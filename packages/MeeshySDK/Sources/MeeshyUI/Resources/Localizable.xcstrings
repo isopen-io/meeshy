@@ -1,1201 +1,24 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
-    "conversation.role.admin" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Admin"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Admin"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Admin"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Admin"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Admin"
-          }
-        }
-      }
+    "" : {
+
     },
-    "conversation.role.creator" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ersteller"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Creator"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Creador"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Createur"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Criador"
-          }
-        }
-      }
+    "·" : {
+
     },
-    "conversation.role.moderator" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Moderator"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Moderator"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Moderador"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Moderateur"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Moderador"
-          }
-        }
-      }
+    "@%@" : {
+
     },
-    "conversation.settings.delete.confirm.message" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Diese Unterhaltung wird für alle Mitglieder geschlossen. Niemand kann mehr schreiben."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "This conversation will be closed for all members. No one will be able to write anymore."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Esta conversación se cerrará para todos los miembros. Nadie podrá escribir más."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Esta conversa será fechada para todos os membros. Ninguém poderá mais escrever."
-          }
-        }
-      }
+    "*" : {
+
     },
-    "conversation.settings.deleteForAll.label" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Für alle löschen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Delete for everyone"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Eliminar para todos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Supprimer pour tous"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Excluir para todos"
-          }
-        }
-      }
+    "/" : {
+
     },
-    "conversation.settings.deleteForMe.confirm.message" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Diese Unterhaltung verschwindet dauerhaft aus deiner Liste. Andere Mitglieder sind nicht betroffen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "This conversation will permanently disappear from your list. Other members won't be affected."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Esta conversación desaparecerá definitivamente de tu lista. Los demás miembros no se verán afectados."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Esta conversa desaparecerá definitivamente da sua lista. Os outros membros não serão afetados."
-          }
-        }
-      }
+    "#%@" : {
+
     },
-    "conversation.settings.deleteForMe.confirm.title" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Für mich löschen?"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Delete for me?"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "¿Eliminar para mí?"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Supprimer pour moi ?"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Excluir para mim?"
-          }
-        }
-      }
-    },
-    "conversation.settings.deleteForMe.label" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Für mich löschen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Delete for me"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Eliminar para mí"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Supprimer pour moi"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Excluir para mim"
-          }
-        }
-      }
-    },
-    "conversation.settings.member.ban" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Sperren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ban"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Banear"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Bannir"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Banir"
-          }
-        }
-      }
-    },
-    "conversation.settings.member.demoteMember" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Zum Mitglied herabstufen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Demote to Member"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Degradar a Miembro"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Retrograder Membre"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Rebaixar a Membro"
-          }
-        }
-      }
-    },
-    "conversation.settings.member.expel" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Entfernen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Remove"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Expulsar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Expulser"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Remover"
-          }
-        }
-      }
-    },
-    "conversation.settings.member.promoteAdmin" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Zum Admin befördern"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Promote to Admin"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Promover a Admin"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Promouvoir Admin"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Promover a Admin"
-          }
-        }
-      }
-    },
-    "conversation.settings.member.promoteModerator" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Zum Moderator befördern"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Promote to Moderator"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Promover a Moderador"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Promouvoir Moderateur"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Promover a Moderador"
-          }
-        }
-      }
-    },
-    "conversation.settings.members.empty" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Kein Mitglied gefunden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "No member found"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ningún miembro encontrado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Aucun membre trouve"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Nenhum membro encontrado"
-          }
-        }
-      }
-    },
-    "conversation.settings.members.search.placeholder" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mitglied suchen..."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Search a member..."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Buscar un miembro..."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Rechercher un membre..."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Buscar um membro..."
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.announcement" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ankündigungsmodus"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Announcement mode"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Modo anuncio"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Mode annonce"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Modo de anúncio"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.announcement.subtitle" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Nur Admins können schreiben"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Only admins can write"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Solo los administradores pueden escribir"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Seuls les admins peuvent ecrire"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Apenas administradores podem escrever"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.autoTranslate" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Automatische Übersetzung"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Automatic translation"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Traducción automática"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Traduction automatique"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Tradução automática"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.autoTranslate.subtitle" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Nachrichten werden automatisch übersetzt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Messages are translated automatically"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Los mensajes se traducen automáticamente"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Les messages sont traduits automatiquement"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "As mensagens são traduzidas automaticamente"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.slowMode" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Langsamer Modus"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Slow mode"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Modo lento"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Mode lent"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Modo lento"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.slowMode.off" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Aus"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Off"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Desactivado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Desactive"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Desativado"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.writeRole" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Wer schreiben darf"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Who can write"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Quién puede escribir"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Qui peut ecrire"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Quem pode escrever"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.writeRole.admins" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Admins"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Admins"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Admins"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Admins"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Admins"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.writeRole.everyone" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Alle"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Everyone"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Todos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Tout le monde"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Todos"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.writeRole.members" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mitglieder"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Members"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Miembros"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Membres"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Membros"
-          }
-        }
-      }
-    },
-    "conversation.settings.permissions.writeRole.moderators" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Moderatoren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Moderators"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Moderadores"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Moderateurs"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Moderadores"
-          }
-        }
-      }
-    },
-    "conversation.settings.section.members" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mitglieder (%d)"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Members (%d)"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Miembros (%d)"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Membres (%d)"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Membros (%d)"
-          }
-        }
-      }
-    },
-    "conversation.settings.section.permissions" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Berechtigungen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Permissions"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Permisos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Permissions"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Permissões"
-          }
-        }
-      }
-    },
-    "conversation.settings.toast.memberBanned" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mitglied gesperrt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Member banned"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Miembro baneado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Membre banni"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Membro banido"
-          }
-        }
-      }
-    },
-    "conversation.settings.toast.memberExpelled" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mitglied entfernt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Member removed"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Miembro expulsado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Membre expulse"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Membro removido"
-          }
-        }
-      }
-    },
-    "conversation.settings.toast.roleUpdated" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Rolle aktualisiert"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Role updated"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Rol actualizado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Role mis a jour"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Função atualizada"
-          }
-        }
-      }
-    },
-    "profile.connection.context.received" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ möchte sich mit dir verbinden. Akzeptiere, um Nachrichten auszutauschen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ wants to connect with you. Accept to exchange messages."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ quiere conectar contigo. Acepta para intercambiar mensajes."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ souhaite entrer en contact avec vous. Acceptez pour échanger des messages."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ quer se conectar com você. Aceite para trocar mensagens."
-          }
-        }
-      }
-    },
-    "profile.connection.context.sent" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Du hast %@ eine Verbindungsanfrage gesendet. Warten auf Antwort."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You sent a connection request to %@. Waiting for their reply."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enviaste una solicitud de conexión a %@. Esperando su respuesta."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vous avez envoyé une demande de connexion à %@. En attente de sa réponse."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Você enviou um pedido de conexão para %@. Aguardando a resposta."
-          }
-        }
-      }
-    },
-    "userIdentity.translation.available" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Übersetzung verfügbar"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Translation available"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traducción disponible"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traduction disponible"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tradução disponível"
-          }
-        }
-      }
-    },
-    "" : {},
-    "@%@" : {},
-    "*" : {},
-    "/" : {},
-    "#%@" : {},
     "%@  %@" : {
       "localizations" : {
         "fr" : {
@@ -1236,6 +59,16 @@
         }
       }
     },
+    "%@ %fs" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$fs"
+          }
+        }
+      }
+    },
     "%@ → %@" : {
       "localizations" : {
         "fr" : {
@@ -1246,7 +79,19 @@
         }
       }
     },
-    "%@ partage sa position" : {},
+    "%@ partage sa position" : {
+
+    },
+    "%@, @%@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@, @%2$@"
+          }
+        }
+      }
+    },
     "%@. %@" : {
       "localizations" : {
         "fr" : {
@@ -1267,11 +112,28 @@
         }
       }
     },
-    "%@s" : {},
-    "%lld" : {},
-    "%lld éléments actifs" : {},
-    "%lld lignes de plus" : {},
-    "%lld messages" : {},
+    "%@s" : {
+
+    },
+    "%lld" : {
+
+    },
+    "%lld %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld %2$@"
+          }
+        }
+      }
+    },
+    "%lld lignes de plus" : {
+
+    },
+    "%lld messages" : {
+
+    },
     "%lld non lue%@" : {
       "localizations" : {
         "fr" : {
@@ -1282,8 +144,12 @@
         }
       }
     },
-    "%lld pages" : {},
-    "%lld sous-titres" : {},
+    "%lld pages" : {
+
+    },
+    "%lld sous-titres" : {
+
+    },
     "%lld trait%@" : {
       "localizations" : {
         "fr" : {
@@ -1314,30 +180,124 @@
         }
       }
     },
-    "%lld%%" : {},
-    "%lld°" : {},
-    "%llds" : {},
-    "%llds max" : {},
-    "🏘️" : {},
-    "1min" : {},
-    "5min" : {},
-    "10s" : {},
-    "30s" : {},
-    "Aa" : {},
-    "Absent" : {},
-    "Actif" : {},
-    "Activer lecture en boucle" : {},
-    "Activer picture in picture" : {},
-    "Admin" : {},
-    "Admins" : {},
-    "AirPlay" : {},
-    "Ajouter le tag %@" : {},
-    "Ajouter un tag..." : {},
-    "Analyse de l'audio…" : {},
-    "Annuler" : {},
-    "Astuce : poignées disponibles sur la timeline principale." : {},
-    "Aucun élément" : {},
-    "Aucun membre trouve" : {},
+    "%lld%%" : {
+
+    },
+    "%lld°" : {
+
+    },
+    "%llds" : {
+
+    },
+    "%llds max" : {
+
+    },
+    "🏘️" : {
+
+    },
+    "1min" : {
+
+    },
+    "5min" : {
+
+    },
+    "10s" : {
+
+    },
+    "30s" : {
+
+    },
+    "Aa" : {
+
+    },
+    "accessibility.message_from_me" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mon message : %@"
+          }
+        }
+      }
+    },
+    "accessibility.message_from_other" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Message : %@"
+          }
+        }
+      }
+    },
+    "Actif" : {
+
+    },
+    "Activer le son de cette piste" : {
+
+    },
+    "Activer le son de la vidéo" : {
+
+    },
+    "Activer lecture en boucle" : {
+
+    },
+    "Activer picture in picture" : {
+
+    },
+    "AirPlay" : {
+
+    },
+    "Ajouter le tag %@" : {
+
+    },
+    "Ajouter un tag..." : {
+
+    },
+    "Analyse de l'audio…" : {
+
+    },
+    "Annuler" : {
+
+    },
+    "Astuce : poignées disponibles sur la timeline principale." : {
+
+    },
+    "audience.picker.except.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tout le monde sauf"
+          }
+        }
+      }
+    },
+    "audience.picker.only.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seulement ces personnes"
+          }
+        }
+      }
+    },
+    "audience.picker.search" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rechercher…"
+          }
+        }
+      }
+    },
     "audio.editor.apply" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -2791,6 +1751,41 @@
         }
       }
     },
+    "auth.countryPicker.selector.hint" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Land ändern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Change country"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cambiar país"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Changer de pays"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Alterar país"
+          }
+        }
+      }
+    },
     "auth.countryPicker.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -3911,10 +2906,9 @@
         }
       }
     },
-    "Bannir" : {},
-    "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes." : {},
-    "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire." : {},
-    "Choisir ou créer une catégorie..." : {},
+    "Choisir ou créer une catégorie..." : {
+
+    },
     "common.cancel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -3946,286 +2940,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Cancelar"
-          }
-        }
-      }
-    },
-    "report.reason.other" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sonstiges"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Other"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Otro"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Autre"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Outro"
-          }
-        }
-      }
-    },
-    "report.reason.impersonation" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Identitätsdiebstahl"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impersonation"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Suplantación de identidad"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usurpation d'identité"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Falsidade ideológica"
-          }
-        }
-      }
-    },
-    "report.reason.fake_profile" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gefälschtes Profil"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fake profile"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Perfil falso"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Faux profil"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Perfil falso"
-          }
-        }
-      }
-    },
-    "report.reason.hate_speech" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hassrede"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hate speech"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Discurso de odio"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Discours haineux"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Discurso de ódio"
-          }
-        }
-      }
-    },
-    "report.reason.violence" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gewalt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Violence"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Violencia"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Violence"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Violência"
-          }
-        }
-      }
-    },
-    "report.reason.harassment" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Belästigung"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Harassment"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Acoso"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Harcèlement"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Assédio"
-          }
-        }
-      }
-    },
-    "report.reason.inappropriate" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unangemessener Inhalt"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Inappropriate content"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Contenido inapropiado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Contenu inapproprié"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Conteúdo inapropriado"
-          }
-        }
-      }
-    },
-    "report.reason.spam" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spam"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spam"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spam"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spam"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Spam"
           }
         }
       }
@@ -4265,6 +2979,17 @@
         }
       }
     },
+    "common.delete" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Supprimer"
+          }
+        }
+      }
+    },
     "common.done" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -4296,6 +3021,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Concluído"
+          }
+        }
+      }
+    },
+    "common.duplicate" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dupliquer"
+          }
+        }
+      }
+    },
+    "common.edit" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Éditer"
           }
         }
       }
@@ -8498,6 +7245,111 @@
         }
       }
     },
+    "conversation.role.admin" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Admin"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Admin"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Admin"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Admin"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Admin"
+          }
+        }
+      }
+    },
+    "conversation.role.creator" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ersteller"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Creator"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Creador"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Createur"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Criador"
+          }
+        }
+      }
+    },
+    "conversation.role.moderator" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moderator"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moderator"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moderador"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moderateur"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moderador"
+          }
+        }
+      }
+    },
     "conversation.settings.avatar" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8636,6 +7488,41 @@
         }
       }
     },
+    "conversation.settings.delete.confirm.message" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diese Unterhaltung wird für alle Mitglieder geschlossen. Niemand kann mehr schreiben."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "This conversation will be closed for all members. No one will be able to write anymore."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta conversación se cerrará para todos los miembros. Nadie podrá escribir más."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta conversa será fechada para todos os membros. Ninguém poderá mais escrever."
+          }
+        }
+      }
+    },
     "conversation.settings.delete.confirm.title" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -8643,6 +7530,146 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Supprimer la conversation"
+          }
+        }
+      }
+    },
+    "conversation.settings.deleteForAll.label" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Für alle löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Delete for everyone"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminar para todos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Supprimer pour tous"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Excluir para todos"
+          }
+        }
+      }
+    },
+    "conversation.settings.deleteForMe.confirm.message" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Diese Unterhaltung verschwindet dauerhaft aus deiner Liste. Andere Mitglieder sind nicht betroffen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "This conversation will permanently disappear from your list. Other members won't be affected."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta conversación desaparecerá definitivamente de tu lista. Los demás miembros no se verán afectados."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Cette conversation disparaitra definitivement de votre liste. Les autres membres ne seront pas affectes."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Esta conversa desaparecerá definitivamente da sua lista. Os outros membros não serão afetados."
+          }
+        }
+      }
+    },
+    "conversation.settings.deleteForMe.confirm.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Für mich löschen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Delete for me?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "¿Eliminar para mí?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Supprimer pour moi ?"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Excluir para mim?"
+          }
+        }
+      }
+    },
+    "conversation.settings.deleteForMe.label" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Für mich löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Delete for me"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Eliminar para mí"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Supprimer pour moi"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Excluir para mim"
           }
         }
       }
@@ -8962,6 +7989,636 @@
         }
       }
     },
+    "conversation.settings.member.ban" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Sperren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ban"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Banear"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Bannir"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Banir"
+          }
+        }
+      }
+    },
+    "conversation.settings.member.demoteMember" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zum Mitglied herabstufen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Demote to Member"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Degradar a Miembro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Retrograder Membre"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rebaixar a Membro"
+          }
+        }
+      }
+    },
+    "conversation.settings.member.expel" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Entfernen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Remove"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Expulsar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Expulser"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Remover"
+          }
+        }
+      }
+    },
+    "conversation.settings.member.promoteAdmin" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zum Admin befördern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Promote to Admin"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Promover a Admin"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Promouvoir Admin"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Promover a Admin"
+          }
+        }
+      }
+    },
+    "conversation.settings.member.promoteModerator" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Zum Moderator befördern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Promote to Moderator"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Promover a Moderador"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Promouvoir Moderateur"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Promover a Moderador"
+          }
+        }
+      }
+    },
+    "conversation.settings.members.empty" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Kein Mitglied gefunden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "No member found"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ningún miembro encontrado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aucun membre trouve"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nenhum membro encontrado"
+          }
+        }
+      }
+    },
+    "conversation.settings.members.search.placeholder" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mitglied suchen..."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Search a member..."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar un miembro..."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rechercher un membre..."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Buscar um membro..."
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.announcement" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Ankündigungsmodus"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Announcement mode"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Modo anuncio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mode annonce"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Modo de anúncio"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.announcement.subtitle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nur Admins können schreiben"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Only admins can write"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Solo los administradores pueden escribir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seuls les admins peuvent ecrire"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Apenas administradores podem escrever"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.autoTranslate" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Automatische Übersetzung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Automatic translation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Traducción automática"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Traduction automatique"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tradução automática"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.autoTranslate.subtitle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Nachrichten werden automatisch übersetzt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Messages are translated automatically"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Los mensajes se traducen automáticamente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Les messages sont traduits automatiquement"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "As mensagens são traduzidas automaticamente"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.slowMode" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Langsamer Modus"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Slow mode"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Modo lento"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Mode lent"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Modo lento"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.slowMode.off" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Aus"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Off"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desactivado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Desactive"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Desativado"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.writeRole" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Wer schreiben darf"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Who can write"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quién puede escribir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Qui peut ecrire"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Quem pode escrever"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.writeRole.admins" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Admins"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Admins"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Admins"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Admins"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Admins"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.writeRole.everyone" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Alle"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Everyone"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Tout le monde"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Todos"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.writeRole.members" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mitglieder"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Members"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Miembros"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Membres"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Membros"
+          }
+        }
+      }
+    },
+    "conversation.settings.permissions.writeRole.moderators" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moderatoren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moderators"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moderadores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Moderateurs"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Moderadores"
+          }
+        }
+      }
+    },
     "conversation.settings.section.appearance" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9057,6 +8714,76 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Info"
+          }
+        }
+      }
+    },
+    "conversation.settings.section.members" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mitglieder (%d)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Members (%d)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Miembros (%d)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Membres (%d)"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Membros (%d)"
+          }
+        }
+      }
+    },
+    "conversation.settings.section.permissions" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Berechtigungen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Permissions"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Permisos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Permissions"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Permissões"
           }
         }
       }
@@ -9236,6 +8963,111 @@
         }
       }
     },
+    "conversation.settings.toast.memberBanned" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mitglied gesperrt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Member banned"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Miembro baneado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Membre banni"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Membro banido"
+          }
+        }
+      }
+    },
+    "conversation.settings.toast.memberExpelled" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mitglied entfernt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Member removed"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Miembro expulsado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Membre expulse"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Membro removido"
+          }
+        }
+      }
+    },
+    "conversation.settings.toast.roleUpdated" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rolle aktualisiert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Role updated"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Rol actualizado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Role mis a jour"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Função atualizada"
+          }
+        }
+      }
+    },
     "conversation.settings.toast.updated" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -9271,21 +9103,51 @@
         }
       }
     },
-    "Couleur" : {},
-    "Couleur du trait" : {},
-    "Couper le son" : {},
-    "Creator" : {},
-    "Créer \"%@\"" : {},
-    "Créer la catégorie %@" : {},
-    "Créer le tag %@" : {},
-    "Desactive" : {},
-    "Desactiver lecture en boucle" : {},
-    "Deutsch" : {},
-    "Diviser au point de lecture" : {},
-    "Easing" : {},
-    "Echantillon %lld" : {},
-    "Effacer" : {},
-    "Effacer la saisie" : {},
+    "Couleur" : {
+
+    },
+    "Couleur du trait" : {
+
+    },
+    "Couper le son" : {
+
+    },
+    "Couper le son de cette piste" : {
+
+    },
+    "Couper le son de la vidéo" : {
+
+    },
+    "Créer \"%@\"" : {
+
+    },
+    "Créer la catégorie %@" : {
+
+    },
+    "Créer le tag %@" : {
+
+    },
+    "Desactiver lecture en boucle" : {
+
+    },
+    "Deutsch" : {
+
+    },
+    "Diviser au point de lecture" : {
+
+    },
+    "Easing" : {
+
+    },
+    "Echantillon %lld" : {
+
+    },
+    "Effacer" : {
+
+    },
+    "Effacer la saisie" : {
+
+    },
     "emoji.category.animals" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -9531,28 +9393,60 @@
         }
       }
     },
-    "En ligne" : {},
-    "English" : {},
-    "Espanol" : {},
-    "Expire %@" : {},
-    "Export %lld %%" : {},
-    "Export impossible" : {},
-    "Expulser" : {},
-    "Faites glisser vers le bas pour réduire ou fermer." : {},
-    "Faites glisser vers le haut pour afficher les options de l'outil." : {},
-    "Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou replier." : {},
-    "Ferme l'éditeur et masque le clavier" : {},
-    "Ferme les contrôles de dessin" : {},
-    "Fermer" : {},
-    "Filtre %@" : {},
-    "Fond" : {},
-    "Francais" : {},
-    "Hors ligne" : {},
-    "Hors zone visible" : {},
-    "Image" : {},
-    "Indisponible" : {},
-    "Invite par %@" : {},
-    "Italiano" : {},
+    "English" : {
+
+    },
+    "Enregistrée dans Photos" : {
+
+    },
+    "Enregistrer dans Photos" : {
+
+    },
+    "Espanol" : {
+
+    },
+    "Expire %@" : {
+
+    },
+    "Export %lld %%" : {
+
+    },
+    "Export impossible" : {
+
+    },
+    "Ferme l'éditeur et masque le clavier" : {
+
+    },
+    "Ferme les contrôles de dessin" : {
+
+    },
+    "Fermer" : {
+
+    },
+    "Fond" : {
+
+    },
+    "Francais" : {
+
+    },
+    "Hors ligne" : {
+
+    },
+    "Hors zone visible" : {
+
+    },
+    "Image" : {
+
+    },
+    "Indisponible" : {
+
+    },
+    "Invite par %@" : {
+
+    },
+    "Italiano" : {
+
+    },
     "joinFlow.close.accessibilityLabel" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -10953,7 +10847,9 @@
         }
       }
     },
-    "Kind" : {},
+    "Kind" : {
+
+    },
     "languagePicker.search" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -11024,11 +10920,18 @@
         }
       }
     },
-    "Langue du contenu" : {},
-    "Langue parlée" : {},
-    "Langues: %@" : {},
-    "Les messages sont traduits automatiquement" : {},
-    "Location: %@" : {},
+    "Langue parlée" : {
+
+    },
+    "Langues: %@" : {
+
+    },
+    "Lire la vidéo %@" : {
+
+    },
+    "Location: %@" : {
+
+    },
     "location.fullscreen.directions" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -11204,7 +11107,9 @@
         }
       }
     },
-    "Lu" : {},
+    "Lu" : {
+
+    },
     "media.audio.cancel" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11328,6 +11233,41 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Original"
+          }
+        }
+      }
+    },
+    "media.audio.play" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio abspielen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play audio"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproducir audio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lire l'audio"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproduzir áudio"
           }
         }
       }
@@ -13158,15 +13098,21 @@
         }
       }
     },
-    "Membres" : {},
-    "min %llds" : {},
-    "Mode annonce" : {},
-    "Moderateur" : {},
-    "Moderateurs" : {},
-    "mshy_" : {},
-    "Muet" : {},
-    "Nederlands" : {},
-    "Nom de la catégorie" : {},
+    "min %llds" : {
+
+    },
+    "mshy_" : {
+
+    },
+    "Muet" : {
+
+    },
+    "Nederlands" : {
+
+    },
+    "Nom de la catégorie" : {
+
+    },
     "notifications.category.all" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14077,16 +14023,140 @@
         }
       }
     },
-    "Nouvelle catégorie" : {},
-    "Ouvrir l'outil %@" : {},
-    "Pause" : {},
-    "Placez la tête de lecture puis divisez la vidéo en segments." : {},
-    "Play" : {},
-    "Poignée de la barre d'outils" : {},
-    "Polski" : {},
-    "Portugues" : {},
-    "Premier plan" : {},
-    "Préparation…" : {},
+    "Nouvelle catégorie" : {
+
+    },
+    "Pause" : {
+
+    },
+    "Placez la tête de lecture puis divisez la vidéo en segments." : {
+
+    },
+    "Play" : {
+
+    },
+    "Polski" : {
+
+    },
+    "Portugues" : {
+
+    },
+    "post.visibility.community" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Communautés"
+          }
+        }
+      }
+    },
+    "post.visibility.except" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sauf…"
+          }
+        }
+      }
+    },
+    "post.visibility.friends" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Contacts"
+          }
+        }
+      }
+    },
+    "post.visibility.only" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Seulement…"
+          }
+        }
+      }
+    },
+    "post.visibility.private" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Privé"
+          }
+        }
+      }
+    },
+    "post.visibility.public" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Public"
+          }
+        }
+      }
+    },
+    "Premier plan" : {
+
+    },
+    "Préparation…" : {
+
+    },
+    "presence.away" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Absent"
+          }
+        }
+      }
+    },
+    "presence.offline" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Hors ligne"
+          }
+        }
+      }
+    },
+    "presence.online" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "En ligne"
+          }
+        }
+      }
+    },
+    "presence.recent" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Actif récemment"
+          }
+        }
+      }
+    },
     "profile.action.acceptConnection" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14402,6 +14472,76 @@
         }
       }
     },
+    "profile.avatar.viewFullscreen.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnet das Foto im Vollbild"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens the photo fullscreen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre la foto en pantalla completa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre la photo en plein écran"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre a foto em tela cheia"
+          }
+        }
+      }
+    },
+    "profile.banner.label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profilbanner"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Profile banner"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner de perfil"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bannière de profil"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Banner de perfil"
+          }
+        }
+      }
+    },
     "profile.blocked.byMe" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14542,6 +14682,87 @@
         }
       }
     },
+    "profile.close.hint" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ferme le profil"
+          }
+        }
+      }
+    },
+    "profile.connection.context.received" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ möchte sich mit dir verbinden. Akzeptiere, um Nachrichten auszutauschen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ wants to connect with you. Accept to exchange messages."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quiere conectar contigo. Acepta para intercambiar mensajes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ souhaite entrer en contact avec vous. Acceptez pour échanger des messages."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quer se conectar com você. Aceite para trocar mensagens."
+          }
+        }
+      }
+    },
+    "profile.connection.context.sent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Du hast %@ eine Verbindungsanfrage gesendet. Warten auf Antwort."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You sent a connection request to %@. Waiting for their reply."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviaste una solicitud de conexión a %@. Esperando su respuesta."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous avez envoyé une demande de connexion à %@. En attente de sa réponse."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Você enviou um pedido de conexão para %@. Aguardando a resposta."
+          }
+        }
+      }
+    },
     "profile.conversations.interactionsDisabled" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14647,6 +14868,76 @@
         }
       }
     },
+    "profile.posts.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Beiträge"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No posts"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguna publicación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun poste"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhum post"
+          }
+        }
+      }
+    },
+    "profile.posts.noText" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beitrag ohne Text"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Post without text"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publicación sin texto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publication sans texte"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publicação sem texto"
+          }
+        }
+      }
+    },
     "profile.presence.justNow" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -14683,7 +14974,7 @@
       }
     },
     "profile.presence.online" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -14718,7 +15009,7 @@
       }
     },
     "profile.stats.achievements" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -14748,111 +15039,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Conquistas"
-          }
-        }
-      }
-    },
-    "profile.stats.languagesUsed" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Verwendete Sprachen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Languages used"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Idiomas usados"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Langues utilisées"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Idiomas usados"
-          }
-        }
-      }
-    },
-    "profile.stats.memberDays" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mitgliedstage"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Days of membership"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Días de membresía"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Jours d'ancienneté"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Dias de membro"
-          }
-        }
-      }
-    },
-    "profile.stats.memberSince" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mitglied seit"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Member since"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Miembro desde"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Membre depuis"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Membro desde"
           }
         }
       }
@@ -14927,37 +15113,142 @@
         }
       }
     },
-    "profile.stats.translationsShort" : {
-      "extractionState" : "manual",
+    "profile.stats.languagesUsed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Übersetzungen"
+            "state" : "needs_review",
+            "value" : "Verwendete Sprachen"
           }
         },
         "en" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Translations"
+            "state" : "needs_review",
+            "value" : "Languages used"
           }
         },
         "es" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traducciones"
+            "state" : "needs_review",
+            "value" : "Idiomas usados"
           }
         },
         "fr" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traductions"
+            "state" : "new",
+            "value" : "Langues utilisées"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
-            "state" : "translated",
-            "value" : "Traduções"
+            "state" : "needs_review",
+            "value" : "Idiomas usados"
+          }
+        }
+      }
+    },
+    "profile.stats.memberDays" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mitgliedstage"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Days of membership"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Días de membresía"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Jours d'ancienneté"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Dias de membro"
+          }
+        }
+      }
+    },
+    "profile.stats.memberSince" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mitglied seit"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Member since"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Miembro desde"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Membre depuis"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Membro desde"
+          }
+        }
+      }
+    },
+    "profile.stats.messagesSent" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Gesendete Nachrichten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Messages sent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mensajes enviados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Messages envoyés"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Mensagens enviadas"
           }
         }
       }
@@ -14997,43 +15288,8 @@
         }
       }
     },
-    "profile.stats.messagesSent" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Gesendete Nachrichten"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Messages sent"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mensajes enviados"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Messages envoyés"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Mensagens enviadas"
-          }
-        }
-      }
-    },
     "profile.stats.translations" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -15062,6 +15318,41 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
+            "value" : "Traduções"
+          }
+        }
+      }
+    },
+    "profile.stats.translationsShort" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übersetzungen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translations"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traducciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traductions"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
             "value" : "Traduções"
           }
         }
@@ -15098,181 +15389,6 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Conectados"
-          }
-        }
-      }
-    },
-    "profile.toast.reportFailed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meldung konnte nicht gesendet werden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unable to send the report"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se pudo enviar la denuncia"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Impossible d'envoyer le signalement"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Não foi possível enviar a denúncia"
-          }
-        }
-      }
-    },
-    "profile.toast.reportSent" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Meldung gesendet"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Report sent"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Denuncia enviada"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Signalement envoyé"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Denúncia enviada"
-          }
-        }
-      }
-    },
-    "profile.voice.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stimme"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Voice"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Voz"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Voix"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Voz"
-          }
-        }
-      }
-    },
-    "profile.posts.noText" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beitrag ohne Text"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Post without text"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Publicación sin texto"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Publication sans texte"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Publicação sem texto"
-          }
-        }
-      }
-    },
-    "profile.posts.empty" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keine Beiträge"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No posts"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ninguna publicación"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucun poste"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nenhum post"
           }
         }
       }
@@ -15383,7 +15499,7 @@
       }
     },
     "profile.tab.profile" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -15418,7 +15534,7 @@
       }
     },
     "profile.tab.stats" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -15623,6 +15739,76 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Não foi possível recusar"
+          }
+        }
+      }
+    },
+    "profile.toast.reportFailed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meldung konnte nicht gesendet werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to send the report"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo enviar la denuncia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'envoyer le signalement"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível enviar a denúncia"
+          }
+        }
+      }
+    },
+    "profile.toast.reportSent" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meldung gesendet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Report sent"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denuncia enviada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Signalement envoyé"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Denúncia enviada"
           }
         }
       }
@@ -15872,8 +16058,41 @@
         }
       }
     },
-    "Promouvoir Admin" : {},
-    "Promouvoir Moderateur" : {},
+    "profile.voice.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stimme"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voix"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voz"
+          }
+        }
+      }
+    },
     "pull_refresh.armed" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -15907,11 +16126,15 @@
         }
       }
     },
-    "Reactiver le son" : {},
-    "Read" : {},
-    "Recherche…" : {},
-    "Rechercher un membre..." : {},
-    "Rechercher une langue" : {},
+    "Reactiver le son" : {
+
+    },
+    "Read" : {
+
+    },
+    "Recherche…" : {
+
+    },
     "Recommandé pour %@ : %@" : {
       "localizations" : {
         "fr" : {
@@ -15922,25 +16145,337 @@
         }
       }
     },
-    "Recommencer" : {},
-    "Réinitialiser" : {},
-    "Reprendre l'édition ?" : {},
-    "Restaurer" : {},
-    "Retirer la catégorie %@" : {},
-    "Retirer le tag %@" : {},
-    "Retour" : {},
-    "Retrograder Membre" : {},
-    "Rotation" : {},
-    "Ruler" : {},
-    "Safe area" : {},
-    "Segment %lld" : {},
-    "Segment sélectionné" : {},
-    "Sélectionner la catégorie %@" : {},
-    "Seuls les admins peuvent ecrire" : {},
-    "Si un compte existe avec %@, un lien de reinitialisation a ete envoye." : {},
-    "Son" : {},
-    "Sortir du picture in picture" : {},
-    "Sticker %@" : {},
+    "Recommencer" : {
+
+    },
+    "Réinitialiser" : {
+
+    },
+    "report.reason.fake_profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gefälschtes Profil"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fake profile"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfil falso"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Faux profil"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Perfil falso"
+          }
+        }
+      }
+    },
+    "report.reason.harassment" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Belästigung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Harassment"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acoso"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Harcèlement"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Assédio"
+          }
+        }
+      }
+    },
+    "report.reason.hate_speech" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hassrede"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hate speech"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discurso de odio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discours haineux"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discurso de ódio"
+          }
+        }
+      }
+    },
+    "report.reason.impersonation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identitätsdiebstahl"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impersonation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suplantación de identidad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Usurpation d'identité"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Falsidade ideológica"
+          }
+        }
+      }
+    },
+    "report.reason.inappropriate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unangemessener Inhalt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inappropriate content"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contenido inapropiado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contenu inapproprié"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conteúdo inapropriado"
+          }
+        }
+      }
+    },
+    "report.reason.other" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonstiges"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Otro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autre"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outro"
+          }
+        }
+      }
+    },
+    "report.reason.spam" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spam"
+          }
+        }
+      }
+    },
+    "report.reason.violence" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gewalt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violence"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violencia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violence"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Violência"
+          }
+        }
+      }
+    },
+    "Reprendre l'édition ?" : {
+
+    },
+    "Restaurer" : {
+
+    },
+    "Retirer la catégorie %@" : {
+
+    },
+    "Retirer le tag %@" : {
+
+    },
+    "Retour" : {
+
+    },
+    "Rotation" : {
+
+    },
+    "Ruler" : {
+
+    },
+    "Safe area" : {
+
+    },
+    "Segment %lld" : {
+
+    },
+    "Segment sélectionné" : {
+
+    },
+    "Sélectionner la catégorie %@" : {
+
+    },
+    "Si un compte existe avec %@, un lien de reinitialisation a ete envoye." : {
+
+    },
+    "Son" : {
+
+    },
+    "Sortir du picture in picture" : {
+
+    },
+    "Sticker %@" : {
+
+    },
     "story.audioEditor.retranscribe" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -16222,7 +16757,7 @@
       }
     },
     "story.audioPanel.library" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16257,7 +16792,7 @@
       }
     },
     "story.audioPanel.noAudio" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16292,7 +16827,7 @@
       }
     },
     "story.audioPanel.noSound" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16327,7 +16862,7 @@
       }
     },
     "story.audioPanel.record" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16362,7 +16897,7 @@
       }
     },
     "story.audioPanel.searchSound" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16396,19 +16931,8 @@
         }
       }
     },
-    "story.audioPanel.title" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Audio"
-          }
-        }
-      }
-    },
     "story.audioSource.library" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16443,7 +16967,7 @@
       }
     },
     "story.audioSource.record" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16478,7 +17002,7 @@
       }
     },
     "story.audioSource.title" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -17066,7 +17590,7 @@
       }
     },
     "story.composer.clearDraft" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -17392,7 +17916,7 @@
       }
     },
     "story.composer.empty.tile.filters" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -17421,7 +17945,7 @@
       }
     },
     "story.composer.empty.tile.filters.sub" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -17855,19 +18379,8 @@
         }
       }
     },
-    "story.composer.filter" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Filtre"
-          }
-        }
-      }
-    },
     "story.composer.friends" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -18512,7 +19025,7 @@
       }
     },
     "story.composer.private" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -18547,7 +19060,7 @@
       }
     },
     "story.composer.public" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -18815,7 +19328,7 @@
       }
     },
     "story.composer.resume" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -18850,7 +19363,7 @@
       }
     },
     "story.composer.resumeStory" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -19158,7 +19671,7 @@
       }
     },
     "story.composer.unpublishedDraft" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -19257,7 +19770,7 @@
       }
     },
     "story.composer.visibility" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -19403,6 +19916,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "modifié à l'instant"
+          }
+        }
+      }
+    },
+    "story.draft.resume.a11y" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Brouillon de story, %lld slide(s)"
           }
         }
       }
@@ -19734,7 +20258,7 @@
       }
     },
     "story.filter.original" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -19768,17 +20292,6 @@
         }
       }
     },
-    "story.filter.pickerTitle" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Filtres"
-          }
-        }
-      }
-    },
     "story.filters.intensity" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -19804,17 +20317,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Intensite"
-          }
-        }
-      }
-    },
-    "story.fontPicker.title" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Style de texte"
           }
         }
       }
@@ -20519,7 +21021,6 @@
       }
     },
     "story.repost.reprojected" : {
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -20548,7 +21049,7 @@
       }
     },
     "story.slide.addSlide" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -20583,7 +21084,7 @@
       }
     },
     "story.slide.delete" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -20618,7 +21119,7 @@
       }
     },
     "story.slide.duplicate" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -20677,50 +21178,6 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Stickers"
-          }
-        }
-      }
-    },
-    "story.textBackground.glass" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Verre"
-          }
-        }
-      }
-    },
-    "story.textBackground.none" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Aucun"
-          }
-        }
-      }
-    },
-    "story.textBackground.solid" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Couleur"
-          }
-        }
-      }
-    },
-    "story.textBackground.title" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Fond du texte"
           }
         }
       }
@@ -21739,6 +22196,7 @@
       }
     },
     "story.timeline.clip.tooltip.fadeIn" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -21755,6 +22213,7 @@
       }
     },
     "story.timeline.clip.tooltip.fadeOut" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -22126,6 +22585,7 @@
       }
     },
     "story.timeline.export.previewTitle" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -22137,6 +22597,57 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aperçu de l'export"
+          }
+        }
+      }
+    },
+    "story.timeline.group.media" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Media"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Médias"
+          }
+        }
+      }
+    },
+    "story.timeline.group.sound" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sound"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son"
+          }
+        }
+      }
+    },
+    "story.timeline.group.text" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texte"
           }
         }
       }
@@ -22205,6 +22716,57 @@
         }
       }
     },
+    "story.timeline.inspector.animate" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animate at playhead"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animer au playhead"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.animate.caption" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animation step: pins position, scale and opacity at this moment — the element glides between steps during playback."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Étape d'animation : fige position, échelle et opacité à cet instant — l'élément glisse d'une étape à l'autre pendant la lecture."
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.animate.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds an animation step at the playhead position"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pose une étape d'animation à la position de lecture"
+          }
+        }
+      }
+    },
     "story.timeline.inspector.animation" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -22251,6 +22813,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fond"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.background.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A background fills the whole slide — start/duration are ignored. Turn “Background” off to time this media on the timeline."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline."
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.close" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermer"
           }
         }
       }
@@ -22390,6 +22986,57 @@
         }
       }
     },
+    "story.timeline.inspector.easing.easeIn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ease in"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accélère"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.easing.easeInOut" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ease in-out"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Douce"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.easing.easeOut" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ease out"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Décélère"
+          }
+        }
+      }
+    },
     "story.timeline.inspector.easing.label" : {
       "localizations" : {
         "de" : {
@@ -22458,6 +23105,74 @@
         }
       }
     },
+    "story.timeline.inspector.easing.section" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Curve"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Courbe"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.fade.off" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "off"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "off"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.fadeIn" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fade in"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apparition (fondu)"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.fadeOut" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fade out"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disparition (fondu)"
+          }
+        }
+      }
+    },
     "story.timeline.inspector.loop" : {
       "localizations" : {
         "en" : {
@@ -22490,6 +23205,40 @@
         }
       }
     },
+    "story.timeline.inspector.transition.duration" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Duration"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Durée"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.transition.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transition between clips"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transition entre les clips"
+          }
+        }
+      }
+    },
     "story.timeline.inspector.volume" : {
       "localizations" : {
         "en" : {
@@ -22507,6 +23256,7 @@
       }
     },
     "story.timeline.keyframe.add" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -23138,6 +23888,23 @@
         }
       }
     },
+    "story.timeline.transition.add" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a transition"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une transition"
+          }
+        }
+      }
+    },
     "story.timeline.transition.crossfade" : {
       "localizations" : {
         "en" : {
@@ -23187,6 +23954,7 @@
       }
     },
     "story.timeline.transition.duration" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -23916,7 +24684,7 @@
       }
     },
     "story.trackDetail.delete" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -23951,7 +24719,7 @@
       }
     },
     "story.trackDetail.loop" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -24101,27 +24869,77 @@
         }
       }
     },
-    "Supprimer" : {},
-    "Supprimer le trait" : {},
-    "Supprimer pour moi" : {},
-    "Supprimer pour moi ?" : {},
-    "Supprimer pour tous" : {},
-    "Tap to open full map" : {},
-    "Terminer" : {},
-    "Terminer l'édition du dessin" : {},
-    "Terminer l'édition du texte" : {},
-    "Timeline" : {},
-    "Touchez deux fois pour fermer." : {},
-    "Touchez deux fois pour ouvrir." : {},
-    "Tout le monde" : {},
-    "Toute la vidéo" : {},
-    "Traduction automatique" : {},
-    "Traduction disponible" : {},
-    "Transcription: %@" : {},
-    "Transitions" : {},
-    "Turkce" : {},
-    "Une session d'édition non terminée a été retrouvée pour cette vidéo." : {},
-    "Vidéo" : {},
+    "Supprimer" : {
+
+    },
+    "Supprimer le trait" : {
+
+    },
+    "Tap to open full map" : {
+
+    },
+    "Terminer" : {
+
+    },
+    "Terminer l'édition du dessin" : {
+
+    },
+    "Terminer l'édition du texte" : {
+
+    },
+    "Timeline" : {
+
+    },
+    "Toute la vidéo" : {
+
+    },
+    "Transcription: %@" : {
+
+    },
+    "Turkce" : {
+
+    },
+    "Une session d'édition non terminée a été retrouvée pour cette vidéo." : {
+
+    },
+    "userIdentity.translation.available" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Übersetzung verfügbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translation available"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traducción disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Traduction disponible"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tradução disponível"
+          }
+        }
+      }
+    },
+    "Vidéo" : {
+
+    },
     "voiceProfile.age.birthDate" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -26047,7 +26865,9 @@
         }
       }
     },
-    "Volume" : {},
+    "Volume" : {
+
+    },
     "Vous avez rejoint %@ en tant que %@" : {
       "localizations" : {
         "fr" : {
@@ -26058,456 +26878,20 @@
         }
       }
     },
-    "Русский" : {},
-    "العربية" : {},
-    "한국어" : {},
-    "中文" : {},
-    "日本語" : {},
-    "media.audio.play" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Audio abspielen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Play audio"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reproducir audio"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lire l'audio"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reproduzir áudio"
-          }
-        }
-      }
+    "Русский" : {
+
     },
-    "profile.avatar.viewFullscreen.hint" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Öffnet das Foto im Vollbild"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opens the photo fullscreen"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre la foto en pantalla completa"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ouvre la photo en plein écran"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abre a foto em tela cheia"
-          }
-        }
-      }
+    "العربية" : {
+
     },
-    "profile.banner.label" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profilbanner"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Profile banner"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Banner de perfil"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bannière de profil"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Banner de perfil"
-          }
-        }
-      }
+    "한국어" : {
+
     },
-    "auth.countryPicker.selector.hint" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Land ändern"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Change country"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Cambiar país"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Changer de pays"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Alterar país"
-          }
-        }
-      }
+    "中文" : {
+
     },
-    "story.timeline.group.media" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Media"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Médias"
-          }
-        }
-      }
-    },
-    "story.timeline.group.sound" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sound"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Son"
-          }
-        }
-      }
-    },
-    "story.timeline.group.text" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Text"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Texte"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.close" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fermer"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.fadeIn" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fade in"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Apparition (fondu)"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.fadeOut" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fade out"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Disparition (fondu)"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.fade.off" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "off"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "off"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.animate" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Animate at playhead"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Animer au playhead"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.animate.hint" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds an animation step at the playhead position"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pose une étape d'animation à la position de lecture"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.animate.caption" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Animation step: pins position, scale and opacity at this moment — the element glides between steps during playback."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Étape d'animation : fige position, échelle et opacité à cet instant — l'élément glisse d'une étape à l'autre pendant la lecture."
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.background.hint" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A background fills the whole slide — start/duration are ignored. Turn “Background” off to time this media on the timeline."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline."
-          }
-        }
-      }
-    },
-    "story.timeline.transition.add" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add a transition"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ajouter une transition"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.transition.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transition between clips"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transition entre les clips"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.transition.duration" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Duration"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Durée"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.easing.section" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Curve"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Courbe"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.easing.easeIn" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ease in"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Accélère"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.easing.easeOut" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ease out"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Décélère"
-          }
-        }
-      }
-    },
-    "story.timeline.inspector.easing.easeInOut" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ease in-out"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Douce"
-          }
-        }
-      }
+    "日本語" : {
+
     }
   },
   "version" : "1.0"
