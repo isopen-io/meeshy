@@ -1468,9 +1468,23 @@ struct ConversationView: View {
             // (expandedHeaderTitleAndTags), never the call button's presence.
             HStack {
                 Spacer()
-                headerCallButtons.layoutPriority(1)
-                expandedHeaderSearchButton
+                headerButtonsCluster
             }
+        }
+    }
+
+    /// Call + search buttons, grouped with zero extra spacing between them
+    /// (user-requested 2026-07-11: "les boutons n'ont pas besoin d'être si
+    /// loin l'un de l'autre"). Each button already carries its own ~8pt of
+    /// invisible padding via `.meeshyTapTarget()`'s 44×44 HIG minimum around
+    /// a visually 28×28 glass circle — stacking the HStack's own spacing ON
+    /// TOP of that built-in padding is what pushed them apart. `spacing: 0`
+    /// still leaves that built-in padding as the visible gap (no tap-target
+    /// overlap between the two 44×44 hit areas).
+    private var headerButtonsCluster: some View {
+        HStack(spacing: 0) {
+            headerCallButtons.layoutPriority(1)
+            expandedHeaderSearchButton
         }
     }
 
@@ -1487,8 +1501,7 @@ struct ConversationView: View {
                 .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
 
                 Spacer(minLength: 4)
-                headerCallButtons.layoutPriority(1)
-                expandedHeaderSearchButton
+                headerButtonsCluster
             }
 
             // Tags row: aligned with title, scrolls under the search icon
