@@ -21,6 +21,13 @@ final class TimelineContainerSwitcherTests: XCTestCase {
         _ = view.body
     }
 
+    func test_body_withExportAction_doesNotCrash() {
+        // Le bouton export (header, trailing) n'est rendu que quand l'hôte
+        // fournit onExport — les hôtes hors composer gardent le header nu.
+        let view = TimelineContainerSwitcher(viewModel: makeViewModel(), onExport: {})
+        _ = view.body
+    }
+
     func test_resolveMode_compactWidth_returnsQuick() {
         XCTAssertEqual(
             TimelineContainerSwitcher.resolveAutoMode(horizontalSizeClass: .compact, currentMode: .pro),

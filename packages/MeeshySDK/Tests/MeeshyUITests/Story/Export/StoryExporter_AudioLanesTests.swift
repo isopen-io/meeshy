@@ -31,10 +31,12 @@ final class StoryExporter_AudioLanesTests: XCTestCase {
 
         let tracks = composition.tracks(withMediaType: .audio)
         XCTAssertEqual(tracks.count, 1)
-        let range = try XCTUnwrap(tracks.first?.timeRange)
-        XCTAssertEqual(range.start.seconds, 1.0, accuracy: 0.05,
+        // `timeRange` du track englobe l'empty edit de tête ([0, startTime)) —
+        // on inspecte le segment RÉEL pour vérifier la fenêtre.
+        let segment = try XCTUnwrap(tracks.first?.segments.first(where: { !$0.isEmpty }))
+        XCTAssertEqual(segment.timeMapping.target.start.seconds, 1.0, accuracy: 0.05,
                        "La fenêtre timeline (startTime) doit être respectée")
-        XCTAssertEqual(range.duration.seconds, 1.5, accuracy: 0.05,
+        XCTAssertEqual(segment.timeMapping.target.duration.seconds, 1.5, accuracy: 0.05,
                        "La durée de fenêtre prime sur la durée de l'asset")
         XCTAssertEqual(params.count, 1, "volume 0.5 ≠ nominal → params de mix requis")
     }

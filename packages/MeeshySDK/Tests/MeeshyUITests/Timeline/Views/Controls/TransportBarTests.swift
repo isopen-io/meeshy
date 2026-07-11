@@ -30,30 +30,6 @@ final class TransportBarTests: XCTestCase {
         _ = makeSUT().body
     }
 
-    func test_body_withExportAction_rendersExportPath() {
-        let bar = TransportBar(
-            isPlaying: false,
-            currentTime: 0,
-            duration: 6,
-            zoomScale: 1.0,
-            isMuted: false,
-            onPlayToggle: {},
-            onMuteToggle: {},
-            onZoomIn: {},
-            onZoomOut: {},
-            onZoomReset: {},
-            onExport: {}
-        )
-        XCTAssertNotNil(bar.onExport, "onExport fourni → le bouton export est rendu")
-        _ = bar.body
-    }
-
-    func test_body_withoutExportAction_hidesExportButton() {
-        let bar = makeSUT()
-        XCTAssertNil(bar.onExport, "Hôtes hors composer : pas de bouton export")
-        _ = bar.body
-    }
-
     func test_formatTime_pads_minutesAndFraction() {
         XCTAssertEqual(TransportBar.formatTime(seconds: 4.25), "0:04.250")
         XCTAssertEqual(TransportBar.formatTime(seconds: 65.0), "1:05.000")

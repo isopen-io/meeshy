@@ -60,15 +60,15 @@ public struct TimelineContainerSwitcher: View {
         switch viewModel.mode {
         case .quick:
             if let previewSlot {
-                QuickTimelineView(viewModel: viewModel, onExport: onExport, previewSlot: previewSlot)
+                QuickTimelineView(viewModel: viewModel, previewSlot: previewSlot)
             } else {
-                QuickTimelineView(viewModel: viewModel, onExport: onExport)
+                QuickTimelineView(viewModel: viewModel)
             }
         case .pro:
             if let previewSlot {
-                ProTimelineView(viewModel: viewModel, onExport: onExport, previewSlot: previewSlot)
+                ProTimelineView(viewModel: viewModel, previewSlot: previewSlot)
             } else {
-                ProTimelineView(viewModel: viewModel, onExport: onExport)
+                ProTimelineView(viewModel: viewModel)
             }
         }
     }
@@ -87,10 +87,31 @@ public struct TimelineContainerSwitcher: View {
             .equatable()
             Spacer(minLength: 0)
         }
+        // Export en overlay trailing (pattern éditeurs vidéo : action en haut
+        // à droite) — le transport row de Quick est déjà saturé en portrait.
+        .overlay(alignment: .trailing) { exportHeaderButton }
         // Top padding clears the system-rendered drag indicator (~14pt above
         // the sheet content) without crowding the segmented control.
         .padding(.top, 16)
         .padding(.bottom, 10)
         .padding(.horizontal, 12)
+    }
+
+    @ViewBuilder
+    private var exportHeaderButton: some View {
+        if let onExport {
+            Button(action: onExport) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .contentShape(Rectangle().inset(by: -5))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(MeeshyColors.indigo600)
+            .padding(.top, 14)   // aligné sur le switcher, sous le drag indicator
+            .accessibilityLabel(String(localized: "story.timeline.export.button",
+                                       defaultValue: "Exporter en vidéo MP4",
+                                       bundle: .module))
+        }
     }
 }

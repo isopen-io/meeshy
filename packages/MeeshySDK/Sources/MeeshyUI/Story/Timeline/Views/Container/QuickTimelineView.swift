@@ -14,20 +14,15 @@ public struct QuickTimelineView: View {
     @State private var isExpanded: Bool = false
 
     private let previewSlot: (() -> AnyView)?
-    private let onExport: (() -> Void)?
 
     public init(viewModel: TimelineViewModel,
-                onExport: (() -> Void)? = nil,
                 @ViewBuilder previewSlot: @escaping () -> some View) {
         self.viewModel = viewModel
-        self.onExport = onExport
         self.previewSlot = { AnyView(previewSlot()) }
     }
 
-    public init(viewModel: TimelineViewModel,
-                onExport: (() -> Void)? = nil) {
+    public init(viewModel: TimelineViewModel) {
         self.viewModel = viewModel
-        self.onExport = onExport
         self.previewSlot = nil
     }
 
@@ -249,8 +244,7 @@ public struct QuickTimelineView: View {
             onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
             onZoomReset: { viewModel.zoomScale = 1.0 },
             onUndo: { viewModel.undo() },
-            onRedo: { viewModel.redo() },
-            onExport: onExport
+            onRedo: { viewModel.redo() }
         )
     }
 

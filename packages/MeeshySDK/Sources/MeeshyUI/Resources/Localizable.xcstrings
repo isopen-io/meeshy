@@ -22009,6 +22009,22 @@
         }
       }
     },
+    "story.timeline.export.button" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export as MP4 video"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter en vidéo MP4"
+          }
+        }
+      }
+    },
     "story.timeline.export.exporting" : {
       "localizations" : {
         "en" : {
@@ -22993,22 +23009,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dissolution"
-          }
-        }
-      }
-    },
-    "story.timeline.transport.export" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Export as MP4 video"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Exporter en vidéo MP4"
           }
         }
       }

@@ -16,6 +16,11 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.transport.zoomOut",
         "story.timeline.transport.zoomReset",
         "story.timeline.transport.timeReadout",
+        // Export
+        "story.timeline.export.button",
+        "story.timeline.export.exporting",
+        "story.timeline.export.failedTitle",
+        "story.timeline.export.previewTitle",
         // Mode
         "story.timeline.mode.quick",
         "story.timeline.mode.pro",
