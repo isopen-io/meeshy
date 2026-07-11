@@ -184,7 +184,11 @@ SNAPSHOT_SIMULATOR_ID, listing PNG -newer stamp, exit 1 si 0 PNG frais).
 Piège rencontré : trailing closure des appels export existants matchait le
 nouveau param audioResolver (forward-scan) → appels étiquetés progress:.
 
-VAGUE MODALE ALLÉGÉE + LIQUID GLASS (2026-07-11, /loop, en cours) :
+VAGUE MODALE ALLÉGÉE + LIQUID GLASS (2026-07-11, /loop, LIVRÉE — commits
+cf6001fd5 + 1331c2955 + 0a3ff37b6 + 928a7415c ; suites ciblées 70/70 vertes,
+build app 165 s vert, rendu VÉRIFIÉ sur simulateur iOS 26.1 réel — glass sans
+artefact, layout identique au fallback 18.2 ; baselines restaurées 18.2 après
+le banc d'essai 26.1) :
 (a) Vue simple SANS timer : TransportBar.showsTimeReadout (défaut true),
 Quick passe false (pin statique transportShowsTimeReadout testé), Pro garde
 true — la position se lit au playhead/règle en Quick. (b) ClipInspector
@@ -201,8 +205,11 @@ verre n'échantillonne pas le verre) ; sheet déjà via
 StoryTimelinePresentationStyle. 9 clés xcstrings fr+en (insertion localisée,
 153 lignes de diff — le tri alphabétique global créait 14,5k lignes, annulé).
 Baselines snapshot ré-enregistrées : inspecteur ×8, Quick ×10 (transport sans
-readout), Pro inspectorOpen ×2. Suites ciblées 44/44 vertes avant glass ;
-re-record post-glass en cours.
+readout), Pro inspectorOpen ×2 — deux fois (avant puis après glass).
+Piège rencontré (→ tasks/lessons.md) : zsh n'expanse pas une variable
+scalaire en plusieurs arguments — un run xcodebuild avec les filtres dans
+$TESTS a « réussi » en exécutant 0 test ; toujours valider sur
+« Executed N tests » avec N attendu.
 
 RESTES (différés, par priorité) :
 1. Boucle audio bg dans la PREVIEW engine (AudioMixer ne re-arme pas ; reader OK).
