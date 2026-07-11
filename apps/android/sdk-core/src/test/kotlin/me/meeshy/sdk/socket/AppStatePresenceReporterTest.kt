@@ -77,6 +77,21 @@ class AppStatePresenceReporterTest {
     }
 
     @Test
+    fun `exposes the last known state as an observable flow`() {
+        val socket: SocketManager = mockk(relaxed = true)
+        val reporter = AppStatePresenceReporter(socket)
+        // null avant la première transition — un observateur (CallViewModel)
+        // ne doit jamais confondre « inconnu » et « backgroundé ».
+        org.junit.Assert.assertNull(reporter.foreground.value)
+
+        reporter.onAppStateChanged(foreground = true)
+        org.junit.Assert.assertEquals(true, reporter.foreground.value)
+
+        reporter.onAppStateChanged(foreground = false)
+        org.junit.Assert.assertEquals(false, reporter.foreground.value)
+    }
+
+    @Test
     fun `a connection before any known state emits nothing`() {
         val socket: SocketManager = mockk(relaxed = true)
         val reporter = AppStatePresenceReporter(socket)

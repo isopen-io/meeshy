@@ -1,5 +1,8 @@
 package me.meeshy.sdk.socket
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,18 +31,25 @@ class AppStatePresenceReporter @Inject constructor(
     private val socketManager: SocketManager,
 ) {
     private val lock = Any()
-    private var lastForeground: Boolean? = null
+    private val _foreground = MutableStateFlow<Boolean?>(null)
+
+    /**
+     * Dernier état foreground connu (`null` avant la première transition) —
+     * observable par le CallViewModel pour les emits per-call
+     * `call:backgrounded`/`foregrounded` (grâce heartbeat in-call).
+     */
+    val foreground: StateFlow<Boolean?> = _foreground.asStateFlow()
 
     /** Transition foreground/background du process (edge-only). */
     fun onAppStateChanged(foreground: Boolean) = synchronized(lock) {
-        if (lastForeground == foreground) return
-        lastForeground = foreground
+        if (_foreground.value == foreground) return
+        _foreground.value = foreground
         emit(foreground)
     }
 
     /** Une socket vient de (re)monter : re-déclare le dernier état connu. */
     fun onSocketConnected() = synchronized(lock) {
-        lastForeground?.let(::emit)
+        _foreground.value?.let(::emit)
     }
 
     private fun emit(foreground: Boolean) {

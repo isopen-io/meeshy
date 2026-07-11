@@ -66,6 +66,18 @@ class CallViewModelTest {
         override val samples: Flow<CallQualitySample> = qualityFlow
     }
 
+    /** Test-driven 10 s liveness clock: emit a `Unit` per heartbeat the VM should send. */
+    private val heartbeatFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
+    private val heartbeatTicker = object : CallHeartbeatTicker {
+        override val beats: Flow<Unit> = heartbeatFlow
+    }
+
+    /** Test-driven app foreground/background state (null = pas encore connu). */
+    private val appForeground = MutableStateFlow<Boolean?>(null)
+    private val appStatePresence: me.meeshy.sdk.socket.AppStatePresenceReporter = mockk {
+        every { foreground } returns appForeground
+    }
+
     private val outgoingVideo =
         CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val incomingAudio =
@@ -114,6 +126,7 @@ class CallViewModelTest {
 
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
+        heartbeatTicker, appStatePresence,
     )
 
     @Test
@@ -426,6 +439,82 @@ class CallViewModelTest {
 
     /** Fire [times] one-second ticks; each is delivered to the connected timer collector. */
     private suspend fun tick(times: Int) = repeat(times) { tickerFlow.emit(Unit) }
+
+    // --- Liveness: call:heartbeat + call:backgrounded/foregrounded (audit #5) ---
+
+    private fun connectedIncoming(): CallViewModel {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+        return vm
+    }
+
+    @Test
+    fun `heartbeats are emitted while media is connected`() = runTest {
+        connectedIncoming()
+
+        heartbeatFlow.emit(Unit)
+        heartbeatFlow.emit(Unit)
+        heartbeatFlow.emit(Unit)
+
+        verify(exactly = 3) { signalManager.emitHeartbeat("call-9") }
+    }
+
+    @Test
+    fun `heartbeats stop once the call ends`() = runTest {
+        val vm = connectedIncoming()
+        heartbeatFlow.emit(Unit)
+
+        vm.hangUp()
+        heartbeatFlow.emit(Unit)
+        heartbeatFlow.emit(Unit)
+
+        verify(exactly = 1) { signalManager.emitHeartbeat("call-9") }
+    }
+
+    @Test
+    fun `no heartbeat is emitted while ringing`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        heartbeatFlow.emit(Unit)
+
+        verify(exactly = 0) { signalManager.emitHeartbeat(any()) }
+    }
+
+    @Test
+    fun `backgrounding during a connected call reports call backgrounded`() = runTest {
+        every { sessionRepository.currentUser } returns MutableStateFlow(mockk { every { id } returns "me" })
+        connectedIncoming()
+
+        appForeground.value = false
+
+        verify(exactly = 1) { signalManager.emitBackgrounded("call-9", "me") }
+    }
+
+    @Test
+    fun `returning to foreground during a connected call reports call foregrounded`() = runTest {
+        every { sessionRepository.currentUser } returns MutableStateFlow(mockk { every { id } returns "me" })
+        connectedIncoming()
+        appForeground.value = false
+
+        appForeground.value = true
+
+        verify(exactly = 1) { signalManager.emitForegrounded("call-9", "me") }
+    }
+
+    @Test
+    fun `app-state transitions while idle report nothing`() = runTest {
+        vm()
+
+        appForeground.value = false
+        appForeground.value = true
+
+        verify(exactly = 0) { signalManager.emitBackgrounded(any(), any()) }
+        verify(exactly = 0) { signalManager.emitForegrounded(any(), any()) }
+    }
 
     @Test
     fun `no duration is shown before the call connects`() {

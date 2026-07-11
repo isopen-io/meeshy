@@ -24,6 +24,7 @@ import me.meeshy.sdk.model.call.TelecomCallPolicy
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.model.call.WaitingCall
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -56,6 +57,8 @@ class CallViewModel @Inject constructor(
     private val telecomReporter: TelecomCallReporter,
     private val qualitySampler: CallQualitySampler,
     private val waitingTimer: CallWaitingTimer,
+    private val heartbeatTicker: CallHeartbeatTicker,
+    private val appStatePresence: AppStatePresenceReporter,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -85,6 +88,9 @@ class CallViewModel @Inject constructor(
 
     /** Collects [CallQualitySampler.samples]; alive only while media is flowing. */
     private var qualityJob: Job? = null
+
+    /** Emits `call:heartbeat` each [CallHeartbeatTicker] beat; alive only while media is flowing. */
+    private var heartbeatJob: Job? = null
 
     /** At most one second incoming call awaiting an accept-swap / reject decision. */
     private var waiting: CallWaitingState = CallWaitingState.EMPTY
@@ -117,6 +123,26 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             signalManager.iceServersRefreshed.collect(::onIceServersRefreshed)
         }
+        viewModelScope.launch {
+            appStatePresence.foreground.collect(::onAppStateChanged)
+        }
+    }
+
+    /**
+     * Transition foreground/background du process pendant un appel actif —
+     * relaie `call:backgrounded`/`foregrounded` pour que le gateway étende la
+     * tolérance heartbeat (grâce 5 min) au lieu de couper l'appel quand
+     * l'utilisateur met l'app en arrière-plan (audit appels 2026-07-11 #5).
+     * Inerte hors appel, avant identification, ou sans session (le schéma
+     * gateway exige un participantId non vide ; le serveur résout le vrai).
+     */
+    private fun onAppStateChanged(foreground: Boolean?) {
+        if (foreground == null) return
+        if (!callState.isActive || callId.isBlank()) return
+        val self = selfId
+        if (self.isBlank()) return
+        if (foreground) signalManager.emitForegrounded(callId, self)
+        else signalManager.emitBackgrounded(callId, self)
     }
 
     /**
@@ -367,6 +393,7 @@ class CallViewModel @Inject constructor(
         driveTelecom(previous, callState)
         syncTicker()
         syncQuality()
+        syncHeartbeat()
         publish()
     }
 
@@ -449,6 +476,31 @@ class CallViewModel @Inject constructor(
         qualityJob?.cancel()
         qualityJob = null
         connectionQuality = null
+    }
+
+    /**
+     * Emits the gateway liveness heartbeat exactly while media is (or is being
+     * re-)established — same window as the ticker/quality jobs. Without it a
+     * dead device is indistinguishable from a live one server-side and zombie
+     * calls linger until the 2 h GC.
+     */
+    private fun syncHeartbeat() {
+        val clockRunning = callState is CallState.Connected || callState is CallState.Reconnecting
+        if (clockRunning) startHeartbeatIfNeeded() else stopHeartbeat()
+    }
+
+    private fun startHeartbeatIfNeeded() {
+        if (heartbeatJob != null) return
+        heartbeatJob = viewModelScope.launch {
+            heartbeatTicker.beats.collect {
+                emitIfIdentified(signalManager::emitHeartbeat)
+            }
+        }
+    }
+
+    private fun stopHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = null
     }
 
     private fun publish() {

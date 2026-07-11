@@ -263,6 +263,28 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `emitBackgrounded sends callId and the self participant id`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitBackgrounded("call-9", participantId = "me")
+        verify { socket.emit("call:backgrounded", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("me")
+    }
+
+    @Test
+    fun `emitForegrounded sends callId and the self participant id`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitForegrounded("call-9", participantId = "me")
+        verify { socket.emit("call:foregrounded", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("me")
+    }
+
+    @Test
     fun `emitToggleAudio sends callId and enabled flag`() {
         val (managerAndSocket, _) = managerWithHandlers()
         val (manager, socket) = managerAndSocket

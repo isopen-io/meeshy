@@ -223,6 +223,26 @@ class CallSignalManager @Inject constructor(
     fun emitRequestIceServers(callId: String) = emit("call:request-ice-servers", callId)
 
     /**
+     * Le device passe en arrière-plan pendant CET appel — le gateway étend la
+     * tolérance heartbeat (grâce 5 min, `BACKGROUND_HEARTBEAT_TIMEOUT_MS`) au
+     * lieu de couper l'appel à 120 s de silence. Le schéma gateway exige un
+     * `participantId` non vide mais le serveur résout le SIEN depuis la socket
+     * authentifiée (jamais de confiance client) — le userId local suffit.
+     */
+    fun emitBackgrounded(callId: String, participantId: String) =
+        socketManager.emit(
+            "call:backgrounded",
+            JSONObject().put("callId", callId).put("participantId", participantId),
+        )
+
+    /** Retour au premier plan pendant CET appel — tolérance heartbeat normale. */
+    fun emitForegrounded(callId: String, participantId: String) =
+        socketManager.emit(
+            "call:foregrounded",
+            JSONObject().put("callId", callId).put("participantId", participantId),
+        )
+
+    /**
      * Liveness beat the gateway uses to detect a dead peer (heartbeat timeout →
      * zombie-call cleanup) instead of waiting for the multi-hour GC. Parity with
      * iOS `emitCallHeartbeat` — the gateway resolves the participant from the
