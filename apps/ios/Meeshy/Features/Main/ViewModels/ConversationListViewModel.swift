@@ -1477,6 +1477,23 @@ class ConversationListViewModel: ObservableObject {
         // disappears because `filterConversations` hides deletedForUserAt != nil;
         // on a 4xx the store clears deletedForUserAt and the row reappears.
         try? await store.apply(.deleteForUser, for: conversationId)
+        await sweepLocalCallTranscripts(forConversation: conversationId)
+    }
+
+    /// Every local call transcript for this conversation, swept alongside the
+    /// (optimistic, rollback-capable) conversation delete. No secondary index
+    /// needed — the existing local messages cache already carries each call
+    /// message's `callSummary.callId`, which IS the join from "this
+    /// conversation" to "its calls". Accepted, low-severity edge case: a
+    /// rolled-back delete (4xx) doesn't un-sweep already-invalidated
+    /// transcripts — same risk class already accepted for other local-cache-only
+    /// invalidations elsewhere in the app. See
+    /// docs/superpowers/specs/2026-07-11-call-transcript-history-design.md.
+    private func sweepLocalCallTranscripts(forConversation conversationId: String) async {
+        let messages = await CacheCoordinator.shared.messages.load(for: conversationId).snapshot() ?? []
+        for callId in messages.compactMap(\.callSummary?.callId) {
+            await CallTranscriptStore.shared.invalidate(for: callId)
+        }
     }
 
     // MARK: - Move to Section

@@ -985,9 +985,15 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleDeletedMessage(_ event: MessageDeletedEvent) async {
+        let callId = await cache.messages.load(for: event.conversationId).snapshot()?
+            .first(where: { $0.id == event.messageId })?.callSummary?.callId
+
         await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
             msg.deletedAt = Date()
             msg.content = ""
+        }
+        if let callId {
+            await CallTranscriptStore.shared.invalidate(for: callId)
         }
         _messagesDidChange.send(event.conversationId)
         // If the deleted message was the conversation's last message, the list-row

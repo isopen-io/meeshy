@@ -403,6 +403,35 @@ final class ConversationListViewModelTests: XCTestCase {
                      "4xx must restore the conversation (clear deletedForUserAt)")
     }
 
+    // MARK: - deleteConversation: sweeps local call transcripts
+
+    func test_deleteConversation_sweepsLocalCallTranscripts() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv-call-1")])
+        await sut.storeHydrationTask?.value
+
+        let callMessage = MeeshyMessage(
+            conversationId: "conv-call-1", content: "",
+            callSummary: CallSummaryMetadata(
+                callId: "call-sweep-1", initiatorId: "user-1", callType: .audio, outcome: .completed,
+                durationSeconds: 12, bytesTotal: nil, bytesEstimated: false, networkQuality: nil
+            )
+        )
+        try? await CacheCoordinator.shared.messages.save([callMessage], for: "conv-call-1")
+        let transcript = CallTranscript(
+            callId: "call-sweep-1", conversationId: "conv-call-1",
+            callStartedAt: Date(timeIntervalSince1970: 0), segments: []
+        )
+        await CallTranscriptStore.shared.saveMerging(transcript)
+
+        await sut.deleteConversation(conversationId: "conv-call-1")
+        await drainMainQueue()
+
+        let loaded = await CallTranscriptStore.shared.transcript(for: "call-sweep-1")
+        XCTAssertNil(loaded, "deleting a conversation must sweep every local call transcript it carried")
+    }
+
     // MARK: - filterConversations hides soft-deleted rows
 
     func test_filterConversations_excludesSoftDeleted() {
