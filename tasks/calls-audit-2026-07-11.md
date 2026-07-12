@@ -644,3 +644,16 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > Ended(Failed) retryable. TDD core:model vert. La détection LOCALE d'échec (initiate
 > fail, connect timeout, reconnect budget) produisait DÉJÀ Failed/ConnectionLost sur
 > les 3 → seul le chemin signalé-serveur divergeait, désormais aligné.
+
+> CLÔTURE retry-on-failure 3 plateformes (2026-07-12) — iOS Tests VERT sur
+> `480b52da4` (run 29193509855, ~18 min, dans la baseline 16-20 min). Feature
+> COMPLÈTE et validée là où une CI existe :
+>   - web : déployé live (7e6ea5d49) + 4 fichiers de test
+>   - iOS : 480b52da4, iOS Tests VERT + re-dial correctness vérifiée (reset .ended→
+>     .idle avant guard, settle-token bail = pas de clobber, canRetryCall gate sur
+>     la raison courante)
+>   - Android : ca19c634f (mapping serveur aligné), gradle core:model + feature:calls
+>     verts, orchestration CallViewModel testée (retryable/re-dial/inert-hangup)
+> Parité CERTIFIÉE à 3 niveaux : règle policy (byte-identique) + mappings d'entrée
+> (local + signalé-serveur) + orchestration. Aucune dette de test. Reste hors
+> périmètre autonome : ship App Store (iOS/Android) + test physique 2 appareils.
