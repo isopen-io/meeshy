@@ -74,11 +74,20 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   Build iOS vert. **Reste ouvert (perf, pas watchdog) → #6** : le vrai batching (1 POST/N sessions)
   + backoff 429 réduiront le 35 s réseau lui-même.
 
-- [ ] **#6 — 429 rate-limit sur POST /posts/engagement/batch**
+- [x] **#6 — 429 rate-limit sur POST /posts/engagement/batch** — `57f76b902`
   Evidence : `Retryable status 429 on POST /posts/engagement/batch retry 1/3 after 30.0s` ×3.
   Hypothèse : le client martèle l'endpoint ; le retry fixe (30 s) ignore `Retry-After`.
   Fichiers : batcher engagement iOS + rate-limit gateway de cette route.
   Fix piste : respecter `Retry-After`, backoff exponentiel + jitter, coalescer/réduire la fréquence.
+  **Cause prouvée** : rate-limit gateway `engagement` = **20/min/user** ; le client postait **1 POST
+  PAR session** (`EngagementDispatcher.dispatch` → `record([session])`) dans la boucle série de
+  l'outbox → ≤50 POST/flush → 429. L'endpoint accepte pourtant un **tableau**. (L'hypothèse
+  « ignore Retry-After » est **fausse** : `APIClient.retryDelay` respecte déjà `min(Retry-After,30)`
+  + exponentiel `1<<attempt` ; l'outbox a aussi `pow(2,n)*5`.)
+  **Fix** : `EngagementOutbox.flush` dispatch TOUTES les sessions prêtes en **UN** POST (1 req ≪ 20/min) ;
+  `dispatch([sessions])` filtre le cross-user avant POST. Jitter **non nécessaire** une fois batché
+  (les rows partent en 1 POST → pas de thundering herd). TDD ×5. Build iOS vert. Résout aussi le
+  35 s réseau résiduel de #5.
 
 - [ ] **#7 — « Publishing changes from within view updates is not allowed »**
   Evidence : warning couplé à `_systemColorScheme changed` → `_theme changed`.
@@ -156,3 +165,5 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 - 2026-07-12 : #5 livré `39c0480fe` — flush engagement borné (`runBounded` 8 s) + boucle SDK
   cancellation-aware. Supprime le blocage 15-35 s de la transition BG (anti-watchdog). Build vert.
   Le batching réel (perf réseau) reste pour #6.
+- 2026-07-12 : #6 livré `57f76b902` — batch le flush en 1 POST/≤50 sessions (rate-limit 20/min).
+  Supprime le martèlement 429 ET le 35 s réseau résiduel de #5. Filtre cross-user pré-POST. Build vert.
