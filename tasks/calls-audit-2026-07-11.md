@@ -422,3 +422,12 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > 0 crash-loop. Le seul changement gateway depuis la révision précédente
 > était cet endpoint (le reste = frontend/docs). Pipeline analytics
 > intégralement live en prod.
+
+> Ring-timeout web #1879 DÉPLOYÉ (2026-07-12) : frontend prod re-déployé de
+> a399fdb0e (CALL_TIMEOUT_MS=30s, bug de raccroché prématuré sur callee lent
+> 30-45s) vers 05daf2068 (45s, parité iOS outgoingRingTimeoutSeconds).
+> Révision conteneur = 05daf2068 healthy, meeshy.me/www 200 après la fenêtre
+> Traefik. Le seul changement frontend depuis la révision précédente était
+> ce fix. Prod entièrement à jour côté serveur+web : gateway b3a336252
+> (analytics), frontend 05daf2068 (ring 45s). Restent les builds app iOS/
+> Android (app stores).
