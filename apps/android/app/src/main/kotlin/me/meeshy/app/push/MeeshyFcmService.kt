@@ -137,6 +137,18 @@ class MeeshyFcmService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // Bouton « Répondre » : mêmes extras que le full-screen intent + le flag
+        // auto-answer — l'écran d'appel décroche directement (gated permissions)
+        // au lieu d'exiger un second tap sur Accepter. RequestCode distinct :
+        // un même requestCode écraserait le PendingIntent du tap/full-screen.
+        val answerIntent = Intent(fullScreenIntent).putExtra(EXTRA_AUTO_ANSWER, true)
+        val answerPendingIntent = PendingIntent.getActivity(
+            this,
+            ("answer:" + push.callId).hashCode(),
+            answerIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         // Prisme : le push d'appel est data-only et le serveur a déjà résolu la
         // langue de l'utilisateur (data.title/body localisés) — les ressources
         // (locale appareil) ne servent que de fallback pour un gateway antérieur.
@@ -157,10 +169,10 @@ class MeeshyFcmService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setFullScreenIntent(pendingIntent, true)
-            // Répondre = le full-screen intent existant (écran d'appel entrant) ;
-            // Refuser = DeclineCallReceiver. Sur API < 31, CallStyle dégrade en
+            // Répondre = décroche directement (auto-answer) ; Refuser =
+            // DeclineCallReceiver. Sur API < 31, CallStyle dégrade en
             // notification standard avec les deux actions.
-            .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declinePendingIntent, pendingIntent))
+            .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declinePendingIntent, answerPendingIntent))
             .build()
 
         manager.notify(push.callId.hashCode(), notification)
@@ -208,5 +220,6 @@ class MeeshyFcmService : FirebaseMessagingService() {
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_CALLER_NAME = "callerName"
         const val EXTRA_IS_VIDEO = "isVideo"
+        const val EXTRA_AUTO_ANSWER = "autoAnswer"
     }
 }

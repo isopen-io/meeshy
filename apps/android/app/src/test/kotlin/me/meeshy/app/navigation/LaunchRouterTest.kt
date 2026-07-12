@@ -137,4 +137,32 @@ class LaunchRouterTest {
         assertThat(configOf(route).callId).isEqualTo("call-3")
         assertThat(configOf(route).isOutgoing).isFalse()
     }
+
+    // --- autoAnswer : bouton « Répondre » de la notification CallStyle --------
+
+    @Test
+    fun `the notification Answer button routes with the auto-answer flag`() {
+        val route = LaunchRouter.route(
+            LaunchExtras(callId = "call-abc", callerName = "Alice", autoAnswer = true),
+        )!!
+
+        assertThat(Uri.parse(route).getQueryParameter(CallRoute.ANSWER_ARG)).isEqualTo("true")
+    }
+
+    @Test
+    fun `a plain notification tap never auto-answers`() {
+        val route = LaunchRouter.route(LaunchExtras(callId = "call-abc", callerName = "Alice"))!!
+
+        assertThat(Uri.parse(route).getQueryParameter(CallRoute.ANSWER_ARG)).isEqualTo("false")
+    }
+
+    @Test
+    fun `a socket incoming offer never auto-answers`() {
+        val route = LaunchRouter.routeIncomingSocketOffer(
+            offer = WaitingCall(callId = "call-3", callerId = "u3", callerName = "Dave", isVideo = false),
+            currentRoute = null,
+        )!!
+
+        assertThat(Uri.parse(route).getQueryParameter(CallRoute.ANSWER_ARG)).isEqualTo("false")
+    }
 }

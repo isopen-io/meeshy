@@ -160,6 +160,12 @@
 > call:end immédiat si socket vivante, sinon DeclinedCallStore drainé au
 > prochain connect (collect MeeshyApplication, emitEnd idempotent).
 > Dégrade en notification à actions sur API < 31.
+> Répondre = décroché DIRECT (autoAnswer bout-en-bout : intent Answer
+> distinct → LaunchExtras/LaunchRouter → arg answer de CallRoute →
+> CallScreen accept gated permissions, gardé sur INCOMING — une
+> ré-entrée ne re-join jamais ; le tap simple et l'offre socket ne
+> décrochent jamais seuls).
+
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`

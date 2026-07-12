@@ -76,6 +76,8 @@ fun CallScreen(
     config: CallConfig,
     onClose: () -> Unit,
     onMinimize: () -> Unit = {},
+    /** Bouton « Répondre » de la notification : décrocher dès l'arrivée (gated permissions). */
+    autoAnswer: Boolean = false,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -108,7 +110,18 @@ fun CallScreen(
     }
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
-        if (config.isOutgoing) withMediaPermissions { viewModel.start(config) } else viewModel.start(config)
+        if (config.isOutgoing) {
+            withMediaPermissions { viewModel.start(config) }
+        } else {
+            viewModel.start(config)
+            // Bouton « Répondre » de la notification : décrocher directement —
+            // même chemin gated permissions que le bouton Accepter de l'écran.
+            // Gardé sur INCOMING : une ré-entrée (second tap de notification,
+            // onNewIntent) sur un appel déjà décroché ne re-join jamais.
+            if (autoAnswer && viewModel.state.value.status == CallStatus.INCOMING) {
+                withMediaPermissions { viewModel.accept() }
+            }
+        }
     }
 
     // Auto-dismiss a settled call after a short beat so the "Call ended" screen does

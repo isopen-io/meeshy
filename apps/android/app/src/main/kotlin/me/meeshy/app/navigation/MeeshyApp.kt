@@ -426,6 +426,7 @@ fun MeeshyApp(
                     navArgument(CallRoute.VIDEO_ARG) { type = NavType.BoolType; defaultValue = false },
                     navArgument(CallRoute.CALL_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
                     navArgument(CallRoute.INCOMING_ARG) { type = NavType.BoolType; defaultValue = false },
+                    navArgument(CallRoute.ANSWER_ARG) { type = NavType.BoolType; defaultValue = false },
                 ),
             ) { entry ->
                 val args = entry.arguments
@@ -437,6 +438,7 @@ fun MeeshyApp(
                         callId = args?.getString(CallRoute.CALL_ID_ARG)?.let(Uri::decode),
                         incoming = args?.getBoolean(CallRoute.INCOMING_ARG) ?: false,
                     ),
+                    autoAnswer = args?.getBoolean(CallRoute.ANSWER_ARG) ?: false,
                     // Activity-scoped instance (see the hoist above) → the CALL
                     // destination re-attaches to the live call instead of spinning
                     // up a nav-scoped one that would die on the next pop.
