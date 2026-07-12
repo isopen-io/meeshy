@@ -629,3 +629,18 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > (session iOS active dessus) + 4 source-guards (vérifiés Python) + test policy pur.
 > Les 3 plateformes offrent « Réessayer » sur un échec transitoire, MÊME
 > règle de policy (SSOT). Reste : verdict iOS Tests + ship App Store.
+
+> Parité retry APPROFONDIE Android (2026-07-12, ca19c634f) — divergence réelle
+> trouvée en certifiant la parité des 3 policies. Les RÈGLES de décision retry
+> étaient déjà byte-identiques (failed/connectionLost) ; la divergence était dans
+> le MAPPING des raisons de fin distante :
+>   - iOS handleRemoteEnd : `failed`/`connectionlost` serveur → .connectionLost (RETRYABLE)
+>   - web isRetryableCallFailure : `failed`/`connectionLost` → RETRYABLE
+>   - Android endedEvent : TOUTE fin non-`missed` → RemoteHangUp → Remote (NON-retryable)
+> Scénario reachable : un `call:ended reason=connectionLost` serveur/pair qui atteint
+> l'appelant AVANT l'épuisement de son budget de reconnexion local → iOS/web offrent
+> Réessayer, Android non (puis FSM terminale ignore le ReconnectFailed local tardif).
+> Fix : Android endedEvent mappe failed|connectionLost → ConnectionFailed(reason) →
+> Ended(Failed) retryable. TDD core:model vert. La détection LOCALE d'échec (initiate
+> fail, connect timeout, reconnect budget) produisait DÉJÀ Failed/ConnectionLost sur
+> les 3 → seul le chemin signalé-serveur divergeait, désormais aligné.
