@@ -398,4 +398,46 @@ final class VoIPPushManagerTests: XCTestCase {
             "mirroring the failure handling in reportIncomingVoIPCall."
         )
     }
+
+    // MARK: - #13 — forceReregister cooldown (anti PushKit churn)
+
+    private func makeRecord(token: String, at seconds: TimeInterval) -> VoIPTokenRecord {
+        VoIPTokenRecord(token: token, at: Date(timeIntervalSince1970: seconds))
+    }
+
+    func test_shouldSkipForceReregister_sameTokenWithinCooldown_skips() {
+        let skip = VoIPPushManager.shouldSkipForceReregister(
+            lastRecord: makeRecord(token: "tok", at: 1000),
+            currentToken: "tok",
+            now: Date(timeIntervalSince1970: 1100),   // 100s < 300s cooldown
+            cooldown: 300)
+        XCTAssertTrue(skip, "an unchanged token registered inside the cooldown must NOT churn PushKit")
+    }
+
+    func test_shouldSkipForceReregister_invalidatedToken_proceeds() {
+        let skip = VoIPPushManager.shouldSkipForceReregister(
+            lastRecord: makeRecord(token: "tok", at: 1000),
+            currentToken: nil,   // didInvalidatePushTokenFor nil'd it
+            now: Date(timeIntervalSince1970: 1100),
+            cooldown: 300)
+        XCTAssertFalse(skip, "a nil (invalidated) token must force a fresh registration cycle")
+    }
+
+    func test_shouldSkipForceReregister_changedToken_proceeds() {
+        let skip = VoIPPushManager.shouldSkipForceReregister(
+            lastRecord: makeRecord(token: "old", at: 1000),
+            currentToken: "new",
+            now: Date(timeIntervalSince1970: 1100),
+            cooldown: 300)
+        XCTAssertFalse(skip, "a changed token must force a fresh registration cycle")
+    }
+
+    func test_shouldSkipForceReregister_staleToken_proceeds() {
+        let skip = VoIPPushManager.shouldSkipForceReregister(
+            lastRecord: makeRecord(token: "tok", at: 1000),
+            currentToken: "tok",
+            now: Date(timeIntervalSince1970: 1400),   // 400s > 300s cooldown
+            cooldown: 300)
+        XCTAssertFalse(skip, "past the cooldown, force a fresh cycle (reactivation net)")
+    }
 }
