@@ -434,9 +434,12 @@ class CallSignalManager @Inject constructor(
         /**
          * Attente max de la connexion socket avant un initiate/join (cold start
          * depuis la notification full-screen : restauration d'auth + TLS +
-         * handshake ≈ 1-3 s ; 8 s couvre un réseau mobile faible).
+         * handshake). Parité iOS : `CallManager` attend `isConnected` jusqu'à
+         * 30 s dans son chemin de réponse — l'utilisateur A décroché, on tient
+         * tant que la fenêtre de sonnerie serveur (60 s) le permet plutôt que
+         * de perdre un appel qu'un connect à 12 s aurait sauvé.
          */
-        const val CONNECT_WAIT_MS = 8_000L
+        const val CONNECT_WAIT_MS = 30_000L
 
         /** Message du fast-fail quand la socket n'a jamais connecté dans la fenêtre. */
         const val SOCKET_OFFLINE = "socket not connected"
