@@ -1,6 +1,7 @@
 package me.meeshy.sdk.model.media
 
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.max
@@ -91,6 +92,118 @@ object ThumbHash {
         if (hasAlpha) require(hash.size >= 6) { "Alpha ThumbHash needs at least 6 bytes" }
         val a = if (hasAlpha) (byte(hash, 5) and 15) / 15.0 else 1.0
         return ycocgToColor(l, p, q, a)
+    }
+
+    private const val MAX_SIDE = 100
+
+    /**
+     * Encodes a small RGBA raster into a ThumbHash placeholder — the inverse of [decode],
+     * used app-side to generate the blur seed before an image upload (feature-parity §P).
+     *
+     * Ports Evan Wallace's canonical `rgbaToThumbHash`: alpha-weighted average colour, an
+     * RGBA→LPQA transform composited atop that average, and a forward DCT of each channel
+     * into a DC term plus scale-normalised AC nibbles. The luminance grid uses fewer bits
+     * when an alpha channel is present, exactly as the reference (and as [decode] expects).
+     *
+     * **Surpasses** the reference on its unguarded inputs: it rejects a non-positive or
+     * over-100 side and a [rgba] buffer too short for `width·height·4` pixels with an
+     * [IllegalArgumentException], where the reference would read past the buffer and emit a
+     * hash full of `NaN`-derived garbage.
+     *
+     * @param rgba row-major, 4 bytes per pixel (R, G, B, A), each an unsigned channel value.
+     */
+    fun encode(width: Int, height: Int, rgba: ByteArray): ByteArray {
+        require(width in 1..MAX_SIDE && height in 1..MAX_SIDE) {
+            "ThumbHash encodes 1..$MAX_SIDE px per side, got ${width}x$height"
+        }
+        require(rgba.size >= width * height * 4) {
+            "rgba buffer too small: need ${width * height * 4} bytes, got ${rgba.size}"
+        }
+
+        val count = width * height
+        var avgR = 0.0
+        var avgG = 0.0
+        var avgB = 0.0
+        var avgA = 0.0
+        var j = 0
+        for (i in 0 until count) {
+            val alpha = byte(rgba, j + 3) / 255.0
+            avgR += alpha / 255.0 * byte(rgba, j)
+            avgG += alpha / 255.0 * byte(rgba, j + 1)
+            avgB += alpha / 255.0 * byte(rgba, j + 2)
+            avgA += alpha
+            j += 4
+        }
+        if (avgA > 0) {
+            avgR /= avgA
+            avgG /= avgA
+            avgB /= avgA
+        }
+
+        val hasAlpha = avgA < count
+        val lLimit = if (hasAlpha) 5 else 7
+        val maxSide = max(width, height)
+        val lx = max(1, roundHalfUp(lLimit.toDouble() * width / maxSide))
+        val ly = max(1, roundHalfUp(lLimit.toDouble() * height / maxSide))
+
+        val lCh = DoubleArray(count)
+        val pCh = DoubleArray(count)
+        val qCh = DoubleArray(count)
+        val aCh = DoubleArray(count)
+        j = 0
+        for (i in 0 until count) {
+            val alpha = byte(rgba, j + 3) / 255.0
+            val r = avgR * (1 - alpha) + alpha / 255.0 * byte(rgba, j)
+            val g = avgG * (1 - alpha) + alpha / 255.0 * byte(rgba, j + 1)
+            val b = avgB * (1 - alpha) + alpha / 255.0 * byte(rgba, j + 2)
+            lCh[i] = (r + g + b) / 3.0
+            pCh[i] = (r + g) / 2.0 - b
+            qCh[i] = r - g
+            aCh[i] = alpha
+            j += 4
+        }
+
+        val lEnc = encodeChannel(lCh, width, height, max(3, lx), max(3, ly))
+        val pEnc = encodeChannel(pCh, width, height, 3, 3)
+        val qEnc = encodeChannel(qCh, width, height, 3, 3)
+        val aEnc = if (hasAlpha) encodeChannel(aCh, width, height, 5, 5) else null
+
+        val isLandscape = width > height
+        val header24 = roundHalfUp(63 * lEnc.dc) or
+            (roundHalfUp(31.5 + 31.5 * pEnc.dc) shl 6) or
+            (roundHalfUp(31.5 + 31.5 * qEnc.dc) shl 12) or
+            (roundHalfUp(31 * lEnc.scale) shl 18) or
+            ((if (hasAlpha) 1 else 0) shl 23)
+        val header16 = (if (isLandscape) ly else lx) or
+            (roundHalfUp(63 * pEnc.scale) shl 3) or
+            (roundHalfUp(63 * qEnc.scale) shl 9) or
+            ((if (isLandscape) 1 else 0) shl 15)
+
+        val out = ArrayList<Int>()
+        out.add(header24 and 0xFF)
+        out.add((header24 shr 8) and 0xFF)
+        out.add((header24 shr 16) and 0xFF)
+        out.add(header16 and 0xFF)
+        out.add((header16 shr 8) and 0xFF)
+        if (aEnc != null) {
+            out.add((roundHalfUp(15 * aEnc.dc) or (roundHalfUp(15 * aEnc.scale) shl 4)) and 0xFF)
+        }
+
+        val acStart = out.size
+        val acChannels =
+            if (aEnc != null) listOf(lEnc.ac, pEnc.ac, qEnc.ac, aEnc.ac)
+            else listOf(lEnc.ac, pEnc.ac, qEnc.ac)
+        var acIndex = 0
+        for (channel in acChannels) {
+            for (f in channel) {
+                val byteIndex = acStart + (acIndex shr 1)
+                while (out.size <= byteIndex) out.add(0)
+                out[byteIndex] = out[byteIndex] or (roundHalfUp(15 * f) shl ((acIndex and 1) shl 2))
+                acIndex++
+            }
+        }
+
+        return ByteArray(out.size) { out[it].toByte() }
     }
 
     /** Decodes the full RGBA placeholder raster. */
@@ -221,6 +334,49 @@ object ThumbHash {
             blue = clampUnit(b),
             alpha = clampUnit(a),
         )
+    }
+
+    private class EncodedChannel(val dc: Double, val ac: DoubleArray, val scale: Double)
+
+    /**
+     * Forward DCT of one channel into a DC term and scale-normalised AC coefficients,
+     * over the `nx × ny` basis-frequency triangle. Mirrors the reference `encodeChannel`;
+     * AC values are mapped to `[0,1]` via `0.5 + 0.5/scale·ac` only when `scale > 0`.
+     */
+    private fun encodeChannel(
+        channel: DoubleArray,
+        w: Int,
+        h: Int,
+        nx: Int,
+        ny: Int,
+    ): EncodedChannel {
+        var dc = 0.0
+        val ac = ArrayList<Double>()
+        var scale = 0.0
+        val fx = DoubleArray(w)
+        for (cy in 0 until ny) {
+            var cx = 0
+            while (cx * ny < nx * (ny - cy)) {
+                for (x in 0 until w) fx[x] = cos(PI / w * cx * (x + 0.5))
+                var f = 0.0
+                for (y in 0 until h) {
+                    val fy = cos(PI / h * cy * (y + 0.5))
+                    for (x in 0 until w) f += channel[x + y * w] * fx[x] * fy
+                }
+                f /= (w * h).toDouble()
+                if (cx != 0 || cy != 0) {
+                    ac.add(f)
+                    scale = max(scale, abs(f))
+                } else {
+                    dc = f
+                }
+                cx++
+            }
+        }
+        if (scale > 0) {
+            for (i in ac.indices) ac[i] = 0.5 + 0.5 / scale * ac[i]
+        }
+        return EncodedChannel(dc, ac.toDoubleArray(), scale)
     }
 
     private fun countAc(nx: Int, ny: Int): Int {

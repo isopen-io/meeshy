@@ -1,5 +1,40 @@
 # Progress — state & what to do next
 
+> On 2026-07-12 **ThumbHash encoder** landed (slice `media-thumbhash-encode`, feature-parity §P —
+> "ThumbHash blur placeholders for all media", line 2144; the generation half of the placeholder pipeline,
+> companion to the decoder that landed earlier the same day). Ships the pure `ThumbHash.encode(width, height,
+> rgba: ByteArray) → ByteArray` in the existing `me.meeshy.sdk.model.media.ThumbHash` object — a faithful port
+> of Evan Wallace's canonical `rgbaToThumbHash`: alpha-weighted average colour → RGBA→LPQA transform composited
+> atop that average → forward DCT of each channel (via a new private `encodeChannel`/`EncodedChannel`) into a DC
+> term plus scale-normalised AC nibbles, with fewer luminance basis bits when an alpha channel is present, exactly
+> as `decode` expects. The `p`/`q` colour-difference transform is **derived as the exact algebraic inverse of THIS
+> repo's decoder** (`B=l−⅔p`, `R=(3l−B+q)/2`, `G=R−q` ⟹ `l=(r+g+b)/3`, `p=(r+g)/2−b`, `q=r−g`) rather than copied
+> from memory — the RED phase caught a channel-swap (green decoded 0.807 instead of 0.4) from the naïve
+> `p=(r+b)/2−g`, `q=r−b` and the derivation fixed it. **Surpasses** the reference on its unguarded inputs: rejects
+> a non-positive or >100 side and an `rgba` buffer shorter than `width·height·4` with `IllegalArgumentException`
+> (the reference reads past the buffer and emits `NaN`-derived garbage). **+13 tests**: hand-derived header bytes
+> for a solid grey (`[32,8,2,7,0]`, independent of `decode`); solid-colour round-trip through the independent
+> `decode` (average tint + flat corner within 6-bit quantisation); opaque→no-alpha-channel; landscape/portrait/
+> square orientation; a left→right luminance gradient decoding brighter on the right (exercises the AC/DCT
+> encode + scale-normalisation branch); uniform partial transparency detection + level round-trip; a left→right
+> alpha gradient (exercises the alpha 5×5 encode branch); a fully-transparent image (`avgA=0` skip-normalise
+> branch); and the three input guards. A **two-mutation RED check** (flip `q=r−g`→`g−r` + force `isLandscape=false`)
+> failed exactly the 2 relevant tests (colour round-trip + landscape), confirming they are behavioural not
+> tautological. `:core:model:testDebugUnitTest --tests 'me.meeshy.sdk.model.media.*'` green (13 new + 21 decoder
+> = 34); full `assembleDebug testDebugUnitTest` across every module → **BUILD SUCCESSFUL** (APK produced, all unit
+> tests pass). One environment note (see NOTES 2026-07-12 locale entry): the full-tree test compile needs
+> `LANG=C.utf8` because a `:sdk-core` test method name carries an em-dash — under the container's default POSIX
+> locale `sun.jnu.encoding` is ASCII and Kotlin throws `InvalidPathException` writing that class file; a UTF-8
+> locale (daemon restarted) fixes it. Reviewer **PASS** (diff `apps/android` only — `:core:model` [`ThumbHash.kt`
+> +encoder, new `ThumbHashEncodeTest.kt`], `feature-parity.md`, routine docs; no production logic outside; **SDK
+> purity** — pure encoder in `:core:model`, the app-side `Bitmap`→`rgba` extraction stays app-side; **SSOT** — one
+> object owns both directions of the format so encode and decode can't drift, `p`/`q` derived FROM the decoder;
+> **UDF/instant-app** — pure function, no state or UI; **colour/UX coherence** — no UI in this slice; **no coverage
+> floor lowered, no test weakened**). **Next slice:** the app-side `Bitmap`→`rgba` extraction + `ThumbHash.encode`
+> wired into the upload path to generate the placeholder seed, the app-side raster→`Bitmap` wrap + Coil placeholder
+> that consumes `ThumbHash.decode`, the app-side Bitmap re-encode consuming `ImageCompressionPlan`, the voice
+> recorder pill consuming the `waveform` cores, or the chat media view consuming `MediaAutoDownloadDecider`.
+
 > On 2026-07-12 **ThumbHash decoder** landed (slice `media-thumbhash-decode`, feature-parity §P —
 > "ThumbHash blur placeholders for all media", line 2144; also underpinning the progressive-image
 > item at line ~207). Ships the pure decode beneath the app-side blur placeholder. Pure `:core:model`

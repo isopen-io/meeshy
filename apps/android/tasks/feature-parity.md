@@ -2148,8 +2148,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`averageColor`, `approximateAspectRatio`, `hasAlpha`, `isLandscape`, `decode` → `ThumbHashImage`
       (w,h,rgba)); DC/AC YCoCg→RGB DCT over primitives, no Android `Bitmap`. **Surpasses** the reference:
       rejects a hash too short for the region it reads (`IllegalArgumentException` vs silent OOB) and clamps
-      the raster to ≥1×1 so a degenerate header can't yield a 0-sized image. App-side raster→`Bitmap` wrap +
-      Coil placeholder wiring + slide-level ThumbHash *generation* (encode) still pending. +21 tests.
+      the raster to ≥1×1 so a degenerate header can't yield a 0-sized image. +21 tests.
+      — **ThumbHash *encoder* shipped** (slice `media-thumbhash-encode`, 2026-07-12): `ThumbHash.encode(width,
+      height, rgba)` → hash `ByteArray`, faithful port of Evan Wallace's `rgbaToThumbHash` (alpha-weighted
+      average colour, RGBA→LPQA composited atop the average, forward DCT per channel into DC + scale-normalised
+      AC nibbles, fewer luminance bits when alpha present). The `p`/`q` transform is derived as the exact inverse
+      of *this repo's* decoder (`p=(r+g)/2−b`, `q=r−g`) so encode∘decode round-trips. **Surpasses** the
+      reference's unguarded inputs: rejects a non-positive / over-100 side and a buffer shorter than
+      `w·h·4` (`IllegalArgumentException` vs reading past the buffer into `NaN` garbage). +13 tests (hand-derived
+      header bytes, solid-colour/gradient/alpha round-trips through `decode`, orientation, guards). App-side
+      raster→`Bitmap` wrap + Coil placeholder wiring + slide-level generation (encode → upload) still pending.
 
 ## Q. Cross-cutting infrastructure
 - [ ] Cache-first / SWR data layer (`CacheResult`, `cacheFirstFlow`, Room as single SoT)
