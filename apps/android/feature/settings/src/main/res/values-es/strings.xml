@@ -207,4 +207,24 @@
     <string name="crash_kind_anr">ANR</string>
     <string name="crash_kind_cpu">CPU</string>
     <string name="crash_kind_disk">Disco</string>
+    <string name="about_title">Acerca de</string>
+    <string name="about_app_name">Meeshy</string>
+    <string name="about_version_label">Versión %1$s</string>
+    <string name="about_section_informations">Información</string>
+    <string name="about_section_description">Descripción</string>
+    <string name="about_section_features">Funciones</string>
+    <string name="about_section_links">Enlaces</string>
+    <string name="about_info_platform">Plataforma</string>
+    <string name="about_info_application_id">ID de aplicación</string>
+    <string name="about_info_sdk_version">Versión del SDK</string>
+    <string name="about_description_body">Meeshy es una plataforma de mensajería en tiempo real de alto rendimiento con traducción multilingüe, clonación de voz y cifrado de extremo a extremo.</string>
+    <string name="about_feature_encryption">Cifrado de extremo a extremo</string>
+    <string name="about_feature_translation">Traducción en tiempo real</string>
+    <string name="about_feature_voice_cloning">Clonación de voz</string>
+    <string name="about_feature_themes">Temas personalizables</string>
+    <string name="about_feature_cloud_sync">Sincronización en la nube</string>
+    <string name="about_link_website">Sitio web</string>
+    <string name="about_link_twitter">Twitter / X</string>
+    <string name="about_link_github">GitHub</string>
+    <string name="about_copyright">2024–2026 Meeshy. Todos los derechos reservados.</string>
 </resources>
