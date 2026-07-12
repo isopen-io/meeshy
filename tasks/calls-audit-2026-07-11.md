@@ -145,6 +145,13 @@
 > report CallKit → le téléphone sonne pour rien). Alignés sur la fenêtre
 > de sonnerie serveur (60 s). Scoping : silent n'a qu'UN producteur
 > (call-push-mirroring) — les pushes messages/badges inchangés.
+> Canal de sonnerie v2 (heads-up écran allumé sonnait un simple ding) :
+> ringtone appareil USAGE_NOTIFICATION_RINGTONE + vibration ; canaux
+> immuables → id meeshy_calls_v2 + delete du legacy. Chaîne ring vérifiée
+> maillon par maillon jusqu'à l'écran : extras full-screen → LaunchRouter
+> (pur) → CallRoute.incoming, chemins push et socket convergents.
+> **3e vague VERTE (CI success sur le tip post-arc pushes)** : data-only,
+> TTL/expiration, canal sonnerie — certifiés.
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
