@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.call.ActiveCallRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.LocallyHiddenMessages
 import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
@@ -31,6 +32,7 @@ import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
@@ -64,6 +66,11 @@ data class ImageViewerTarget(
 
 data class ChatUiState(
     val messages: List<BubbleContent> = emptyList(),
+    /** L'appel encore actif serveur-side pour CETTE conversation (probe REST
+     * active-call) — alimente la pill « Rejoindre » du header (parité iOS
+     * b69509366 / bulle call-live web) après un crash/relaunch mid-call. Null
+     * quand aucun appel n'est en cours ou que la sonde échoue. */
+    val activeCall: ActiveCallSession? = null,
     val draft: String = "",
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
@@ -163,6 +170,7 @@ class ChatViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val clock: CacheClock,
     private val draftStore: ConversationDraftStore,
+    private val activeCallRepository: ActiveCallRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -211,6 +219,8 @@ class ChatViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { markConversationRead() }
+
+        refreshActiveCall()
 
         viewModelScope.launch {
             val stored = draftStore.load(conversationId)
@@ -486,6 +496,21 @@ class ChatViewModel @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Re-probe the server for a still-active call in this conversation. Called
+     * on init and by the screen when it resumes (returning from the call, an
+     * app relaunch) so the « Rejoindre » pill reflects the server truth: it
+     * appears when a call the local session lost is still live, and clears once
+     * the call is over. The probe never breaks the screen — a failure degrades
+     * to `null` (see [ActiveCallRepository]).
+     */
+    fun refreshActiveCall() {
+        viewModelScope.launch {
+            val active = activeCallRepository.activeCallFor(conversationId)
+            _state.update { it.copy(activeCall = active) }
         }
     }
 
