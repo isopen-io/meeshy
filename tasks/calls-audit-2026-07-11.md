@@ -340,3 +340,13 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > guard bye-before-teardown migré fenêtre 3000 chars → borne MARK (il
 > épinglait aussi endCallInternal(reason: .local) texte exact). Vérifié par
 > réplication Python avant push ; verdict iOS Tests attendu sur ce tip.
+
+> Refus socket-down iOS (2026-07-12, 95c6cebc4) : emitCallReject dans une
+> socket morte était JETÉ (push VoIP à froid + refus avant handshake →
+> appelant sonne 60 s, résolution missed). Le refus est désormais différé
+> dans pendingEndReconciliationCallId + pendingEndReconciliationReason et
+> rejoué AVEC reason=rejected par l'observer connectionState (un replay en
+> end plat ressusciterait le mislabel). rejectPendingCall passe par le
+> helper. Parité Android DeclinedCallStore. 3 source-guards
+> RejectDeferredReconciliationTests. L'arc reject couvre désormais TOUS
+> les chemins × TOUS les états de transport sur les 3 plateformes.
