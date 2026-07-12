@@ -507,3 +507,11 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > WebRTC mobile plausibles — à monitorer via le pipeline analytics (qui
 > accumule désormais les données 3 plateformes) avant toute conclusion.
 > Prochaine étape réelle = device-test 2 appareils sur réseaux mobiles.
+
+> callFailureRate exposé (2026-07-12, eb08aa377) : le taux d'échec (~20%
+> trouvé à la main) est LA KPI de fiabilité que l'endpoint existe pour
+> surfacer. callFailureRate = fraction finissant sur échec système
+> (failed/connectionLost/heartbeatTimeout/garbageCollected normalisés) ;
+> normal (completed/local/remote/missed/rejected) + in_progress délibéré
+> exclus. isFailureEndReason testé. 61/61. L'endpoint donne maintenant
+> directement le signal au lieu de forcer un calcul manuel depuis byEndReason.
