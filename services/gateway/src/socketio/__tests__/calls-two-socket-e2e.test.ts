@@ -79,6 +79,10 @@ const session = {
  * observable du round-trip reconnecting/reconnected et de son autorisation. */
 const statusUpdates: Array<{ callId: string; status: string }> = [];
 
+/** Chaque endCall reçu par le service — le harnais y lit la propagation de la
+ * raison (arc reject : un refus doit porter reason=rejected jusqu'au service). */
+const endCallCalls: Array<{ callId: string; reason?: string }> = [];
+
 const callServiceStub = {
   initiateCall: async () => session,
   joinCall: async () => ({ callSession: session, iceServers: [] }),
@@ -98,7 +102,12 @@ const callServiceStub = {
   },
   createCallSummaryMessage: async () => null,
   createLiveCallMessage: async () => null,
-  endCall: async () => ({ ...session, status: 'ended', endReason: 'completed', duration: 30 }),
+  endCall: async (callId: string, _userId: string, _participantId: unknown, _isAnonymous: unknown, reason?: string) => {
+    endCallCalls.push({ callId, reason });
+    // Miroir du vrai CallService : la raison résolue devient l'endReason que
+    // le broadcast autoritatif relaie aux clients.
+    return { ...session, status: 'ended', endReason: reason ?? 'completed', duration: 30 };
+  },
   persistCallStats: async () => undefined,
 } as unknown as CallService;
 
@@ -516,6 +525,41 @@ describe('Appels — e2e 2 sockets « deux devices, un répond »', () => {
     expect((editBroadcasts[0] as { id?: string }).id).toBe('msg-call-1');
     // Un seul message par appel : le terminal n'a rien posté via message:new.
     expect(newBroadcasts).toHaveLength(1);
+  }, 20_000);
+
+  // Arc reject (2026-07-12) — le contrat wire du refus : les 3 plateformes
+  // envoient call:end {reason:'rejected'} sur refus explicite (in-app,
+  // call-waiting, lock-screen, différé socket-down). La raison doit voyager
+  // intacte jusqu'au service (qui écrit status=rejected — fin de la fausse
+  // notification « appel manqué » au refuseur) ET jusqu'au broadcast ENDED
+  // que l'appelant consomme.
+  it('un refus pré-décroché porte reason=rejected jusqu’au service et au broadcast', async () => {
+    // A ré-initie : le callee sonne à nouveau (même CALL_ID via le stub).
+    const ringB1 = nextEvent<{ callId: string }>(clientB1, CALL_EVENTS.INITIATED);
+    const initiateAck = await new Promise<{ success: boolean }>((resolve) => {
+      clientA.emit(CALL_EVENTS.INITIATE, { conversationId: CONV_ID, type: 'audio' }, resolve);
+    });
+    expect(initiateAck.success).toBe(true);
+    expect((await ringB1).callId).toBe(CALL_ID);
+
+    // B1 refuse SANS avoir décroché — le end porte la raison.
+    endCallCalls.length = 0;
+    const endedAtA = nextEvent<{ callId: string; reason: string }>(clientA, CALL_EVENTS.ENDED);
+    const endAck = await new Promise<{ success: boolean }>((resolve) => {
+      clientB1.emit(CALL_EVENTS.END, { callId: CALL_ID, reason: 'rejected' }, resolve);
+    });
+    expect(endAck.success).toBe(true);
+
+    // Le service reçoit la raison telle quelle (il en dérive status=rejected).
+    await expect(
+      waitUntil(() => endCallCalls.some((c) => c.callId === CALL_ID && c.reason === 'rejected'))
+    ).resolves.toBe(true);
+
+    // L'appelant est notifié de la fin AVEC la raison — son UI peut dire
+    // « refusé » au lieu de « manqué ».
+    const ended = await endedAtA;
+    expect(ended.callId).toBe(CALL_ID);
+    expect(ended.reason).toBe('rejected');
   }, 20_000);
 });
 

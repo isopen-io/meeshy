@@ -350,3 +350,11 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > helper. Parité Android DeclinedCallStore. 3 source-guards
 > RejectDeferredReconciliationTests. L'arc reject couvre désormais TOUS
 > les chemins × TOUS les états de transport sur les 3 plateformes.
+
+> Harnais e2e +1 scénario reject (2026-07-12) : refus pré-décroché sur le
+> fil — call:end {reason:'rejected'} ack'é, raison reçue TELLE QUELLE par
+> CallService.endCall (stub enregistreur, endReason la fait suivre comme
+> le vrai service) et broadcast call:ended {reason:'rejected'} consommé
+> par l'appelant. 8/8 harnais. Le contrat des 4 arcs (ring multi-device,
+> side-channels, reject, captions) est intégralement épinglé sur vraies
+> sockets.
