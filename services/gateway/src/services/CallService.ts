@@ -149,6 +149,66 @@ const callSessionInclude = {
   }
 } as const;
 
+/**
+ * Shapes a raw Prisma `CallSession` (with `callSessionInclude`) into the FLAT
+ * participant contract that `callSessionSchema` (the REST response serializer
+ * shared by every `/calls*` route) whitelists and that iOS
+ * `ActiveCallParticipant` decodes: top-level `userId`, `user`, `isMuted`,
+ * `isVideoOff`.
+ *
+ * fast-json-stringify only whitelists field names — it never remaps — so the
+ * raw nested shape (identity at `participant.userId`/`participant.user`, media
+ * state as `isAudioEnabled`/`isVideoEnabled`) serialized to just
+ * `{ id, role, joinedAt, leftAt }`, dropping WHO is in the call and their
+ * media state on EVERY call REST response. iOS `ActiveCallParticipant.userId`
+ * is non-optional, so a registered-user call made the whole `ActiveCallSession`
+ * decode throw and crash-recovery / rejoin silently returned nothing. This
+ * bridges the two.
+ *
+ * The reshape is strictly additive over the previously-serialized shape (it
+ * surfaces fields the schema whitelist was already declaring but the raw
+ * object never provided), so existing clients cannot regress.
+ *
+ * Per-participant `analytics` (private end-of-call telemetry) is intentionally
+ * NOT copied onto the reshaped object — the privacy guarantee the response
+ * schema's whitelist provides is preserved here too.
+ */
+type SerializableCallSession = {
+  participants: Array<{
+    id: string;
+    participantId: string;
+    role: string;
+    joinedAt: Date | null;
+    leftAt: Date | null;
+    isAudioEnabled: boolean;
+    isVideoEnabled: boolean;
+    participant?: {
+      userId?: string | null;
+      user?: { id: string; username: string; displayName: string | null; avatar: string | null } | null;
+    } | null;
+  }>;
+  [key: string]: unknown;
+};
+
+export function serializeCallSession(
+  session: SerializableCallSession | null
+): Record<string, unknown> | null {
+  if (!session) return null;
+  return {
+    ...session,
+    participants: session.participants.map((p) => ({
+      id: p.id,
+      userId: p.participant?.userId ?? p.participantId,
+      role: p.role,
+      joinedAt: p.joinedAt,
+      leftAt: p.leftAt,
+      isMuted: !p.isAudioEnabled,
+      isVideoOff: !p.isVideoEnabled,
+      user: p.participant?.user ?? undefined
+    }))
+  };
+}
+
 interface InitiateCallData {
   conversationId: string;
   initiatorId: string;

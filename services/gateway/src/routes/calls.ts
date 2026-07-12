@@ -15,7 +15,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
-import { CallService } from '../services/CallService.js';
+import { CallService, serializeCallSession } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
 import {
@@ -312,7 +312,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // CVE-003: Pass requesting user ID for authorization check
       const callSession = await callService.getCallSession(callId, userId);
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, serializeCallSession(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error getting call', error);
 
@@ -455,7 +455,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
       const callSession = await callService.endCall(callId, userId, endParticipantId);
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, serializeCallSession(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error ending call', error);
 
@@ -601,6 +601,11 @@ export default async function callRoutes(fastify: FastifyInstance) {
         settings,
       });
 
+      // NOTE: joinCall returns a wrapper `{ callSession, iceServers }`, not a
+      // bare CallSessionWithParticipants — a distinct, pre-existing response
+      // contract. The participant-reshape (serializeCallSession) applied to the
+      // other call routes deliberately does NOT wrap this one; see
+      // docs/routine for the follow-up on this route's schema mismatch.
       return sendSuccess(reply, callSession);
     } catch (error: any) {
       logger.error('❌ REST: Error joining call', error);
@@ -790,7 +795,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         participantId: leaveParticipantId,
       });
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, serializeCallSession(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error leaving call', error);
 
@@ -931,7 +936,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         conversationId
       );
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, serializeCallSession(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call', error);
 
@@ -1048,7 +1053,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'NO_ACTIVE_CALL');
       }
 
-      return sendSuccess(reply, activeCall);
+      return sendSuccess(reply, serializeCallSession(activeCall));
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call for user', error);
 

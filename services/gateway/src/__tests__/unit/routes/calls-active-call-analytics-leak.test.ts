@@ -32,12 +32,19 @@ const OTHER_PARTICIPANT_ID = '507f1f77bcf86cd799439055';
 
 const mockGetActiveCallForConversation = jest.fn<any>();
 
-jest.mock('../../../services/CallService', () => ({
-  CallService: jest.fn<any>().mockImplementation(() => ({
-    getActiveCallForConversation: (...args: any[]) =>
-      mockGetActiveCallForConversation(...args),
-  })),
-}));
+jest.mock('../../../services/CallService', () => {
+  // serializeCallSession is a pure wire-shaper the route now calls before
+  // sendSuccess — use the REAL implementation so this end-to-end test
+  // exercises the actual reshape + response-schema serialization path.
+  const actual = jest.requireActual('../../../services/CallService') as any;
+  return {
+    CallService: jest.fn<any>().mockImplementation(() => ({
+      getActiveCallForConversation: (...args: any[]) =>
+        mockGetActiveCallForConversation(...args),
+    })),
+    serializeCallSession: actual.serializeCallSession,
+  };
+});
 
 // Middleware mocks below must be genuine `async (request) => {...}` functions
 // (not a bare `jest.fn()`) — a zero-arity stub with no body left the
@@ -92,22 +99,28 @@ async function buildApp(activeCall: unknown): Promise<FastifyInstance> {
 
 describe('GET /conversations/:conversationId/active-call — response schema does not leak participant analytics', () => {
   it('strips CallParticipant.analytics (and any other undeclared field) from every participant', async () => {
+    // Realistic RAW Prisma shape (callSessionInclude): identity lives at
+    // `participant.userId` / `participant.user`, media state as
+    // `isAudioEnabled` / `isVideoEnabled`, plus private per-participant
+    // `analytics`. serializeCallSession() reshapes this to the flat wire
+    // contract; the response schema strips anything undeclared.
     const activeCall = {
       id: CALL_ID,
       conversationId: CONV_ID,
       initiatorId: OTHER_PARTICIPANT_ID,
-      mode: 'video',
+      mode: 'p2p',
       status: 'active',
       participants: [
         {
           id: 'cp-1',
-          userId: OTHER_PARTICIPANT_ID,
+          participantId: 'part-1',
           role: 'initiator',
-          status: 'connected',
-          isMuted: false,
-          isVideoOff: false,
+          joinedAt: null,
+          leftAt: null,
+          isAudioEnabled: true,
+          isVideoEnabled: true,
           // Private telemetry that must NEVER reach another conversation
-          // member — this is exactly what leaked before the fix.
+          // member — this is exactly what leaked before the schema fix.
           analytics: {
             deviceModel: 'iPhone17,SECRET-INTERNAL-CODENAME',
             platform: 'ios',
@@ -115,15 +128,24 @@ describe('GET /conversations/:conversationId/active-call — response schema doe
             averageRtt: 42,
             negotiationTimeMs: 890,
           },
+          participant: {
+            userId: OTHER_PARTICIPANT_ID,
+            user: { id: OTHER_PARTICIPANT_ID, username: 'bob', displayName: 'Bob', avatar: null },
+          },
         },
         {
           id: 'cp-2',
-          userId: USER_ID,
+          participantId: 'part-2',
           role: 'participant',
-          status: 'connected',
-          isMuted: false,
-          isVideoOff: false,
+          joinedAt: null,
+          leftAt: null,
+          isAudioEnabled: false,
+          isVideoEnabled: true,
           analytics: null,
+          participant: {
+            userId: USER_ID,
+            user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null },
+          },
         },
       ],
       participantCount: 2,
@@ -142,10 +164,21 @@ describe('GET /conversations/:conversationId/active-call — response schema doe
     expect(body.success).toBe(true);
     expect(body.data.id).toBe(CALL_ID);
     expect(body.data.participants).toHaveLength(2);
+
+    // Privacy: analytics never reaches the wire.
     for (const participant of body.data.participants) {
       expect(participant).not.toHaveProperty('analytics');
     }
     expect(JSON.stringify(body)).not.toContain('SECRET-INTERNAL-CODENAME');
+
+    // Reshape: participant identity + media state survive to the wire — the
+    // exact fields iOS `ActiveCallParticipant` requires to decode at all.
+    const [first] = body.data.participants;
+    expect(first.userId).toBe(OTHER_PARTICIPANT_ID);
+    expect(first.user).toEqual({ id: OTHER_PARTICIPANT_ID, username: 'bob', displayName: 'Bob', avatar: null });
+    expect(first.isMuted).toBe(false);
+    expect(first.isVideoOff).toBe(false);
+    expect(body.data.participants[1].isMuted).toBe(true);
 
     await app.close();
   });

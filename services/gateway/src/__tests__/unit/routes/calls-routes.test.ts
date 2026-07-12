@@ -37,18 +37,25 @@ const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
-jest.mock('../../../services/CallService', () => ({
-  CallService: jest.fn<any>().mockImplementation(() => ({
-    initiateCall: (...args: any[]) => mockInitiateCall(...args),
-    getCallSession: (...args: any[]) => mockGetCallSession(...args),
-    endCall: (...args: any[]) => mockEndCall(...args),
-    joinCall: (...args: any[]) => mockJoinCall(...args),
-    leaveCall: (...args: any[]) => mockLeaveCall(...args),
-    getActiveCallForConversation: (...args: any[]) =>
-      mockGetActiveCallForConversation(...args),
-    listHistory: (...args: any[]) => mockListHistory(...args),
-  })),
-}));
+jest.mock('../../../services/CallService', () => {
+  // serializeCallSession is a pure wire-shaper the routes now apply before
+  // sendSuccess — keep the REAL implementation so assertions see the actual
+  // flat participant contract clients receive.
+  const actual = jest.requireActual('../../../services/CallService') as any;
+  return {
+    CallService: jest.fn<any>().mockImplementation(() => ({
+      initiateCall: (...args: any[]) => mockInitiateCall(...args),
+      getCallSession: (...args: any[]) => mockGetCallSession(...args),
+      endCall: (...args: any[]) => mockEndCall(...args),
+      joinCall: (...args: any[]) => mockJoinCall(...args),
+      leaveCall: (...args: any[]) => mockLeaveCall(...args),
+      getActiveCallForConversation: (...args: any[]) =>
+        mockGetActiveCallForConversation(...args),
+      listHistory: (...args: any[]) => mockListHistory(...args),
+    })),
+    serializeCallSession: actual.serializeCallSession,
+  };
+});
 
 jest.mock('../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: jest.fn<any>().mockReturnValue(jest.fn<any>()),

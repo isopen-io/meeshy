@@ -2205,7 +2205,11 @@ export const callSessionMinimalSchema = {
   description: 'Minimal call session data',
   properties: {
     id: { type: 'string', description: 'Call session ID' },
-    mode: { type: 'string', enum: ['voice', 'video'], description: 'Call mode' },
+    mode: {
+      type: 'string',
+      enum: ['p2p', 'sfu'],
+      description: 'WebRTC architecture (p2p or sfu) — NOT the call type; see callSessionSchema.metadata.type'
+    },
     status: { type: 'string', description: 'Call status' },
     startedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Start time' },
     duration: { type: 'number', nullable: true, description: 'Duration in seconds' },
