@@ -477,18 +477,25 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > Fix avgRtt DÉPLOYÉ (2026-07-12) : gateway ed8a56c02→fe13f1293, healthy,
 > endpoint 401. avgRtt/avgPacketLoss corrects (connectés seulement) live.
 
-> INSIGHTS OPÉRATIONNELS du pipeline analytics (2026-07-12) — le pipeline
-> désormais live révèle des anomalies d'ÉMISSION iOS (100% des 87 rows sont
-> iOS) à corriger côté client iOS (PAS l'agrégateur, qui reporte honnêtement) :
->   1. durationSeconds émis en FLOAT 12 décimales (960.2690999507904) —
->      devrait être un entier de secondes (l'émission web arrondit déjà).
->   2. endReason="in_progress" (6 rows) — un STATUT non-terminal dans une
->      émission terminale ; 5/6 connectés, durées jusqu'à 16 min. iOS capture
->      le statut courant au lieu d'une raison terminale dans certains chemins
->      (force-end/app-kill ?).
->   3. averageRtt incohérent (0.489 ET 994.72 dans le même champ) — mélange
->      probable ms/s côté mesure iOS (0.489 ms impossible).
-> Signal fiabilité : sur 87 appels, ~50 complétés, 17 missed/rejected
+> INSIGHTS OPÉRATIONNELS du pipeline analytics (2026-07-12, RÉVISÉ après
+> lecture du code d'émission iOS — l'accuracy prime sur le volume) :
+>   1. durationSeconds émis en FLOAT (callDuration TimeInterval, CallManager
+>      :3205) — vrai mais COSMÉTIQUE (l'agrégateur gère les floats ;
+>      l'émission web arrondit déjà). Pas worth toucher CallManager.
+>   2. endReason="in_progress" : PAS UN BUG — DÉLIBÉRÉ. Snapshot périodique
+>      60s (CallManager:3239 startAnalyticsSnapshots) qui persiste la
+>      télémétrie avec ce label pour ne pas perdre les données d'un appel
+>      long killé/crashé mid-call (cf. commentaire :3180, vécu 2026-07-03
+>      row perdue à 29 min). Un row "in_progress" = appel non terminé
+>      proprement, télémétrie honnête best-effort. (Ma 1re caractérisation
+>      était un MISREAD — corrigée après investigation.)
+>   3. averageRtt bas (0.489 ms) : la conversion iOS est CORRECTE
+>      (currentRoundTripTime * 1000, WebRTCTypes:232). Les valeurs basses
+>      sont un quirk probable des stats WebRTC (RTT tôt/manquant), PAS un
+>      bug de code identifiable sans device. Pas un fix propre.
+> Signal fiabilité RÉEL : sur 87 appels, ~50 complétés, 17 missed/rejected
 > (normal), ~14 échecs réels (connectionLost 9 + failed 5) = ~20% des appels
-> répondables échouent à établir/tiennent — à investiguer (TURN/ICE/réseau,
-> device-test). C'est la 1re valeur opérationnelle du pipeline analytics.
+> répondables échouent — SEUL insight actionnable, à investiguer sur device
+> (TURN/ICE/réseau). Leçon : investiguer le code d'émission AVANT de
+> qualifier une donnée d'anomalie — 2 des 3 « anomalies » étaient du
+> comportement correct.
