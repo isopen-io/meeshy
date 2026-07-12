@@ -548,3 +548,27 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > code/config atteignable ; caractérisation fine = device-test sur réseaux
 > réels. Causes éliminées : TURN mort ✗, TURN absent config ✗, TURN non
 > utilisé ✗. Reste : conditions réseau réelles.
+
+## Recommandation forward — prochaine amélioration à plus forte valeur (décision produit)
+
+> Système CLOS et vérifié pour Phase 1A. Le seul signal opérationnel réel
+> est le ~16% de taux d'échec (14/87, toutes causes logicielles écartées :
+> TURN sain+config complète, agrégat correct). L'amélioration user-facing à
+> plus forte valeur, backée par ce signal :
+>
+> **RETRY-ON-FAILURE** : quand un appel échoue à établir la connexion
+> ("Couldn't establish"/connectionLost pré-connexion), offrir « Réessayer »
+> au lieu de tomber en toast+teardown. Rationale : les échecs WebRTC sont
+> souvent TRANSITOIRES (ICE gathering, TURN allocation) — un retour immédiat
+> réussit fréquemment ; ça réduirait l'impact user du 16% sans avoir à
+> réduire le taux lui-même.
+> - Placement : côté APPELANT (CallManager web, pas VideoCallInterface qui
+>   est torn-down au fail) ; parité iOS/Android à suivre.
+> - Pourquoi PAS fait autonome : c'est une NOUVELLE feature (changement de
+>   périmètre) + décision UX/produit (quand offrir, combien de retries,
+>   cohérence 3 plateformes) — hors du mandat « combler/corriger », relève
+>   d'un choix produit explicite.
+>
+> Autres évolutions = features délibérément différées (SFU/groupe Phase 2,
+> recording/transcription-persistence/quality-scoring : placeholders schéma
+> sans consommateur) ou hardware (device-test 2 appareils).
