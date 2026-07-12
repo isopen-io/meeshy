@@ -318,3 +318,14 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > L'ÉMISSION reste iOS-only (SFSpeechRecognizer on-device) — émission
 > web (Web Speech API) / Android (SpeechRecognizer) = features dédiées,
 > hors périmètre parité consommation.
+
+> Harnais e2e +1 scénario captions (2026-07-12) : transcription-segment →
+> translated-segment épinglé sur vraies sockets — partial relayé sans
+> traduction, final fallback sans ZMQ (translatedText absent,
+> targetLanguage=sourceLanguage — le chemin dégradé que les 3 clients
+> affichent), speaker exclu (socket.to), device hors room exclu,
+> non-participant rejeté NOT_A_PARTICIPANT sans fuite. Revue au passage :
+> segment.speakerId transite TEL QUEL (pas de réécriture serveur comme
+> screen-capture-detected) — accepté : l'auteur est déjà un participant
+> actif autorisé à injecter du texte ; l'usurpation intra-appel n'élargit
+> pas la surface (il pourrait aussi bien parler). 7/7 harnais.

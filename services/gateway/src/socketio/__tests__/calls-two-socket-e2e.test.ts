@@ -390,6 +390,78 @@ describe('Appels — e2e 2 sockets « deux devices, un répond »', () => {
     }
   }, 20_000);
 
+  // Captions live (arc transcription 2026-07-10, parité consommation close
+  // 2026-07-12) — le contrat wire que les 3 clients consomment : chaque
+  // segment émis par un participant ACTIF revient aux pairs — et aux pairs
+  // seuls — en call:translated-segment. Sans traducteur ZMQ (harnais), le
+  // fallback relaie l'original (translatedText absent, targetLanguage =
+  // sourceLanguage) : exactement le chemin dégradé que les clients affichent.
+  it('relaie transcription-segment → translated-segment aux pairs seuls ; non-participant REJETÉ', async () => {
+    // --- 1. Partial : relayé sans traduction, les clients le réécrivent ----
+    const partialAtA = nextEvent<{
+      callId: string;
+      segment: { text: string; isFinal: boolean; speakerId: string };
+    }>(clientA, CALL_EVENTS.TRANSLATED_SEGMENT);
+    let echoedToSpeaker = false;
+    clientB1.once(CALL_EVENTS.TRANSLATED_SEGMENT, () => {
+      echoedToSpeaker = true;
+    });
+    let leakedToIdleDevice = false;
+    clientB2.once(CALL_EVENTS.TRANSLATED_SEGMENT, () => {
+      leakedToIdleDevice = true;
+    });
+
+    clientB1.emit(CALL_EVENTS.TRANSCRIPTION_SEGMENT, {
+      callId: CALL_ID,
+      segment: { text: 'bonjour à', speakerId: USER_B, startMs: 0, endMs: 800, isFinal: false, confidence: 0.8, language: 'fr' },
+    });
+
+    const partial = await partialAtA;
+    expect(partial.callId).toBe(CALL_ID);
+    expect(partial.segment.text).toBe('bonjour à');
+    expect(partial.segment.isFinal).toBe(false);
+
+    // --- 2. Final : fallback sans ZMQ = original relayé tel quel ----------
+    const finalAtA = nextEvent<{
+      segment: { text: string; isFinal: boolean; sourceLanguage: string; targetLanguage: string; translatedText?: string };
+    }>(clientA, CALL_EVENTS.TRANSLATED_SEGMENT);
+    clientB1.emit(CALL_EVENTS.TRANSCRIPTION_SEGMENT, {
+      callId: CALL_ID,
+      segment: { text: 'bonjour à tous', speakerId: USER_B, startMs: 0, endMs: 1600, isFinal: true, confidence: 0.9, language: 'fr' },
+    });
+    const finalSegment = await finalAtA;
+    expect(finalSegment.segment.text).toBe('bonjour à tous');
+    expect(finalSegment.segment.isFinal).toBe(true);
+    expect(finalSegment.segment.translatedText).toBeUndefined();
+    expect(finalSegment.segment.targetLanguage).toBe(finalSegment.segment.sourceLanguage);
+
+    // Le speaker ne reçoit jamais ses propres captions (socket.to) ; l'autre
+    // device du callee n'a jamais rejoint la call room.
+    expect(echoedToSpeaker).toBe(false);
+    expect(leakedToIdleDevice).toBe(false);
+
+    // --- 3. Anti-injection (audit P1-21) : un authentifié NON participant
+    // ne peut pas pousser de texte dans un appel qu'il n'a jamais rejoint ---
+    const intruder = await connectClient(port, 'user-charlie');
+    try {
+      let relayedFromIntruder = false;
+      clientA.once(CALL_EVENTS.TRANSLATED_SEGMENT, () => {
+        relayedFromIntruder = true;
+      });
+      const errorAtIntruder = nextEvent<{ code: string }>(intruder, CALL_EVENTS.ERROR);
+      intruder.emit(CALL_EVENTS.TRANSCRIPTION_SEGMENT, {
+        callId: CALL_ID,
+        segment: { text: 'texte forgé', speakerId: USER_A, startMs: 0, endMs: 500, isFinal: true, confidence: 1, language: 'fr' },
+      });
+      expect((await errorAtIntruder).code).toBe('NOT_A_PARTICIPANT');
+      // Fenêtre d'observation : l'absence de relais est le contrat.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(relayedFromIntruder).toBe(false);
+    } finally {
+      intruder.disconnect();
+    }
+  }, 20_000);
+
   // Message d'appel VIVANT (feature 2026-07-11) — cycle complet sur vraies
   // sockets : l'initiate poste le message kind:'call-live' via le broadcaster
   // message:new (fire-and-forget, après l'ack), puis le terminal l'édite
