@@ -109,6 +109,21 @@ const callServiceStub = {
     return { ...session, status: 'ended', endReason: reason ?? 'completed', duration: 30 };
   },
   persistCallStats: async () => undefined,
+  // Miroir du vrai CallService.resolveEndReason — le fast-path broadcast et
+  // le chemin de récupération force-end du handler normalisent désormais
+  // tous deux la raison brute du client via cette méthode avant de l'utiliser
+  // comme CallEndReason.
+  resolveEndReason: (reason?: string) => {
+    switch (reason) {
+      case 'missed': return 'missed';
+      case 'rejected': return 'rejected';
+      case 'failed': return 'failed';
+      case 'connectionLost': return 'connectionLost';
+      case 'heartbeatTimeout': return 'heartbeatTimeout';
+      case 'garbageCollected': return 'garbageCollected';
+      default: return 'completed';
+    }
+  },
 } as unknown as CallService;
 
 const prismaStub = {

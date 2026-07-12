@@ -887,7 +887,10 @@ export class CallEventsHandler {
     reason?: string
   ): Promise<void> {
     try {
-      const forceEnded = await this.callService.forceEndOrphanedCallSession(callId, (reason || 'completed') as CallEndReason);
+      // Same normalization requirement as the fast-path broadcast in
+      // call:end — `reason` here can be raw client input (see the
+      // `call:end` catch-block call site), never a validated CallEndReason.
+      const forceEnded = await this.callService.forceEndOrphanedCallSession(callId, this.callService.resolveEndReason(reason));
       if (!forceEnded) return;
 
       const forceEndedEvent: CallEndedEvent = {
@@ -3016,7 +3019,14 @@ export class CallEventsHandler {
             callId: data.callId,
             duration: 0,
             endedBy: userId,
-            reason: (data.reason || 'completed') as CallEndReason
+            // Must go through the same normalization as the authoritative
+            // broadcast below (endCall() → resolveEndReason()): `data.reason`
+            // is raw client input, gated only by the schema's `[a-z_]+`
+            // charset whitelist, not membership in the CallEndReason enum. A
+            // raw cast here could broadcast a value ("busy", "declined", ...)
+            // the authoritative broadcast a few lines later would normalize
+            // to `completed` — the two would disagree.
+            reason: this.callService.resolveEndReason(data.reason)
           } as CallEndedEvent);
         }
 

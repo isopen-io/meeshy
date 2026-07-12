@@ -2125,9 +2125,11 @@ export class CallService {
   }
 
   /**
-   * Resolve a string reason to a Prisma CallEndReason enum
+   * Resolve a string reason to a Prisma CallEndReason enum. Public: the single
+   * normalization point for any raw client-supplied `reason` string reaching a
+   * `CallEndReason`-typed field — callers must never cast client input directly.
    */
-  private resolveEndReason(reason?: string): CallEndReason {
+  resolveEndReason(reason?: string): CallEndReason {
     switch (reason) {
       case 'missed': return CallEndReason.missed;
       case 'rejected': return CallEndReason.rejected;
