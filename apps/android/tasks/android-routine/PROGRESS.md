@@ -37,9 +37,17 @@
 > owns grouping + ordering, one catalog owns the shipped list, `groups()` defers to the builder so screen and
 > tested transform can't drift; **UDF/instant-app** — static content, no state machine; **colour/UX coherence** —
 > semantic per-family accents, natural row→screen→back, no dead ends; **no coverage floor lowered, no test
-> weakened**). **Next slice:** the chat media view that consumes the `MediaAutoDownloadDecider` (the actual
-> auto-DL trigger + a manual-download affordance for `SKIP_POLICY`), in-place crop/resize/compress before upload
-> (§K polish), or a §K row (device-sessions / 2FA / voice-cloning / blocked-users management).
+> weakened**). ⚠ **MERGE BLOCKED (not my diff):** PR #1894's CI is red only on a **pre-existing, unrelated**
+> gateway failure — `services/gateway/.../calls-routes.test.ts` (3 endCall/leaveCall tests returning
+> `success:false`). The **same "Test gateway" job also fails on main's own push CI** (sha `6d0b17d`, run
+> 29196093956), so it is a broken gateway test on main from in-flight gateway/calls work, **not** caused by this
+> apps/android-only slice (which cannot touch gateway logic). Per the hard rule *never merge past red CI* and the
+> scope rule *diff is apps/android only* (so I can't fix gateway prod code), the slice is **held ⚠ blocked at the
+> merge gate**; it is code-complete + locally green (full `assembleDebug` + all-module tests) and will squash-merge
+> once main's gateway tests go green (maintainer is actively pushing gateway/calls fixes). **Next slice (after
+> merge unblocks):** the chat media view that consumes the `MediaAutoDownloadDecider` (the actual auto-DL trigger
+> + a manual-download affordance for `SKIP_POLICY`), in-place crop/resize/compress before upload (§K polish), or a
+> §K row (device-sessions / 2FA / voice-cloning / blocked-users management).
 
 > On 2026-07-12 **Help & Support** landed (slice `settings-help-support`, feature-parity §L — "Static
 > screens: … Help & Support …"). Port of iOS `SupportView`, wiring a new **Help & Support** row in
@@ -7821,6 +7829,12 @@ After Stories richness is sufficient, advance to the **Calls** area
   PROGRESS,REVIEWER,TDD-COVERAGE,NOTES}.md`.
 
 ## Blocked / risks
+- ⚠ **PR #1894 (`settings-open-source-licenses`) merge-blocked on a pre-existing, unrelated gateway CI
+  failure.** The monorepo "Test gateway" job fails 3 tests in `services/gateway/.../calls-routes.test.ts`
+  (endCall/leaveCall returning `success:false`). The **same job also fails on main's own push CI** (sha
+  `6d0b17d`), so main is red independently of this apps/android-only slice. Can't fix without touching
+  gateway production logic (out of scope). Held blocked; will squash-merge once main's gateway suite is
+  green. Code-complete + locally green (`assembleDebug` + all-module unit tests).
 - No Android CI workflow → CI green is the JS/Python monorepo suite; local
   `meeshy.sh check` is the real Android gate. (Follow-up: add Android CI.)
 - No Kover/Jacoco gate wired → coverage is a discipline (see `TDD-COVERAGE.md`).

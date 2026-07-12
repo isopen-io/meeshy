@@ -2006,8 +2006,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       recorder. +42 tests (CrashKind 5, CrashDiagnosticFactory 5, CrashReportFormatter 5, CrashReportRetention
       12, CrashReportCodec 6, CrashReportViewModel 9). EN/FR/ES/PT strings. Surpasses iOS by keeping the whole
       capture→retain→format→share pipeline as pure, fully-covered SSOTs rather than inline sheet logic.
-- [x] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
+- [~] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
       open-source licenses (auto-generated), About.
+      **All five code-complete & locally green.** Licenses (PR #1894) is built + fully tested but **not yet
+      merged** — its CI is red only on a **pre-existing, unrelated** gateway failure (`calls-routes.test.ts`,
+      3 tests) that also fails on main's own push CI (sha `6d0b17d`); the apps/android-only diff cannot
+      touch gateway logic. Slice ⚠ blocked at the merge gate until main's gateway tests go green.
       **About screen shipped** (slice `settings-about-screen`, 2026-07-12). Port of iOS `AboutView`.
       Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.about`): `AppVersionFormatter.format(name, code)`
       — the i18n-agnostic `"name (build)"` fragment (blank name → `1.0.0`, non-positive code → `1`, so the

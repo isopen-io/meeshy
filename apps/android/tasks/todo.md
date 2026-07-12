@@ -4,7 +4,7 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-open-source-licenses` ✅
+## This loop (Phase: Settings §L) — slice `settings-open-source-licenses` ⚠ blocked (unrelated CI)
 **Open-source licenses** — the last §L static screen (§L static screens now complete). Port of iOS `LicensesView`
 over an **Android-accurate** curated catalog (Compose/AndroidX/Material/Hilt/Coroutines/Serialization/Coil/OkHttp/
 Retrofit/Media3/Room/Timber/ZXing/Firebase/Socket.IO-java/WebRTC-android) — the libs that actually ship, not iOS's
@@ -16,7 +16,10 @@ non-launchable up front), `OpenSourceLicenseCatalog` (curated list + `groups()`)
 accent-coded per-family section cards, tappable repo rows via `ACTION_VIEW`. Wired a new **Open source licenses**
 row in Settings → About (`Routes.LICENSES`). +26 tests (resolver 9, builder 8, catalog 7). Full `:app:assembleDebug`
 + all-module tests green (6m36s, APK produced); two-mutation RED check (break sort + widen resolver to `mailto:`)
-failed exactly the 3 relevant tests. Reviewer PASS, diff = `apps/android` only, EN/FR/ES/PT. Next: chat media view
+failed exactly the 3 relevant tests. Reviewer PASS, diff = `apps/android` only, EN/FR/ES/PT. **⚠ Merge held:**
+PR #1894 CI is red only on a pre-existing, unrelated gateway failure (`calls-routes.test.ts`, 3 tests) that also
+fails on main's own push CI (sha `6d0b17d`) — can't fix without touching gateway prod logic (out of scope), and
+hard rule = never merge past red CI. Will squash-merge once main's gateway suite is green. Next: chat media view
 consuming `MediaAutoDownloadDecider`; §K crop/resize/compress before upload; or a §K row (device-sessions / 2FA /
 voice-cloning / blocked-users).
 
