@@ -239,6 +239,33 @@ describe('ensureUniqueShareLinkIdentifier', () => {
 
     expect(result).toBe('my-link');
   });
+
+  it('test_ensureUniqueShareLink_whitespaceInput_baseExists_timestampVariantIsTrimmed', async () => {
+    // The collision variant must be built from the SAME trimmed value that was
+    // checked for existence — surrounding whitespace must never survive into the
+    // persisted identifier, otherwise the uniqueness check (run on the trimmed
+    // form) and the returned value diverge.
+    mockShareLinkFindFirst
+      .mockResolvedValueOnce({ id: 'existing' }) // trimmed base exists
+      .mockResolvedValueOnce(null);               // timestamp variant free
+    const prisma = makePrisma();
+
+    const result = await ensureUniqueShareLinkIdentifier(prisma, '  my-link  ');
+
+    expect(result).toMatch(/^my-link-\d{14}$/);
+  });
+
+  it('test_ensureUniqueShareLink_whitespaceInput_baseAndTimestampExist_counterVariantIsTrimmed', async () => {
+    mockShareLinkFindFirst
+      .mockResolvedValueOnce({ id: '1' })   // trimmed base exists
+      .mockResolvedValueOnce({ id: '2' })   // timestamp variant exists
+      .mockResolvedValueOnce(null);          // counter-1 variant free
+    const prisma = makePrisma();
+
+    const result = await ensureUniqueShareLinkIdentifier(prisma, '  my-link  ');
+
+    expect(result).toMatch(/^my-link-\d{14}-1$/);
+  });
 });
 
 // ---------------------------------------------------------------------------

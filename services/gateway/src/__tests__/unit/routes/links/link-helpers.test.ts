@@ -295,6 +295,31 @@ describe('ensureUniqueShareLinkIdentifier', () => {
     expect(result).toMatch(/^mshy_link-/);
   });
 
+  it('trims surrounding whitespace on the timestamp collision variant', async () => {
+    const prisma = {
+      conversationShareLink: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce({ id: 'existing' })  // trimmed base conflicts
+          .mockResolvedValueOnce(null),               // timestamp variant free
+      },
+    } as any;
+    const result = await ensureUniqueShareLinkIdentifier(prisma, '  my-link  ');
+    expect(result).toMatch(/^my-link-\d{14}$/);
+  });
+
+  it('trims surrounding whitespace on the counter collision variant', async () => {
+    const prisma = {
+      conversationShareLink: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce({ id: 'base' })       // trimmed base conflicts
+          .mockResolvedValueOnce({ id: 'timestamp' })  // timestamp variant conflicts
+          .mockResolvedValueOnce(null),                // counter-1 variant free
+      },
+    } as any;
+    const result = await ensureUniqueShareLinkIdentifier(prisma, '  my-link  ');
+    expect(result).toMatch(/^my-link-\d{14}-1$/);
+  });
+
   it('increments counter past 1 when multiple conflicts exist (covers counter++ branch)', async () => {
     const prisma = {
       conversationShareLink: {

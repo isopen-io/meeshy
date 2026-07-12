@@ -120,7 +120,13 @@ export async function ensureUniqueShareLinkIdentifier(prisma: PrismaClient, base
     baseIdentifier = `mshy_link-${timestamp}-${randomPart}`;
   }
 
-  let identifier = baseIdentifier.trim();
+  // Valeur canonique trimée : c'est elle qui est vérifiée ET renvoyée. Les
+  // variantes de collision (timestamp, compteur) dérivent de cette même base
+  // pour que l'espace résiduel ne survive jamais dans l'identifiant persisté
+  // (sinon la vérification d'unicité, faite sur la forme trimée, diverge de la
+  // valeur retournée).
+  const trimmedBase = baseIdentifier.trim();
+  let identifier = trimmedBase;
 
   const existing = await prisma.conversationShareLink.findFirst({
     where: { identifier }
@@ -138,7 +144,7 @@ export async function ensureUniqueShareLinkIdentifier(prisma: PrismaClient, base
     now.getMinutes().toString().padStart(2, '0') +
     now.getSeconds().toString().padStart(2, '0');
 
-  identifier = `${baseIdentifier}-${timestamp}`;
+  identifier = `${trimmedBase}-${timestamp}`;
 
   const existingWithTimestamp = await prisma.conversationShareLink.findFirst({
     where: { identifier }
@@ -150,7 +156,7 @@ export async function ensureUniqueShareLinkIdentifier(prisma: PrismaClient, base
 
   let counter = 1;
   while (true) {
-    const newIdentifier = `${baseIdentifier}-${timestamp}-${counter}`;
+    const newIdentifier = `${trimmedBase}-${timestamp}-${counter}`;
     const existingWithCounter = await prisma.conversationShareLink.findFirst({
       where: { identifier: newIdentifier }
     });
