@@ -2397,12 +2397,17 @@ final class CallManager: ObservableObject {
     }
 
     func handleRemoteEnd(callId: String, rawReason: String? = nil) {
-        guard currentCallId == callId else { return }
-        // Dedup : le serveur peut émettre `call:ended` plusieurs fois
-        // (e.g. CXEndCallAction côté peer + cleanup serveur), et le user
-        // local peut aussi avoir déjà raccroché en local. Si l'état est
-        // déjà `.ended`, on ignore les doublons.
-        if case .ended = callState { return }
+        // Dedup (idempotence testable — cf. CallReliabilityPolicy.shouldProcessRemoteEnd) :
+        // le serveur peut émettre `call:ended` plusieurs fois (CXEndCallAction côté
+        // peer + cleanup serveur, et depuis 2026-07-12 le broadcast REST end/leave),
+        // tous routés vers ce handler via le publisher `callEnded`. On traite le
+        // premier ; un doublon sur un état déjà `.ended`, ou un event d'un AUTRE
+        // call, est ignoré.
+        guard CallReliabilityPolicy.shouldProcessRemoteEnd(
+            currentCallId: currentCallId,
+            incomingCallId: callId,
+            callState: callState
+        ) else { return }
 
         // Audit P1-24 — map the gateway's `reason` string to the right
         // CXCallEndedReason (drives Recents UX) and CallEndReason (drives

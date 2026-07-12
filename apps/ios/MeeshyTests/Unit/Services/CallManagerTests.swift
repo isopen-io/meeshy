@@ -1039,6 +1039,37 @@ final class CallReliabilityPolicyDefaultsTests: XCTestCase {
             .retry
         )
     }
+
+    // --- Remote-end idempotence (call:ended dedup — native + REST broadcast, P1-B) ---
+
+    func test_shouldProcessRemoteEnd_matchingCallIdOnConnected_returnsTrue() {
+        XCTAssertTrue(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .connected))
+    }
+
+    func test_shouldProcessRemoteEnd_duplicateWhileEnded_returnsFalse() {
+        // Second `call:ended` (native hangup + REST end/leave broadcast) while
+        // already terminal must be a no-op.
+        XCTAssertFalse(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .ended(reason: .remote)))
+    }
+
+    func test_shouldProcessRemoteEnd_differentCallId_returnsFalse() {
+        // An event for another call must never tear down the current one.
+        XCTAssertFalse(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c2", callState: .connected))
+    }
+
+    func test_shouldProcessRemoteEnd_nilCurrentCallId_returnsFalse() {
+        XCTAssertFalse(Policy.shouldProcessRemoteEnd(
+            currentCallId: nil, incomingCallId: "c1", callState: .connected))
+    }
+
+    func test_shouldProcessRemoteEnd_duringRing_returnsTrue() {
+        // A remote cancel during the ring must still be processed.
+        XCTAssertTrue(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .ringing(isOutgoing: true)))
+    }
 }
 
 // MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)
