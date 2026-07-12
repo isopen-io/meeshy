@@ -1072,6 +1072,53 @@ final class CallReliabilityPolicyDefaultsTests: XCTestCase {
     }
 }
 
+// MARK: - CallEndReasonMapper (rawReason → CXCallEndedReason + CallEndReason)
+
+final class CallEndReasonMapperTests: XCTestCase {
+
+    func test_map_missedVariants_returnUnansweredMissed() {
+        // camelCase + snake_case + case-insensitivity (mapper lowercases).
+        for raw in ["missed", "no_answer", "unanswered", "MISSED", "No_Answer"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .unanswered, "raw=\(raw)")
+            XCTAssertEqual(r.local, .missed, "raw=\(raw)")
+        }
+    }
+
+    func test_map_rejectedVariants_returnDeclinedElsewhereRejected() {
+        for raw in ["rejected", "declined"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .declinedElsewhere, "raw=\(raw)")
+            XCTAssertEqual(r.local, .rejected, "raw=\(raw)")
+        }
+    }
+
+    func test_map_answeredElsewhereVariants_returnAnsweredElsewhereRemote() {
+        for raw in ["answeredElsewhere", "answered_elsewhere"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .answeredElsewhere, "raw=\(raw)")
+            XCTAssertEqual(r.local, .remote, "raw=\(raw)")
+        }
+    }
+
+    func test_map_failedVariants_returnFailedConnectionLost() {
+        for raw in ["failed", "connectionLost"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .failed, "raw=\(raw)")
+            XCTAssertEqual(r.local, .connectionLost, "raw=\(raw)")
+        }
+    }
+
+    func test_map_unknownOrNil_defaultsToRemoteEnded() {
+        let inputs: [String?] = [nil, "completed", "garbage", ""]
+        for raw in inputs {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .remoteEnded, "raw=\(raw ?? "nil")")
+            XCTAssertEqual(r.local, .remote, "raw=\(raw ?? "nil")")
+        }
+    }
+}
+
 // MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)
 
 // Renamed from `CallPillStatusTests` to avoid an `invalid redeclaration` collision
