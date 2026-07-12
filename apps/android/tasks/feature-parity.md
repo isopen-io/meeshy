@@ -2006,7 +2006,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       recorder. +42 tests (CrashKind 5, CrashDiagnosticFactory 5, CrashReportFormatter 5, CrashReportRetention
       12, CrashReportCodec 6, CrashReportViewModel 9). EN/FR/ES/PT strings. Surpasses iOS by keeping the whole
       capture→retain→format→share pipeline as pure, fully-covered SSOTs rather than inline sheet logic.
-- [~] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
+- [x] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
       open-source licenses (auto-generated), About.
       **About screen shipped** (slice `settings-about-screen`, 2026-07-12). Port of iOS `AboutView`.
       Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.about`): `AppVersionFormatter.format(name, code)`
@@ -2050,7 +2050,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tappable row opening via `ACTION_VIEW`. Wired a new **Help &amp; Support** row in Settings → About
       (`Routes.SUPPORT`). +24 tests (SupportLinkResolver 11, SupportPresentationBuilder 13). EN/FR/ES/PT strings.
       A two-mutation RED check (drop the `mailto:` scheme + drop the build `≤0` fallback) failed exactly the 9
-      relevant tests, confirming they are behavioural not tautological. **Pending:** open-source licenses screen.
+      relevant tests, confirming they are behavioural not tautological.
+      **Open-source licenses shipped** (slice `settings-open-source-licenses`, 2026-07-12) — the last §L static
+      screen. Port of iOS `LicensesView`, but over an **Android-accurate** curated catalog (Jetpack Compose,
+      AndroidX, Material Components, Hilt, Kotlin Coroutines/Serialization, Coil, OkHttp, Retrofit, Media3
+      ExoPlayer, Room, Timber, ZXing, Firebase Android SDK, Socket.IO Client Java, WebRTC-Android) — the libs that
+      actually ship, not iOS's Swift deps. Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.licenses`):
+      `OpenSourceLicenseType` (MIT/APACHE_2_0/BSD/OTHER — declaration order = render order); `OpenSourceLicense`
+      /`OpenSourceLicenseGroup`; `OpenSourceLicenseResolver.resolvable(licenses)` — the launchability gate porting
+      iOS `licenseCard`'s `if let URL(string:)` guard, narrowed to `http(s)://` only (licenses only open repo web
+      pages, no `mailto:`); `OpenSourceLicensePresentationBuilder.build(licenses)` — **surpasses iOS's flat list**
+      by grouping launchable licenses by type in enum order, sorting each group by name case-insensitively, and
+      dropping empty groups; `OpenSourceLicenseCatalog` (the curated list + `groups()`). `LicensesScreen`
+      (`:feature:settings`) is pure Compose glue: intro line + one accent-coded section per family (MIT=Success,
+      Apache=Warning, BSD=Info, Other=Neutral), each row a tappable card opening the repo via `ACTION_VIEW`. Wired
+      a new **Open source licenses** row in Settings → About (`Routes.LICENSES`). +26 tests (OpenSourceLicenseResolver
+      9, OpenSourceLicensePresentationBuilder 8, OpenSourceLicenseCatalog 7). EN/FR/ES/PT strings. A two-mutation
+      RED check (break the group sort + widen the resolver to `mailto:`) failed exactly the 3 relevant tests,
+      confirming they are behavioural not tautological. **§L static screens now complete.**
 
 ## M. Notifications
 - [ ] Notification center with category filters (messages, reactions, mentions, social,

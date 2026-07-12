@@ -66,6 +66,7 @@ import me.meeshy.app.settings.ChangePasswordScreen
 import me.meeshy.app.settings.CrashReportScreen
 import me.meeshy.app.settings.DataExportScreen
 import me.meeshy.app.settings.LegalDocumentScreen
+import me.meeshy.app.settings.LicensesScreen
 import me.meeshy.app.settings.MediaCacheScreen
 import me.meeshy.sdk.model.legal.LegalDocumentKind
 import me.meeshy.app.settings.MediaDownloadScreen
@@ -100,6 +101,7 @@ object Routes {
     const val DIAGNOSTICS = "settings/diagnostics"
     const val ABOUT = "settings/about"
     const val SUPPORT = "settings/support"
+    const val LICENSES = "settings/licenses"
     const val LEGAL_DOC_ARG = "doc"
     const val LEGAL = "settings/legal/{$LEGAL_DOC_ARG}"
     const val DELETE_ACCOUNT = "settings/delete-account"
@@ -371,6 +373,7 @@ fun MeeshyApp(
                     onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
                     onOpenSupport = { navController.navigate(Routes.SUPPORT) },
+                    onOpenLicenses = { navController.navigate(Routes.LICENSES) },
                     onOpenTerms = {
                         navController.navigate(Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE))
                     },
@@ -403,6 +406,9 @@ fun MeeshyApp(
             }
             composable(Routes.SUPPORT) {
                 SupportScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.LICENSES) {
+                LicensesScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = Routes.LEGAL,

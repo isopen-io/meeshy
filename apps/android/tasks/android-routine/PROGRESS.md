@@ -4,6 +4,43 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload + crash-report diagnostics viewer w/ share)** → rest`
 
+> On 2026-07-12 **open-source licenses** landed (slice `settings-open-source-licenses`, feature-parity §L —
+> the last §L static screen; **§L static screens now complete**). Port of iOS `LicensesView`, but over an
+> **Android-accurate** curated catalog — the libraries that actually ship (Jetpack Compose, AndroidX, Material
+> Components, Dagger Hilt, Kotlin Coroutines/Serialization, Coil, OkHttp, Retrofit, Media3 ExoPlayer, Room,
+> Timber, ZXing, Firebase Android SDK, Socket.IO Client Java, WebRTC-Android), not iOS's Swift deps. Pure
+> `:core:model` SSOTs (package `me.meeshy.sdk.model.licenses`): `OpenSourceLicenseType` (MIT/APACHE_2_0/BSD/OTHER
+> — declaration order = render order); `OpenSourceLicense` + `OpenSourceLicenseGroup`;
+> `OpenSourceLicenseResolver.resolvable(licenses)` — the launchability gate porting iOS `licenseCard`'s
+> `if let URL(string:)` guard, **narrowed** to `http(s)://` only (unlike Help & Support, licenses only ever open
+> repo web pages — never `mailto:`; trim + case-fold, order-preserving, blank/other-scheme dropped);
+> `OpenSourceLicensePresentationBuilder.build(licenses)` — **surpasses iOS's flat list** by grouping the
+> launchable licenses by type in enum order (not insertion order), sorting each group by name case-insensitively,
+> excluding non-launchable entries up front, and dropping empty groups; `OpenSourceLicenseCatalog` (the curated
+> list + `groups()`). `LicensesScreen` (`:feature:settings`, coverage-exempt glue): a localized intro line + one
+> accent-coded section card per family (MIT=Success green, Apache=Warning amber, BSD=Info blue, Other=Neutral,
+> matching the codebase's semantic palette), each row a tappable card (name + author + open-in-new) opening the
+> repository via `ACTION_VIEW`. Nav: one `settings/licenses` route reached by `Routes.LICENSES` from a new
+> **Open source licenses** row in Settings → About. **+26 tests** (OpenSourceLicenseResolver 9 — http/https/upper/
+> padded kept, blank + mailto + schemeless dropped, mixed list keeps only launchable in order;
+> OpenSourceLicensePresentationBuilder 8 — empty, single group/entry, enum-order-not-insertion-order, within-group
+> case-insensitive sort, empty-groups dropped, non-launchable excluded before grouping, multi-group each sorted,
+> distinct same-name entries kept; OpenSourceLicenseCatalog 7 — non-empty, non-blank name/author, every entry
+> launchable, no duplicate name/url, `groups()` == builder over raw list, groups cover every license once). Full
+> `:app:assembleDebug` + all-module `testDebugUnitTest` → **BUILD SUCCESSFUL in 6m36s** (APK produced). A
+> two-mutation RED check (drop the group `.sortedBy` + widen the resolver to accept `mailto:`) failed exactly the
+> 3 relevant tests (2 sort tests + the mailto-drop test), confirming they are behavioural not tautological.
+> Reviewer **PASS** (diff `apps/android` only — `:core:model` [new `licenses` package], `:feature:settings`
+> [screen + 7× strings EN/FR/ES/PT], `:app` nav wiring, `SettingsScreen` one new callback + row; no production
+> logic outside; **SDK purity** — pure type/resolver/builder/catalog in `:core:model`, localized labels + accent
+> colours + "which screen / launch intent" glue app-side; **SSOT** — one resolver owns launchability, one builder
+> owns grouping + ordering, one catalog owns the shipped list, `groups()` defers to the builder so screen and
+> tested transform can't drift; **UDF/instant-app** — static content, no state machine; **colour/UX coherence** —
+> semantic per-family accents, natural row→screen→back, no dead ends; **no coverage floor lowered, no test
+> weakened**). **Next slice:** the chat media view that consumes the `MediaAutoDownloadDecider` (the actual
+> auto-DL trigger + a manual-download affordance for `SKIP_POLICY`), in-place crop/resize/compress before upload
+> (§K polish), or a §K row (device-sessions / 2FA / voice-cloning / blocked-users management).
+
 > On 2026-07-12 **Help & Support** landed (slice `settings-help-support`, feature-parity §L — "Static
 > screens: … Help & Support …"). Port of iOS `SupportView`, wiring a new **Help & Support** row in
 > Settings → About. Two pure `:core:model` SSOTs (package `me.meeshy.sdk.model.support`):
