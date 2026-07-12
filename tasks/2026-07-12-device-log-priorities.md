@@ -155,9 +155,15 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   debounce avant suspend est **écartée** (rouvrirait le bug « isConnected ment » : `Task.sleep`
   n'avance pas gelé, downside sévère = socket morte silencieuse). Build vert.
 
-- [ ] **#12 — Interaction avec appel déjà terminé**
+- [x] **#12 — Interaction avec appel déjà terminé** — `c813214ea`
   Evidence : `call:error CALL_ENDED "already ended"`, `call_cancel push ignored — no matching incoming ring`.
   Fichiers : garde client sur états terminaux ; alignement du cancel push. Lié à #3/#9.
+  **Cause prouvée** : `call:error CALL_ENDED` tombait au **fallback** du handler → toast d'ERREUR user
+  + `failCall` (marque un appel sainement terminé comme « échoué » dans Recents). C'est une race d'état
+  terminal bénigne. **Fix** : router `CALL_ENDED` vers `handleRemoteEnd` (canonique, call-scoped, dedup
+  `.ended`, mapping CX reason, teardown+CallKit) — plus de toast ni `failCall`. **Le `call_cancel push
+  ignored` est une GARDE INTENTIONNELLE bénigne** (`CallReliabilityPolicy.shouldEndRingingOnCancellation` :
+  un cancel tardif/rejoué au callId non-courant est ignoré à raison). Build vert.
 
 - [ ] **#13 — VoIP token re-registration churn**
   Evidence : `VoIP push unregistered` → `registration started` → `force re-registration triggered`.
@@ -214,3 +220,5 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 - 2026-07-12 : #11 livré `4c87d81d0` — flag `didEnterBackground` : la socket ne se rearme qu'après un
   vrai `.background`, plus sur les `.inactive→.active` transitoires. Tue le churn évitable. « 0 room(s) »
   jugé légitime. Grâce-avant-suspend écartée (risque « isConnected ment »).
+- 2026-07-12 : #12 livré `c813214ea` — `call:error CALL_ENDED` routé vers `handleRemoteEnd` (réconciliation
+  terminale) au lieu du toast+`failCall`. `call_cancel push ignored` = garde intentionnelle bénigne.
