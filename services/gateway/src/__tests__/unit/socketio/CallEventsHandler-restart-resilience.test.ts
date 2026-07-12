@@ -31,6 +31,7 @@ jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCall,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     joinCall: mockJoinCall,
     generateIceServers: mockGenerateIceServers,
     getIceServerTtl: jest.fn<any>().mockReturnValue(86400),

@@ -34,6 +34,10 @@ struct BubbleCallNoticeView: View, Equatable {
     var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
     var onLongPress: (() -> Void)? = nil
 
+    /// Drives the live-call pulsing dot (SwiftUI repeatForever — no per-cell
+    /// Timer). Pure presentation state, excluded from Equatable by nature.
+    @State private var livePulse = false
+
     static func == (lhs: BubbleCallNoticeView, rhs: BubbleCallNoticeView) -> Bool {
         lhs.notice == rhs.notice && lhs.accentHex == rhs.accentHex && lhs.isDark == rhs.isDark
     }
@@ -68,7 +72,9 @@ struct BubbleCallNoticeView: View, Equatable {
             )
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
-            .accessibilityHint(Text(String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
+            .accessibilityHint(Text(presentation.isLive
+                ? String(localized: "bubble.call.join.a11y.hint", defaultValue: "Double-tapez pour rejoindre l'appel", bundle: .main)
+                : String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
                 onLongPress?()
@@ -88,7 +94,11 @@ struct BubbleCallNoticeView: View, Equatable {
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(ThemeManager.shared.textPrimary)
                         .lineLimit(1)
-                    metricsRow
+                    if let liveSubtitle = presentation.liveSubtitle {
+                        liveRow(subtitle: liveSubtitle)
+                    } else {
+                        metricsRow
+                    }
                 }
             }
             Text(notice.timeString)
@@ -123,6 +133,25 @@ struct BubbleCallNoticeView: View, Equatable {
                 }
                 if let data { metric(icon: "arrow.up.arrow.down", text: data) }
             }
+        }
+    }
+
+    /// Live-call sub-row: pulsing accent dot + "Toucher pour rejoindre".
+    /// Replaces the metrics row while the call is ongoing (no duration, no
+    /// data — those only exist once the call is terminal).
+    private func liveRow(subtitle: String) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
+                .opacity(livePulse ? 0.3 : 1)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: livePulse)
+                .onAppear { livePulse = true }
+                .accessibilityHidden(true)
+            Text(subtitle)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .foregroundColor(tint)
+                .lineLimit(1)
         }
     }
 
@@ -222,13 +251,21 @@ struct BubbleCallNoticeView: View, Equatable {
 /// Shared presentation derivations for a call summary (tint, glyphs, title) — single
 /// source of truth so the compact bubble and its long-press detail sheet can never
 /// drift apart on how they describe the same call.
-private struct CallNoticePresentation {
+///
+/// Internal (not private) for unit-testability — the live/cancelled matrix is
+/// asserted in `BubbleContentMatrixTests` without any new test file.
+struct CallNoticePresentation {
     let summary: CallSummaryMetadata
     let isOutgoing: Bool
     /// Conversation accent (hex) — see `BubbleCallNoticeView.accentHex`.
     let accentHex: String
 
+    /// Le kind se lit AVANT l'outcome : un message vivant porte un outcome
+    /// placeholder ('completed') qui ne doit jamais piloter le rendu.
+    var isLive: Bool { summary.isLive }
+
     var tint: Color {
+        if isLive { return Color(hex: accentHex) }
         switch summary.outcome {
         case .completed: return Color(hex: accentHex)
         case .missed, .rejected: return MeeshyColors.error
@@ -248,6 +285,14 @@ private struct CallNoticePresentation {
 
     var title: String {
         let isVideo = summary.callType == .video
+        if isLive {
+            return isVideo
+                ? String(localized: "bubble.call.video.ongoing", defaultValue: "Appel vidéo en cours", bundle: .main)
+                : String(localized: "bubble.call.audio.ongoing", defaultValue: "Appel audio en cours", bundle: .main)
+        }
+        if summary.isCancelled(viewerIsInitiator: isOutgoing) {
+            return String(localized: "bubble.call.cancelled", defaultValue: "Appel annulé", bundle: .main)
+        }
         switch summary.outcome {
         case .completed:
             let type = isVideo
@@ -270,6 +315,13 @@ private struct CallNoticePresentation {
                 ? String(localized: "bubble.call.video.failed", defaultValue: "Appel vidéo interrompu", bundle: .main)
                 : String(localized: "bubble.call.audio.failed", defaultValue: "Appel audio interrompu", bundle: .main)
         }
+    }
+
+    /// Sous-titre affiché à la place des métriques quand l'appel est EN COURS
+    /// (tap = rejoindre). `nil` pour tout état terminal.
+    var liveSubtitle: String? {
+        guard isLive else { return nil }
+        return String(localized: "bubble.call.join.hint", defaultValue: "Toucher pour rejoindre", bundle: .main)
     }
 }
 

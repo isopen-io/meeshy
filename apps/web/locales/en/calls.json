@@ -68,6 +68,9 @@
       "qualityDegraded": "{name}'s connection is unstable",
       "screenCapturing": "{name} may be recording the screen"
     },
+    "captions": {
+      "region": "Live translated captions"
+    },
     "stream": {
       "disconnected": "Disconnected",
       "participantLeft": "{name} has left",
@@ -85,8 +88,10 @@
       "cameraSwitched": "Camera switched",
       "cameraSwitchFailed": "Failed to switch camera",
       "joinFailed": "Failed to join call",
+      "callAlreadyEnded": "The call has ended",
       "videoSuspendedPoorConnection": "Weak connection — video paused to keep the call going",
-      "videoResumed": "Connection recovered — video back on"
+      "videoResumed": "Connection recovered — video back on",
+      "connectTimeout": "Could not establish the connection — call ended"
     },
     "permissions": {
       "title": {

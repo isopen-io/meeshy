@@ -75,17 +75,55 @@ const session = {
   ],
 };
 
+/** Chaque flip de statut demandé au service — le harnais y lit l'effet
+ * observable du round-trip reconnecting/reconnected et de son autorisation. */
+const statusUpdates: Array<{ callId: string; status: string }> = [];
+
+/** Chaque endCall reçu par le service — le harnais y lit la propagation de la
+ * raison (arc reject : un refus doit porter reason=rejected jusqu'au service). */
+const endCallCalls: Array<{ callId: string; reason?: string }> = [];
+
 const callServiceStub = {
   initiateCall: async () => session,
   joinCall: async () => ({ callSession: session, iceServers: [] }),
-  getCallSession: async () => session,
+  // Statut DYNAMIQUE : la garde FSM du handler reconnected exige que le
+  // statut courant soit reconnecting|active — un stub figé sur ringing
+  // ferait mentir le harnais (le serveur ignorerait, à raison, le retour).
+  getCallSession: async () => ({
+    ...session,
+    status: statusUpdates.at(-1)?.status ?? session.status,
+  }),
   generateIceServers: () => [],
   getIceServerTtl: () => 86400,
   scheduleRingingTimeout: () => undefined,
   clearRingingTimeout: () => undefined,
-  updateCallStatus: async () => undefined,
+  updateCallStatus: async (callId: string, status: string) => {
+    statusUpdates.push({ callId, status });
+  },
   createCallSummaryMessage: async () => null,
+  createLiveCallMessage: async () => null,
+  endCall: async (callId: string, _userId: string, _participantId: unknown, _isAnonymous: unknown, reason?: string) => {
+    endCallCalls.push({ callId, reason });
+    // Miroir du vrai CallService : la raison résolue devient l'endReason que
+    // le broadcast autoritatif relaie aux clients.
+    return { ...session, status: 'ended', endReason: reason ?? 'completed', duration: 30 };
+  },
   persistCallStats: async () => undefined,
+  // Miroir du vrai CallService.resolveEndReason — le fast-path broadcast et
+  // le chemin de récupération force-end du handler normalisent désormais
+  // tous deux la raison brute du client via cette méthode avant de l'utiliser
+  // comme CallEndReason.
+  resolveEndReason: (reason?: string) => {
+    switch (reason) {
+      case 'missed': return 'missed';
+      case 'rejected': return 'rejected';
+      case 'failed': return 'failed';
+      case 'connectionLost': return 'connectionLost';
+      case 'heartbeatTimeout': return 'heartbeatTimeout';
+      case 'garbageCollected': return 'garbageCollected';
+      default: return 'completed';
+    }
+  },
 } as unknown as CallService;
 
 const prismaStub = {
@@ -336,6 +374,207 @@ describe('Appels — e2e 2 sockets « deux devices, un répond »', () => {
         )
       )
     ).resolves.toBe(true);
+  }, 20_000);
+
+  it('round-trip reconnecting/reconnected : statut flippé pour un participant, REJETÉ pour un tiers', async () => {
+    // Les 3 plateformes émettent désormais ces signaux : l'autorisation
+    // (audit P1-21 — participant ACTIF seul) est un contrat de sécurité à
+    // verrouiller au niveau du fil, pas seulement en unitaire.
+    statusUpdates.length = 0;
+
+    clientB1.emit(CALL_EVENTS.RECONNECTING, {
+      callId: CALL_ID,
+      participantId: USER_B,
+      attempt: 1,
+    });
+    await expect(
+      waitUntil(() => statusUpdates.some((u) => u.callId === CALL_ID && u.status === 'reconnecting'))
+    ).resolves.toBe(true);
+
+    clientB1.emit(CALL_EVENTS.RECONNECTED, { callId: CALL_ID, participantId: USER_B });
+    await expect(
+      waitUntil(() => statusUpdates.some((u) => u.callId === CALL_ID && u.status === 'active'))
+    ).resolves.toBe(true);
+
+    // Un utilisateur authentifié mais NON participant ne peut pas basculer
+    // le statut d'un appel arbitraire.
+    statusUpdates.length = 0;
+    const intruder = await connectClient(port, 'user-charlie');
+    try {
+      intruder.emit(CALL_EVENTS.RECONNECTING, {
+        callId: CALL_ID,
+        participantId: 'user-charlie',
+        attempt: 1,
+      });
+      // Fenêtre d'observation : l'absence d'effet est le contrat.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(statusUpdates).toHaveLength(0);
+    } finally {
+      intruder.disconnect();
+    }
+  }, 20_000);
+
+  // Captions live (arc transcription 2026-07-10, parité consommation close
+  // 2026-07-12) — le contrat wire que les 3 clients consomment : chaque
+  // segment émis par un participant ACTIF revient aux pairs — et aux pairs
+  // seuls — en call:translated-segment. Sans traducteur ZMQ (harnais), le
+  // fallback relaie l'original (translatedText absent, targetLanguage =
+  // sourceLanguage) : exactement le chemin dégradé que les clients affichent.
+  it('relaie transcription-segment → translated-segment aux pairs seuls ; non-participant REJETÉ', async () => {
+    // --- 1. Partial : relayé sans traduction, les clients le réécrivent ----
+    const partialAtA = nextEvent<{
+      callId: string;
+      segment: { text: string; isFinal: boolean; speakerId: string };
+    }>(clientA, CALL_EVENTS.TRANSLATED_SEGMENT);
+    let echoedToSpeaker = false;
+    clientB1.once(CALL_EVENTS.TRANSLATED_SEGMENT, () => {
+      echoedToSpeaker = true;
+    });
+    let leakedToIdleDevice = false;
+    clientB2.once(CALL_EVENTS.TRANSLATED_SEGMENT, () => {
+      leakedToIdleDevice = true;
+    });
+
+    clientB1.emit(CALL_EVENTS.TRANSCRIPTION_SEGMENT, {
+      callId: CALL_ID,
+      segment: { text: 'bonjour à', speakerId: USER_B, startMs: 0, endMs: 800, isFinal: false, confidence: 0.8, language: 'fr' },
+    });
+
+    const partial = await partialAtA;
+    expect(partial.callId).toBe(CALL_ID);
+    expect(partial.segment.text).toBe('bonjour à');
+    expect(partial.segment.isFinal).toBe(false);
+
+    // --- 2. Final : fallback sans ZMQ = original relayé tel quel ----------
+    const finalAtA = nextEvent<{
+      segment: { text: string; isFinal: boolean; sourceLanguage: string; targetLanguage: string; translatedText?: string };
+    }>(clientA, CALL_EVENTS.TRANSLATED_SEGMENT);
+    clientB1.emit(CALL_EVENTS.TRANSCRIPTION_SEGMENT, {
+      callId: CALL_ID,
+      segment: { text: 'bonjour à tous', speakerId: USER_B, startMs: 0, endMs: 1600, isFinal: true, confidence: 0.9, language: 'fr' },
+    });
+    const finalSegment = await finalAtA;
+    expect(finalSegment.segment.text).toBe('bonjour à tous');
+    expect(finalSegment.segment.isFinal).toBe(true);
+    expect(finalSegment.segment.translatedText).toBeUndefined();
+    expect(finalSegment.segment.targetLanguage).toBe(finalSegment.segment.sourceLanguage);
+
+    // Le speaker ne reçoit jamais ses propres captions (socket.to) ; l'autre
+    // device du callee n'a jamais rejoint la call room.
+    expect(echoedToSpeaker).toBe(false);
+    expect(leakedToIdleDevice).toBe(false);
+
+    // --- 3. Anti-injection (audit P1-21) : un authentifié NON participant
+    // ne peut pas pousser de texte dans un appel qu'il n'a jamais rejoint ---
+    const intruder = await connectClient(port, 'user-charlie');
+    try {
+      let relayedFromIntruder = false;
+      clientA.once(CALL_EVENTS.TRANSLATED_SEGMENT, () => {
+        relayedFromIntruder = true;
+      });
+      const errorAtIntruder = nextEvent<{ code: string }>(intruder, CALL_EVENTS.ERROR);
+      intruder.emit(CALL_EVENTS.TRANSCRIPTION_SEGMENT, {
+        callId: CALL_ID,
+        segment: { text: 'texte forgé', speakerId: USER_A, startMs: 0, endMs: 500, isFinal: true, confidence: 1, language: 'fr' },
+      });
+      expect((await errorAtIntruder).code).toBe('NOT_A_PARTICIPANT');
+      // Fenêtre d'observation : l'absence de relais est le contrat.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(relayedFromIntruder).toBe(false);
+    } finally {
+      intruder.disconnect();
+    }
+  }, 20_000);
+
+  // Message d'appel VIVANT (feature 2026-07-11) — cycle complet sur vraies
+  // sockets : l'initiate poste le message kind:'call-live' via le broadcaster
+  // message:new (fire-and-forget, après l'ack), puis le terminal l'édite
+  // in-place via le broadcaster message:edited (upsert {kind:'updated'}).
+  // Clôt aussi le déroulé séquentiel : l'appel des scénarios précédents finit
+  // par un vrai call:end.
+  it('cycle du message vivant : initiate → broadcast live (message:new) → end → broadcast édité (message:edited)', async () => {
+    const liveMessage = {
+      id: 'msg-call-1',
+      conversationId: CONV_ID,
+      content: 'Appel audio en cours',
+      metadata: { kind: 'call-live', callId: CALL_ID, initiatorId: USER_A, callType: 'audio' },
+    };
+    const terminalMessage = {
+      id: 'msg-call-1',
+      conversationId: CONV_ID,
+      content: 'Appel audio · 00:30',
+      metadata: { kind: 'call', callId: CALL_ID, initiatorId: USER_A, callType: 'audio', outcome: 'completed' },
+    };
+    (callServiceStub as { createLiveCallMessage: unknown }).createLiveCallMessage =
+      async () => liveMessage;
+    (callServiceStub as { createCallSummaryMessage: unknown }).createCallSummaryMessage =
+      async () => ({ kind: 'updated', message: terminalMessage });
+
+    const newBroadcasts: Array<{ metadata: { kind: string } }> = [];
+    const editBroadcasts: Array<{ metadata: { kind: string } }> = [];
+    handler.setMessageBroadcaster(async (message) => {
+      newBroadcasts.push(message as { metadata: { kind: string } });
+    });
+    handler.setMessageUpdateBroadcaster(async (message) => {
+      editBroadcasts.push(message as { metadata: { kind: string } });
+    });
+
+    // A (ré)initie — l'ack ne doit jamais être gaté par le message vivant.
+    const initiateAck = await new Promise<{ success: boolean }>((resolve) => {
+      clientA.emit(CALL_EVENTS.INITIATE, { conversationId: CONV_ID, type: 'audio' }, resolve);
+    });
+    expect(initiateAck.success).toBe(true);
+
+    await expect(waitUntil(() => newBroadcasts.length === 1)).resolves.toBe(true);
+    expect(newBroadcasts[0].metadata.kind).toBe('call-live');
+    expect(editBroadcasts).toHaveLength(0);
+
+    // A raccroche : le terminal édite le MÊME message (jamais un second post).
+    const endAck = await new Promise<{ success: boolean }>((resolve) => {
+      clientA.emit(CALL_EVENTS.END, { callId: CALL_ID }, resolve);
+    });
+    expect(endAck.success).toBe(true);
+
+    await expect(waitUntil(() => editBroadcasts.length === 1)).resolves.toBe(true);
+    expect(editBroadcasts[0].metadata.kind).toBe('call');
+    expect((editBroadcasts[0] as { id?: string }).id).toBe('msg-call-1');
+    // Un seul message par appel : le terminal n'a rien posté via message:new.
+    expect(newBroadcasts).toHaveLength(1);
+  }, 20_000);
+
+  // Arc reject (2026-07-12) — le contrat wire du refus : les 3 plateformes
+  // envoient call:end {reason:'rejected'} sur refus explicite (in-app,
+  // call-waiting, lock-screen, différé socket-down). La raison doit voyager
+  // intacte jusqu'au service (qui écrit status=rejected — fin de la fausse
+  // notification « appel manqué » au refuseur) ET jusqu'au broadcast ENDED
+  // que l'appelant consomme.
+  it('un refus pré-décroché porte reason=rejected jusqu’au service et au broadcast', async () => {
+    // A ré-initie : le callee sonne à nouveau (même CALL_ID via le stub).
+    const ringB1 = nextEvent<{ callId: string }>(clientB1, CALL_EVENTS.INITIATED);
+    const initiateAck = await new Promise<{ success: boolean }>((resolve) => {
+      clientA.emit(CALL_EVENTS.INITIATE, { conversationId: CONV_ID, type: 'audio' }, resolve);
+    });
+    expect(initiateAck.success).toBe(true);
+    expect((await ringB1).callId).toBe(CALL_ID);
+
+    // B1 refuse SANS avoir décroché — le end porte la raison.
+    endCallCalls.length = 0;
+    const endedAtA = nextEvent<{ callId: string; reason: string }>(clientA, CALL_EVENTS.ENDED);
+    const endAck = await new Promise<{ success: boolean }>((resolve) => {
+      clientB1.emit(CALL_EVENTS.END, { callId: CALL_ID, reason: 'rejected' }, resolve);
+    });
+    expect(endAck.success).toBe(true);
+
+    // Le service reçoit la raison telle quelle (il en dérive status=rejected).
+    await expect(
+      waitUntil(() => endCallCalls.some((c) => c.callId === CALL_ID && c.reason === 'rejected'))
+    ).resolves.toBe(true);
+
+    // L'appelant est notifié de la fin AVEC la raison — son UI peut dire
+    // « refusé » au lieu de « manqué ».
+    const ended = await endedAtA;
+    expect(ended.callId).toBe(CALL_ID);
+    expect(ended.reason).toBe('rejected');
   }, 20_000);
 });
 

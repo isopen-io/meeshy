@@ -187,4 +187,44 @@
     <string name="media_cache_confirm_cancel">Annuler</string>
     <string name="media_cache_error_scan">Impossible de lire la taille du cache. Tirez pour actualiser.</string>
     <string name="media_cache_error_clear">Impossible de vider le cache. Veuillez réessayer.</string>
+
+    <!-- Diagnostics de plantage -->
+    <string name="settings_diagnostics">Diagnostics</string>
+    <string name="crash_reports_title">Diagnostics</string>
+    <string name="crash_reports_info_title">Rapports de plantage</string>
+    <string name="crash_reports_info_body">Si l\'application se ferme de façon inattendue, un rapport est enregistré ici pour que vous puissiez le partager avec le support. Rien ne quitte votre appareil tant que vous ne le partagez pas.</string>
+    <string name="crash_reports_empty">Aucun rapport de plantage — l\'application fonctionne parfaitement.</string>
+    <string name="crash_reports_share">Partager les rapports</string>
+    <string name="crash_reports_clear_all">Effacer les rapports</string>
+    <string name="crash_reports_confirm_title">Effacer les rapports</string>
+    <string name="crash_reports_confirm_message">Cela supprime définitivement tous les rapports de plantage enregistrés sur cet appareil.</string>
+    <string name="crash_reports_confirm_clear">Effacer</string>
+    <string name="crash_reports_confirm_cancel">Annuler</string>
+    <string name="crash_reports_error_load">Impossible de lire les rapports de plantage.</string>
+    <string name="crash_reports_error_clear">Impossible d\'effacer les rapports de plantage. Veuillez réessayer.</string>
+    <string name="crash_kind_exception">Exception</string>
+    <string name="crash_kind_crash">Plantage</string>
+    <string name="crash_kind_anr">ANR</string>
+    <string name="crash_kind_cpu">Processeur</string>
+    <string name="crash_kind_disk">Disque</string>
+    <string name="about_title">À propos</string>
+    <string name="about_app_name">Meeshy</string>
+    <string name="about_version_label">Version %1$s</string>
+    <string name="about_section_informations">Informations</string>
+    <string name="about_section_description">Description</string>
+    <string name="about_section_features">Fonctionnalités</string>
+    <string name="about_section_links">Liens</string>
+    <string name="about_info_platform">Plateforme</string>
+    <string name="about_info_application_id">Identifiant application</string>
+    <string name="about_info_sdk_version">Version du SDK</string>
+    <string name="about_description_body">Meeshy est une plateforme de messagerie en temps réel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.</string>
+    <string name="about_feature_encryption">Chiffrement de bout en bout</string>
+    <string name="about_feature_translation">Traduction en temps réel</string>
+    <string name="about_feature_voice_cloning">Clonage vocal</string>
+    <string name="about_feature_themes">Thèmes personnalisables</string>
+    <string name="about_feature_cloud_sync">Synchronisation cloud</string>
+    <string name="about_link_website">Site web</string>
+    <string name="about_link_twitter">Twitter / X</string>
+    <string name="about_link_github">GitHub</string>
+    <string name="about_copyright">2024–2026 Meeshy. Tous droits réservés.</string>
 </resources>

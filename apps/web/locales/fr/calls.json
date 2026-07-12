@@ -68,6 +68,9 @@
       "qualityDegraded": "La connexion de {name} est instable",
       "screenCapturing": "{name} enregistre peut-être l'écran"
     },
+    "captions": {
+      "region": "Sous-titres traduits en direct"
+    },
     "stream": {
       "disconnected": "Déconnecté",
       "participantLeft": "{name} a quitté l'appel",
@@ -85,8 +88,10 @@
       "cameraSwitched": "Caméra changée",
       "cameraSwitchFailed": "Échec du changement de caméra",
       "joinFailed": "Impossible de rejoindre l'appel",
+      "callAlreadyEnded": "L'appel est terminé",
       "videoSuspendedPoorConnection": "Connexion faible — vidéo suspendue pour maintenir l'appel",
-      "videoResumed": "Connexion rétablie — vidéo réactivée"
+      "videoResumed": "Connexion rétablie — vidéo réactivée",
+      "connectTimeout": "Connexion impossible — appel terminé"
     },
     "permissions": {
       "title": {

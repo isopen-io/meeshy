@@ -41,4 +41,6 @@
     <string name="call_waiting_answer_a11y">Colgar y responder a %1$s</string>
     <string name="call_peer_quality_degraded">La conexión de %1$s es inestable</string>
     <string name="call_peer_screen_capturing">%1$s está capturando la pantalla</string>
+    <string name="call_peer_muted">%1$s ha silenciado su micrófono</string>
+    <string name="call_peer_camera_off">%1$s ha desactivado su cámara</string>
 </resources>

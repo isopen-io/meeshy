@@ -56,12 +56,17 @@ struct CallModelsTests {
 struct ActiveCallSessionTests {
 
     @Test func decodesGatewayShape_withParticipants() throws {
+        // Real wire shape: `mode` is the WebRTC architecture (p2p|sfu) and the
+        // call type travels in the whitelisted `metadata.type` — a video call
+        // rejoined after crash used to resume as audio because isVideo read
+        // `mode == "video"`, which the gateway never sends (fix 2026-07-12).
         let json = """
         {
             "id": "call-1",
             "conversationId": "conv-1",
-            "mode": "video",
+            "mode": "p2p",
             "status": "active",
+            "metadata": { "type": "video" },
             "participants": [
                 { "userId": "user-1", "user": { "id": "user-1", "username": "alice", "displayName": "Alice" } },
                 { "userId": "user-2", "user": { "id": "user-2", "username": "bob", "displayName": "Bob" } }
@@ -74,6 +79,44 @@ struct ActiveCallSessionTests {
         #expect(session.id == "call-1")
         #expect(session.isVideo)
         #expect(session.remoteParticipant(currentUserId: "user-1")?.user?.username == "bob")
+    }
+
+    @Test func audioCall_p2pModeWithoutVideoMetadata_isNotVideo() throws {
+        // An audio p2p call: metadata.type=audio (or absent) must never read
+        // as video just because some other field varies.
+        let json = """
+        {
+            "id": "call-2",
+            "conversationId": "conv-1",
+            "mode": "p2p",
+            "status": "active",
+            "metadata": { "type": "audio" },
+            "participants": []
+        }
+        """.data(using: .utf8)!
+
+        let session = try JSONDecoder().decode(ActiveCallSession.self, from: json)
+
+        #expect(!session.isVideo)
+    }
+
+    @Test func legacySession_withoutMetadata_decodesAndDefaultsToAudio() throws {
+        // Sessions serialized before the metadata whitelist (or by an older
+        // gateway) carry no metadata: decode must succeed and isVideo falls
+        // back to `mode`, which is p2p → audio.
+        let json = """
+        {
+            "id": "call-3",
+            "conversationId": "conv-1",
+            "mode": "p2p",
+            "status": "active",
+            "participants": []
+        }
+        """.data(using: .utf8)!
+
+        let session = try JSONDecoder().decode(ActiveCallSession.self, from: json)
+
+        #expect(!session.isVideo)
     }
 
     @Test func remoteParticipant_returnsNil_whenOnlySelfPresent() {

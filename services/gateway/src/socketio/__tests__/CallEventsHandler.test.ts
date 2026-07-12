@@ -29,8 +29,20 @@ const mockCallServicePersistCallStats = jest.fn() as jest.Mock<any>;
 const mockCallServiceRecordParticipantBackgrounded = jest.fn() as jest.Mock<any>;
 const mockCallServiceClearParticipantBackgrounded = jest.fn() as jest.Mock<any>;
 const mockCallServiceCreateCallSummaryMessage = jest.fn() as jest.Mock<any>;
+const mockCallServiceCreateLiveCallMessage = jest.fn() as jest.Mock<any>;
 const mockCallServiceReleaseActiveCallClaim = jest.fn() as jest.Mock<any>;
 const mockCallServiceForceEndOrphanedCallSession = jest.fn() as jest.Mock<any>;
+const mockCallServiceResolveEndReason = jest.fn((reason?: string) => {
+  switch (reason) {
+    case 'missed': return 'missed';
+    case 'rejected': return 'rejected';
+    case 'failed': return 'failed';
+    case 'connectionLost': return 'connectionLost';
+    case 'heartbeatTimeout': return 'heartbeatTimeout';
+    case 'garbageCollected': return 'garbageCollected';
+    default: return 'completed';
+  }
+}) as jest.Mock<any>;
 
 jest.mock('../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -50,10 +62,12 @@ jest.mock('../../services/CallService', () => ({
     recordHeartbeat: (...a: unknown[]) => mockCallServiceRecordHeartbeat(...a),
     persistCallStats: (...a: unknown[]) => mockCallServicePersistCallStats(...a),
     createCallSummaryMessage: (...a: unknown[]) => mockCallServiceCreateCallSummaryMessage(...a),
+    createLiveCallMessage: (...a: unknown[]) => mockCallServiceCreateLiveCallMessage(...a),
     recordParticipantBackgrounded: (...a: unknown[]) => mockCallServiceRecordParticipantBackgrounded(...a),
     clearParticipantBackgrounded: (...a: unknown[]) => mockCallServiceClearParticipantBackgrounded(...a),
     releaseActiveCallClaim: (...a: unknown[]) => mockCallServiceReleaseActiveCallClaim(...a),
     forceEndOrphanedCallSession: (...a: unknown[]) => mockCallServiceForceEndOrphanedCallSession(...a),
+    resolveEndReason: (...a: unknown[]) => mockCallServiceResolveEndReason(...a),
   })),
 }));
 
@@ -338,6 +352,7 @@ describe('CallEventsHandler', () => {
     mockCallServiceRecordHeartbeat.mockReturnValue(undefined);
     mockCallServicePersistCallStats.mockResolvedValue(undefined);
     mockCallServiceCreateCallSummaryMessage.mockResolvedValue(null);
+    mockCallServiceCreateLiveCallMessage.mockResolvedValue(null);
     mockCallServiceRecordParticipantBackgrounded.mockReturnValue(undefined);
     mockCallServiceClearParticipantBackgrounded.mockReturnValue(undefined);
   });
@@ -549,6 +564,55 @@ describe('CallEventsHandler', () => {
       expect(socket.join).toHaveBeenCalledWith(`call:${CALL_ID}`);
       expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
       expect(memberSocket.emit).toHaveBeenCalledWith('call:initiated', expect.objectContaining({ callId: CALL_ID }));
+      expect(mockCallServiceScheduleRingingTimeout).toHaveBeenCalled();
+    });
+
+    it('poste le message d\'appel vivant après l\'ack et le broadcast via messageBroadcaster', async () => {
+      const callSession = makeCallSession();
+      mockCallServiceInitiateCall.mockResolvedValue(callSession);
+      const liveMessage = { id: 'msg-live', conversationId: CONV_ID };
+      mockCallServiceCreateLiveCallMessage.mockResolvedValue(liveMessage);
+      const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
+      const ack = jest.fn();
+
+      const { handler, socket, io } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([{ userId: USER_ID }]),
+        },
+      });
+      handler.setMessageBroadcaster(broadcaster);
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:initiate', validData, ack);
+      await new Promise(r => setImmediate(r));
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+      expect(mockCallServiceCreateLiveCallMessage).toHaveBeenCalledWith(CALL_ID);
+      expect(broadcaster).toHaveBeenCalledWith(liveMessage, CONV_ID);
+    });
+
+    it('un message vivant null (course terminale déjà gagnée) n\'affecte ni l\'ack ni le setup', async () => {
+      const callSession = makeCallSession();
+      mockCallServiceInitiateCall.mockResolvedValue(callSession);
+      mockCallServiceCreateLiveCallMessage.mockResolvedValue(null);
+      const broadcaster = jest.fn<any>().mockResolvedValue(undefined);
+      const ack = jest.fn();
+
+      const { handler, socket, io } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([{ userId: USER_ID }]),
+        },
+      });
+      handler.setMessageBroadcaster(broadcaster);
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:initiate', validData, ack);
+      await new Promise(r => setImmediate(r));
+
+      expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+      expect(broadcaster).not.toHaveBeenCalled();
       expect(mockCallServiceScheduleRingingTimeout).toHaveBeenCalled();
     });
 
@@ -1587,6 +1651,31 @@ describe('CallEventsHandler', () => {
       expect(ack).toHaveBeenCalledWith({ success: true });
     });
 
+    // The fast-path optimistic broadcast (socket.to, in-memory) used to cast
+    // the raw client `reason` straight to CallEndReason instead of routing it
+    // through the same resolveEndReason() normalization as the authoritative
+    // broadcast a few lines later. The socket schema only whitelists the
+    // `[a-z_]+` charset, not membership in the CallEndReason enum, so a
+    // schema-valid-but-unrecognized string ("busy") could reach the peer via
+    // the fast path while the authoritative broadcast normalized the same
+    // event to "completed" — the two disagreeing about how the call ended.
+    it('normalizes an unrecognized-but-schema-valid reason in the fast-path optimistic broadcast, matching what the authoritative broadcast would resolve it to', async () => {
+      mockCallServiceGetCallSession.mockResolvedValueOnce(
+        makeCallSession({ participants: [makeParticipant()] })
+      );
+      mockCallServiceEndCall.mockResolvedValue(makeCallSession({ status: 'ended', duration: 5 }));
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:end', { callId: CALL_ID, reason: 'busy' }, jest.fn());
+
+      const roomEmit = (socket.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+      expect(roomEmit).toHaveBeenCalledWith('call:ended', expect.objectContaining({ reason: 'completed' }));
+    });
+
     it('fans out call:ended to every conversation member USER room (ringing callee is in neither the call nor the conversation room)', async () => {
       // Incident prod 2026-07-03 06:14 — the caller hung up while the callee
       // was still ringing; the callee had joined NEITHER the call room (never
@@ -1642,6 +1731,19 @@ describe('CallEventsHandler', () => {
       mockCallServiceEndCall.mockRejectedValue(new Error('END_CALL_FAIL: permission denied'));
       const { socket } = setupWithSocket();
       await socket._trigger('call:end', validData, jest.fn());
+      expect(mockCallServiceForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
+    });
+
+    // Same root cause as the fast-path broadcast fix above, in the sibling
+    // call site: this recovery path used to cast the raw client `reason`
+    // straight to CallEndReason before handing it to forceEndOrphanedCallSession,
+    // which persists it to the DB's strictly-enum-typed `endReason` column.
+    // An unrecognized-but-schema-valid string must resolve to a real enum
+    // member here too, not just in the optimistic broadcast.
+    it('normalizes an unrecognized-but-schema-valid reason before force-ending the orphaned session', async () => {
+      mockCallServiceEndCall.mockRejectedValue(new Error('END_CALL_FAIL: permission denied'));
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:end', { callId: CALL_ID, reason: 'busy' }, jest.fn());
       expect(mockCallServiceForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
     });
 

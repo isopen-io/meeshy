@@ -57,11 +57,150 @@
 > construction (#8).
 > **L'audit est CLOS.** Dette restante : device-test 2 appareils réels
 > jamais fait.
+> Replay de sonnerie Android : `call:check-active` émis à CHAQUE connexion
+> socket (même collect que la re-déclaration presence) — un callee Android
+> qui (re)connecte mid-ring voit enfin l'appel au lieu de le laisser sonner
+> vers missed. Parité iOS MessageSocketManager / web checkForActiveCall ;
+> dédup par callId déjà en place (start() inerte en appel, offre du callId
+> actif ignorée).
+> Décroché à froid Android : initiate/join attendent la connexion socket
+> (borné 30 s — parité iOS force-connect+wait, `connectionState.first`)
+> avant d'émettre — un emit sur un `_socket` encore null (fenêtre
+> cold-start entre la notification full-screen et la restauration d'auth)
+> était JETÉ en silence : l'ACK ne venait jamais et l'appel décroché
+> mourait en Failure après le budget. Immédiat quand déjà connecté ;
+> échec rapide explicite (« socket not connected ») si la fenêtre expire.
+> Watchdog Connecting Android : une fenêtre CONTINUE de 45 s couvre
+> Offering∪Connecting (socket-wait 30 + ACK 5 + marge ICE) — le dernier
+> trou non borné après le décroché : le ring-timeout serveur ne s'applique
+> plus une fois répondu et les heartbeats ne démarrent qu'en Connected,
+> donc un appel répondu dont l'ICE ne s'établissait jamais restait sur
+> « Connexion… » à vie (2 côtés, jusqu'au GC 2 h). Expiry = même devoir
+> terminal que hangUp (ConnectionFailed + emitEnd + teardown). Parité
+> d'intention iOS connectingFailSeconds.
+> Watchdog Connecting web : même trou, même borne (45 s dans
+> VideoCallInterface) — un échec ICE ne produisait qu'un toast pendant
+> que webrtc-service retentait en boucle sans escalade ; l'appel jamais
+> connecté se termine désormais (handleHangUp via ref, fenêtre unique
+> par callId, seedée de l'état courant — un remontage sur appel connecté
+> ne ré-ouvre jamais de fenêtre de kill). i18n connectTimeout 4 locales.
+> Les 3 plateformes bornent désormais chaque phase d'appel.
+> Résilience réseau Android : le coordinateur WebRTC réagit enfin aux stalls
+> ICE mid-call (avant : handoff WiFi→LTE = média figé pour toujours, appel
+> « actif » côté serveur car les heartbeats socket survivent au média mort).
+> DISCONNECTED = stall (FSM Reconnecting + call:reconnecting, souvent
+> auto-guéri) ; FAILED = restart ICE (WebRtcEngine.restartIce, atome SDK) +
+> renégociation par l'APPELANT INITIAL seul (anti-glare, negotiationId+1) ;
+> retour CONNECTED = call:reconnected + MediaConnected. Les reconnexions
+> alimentent l'analytics (foldAnalytics comptait déjà les entrées en
+> Reconnecting). Pré-connexion jamais un stall (= phase Connecting FSM).
+> Watchdog budget : CallReconnectBudget (10 s/tentative, parité iOS
+> reconnectAttemptBudgetSeconds) armé par état Reconnecting DISTINCT —
+> expiry = ReconnectFailed (FSM : tentative+1, nudge retryIceRestart —
+> couvre le DISCONNECTED éternel jamais FAILED — puis, budget épuisé à 3,
+> Ended(connectionLost) + emitEnd + teardown coordinator, même devoir que
+> hangUp : sans ça le pair restait en appel zombie). Fenêtre totale bornée
+> ~30 s au lieu de « Reconnexion… » à vie.
+> Signaux de reconnexion web : le web AVAIT le restart SOTA (grace timer +
+> restartIce dans webrtc-service) mais n'émettait JAMAIS
+> call:reconnecting/reconnected — le serveur ignorait le restart (statut
+> `active` pendant le stall, analytics aveugle).
+> use-webrtc-p2p émet désormais aux vrais edges mid-call (jamais en
+> pré-connexion), attempt incrémenté par cycle, reset au cleanup. Les 3
+> plateformes tiennent le serveur informé de leurs reconnexions.
+> Sémantique serveur VÉRIFIÉE (2026-07-12) : `reconnecting` n'est pas une
+> « suspension du cleanup » — CallCleanupService le traite comme `active`
+> (GC 2 h ET heartbeatTimeout 120 s inclus). La protection réelle vient des
+> heartbeats qui continuent pendant un restart sur les 3 plateformes
+> (fenêtres client 30-45 s ≪ 120 s) ; un client mort en plein restart est
+> rattrapé par le heartbeatTimeout. Round-trip complet : reconnecting →
+> status reconnecting (CallEventsHandler:3264, autorisation participant
+> actif seul), reconnected → status active (:3315, garde durée). Le statut
+> sert l'observabilité/analytics — la borne de vie, elle, est toujours là.
+> **CI main VERTE sur le tip `05eb54eb3`** (run 29172721298, conclusion
+> success — 11 jobs verts incl. Test gateway/web/shared) : tout l'arc
+> résilience (stalls ICE + watchdog + clamp Android, signaux web, harnais
+> étendu, message d'appel vivant de l'autre session) est validé en CI.
+> Vérifs locales croisées : 1188/1188 gateway socketio (bun), tous les
+> modules Android, 118/118 web domaine appels.
+> **2e vague également VERTE (CI + Docker success sur `4975d9791`)** :
+> décroché à froid + budget 30 s, watchdogs Connecting Android (45 s) et
+> web (45 s), sémantique reconnecting précisée, harnais autorisations
+> P1-21. Prod re-vérifiée saine après déploiement (health up, front 200).
+> **BUG STRUCTUREL FCM Android trouvé et corrigé** : tous les pushes
+> partaient avec un bloc `notification` — or FCM le rend LUI-MÊME quand
+> l'app est backgroundée/tuée et onMessageReceived ne s'exécute JAMAIS :
+> le full-screen ring, StopRing (call_cancel/answered_elsewhere) et
+> SeenCallRing étaient morts précisément dans le seul scénario visé (le
+> foreground passe par la socket). Fix : pushes d'appel Android =
+> DATA-ONLY (sendViaFCM : android && (silent || data.type=call), aucun
+> bloc notification), title/body localisés serveur injectés DANS data ;
+> Android rend sa notification avec data.title/body (Prisme — langue
+> résolue serveur) et fallback ressources 4 locales (le « Appel entrant »
+> codé en dur en français saute). iOS/web FCM inchangés.
+> Compagnons anti-ring-fantôme : TTL FCM 60 s (android.ttl) ET expiration
+> APNs 60 s (notification.expiry) sur les pushes d'appel — sans eux, un
+> téléphone qui resurgit du hors-réseau recevait le ring d'un appel missed
+> depuis longtemps (FCM conserve ~4 semaines par défaut ; PushKit force le
+> report CallKit → le téléphone sonne pour rien). Alignés sur la fenêtre
+> de sonnerie serveur (60 s). Scoping : silent n'a qu'UN producteur
+> (call-push-mirroring) — les pushes messages/badges inchangés.
+> Canal de sonnerie v2 (heads-up écran allumé sonnait un simple ding) :
+> ringtone appareil USAGE_NOTIFICATION_RINGTONE + vibration ; canaux
+> immuables → id meeshy_calls_v2 + delete du legacy. Chaîne ring vérifiée
+> maillon par maillon jusqu'à l'écran : extras full-screen → LaunchRouter
+> (pur) → CallRoute.incoming, chemins push et socket convergents.
+> **3e vague VERTE (CI success sur le tip post-arc pushes)** : data-only,
+> TTL/expiration, canal sonnerie — certifiés.
+> Refuser depuis la notification (CallStyle) : avant, « Refuser »
+> n'existait pas — le correspondant sonnait 60 s dans le vide. CallStyle
+> forIncomingCall (Répondre = full-screen intent existant, Refuser =
+> DeclineCallReceiver) ; le refus coupe la sonnerie, mémorise l'id dans le
+> ring (une redélivrance ne re-sonne pas) et prévient le correspondant :
+> call:end immédiat si socket vivante, sinon DeclinedCallStore drainé au
+> prochain connect (collect MeeshyApplication, emitEnd idempotent).
+> Dégrade en notification à actions sur API < 31.
+> Répondre = décroché DIRECT (autoAnswer bout-en-bout : intent Answer
+> distinct → LaunchExtras/LaunchRouter → arg answer de CallRoute →
+> CallScreen accept gated permissions, gardé sur INCOMING — une
+> ré-entrée ne re-join jamais ; le tap simple et l'offre socket ne
+> décrochent jamais seuls).
+> Refus = 'rejected' sur le fil : AUCUNE plateforme n'envoyait la raison
+> — tout refus explicite devenait « manqué » dans le journal de
+> l'appelant (le serveur préserve pourtant rejected pré-décroché).
+> Android : emitEnd(callId, reason?) + decline/rejectWaiting/auto-dismiss/
+> DeclineCallReceiver/drain passent rejected ; hangUp reste sans raison.
+> Web : handleRejectCall passe de call:leave (résolu missed) à call:end
+> {reason:'rejected'} — end permis à tout participant actif (P2P, C4),
+> broadcast immédiat à l'appelant. iOS ALIGNÉ : emitCallReject passe de
+> call:leave à call:end {reason:'rejected'} (même bug que le web), le
+> refus du call-waiting (rejectPendingCall) aussi — les 3 plateformes
+> envoient la raison.
+> status=rejected serveur : endCall pré-décroché + reason rejected écrit
+> enfin CallStatus.rejected (l'enum existait, RIEN ne l'écrivait) — fin de
+> la notification « appel manqué » envoyée au callee qui venait de REFUSER
+> (handleMissedCall gaté sur status missed) et le filtre « manqués » du
+> journal exclut les refus comme son commentaire le promettait.
+> Post-fix iOS Tests ROUGE (2/3685) : les source-guards RejectPendingCallTests
+> exigeaient la sous-chaîne emitCallEnd(callId: pending.callId) — remplacée
+> par emitCallReject. Guards mis à jour vers le nouveau contrat + nouveau
+> verrou test_sdkEmitCallReject_emitsCallEndWithRejectedReason (le SDK doit
+> émettre call:end AVEC reason rejected, sinon le guard app passerait à vide).
+> CI/SDK Tests verts sur f67c39ac0 ; iOS Tests VERT sur 2cbf13bc9
+> (run 29177219556, conclusion=success, 3685 tests) — arc reject CLOS
+> et certifié sur les 3 plateformes.
+
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
 > gated au callId + cluster CallQualityOverlay, i18n 4 locales. Les 3
 > plateformes affichent les mêmes alertes distantes.
+> Indicateurs mute/caméra du pair Android : `call:media-toggled` n'est plus
+> jeté — décodage pur `mediaToggle` + flux `mediaToggles`, VM
+> peerAudioEnabled/peerVideoEnabled gatés au callId (mediaType inconnu =
+> inerte), presenter isPeerMuted / isPeerCameraOff (caméra = appels vidéo
+> seulement), indicateurs CallScreen + 4 locales. Parité
+> isRemoteAudioEnabled/isRemoteVideoEnabled iOS et VideoStream web.
 > Émission Android (post-audit) : `call:screen-capture-detected` relayé —
 > seam `ScreenRecordingDetector` (Android 15 `addScreenRecordingCallback`,
 > permission normale DETECT_SCREEN_RECORDING, silencieux < API 35), collecte
@@ -164,3 +303,95 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 `CallManager.swift:1281,3915,4788`, `P2PWebRTCClient.swift:174-190`,
 `apps/web/components/video-call/CallManager.tsx:643-648`,
 `CallSignalManager.kt:295-312`, `packages/shared/types/video-call.ts:836-885`.
+
+> Captions live 3 plateformes (2026-07-12, post-arc transcription) : le
+> gateway traduit chaque segment final par participant et relaie
+> call:translated-segment ; iOS l'affichait (CallTranscriptionService),
+> Android aussi (audit #5 — CallViewModel.onTranslatedSegment →
+> state.captionText → CallScreen), mais le web n'avait AUCUN listener :
+> un participant web face à un speaker iOS ne voyait jamais les
+> sous-titres. Comblé b507ebe19 : useCallCaptions (sémantique miroir iOS
+> appendSegment — partial remplace partial du même speaker, final efface
+> le partial, rétention 4 lignes, linger 6 s ré-armé) +
+> CallCaptionsOverlay (bandeau bas-centre, partials atténués, préfixe
+> speaker résolu) + i18n 4 locales. 19 suites appels web 103/103.
+> L'ÉMISSION reste iOS-only (SFSpeechRecognizer on-device) — émission
+> web (Web Speech API) / Android (SpeechRecognizer) = features dédiées,
+> hors périmètre parité consommation.
+
+> Harnais e2e +1 scénario captions (2026-07-12) : transcription-segment →
+> translated-segment épinglé sur vraies sockets — partial relayé sans
+> traduction, final fallback sans ZMQ (translatedText absent,
+> targetLanguage=sourceLanguage — le chemin dégradé que les 3 clients
+> affichent), speaker exclu (socket.to), device hors room exclu,
+> non-participant rejeté NOT_A_PARTICIPANT sans fuite. Revue au passage :
+> segment.speakerId transite TEL QUEL (pas de réécriture serveur comme
+> screen-capture-detected) — accepté : l'auteur est déjà un participant
+> actif autorisé à injecter du texte ; l'usurpation intra-appel n'élargit
+> pas la surface (il pourrait aussi bien parler). 7/7 harnais.
+
+> Arc reject, chemin manquant (2026-07-12) : le refus depuis l'ÉCRAN
+> VERROUILLÉ (CXEndCallAction sur entrant pré-décroché = bouton Refuser
+> CallKit, seul chemin de refus en background) aboutissait dans endCall()
+> sans raison → missed → fausse notification « appel manqué » au refuseur,
+> encore vivante sur le chemin le plus fréquent. Fix d371f3505 : endCall()
+> détecte .ringing(isOutgoing: false) → emitCallReject +
+> endCallInternal(.rejected) ; 4 source-guards EndCallLockScreenDeclineTests ;
+> guard bye-before-teardown migré fenêtre 3000 chars → borne MARK (il
+> épinglait aussi endCallInternal(reason: .local) texte exact). Vérifié par
+> réplication Python avant push ; verdict iOS Tests attendu sur ce tip.
+
+> Refus socket-down iOS (2026-07-12, 95c6cebc4) : emitCallReject dans une
+> socket morte était JETÉ (push VoIP à froid + refus avant handshake →
+> appelant sonne 60 s, résolution missed). Le refus est désormais différé
+> dans pendingEndReconciliationCallId + pendingEndReconciliationReason et
+> rejoué AVEC reason=rejected par l'observer connectionState (un replay en
+> end plat ressusciterait le mislabel). rejectPendingCall passe par le
+> helper. Parité Android DeclinedCallStore. 3 source-guards
+> RejectDeferredReconciliationTests. L'arc reject couvre désormais TOUS
+> les chemins × TOUS les états de transport sur les 3 plateformes.
+
+> Harnais e2e +1 scénario reject (2026-07-12) : refus pré-décroché sur le
+> fil — call:end {reason:'rejected'} ack'é, raison reçue TELLE QUELLE par
+> CallService.endCall (stub enregistreur, endReason la fait suivre comme
+> le vrai service) et broadcast call:ended {reason:'rejected'} consommé
+> par l'appelant. 8/8 harnais. Le contrat des 4 arcs (ring multi-device,
+> side-channels, reject, captions) est intégralement épinglé sur vraies
+> sockets.
+
+> **CERTIFICATION 2026-07-12 : tout vert.** iOS Tests success sur 95c6cebc4
+> (run 29178082197 — refus lock-screen d371f3505 + refus socket-down différé
+> 95c6cebc4, 7 source-guards neufs). CI success + Docker success sur
+> 8c6c75748 (harnais e2e 8 scénarios dont reject wire + captions web
+> b507ebe19). L'arc reject est complet : 3 plateformes × tous les chemins
+> de refus × tous les états de transport, contrat serveur épinglé en e2e.
+> Reste UNIQUEMENT le device-test physique 2 appareils.
+
+> DÉPLOIEMENT PROD 2026-07-12 ~03:42Z : pull isopen/meeshy-gateway:latest +
+> isopen/meeshy-web:latest, recréation chirurgicale (--no-deps gateway
+> frontend). Gateway healthy (0 motif crash-loop), meeshy.me/www 200,
+> ws/translation/db up. Le 404 Traefik ~60 s post-recréation = fenêtre
+> healthcheck→routage documentée (vérifié : app 200 en direct, routeur
+> unique, WRN réseau inoffensif). L'arc reject serveur (status=rejected)
+> et les captions web sont EN PRODUCTION.
+
+> Bug rejoin visio (2026-07-12) : callSessionSchema ne whitelist ait PAS
+> metadata → le type audio/video était strippé du payload REST active-call
+> (privacy fix 2026-05-12 trop large) ; mode transporte l'architecture
+> (p2p|sfu), jamais 'video' — iOS ActiveCallSession.isVideo lisait
+> mode=="video" → une VISIO rejointe après crash reprenait en AUDIO
+> (pill Rejoindre b69509366). Fix racine : metadata whitelisted {type}
+> dans le schema + enum mode corrigée (p2p|sfu) + test de SÉRIALISATION
+> fast-json-stringify (les tests de routes mockent sendSuccess — le
+> schema n'y est jamais exercé, d'où l'invisibilité) ; iOS decode
+> metadata.type (fallback mode), tests SDK ré-encodés sur la vraie forme
+> wire. Web non affecté (lit callType du message call-live). Reste :
+> parité Android rejoin (aucune découverte active-call côté Android).
+
+> Parité Android rejoin — tranche 1 (2026-07-12) : découverte active-call
+> posée. ActiveCallSession/Metadata/Participant (core/model, décode pur de
+> callSessionSchema, 5 tests XML-vérifiés — isVideo lit metadata.type dès
+> le départ, jamais le bug iOS mode=='video') + ActiveCallApi Retrofit
+> (GET conversations/:id/active-call + GET calls/active crash-recovery)
+> + provider Hilt. Reste tranche 2 : affordance (bulle call-live ou pill
+> header) + flux join depuis la découverte.

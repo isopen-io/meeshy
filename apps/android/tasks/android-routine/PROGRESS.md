@@ -2,7 +2,75 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload + crash-report diagnostics viewer w/ share)** → rest`
+
+> On 2026-07-12 **Terms of Service + Privacy Policy** landed (slice `settings-legal-documents`,
+> feature-parity §L — "Static screens: … Terms of Service … Privacy Policy …"). Port of iOS
+> `TermsOfServiceView` + `PrivacyPolicyView`, **unified** into one data-driven screen keyed by
+> `LegalDocumentKind`, wiring the **two previously dead-end** Settings → About rows ("Terms of Service",
+> "Privacy Policy", both `onClick = {}`). Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.legal`):
+> `LegalDocumentKind` (enum with a stable route `arg` + `fromArg(raw)` — the case-folded, trimmed parser that
+> returns `null` on a blank / absent / unrecognised token so an unknown deep link never silently resolves to the
+> wrong document); `LegalSectionKey` (the 9 ToS + 7 Privacy section keys, in iOS order); `LegalNumberedSection`;
+> `LegalDocumentCatalog.sections(kind)` (ordered section keys per document) + `.numbered(kind)` (iOS's
+> `index + 1`, contiguous 1-based numbering). `LegalDocumentScreen` (`:feature:settings`, coverage-exempt glue):
+> a "last updated" line + numbered Info-blue section cards (accent circle number + heading + body), every key
+> resolved app-side to a localized string. Nav: one `settings/legal/{doc}` route parsed via `fromArg`
+> (defensive fallback to ToS), reached by `Routes.legal(kind)` from the two wired rows. **Surpasses iOS twice:**
+> (a) two near-identical iOS views collapse into one catalog-driven screen (one place to add/reorder a section),
+> and (b) the document follows the app's content language automatically across values-* (EN/FR/ES/PT — Prisme
+> philosophy: content in the user's language with no friction), replacing iOS's manual fr/en `Picker`. **+14
+> tests** (LegalDocumentCatalog 7 — per-document order, contiguous 1-based numbering, `numbered↔sections` key
+> parity, no intra-doc duplicate, the two docs disjoint, and every `LegalSectionKey` partitioned across exactly
+> one document; LegalDocumentKind 7 — token resolution, case-insensitivity, trimming, null-on-blank/unknown,
+> arg round-trip). `:app:assembleDebug` **BUILD SUCCESSFUL**; full all-module `testDebugUnitTest` **BUILD
+> SUCCESSFUL**. A one-mutation RED check (dropping `TOS_CONTACT` from the TERMS list) failed exactly the order +
+> partition tests, confirming they are behavioural not tautological. Reviewer **PASS** (diff `apps/android` only
+> — `:core:model` [new `legal` package], `:feature:settings` [screen + 4× `legal.xml` EN/FR/ES/PT], `:app` nav
+> wiring, `SettingsScreen` two callbacks; no production logic outside; **SDK purity** — pure kind/catalog in
+> `:core:model`, localized content + "which screen / route parse" glue app-side; **SSOT** — one catalog owns the
+> section order + numbering, one `fromArg` parses the route, no re-implementation; **UDF/instant-app** — static
+> content, no state machine; **colour/UX coherence** — Info-blue numbered cards, natural row→screen→back, no dead
+> ends left; **no coverage floor lowered, no test weakened**). **Next slice:** the remaining §L static screens
+> (Help & Support; open-source licenses — an Android-accurate curated catalog, not iOS's Swift deps), the chat
+> media view that consumes the `MediaAutoDownloadDecider`, or in-place crop/resize/compress before upload (§K).
+
+> On 2026-07-12 **media auto-download decision pipeline** landed (slice `media-auto-download-decider`,
+> feature-parity §L). Closes the "next slice" NB the `settings-media-auto-download` slice left open: the live
+> `ConnectivityManager` monitor + the **first consumer** of the already-tested `MediaDownloadPolicyEngine`.
+> Two pure `:core:model` SSOTs: (1) `MediaKindClassifier.fromMimeType(mime, isAudioTranslation) → MediaKind?`
+> — the bridge from an attachment's wire MIME to the policy table: strips the `;`-parameter, trims, case-folds
+> (MIME is case-insensitive), `image/`→IMAGE, `video/`→VIDEO, `audio/`→AUDIO or AUDIO_TRANSLATION per the flag;
+> a document / blank / absent / bare top-level token (`image` without a subtype) → `null` = *never auto-fetched*
+> on the user's data; (2) `MediaAutoDownloadDecider.decide(kind, availability, condition, prefs) →
+> AutoDownloadDecision` — the guard chain iOS inlines in `ConversationMediaViews`'s auto-DL `.task`, made a pure
+> state machine: `null` kind → SKIP_UNSUPPORTED (short-circuits before any network read), AVAILABLE →
+> SKIP_ALREADY_AVAILABLE, DOWNLOADING → SKIP_IN_FLIGHT, NEEDS_DOWNLOAD → the `MediaDownloadPolicyEngine` verdict
+> (DOWNLOAD / SKIP_POLICY, the offline gate surfacing as SKIP_POLICY not DOWNLOAD); `decideFor(mime,…)`
+> classifies then decides. Supporting enums `MediaAvailability` (AVAILABLE/DOWNLOADING/NEEDS_DOWNLOAD) +
+> `AutoDownloadDecision` (with a `shouldDownload` convenience). `:sdk-core` `NetworkConditionMonitor` (interface
+> + `InMemoryNetworkConditionMonitor` fake + `AndroidNetworkConditionMonitor` — the `ConnectivityManager` glue
+> that maps the default network's `NetworkCapabilities` onto the four flags the pure, already-tested
+> `NetworkConditionResolver` consumes, exposed as a `StateFlow<NetworkCondition>` via `callbackFlow`+`stateIn`),
+> Hilt-provided `@Singleton` in `SdkModule`. The future chat media view injects the monitor +
+> `MediaDownloadPreferencesStore` and calls the pure decider — the "when to actually kick the download / which
+> UI cascade" rule stays app-side (grain rule: a component wiring the named Meeshy singletons + a "when to X"
+> rule is app-side; the monitor takes opaque `Context` and is agnostic → SDK). **+24 tests**
+> (MediaKindClassifier 13, MediaAutoDownloadDecider 11), all green. `:app:assembleDebug` **BUILD SUCCESSFUL**;
+> `:core:model:testDebugUnitTest` green; full all-module `testDebugUnitTest` had its **only** failure on the
+> documented DataStore-under-parallel-load flake (`NotificationPreferencesStoreTest`, NOTES §DataStore, 1/574
+> sdk-core tests) — **green in isolation in 3s**, and this slice adds **no** DataStore store. A two-mutation RED
+> check (break the DOWNLOADING gate + break the video branch) failed exactly the 5 relevant tests, confirming
+> they are behavioural not tautological. Reviewer **PASS** (diff `apps/android` only — `:core:model` [new file],
+> `:sdk-core` [new monitor + `SdkModule` binding], `feature-parity.md`; no production logic outside; **SDK
+> purity** — pure classifier/decider in `:core:model`, agnostic `Context`-fed monitor in `:sdk-core`, "when to
+> auto-DL" left app-side; **SSOT** — one `MediaKindClassifier` bridges MIME→kind, the decider defers the network
+> verdict to the existing `MediaDownloadPolicyEngine` + `NetworkConditionResolver`, no re-implementation;
+> **UDF/instant-app** — pure decision, live `StateFlow` condition; **colour/UX coherence** — no UI in this slice
+> (decision layer + service); **no coverage floor lowered, no test weakened**). **Next slice:** the chat media
+> view that consumes the decider (the actual auto-DL trigger + a manual-download affordance for SKIP_POLICY),
+> in-place crop/resize/compress before upload (§K polish), or a §L row (crash-report diagnostics viewer; static
+> screens: Help/ToS/Privacy/licenses/About).
 
 > On 2026-07-11 **avatar + banner upload** landed (slice `profile-avatar-banner-upload`, feature-parity §K —
 > "Edit profile (avatar + banner upload …)", the last unshipped leg of profile editing). Port of iOS
@@ -2496,6 +2564,115 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-12 — slice `settings-about-screen` ✅ impl + reviewer PASS → merged
+- **Branch:** `claude/apps/android/settings-about-screen` (off latest `main` `32df95a`, i.e. after the
+  `settings-crash-diagnostics` PR #1884 was merged at the start of this run).
+- **Housekeeping first (routine rule 0):** the previous iteration's PR #1884
+  (`settings-crash-diagnostics`) was open with green CI (SHA `78e22d85` → success), `apps/android`-only
+  (26 files) and `mergeable_state: clean` → squash-merged to `main` (`32df95a`) before starting this slice.
+- **What:** feature-parity §L — the About screen. Port of iOS `AboutView`.
+- **Added (production):**
+  - `:core:model` `about/` (package `me.meeshy.sdk.model.about`) — `AboutModels.kt` (`AboutInfoKey`,
+    `AboutInfoRow`, `AboutLinkKind`, `AboutLink`, `AboutFeatureKey`, `AboutParams`, `AboutPresentation`),
+    `AppVersionFormatter` (pure `"name (build)"` fragment; blank name → `1.0.0`, non-positive code → `1`),
+    `AboutLinkResolver` (keeps only non-blank http(s) links, order-preserving), `AboutPresentationBuilder`
+    (assembles version label + 3 blank-safe info rows + full feature list + launchable canonical links).
+  - `:feature:settings` `AboutScreen.kt` — Compose glue (brand-gradient header, Indigo section cards,
+    info/feature rows, `ACTION_VIEW` links); reads version/platform facts from `PackageInfo`/`Build`.
+  - `:feature:settings` EN/FR/ES/PT strings (`about_*`).
+- **Wired:** `SettingsScreen` gained `onOpenAbout`; the previously-dead Settings → About "Version" row now
+  navigates to `Routes.ABOUT`; `MeeshyApp` registers `composable(Routes.ABOUT) { AboutScreen(...) }`.
+- **Tests (+27, RED→GREEN):** AppVersionFormatter 7, AboutLinkResolver 9, AboutPresentationBuilder 11.
+  Branches swept: version blank/empty/padded name × zero/negative/positive code + both-degraded; link
+  https/http/uppercase-scheme/padded kept, blank/non-http/schemeless dropped, mixed-order preserved, empty;
+  builder version-label delegation, platform prefix vs bare-Android (blank release), appId trim vs default,
+  sdk trim vs default, info-row fixed order, features = all keys, links = launchable-only canonical.
+- **Two-mutation RED proof:** leak non-positive build code (`build = versionCode.toString()`) + always-prefix
+  platform (`"$PREFIX $release"`) → exactly 4 tests failed (`format_zeroCode…`, `format_negativeCode…`,
+  `format_bothDegraded…`, `build_blankRelease_platformRowIsBareAndroid`); reverted, green again.
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model` + `:feature:settings`
+  `testDebugUnitTest` green.
+- **Reviewer PASS:** diff `apps/android` only (14 files: `:core:model` [4 new + 3 test], `:feature:settings`
+  [AboutScreen + SettingsScreen + 4 strings], `:app` nav wiring, feature-parity/PROGRESS/NOTES docs); no
+  production logic outside; **SDK purity** — pure formatter/resolver/builder in `:core:model` (no Android
+  import), the "read PackageInfo / which icon / open URL" glue app-side; **SSOT** — one `AppVersionFormatter`
+  owns the version string, one `AboutLinkResolver` the launchability gate, no re-implementation;
+  **UDF/instant-app** — pure synchronous `remember`ed projection, no network/spinner; **colour/UX coherence**
+  — Indigo brand-gradient header + Indigo section headers + Info-coloured links, natural row→screen→back,
+  no dead end (the version row was previously inert); **no coverage floor lowered, no test weakened**.
+- **Next slice:** the remaining §L static screens (Help & Support, Terms of Service, Privacy Policy,
+  open-source licenses — the licenses screen has a genuinely testable pure core: parse/group/sort an
+  auto-generated licenses manifest), or the chat media view that consumes the `MediaAutoDownloadDecider`.
+
+### 2026-07-12 — slice `settings-crash-diagnostics` ✅ merged to `main` (PR #1884, squash `32df95a`, CI green)
+- **Branch:** `claude/apps/android/settings-crash-diagnostics` (off latest `main` `4d341f2`).
+- **What:** feature-parity §L — the crash-report diagnostics viewer with share. Port of iOS
+  `CrashDiagnosticsManager` + `CrashReportSheet`; Android-honest capture via
+  `Thread.setDefaultUncaughtExceptionHandler` (analogue of iOS `NSSetUncaughtExceptionHandler`, chains to the
+  previous handler).
+- **Added (production):**
+  - `:core:model` `diagnostics/` — `CrashKind`(+`CrashSeverity`) severity/wire-token SSOT, `CrashDiagnostic`
+    (`@Serializable`), `CrashDiagnosticFactory.fromThrowable` (throwable→diagnostic, id/ts injected),
+    `CrashReportFormatter` (share text, port of `formatAllReports()`), `CrashReportRetention`
+    (sort-newest-first + cap 50 + overflow GC, port of `decodeAllReports()`), `CrashReportCodec`
+    (`storageValue`/`crashReportsFromStorage`, corruption-safe, skips bad elements).
+  - `:feature:settings` — `CrashDiagnosticsStore` (interface) + `FileCrashDiagnosticsStore` (exempt I/O glue,
+    `@Synchronized` sync `record`), `CrashDiagnosticsRecorder` (installer), `CrashDiagnosticsModule` (Hilt
+    binding), `CrashReportViewModel` (UDF), `CrashReportScreen` (glue), SettingsScreen "Diagnostics" row.
+  - `:app` — `Routes.DIAGNOSTICS` + composable + SettingsScreen callback; `MeeshyApplication` installs the
+    recorder in `onCreate`.
+- **Tests (RED→GREEN):** +42 — CrashKind 5, CrashDiagnosticFactory 5, CrashReportFormatter 5,
+  CrashReportRetention 12, CrashReportCodec 6, CrashReportViewModel 9. Branches swept: severity/wire per kind;
+  null-message placeholder; cause-in-details; formatter empty/single/multi/order/ISO; retention
+  empty/single/newest-first/tie-break/under-cap/at-boundary/over-cap/cap≤0/overflow; codec
+  roundtrip/blank/malformed/non-array/skip-corrupt/unknown-keys; VM load success+failure, empty+shareContent,
+  optimistic clear+rollback+inert+in-flight guard+cancellation.
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model` + `:feature:settings` diagnostics
+  tests green. Full all-module `testDebugUnitTest`: only failure = documented DataStore flake
+  `NotificationPreferencesStoreTest` (1/576 sdk-core, green in isolation in 4s, NOTES §DataStore) — this slice
+  adds no DataStore store and touches no sdk-core code. Two-mutation RED proof: misclassify DISK severity +
+  drop the retention cap → exactly 3 relevant tests fail (`severity_mapsInfoKinds`,
+  `retained_overCap_dropsOldestBeyondCap`, `retained_capZeroOrNegative_isEmpty`); reverted.
+- **Reviewer:** PASS. Diff `apps/android` only (`:core:model` new `diagnostics/` files, `:feature:settings`
+  new store/recorder/module/VM/screen + SettingsScreen row + EN/FR/ES/PT strings, `:app` nav + Application
+  install); no production logic outside `apps/android`. SDK purity — pure classify/format/retain/codec in
+  `:core:model`, "when to record / on-disk layout / cache→UI" orchestration in `:feature:settings`. SSOT — one
+  formatter/retention/codec, no re-implementation. UDF/instant-app — immutable `StateFlow<UiState>`, skeleton
+  only on cold empty, optimistic clear with rollback. Colour/UX — severity badges from `MeeshyPalette`
+  (Error/Warning/Info), natural back nav, share + confirmed clear, no dead end. No coverage floor lowered, no
+  test weakened.
+- **Env note:** the gradle **wrapper** dist download is proxy-blocked (403 on services.gradle.org→github);
+  use the pre-installed `/opt/gradle/bin/gradle` (8.14.3, compatible with AGP 8.7.3). See NOTES §Gradle.
+- **Next:** the chat media view that consumes the `MediaAutoDownloadDecider` (auto-DL trigger + manual-download
+  affordance for SKIP_POLICY); in-place crop/resize/compress before avatar/banner upload (§K); or the §L
+  static screens (Help/ToS/Privacy/licenses/About).
+
+### 2026-07-12 — slice `media-auto-download-decider` ✅ impl + reviewer PASS + MERGED
+- **Branch:** `claude/apps/android/media-auto-download-decider` (off latest `main`).
+- **What:** feature-parity §L — the live `ConnectivityManager` network monitor + the first consumer of
+  `MediaDownloadPolicyEngine`. Closes the NB the `settings-media-auto-download` slice left open.
+- **Added (production):**
+  - `:core:model` `MediaAutoDownload.kt` — `MediaKindClassifier.fromMimeType(mime, isAudioTranslation) →
+    MediaKind?` (defensive MIME parse: strip `;`-param, trim, case-fold; image/video/audio→kind, else `null`);
+    `MediaAvailability` (AVAILABLE/DOWNLOADING/NEEDS_DOWNLOAD); `AutoDownloadDecision`
+    (DOWNLOAD/SKIP_UNSUPPORTED/SKIP_ALREADY_AVAILABLE/SKIP_IN_FLIGHT/SKIP_POLICY + `shouldDownload`);
+    `MediaAutoDownloadDecider.decide(…)` (the availability-gated wrapper over the policy engine) + `decideFor(…)`.
+  - `:sdk-core` `NetworkConditionMonitor` (interface + `InMemoryNetworkConditionMonitor` fake +
+    `AndroidNetworkConditionMonitor` `ConnectivityManager` glue over `NetworkConditionResolver`, `StateFlow`);
+    `SdkModule` `@Provides @Singleton` binding.
+- **Tests (RED→GREEN):** +24 — `MediaKindClassifierTest` 13 (image/video/audio, translation flag routing +
+  ignored-for-non-audio, case-fold, `;`-param strip, whitespace trim, null/blank/non-media/bare-token → null,
+  trailing-slash boundary), `MediaAutoDownloadDeciderTest` 11 (unsupported short-circuit incl. all-availability
+  sweep, already-available, in-flight, needs+allows, needs+denies, offline→SKIP_POLICY, per-kind policy read,
+  `decideFor` classify-then-decide, unclassifiable→unsupported, translation-flag routes to the AT policy).
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model:testDebugUnitTest` green (958 total, my
+  24 pass). Full all-module run: only failure = documented DataStore flake `NotificationPreferencesStoreTest`
+  (1/574 sdk-core, green in isolation in 3s, NOTES §DataStore-under-parallel-load) — this slice adds no
+  DataStore store. Two-mutation RED proof: break DOWNLOADING gate + video branch → exactly 5 relevant tests
+  fail; reverted.
+- **Reviewer:** PASS. Diff `apps/android` only (`:core:model` new file, `:sdk-core` monitor + `SdkModule`
+  binding, `feature-parity.md`). SDK purity, SSOT, UDF, no coverage floor lowered.
 
 ### 2026-07-11 — slice `settings-account-deletion` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/settings-account-deletion` (off latest `main`).

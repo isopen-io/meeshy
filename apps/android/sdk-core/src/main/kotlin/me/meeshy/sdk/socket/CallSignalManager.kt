@@ -3,6 +3,7 @@ package me.meeshy.sdk.socket
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -11,6 +12,7 @@ import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinAckParser
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallParticipantLeftPayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualityReport
@@ -134,6 +136,15 @@ class CallSignalManager @Inject constructor(
     private val _translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(replay = 0, extraBufferCapacity = 128)
     val translatedSegments: SharedFlow<CallTranslatedSegmentPayload> = _translatedSegments.asSharedFlow()
 
+    /**
+     * The remote peer muted/unmuted the mic or turned the camera off/on
+     * (`call:media-toggled`). Inert to the FSM; feeds the "peer is muted /
+     * camera off" indicators — iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
+     * parity. Hot, no replay.
+     */
+    private val _mediaToggles = MutableSharedFlow<CallMediaTogglePayload>(replay = 0, extraBufferCapacity = 16)
+    val mediaToggles: SharedFlow<CallMediaTogglePayload> = _mediaToggles.asSharedFlow()
+
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
     }
@@ -153,6 +164,7 @@ class CallSignalManager @Inject constructor(
      * JSON object — yields [CallInitiateResult.Timeout].
      */
     suspend fun emitInitiate(conversationId: String, isVideo: Boolean): CallInitiateResult {
+        if (!awaitSocketConnected()) return CallInitiateResult.Timeout
         val payload = JSONObject()
             .put("conversationId", conversationId)
             .put("type", if (isVideo) "video" else "audio")
@@ -177,6 +189,7 @@ class CallSignalManager @Inject constructor(
      * No ACK within [JOIN_ACK_TIMEOUT_MS] yields [CallJoinResult.Failure].
      */
     suspend fun emitJoinAwaitingAck(callId: String): CallJoinResult {
+        if (!awaitSocketConnected()) return CallJoinResult.Failure(SOCKET_OFFLINE)
         val raw = withTimeoutOrNull(JOIN_ACK_TIMEOUT_MS) {
             suspendCancellableCoroutine { continuation ->
                 socketManager.emit("call:join", JSONObject().put("callId", callId)) { args ->
@@ -189,6 +202,21 @@ class CallSignalManager @Inject constructor(
         return CallJoinAckParser.parse(raw)
     }
 
+    /**
+     * Attente BORNÉE de la connexion socket avant un emit à ACK. Le trou du
+     * décroché à froid : l'utilisateur répond depuis la notification FCM
+     * full-screen pendant que l'app démarre — la restauration d'auth puis le
+     * handshake socket prennent quelques secondes, et un emit sur un `_socket`
+     * encore null est JETÉ en silence (l'ACK ne vient jamais, le budget expire,
+     * l'appel décroché meurt en Failure). Immédiat quand déjà connecté ;
+     * au-delà de [CONNECT_WAIT_MS], échec rapide et explicite plutôt qu'un
+     * budget ACK brûlé dans le vide.
+     */
+    private suspend fun awaitSocketConnected(): Boolean =
+        withTimeoutOrNull(CONNECT_WAIT_MS) {
+            socketManager.connectionState.first { it == SocketConnectionState.CONNECTED }
+        } != null
+
     /** Join the call room after answering / on reconnect (fire-and-forget). */
     fun emitJoin(callId: String) = emit("call:join", callId)
 
@@ -196,7 +224,17 @@ class CallSignalManager @Inject constructor(
     fun emitLeave(callId: String) = emit("call:leave", callId)
 
     /** End the call for every participant. */
-    fun emitEnd(callId: String) = emit("call:end", callId)
+    /**
+     * End the call for every participant. [reason] optionnel au schéma gateway
+     * (`socketEndCallSchema`, minuscules+underscores) : `"rejected"` sur un
+     * refus explicite — sans lui, le serveur résout tout end pré-décroché en
+     * `missed` et le journal de l'appelant ment (« manqué » pour un refus).
+     */
+    fun emitEnd(callId: String, reason: String? = null) =
+        socketManager.emit(
+            "call:end",
+            JSONObject().put("callId", callId).apply { reason?.let { put("reason", it) } },
+        )
 
     /** Signal the peer that the local microphone was muted/unmuted. */
     fun emitToggleAudio(callId: String, enabled: Boolean) =
@@ -298,6 +336,18 @@ class CallSignalManager @Inject constructor(
         )
 
     /**
+     * Demande au gateway de REJOUER tout appel encore en train de sonner que
+     * cette socket a manqué — un ring parti pendant que l'app était fermée, un
+     * blip réseau mid-ring, une reconnexion. Le serveur re-émet
+     * `call:initiated` (fenêtre sonnerie < 60 s, jamais l'initiateur, jamais un
+     * appel déjà quitté) ; le client dédoublonne par callId. À émettre à CHAQUE
+     * connexion, parité iOS `MessageSocketManager` / web `checkForActiveCall` —
+     * sans lui, un callee Android qui (re)connecte mid-ring laisse l'appel
+     * sonner dans le vide jusqu'au missed.
+     */
+    fun emitCheckActive() = socketManager.emit("call:check-active", JSONObject())
+
+    /**
      * Télémétrie de cycle de vie émise UNE fois à la fin de l'appel (parité iOS
      * `emitCallAnalytics`, fire-and-forget — le gateway log/persiste pour les
      * dashboards qualité). Le payload est décidé une seule fois par le pur
@@ -377,6 +427,9 @@ class CallSignalManager @Inject constructor(
             if (event == TRANSLATED_SEGMENT_EVENT) {
                 CallSignalMapper.translatedSegment(raw)?.let(_translatedSegments::tryEmit)
             }
+            if (event == MEDIA_TOGGLED_EVENT) {
+                CallSignalMapper.mediaToggle(raw)?.let(_mediaToggles::tryEmit)
+            }
             CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::tryEmit)
         }
     }
@@ -387,6 +440,19 @@ class CallSignalManager @Inject constructor(
 
         /** ACK budget for `call:join`; a bit above the iOS 3 s to tolerate the emulator. */
         const val JOIN_ACK_TIMEOUT_MS = 5_000L
+
+        /**
+         * Attente max de la connexion socket avant un initiate/join (cold start
+         * depuis la notification full-screen : restauration d'auth + TLS +
+         * handshake). Parité iOS : `CallManager` attend `isConnected` jusqu'à
+         * 30 s dans son chemin de réponse — l'utilisateur A décroché, on tient
+         * tant que la fenêtre de sonnerie serveur (60 s) le permet plutôt que
+         * de perdre un appel qu'un connect à 12 s aurait sauvé.
+         */
+        const val CONNECT_WAIT_MS = 30_000L
+
+        /** Message du fast-fail quand la socket n'a jamais connecté dans la fenêtre. */
+        const val SOCKET_OFFLINE = "socket not connected"
 
         /** The single inbound frame that also carries incoming-offer identity. */
         const val INITIATED_EVENT = "call:initiated"
@@ -409,6 +475,9 @@ class CallSignalManager @Inject constructor(
         /** A live (optionally translated) caption segment from the remote speaker. */
         const val TRANSLATED_SEGMENT_EVENT = "call:translated-segment"
 
+        /** The remote peer muted/unmuted the mic or toggled the camera. */
+        const val MEDIA_TOGGLED_EVENT = "call:media-toggled"
+
         // `call:force-leave` is deliberately ABSENT: the gateway never emits it
         // (audit appels 2026-07-11 — verified dead; subscribing would be a
         // silent no-op inviting drift).
@@ -420,10 +489,10 @@ class CallSignalManager @Inject constructor(
             QUALITY_ALERT_EVENT,
             SCREEN_CAPTURE_ALERT_EVENT,
             TRANSLATED_SEGMENT_EVENT,
+            MEDIA_TOGGLED_EVENT,
             "call:participant-joined",
             "call:ended",
             "call:missed",
-            "call:media-toggled",
             "call:error",
             "call:already-answered",
         )

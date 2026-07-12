@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 // ---- Mocks for the container's heavy dependencies -------------------------
 
@@ -65,6 +65,9 @@ jest.mock('@/hooks/use-call-quality', () => ({
 jest.mock('@/hooks/use-remote-call-alerts', () => ({
   useRemoteCallAlerts: () => ({ remoteQualityDegraded: false, remoteScreenCapturing: false }),
 }));
+jest.mock('@/hooks/use-call-captions', () => ({
+  useCallCaptions: () => ({ captions: [] }),
+}));
 jest.mock('@/hooks/use-active-peer-connection', () => ({
   useActivePeerConnection: () => null,
 }));
@@ -126,6 +129,46 @@ describe('VideoCallInterface (container)', () => {
     expect(screen.getByRole('toolbar')).toBeInTheDocument();
     expect(screen.getByTestId('local-video-tile')).toBeInTheDocument();
     expect(screen.getByTestId('call-duration')).toBeInTheDocument();
+  });
+
+  // --- watchdog de connexion : un appel jamais connecté est borné à 45 s ---
+  // (parité iOS connectingFailSeconds / Android CallConnectingWatchdog — un
+  // échec ICE ne produisait qu'un toast, l'UI d'appel restait à vie)
+
+  it('termine l’appel jamais connecté à l’expiration du watchdog', () => {
+    jest.useFakeTimers();
+    const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+    webrtc.connectionState = 'connecting';
+    try {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => {
+        jest.advanceTimersByTime(45_000);
+      });
+
+      expect(fakeSocket.emit).toHaveBeenCalledWith('call:leave', { callId: 'call1' });
+    } finally {
+      webrtc.connectionState = 'connected';
+      jest.useRealTimers();
+    }
+  });
+
+  it('le watchdog est inerte pour un appel déjà connecté', () => {
+    jest.useFakeTimers();
+    const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+    try {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => {
+        jest.advanceTimersByTime(45_000);
+      });
+
+      expect(fakeSocket.emit).not.toHaveBeenCalledWith('call:leave', expect.anything());
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('shows NO survival affordances when video is healthy', () => {

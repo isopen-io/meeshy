@@ -12,11 +12,16 @@ final class ActiveCallServiceTests: XCTestCase {
     private func makeSession(
         id: String = "call-1",
         conversationId: String = "conv-1",
-        mode: String = "voice",
+        mode: String = "p2p",
         status: String = "active",
+        callType: String? = nil,
         participants: [ActiveCallParticipant] = []
     ) -> ActiveCallSession {
-        ActiveCallSession(id: id, conversationId: conversationId, mode: mode, status: status, participants: participants)
+        ActiveCallSession(
+            id: id, conversationId: conversationId, mode: mode, status: status,
+            metadata: callType.map { ActiveCallMetadata(type: $0) },
+            participants: participants
+        )
     }
 
     func test_activeCall_hitsConversationScopedEndpoint() async throws {
@@ -40,7 +45,8 @@ final class ActiveCallServiceTests: XCTestCase {
 
     func test_activeCall_whenActiveCallExists_returnsSession() async throws {
         let (sut, api) = makeSUT()
-        let session = makeSession(mode: "video", participants: [
+        // Wire truth: mode stays p2p; the video nature travels in metadata.type.
+        let session = makeSession(callType: "video", participants: [
             ActiveCallParticipant(userId: "user-1", user: ActiveCallParticipantUser(id: "user-1", username: "alice", displayName: "Alice")),
             ActiveCallParticipant(userId: "user-2", user: ActiveCallParticipantUser(id: "user-2", username: "bob", displayName: "Bob"))
         ])

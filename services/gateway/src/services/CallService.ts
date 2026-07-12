@@ -1707,7 +1707,17 @@ export class CallService {
     const endReason = wasPreAnswered && resolvedReason === CallEndReason.completed
       ? CallEndReason.missed
       : resolvedReason;
-    const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
+    // Un refus EXPLICITE (reason=rejected, envoyé par les boutons Refuser de
+    // toutes les plateformes) garde son statut distinct : normalisé `missed`,
+    // il déclenchait handleMissedCall — une notification « appel manqué »
+    // pour un appel que le callee venait de REFUSER — et tombait dans le
+    // filtre « manqués » du journal (dont le commentaire suppose, à raison,
+    // un statut `rejected` que rien n'écrivait jusqu'ici).
+    const targetStatus = !wasPreAnswered
+      ? CallStatus.ended
+      : resolvedReason === CallEndReason.rejected
+        ? CallStatus.rejected
+        : CallStatus.missed;
 
     // Version-guarded: a plain read-modify-write here raced with any other
     // terminal writer touching this same call (a retried `call:end`, a
@@ -2115,9 +2125,11 @@ export class CallService {
   }
 
   /**
-   * Resolve a string reason to a Prisma CallEndReason enum
+   * Resolve a string reason to a Prisma CallEndReason enum. Public: the single
+   * normalization point for any raw client-supplied `reason` string reaching a
+   * `CallEndReason`-typed field — callers must never cast client input directly.
    */
-  private resolveEndReason(reason?: string): CallEndReason {
+  resolveEndReason(reason?: string): CallEndReason {
     switch (reason) {
       case 'missed': return CallEndReason.missed;
       case 'rejected': return CallEndReason.rejected;

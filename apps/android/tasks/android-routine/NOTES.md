@@ -4,6 +4,57 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-12, `settings-legal-documents`)
+- **Static legal/content screens: keep the *structure* pure, the *content* in `values-*`.** Mirroring the
+  About pattern, the pure `:core:model` catalog holds only the ordered section **keys** + numbering; the
+  localized heading/body text lives in Android string resources resolved app-side. This gives automatic
+  EN/FR/ES/PT (Prisme philosophy) and lets us **collapse iOS's per-view fr/en `Picker`** — a legitimate
+  "better at the base" simplification, not just a port.
+- **When two iOS views are near-identical (ToS + Privacy), unify them into one data-driven screen keyed by an
+  enum.** One `LegalDocumentCatalog` owns both section lists; one `LegalDocumentScreen` renders either. Adding
+  or reordering a section is then a one-line catalog edit.
+- **Partition invariant as a drift guard (non-tautological).** For an enum split across N buckets, assert the
+  buckets are pairwise-disjoint AND together cover the enum exactly once (`containsExactlyElementsIn(entries)` +
+  `containsNoDuplicates()`). This catches a future section key that is added to the enum but forgotten in a
+  document, or listed in both — a real bug the per-list order tests alone would miss. Confirmed non-tautological:
+  dropping one key from a list fails exactly the order + partition tests.
+- **Wire *every* dead-end you touch.** Two Settings rows were `onClick = {}` placeholders; the slice removed
+  both. Grep the target screen for `onClick = {}` before picking the next slice — placeholders are the cheapest
+  parity wins.
+
+## Lesson (2026-07-12, `settings-about-screen`)
+- **Keep the i18n boundary out of the pure core.** iOS's `AboutView` builds the whole `"Version X (Y)"`
+  string (word included) in one place. On Android the word "Version" is a translatable string, so the pure
+  `AppVersionFormatter` returns only the `"X (Y)"` fragment and the screen wraps it in
+  `stringResource(R.string.about_version_label, fragment)` = `"Version %1$s"`. Same for the "Android" platform
+  prefix vs the translatable `about_info_platform` *label* — the value (`Android 14`) is data (pure builder),
+  the row *label* ("Platform"/"Plateforme") is a resource. Rule: the pure core emits values and proper nouns;
+  the Compose layer owns every translatable label.
+- **A "static" screen still has a testable core.** An About screen looks like pure glue, but the version
+  formatting (blank/negative degrade), the link launchability gate (drop non-http(s)) and the blank-safe info
+  rows are all pure branches → 27 behavioural tests, two-mutation RED-proven. Push those out of the Composable.
+- **New files aren't revertable with `git checkout --`.** The two-mutation RED proof edited untracked new
+  files; `git checkout -- <file>` errored ("did not match any file"). Had to restore the two lines by hand.
+  Next time, either `git add` before mutating (so `git checkout` works) or keep the exact original lines handy.
+
+## Lesson (2026-07-12, `media-auto-download-decider`)
+- **The grain rule, applied cleanly: monitor = SDK, "when to auto-DL" = app.** A `NetworkConditionMonitor`
+  takes an opaque `Context` and produces a `NetworkCondition` via the already-pure `NetworkConditionResolver` —
+  agnostic of any Meeshy product rule → `:sdk-core`. A *coordinator* that would inject the named Meeshy
+  singletons (`NetworkConditionMonitor` + `MediaDownloadPreferencesStore`) **and** encode "when to actually
+  kick the download" is app-side per the grain rule — so I did **not** add one this slice. The future chat
+  media view injects both singletons and calls the pure `MediaAutoDownloadDecider` directly (exactly the iOS
+  `.task` shape). Shipping the decision SSOT + the live service ahead of the UI consumer mirrors how
+  `MediaDownloadPolicyEngine` itself shipped — a wired, Hilt-`@Singleton` service is not "orphan" code.
+- **Pure decider = policy engine + availability gates.** `MediaDownloadPolicyEngine` only answers the *policy*
+  question. A real media view also has "already on disk / download running / unsupported type" gates. Layering
+  those as a pure `MediaAvailability` → `AutoDownloadDecision` state machine keeps the whole decision JVM-
+  testable and lets the Compose glue stay a one-liner (`decision.shouldDownload`).
+- **`ConnectivityManager` glue stays untestable-but-thin over the pure resolver.** `NetworkCapabilities` can't
+  be constructed in a JVM unit test, so `AndroidNetworkConditionMonitor` is coverage-exempt — but it holds ZERO
+  decision logic: it only maps caps→4 booleans and defers to `NetworkConditionResolver` (already 9-test
+  covered). Same pattern as the DataStore stores: framework I/O in the glue, all branches in `:core:model`.
+
 ## Lesson (2026-07-11, `profile-avatar-banner-upload`)
 - **Reuse beat rebuild: the avatar/banner upload was almost entirely wiring.** The multipart
   `MediaApi`/`MediaRepository` (pure `MediaUpload.formPart`, JVM-tested), the `PickVisualMedia` +

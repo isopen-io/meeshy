@@ -148,6 +148,42 @@ describe('RedisDeliveryQueue (memory fallback)', () => {
     }
   });
 
+  test('peek — memory-only path orders a superseded entry by enqueuedAt, matching drain()', async () => {
+    // Mirror of the Redis fast-path test: an in-place supersede keeps the
+    // entry's ORIGINAL slot but stamps a NEWER enqueuedAt, so raw memory-array
+    // (slot) order can disagree with chronological order. drain() re-sorts by
+    // enqueuedAt; peek()'s memory-only fallback must do the same or it reports a
+    // replay order the reconnecting client will never actually see.
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-1', makePayload({ messageId: 'M0', eventType: 'edited', enqueuedAt: new Date(1000).toISOString(), payload: { content: 'v1' } }));
+      await queue.enqueue('user-1', makePayload({ messageId: 'N', enqueuedAt: new Date(2000).toISOString(), payload: { content: 'N' } }));
+      // Supersedes M0 in place at slot 0 (older slot, newer ts).
+      await queue.enqueue('user-1', makePayload({ messageId: 'M0', eventType: 'edited', enqueuedAt: new Date(3000).toISOString(), payload: { content: 'v2' } }));
+
+      const peeked = await queue.peek('user-1');
+      expect(peeked.map(p => p.messageId)).toEqual(['N', 'M0']);
+    } finally {
+      await cacheStore.close();
+    }
+  });
+
+  test('peek — memory-only limit picks the chronologically-earliest, not the first slot', async () => {
+    const { cacheStore, queue } = makeMemoryQueue();
+    try {
+      await queue.enqueue('user-1', makePayload({ messageId: 'M0', eventType: 'edited', enqueuedAt: new Date(1000).toISOString() }));
+      await queue.enqueue('user-1', makePayload({ messageId: 'N', enqueuedAt: new Date(2000).toISOString() }));
+      await queue.enqueue('user-1', makePayload({ messageId: 'M0', eventType: 'edited', enqueuedAt: new Date(3000).toISOString() }));
+
+      // limit=1 must preview N (t2000) — the first entry drain() replays — not
+      // M0, which merely occupies slot 0 after the in-place supersede.
+      const peeked = await queue.peek('user-1', 1);
+      expect(peeked.map(p => p.messageId)).toEqual(['N']);
+    } finally {
+      await cacheStore.close();
+    }
+  });
+
   test('cleanup removes expired entries', async () => {
     const { cacheStore, queue } = makeMemoryQueue();
     try {

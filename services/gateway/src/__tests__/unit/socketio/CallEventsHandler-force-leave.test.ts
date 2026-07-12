@@ -25,6 +25,7 @@ jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCall5,
     createCallSummaryMessage: mockCreateCallSummaryMessage5,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     // Stubs for paths not exercised in these tests
     initiateCall: jest.fn<any>(),
     joinCall: jest.fn<any>(),

@@ -308,8 +308,14 @@ export class RedisDeliveryQueue {
       }
     }
 
-    const entries = this.memoryQueue.get(userId) ?? [];
-    return limit ? entries.slice(0, limit) : [...entries];
+    // Sort by enqueuedAt before applying the limit, exactly like drain()'s
+    // memory path (and peek()'s Redis fast/mixed paths above): an in-place
+    // supersede (see enqueue()) keeps an entry's original array slot while
+    // stamping a NEWER enqueuedAt, so raw slot order can disagree with
+    // chronological order. Returning slot order here would preview a first
+    // entry — and, under `limit`, a slice — that drain() never replays.
+    const entries = [...(this.memoryQueue.get(userId) ?? [])].sort(byEnqueuedAt);
+    return limit ? entries.slice(0, limit) : entries;
   }
 
   async size(userId: string): Promise<number> {

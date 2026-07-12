@@ -2314,6 +2314,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:end", ["callId": callId])
     }
 
+    /// Refus explicite : `call:end` avec `reason: "rejected"`. Sans la raison,
+    /// le gateway résout tout end pré-décroché en `missed` — fausse
+    /// notification « appel manqué » chez le callee qui vient de refuser, et
+    /// le refus tombe dans le filtre « manqués » du journal. Parité Android
+    /// `emitEnd(callId, reason)` / web `handleRejectCall`.
+    public func emitCallReject(callId: String) {
+        socket?.emit("call:end", ["callId": callId, "reason": "rejected"])
+    }
+
     /// Variante avec ACK : émet `call:end` et attend confirmation du gateway
     /// (max 3s). Le gateway accepte et broadcast `call:ended` à tous les
     /// participants. Sans ACK le client ne sait pas si le peer a été notifié

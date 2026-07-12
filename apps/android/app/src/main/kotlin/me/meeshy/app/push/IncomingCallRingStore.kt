@@ -56,4 +56,13 @@ class IncomingCallRingStore @Inject constructor() {
     fun forget(callId: String) = synchronized(lock) {
         seen = seen.remove(callId)
     }
+
+    /**
+     * Record [callId] as seen WITHOUT a push having arrived — the user declined
+     * from the notification, so a late-delivered/retried ring push for that
+     * same call must stay silent instead of re-ringing a refused call.
+     */
+    fun remember(callId: String, nowMillis: Long) = synchronized(lock) {
+        seen = seen.insert(callId, nowMillis)
+    }
 }

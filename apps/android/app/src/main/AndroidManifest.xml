@@ -72,6 +72,11 @@
             </intent-filter>
         </service>
 
+        <!-- Bouton « Refuser » de la notification d'appel (CallStyle) -->
+        <receiver
+            android:name=".push.DeclineCallReceiver"
+            android:exported="false" />
+
         <!-- WorkManager initialization -->
         <provider
             android:name="androidx.startup.InitializationProvider"

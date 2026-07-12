@@ -52,4 +52,8 @@
     <string name="profile_cancel">Cancelar</string>
     <string name="profile_save">Guardar</string>
     <string name="profile_unknown">Desconocido</string>
+    <string name="call_channel_name">Llamadas</string>
+    <string name="call_channel_description">Llamadas de voz y vídeo entrantes</string>
+    <string name="call_incoming_audio">Llamada entrante</string>
+    <string name="call_incoming_video">Videollamada entrante</string>
 </resources>

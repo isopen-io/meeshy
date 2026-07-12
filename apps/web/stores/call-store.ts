@@ -19,12 +19,27 @@ import type {
   ConnectionQualityLevel,
 } from '@meeshy/shared/types/video-call';
 
+/**
+ * Join request posed by the live call bubble (`CallSystemMessage`, message
+ * `kind: 'call-live'`). The bubble owns no media/UI — `CallManager` consumes
+ * this request: validates the call is still active via
+ * `GET /conversations/:id/active-call`, then runs the same accept path as an
+ * incoming call. Cold-rehydration-safe: no dependency on a received
+ * `call:initiated` event (works after a mid-call page reload).
+ */
+export interface JoinCallRequest {
+  callId: string;
+  conversationId: string;
+  callType: 'audio' | 'video';
+}
+
 interface CallStoreState extends CallState {
   // Extended state
   callEndReason: CallEndReason | null;
   reconnectAttempt: number;
   connectionQuality: ConnectionQualityLevel | null;
   isReconnecting: boolean;
+  joinRequest: JoinCallRequest | null;
 
   // Server-provided ICE servers (STUN + time-limited TURN credentials).
   // Supplied by the gateway via the initiate/join acks and the
@@ -75,6 +90,10 @@ interface CallStoreState extends CallState {
 
   // Actions: End reason
   setCallEndReason: (reason: CallEndReason) => void;
+
+  // Actions: Join an ongoing call from its live message bubble
+  requestJoin: (request: JoinCallRequest) => void;
+  clearJoinRequest: () => void;
 
   // Actions: Cleanup
   reset: () => void;
@@ -138,6 +157,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   connectionQuality: null,
   isReconnecting: false,
   iceServers: null,
+  joinRequest: null,
 
   // ===== CALL MANAGEMENT =====
 
@@ -452,6 +472,19 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     set({ callEndReason: reason });
   },
 
+  // ===== JOIN FROM LIVE CALL BUBBLE =====
+
+  requestJoin: (request) => {
+    // Already in a call (this one or another) — the bubble tap is a no-op;
+    // joining pre-answer or double-joining is never driven from here.
+    if (get().isInCall) {
+      return;
+    }
+    set({ joinRequest: request });
+  },
+
+  clearJoinRequest: () => set({ joinRequest: null }),
+
   // ===== CLEANUP =====
 
   reset: () => {
@@ -497,6 +530,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       connectionQuality: null,
       isReconnecting: false,
       iceServers: null,
+      joinRequest: null,
     });
   },
 }));

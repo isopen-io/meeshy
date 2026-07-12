@@ -1885,8 +1885,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       policy is an inert no-op. `MediaDownloadScreen` (glue): one accent-coherent section per kind with a
       single-choice `RadioButton` list, reached from a new "Auto-download" row in Settings → Data
       (`Routes.MEDIA_DOWNLOAD`). +37 tests (engine 6, resolver 9, prefs/codec 10, store 7, VM 5). EN/FR/ES/PT
-      strings. NB: the live `ConnectivityManager` monitor + the media-pipeline consumer of the decision are the
-      next slice — this ships the fully-tested decision SSOT + the persisted preference surface.
+      strings.
+- [x] Media auto-download decision pipeline — the live `ConnectivityManager` monitor + the first consumer of
+      `MediaDownloadPolicyEngine` — **shipped** (slice `media-auto-download-decider`, 2026-07-12). Closes the
+      "next slice" NB left by `settings-media-auto-download`. Two pure `:core:model` SSOTs: `MediaKindClassifier`
+      (wire MIME → `MediaKind?`; strips the `;`-parameter, trims, case-folds; `image/`→IMAGE, `video/`→VIDEO,
+      `audio/`→AUDIO or AUDIO_TRANSLATION per the translation flag; a document / blank / bare top-level token →
+      `null` = never auto-fetched) and `MediaAutoDownloadDecider.decide(kind, availability, condition, prefs) →
+      AutoDownloadDecision` (the guard chain iOS inlines in `ConversationMediaViews`'s auto-DL `.task`: unsupported
+      kind → SKIP_UNSUPPORTED, on-disk → SKIP_ALREADY_AVAILABLE, in-flight → SKIP_IN_FLIGHT, else the
+      `MediaDownloadPolicyEngine` verdict → DOWNLOAD / SKIP_POLICY; `decideFor(mimeType,…)` classifies then decides).
+      `MediaAvailability` (AVAILABLE/DOWNLOADING/NEEDS_DOWNLOAD) + `AutoDownloadDecision` (with `shouldDownload`).
+      `:sdk-core` `NetworkConditionMonitor` (interface + `InMemoryNetworkConditionMonitor` fake +
+      `AndroidNetworkConditionMonitor` — the `ConnectivityManager` glue that maps the default network's
+      `NetworkCapabilities` onto the four flags the pure, already-tested `NetworkConditionResolver` consumes;
+      exposed as a `StateFlow<NetworkCondition>`), Hilt-provided as a `@Singleton`. The future chat media view
+      injects the monitor + `MediaDownloadPreferencesStore` and calls the pure decider — the "when to auto-DL"
+      rule stays app-side (grain rule). +24 tests (MediaKindClassifier 13, MediaAutoDownloadDecider 11). No new
+      DataStore store (no flake surface). EN/FR/ES/PT strings: none needed (no user-facing copy).
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync
 - [x] Change password with strength meter + validation — **shipped** (slice `settings-change-password`,
       2026-07-11). Port of iOS `ChangePasswordView` + `PasswordStrengthIndicator`, surpassing it with one SOTA
@@ -1962,9 +1978,63 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       two previously no-op Settings → Data rows ("Clear media cache" + "Storage used") to `Routes.MEDIA_CACHE`.
       +43 tests (ByteSizeFormatter 15, MediaCacheReport 10, MediaCacheScanner 6, MediaCacheViewModel 12).
       EN/FR/ES/PT strings.
-- [ ] Crash-report diagnostics viewer with share
-- [ ] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
-      open-source licenses (auto-generated), About
+- [x] Crash-report diagnostics viewer with share — **shipped** (slice `settings-crash-diagnostics`,
+      2026-07-12). Port of iOS `CrashDiagnosticsManager` + `CrashReportSheet`, with an Android-honest capture
+      layer: the directly-capturable analogue of the iOS NSException path is a process-wide
+      `Thread.setDefaultUncaughtExceptionHandler`, which persists an uncaught JVM exception and then chains to
+      the previously-installed handler (mirroring iOS's `previousExceptionHandler`). Five pure `:core:model`
+      SSOTs (package `me.meeshy.sdk.model.diagnostics`): `CrashKind` (EXCEPTION/CRASH/ANR/CPU/DISK, each with a
+      stable `severity` badge band [ERROR/WARNING/INFO, mirroring the iOS `kindBadge` colours] + a stable
+      lowercase `wireValue` share token) + `CrashSeverity`; `CrashDiagnostic` (`@Serializable`; id, epoch-millis
+      timestamp, kind, summary, details); `CrashDiagnosticFactory.fromThrowable(throwable, id, timestampMillis)`
+      — the pure port of the iOS `"name: reason"` summary + joined-stack-trace details, id/timestamp injected
+      for determinism; `CrashReportFormatter.format`/`formatAll` — the pure port of iOS `formatAllReports()`
+      (`[kind] ISO-8601-UTC` / summary / details, blocks `---`-fenced, order-preserving, empty → ""); and
+      `CrashReportRetention.sorted`/`retained`/`overflowIds` (MAX_STORED=50) — the pure port of the iOS
+      `decodeAllReports()` newest-first sort + cap + GC-overflow, so a crash loop can never grow the store
+      without bound. Durable JSON codec `List<CrashDiagnostic>.storageValue`/`crashReportsFromStorage`
+      (corruption-safe: blank/absent/malformed/non-array → empty; a single unparseable element is skipped, not
+      the whole list — mirroring iOS per-file decode resilience). `:feature:settings`: `CrashDiagnosticsStore`
+      interface + coverage-exempt `FileCrashDiagnosticsStore` (single JSON file under
+      `filesDir/diagnostics/`, `@Synchronized` synchronous `record` for the dying crash thread, retention cap
+      applied on every append/read), `CrashDiagnosticsRecorder` (installs the uncaught-exception handler),
+      `CrashReportViewModel` (UDF immutable `CrashReportUiState`; loads newest-first, exposes `shareContent`
+      derived from the pure formatter, optimistic clear with snapshot rollback, inert-when-empty + in-flight
+      guards, `CancellationException` rethrown), `CrashReportScreen` (severity-coloured kind badges, tap-to-
+      expand monospace details, `ACTION_SEND` share, confirmed clear-all, empty/loading states). Wired a new
+      "Diagnostics" row in Settings → About (`Routes.DIAGNOSTICS`) + `MeeshyApplication.onCreate` installs the
+      recorder. +42 tests (CrashKind 5, CrashDiagnosticFactory 5, CrashReportFormatter 5, CrashReportRetention
+      12, CrashReportCodec 6, CrashReportViewModel 9). EN/FR/ES/PT strings. Surpasses iOS by keeping the whole
+      capture→retain→format→share pipeline as pure, fully-covered SSOTs rather than inline sheet logic.
+- [~] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
+      open-source licenses (auto-generated), About.
+      **About screen shipped** (slice `settings-about-screen`, 2026-07-12). Port of iOS `AboutView`.
+      Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.about`): `AppVersionFormatter.format(name, code)`
+      — the i18n-agnostic `"name (build)"` fragment (blank name → `1.0.0`, non-positive code → `1`, so the
+      label is never empty/`"()"`/negative; the screen wraps it in a localized "Version %s");
+      `AboutLinkResolver.resolvable(links)` — the port of iOS `linkRow`'s `if let URL(string:)` guard (keeps
+      only non-blank http(s) links, order-preserving, so `ACTION_VIEW` always has a launchable target);
+      `AboutPresentationBuilder.build(params)` — assembles the version label, the three info rows
+      (platform=`Android {release}` [blank release → bare `Android`], applicationId [blank → default],
+      sdkVersion [blank → `1.0.0`]), the fixed feature list and the launchable-only canonical links from the
+      opaque `AboutParams` (versionName/versionCode/osRelease/applicationId/sdkVersion — injected app-side from
+      `PackageInfo`/`Build`, no Android import in the core). `AboutScreen` (`:feature:settings`) is pure Compose
+      glue: brand-gradient header, Indigo section cards, info/feature rows, links open via `ACTION_VIEW`.
+      Wired the previously-dead Settings → About "Version" row to `Routes.ABOUT`. +27 tests (AppVersionFormatter 7,
+      AboutLinkResolver 9, AboutPresentationBuilder 11). EN/FR/ES/PT strings.
+      **ToS + Privacy Policy shipped** (slice `settings-legal-documents`, 2026-07-12). Port of iOS
+      `TermsOfServiceView` + `PrivacyPolicyView`, **unified** into one data-driven screen keyed by
+      `LegalDocumentKind`. Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.legal`):
+      `LegalDocumentKind.fromArg(raw)` — the case-folded/trimmed route-arg parser (`terms`/`privacy`, null on
+      blank/unknown so an unrecognised deep link never resolves to the wrong doc); `LegalSectionKey` (the 9 ToS
+      + 7 Privacy sections); `LegalDocumentCatalog.sections(kind)` + `.numbered(kind)` (ordered section keys +
+      iOS's `index + 1` 1-based numbering). `LegalDocumentScreen` (`:feature:settings`) is pure Compose glue:
+      numbered Info-blue section cards, each key resolved to a localized heading/body. Wired the two previously
+      **dead-end** Settings → About rows ("Terms of Service", "Privacy Policy") to `Routes.legal(kind)`.
+      **Surpasses iOS** by (a) collapsing two near-identical views into one catalog-driven screen and (b) the
+      document following the app language automatically across values-* (EN/FR/ES/PT — Prisme philosophy),
+      dropping iOS's manual fr/en `Picker`. +14 tests (LegalDocumentCatalog 7, LegalDocumentKind 7). EN/FR/ES/PT
+      strings. **Pending:** Help & Support, open-source licenses screens.
 
 ## M. Notifications
 - [ ] Notification center with category filters (messages, reactions, mentions, social,

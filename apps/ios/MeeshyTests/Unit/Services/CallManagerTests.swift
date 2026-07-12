@@ -3699,6 +3699,7 @@ final class RejectPendingCallTests: XCTestCase {
         let nextFunc = [
             source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
             source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    public func ", range: range.upperBound..<source.endIndex)?.lowerBound,
             source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
         ].compactMap { $0 }.min() ?? source.endIndex
         return String(source[range.lowerBound..<nextFunc])
@@ -3719,18 +3720,20 @@ final class RejectPendingCallTests: XCTestCase {
         )
     }
 
-    func test_rejectPendingCall_emitsCallEndWithPendingCallId() throws {
-        // rejectPendingCall() must emit call:end (emitCallEnd) so the gateway
-        // tears down the pending call session and notifies the waiting peer.
-        // Missing this emit would leave the peer's call ringing indefinitely.
+    func test_rejectPendingCall_emitsCallRejectWithPendingCallId() throws {
+        // rejectPendingCall() must emit call:end via emitCallReject so the gateway
+        // tears down the pending call session AND records reason=rejected —
+        // a plain emitCallEnd pre-answer resolves to `missed`, sending a false
+        // "missed call" notification to the very user who just declined (2026-07-12).
         let source = try callManagerSource()
         guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
             XCTFail("rejectPendingCall() not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("emitCallEnd(callId: pending.callId)"),
-            "rejectPendingCall() must call emitCallEnd(callId: pending.callId) — " +
-            "the gateway needs call:end to tear down the waiting call and notify the peer."
+            body.contains("emitCallReject(callId: pending.callId)"),
+            "rejectPendingCall() must call emitCallReject(callId: pending.callId) — " +
+            "the gateway needs call:end {reason: rejected} to tear down the waiting call, " +
+            "notify the peer, and record the decline as rejected (not missed)."
         )
     }
 
@@ -3762,23 +3765,225 @@ final class RejectPendingCallTests: XCTestCase {
         )
     }
 
-    func test_rejectPendingCall_emitCallEnd_beforeClearingPending() throws {
-        // emitCallEnd must happen before pendingIncomingCall is cleared so the callId
+    func test_rejectPendingCall_emitCallReject_beforeClearingPending() throws {
+        // emitCallReject must happen before pendingIncomingCall is cleared so the callId
         // is still available when the socket event fires. Reversing this order would
         // emit call:end with a nil/stale callId.
         let source = try callManagerSource()
         guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
             XCTFail("rejectPendingCall() not found in CallManager.swift"); return
         }
-        guard let emitRange = body.range(of: "emitCallEnd(callId: pending.callId)"),
+        guard let emitRange = body.range(of: "emitCallReject(callId: pending.callId)"),
               let clearRange = body.range(of: "pendingIncomingCall = nil") else {
-            XCTFail("Expected emitCallEnd and pendingIncomingCall = nil in rejectPendingCall()"); return
+            XCTFail("Expected emitCallReject and pendingIncomingCall = nil in rejectPendingCall()"); return
         }
         XCTAssertLessThan(
             emitRange.lowerBound,
             clearRange.lowerBound,
-            "rejectPendingCall() must emit call:end BEFORE clearing pendingIncomingCall — " +
+            "rejectPendingCall() must emit call:end (reject) BEFORE clearing pendingIncomingCall — " +
             "callId must still be available when the socket emit fires."
+        )
+    }
+
+    func test_sdkEmitCallReject_emitsCallEndWithRejectedReason() throws {
+        // Closes the loop on the two guards above: emitCallReject is only a valid
+        // substitute for emitCallEnd if it actually emits `call:end` — carrying
+        // reason=rejected so the gateway records the decline as rejected, not missed
+        // (parity with Android emitEnd(callId, reason) and web handleRejectCall).
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let body = functionBody(of: "func emitCallReject(callId: String)", in: source) else {
+            XCTFail("emitCallReject(callId:) not found in MessageSocketManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("\"call:end\""),
+            "emitCallReject must emit the call:end event — the gateway tears the call down on call:end."
+        )
+        XCTAssertTrue(
+            body.contains("\"rejected\""),
+            "emitCallReject must carry reason=rejected — without it the gateway resolves a " +
+            "pre-answer end to `missed` and notifies the decliner of a call they just refused."
+        )
+    }
+}
+
+// MARK: - Lock-screen decline = reject (§arc reject 2026-07-12)
+
+/// A CallKit `CXEndCallAction` on an INCOMING ringing call is the lock-screen
+/// « Refuser » button — the single decline path for background calls. It routes
+/// through `endCall()`, not `rejectCall()`: without a dedicated branch there,
+/// the end reaches the gateway without reason=rejected, the server resolves the
+/// pre-answer end to `missed`, and the decliner gets the false "missed call"
+/// notification the reject arc just eliminated on every other path.
+final class EndCallLockScreenDeclineTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_endCall_detectsPreAnswerIncomingDecline() throws {
+        // endCall() must distinguish a pre-answer INCOMING call (lock-screen
+        // decline via CXEndCallAction) from a regular hang-up.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(".ringing(isOutgoing: false)"),
+            "endCall() must detect the pre-answer incoming state — a CXEndCallAction " +
+            "on a ringing incoming call is the lock-screen decline, not a hang-up."
+        )
+    }
+
+    func test_endCall_declineBranchEmitsCallReject() throws {
+        // The decline branch must emit call:end {reason: rejected} via
+        // emitCallReject — a plain end resolves to `missed` server-side.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallReject(callId:"),
+            "endCall() must route the pre-answer incoming decline through " +
+            "emitCallReject — otherwise the lock-screen decline resolves to `missed` " +
+            "and the decliner is notified of a call they just refused."
+        )
+    }
+
+    func test_endCall_declineEmit_beforeEndCallInternal() throws {
+        // The reject emit must fire BEFORE endCallInternal tears down local
+        // state — mirroring the emit-then-teardown order of the regular path.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        guard let emitRange = body.range(of: "emitCallReject(callId:"),
+              let teardownRange = body.range(of: "endCallInternal(") else {
+            XCTFail("Expected emitCallReject and endCallInternal in endCall()"); return
+        }
+        XCTAssertLessThan(
+            emitRange.lowerBound,
+            teardownRange.lowerBound,
+            "endCall() must emit the reject BEFORE endCallInternal — teardown clears " +
+            "the identifiers the emit needs."
+        )
+    }
+
+    func test_endCall_declineTeardownCarriesRejectedReason() throws {
+        // Local teardown must record .rejected (journal/analytics coherence with
+        // rejectCall) instead of .local when the end is a decline.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(".rejected"),
+            "endCall()'s decline branch must pass .rejected to endCallInternal — " +
+            "the decliner's own journal must not label a refusal as a local hang-up."
+        )
+    }
+}
+
+// MARK: - Deferred reject reconciliation (§arc reject 2026-07-12, parité Android DeclinedCallStore)
+
+/// A decline while the socket is down (VoIP push wakes the app cold, the user
+/// declines within seconds — before the socket handshake lands) must NOT be
+/// dropped: the caller would keep ringing the full 60 s window and the server
+/// would resolve `missed`. Android defers via DeclinedCallStore and drains on
+/// connect; iOS already defers plain hang-ups via pendingEndReconciliationCallId
+/// — the reject path must ride the same mechanism, reason included.
+final class RejectDeferredReconciliationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_emitCallReject_defersWhenSocketDown() throws {
+        // The private reject helper must mirror emitCallEndReliably's socket-down
+        // deferral — an emit into a dead socket is silently dropped by the SDK.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func emitCallReject(callId: String)", in: source) else {
+            XCTFail("emitCallReject(callId:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard MessageSocketManager.shared.isConnected"),
+            "emitCallReject must defer when the socket is down — a dropped reject leaves " +
+            "the caller ringing 60 s and the server resolving `missed`."
+        )
+        XCTAssertTrue(
+            body.contains("pendingEndReconciliationCallId = callId"),
+            "the deferred reject must be remembered in pendingEndReconciliationCallId " +
+            "so the connectionState observer replays it on reconnect."
+        )
+    }
+
+    func test_reconnectReplay_preservesRejectedReason() throws {
+        // The reconnect observer must replay a deferred DECLINE as a reject —
+        // replaying it as a plain end would resurrect the `missed` mislabel the
+        // reject arc eliminated.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("emitCallReject(callId: pending)"),
+            "the connectionState reconciliation must route a deferred reject through " +
+            "emitCallReject(callId:) — a plain replay loses reason=rejected."
+        )
+    }
+
+    func test_rejectPendingCall_routesThroughDeferralCapableHelper() throws {
+        // rejectPendingCall must use the private helper (deferral-capable), not
+        // the SDK singleton directly — a direct emit bypasses the socket-down path.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertFalse(
+            body.contains("MessageSocketManager.shared.emitCallReject"),
+            "rejectPendingCall must not call the SDK emitCallReject directly — route " +
+            "through the private emitCallReject(callId:) helper to inherit the " +
+            "socket-down deferral."
+        )
+        XCTAssertTrue(
+            body.contains("emitCallReject(callId: pending.callId)"),
+            "rejectPendingCall must still emit the reject for the pending callId."
         )
     }
 }

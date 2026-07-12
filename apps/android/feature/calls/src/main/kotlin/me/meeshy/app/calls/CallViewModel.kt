@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
 import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
@@ -67,6 +68,8 @@ class CallViewModel @Inject constructor(
     private val qualityResetTimer: CallQualityResetTimer,
     private val screenRecordingDetector: ScreenRecordingDetector,
     private val clock: CallClock,
+    private val reconnectBudget: CallReconnectBudget,
+    private val connectingWatchdog: CallConnectingWatchdog,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -103,6 +106,15 @@ class CallViewModel @Inject constructor(
     /** Relays local screen-recording edges to the gateway; alive only while media is flowing. */
     private var screenCaptureReportJob: Job? = null
 
+    /** The armed per-attempt reconnection window; escalates ReconnectFailed on expiry. */
+    private var reconnectBudgetJob: Job? = null
+
+    /** The exact Reconnecting state the window was armed for — an attempt bump re-arms. */
+    private var reconnectBudgetArmedFor: CallState? = null
+
+    /** One continuous connect window over Offering∪Connecting; fails the call on expiry. */
+    private var connectingWatchdogJob: Job? = null
+
     /**
      * The last capture state actually SENT this call, or `null` when none was.
      * Dedupes the detector's re-emissions AND keeps the initial "not capturing"
@@ -127,6 +139,12 @@ class CallViewModel @Inject constructor(
 
     /** The latest live caption from the remote speaker (`call:translated-segment`). */
     private var caption: String? = null
+
+    /** The remote peer's mic state (`call:media-toggled` audio); `true` until told otherwise. */
+    private var peerAudioEnabled: Boolean = true
+
+    /** The remote peer's camera state (`call:media-toggled` video); `true` until told otherwise. */
+    private var peerVideoEnabled: Boolean = true
 
     /**
      * The pure once-per-call telemetry accumulator behind `call:analytics`,
@@ -172,6 +190,9 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             signalManager.translatedSegments.collect(::onTranslatedSegment)
         }
+        viewModelScope.launch {
+            signalManager.mediaToggles.collect(::onMediaToggle)
+        }
     }
 
     // --- Peer indicators: quality / screen-capture / captions (audit #5) ----
@@ -203,6 +224,22 @@ class CallViewModel @Inject constructor(
         publish()
     }
 
+    /**
+     * The remote peer muted/unmuted the mic or toggled the camera — flip the
+     * matching indicator (iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
+     * parity). Gated on the active call's id; an unknown `mediaType` is inert
+     * (never a blind flip).
+     */
+    private fun onMediaToggle(toggle: CallMediaTogglePayload) {
+        if (callId.isBlank() || toggle.callId != callId) return
+        when (toggle.mediaType) {
+            "audio" -> peerAudioEnabled = toggle.enabled
+            "video" -> peerVideoEnabled = toggle.enabled
+            else -> return
+        }
+        publish()
+    }
+
     private fun restartQualityResetWindow() {
         qualityResetJob?.cancel()
         qualityResetJob = viewModelScope.launch {
@@ -220,6 +257,8 @@ class CallViewModel @Inject constructor(
         peerQualityDegraded = false
         peerScreenCapturing = false
         caption = null
+        peerAudioEnabled = true
+        peerVideoEnabled = true
     }
 
     /**
@@ -254,12 +293,16 @@ class CallViewModel @Inject constructor(
         if (!awaitingIncomingIce) return
         awaitingIncomingIce = false
         coordinator.startIncoming(
-            viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo, ::onMediaConnected,
+            viewModelScope, callId, iceServers, config.peerId, selfId, config.isVideo,
+            ::onMediaConnected, ::onMediaStalled,
         )
     }
 
     /** WebRTC reports the media path is up → advance the FSM to Connected. */
     private fun onMediaConnected() = dispatch(CallEvent.MediaConnected)
+
+    /** WebRTC reports a mid-call ICE stall → FSM Reconnecting (« Reconnexion… »). */
+    private fun onMediaStalled() = dispatch(CallEvent.ConnectionStalled)
 
     /**
      * Begin a call for [config]. Inert unless the FSM is idle, so a re-entrant
@@ -280,6 +323,8 @@ class CallViewModel @Inject constructor(
         stopTicker()
         stopQuality()
         stopWaitingTimer()
+        stopReconnectBudget()
+        stopConnectingWatchdog()
         clearPeerIndicators()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
@@ -297,7 +342,7 @@ class CallViewModel @Inject constructor(
                     callId = result.ack.callId
                     coordinator.startOutgoing(
                         viewModelScope, callId, result.ack.iceServers, config.peerId, selfId,
-                        config.isVideo, ::onMediaConnected,
+                        config.isVideo, ::onMediaConnected, ::onMediaStalled,
                     )
                 }
                 is CallInitiateResult.ServerError -> dispatch(CallEvent.ConnectionFailed(result.message))
@@ -323,7 +368,8 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             when (val result = signalManager.emitJoinAwaitingAck(callId)) {
                 is CallJoinResult.Success -> coordinator.startIncoming(
-                    viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo, ::onMediaConnected,
+                    viewModelScope, callId, result.iceServers, config.peerId, selfId, config.isVideo,
+                    ::onMediaConnected, ::onMediaStalled,
                 )
                 is CallJoinResult.Failure -> dispatch(CallEvent.ConnectionFailed(result.message))
             }
@@ -333,14 +379,16 @@ class CallViewModel @Inject constructor(
     /** Local user declines an incoming call — reject the FSM and end it on the wire. */
     fun decline() {
         dispatch(CallEvent.Reject)
-        emitIfIdentified(signalManager::emitEnd)
+        // reason=rejected : sans elle le serveur résout ce end pré-décroché en
+        // missed et le journal de l'appelant dit « manqué » pour un refus.
+        emitIfIdentified { signalManager.emitEnd(it, reason = REASON_REJECTED) }
         coordinator.end()
     }
 
     /** Local user hangs up an active call — end the FSM and the call on the wire. */
     fun hangUp() {
         dispatch(CallEvent.LocalHangUp)
-        emitIfIdentified(signalManager::emitEnd)
+        emitIfIdentified { signalManager.emitEnd(it) }
         coordinator.end()
     }
 
@@ -449,7 +497,7 @@ class CallViewModel @Inject constructor(
     }
 
     private fun endWaiting(pending: WaitingCall) {
-        signalManager.emitEnd(pending.callId)
+        signalManager.emitEnd(pending.callId, reason = REASON_REJECTED)
         waitingReduce(CallWaitingEvent.Rejected)
     }
 
@@ -492,6 +540,8 @@ class CallViewModel @Inject constructor(
         syncQuality()
         syncHeartbeat()
         syncScreenCaptureReport()
+        syncReconnectBudget()
+        syncConnectingWatchdog()
         syncPeerIndicators()
         publish()
     }
@@ -695,15 +745,98 @@ class CallViewModel @Inject constructor(
         lastReportedCapture = null
     }
 
+    /**
+     * Arms one [CallReconnectBudget] window per DISTINCT Reconnecting state —
+     * an attempt bump is a fresh window — and tears it down on any other phase.
+     * Without this watchdog nothing ever fired [CallEvent.ReconnectFailed]: a
+     * stall that never recovered left the user on « Reconnexion… » forever,
+     * the server never cleaning up because the socket heartbeats survive the
+     * dead media (iOS parity: the `.reconnecting` watchdog, 10 s × 3 attempts
+     * ≈ 30 s bounded before `connectionLost`).
+     */
+    private fun syncReconnectBudget() {
+        val state = callState
+        if (state !is CallState.Reconnecting) {
+            stopReconnectBudget()
+            return
+        }
+        if (state == reconnectBudgetArmedFor) return
+        reconnectBudgetArmedFor = state
+        reconnectBudgetJob?.cancel()
+        reconnectBudgetJob = viewModelScope.launch {
+            reconnectBudget.countdown().collect {
+                onReconnectBudgetExpired()
+            }
+        }
+    }
+
+    /**
+     * Escalate: the FSM either bumps to the next attempt — nudged by a fresh
+     * ICE restart, covering the DISCONNECTED-forever stall that never turns
+     * FAILED — or ends the call `connectionLost`, which must ALSO reach the
+     * wire and tear the media down (the peer would otherwise stay in a
+     * zombie call; same duty as [hangUp]).
+     */
+    private fun onReconnectBudgetExpired() {
+        dispatch(CallEvent.ReconnectFailed)
+        if (callState is CallState.Ended) {
+            emitIfIdentified { signalManager.emitEnd(it) }
+            coordinator.end()
+        } else {
+            coordinator.retryIceRestart()
+        }
+    }
+
+    private fun stopReconnectBudget() {
+        reconnectBudgetJob?.cancel()
+        reconnectBudgetJob = null
+        reconnectBudgetArmedFor = null
+    }
+
+    /**
+     * One CONTINUOUS window over the whole Offering∪Connecting stretch (an
+     * Offering → Connecting transition never re-arms) — the last unbounded
+     * hole after answering: the server's ring timeout stops applying once
+     * answered and heartbeats only start in Connected, so an answered call
+     * whose ICE never established sat on « Connexion… » forever. Expiry
+     * carries the same terminal duty as [hangUp] — the wire and the media
+     * must learn of the teardown or the peer stays in a zombie call.
+     */
+    private fun syncConnectingWatchdog() {
+        val connecting = callState is CallState.Offering || callState is CallState.Connecting
+        if (!connecting) {
+            stopConnectingWatchdog()
+            return
+        }
+        if (connectingWatchdogJob != null) return
+        connectingWatchdogJob = viewModelScope.launch {
+            connectingWatchdog.countdown().collect {
+                dispatch(CallEvent.ConnectionFailed(CONNECT_TIMED_OUT))
+                emitIfIdentified { signalManager.emitEnd(it) }
+                coordinator.end()
+            }
+        }
+    }
+
+    private fun stopConnectingWatchdog() {
+        connectingWatchdogJob?.cancel()
+        connectingWatchdogJob = null
+    }
+
     private fun publish() {
         _state.value = CallPresenter.present(
             callState, config, media, elapsedSeconds, connectionQuality, waiting,
             peerQualityDegraded, peerScreenCapturing, caption,
+            peerAudioEnabled, peerVideoEnabled,
         )
     }
 
     private companion object {
         const val INITIATE_TIMED_OUT = "call:initiate timed out"
         const val INITIATE_MALFORMED = "malformed call:initiate ack"
+        const val CONNECT_TIMED_OUT = "connect timed out"
+
+        /** Raison wire d'un refus explicite (schéma gateway socketEndCallSchema). */
+        const val REASON_REJECTED = "rejected"
     }
 }

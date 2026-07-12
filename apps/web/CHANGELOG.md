@@ -1,5 +1,63 @@
 # @meeshy/web
 
+## 1.11.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le type audio/video voyage enfin dans le payload REST active-call — une visio rejointe reprenait en audio
+  - un refus socket-down est différé et rejoué AVEC sa raison — parité Android DeclinedCallStore
+  - le refus depuis l'écran verrouillé émet reason=rejected — dernier chemin de refus non couvert
+  - captions traduites en direct — consommation de call:translated-segment
+  - GET /reactions/user/:userId resolves userId → participant ids (#1882)
+  - auto-download decision pipeline — network monitor + first policy consumer (#1881)
+  - le refus émet call:end reason=rejected — aligné Android/web
+  - un refus explicite écrit status=rejected — fin de la fausse notification « appel manqué »
+  - les refus portent reason=rejected — le journal de l'appelant ne dit plus « manqué » pour un refus
+  - le bouton Répondre décroche directement — autoAnswer câblé de bout en bout
+  - Refuser depuis la notification (CallStyle) — le correspondant ne sonne plus 60 s dans le vide
+  - canal de sonnerie v2 — le heads-up d'appel entrant SONNE au lieu d'un ding
+  - expiration APNs 60 s sur les pushes d'appel iOS — miroir du TTL FCM
+  - TTL 60 s sur les pushes d'appel Android — fin du ring fantôme post-reconnexion
+  - pushes d'appel Android data-only — la chaîne FCM background revit
+  - watchdog de connexion — l'appel jamais connecté se termine à 45 s
+  - watchdog de la phase de connexion — un appel répondu jamais connecté est borné à 45 s
+  - budget d'attente socket aligné sur iOS (8 s → 30 s)
+  - initiate/join attendent la connexion socket — le décroché à froid ne meurt plus en silence
+  - clampe l'attempt de call:reconnecting à la borne du schéma gateway (10)
+  - émet call:reconnecting/reconnected — le serveur suit enfin les restarts ICE web
+  - watchdog du budget de reconnexion — ReconnectFailed enfin tiré, fenêtre bornée ~30 s
+  - rejoindre l'appel en cours depuis la bulle
+  - bulle d'appel vivante + rendu annulé par-spectateur
+  - résilience réseau mid-call — stalls ICE détectés, restart + renégociation, reconnecting/reconnected émis
+  - message:edited avec callSummary route vers applyCallNoticeUpdate — transition live→terminal sans badge « modifié »
+  - call:check-active à chaque connexion — le ring manqué mid-reconnexion est rejoué
+  - support call-live côté iOS — décodage, transition terminale in-place, anti-régression snapshot
+  - indicateurs mute/caméra du pair — call:media-toggled n'est plus jeté
+  - bulle d'appel vivante + annulé par-spectateur + fallback durci
+  - message d'appel vivant créé dès call:initiate
+  - sort peek() memory-only fallback by enqueuedAt to match drain() (#1877)
+  - avatar + banner upload (media pipeline) (#1878)
+  - les sweeps GC d'initiateCall postent la conversion du message live
+  - drop residual {emoji:0} on optimistic unlike (align with socket sync) (#1876)
+  - émet call:analytics — télémétrie de cycle de vie à la fin d'appel
+  - endedBy stampé sur les deux branches terminales de leaveCall
+  - upsert terminal du message d'appel (anti-freeze + GC failed)
+  - evict signalSessionCache entry when a participant leaves (audit #10 regression) (#1875)
+  - clear pending-message timers on eviction & cleanup (no timer/Map leak) (#1873)
+  - relaie call:screen-capture-detected — l'enregistrement d'écran local alerte le pair
+  - live transcript panel auto-reveals on first segment, not only local toggle
+  - broadcast message:edited système (payload complet + offline)
+  - Transcript section in the call detail sheet — gated, deletable, disclaimed
+  - création du message d'appel vivant (non branchée)
+  - métadonnée call-live + endedByInitiator + conversion GC
+  - parité alertes distantes — quality-alert + screen-capture-alert (solde parité web)
+  - route call-message long-press through the shared decision point
+  - media cache management (per-category sizes + clear) (#1874)
+  - creds TURN frais reçus mid-reconnect ré-arment le restart ICE en vol (audit #9)
+  - écoute des 4 side-channels manquants — participant-left, quality-alert, screen-capture-alert, translated-segment (audit #5, solde listeners)
+
 ## 1.10.0
 
 ### Minor Changes

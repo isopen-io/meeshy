@@ -190,22 +190,38 @@ public struct ActiveCallSession: Codable, Identifiable, Sendable, Equatable {
     public let conversationId: String
     public let mode: String
     public let status: String
+    public let metadata: ActiveCallMetadata?
     public let participants: [ActiveCallParticipant]
 
-    public init(id: String, conversationId: String, mode: String, status: String, participants: [ActiveCallParticipant]) {
+    public init(id: String, conversationId: String, mode: String, status: String, metadata: ActiveCallMetadata? = nil, participants: [ActiveCallParticipant]) {
         self.id = id
         self.conversationId = conversationId
         self.mode = mode
         self.status = status
+        self.metadata = metadata
         self.participants = participants
     }
 
-    public var isVideo: Bool { mode == "video" }
+    /// `metadata.type` is the REST source of the call's audio/video nature.
+    /// `mode` carries the WebRTC architecture (p2p|sfu) — it is never "video"
+    /// on the wire (bug 2026-07-12: a video call rejoined after crash resumed
+    /// as audio) and stays only as a forward-compatibility fallback.
+    public var isVideo: Bool { (metadata?.type ?? mode) == "video" }
 
     /// The other participant in a direct call — the first entry whose
     /// `userId` isn't `currentUserId`. `nil` for group calls or if the
     /// participant list hasn't been populated.
     public func remoteParticipant(currentUserId: String) -> ActiveCallParticipant? {
         participants.first { $0.userId != currentUserId }
+    }
+}
+
+/// The whitelisted slice of `CallSession.metadata` the gateway serializes
+/// (`callSessionSchema` — every other metadata key is stripped for privacy).
+public struct ActiveCallMetadata: Codable, Sendable, Equatable {
+    public let type: String?
+
+    public init(type: String? = nil) {
+        self.type = type
     }
 }

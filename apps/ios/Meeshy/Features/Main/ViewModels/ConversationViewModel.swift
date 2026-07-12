@@ -780,6 +780,8 @@ class ConversationViewModel: ObservableObject {
     private let messageSocket: MessageSocketProviding
     private let networkMonitor: NetworkMonitorProviding
     private let offlineQueue: OfflineMessageQueueing
+    private let activeCallService: ActiveCallServiceProviding
+    private let liveCallJoin: LiveCallJoinContext
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
     /// Captured at init so the heavy side-effects (DB observation, initial
@@ -917,8 +919,12 @@ class ConversationViewModel: ObservableObject {
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         dependencies: ConversationDependencies = .live,
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
-        offlineQueue: OfflineMessageQueueing = OfflineQueue.shared
+        offlineQueue: OfflineMessageQueueing = OfflineQueue.shared,
+        activeCallService: ActiveCallServiceProviding = ActiveCallService.shared,
+        liveCallJoin: LiveCallJoinContext = .live
     ) {
+        self.activeCallService = activeCallService
+        self.liveCallJoin = liveCallJoin
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
         self.initialUnreadCount = unreadCount
@@ -1869,13 +1875,19 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Audio Continuous Playback (Phase 4)
 
-    /// Re-initiate ("call back") a call from a tapped call-summary notice.
-    /// Mirrors the conversation header's call entry point: direct (1:1) calls
-    /// only, re-using the SAME media type (audio/video) as the summarized call.
-    /// The peer display name is resolved best-effort from a received message so
-    /// the CallKit / in-app outgoing UI shows a name, not a raw id.
+    /// Re-initiate ("call back") a call from a tapped call-summary notice —
+    /// or JOIN it when the notice is the LIVE message (`kind: 'call-live'`,
+    /// "Appel … en cours"). Mirrors the conversation header's call entry
+    /// point: direct (1:1) calls only, re-using the SAME media type
+    /// (audio/video) as the summarized call. The peer display name is
+    /// resolved best-effort from a received message so the CallKit / in-app
+    /// outgoing UI shows a name, not a raw id.
     func callBack(for summary: CallSummaryMetadata) {
         guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
+        if summary.isLive {
+            Task { await joinOngoingCall(summary) }
+            return
+        }
         let displayName = resolvedPeerDisplayName
             ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
         CallManager.shared.startCall(
@@ -1884,6 +1896,59 @@ class ConversationViewModel: ObservableObject {
             displayName: displayName,
             isVideo: summary.callType == .video
         )
+    }
+
+    /// Rejoint l'appel EN COURS annoncé par la bulle vivante — 4 branches :
+    ///   1. ce device est déjà sur CET appel (actif ou en négociation) →
+    ///      ramener l'UI d'appel au premier plan ;
+    ///   2. ce device SONNE sur cet appel (bannière call-waiting) → laisser la
+    ///      bannière/CallKit porter le geste de réponse, pas de double-join ;
+    ///   3. l'appel est actif côté serveur (revalidé via active-call) →
+    ///      `rejoinActiveCall` (réhydratation à froid — app relancée mi-appel) ;
+    ///   4. l'appel n'existe plus → toast « L'appel est terminé » (la bulle
+    ///      sera éditée au terminal dès que le message:edited arrive).
+    /// Internal (pas private) pour la testabilité des branches.
+    func joinOngoingCall(_ summary: CallSummaryMetadata) async {
+        // 1 — déjà sur cet appel : l'UI d'appel revient au premier plan.
+        if liveCallJoin.currentCallId() == summary.callId, !liveCallJoin.isIdle() {
+            liveCallJoin.bringCallUIForward()
+            return
+        }
+        // 2 — cet appel sonne en attente sur ce device : répondre reste le
+        // geste de la bannière (jamais de rejoin concurrent).
+        if liveCallJoin.hasPendingIncomingCall(summary.callId) {
+            return
+        }
+        // 3/4 — réhydratation à froid : revalider côté serveur avant tout média.
+        do {
+            let session = try await activeCallService.activeCall(conversationId: conversationId)
+            guard let session, session.id == summary.callId else {
+                FeedbackToastManager.shared.show(
+                    String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main),
+                    type: .info
+                )
+                return
+            }
+            let remote = session.remoteParticipant(currentUserId: currentUserId)
+            let displayName = remote?.user?.displayName
+                ?? remote?.user?.username
+                ?? resolvedPeerDisplayName
+                ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
+            let joined = liveCallJoin.rejoinActiveCall(
+                summary.callId,
+                conversationId,
+                remote?.userId ?? participantUserId ?? "",
+                displayName,
+                summary.callType == .video
+            )
+            if !joined {
+                Logger.messages.warning("[ConversationVM] rejoinActiveCall refused (state non-idle) for \(summary.callId, privacy: .public)")
+            }
+        } catch {
+            FeedbackToastManager.shared.showError(
+                String(localized: "bubble.call.join.failed", defaultValue: "Impossible de rejoindre l'appel", bundle: .main)
+            )
+        }
     }
 
     /// Best-effort peer display name from the most recent received message in
@@ -4298,4 +4363,41 @@ extension ConversationViewModel: ConversationSocketDelegate {
             }
         }
     }
+}
+
+// MARK: - Live call join seam
+
+/// Seam de testabilité pour `ConversationViewModel.joinOngoingCall` — par
+/// défaut lit/actionne `CallManager.shared` (singleton WebRTC intestable en
+/// unit) ; les tests injectent des closures espionnes pour couvrir les 4
+/// branches sans toucher au sous-système d'appel réel.
+@MainActor
+struct LiveCallJoinContext {
+    var currentCallId: () -> String?
+    var isIdle: () -> Bool
+    var hasPendingIncomingCall: (String) -> Bool
+    var bringCallUIForward: () -> Void
+    var rejoinActiveCall: (
+        _ callId: String,
+        _ conversationId: String,
+        _ remoteUserId: String,
+        _ remoteUsername: String,
+        _ isVideo: Bool
+    ) -> Bool
+
+    static let live = LiveCallJoinContext(
+        currentCallId: { CallManager.shared.currentCallId },
+        isIdle: { CallManager.shared.callState == .idle },
+        hasPendingIncomingCall: { CallManager.shared.pendingIncomingCall?.callId == $0 },
+        bringCallUIForward: { CallManager.shared.displayMode = .fullScreen },
+        rejoinActiveCall: { callId, conversationId, remoteUserId, remoteUsername, isVideo in
+            CallManager.shared.rejoinActiveCall(
+                callId: callId,
+                conversationId: conversationId,
+                remoteUserId: remoteUserId,
+                remoteUsername: remoteUsername,
+                isVideo: isVideo
+            )
+        }
+    )
 }

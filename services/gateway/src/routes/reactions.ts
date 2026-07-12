@@ -591,8 +591,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'You can only view your own reactions');
       }
 
-      // Récupérer les réactions de l'utilisateur
-      const reactions = await reactionService.getParticipantReactions(targetUserId);
+      // Récupérer les réactions de l'utilisateur (résolution userId → participant ids)
+      const reactions = await reactionService.getUserReactions(targetUserId);
 
       return sendSuccess(reply, reactions);
     } catch (error) {

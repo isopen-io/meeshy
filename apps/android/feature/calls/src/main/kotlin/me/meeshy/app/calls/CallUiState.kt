@@ -131,6 +131,17 @@ data class CallUiState(
      * captions are quiet or off the media phases.
      */
     val captionText: String? = null,
+    /**
+     * `true` while the remote peer's microphone is muted (`call:media-toggled`
+     * audio) — iOS `isRemoteAudioEnabled` parity. Only on the media phases.
+     */
+    val isPeerMuted: Boolean = false,
+    /**
+     * `true` while the remote peer's camera is off DURING A VIDEO CALL
+     * (`call:media-toggled` video) — iOS `isRemoteVideoEnabled` parity, driving
+     * the "camera off" placeholder. Never raised on an audio-only call.
+     */
+    val isPeerCameraOff: Boolean = false,
 ) {
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -182,6 +193,8 @@ object CallPresenter {
         peerQualityDegraded: Boolean = false,
         peerScreenCapturing: Boolean = false,
         caption: String? = null,
+        peerAudioEnabled: Boolean = true,
+        peerVideoEnabled: Boolean = true,
     ): CallUiState {
         val status = statusOf(state)
         val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
@@ -201,6 +214,10 @@ object CallPresenter {
             isPeerQualityDegraded = onMediaPhase && peerQualityDegraded,
             isPeerScreenCapturing = onMediaPhase && peerScreenCapturing,
             captionText = caption.takeIf { onMediaPhase },
+            isPeerMuted = onMediaPhase && !peerAudioEnabled,
+            // Only a VIDEO call renders a camera indicator — an audio call's
+            // peer "camera off" is its permanent, unremarkable state.
+            isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled,
         )
     }
 

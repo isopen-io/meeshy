@@ -112,4 +112,5 @@ private fun Intent.launchExtras(): LaunchExtras = LaunchExtras(
     conversationId = getStringExtra(MeeshyFcmService.EXTRA_CONVERSATION_ID),
     callerName = getStringExtra(MeeshyFcmService.EXTRA_CALLER_NAME),
     isVideo = getBooleanExtra(MeeshyFcmService.EXTRA_IS_VIDEO, false),
+    autoAnswer = getBooleanExtra(MeeshyFcmService.EXTRA_AUTO_ANSWER, false),
 )

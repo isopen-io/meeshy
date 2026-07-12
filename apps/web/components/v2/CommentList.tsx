@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { CommentItem } from './CommentItem';
 import { CommentComposer } from './CommentComposer';
 import { Skeleton } from './Skeleton';
+import { isHeartLikedByMe } from '@/lib/reactions';
 import type { PostComment } from '@meeshy/shared/types/post';
 
 export interface CommentListProps {
@@ -120,7 +121,7 @@ function CommentList({
           comment={comment}
           userLanguage={userLanguage}
           isAuthor={currentUserId === comment.authorId}
-          isLiked={likedCommentIds.has(comment.id)}
+          isLiked={likedCommentIds.has(comment.id) || isHeartLikedByMe(comment)}
           onLike={onLikeComment}
           onUnlike={onUnlikeComment}
           onReply={handleReply}

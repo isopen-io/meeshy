@@ -277,4 +277,54 @@ class CallPresenterTest {
             assertThat(ui.captionText).isNull()
         }
     }
+
+    // --- peer mute/camera derivation (call:media-toggled) --------------------
+
+    private fun presentMedia(
+        state: CallState,
+        isVideo: Boolean = true,
+        peerAudioEnabled: Boolean = true,
+        peerVideoEnabled: Boolean = true,
+    ) = CallPresenter.present(
+        state,
+        config.copy(isVideo = isVideo),
+        media,
+        peerAudioEnabled = peerAudioEnabled,
+        peerVideoEnabled = peerVideoEnabled,
+    )
+
+    @Test
+    fun `a muted peer surfaces on the media phases`() {
+        assertThat(presentMedia(CallState.Connected, peerAudioEnabled = false).isPeerMuted).isTrue()
+        assertThat(
+            presentMedia(CallState.Reconnecting(attempt = 1), peerAudioEnabled = false).isPeerMuted,
+        ).isTrue()
+    }
+
+    @Test
+    fun `a muted peer is suppressed off the media phases`() {
+        assertThat(
+            presentMedia(CallState.Ringing(isOutgoing = false), peerAudioEnabled = false).isPeerMuted,
+        ).isFalse()
+        assertThat(
+            presentMedia(CallState.Ended(CallEndReason.Remote), peerAudioEnabled = false).isPeerMuted,
+        ).isFalse()
+    }
+
+    @Test
+    fun `a peer camera-off surfaces only for a video call`() {
+        assertThat(
+            presentMedia(CallState.Connected, isVideo = true, peerVideoEnabled = false).isPeerCameraOff,
+        ).isTrue()
+        assertThat(
+            presentMedia(CallState.Connected, isVideo = false, peerVideoEnabled = false).isPeerCameraOff,
+        ).isFalse()
+    }
+
+    @Test
+    fun `enabled peer media raises no indicator`() {
+        val ui = presentMedia(CallState.Connected)
+        assertThat(ui.isPeerMuted).isFalse()
+        assertThat(ui.isPeerCameraOff).isFalse()
+    }
 }

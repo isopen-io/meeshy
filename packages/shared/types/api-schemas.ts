@@ -2131,13 +2131,26 @@ export const callSessionSchema = {
     initiatorId: { type: 'string', description: 'User who initiated the call' },
     mode: {
       type: 'string',
-      enum: ['voice', 'video'],
-      description: 'Call mode'
+      enum: ['p2p', 'sfu'],
+      description: 'WebRTC architecture (p2p or sfu) — NOT the call type; see metadata.type'
     },
     status: {
       type: 'string',
       enum: ['ringing', 'active', 'ended', 'missed', 'rejected', 'failed'],
       description: 'Call status'
+    },
+
+    // Whitelisted metadata — fast-json-stringify strips everything else
+    // (privacy fix 2026-05-12: raw Prisma metadata leaked other participants'
+    // telemetry). `type` is the ONLY REST source of the audio/video nature of
+    // the call: `mode` carries the WebRTC architecture, never 'video'.
+    metadata: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        type: { type: 'string', enum: ['audio', 'video'], description: 'Call type (audio or video)' }
+      },
+      description: 'Call metadata (whitelisted: type only)'
     },
 
     // Timestamps

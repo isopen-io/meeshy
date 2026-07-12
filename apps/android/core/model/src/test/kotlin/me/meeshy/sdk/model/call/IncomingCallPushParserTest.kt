@@ -149,4 +149,21 @@ class IncomingCallPushParserTest {
         assertThat(push.callId).isEqualTo("call-1")
         assertThat(push.iceServers).isEmpty()
     }
+
+    // --- title/body localisés serveur (push data-only, Prisme) ---------------
+
+    @Test
+    fun `the server-localized title and body ride the data map`() {
+        val push = call("title" to "Alice vous appelle", "body" to "Appel audio")
+        assertThat(push.title).isEqualTo("Alice vous appelle")
+        assertThat(push.body).isEqualTo("Appel audio")
+    }
+
+    @Test
+    fun `absent or blank title and body decode to null so the client falls back`() {
+        assertThat(call().title).isNull()
+        assertThat(call().body).isNull()
+        assertThat(call("title" to " ", "body" to "").title).isNull()
+        assertThat(call("title" to " ", "body" to "").body).isNull()
+    }
 }

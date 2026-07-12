@@ -25,6 +25,7 @@ import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
 import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualitySample
 import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
@@ -104,6 +105,21 @@ class CallViewModelTest {
         override fun nowMs(): Long = clockNowMs
     }
 
+    /** Test-driven peer mute/camera toggles (gateway `call:media-toggled`). */
+    private val mediaToggles = MutableSharedFlow<CallMediaTogglePayload>(extraBufferCapacity = 16)
+
+    /** Test-driven per-attempt reconnect window: emit once to expire the armed budget. */
+    private val reconnectBudgetFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    private val reconnectBudget = object : CallReconnectBudget {
+        override fun countdown(): Flow<Unit> = reconnectBudgetFlow
+    }
+
+    /** Test-driven connect-phase watchdog: emit once to expire the armed window. */
+    private val connectingWatchdogFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    private val connectingWatchdog = object : CallConnectingWatchdog {
+        override fun countdown(): Flow<Unit> = connectingWatchdogFlow
+    }
+
     private val outgoingVideo =
         CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val incomingAudio =
@@ -141,6 +157,7 @@ class CallViewModelTest {
         every { signalManager.qualityAlerts } returns qualityAlerts
         every { signalManager.screenCaptureAlerts } returns screenCaptureAlerts
         every { signalManager.translatedSegments } returns translatedSegments
+        every { signalManager.mediaToggles } returns mediaToggles
         every { sessionRepository.currentUser } returns MutableStateFlow(null)
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
@@ -155,7 +172,8 @@ class CallViewModelTest {
 
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock,
+        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock, reconnectBudget,
+        connectingWatchdog,
     )
 
     @Test
@@ -400,7 +418,7 @@ class CallViewModelTest {
         vm.start(incomingAudio)
         vm.decline()
 
-        verify(exactly = 1) { signalManager.emitEnd("call-9") }
+        verify(exactly = 1) { signalManager.emitEnd("call-9", "rejected") }
     }
 
     @Test
@@ -708,6 +726,221 @@ class CallViewModelTest {
 
         assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
         verify(exactly = 0) { signalManager.emitAnalytics(any(), any()) }
+    }
+
+    // --- Connecting watchdog: appel répondu mais jamais connecté = borné ---
+
+    @Test
+    fun `an answered call whose media never establishes fails at the connect budget`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.accept()
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
+
+        connectingWatchdogFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+        assertThat(vm.state.value.endReason).isEqualTo(CallEndReason.Failed("connect timed out"))
+        verify(exactly = 1) { signalManager.emitEnd("call-9") }
+        verify(exactly = 1) { coordinator.end() }
+    }
+
+    @Test
+    fun `a call that connects before the budget disarms the watchdog`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.accept()
+        vm.onSignal(CallEvent.MediaConnected)
+
+        connectingWatchdogFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+        verify(exactly = 0) { signalManager.emitEnd(any()) }
+    }
+
+    @Test
+    fun `the watchdog spans offering into connecting as one continuous window`() = runTest {
+        every { sessionRepository.currentUser } returns MutableStateFlow(mockk { every { id } returns "me" })
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.onSignal(CallEvent.ParticipantJoined("u1"))
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
+        vm.onSignal(CallEvent.RemoteAnswer)
+
+        connectingWatchdogFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+    }
+
+    @Test
+    fun `no watchdog is armed while merely ringing`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        connectingWatchdogFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.INCOMING)
+    }
+
+    // --- Reconnect budget watchdog: ReconnectFailed enfin tiré (parité iOS) ---
+
+    private fun reconnecting(): CallViewModel {
+        val vm = connectedIncoming()
+        vm.onSignal(CallEvent.ConnectionStalled)
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
+        return vm
+    }
+
+    @Test
+    fun `an expired budget escalates to the next attempt and nudges an ICE restart`() = runTest {
+        val vm = reconnecting()
+
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
+        assertThat(vm.state.value.reconnectAttempt).isEqualTo(2)
+        verify(exactly = 1) { coordinator.retryIceRestart() }
+        verify(exactly = 0) { signalManager.emitEnd(any()) }
+    }
+
+    @Test
+    fun `a recovery before expiry disarms the budget`() = runTest {
+        val vm = reconnecting()
+        vm.onSignal(CallEvent.MediaConnected)
+
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+        verify(exactly = 0) { coordinator.retryIceRestart() }
+    }
+
+    @Test
+    fun `exhausting every attempt ends the call as connectionLost on the wire too`() = runTest {
+        val vm = reconnecting()
+
+        reconnectBudgetFlow.emit(Unit)
+        reconnectBudgetFlow.emit(Unit)
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+        assertThat(vm.state.value.endReason).isEqualTo(CallEndReason.ConnectionLost)
+        verify(exactly = 1) { signalManager.emitEnd("call-9") }
+        verify(exactly = 1) { coordinator.end() }
+    }
+
+    @Test
+    fun `the terminal escalation reports connectionLost analytics`() = runTest {
+        reconnecting()
+
+        reconnectBudgetFlow.emit(Unit)
+        reconnectBudgetFlow.emit(Unit)
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(analyticsFields()["endReason"]).isEqualTo("connectionLost")
+        assertThat(analyticsFields()["reconnectionCount"]).isEqualTo(3)
+    }
+
+    @Test
+    fun `no budget is armed outside the reconnecting phase`() = runTest {
+        val vm = connectedIncoming()
+
+        reconnectBudgetFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+        verify(exactly = 0) { coordinator.retryIceRestart() }
+    }
+
+    // --- Peer mute/camera indicators: call:media-toggled (parité iOS/web) ---
+
+    private fun audioToggle(enabled: Boolean, callId: String = "call-9") =
+        CallMediaTogglePayload(callId = callId, mediaType = "audio", enabled = enabled)
+
+    private fun videoToggle(enabled: Boolean, callId: String = "call-9") =
+        CallMediaTogglePayload(callId = callId, mediaType = "video", enabled = enabled)
+
+    @Test
+    fun `a peer audio mute raises the muted indicator`() = runTest {
+        val vm = connectedIncoming()
+
+        mediaToggles.emit(audioToggle(enabled = false))
+
+        assertThat(vm.state.value.isPeerMuted).isTrue()
+    }
+
+    @Test
+    fun `a peer unmute lowers the muted indicator`() = runTest {
+        val vm = connectedIncoming()
+        mediaToggles.emit(audioToggle(enabled = false))
+
+        mediaToggles.emit(audioToggle(enabled = true))
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
+    }
+
+    @Test
+    fun `a toggle keyed by another call is ignored`() = runTest {
+        val vm = connectedIncoming()
+
+        mediaToggles.emit(audioToggle(enabled = false, callId = "other-call"))
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
+    }
+
+    @Test
+    fun `an unknown media type is inert rather than a blind flip`() = runTest {
+        val vm = connectedIncoming()
+
+        mediaToggles.emit(
+            CallMediaTogglePayload(callId = "call-9", mediaType = "hologram", enabled = false),
+        )
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
+        assertThat(vm.state.value.isPeerCameraOff).isFalse()
+    }
+
+    @Test
+    fun `a peer camera-off during a video call raises the camera indicator`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio.copy(isVideo = true))
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+
+        mediaToggles.emit(videoToggle(enabled = false))
+
+        assertThat(vm.state.value.isPeerCameraOff).isTrue()
+    }
+
+    @Test
+    fun `a peer camera-off during an audio call never raises the camera indicator`() = runTest {
+        val vm = connectedIncoming()
+
+        mediaToggles.emit(videoToggle(enabled = false))
+
+        assertThat(vm.state.value.isPeerCameraOff).isFalse()
+    }
+
+    @Test
+    fun `peer media indicators die with the call`() = runTest {
+        val vm = connectedIncoming()
+        mediaToggles.emit(audioToggle(enabled = false))
+
+        vm.hangUp()
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
+    }
+
+    @Test
+    fun `a fresh call never inherits the previous peer mute state`() = runTest {
+        val vm = connectedIncoming()
+        mediaToggles.emit(audioToggle(enabled = false))
+        vm.hangUp()
+        vm.dismiss()
+
+        vm.start(incomingAudio.copy(callId = "call-10"))
+        vm.onSignal(CallEvent.LocalAnswer)
+        vm.onSignal(CallEvent.MediaConnected)
+
+        assertThat(vm.state.value.isPeerMuted).isFalse()
     }
 
     @Test
@@ -1083,9 +1316,10 @@ class CallViewModelTest {
         vm.rejectWaiting()
 
         assertThat(vm.state.value.waitingBanner).isNull()
-        verify(exactly = 1) { signalManager.emitEnd("call-77") }
+        verify(exactly = 1) { signalManager.emitEnd("call-77", "rejected") }
         // The active call is untouched by rejecting the waiting one.
         verify(exactly = 0) { signalManager.emitEnd("call-9") }
+        verify(exactly = 0) { signalManager.emitEnd("call-9", any()) }
         assertThat(vm.state.value.status).isEqualTo(CallStatus.INCOMING)
     }
 
@@ -1110,7 +1344,7 @@ class CallViewModelTest {
         waitingTimerFlow.emit(Unit) // 15 s elapsed
 
         assertThat(vm.state.value.waitingBanner).isNull()
-        verify(exactly = 1) { signalManager.emitEnd("call-77") }
+        verify(exactly = 1) { signalManager.emitEnd("call-77", "rejected") }
     }
 
     @Test

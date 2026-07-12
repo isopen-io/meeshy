@@ -5,13 +5,14 @@
 
 'use client';
 
-import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
 import { useRemoteCallAlerts } from '@/hooks/use-remote-call-alerts';
+import { useCallCaptions } from '@/hooks/use-call-captions';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
 import {
   useAdaptiveDegradation,
@@ -24,6 +25,7 @@ import { CallControls } from './CallControls';
 import { CallStatusIndicator } from './CallStatusIndicator';
 import { AudioEffectsCarousel } from './AudioEffectsCarousel';
 import { CallQualityOverlay } from './CallQualityOverlay';
+import { CallCaptionsOverlay } from './CallCaptionsOverlay';
 import { CallInfoOverlay } from './CallInfoOverlay';
 import { LocalVideoTile } from './LocalVideoTile';
 import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
@@ -32,6 +34,16 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+
+/**
+ * Watchdog de la phase de connexion (parité iOS `connectingFailSeconds` /
+ * Android `CallConnectingWatchdog`) : un appel dont l'ICE ne s'établit JAMAIS
+ * restait indéfiniment sur l'UI d'appel — l'échec ne produisait qu'un toast
+ * pendant que webrtc-service retentait l'ICE en boucle sans borne d'escalade.
+ * Une seule fenêtre par appel, jamais ré-armée après la première connexion
+ * (les stalls mid-call ont leur propre chaîne reconnect/restart).
+ */
+const CONNECT_WATCHDOG_MS = 45_000;
 
 interface VideoCallInterfaceProps {
   callId: string;
@@ -114,6 +126,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // sustained degradation (transient pill, 15 s auto-clear) and the privacy
   // signal when the peer captures the call screen.
   const { remoteQualityDegraded, remoteScreenCapturing } = useRemoteCallAlerts(callId);
+  const { captions } = useCallCaptions(callId);
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -403,6 +416,35 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   };
 
+  // Le watchdog lit le raccrochage et l'état via des refs : ré-armer la
+  // fenêtre parce qu'une dépendance a changé fausserait le budget.
+  const handleHangUpRef = useRef<() => void>(() => {});
+  const connectionStateRef = useRef(connectionState);
+  const hasConnectedRef = useRef(false);
+
+  useEffect(() => {
+    connectionStateRef.current = connectionState;
+    if (connectionState === 'connected') {
+      hasConnectedRef.current = true;
+    }
+  }, [connectionState]);
+
+  useEffect(() => {
+    // Seedé depuis l'état COURANT (pas `false` en dur) : un remontage sur un
+    // appel déjà connecté ne doit jamais ré-ouvrir une fenêtre de kill.
+    hasConnectedRef.current = connectionStateRef.current === 'connected';
+    const timer = setTimeout(() => {
+      if (hasConnectedRef.current) return;
+      logger.warn('[VideoCallInterface]', 'Connect watchdog expired — ending the never-connected call', {
+        callId,
+      });
+      toast.error(t('calls.toasts.connectTimeout'));
+      handleHangUpRef.current();
+    }, CONNECT_WATCHDOG_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- une fenêtre par callId, jamais ré-armée par les re-render
+  }, [callId]);
+
   const handleHangUp = useCallback(() => {
     logger.debug('[VideoCallInterface]', 'Hanging up - callId: ' + callId);
 
@@ -421,6 +463,10 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     // Reset immediately for instant UI feedback
     reset();
   }, [callId, reset]);
+
+  useEffect(() => {
+    handleHangUpRef.current = handleHangUp;
+  }, [handleHangUp]);
 
   // Listen for participant left events to show disconnected state
   // Regression: the 2s delayed cleanup below used to hand setTimeout() to
@@ -551,6 +597,16 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         remoteQualityDegraded={remoteQualityDegraded}
         remoteScreenCapturing={remoteScreenCapturing}
         participantName={remoteParticipant?.username || ''}
+      />
+
+      {/* Live translated captions from peers (call:translated-segment) */}
+      <CallCaptionsOverlay
+        captions={captions}
+        resolveSpeakerName={(speakerId) =>
+          currentCall?.participants?.find(
+            (p) => (p.userId || p.participantId) === speakerId
+          )?.username
+        }
       />
 
       {/* Audio Effects Panel (Sliding from bottom) */}

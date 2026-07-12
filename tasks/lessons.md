@@ -1648,3 +1648,51 @@ merge de la branche complète atterrisse sans conflit 15-fichiers entre deux imp
   partie du « travail existant » au même titre que main.
 - En cas de doublon découvert APRÈS push : garder l'implémentation surensemble, reverter l'autre
   immédiatement (avant que quiconque ne bâtisse dessus), et dire pourquoi dans le message du revert.
+
+## 2026-07-12 — `gh run watch --exit-status` exit 0 ≠ succès (annulé retourne aussi 0)
+
+Annoncé une run CI « verte » sur la foi d'un `gh run watch --exit-status` sorti en 0 : la run était
+en réalité CANCELLED (annulée par le push suivant via la concurrency). L'exit-status de `gh run watch`
+ne distingue pas success/cancelled dans cette version de gh — seul `failure` est non-zéro.
+
+**Règles** :
+- Un verdict CI se lit dans `gh run view <id> --json status,conclusion` (conclusion == "success"),
+  jamais dans l'exit code de `gh run watch` seul. Même famille que « meeshy.sh exit 0 malgré FAILED »
+  et « un résultat de tests se valide sur le compte attendu ».
+- Sur un main à pushes rapprochés, chaque push ANNULE la run précédente (concurrency) : le seul
+  verdict significatif est celui de la DERNIÈRE run du tip — attendre qu'elle se termine avant
+  d'annoncer quoi que ce soit.
+
+## 2026-07-12 — `grep -v <ClasseÉmettrice>` mange les consommateurs qualifiés — fausse « brèche confirmée »
+
+En cherchant les consommateurs de `EXTRA_CALL_ID`, le filtre `grep -v MeeshyFcmService` (censé
+exclure le fichier ÉMETTEUR) a aussi exclu les lignes des CONSOMMATEURS — qui référencent la
+constante par son nom qualifié `MeeshyFcmService.EXTRA_CALL_ID`. Résultat : zéro occurrence,
+« trou confirmé » annoncé... alors que MainActivity → LaunchRouter → CallRoute.incoming consomme
+tout proprement.
+
+**Règles** :
+- Pour exclure un FICHIER d'un grep, exclure par CHEMIN (`grep -v "/MeeshyFcmService.kt:"`) ou
+  utiliser `--exclude=<fichier>` — jamais par un motif texte qui peut apparaître dans le code des
+  autres fichiers (nom de classe = namespace des constantes).
+- Une absence de résultat grep n'est pas une preuve d'absence : avant d'annoncer « rien ne consomme
+  X », refaire la recherche sans AUCUN filtre d'exclusion.
+
+## 2026-07-12 — Renommer un appel dans CallManager.swift casse les source-guards de CallManagerTests.swift
+
+**Contexte** : le fix reject iOS (`f67c39ac0`, `emitCallEnd` → `emitCallReject` dans
+`rejectPendingCall()`) a fait tomber iOS Tests (2/3685) : `RejectPendingCallTests` sont des
+source-guards qui lisent CallManager.swift en TEXTE et exigent des sous-chaînes exactes
+(`emitCallEnd(callId: pending.callId)`). CI + SDK Tests verts n'ont rien vu — seul iOS Tests
+exécute MeeshyTests.
+
+**Règles** :
+- Avant tout push qui renomme/déplace un appel dans CallManager.swift (ou tout fichier prod
+  couvert par des guards) : `grep -n "<ancien-symbole>" apps/ios/MeeshyTests/` et adapter les
+  guards DANS LE MÊME commit.
+- Un source-guard cassé se répare en ré-encodant le NOUVEAU contrat (jamais en dégradant la
+  prod) et en le RENFORÇANT si la substitution ouvre un trou (ex : verrou SDK
+  `emitCallReject` doit émettre `call:end` AVEC `reason=rejected`, sinon le guard app
+  passerait à vide).
+- Ces guards se vérifient sans Xcode : répliquer l'extraction `functionBody` en Python sur
+  les vraies sources (10 s au lieu d'un build de 15 min).

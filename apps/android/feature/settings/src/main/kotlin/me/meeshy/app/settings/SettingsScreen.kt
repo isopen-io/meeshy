@@ -102,6 +102,10 @@ fun SettingsScreen(
     onOpenMediaCache: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
     onOpenDataExport: () -> Unit = {},
+    onOpenDiagnostics: () -> Unit = {},
+    onOpenAbout: () -> Unit = {},
+    onOpenTerms: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -311,11 +315,13 @@ fun SettingsScreen(
                 icon = Icons.Filled.Info,
                 iconColor = MeeshyPalette.Neutral500,
             ) {
-                SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = null)
+                SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = onOpenAbout)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_diagnostics), detail = null, onClick = onOpenDiagnostics)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = onOpenTerms)
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = onOpenPrivacyPolicy)
             }
 
             SettingsSection(
