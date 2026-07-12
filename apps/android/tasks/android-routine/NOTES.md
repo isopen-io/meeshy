@@ -4,6 +4,24 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-12, `settings-legal-documents`)
+- **Static legal/content screens: keep the *structure* pure, the *content* in `values-*`.** Mirroring the
+  About pattern, the pure `:core:model` catalog holds only the ordered section **keys** + numbering; the
+  localized heading/body text lives in Android string resources resolved app-side. This gives automatic
+  EN/FR/ES/PT (Prisme philosophy) and lets us **collapse iOS's per-view fr/en `Picker`** — a legitimate
+  "better at the base" simplification, not just a port.
+- **When two iOS views are near-identical (ToS + Privacy), unify them into one data-driven screen keyed by an
+  enum.** One `LegalDocumentCatalog` owns both section lists; one `LegalDocumentScreen` renders either. Adding
+  or reordering a section is then a one-line catalog edit.
+- **Partition invariant as a drift guard (non-tautological).** For an enum split across N buckets, assert the
+  buckets are pairwise-disjoint AND together cover the enum exactly once (`containsExactlyElementsIn(entries)` +
+  `containsNoDuplicates()`). This catches a future section key that is added to the enum but forgotten in a
+  document, or listed in both — a real bug the per-list order tests alone would miss. Confirmed non-tautological:
+  dropping one key from a list fails exactly the order + partition tests.
+- **Wire *every* dead-end you touch.** Two Settings rows were `onClick = {}` placeholders; the slice removed
+  both. Grep the target screen for `onClick = {}` before picking the next slice — placeholders are the cheapest
+  parity wins.
+
 ## Lesson (2026-07-12, `settings-about-screen`)
 - **Keep the i18n boundary out of the pure core.** iOS's `AboutView` builds the whole `"Version X (Y)"`
   string (word included) in one place. On Android the word "Version" is a translatable string, so the pure

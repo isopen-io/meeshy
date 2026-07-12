@@ -4,7 +4,20 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Profile §K) — slice `profile-avatar-banner-upload` ✅
+## This loop (Phase: Settings §L) — slice `settings-legal-documents` ✅
+**Terms of Service + Privacy Policy** — port of iOS `TermsOfServiceView` + `PrivacyPolicyView`, **unified**
+into one data-driven screen keyed by `LegalDocumentKind`, wiring the two previously **dead-end** Settings → About
+rows. Pure `:core:model` SSOTs (`me.meeshy.sdk.model.legal`): `LegalDocumentKind` (route `arg` + `fromArg` parser,
+null on blank/unknown), `LegalSectionKey` (9 ToS + 7 Privacy), `LegalDocumentCatalog.sections`/`.numbered`
+(ordered keys + iOS `index + 1` numbering). `LegalDocumentScreen` glue: numbered Info-blue cards, content resolved
+app-side across values-* → **automatic EN/FR/ES/PT**, surpassing iOS's manual fr/en picker. +14 tests
+(catalog 7 order/numbering/partition invariants, kind 7 parse/case/trim/null). `:app:assembleDebug` + all-module
+`testDebugUnitTest` green; one-mutation RED check (drop `TOS_CONTACT`) failed exactly the order+partition tests.
+Reviewer PASS, diff = `apps/android` only. Next: remaining §L static screens (Help & Support; open-source
+licenses — Android-accurate curated catalog), the chat media view consuming `MediaAutoDownloadDecider`, or §K
+crop/resize/compress before upload.
+
+## Prior loop (Phase: Profile §K) — slice `profile-avatar-banner-upload` ✅
 **Avatar + banner upload** — port of iOS `AttachmentUploader` + `UserService.updateAvatar`, generalised to a
 banner (iOS uploads only a single compressed JPEG avatar). Four pure `:core:model` SSOTs: `ImageUploadTarget`
 (AVATAR/BANNER + per-target `maxBytes` 8/12 MiB), `ImageUploadValidator` (priority gate empty → non-image →

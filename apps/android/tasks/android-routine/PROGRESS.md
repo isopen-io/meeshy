@@ -4,6 +4,37 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload + crash-report diagnostics viewer w/ share)** → rest`
 
+> On 2026-07-12 **Terms of Service + Privacy Policy** landed (slice `settings-legal-documents`,
+> feature-parity §L — "Static screens: … Terms of Service … Privacy Policy …"). Port of iOS
+> `TermsOfServiceView` + `PrivacyPolicyView`, **unified** into one data-driven screen keyed by
+> `LegalDocumentKind`, wiring the **two previously dead-end** Settings → About rows ("Terms of Service",
+> "Privacy Policy", both `onClick = {}`). Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.legal`):
+> `LegalDocumentKind` (enum with a stable route `arg` + `fromArg(raw)` — the case-folded, trimmed parser that
+> returns `null` on a blank / absent / unrecognised token so an unknown deep link never silently resolves to the
+> wrong document); `LegalSectionKey` (the 9 ToS + 7 Privacy section keys, in iOS order); `LegalNumberedSection`;
+> `LegalDocumentCatalog.sections(kind)` (ordered section keys per document) + `.numbered(kind)` (iOS's
+> `index + 1`, contiguous 1-based numbering). `LegalDocumentScreen` (`:feature:settings`, coverage-exempt glue):
+> a "last updated" line + numbered Info-blue section cards (accent circle number + heading + body), every key
+> resolved app-side to a localized string. Nav: one `settings/legal/{doc}` route parsed via `fromArg`
+> (defensive fallback to ToS), reached by `Routes.legal(kind)` from the two wired rows. **Surpasses iOS twice:**
+> (a) two near-identical iOS views collapse into one catalog-driven screen (one place to add/reorder a section),
+> and (b) the document follows the app's content language automatically across values-* (EN/FR/ES/PT — Prisme
+> philosophy: content in the user's language with no friction), replacing iOS's manual fr/en `Picker`. **+14
+> tests** (LegalDocumentCatalog 7 — per-document order, contiguous 1-based numbering, `numbered↔sections` key
+> parity, no intra-doc duplicate, the two docs disjoint, and every `LegalSectionKey` partitioned across exactly
+> one document; LegalDocumentKind 7 — token resolution, case-insensitivity, trimming, null-on-blank/unknown,
+> arg round-trip). `:app:assembleDebug` **BUILD SUCCESSFUL**; full all-module `testDebugUnitTest` **BUILD
+> SUCCESSFUL**. A one-mutation RED check (dropping `TOS_CONTACT` from the TERMS list) failed exactly the order +
+> partition tests, confirming they are behavioural not tautological. Reviewer **PASS** (diff `apps/android` only
+> — `:core:model` [new `legal` package], `:feature:settings` [screen + 4× `legal.xml` EN/FR/ES/PT], `:app` nav
+> wiring, `SettingsScreen` two callbacks; no production logic outside; **SDK purity** — pure kind/catalog in
+> `:core:model`, localized content + "which screen / route parse" glue app-side; **SSOT** — one catalog owns the
+> section order + numbering, one `fromArg` parses the route, no re-implementation; **UDF/instant-app** — static
+> content, no state machine; **colour/UX coherence** — Info-blue numbered cards, natural row→screen→back, no dead
+> ends left; **no coverage floor lowered, no test weakened**). **Next slice:** the remaining §L static screens
+> (Help & Support; open-source licenses — an Android-accurate curated catalog, not iOS's Swift deps), the chat
+> media view that consumes the `MediaAutoDownloadDecider`, or in-place crop/resize/compress before upload (§K).
+
 > On 2026-07-12 **media auto-download decision pipeline** landed (slice `media-auto-download-decider`,
 > feature-parity §L). Closes the "next slice" NB the `settings-media-auto-download` slice left open: the live
 > `ConnectivityManager` monitor + the **first consumer** of the already-tested `MediaDownloadPolicyEngine`.
