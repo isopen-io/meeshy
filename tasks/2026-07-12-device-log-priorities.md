@@ -192,9 +192,16 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   pour capturer les crashs du device-test watchdog, utiliser un **build Release/TestFlight** (Crashlytics
   actif), pas un build Debug. Le design est déjà documenté dans le code (AppDelegate 365-401).
 
-- [ ] **#15 — App Group CFPrefs mal lu**
+- [x] **#15 — App Group CFPrefs mal lu** — investigué : bruit iOS bénin (code déjà correct)
   Evidence : `Couldn't read values … group.me.meeshy.apps … kCFPreferencesAnyUser … detaching from cfprefsd`.
   Fix : accès App Group via `UserDefaults(suiteName:)` correct (pas AnyUser sur container).
+  **Conclusion (evidence code)** : **TOUS** les accès App Group utilisent déjà `UserDefaults(suiteName:
+  "group.me.meeshy.apps")` (API correcte) avec `guard let` sur le nil — `SessionSnapshotStore`, `AuthManager`,
+  `NotificationCoordinator`, `WidgetDataManager`/`Flusher`, `MeeshyFocusFilter`, `MeeshyAppIntents`, NSE
+  consumers. **Aucun** code n'appelle le bas-niveau `CFPreferencesCopyValue`/`kCFPreferencesAnyUser` (le
+  vrai pattern fautif). Le log `kCFPreferencesAnyUser … detaching from cfprefsd` est du **bruit iOS connu
+  et bénin** (cache miss `cfprefsd` / lecture depuis extension ou tôt au launch → fallback réussi, pas de
+  perte de données). Hypothèse réfutée. **Aucun code — non actionnable** (analogue #17).
 
 - [ ] **#16 — Hygiène SwiftUI**
   Evidence : `NavigationRequestObserver tried to update multiple times per frame`,
@@ -239,3 +246,5 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   Tue le churn PushKit. **P2 (#9-#13) entièrement clos.**
 - 2026-07-12 : #14 (P3) décision no-code — NoOp Firebase intentionnel (plist gitignored ; DEBUG désactive
   la collecte ; Release a Crashlytics). Device-test crash → build Release. Aucun secret ajouté.
+- 2026-07-12 : #15 (P3) investigué no-code — accès App Group déjà via `UserDefaults(suiteName:)` partout ;
+  le log `kCFPreferencesAnyUser … detaching from cfprefsd` = bruit iOS bénin (cfprefsd), non actionnable.
