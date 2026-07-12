@@ -27,6 +27,7 @@ import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 import { callsService } from '@/services/calls.service';
+import { isRetryableCallFailure } from '@/lib/calls/call-retry-policy';
 
 // Caller/callee no-answer timeout. The gateway has its own 60s server-side
 // ringing timeout (CallService.RINGING_TIMEOUT_MS), and iOS deliberately
@@ -333,6 +334,22 @@ export function CallManager() {
 
       // Clear timeout
       clearCallTimeout();
+
+      // A call ending in a TRANSIENT failure (failed/connectionLost) gets a
+      // « Réessayer » offer — same policy VideoCallInterface's connect
+      // watchdog already applies to the narrower never-connected case, now
+      // also covering the server-authoritative call:ended path (the majority
+      // real-world drop scenario for an already-established call). Read from
+      // the store BEFORE reset() wipes currentCall/controls.
+      if (isRetryableCallFailure(event.reason)) {
+        const { currentCall, controls, offerCallRetry } = useCallStore.getState();
+        if (currentCall?.conversationId) {
+          offerCallRetry({
+            conversationId: currentCall.conversationId,
+            type: controls.videoEnabled ? 'video' : 'audio',
+          });
+        }
+      }
 
       // Reset call state - CallInterface will handle WebRTC cleanup
       reset();
