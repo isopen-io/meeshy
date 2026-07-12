@@ -69,6 +69,7 @@ class CallViewModel @Inject constructor(
     private val screenRecordingDetector: ScreenRecordingDetector,
     private val clock: CallClock,
     private val reconnectBudget: CallReconnectBudget,
+    private val connectingWatchdog: CallConnectingWatchdog,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -110,6 +111,9 @@ class CallViewModel @Inject constructor(
 
     /** The exact Reconnecting state the window was armed for — an attempt bump re-arms. */
     private var reconnectBudgetArmedFor: CallState? = null
+
+    /** One continuous connect window over Offering∪Connecting; fails the call on expiry. */
+    private var connectingWatchdogJob: Job? = null
 
     /**
      * The last capture state actually SENT this call, or `null` when none was.
@@ -320,6 +324,7 @@ class CallViewModel @Inject constructor(
         stopQuality()
         stopWaitingTimer()
         stopReconnectBudget()
+        stopConnectingWatchdog()
         clearPeerIndicators()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
@@ -534,6 +539,7 @@ class CallViewModel @Inject constructor(
         syncHeartbeat()
         syncScreenCaptureReport()
         syncReconnectBudget()
+        syncConnectingWatchdog()
         syncPeerIndicators()
         publish()
     }
@@ -785,6 +791,36 @@ class CallViewModel @Inject constructor(
         reconnectBudgetArmedFor = null
     }
 
+    /**
+     * One CONTINUOUS window over the whole Offering∪Connecting stretch (an
+     * Offering → Connecting transition never re-arms) — the last unbounded
+     * hole after answering: the server's ring timeout stops applying once
+     * answered and heartbeats only start in Connected, so an answered call
+     * whose ICE never established sat on « Connexion… » forever. Expiry
+     * carries the same terminal duty as [hangUp] — the wire and the media
+     * must learn of the teardown or the peer stays in a zombie call.
+     */
+    private fun syncConnectingWatchdog() {
+        val connecting = callState is CallState.Offering || callState is CallState.Connecting
+        if (!connecting) {
+            stopConnectingWatchdog()
+            return
+        }
+        if (connectingWatchdogJob != null) return
+        connectingWatchdogJob = viewModelScope.launch {
+            connectingWatchdog.countdown().collect {
+                dispatch(CallEvent.ConnectionFailed(CONNECT_TIMED_OUT))
+                emitIfIdentified(signalManager::emitEnd)
+                coordinator.end()
+            }
+        }
+    }
+
+    private fun stopConnectingWatchdog() {
+        connectingWatchdogJob?.cancel()
+        connectingWatchdogJob = null
+    }
+
     private fun publish() {
         _state.value = CallPresenter.present(
             callState, config, media, elapsedSeconds, connectionQuality, waiting,
@@ -796,5 +832,6 @@ class CallViewModel @Inject constructor(
     private companion object {
         const val INITIATE_TIMED_OUT = "call:initiate timed out"
         const val INITIATE_MALFORMED = "malformed call:initiate ack"
+        const val CONNECT_TIMED_OUT = "connect timed out"
     }
 }

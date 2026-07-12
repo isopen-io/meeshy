@@ -114,6 +114,12 @@ class CallViewModelTest {
         override fun countdown(): Flow<Unit> = reconnectBudgetFlow
     }
 
+    /** Test-driven connect-phase watchdog: emit once to expire the armed window. */
+    private val connectingWatchdogFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    private val connectingWatchdog = object : CallConnectingWatchdog {
+        override fun countdown(): Flow<Unit> = connectingWatchdogFlow
+    }
+
     private val outgoingVideo =
         CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val incomingAudio =
@@ -167,6 +173,7 @@ class CallViewModelTest {
     private fun vm() = CallViewModel(
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
         heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock, reconnectBudget,
+        connectingWatchdog,
     )
 
     @Test
@@ -719,6 +726,60 @@ class CallViewModelTest {
 
         assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
         verify(exactly = 0) { signalManager.emitAnalytics(any(), any()) }
+    }
+
+    // --- Connecting watchdog: appel répondu mais jamais connecté = borné ---
+
+    @Test
+    fun `an answered call whose media never establishes fails at the connect budget`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.accept()
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
+
+        connectingWatchdogFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+        assertThat(vm.state.value.endReason).isEqualTo(CallEndReason.Failed("connect timed out"))
+        verify(exactly = 1) { signalManager.emitEnd("call-9") }
+        verify(exactly = 1) { coordinator.end() }
+    }
+
+    @Test
+    fun `a call that connects before the budget disarms the watchdog`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.accept()
+        vm.onSignal(CallEvent.MediaConnected)
+
+        connectingWatchdogFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+        verify(exactly = 0) { signalManager.emitEnd(any()) }
+    }
+
+    @Test
+    fun `the watchdog spans offering into connecting as one continuous window`() = runTest {
+        every { sessionRepository.currentUser } returns MutableStateFlow(mockk { every { id } returns "me" })
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.onSignal(CallEvent.ParticipantJoined("u1"))
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
+        vm.onSignal(CallEvent.RemoteAnswer)
+
+        connectingWatchdogFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+    }
+
+    @Test
+    fun `no watchdog is armed while merely ringing`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        connectingWatchdogFlow.emit(Unit)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.INCOMING)
     }
 
     // --- Reconnect budget watchdog: ReconnectFailed enfin tiré (parité iOS) ---
