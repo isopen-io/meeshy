@@ -1854,6 +1854,17 @@ final class CallManager: ObservableObject {
     func endCall() {
         guard callState.isActive else { return }
 
+        // Refus lock-screen (arc reject 2026-07-12) : un `CXEndCallAction` sur
+        // un entrant PRÉ-décroché est le bouton « Refuser » de CallKit — le
+        // seul chemin de refus d'un appel reçu en background. Il aboutit ici,
+        // pas dans rejectCall() : sans cette branche, l'end part sans raison,
+        // le gateway le résout `missed` et notifie « appel manqué » celui qui
+        // vient de refuser (exactement le bug corrigé sur les autres chemins).
+        let isDecliningIncoming: Bool = {
+            if case .ringing(isOutgoing: false) = callState { return true }
+            return false
+        }()
+
         // Le second guard historique (`guard let callId = currentCallId`)
         // retournait early si l'ACK call:initiate n'avait pas encore
         // atterri — laissant `activeCallUUID` non-cleared et le Task de
@@ -1882,7 +1893,14 @@ final class CallManager: ObservableObject {
         webRTCService.sendHangupBye()
 
         if let callId {
-            emitCallEndReliably(callId: callId)
+            if isDecliningIncoming {
+                // Mêmes garanties que rejectCall() (fire-and-forget) : le refus
+                // porte reason=rejected, l'ACK/réconciliation reste le filet du
+                // chemin raccroché.
+                emitCallReject(callId: callId)
+            } else {
+                emitCallEndReliably(callId: callId)
+            }
         }
 
         // H1 — rendre le teardown local atomique vis-à-vis de CallKit. On capture
@@ -1894,7 +1912,7 @@ final class CallManager: ObservableObject {
         // locale ci-dessus.)
         let endUUID = activeCallUUID
         let endUsedCallKit = callUsesCallKit
-        endCallInternal(reason: .local)
+        endCallInternal(reason: isDecliningIncoming ? .rejected : .local)
         if let endUUID, endUsedCallKit {
             let endAction = CXEndCallAction(call: endUUID)
             callController.request(CXTransaction(action: endAction)) { error in

@@ -3814,6 +3814,99 @@ final class RejectPendingCallTests: XCTestCase {
     }
 }
 
+// MARK: - Lock-screen decline = reject (§arc reject 2026-07-12)
+
+/// A CallKit `CXEndCallAction` on an INCOMING ringing call is the lock-screen
+/// « Refuser » button — the single decline path for background calls. It routes
+/// through `endCall()`, not `rejectCall()`: without a dedicated branch there,
+/// the end reaches the gateway without reason=rejected, the server resolves the
+/// pre-answer end to `missed`, and the decliner gets the false "missed call"
+/// notification the reject arc just eliminated on every other path.
+final class EndCallLockScreenDeclineTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_endCall_detectsPreAnswerIncomingDecline() throws {
+        // endCall() must distinguish a pre-answer INCOMING call (lock-screen
+        // decline via CXEndCallAction) from a regular hang-up.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(".ringing(isOutgoing: false)"),
+            "endCall() must detect the pre-answer incoming state — a CXEndCallAction " +
+            "on a ringing incoming call is the lock-screen decline, not a hang-up."
+        )
+    }
+
+    func test_endCall_declineBranchEmitsCallReject() throws {
+        // The decline branch must emit call:end {reason: rejected} via
+        // emitCallReject — a plain end resolves to `missed` server-side.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallReject(callId:"),
+            "endCall() must route the pre-answer incoming decline through " +
+            "emitCallReject — otherwise the lock-screen decline resolves to `missed` " +
+            "and the decliner is notified of a call they just refused."
+        )
+    }
+
+    func test_endCall_declineEmit_beforeEndCallInternal() throws {
+        // The reject emit must fire BEFORE endCallInternal tears down local
+        // state — mirroring the emit-then-teardown order of the regular path.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        guard let emitRange = body.range(of: "emitCallReject(callId:"),
+              let teardownRange = body.range(of: "endCallInternal(") else {
+            XCTFail("Expected emitCallReject and endCallInternal in endCall()"); return
+        }
+        XCTAssertLessThan(
+            emitRange.lowerBound,
+            teardownRange.lowerBound,
+            "endCall() must emit the reject BEFORE endCallInternal — teardown clears " +
+            "the identifiers the emit needs."
+        )
+    }
+
+    func test_endCall_declineTeardownCarriesRejectedReason() throws {
+        // Local teardown must record .rejected (journal/analytics coherence with
+        // rejectCall) instead of .local when the end is a decline.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(".rejected"),
+            "endCall()'s decline branch must pass .rejected to endCallInternal — " +
+            "the decliner's own journal must not label a refusal as a local hang-up."
+        )
+    }
+}
+
 // MARK: - Quality Label Mapping (§gateway connection quality ladder)
 
 /// `CallManager.connectionQualityLabel(for:)` collapses the client's 5-tier ladder
