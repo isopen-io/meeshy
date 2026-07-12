@@ -11,6 +11,7 @@ import { describe, it, expect } from '@jest/globals';
 import {
   coerceCallAnalytics,
   summarizeCallReliability,
+  normalizeEndReason,
   type CallAnalyticsRecord,
 } from '../../../services/callAnalyticsAggregate';
 
@@ -174,5 +175,35 @@ describe('summarizeCallReliability', () => {
     ]);
     expect(s.byPlatform).toEqual({ ios: 2, android: 1, web: 1 });
     expect(s.byEndReason).toEqual({ completed: 2, rejected: 1, connectionLost: 1 });
+  });
+
+  it('collapses parameterized failure reasons into one « failed » bucket', () => {
+    // Prod data 2026-07-12: clients send failed("Couldn't establish…") /
+    // failed("Not in call room") — distinct strings that must aggregate as
+    // one so the operator sees the total-failed count.
+    const s = summarizeCallReliability([
+      record({ endReason: 'failed("Couldn\'t establish the call connection")' }),
+      record({ endReason: 'failed("Not in call room")' }),
+      record({ endReason: 'completed' }),
+    ]);
+    expect(s.byEndReason).toEqual({ failed: 2, completed: 1 });
+  });
+});
+
+describe('normalizeEndReason', () => {
+  it('collapses failed("message") to failed', () => {
+    expect(normalizeEndReason('failed("Couldn\'t establish the call connection")')).toBe('failed');
+    expect(normalizeEndReason('failed("Not in call room")')).toBe('failed');
+  });
+
+  it('passes plain reasons through unchanged', () => {
+    expect(normalizeEndReason('local')).toBe('local');
+    expect(normalizeEndReason('missed')).toBe('missed');
+    expect(normalizeEndReason('connectionLost')).toBe('connectionLost');
+  });
+
+  it('degrades an empty / paren-only reason to unknown', () => {
+    expect(normalizeEndReason('')).toBe('unknown');
+    expect(normalizeEndReason('(orphan)')).toBe('unknown');
   });
 });

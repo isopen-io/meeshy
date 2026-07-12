@@ -118,6 +118,20 @@ export function coerceCallAnalytics(value: unknown): CallAnalyticsRecord | null 
   };
 }
 
+/**
+ * Collapse a parameterized end reason to its category. Clients serialize a
+ * failure as `failed("Couldn't establish the call connection")` /
+ * `failed("Not in call room")` — the embedded message fragments the
+ * `byEndReason` breakdown into one bucket per message (prod data 2026-07-12),
+ * hiding the total-failed count an operator actually wants. Strip everything
+ * from the first `(` so all `failed(...)` variants collapse to `failed`;
+ * plain reasons (`local`, `missed`, `connectionLost`…) pass through unchanged.
+ */
+export function normalizeEndReason(raw: string): string {
+  const base = raw.split('(')[0].trim();
+  return base.length > 0 ? base : 'unknown';
+}
+
 const ZERO_SUMMARY: CallReliabilitySummary = {
   totalCalls: 0,
   videoShare: 0,
@@ -183,6 +197,6 @@ export function summarizeCallReliability(
       poor: sum((r) => r.qualityDistribution.poor) / n,
     },
     byPlatform: byCount((r) => r.platform),
-    byEndReason: byCount((r) => r.endReason),
+    byEndReason: byCount((r) => normalizeEndReason(r.endReason)),
   };
 }
