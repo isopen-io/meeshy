@@ -459,6 +459,9 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // pas le call-summary elle-même : sans ceci la bulle « Appel … en cours »
       // resterait orpheline. Fire-and-forget + idempotent (cf. finalizeCallSummary).
       callService.finalizeCallSummary(callId);
+      // Parité socket call:end — diffuse `call:ended` au pair (WebRTC/CallKit
+      // tear-down temps réel) au lieu d'attendre le GC ~120s. Auto-gardé terminal.
+      callService.broadcastCallEndedIfTerminal(callSession, userId);
 
       return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
@@ -798,6 +801,9 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // No-op si l'appel de groupe continue (createCallSummaryMessage se garde
       // sur le statut terminal), finalise la bulle si l'appel s'est terminé.
       callService.finalizeCallSummary(callId);
+      // Parité socket call:leave — diffuse `call:ended` au pair UNIQUEMENT si le
+      // leave a rendu l'appel terminal (broadcastCallEndedIfTerminal auto-gardé).
+      callService.broadcastCallEndedIfTerminal(callSession, participantId);
 
       return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
