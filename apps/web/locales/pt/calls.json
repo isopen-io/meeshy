@@ -91,7 +91,9 @@
       "callAlreadyEnded": "A chamada terminou",
       "videoSuspendedPoorConnection": "Conexão fraca — vídeo pausado para manter a chamada",
       "videoResumed": "Conexão recuperada — vídeo reativado",
-      "connectTimeout": "Não foi possível estabelecer a conexão — chamada encerrada"
+      "connectTimeout": "Não foi possível estabelecer a conexão — chamada encerrada",
+      "callFailed": "Falha na conexão da chamada",
+      "retry": "Tentar novamente"
     },
     "permissions": {
       "title": {

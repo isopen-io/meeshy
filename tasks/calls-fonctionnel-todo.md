@@ -2903,3 +2903,61 @@ cette vague.
 - **Reste ouvert (inchangé + additions)** : tout ce qui précède, plus — le candidat §4.6
   buffered-offer/`answer` non creusé (voir faux-positif ci-dessus, en réalité "non tranché", à
   re-évaluer) ; PR #1879/#1880/#1883/#1884 (autres sessions, même mandat) à suivre séparément.
+
+## Vague 40 — retry-on-failure n'était câblé que sur le watchdog local, jamais sur `call:ended` (web) (2026-07-12)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). Branche
+`claude/loving-thompson-260v1v` : les 50 commits qu'elle portait s'étaient déjà tous retrouvés dans
+`origin/main` (vérifié après un `git fetch --unshallow` — le clone shallow initial masquait l'ancêtre
+commun et faisait croire à une divergence ; `git merge-base --is-ancestor HEAD origin/main` confirme
+franchement 0 commit non mergé). Branche redémarrée depuis `origin/main` (règle "PR déjà mergée = travail
+neuf", même si ici aucune PR formelle n'a jamais existé pour cette branche précise — le contenu était déjà
+entré via une autre lignée). PR ouvertes vérifiées avant de commencer : **#1889** (gateway, buffer `answer`
+§4.6) et **#1890** (gateway ZMQ, `translatedAudios` optionnel) — aucun recouvrement de fichiers. Un agent
+d'exploration dédié, briefé avec l'audit CLOS + les 39 vagues précédentes pour falsifier tout candidat,
+a ciblé le commit le plus récent (`7e6ea5d49`, retry-on-failure web) — postérieur à toute vague/audit
+existant, donc jamais revu.
+
+- **[HAUT, web, CONFIRMÉ + CORRIGÉ, TDD]** `isRetryableCallFailure` (`call-retry-policy.ts`) — la
+  politique pure qui décide quelles raisons de fin d'appel méritent un « Réessayer » (`failed`,
+  `connectionLost`) — n'avait **aucun call site en production** ; son seul consommateur était son propre
+  test unitaire. Le seul site de production de `offerCallRetry` était le watchdog local
+  `VideoCallInterface.tsx:451` (appel jamais connecté dans les 45s) — un timer local sans raison serveur à
+  consulter. Le site qui REÇOIT la raison serveur pour CHAQUE terminaison — `CallManager.handleCallEnded`
+  (`CallManager.tsx:330`), sur l'event `call:ended` dont `reason: CallEndReason` est un champ
+  **obligatoire et toujours peuplé** (`video-call.ts:468-472`) — ne lisait jamais `event.reason` : `reset()`
+  inconditionnel, sans jamais consulter `isRetryableCallFailure` ni appeler `offerCallRetry`. **Scénario
+  concret** : A et B en appel établi ; la connexion de B tombe réellement (perte réseau, tab tuée en fond,
+  portable en veille) ; côté serveur ceci se résout via la grâce de déconnexion / `CallCleanupService` en
+  `call:ended` avec `reason: 'failed'`/`'connectionLost'` diffusé à A ; `handleCallEnded` de A réinitialise
+  l'état SANS offrir de retry — alors que c'est exactement le scénario "~16% des appels finissent en échec
+  transitoire" qui a motivé la feature (commit `7e6ea5d49` + section "Retry-on-failure" de l'audit). Seul
+  le cas plus étroit (appel JAMAIS connecté dans une fenêtre locale fixe de 45s) recevait le toast
+  « Réessayer » — la voie la plus fréquente en usage réel (fin pilotée serveur avec raison) ne l'avait
+  jamais eu.
+- **Fix** : `handleCallEnded` consulte désormais `isRetryableCallFailure(event.reason)` avant `reset()` ;
+  si vrai, lit `currentCall`/`controls` FRAIS via `useCallStore.getState()` (même pattern que
+  `VideoCallInterface.tsx:451`, évite une dépendance périmée dans le `useCallback`) et appelle
+  `offerCallRetry({ conversationId, type })` — `type` dérivé de `controls.videoEnabled`, comme le watchdog
+  local. `reset()` continue inconditionnellement juste après (il préserve déjà `pendingRetry` par design).
+  Aucun changement gateway/iOS/Android.
+- **Tests TDD** (`CallManager.callEndedRetry.test.tsx`, nouveau fichier) : RED confirmé avant le fix — les
+  2 cas `failed`/`connectionLost` échouaient (`pendingRetry` restait `null`), les cas non-transitoires
+  (`completed`/`missed`/`rejected`/`heartbeatTimeout`/`garbageCollected`) passaient déjà (no-op correct).
+  GREEN après fix : 8/8. Piège d'isolation de test découvert en cours de route : `reset()` préserve
+  **délibérément** `pendingRetry` d'un test à l'autre (par design, pour survivre à sa propre remise à
+  zéro) — `beforeEach` doit appeler explicitement `clearCallRetry()` en plus de `reset()`, sinon l'offre
+  d'un cas fuit dans le suivant. Suite complète `video-call|call-retry|call-store` : 23/23 suites, 213/213
+  tests verts. `tsc --noEmit` web : 30 erreurs préexistantes dans `CallManager.tsx` (typage `socket as
+  unknown`, sans rapport, confirmées identiques avant/après via `git stash`) ; 0 nouvelle erreur. `eslint`
+  cassé dans ce sandbox après `bun install --ignore-scripts` (config circulaire `@eslint/eslintrc`,
+  environnement, même limitation pré-existante que Vague 38) — non bloquant.
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre cette vague (aucune toolchain
+  Swift/Kotlin dans ce sandbox) ; la feature retry-on-failure reste web-only, parité iOS/Android à
+  construire dans une session avec le toolchain adéquat (déjà noté comme suivi dans le commit
+  `7e6ea5d49`).
+- **Reste ouvert (inchangé + additions)** : tout ce qui précède ; parité iOS/Android du retry-on-failure ;
+  la piste secondaire notée par l'agent d'exploration (`CallService.leaveCall` résout tout leave
+  post-answer en `completed`, y compris une vraie coupure réseau détectée seulement par l'expiry de la
+  grâce de déconnexion — semble intentionnel d'après les commentaires du fichier, non creusé cette vague,
+  à ré-évaluer) ; PR #1889/#1890 (autres sessions) à suivre séparément.

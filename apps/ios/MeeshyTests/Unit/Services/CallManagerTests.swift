@@ -3988,6 +3988,78 @@ final class RejectDeferredReconciliationTests: XCTestCase {
     }
 }
 
+// MARK: - Retry-on-failure (« Réessayer », parité web/Android)
+
+/// Source-guards for the transient-failure retry: `canRetryCall` gates on the
+/// shared [CallRetryPolicy], `retryCall()` re-dials the captured outgoing
+/// context, and a retryable end holds the ended screen longer so the user can
+/// tap « Réessayer » before it auto-dismisses.
+final class RetryCallSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    var ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_canRetryCall_gatesOnPolicyAndOutgoingContext() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "var canRetryCall: Bool", in: source) else {
+            XCTFail("canRetryCall not found"); return
+        }
+        XCTAssertTrue(body.contains("CallRetryPolicy.isRetryable(reason)"),
+            "canRetryCall must gate on the shared CallRetryPolicy (one rule, 3 platforms).")
+        XCTAssertTrue(body.contains("lastOutgoingContext != nil"),
+            "canRetryCall must require a captured outgoing context — an incoming-call " +
+            "failure has nothing to re-dial.")
+    }
+
+    func test_retryCall_reDialsTheCapturedContext() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func retryCall()", in: source) else {
+            XCTFail("retryCall() not found"); return
+        }
+        XCTAssertTrue(body.contains("guard canRetryCall"),
+            "retryCall must be inert unless canRetryCall — a normal hangup must never re-dial.")
+        XCTAssertTrue(body.contains("startCall("),
+            "retryCall must re-enter startCall with the captured dial context.")
+    }
+
+    func test_startCall_capturesTheOutgoingContextForRetry() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func startCall(conversationId:", in: source) else {
+            XCTFail("startCall not found"); return
+        }
+        XCTAssertTrue(body.contains("lastOutgoingContext = (conversationId, userId, displayName, isVideo)"),
+            "startCall must snapshot the dial context so a transient failure is retryable.")
+    }
+
+    func test_endCallInternal_holdsARetryableFailureLongerBeforeAutoSettle() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCallInternal(reason:", in: source) else {
+            XCTFail("endCallInternal not found"); return
+        }
+        XCTAssertTrue(body.contains("callEndRetryableSettleSeconds"),
+            "a retryable failure must use the longer settle window so « Réessayer » " +
+            "isn't yanked before the user can tap it.")
+    }
+}
+
 // MARK: - Quality Label Mapping (§gateway connection quality ladder)
 
 /// `CallManager.connectionQualityLabel(for:)` collapses the client's 5-tier ladder

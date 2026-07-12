@@ -218,6 +218,35 @@ class CallSignalMapperTest {
             .isEqualTo(CallEndedSignal("c8", CallEvent.RingTimeout))
     }
 
+    // A server/peer-signalled TRANSIENT failure (`failed`/`connectionLost`) must
+    // reach the FSM as [CallEvent.ConnectionFailed] — NOT a plain RemoteHangUp —
+    // so the caller lands on a retryable [CallEndReason.Failed] and gets the
+    // « Réessayer » affordance. Parité iOS `handleRemoteEnd` (maps `failed`/
+    // `connectionlost` → `.connectionLost`, retryable) and web
+    // `isRetryableCallFailure`. Without this, a peer-signalled drop that beats
+    // the caller's own reconnect-budget exhaustion ended the call as `Remote`
+    // (non-retryable) on Android only.
+
+    @Test
+    fun `endedSignal decodes a failed ended frame as a ConnectionFailed keyed by its id`() {
+        assertThat(CallSignalMapper.endedSignal("call:ended", """{"callId":"c7","reason":"failed"}"""))
+            .isEqualTo(CallEndedSignal("c7", CallEvent.ConnectionFailed("failed")))
+    }
+
+    @Test
+    fun `endedSignal decodes a connectionLost ended frame as a ConnectionFailed keyed by its id`() {
+        assertThat(CallSignalMapper.endedSignal("call:ended", """{"callId":"c7","reason":"connectionLost"}"""))
+            .isEqualTo(CallEndedSignal("c7", CallEvent.ConnectionFailed("connectionLost")))
+    }
+
+    @Test
+    fun `a server-signalled failed teardown drives the FSM to a RETRYABLE ended state`() {
+        val signal = CallSignalMapper.endedSignal("call:ended", """{"callId":"c7","reason":"failed"}""")
+        val ended = CallStateMachine.reduce(CallState.Connected, signal!!.event)
+        val reason = (ended as CallState.Ended).reason
+        assertThat(CallRetryPolicy.isRetryable(reason)).isTrue()
+    }
+
     @Test
     fun `endedSignal is null for a non-teardown frame`() {
         assertThat(CallSignalMapper.endedSignal("call:signal", """{"callId":"c9","signal":{"type":"answer"}}"""))

@@ -390,6 +390,11 @@ final class CallManager: ObservableObject {
     /// is fulfilled. Calling reportOutgoingCall on the callee silently no-ops
     /// and the Phone-app Recents entry shows no duration.
     private var lastCallWasOutgoing: Bool = false
+    /// The last OUTGOING call's dial context, captured at `startCall`. Powers
+    /// `retryCall()` (« Réessayer ») — `resetEndedStateForNewCall` clears the
+    /// live identity fields, so the retry must re-dial from this snapshot rather
+    /// than the (already-torn-down) call state. Parité web/Android retry.
+    private var lastOutgoingContext: (conversationId: String, userId: String, displayName: String, isVideo: Bool)?
     /// `private(set)` (not `private`) so CallView can compute a "since call
     /// start" elapsed time for each live-caption row — the only other
     /// existing consumer of call timing is `callDuration`, which is a ticking
@@ -844,6 +849,8 @@ final class CallManager: ObservableObject {
         displayMode = .fullScreen
         callState = .ringing(isOutgoing: true)
         lastCallWasOutgoing = true
+        // Snapshot the dial context so a transient failure can be « Réessayer »-ed.
+        lastOutgoingContext = (conversationId, userId, displayName, isVideo)
 
         // Phase 1.5 — Ringback tone démarré dans `provider:didActivate:audioSession`
         // (PAS ici). Démarrer AVAudioPlayer AVANT que CallKit ait posé sa
@@ -984,6 +991,30 @@ final class CallManager: ObservableObject {
 
         HapticFeedback.medium()
         return true
+    }
+
+    // MARK: - Retry a transiently-failed call (« Réessayer »)
+
+    /// True when the ended call failed transiently (`.failed`/`.connectionLost`)
+    /// and its outgoing dial context is known — the ended view offers
+    /// « Réessayer ». Parité web/Android retry-on-failure.
+    var canRetryCall: Bool {
+        guard case .ended(let reason) = callState else { return false }
+        return CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil
+    }
+
+    /// Re-dial the last outgoing call after a transient failure. `startCall`
+    /// resets the ended state to idle before re-initiating, so this simply
+    /// replays the captured dial context. Inert unless `canRetryCall`.
+    @discardableResult
+    func retryCall() -> Bool {
+        guard canRetryCall, let ctx = lastOutgoingContext else { return false }
+        return startCall(
+            conversationId: ctx.conversationId,
+            userId: ctx.userId,
+            displayName: ctx.displayName,
+            isVideo: ctx.isVideo
+        )
     }
 
     // MARK: - Rejoin Active Call (crash/reconnect recovery)
@@ -3403,8 +3434,15 @@ final class CallManager: ObservableObject {
         // we must NOT clobber its freshly-assigned identity.
         let token = UUID()
         settleToken = token
+        // A retryable transient failure holds the ended screen LONGER so the user
+        // has time to tap « Réessayer » (parité web/Android), then auto-dismisses
+        // like any other ended call. Tapping retry re-enters startCall, whose
+        // resetEndedStateForNewCall nils this token so the pending settle bails.
+        let settleDelay = (CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil)
+            ? QualityThresholds.callEndRetryableSettleSeconds
+            : QualityThresholds.callEndSettleSeconds
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.callEndSettleSeconds))
+            try? await Task.sleep(for: .seconds(settleDelay))
             guard let self else { return }
             guard self.settleToken == token else { return }
             if case .ended = self.callState {

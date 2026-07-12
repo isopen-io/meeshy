@@ -444,7 +444,19 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       logger.warn('[VideoCallInterface]', 'Connect watchdog expired — ending the never-connected call', {
         callId,
       });
-      toast.error(t('calls.toasts.connectTimeout'));
+      // A never-connected call is a TRANSIENT failure — post a « Réessayer »
+      // offer (consumed by useCallRetryToast at the conversation level, which
+      // survives this teardown) instead of a dead-end toast. Fall back to the
+      // plain timeout toast if the call context is already gone.
+      const { currentCall, controls, offerCallRetry } = useCallStore.getState();
+      if (currentCall?.conversationId) {
+        offerCallRetry({
+          conversationId: currentCall.conversationId,
+          type: controls.videoEnabled ? 'video' : 'audio',
+        });
+      } else {
+        toast.error(t('calls.toasts.connectTimeout'));
+      }
       handleHangUpRef.current();
     }, CONNECT_WATCHDOG_MS);
     return () => clearTimeout(timer);

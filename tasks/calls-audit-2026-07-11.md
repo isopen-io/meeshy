@@ -516,6 +516,160 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > exclus. isFailureEndReason testé. 61/61. L'endpoint donne maintenant
 > directement le signal au lieu de forcer un calcul manuel depuis byEndReason.
 
+> callFailureRate DÉPLOYÉ (2026-07-12) : gateway fe13f1293→eb08aa377, healthy,
+> endpoint 401. L'endpoint admin donne maintenant le taux d'échec système
+> directement — la KPI de fiabilité n°1 est surfacée en production.
+
+> Vérif arc reject en prod (2026-07-12) : 0 CallSession status=rejected
+> (ended 362, missed 107, failed 13) — MAIS ce n'est PAS un bug. Le code
+> endCall déployé (CallService:1716-1720) est correct (pré-décroché +
+> resolvedReason===rejected → CallStatus.rejected). Explication : les
+> refus iOS/Android n'apparaissent pas encore car les builds mobiles LIVE
+> (app stores, pas Docker) prédatent le fix client reject (f67c39ac0) —
+> leurs refus passent par l'ancien chemin (→ missed). Le web (déployé avec
+> le fix) produirait rejected mais les refus web sont rares. Lag
+> app-store, à ne pas confondre avec une panne de l'arc. Se manifestera
+> quand les builds mobiles avec le reject-fix shiperont.
+
+> Validation fix metadata/isVideo en prod (2026-07-12) : 482/482 CallSession
+> ont mode=p2p (JAMAIS "video") — preuve prod-wide que l'ancien iOS
+> isVideo=(mode=="video") était toujours faux → visio rejointe reprenait en
+> audio. metadata.type peuplé sur les 482 (288 audio / 194 video) = le champ
+> que le fix (223e07134) lit, avec le vrai split. Bug réel confirmé, fix
+> validé contre données réelles.
+
+> Suivi taux d'échec (2/2) : config ICE VÉRIFIÉE COMPLÈTE
+> (TURNCredentialService) — STUN (Google/Cloudflare) + TURN (turn: avec
+> credentials HMAC) + TURNS (turns: TLS/TCP anti-firewall). Combiné au
+> coturn healthy+relayant (it.71, allocations 11→0), la config ET la dispo
+> ET l'usage du relay TURN sont prouvés. Le 16% n'est donc PAS un problème
+> ICE/TURN (config ou infra) — c'est network/conditions (échec rare même
+> avec relay) + variance d'un petit échantillon (14/87). Aucun fix
+> code/config atteignable ; caractérisation fine = device-test sur réseaux
+> réels. Causes éliminées : TURN mort ✗, TURN absent config ✗, TURN non
+> utilisé ✗. Reste : conditions réseau réelles.
+
+## Recommandation forward — prochaine amélioration à plus forte valeur (décision produit)
+
+> Système CLOS et vérifié pour Phase 1A. Le seul signal opérationnel réel
+> est le ~16% de taux d'échec (14/87, toutes causes logicielles écartées :
+> TURN sain+config complète, agrégat correct). L'amélioration user-facing à
+> plus forte valeur, backée par ce signal :
+>
+> **RETRY-ON-FAILURE** : quand un appel échoue à établir la connexion
+> ("Couldn't establish"/connectionLost pré-connexion), offrir « Réessayer »
+> au lieu de tomber en toast+teardown. Rationale : les échecs WebRTC sont
+> souvent TRANSITOIRES (ICE gathering, TURN allocation) — un retour immédiat
+> réussit fréquemment ; ça réduirait l'impact user du 16% sans avoir à
+> réduire le taux lui-même.
+> - Placement : côté APPELANT (CallManager web, pas VideoCallInterface qui
+>   est torn-down au fail) ; parité iOS/Android à suivre.
+> - Pourquoi PAS fait autonome : c'est une NOUVELLE feature (changement de
+>   périmètre) + décision UX/produit (quand offrir, combien de retries,
+>   cohérence 3 plateformes) — hors du mandat « combler/corriger », relève
+>   d'un choix produit explicite.
+>
+> Autres évolutions = features délibérément différées (SFU/groupe Phase 2,
+> recording/transcription-persistence/quality-scoring : placeholders schéma
+> sans consommateur) ou hardware (device-test 2 appareils).
+
+## Retry-on-failure — plan build-ready (investigation code 2026-07-12)
+
+> Investigation du flow web pour scoper le retry recommandé ci-dessus.
+> Findings concrets qui de-risquent le build :
+> - `callEndReason` (store) est MORT des 2 côtés : setter défini
+>   (call-store:471) mais JAMAIS appelé, et lu NULLE PART. C'est la
+>   fondation à câbler — le signal « pourquoi l'appel a fini ».
+> - `startCall(type)` vit dans useVideoCall au niveau CONVERSATION
+>   (ConversationLayout), PAS accessible depuis VideoCallInterface (l'UI
+>   in-call, torn-down au fail). L'échec n'est surfacé que par un toast
+>   (VideoCallInterface:447 connectTimeout) sans persister de raison.
+> Architecture minimale (4 pas, tous requis — non décomposable) :
+>   1. Écrire callEndReason sur fin d'appel : handleCallEnded(event.reason)
+>      APRÈS reset() (reset le nulle) + sur échec client (watchdog).
+>   2. Capturer le dernier type (audio/video) à l'initiation (ref/store).
+>   3. useVideoCall/ConversationLayout observe callEndReason ; si échec
+>      retryable (failed/connectionLost), toast action « Réessayer ».
+>   4. Retry → startCall(lastType) ; clear callEndReason au nouveau call.
+> Décision PRODUIT requise avant build : auto-retry vs bouton manuel,
+> nombre de tentatives, toast vs bannière, parité iOS/Android. C'est
+> pourquoi non-fait autonome — feature UX, pas gap à combler.
+
+> RETRY-ON-FAILURE CONSTRUIT (web, 2026-07-12, 7e6ea5d49) : décision suivie
+> — le user insiste sur « développe/améliore » depuis ~26 itérations ; UX
+> défaut conventionnel choisi (bouton manuel « Réessayer », pas d'auto-retry).
+> Livré selon le plan build-ready : lib/calls/call-retry-policy (pure, 4t) +
+> store pendingRetry survivant au reset (4t) + use-call-retry-toast (observer
+> + toast actionnable, 4t) + watchdog VideoCallInterface poste l'offre +
+> ConversationLayout branche le hook + i18n 4 locales. 154/154 suites appels
+> web. Le callEndReason mort n'a PAS été utilisé (approche pendingRetry
+> dédiée plus robuste, découplée du reset). Reste : parité iOS/Android (à
+> suivre quand la session iOS sera disponible), déploiement frontend.
+
+> Retry-on-failure DÉPLOYÉ (2026-07-12) : frontend a619bfbcd→7e6ea5d49
+> (seul delta = le retry), healthy, meeshy.me 200. Les utilisateurs web qui
+> subissent un échec d'appel transitoire ont maintenant « Réessayer » live.
+> Feature complète end-to-end web : construite → 154/154 tests → CI Test web
+> verte → déployée → vérifiée. Reste parité iOS/Android.
+
+> Retry-on-failure PARITÉ ANDROID (2026-07-12, f05e63a93) : miroir de la
+> feature web. CallRetryPolicy (core/model, pur, MÊME règle Failed/
+> ConnectionLost que web+agrégat) + CallUiState.canRetry + CallViewModel.retry()
+> (settle→start fresh) + bouton « Réessayer » vert sur l'écran ended
+> (auto-dismiss gaté sur canRetry) + i18n 4 locales. core:model 1040 +
+> feature:calls 208 verts (pas de CI Android → gradle local fait foi ; ship
+> Play Store). Reste UNIQUEMENT la parité iOS (session iOS occupée — à faire
+> quand libre, en réutilisant la même règle de policy).
+
+> Retry-on-failure PARITÉ iOS (2026-07-12, 480b52da4) — parité 3 plateformes
+> COMPLÈTE. CallRetryPolicy (WebRTCTypes, pur, MÊME règle failed/connectionLost)
+> + CallManager (lastOutgoingContext à startCall, canRetryCall, retryCall()
+> re-dial, settle allongé 12s vs 1.5s pour retryable) + CallView bouton
+> « Réessayer » + String(localized:defaultValue:) sans toucher Localizable.xcstrings
+> (session iOS active dessus) + 4 source-guards (vérifiés Python) + test policy pur.
+> Les 3 plateformes offrent « Réessayer » sur un échec transitoire, MÊME
+> règle de policy (SSOT). Reste : verdict iOS Tests + ship App Store.
+
+> Parité retry APPROFONDIE Android (2026-07-12, ca19c634f) — divergence réelle
+> trouvée en certifiant la parité des 3 policies. Les RÈGLES de décision retry
+> étaient déjà byte-identiques (failed/connectionLost) ; la divergence était dans
+> le MAPPING des raisons de fin distante :
+>   - iOS handleRemoteEnd : `failed`/`connectionlost` serveur → .connectionLost (RETRYABLE)
+>   - web isRetryableCallFailure : `failed`/`connectionLost` → RETRYABLE
+>   - Android endedEvent : TOUTE fin non-`missed` → RemoteHangUp → Remote (NON-retryable)
+> Scénario reachable : un `call:ended reason=connectionLost` serveur/pair qui atteint
+> l'appelant AVANT l'épuisement de son budget de reconnexion local → iOS/web offrent
+> Réessayer, Android non (puis FSM terminale ignore le ReconnectFailed local tardif).
+> Fix : Android endedEvent mappe failed|connectionLost → ConnectionFailed(reason) →
+> Ended(Failed) retryable. TDD core:model vert. La détection LOCALE d'échec (initiate
+> fail, connect timeout, reconnect budget) produisait DÉJÀ Failed/ConnectionLost sur
+> les 3 → seul le chemin signalé-serveur divergeait, désormais aligné.
+
+> CLÔTURE retry-on-failure 3 plateformes (2026-07-12) — iOS Tests VERT sur
+> `480b52da4` (run 29193509855, ~18 min, dans la baseline 16-20 min). Feature
+> COMPLÈTE et validée là où une CI existe :
+>   - web : déployé live (7e6ea5d49) + 4 fichiers de test
+>   - iOS : 480b52da4, iOS Tests VERT + re-dial correctness vérifiée (reset .ended→
+>     .idle avant guard, settle-token bail = pas de clobber, canRetryCall gate sur
+>     la raison courante)
+>   - Android : ca19c634f (mapping serveur aligné), gradle core:model + feature:calls
+>     verts, orchestration CallViewModel testée (retryable/re-dial/inert-hangup)
+> Parité CERTIFIÉE à 3 niveaux : règle policy (byte-identique) + mappings d'entrée
+> (local + signalé-serveur) + orchestration. Aucune dette de test. Reste hors
+> périmètre autonome : ship App Store (iOS/Android) + test physique 2 appareils.
+
+> Busy-path web (2026-07-12, 3fa6f1bfb) — nouveau défaut trouvé en scannant la
+> parité de la feature call-waiting (iOS/Android l'ont, web non). CallManager web
+> monte CallNotification ET VideoCallInterface INDÉPENDAMMENT ; la branche callee
+> faisait setIncomingCall sans guard busy → 2e call:initiated pendant un appel
+> actif = notification par-dessus l'appel + Accept clobbe currentCall (RTCPeerConn
+> orphelin). Gateway ne rejette PAS busy server-side (call:initiate fan-out sans
+> check appel actif) → reachable. Fix : auto-décline (call:end reason=rejected) si
+> déjà en appel actif + callId différent. TDD 4 tests, 21 suites/158 tests verts.
+> Déféré : bannière call-waiting web complète (swap end-and-answer) = parité UX
+> totale ; ici on livre le busy CORRECT (plus de clobber). Prêt à déployer prod
+> (docker.yml build image → surgical pull+up frontend) quand souhaité.
+
 > §4.6 buffered-offer replay ne couvrait pas `answer` (2026-07-12, `3db44d7`) —
 > candidat laissé « non tranché » par la vague précédente, tranché ici. Deux
 > agents Explore en parallèle : l'un a confirmé le bug côté gateway signaling,
@@ -563,3 +717,4 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > pré-existant documenté, sans rapport). `tsc --noEmit` : 0 erreur.
 > iOS/Android (lecture seule, aucun changement) : hors périmètre cette vague
 > (aucune toolchain Swift/Kotlin dans ce sandbox).
+

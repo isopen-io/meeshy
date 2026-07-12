@@ -91,7 +91,9 @@
       "callAlreadyEnded": "La llamada ha terminado",
       "videoSuspendedPoorConnection": "Conexión débil — vídeo en pausa para mantener la llamada",
       "videoResumed": "Conexión recuperada — vídeo reactivado",
-      "connectTimeout": "No se pudo establecer la conexión — llamada finalizada"
+      "connectTimeout": "No se pudo establecer la conexión — llamada finalizada",
+      "callFailed": "Error de conexión de la llamada",
+      "retry": "Reintentar"
     },
     "permissions": {
       "title": {

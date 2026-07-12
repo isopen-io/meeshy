@@ -1715,3 +1715,26 @@ WebRTCTypes:232), **2 sur 3 étaient du comportement CORRECT** :
   comportement voulu. Corriger publiquement un finding erroné dès qu'on le découvre.
 - L'accuracy prime sur le volume : 1 insight actionnable vérifié (ici : ~20% des appels
   répondables échouent réellement) vaut mieux que 3 « anomalies » dont 2 fausses.
+
+## Parité cross-platform : certifier la RÈGLE ne suffit pas — vérifier les MAPPINGS d'entrée (2026-07-12)
+En livrant retry-on-failure sur web/iOS/Android, j'avais certifié que les 3 `CallRetryPolicy`
+encodaient une règle byte-identique (failed/connectionLost → retryable). Vrai mais insuffisant :
+la même règle nourrie par des MAPPINGS d'entrée différents produit un comportement différent.
+Android `CallSignalMapper.endedEvent` collapsait toute fin distante non-`missed` en `Remote`
+(non-retryable), tandis qu'iOS/web mappaient `failed`/`connectionLost` serveur vers du retryable
+→ divergence reachable côté appelant. **Règle : après avoir prouvé qu'une décision partagée est
+identique, tracer TOUS les chemins qui alimentent son entrée sur chaque plateforme (décodage
+socket, détection locale, valeurs par défaut) et vérifier qu'ils produisent des entrées
+équivalentes. La parité d'une fonction pure est vide si ses arguments divergent en amont.**
+
+## CI concurrency : un push docs juste après un push de code ANNULE le run CI du code (2026-07-12)
+La CI Meeshy (workflow « CI ») a un groupe de concurrence par branche : chaque nouveau push
+sur `main` annule le run en cours. En poussant un commit `docs(...)` immédiatement après un
+commit `fix(...)`/`feat(...)`, j'ai annulé à répétition (5+ fois cette session) le run CI qui
+validait le commit de code — verdict `cancelled`, jamais `success`. Pire : si le commit docs
+ne matche pas les path-filters du job de test concerné, ce job est SKIP sur le commit docs →
+le code n'obtient JAMAIS de verdict CI propre. **Règle : après un commit de code qui a besoin
+de validation CI, NE PAS pousser de commit docs/lessons par-dessus tant que le run CI du code
+n'est pas terminé. Grouper la doc AVEC le commit de code, OU attendre le vert avant de pousser
+la doc.** Vérifier le verdict sur le job pertinent (`Test web`/`Test gateway`), pas juste sur le
+run global — le run peut être `in_progress` alors que le job qui m'intéresse est déjà `success`.

@@ -27,6 +27,7 @@ import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 import { callsService } from '@/services/calls.service';
+import { isRetryableCallFailure } from '@/lib/calls/call-retry-policy';
 
 // Caller/callee no-answer timeout. The gateway has its own 60s server-side
 // ringing timeout (CallService.RINGING_TIMEOUT_MS), and iOS deliberately
@@ -243,6 +244,28 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     } else {
+      // Busy-path parity (iOS CallManager busy-path, Android onIncomingOffer):
+      // a second incoming call while already in a DIFFERENT active call must not
+      // naively setIncomingCall. The render mounts CallNotification and
+      // VideoCallInterface independently, so an ungated notification renders
+      // OVER the live call and tapping Accept runs setCurrentCall(secondCall),
+      // clobbering the active call and orphaning its RTCPeerConnection.
+      // Auto-decline it (call:end reason=rejected, same as handleRejectCall) so
+      // the active call is untouched and the second caller is freed immediately
+      // instead of ringing into a notification that would break the ongoing call.
+      const { isInCall: busyInCall, currentCall: busyCall } = useCallStore.getState();
+      if (busyInCall && busyCall && busyCall.id !== event.callId) {
+        logger.info('[CallManager]', 'Busy in another call — auto-declining second incoming call ' + event.callId);
+        const socket = meeshySocketIOService.getSocket();
+        if (socket) {
+          (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_END, {
+            callId: event.callId,
+            reason: 'rejected',
+          });
+        }
+        return;
+      }
+
       // I am being called - show notification
       console.log('📞 [CallManager] Setting incomingCall state - should show CallNotification', {
         callId: event.callId,
@@ -333,6 +356,22 @@ export function CallManager() {
 
       // Clear timeout
       clearCallTimeout();
+
+      // A call ending in a TRANSIENT failure (failed/connectionLost) gets a
+      // « Réessayer » offer — same policy VideoCallInterface's connect
+      // watchdog already applies to the narrower never-connected case, now
+      // also covering the server-authoritative call:ended path (the majority
+      // real-world drop scenario for an already-established call). Read from
+      // the store BEFORE reset() wipes currentCall/controls.
+      if (isRetryableCallFailure(event.reason)) {
+        const { currentCall, controls, offerCallRetry } = useCallStore.getState();
+        if (currentCall?.conversationId) {
+          offerCallRetry({
+            conversationId: currentCall.conversationId,
+            type: controls.videoEnabled ? 'video' : 'audio',
+          });
+        }
+      }
 
       // Reset call state - CallInterface will handle WebRTC cleanup
       reset();

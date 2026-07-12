@@ -782,6 +782,45 @@ class CallViewModelTest {
         assertThat(vm.state.value.status).isEqualTo(CallStatus.INCOMING)
     }
 
+    // --- Retry-on-failure: « Réessayer » un appel échoué transitoirement (parité web) ---
+
+    @Test
+    fun `a transiently-failed call is retryable`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.onSignal(CallEvent.ConnectionFailed("Couldn't establish the call connection"))
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+        assertThat(vm.state.value.canRetry).isTrue()
+    }
+
+    @Test
+    fun `retry re-initiates a fresh outgoing call to the same conversation and type`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)          // emitInitiate #1
+        vm.onSignal(CallEvent.ConnectionFailed("connect timed out"))
+
+        vm.retry()                       // emitInitiate #2 (fresh outgoing)
+
+        coVerify(exactly = 2) { signalManager.emitInitiate("conv-1", true) }
+        assertThat(vm.state.value.status).isNotEqualTo(CallStatus.ENDED)
+    }
+
+    @Test
+    fun `retry is inert for a non-retryable end (a plain hangup never re-dials)`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.onSignal(CallEvent.ParticipantJoined("u1"))
+        vm.onSignal(CallEvent.MediaConnected)
+        vm.hangUp()                      // Ended(Local) — not retryable
+
+        vm.retry()
+
+        assertThat(vm.state.value.canRetry).isFalse()
+        // Only the original initiate — retry did NOT re-dial.
+        coVerify(exactly = 1) { signalManager.emitInitiate(any(), any()) }
+    }
+
     // --- Reconnect budget watchdog: ReconnectFailed enfin tiré (parité iOS) ---
 
     private fun reconnecting(): CallViewModel {
