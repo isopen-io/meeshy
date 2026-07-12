@@ -447,3 +447,13 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > (sentinelle -1 exclue) + connectSuccessRate live sur les 87 rows réels.
 > Boucle complète : bug trouvé sur données prod → fix TDD → CI verte →
 > déployé → vérifié live.
+
+> Émission call:analytics WEB comblée (2026-07-12, a619bfbcd) : découvert
+> sur données prod — 100% des analytics étaient iOS. Android/iOS émettent,
+> le web JAMAIS → dashboard fiabilité aveugle aux appels web. Livré :
+> lib/call-analytics accumulateur pur (setupTimeMs premier-connect/−1
+> sentinelle, reconnexions, échantillons qualité → avg/max + distribution ;
+> 9 tests) + use-call-analytics-reporter (émet 1× au teardown, ref-gardé ;
+> 6 tests) + câblage VideoCallInterface. platform='web', honest defaults.
+> 107/107 suites appels web. Les 3 plateformes émettent désormais la
+> télémétrie de fiabilité (parité complète émission↔lecture).
