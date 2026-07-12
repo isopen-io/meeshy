@@ -203,15 +203,25 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   et bénin** (cache miss `cfprefsd` / lecture depuis extension ou tôt au launch → fallback réussi, pas de
   perte de données). Hypothèse réfutée. **Aucun code — non actionnable** (analogue #17).
 
-- [ ] **#16 — Hygiène SwiftUI**
+- [x] **#16 — Hygiène SwiftUI** — `64825cf72` (1 fix + reste bruit UIKit)
   Evidence : `NavigationRequestObserver tried to update multiple times per frame`,
   `Snapshotting … UIKeyboardImpl … afterScreenUpdates:YES`, `RTIInputSystemClient … valid sessionID`,
   `UIContextMenuInteraction … no context menu visible`. Warnings cosmétiques, traiter au cas par cas.
+  **Traité au cas par cas** : (1) `NavigationRequestObserver` = **actionnable** — la nav conversation iPhone
+  était déjà atomique, mais les deep-links `.ownProfile`/`.userLinks` faisaient encore `popToRoot()` +
+  `asyncAfter { push }` = 2 mutations/frame. **Fix** : helper `replaceStack(with:)` (mutation `path` unique
+  iPhone, forwarding iPad inchangé), TDD 2 cas. (2-4) `Snapshotting UIKeyboardImpl`, `RTIInputSystemClient`,
+  `UIContextMenuInteraction no menu visible` = **bruit UIKit système non actionnable** (aucun de ces strings
+  dans notre code). Build vert.
 
-- [ ] **#17 — Bruit système (probablement non actionnable)**
+- [x] **#17 — Bruit système (probablement non actionnable)** — investigué : bruit OS, clos (no-code)
   Evidence : `FigApplicationStateMonitor signalled err=-19431`, `XPC connection interrupted`,
   `nw_connection … on unconnected`, `Result accumulator timeout`. Vérifier qu'aucun ne masque
   un vrai bug ; sinon documenter comme bruit OS et clore.
+  **Conclusion** : `grep` des 4 strings dans tout `apps/ios/Meeshy` + `MeeshySDK` → **0 match** : elles
+  proviennent à 100 % de frameworks système (CoreMedia `FigApplicationStateMonitor`, XPC, Network.framework),
+  pas de notre code. Aucune ne masque un bug applicatif (la cause du crash P0 = watchdog, déjà identifiée+fixée).
+  **Bruit OS documenté et clos — aucun code.**
 
 ---
 
@@ -248,3 +258,11 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   la collecte ; Release a Crashlytics). Device-test crash → build Release. Aucun secret ajouté.
 - 2026-07-12 : #15 (P3) investigué no-code — accès App Group déjà via `UserDefaults(suiteName:)` partout ;
   le log `kCFPreferencesAnyUser … detaching from cfprefsd` = bruit iOS bénin (cfprefsd), non actionnable.
+- 2026-07-12 : #16 livré `64825cf72` — `replaceStack(with:)` atomique pour les deep-links (anti
+  NavigationRequestObserver). Reste des warnings #16 = bruit UIKit. #17 investigué no-code : 4 strings
+  = 100 % framework système (0 match dans notre code), bruit OS clos.
+- 2026-07-12 : **TOUT LE FICHIER EST RÉSOLU (#1-#17).** P0 #1-3 (pré-session) ; P1 #4-8, P2 #9-13,
+  P3 #14-17 (cette session /loop). 9 fixes code (builds verts, TDD là où testable) + 4 investigations
+  no-code (#4 environnemental, #14 décision Firebase, #15/#17 bruit OS). Reste UNIQUEMENT la vérif
+  device réelle = **absence de SIGKILL** pendant un appel backgroundé long (2 appareils, build Release
+  pour Crashlytics — cf. #14).
