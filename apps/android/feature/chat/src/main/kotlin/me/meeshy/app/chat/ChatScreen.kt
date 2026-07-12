@@ -146,6 +146,10 @@ fun ChatScreen(
     onBack: () -> Unit,
     onStartCall: (peerName: String, isVideo: Boolean) -> Unit = { _, _ -> },
     onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit = { _, _ -> },
+    /** True when THIS device is already engaged in a live call — suppresses the
+     * « Rejoindre » pill so a minimised call viewing its own chat isn't offered
+     * to rejoin the call it's already in. */
+    hasLocalLiveCall: Boolean = false,
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -288,6 +292,7 @@ fun ChatScreen(
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.chat_search))
                         }
                         val ongoing = state.activeCall
+                            ?.takeIf { RejoinPillPolicy.shouldOffer(it, hasLocalLiveCall) }
                         if (ongoing != null) {
                             // An call the local session lost is still live server-side:
                             // offer « Rejoindre » (a tap joins the existing call via the

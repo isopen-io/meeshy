@@ -327,6 +327,9 @@ fun MeeshyApp(
                             ),
                         )
                     },
+                    // A live local call (minimised/floating) suppresses the rejoin
+                    // pill — don't offer to rejoin the call this device is in.
+                    hasLocalLiveCall = CallPillPresenter.isMinimizable(callState.status),
                 )
             }
             composable(Routes.FEED) {
