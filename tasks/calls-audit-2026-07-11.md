@@ -657,3 +657,15 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > Parité CERTIFIÉE à 3 niveaux : règle policy (byte-identique) + mappings d'entrée
 > (local + signalé-serveur) + orchestration. Aucune dette de test. Reste hors
 > périmètre autonome : ship App Store (iOS/Android) + test physique 2 appareils.
+
+> Busy-path web (2026-07-12, 3fa6f1bfb) — nouveau défaut trouvé en scannant la
+> parité de la feature call-waiting (iOS/Android l'ont, web non). CallManager web
+> monte CallNotification ET VideoCallInterface INDÉPENDAMMENT ; la branche callee
+> faisait setIncomingCall sans guard busy → 2e call:initiated pendant un appel
+> actif = notification par-dessus l'appel + Accept clobbe currentCall (RTCPeerConn
+> orphelin). Gateway ne rejette PAS busy server-side (call:initiate fan-out sans
+> check appel actif) → reachable. Fix : auto-décline (call:end reason=rejected) si
+> déjà en appel actif + callId différent. TDD 4 tests, 21 suites/158 tests verts.
+> Déféré : bannière call-waiting web complète (swap end-and-answer) = parité UX
+> totale ; ici on livre le busy CORRECT (plus de clobber). Prêt à déployer prod
+> (docker.yml build image → surgical pull+up frontend) quand souhaité.
