@@ -120,11 +120,17 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 
 ## P2 — Modéré (signaling appels / socket)
 
-- [ ] **#9 — `call:join NOT ACKed` → appel entrant raté (`rawReason=missed`)**
+- [x] **#9 — `call:join NOT ACKed` → appel entrant raté (`rawReason=missed`)** — `8a2712e0b` (hardening)
   Evidence : `[CALL_JOIN] call:join NOT ACKed` puis `Call ended by remote … missed`.
   Hypothèse : race de join (ACK manquant/tardif) → l'appel entrant se termine en « manqué ».
   Fichiers : `CallEventsHandler` call:join (gateway), `MessageSocketManager` emit join (iOS).
   Cf. mémoire `reference_android_webrtc_call_signaling_gotchas` (join-with-ACK). Fix : ACK + retry join.
+  **Investigation** : reliable-join + ACK + retry **existent déjà** (`joinCallRoomReliably`, fix 2026-07-02).
+  Rate-limit `CALL_JOIN` = 20/min = généreux → écarté. Cause prouvable par le code : le gateway n'ACK
+  le succès qu'**après** `joinCall` (Prisma tx + génération TURN + `fetchSockets`), or le timeout ACK
+  client était **3 s** → un join lent-mais-réussi = false `NOT ACKed` → retry redondant grignotant le
+  budget ring → `missed`. **Fix (hardening)** : timeout ACK 3→6 s (≪ ring 45 s). **Preuve définitive
+  = repro 2 devices (P0 en attente)** — pas cleanly unit-testable (constante socket). Build vert.
 
 - [ ] **#10 — `MessageSocket error: Tried emitting when not connected`**
   Evidence : 2× pendant transitions BG.
@@ -186,3 +192,6 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 - 2026-07-12 : #8 livré `ed0380dcf` — refresh presence chunké (50/req concurrent) au lieu d'1 URL de
   200 ids. Tue la fragilité URL ~5 KB + latence 5,1 s. **P1 (#4-#8) entièrement clos.** Build vert.
   (1er build #8 rouge = 3 erreurs isolation Swift 6 sur `nonisolated fetchChunk` → corrigé.)
+- 2026-07-12 : #9 (P2) hardening `8a2712e0b` — timeout ACK `call:join` 3→6 s. L'ACK succès gateway
+  arrive après `joinCall` (DB+TURN) ; 3 s trop serré → false `NOT ACKed` + retry gâchant le ring →
+  `missed`. Reliable-join/ACK/retry préexistaient. Preuve finale = repro 2 devices.
