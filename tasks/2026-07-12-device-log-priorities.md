@@ -105,11 +105,16 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   (`init` privé) → pas de TDD propre sans refactor hors-scope ; vérif absence-warning = **sonde device**
   (P0). Build iOS vert.
 
-- [ ] **#8 — Presence : 200 ids dans UNE URL géante (5,1 s, fragile)**
+- [x] **#8 — Presence : 200 ids dans UNE URL géante (5,1 s, fragile)** — `ed0380dcf`
   Evidence : `GET /users/presence?ids=<200 ids> network=5118ms`, `Refreshed presence for 200 ids` en boucle.
   Hypothèse : URL énorme (limite de longueur, fragile) + requête lente.
   Fichiers : `PresenceManager` (fetch presence).
   Fix piste : chunker (ex. 50/req) ou passer en POST body ; borner la fréquence de refresh.
+  **Cause prouvée** : `PresenceService.performRefresh` joignait ≤200 ObjectIds en UNE query `?ids=`
+  → URL ~5 KB, lente + fragile vs limites header. **Fix** : chunk par 50, fetch **concurrent**
+  (`withTaskGroup`) + ingest progressif → URLs ~1,3 KB, 1re salve rafraîchit l'UI sans attendre
+  (préserve l'intention « refresh rapide »). `Array.chunked(into:)` pur + testé (200→4×50). Build vert.
+  **La FRÉQUENCE « en boucle » relève du churn socket → #11**, pas de ce fix.
 
 ---
 
@@ -178,3 +183,6 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 - 2026-07-12 : #7 livré `1b1e4668b` — `ThemeManager.syncWithSystem` différé (Task @MainActor) hors
   passe d'update SwiftUI. Supprime le warning « publishing within view updates » + renders parasites
   sur le chemin RootView (P0). Build vert ; vérif finale = sonde device.
+- 2026-07-12 : #8 livré `ed0380dcf` — refresh presence chunké (50/req concurrent) au lieu d'1 URL de
+  200 ids. Tue la fragilité URL ~5 KB + latence 5,1 s. **P1 (#4-#8) entièrement clos.** Build vert.
+  (1er build #8 rouge = 3 erreurs isolation Swift 6 sur `nonisolated fetchChunk` → corrigé.)
