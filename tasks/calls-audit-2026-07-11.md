@@ -537,3 +537,14 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > audio. metadata.type peuplé sur les 482 (288 audio / 194 video) = le champ
 > que le fix (223e07134) lit, avec le vrai split. Bug réel confirmé, fix
 > validé contre données réelles.
+
+> Suivi taux d'échec (2/2) : config ICE VÉRIFIÉE COMPLÈTE
+> (TURNCredentialService) — STUN (Google/Cloudflare) + TURN (turn: avec
+> credentials HMAC) + TURNS (turns: TLS/TCP anti-firewall). Combiné au
+> coturn healthy+relayant (it.71, allocations 11→0), la config ET la dispo
+> ET l'usage du relay TURN sont prouvés. Le 16% n'est donc PAS un problème
+> ICE/TURN (config ou infra) — c'est network/conditions (échec rare même
+> avec relay) + variance d'un petit échantillon (14/87). Aucun fix
+> code/config atteignable ; caractérisation fine = device-test sur réseaux
+> réels. Causes éliminées : TURN mort ✗, TURN absent config ✗, TURN non
+> utilisé ✗. Reste : conditions réseau réelles.
