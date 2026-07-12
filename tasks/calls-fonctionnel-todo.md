@@ -2791,3 +2791,78 @@ récent non encore audité en profondeur (`3061b1f`, audit #10 — cache TTL 2s 
   de l'audit #10-#11 (emits Android `call:screen-capture-detected`/`call:analytics`, jamais testable dans
   ce sandbox sans device 2 réel) ; aucun nouveau candidat gateway/web de confiance comparable trouvé après
   ce passage (cf. rapport de l'agent d'exploration dédié).
+
+## Vague 38 — `call:end` : deux sites castaient la raison brute du client en `CallEndReason` sans normalisation (gateway) (2026-07-12)
+
+Point d'entrée : routine calling-feature (agent Cowork non interactif, mandat PHASE 1-12). `git fetch
+origin main` : HEAD (`489176d`) à jour. PR ouvertes trouvées AVANT de commencer — **#1883** (iOS,
+`P2PWebRTCClient` delegate-identity guard), **#1880** (web, comments — hors périmètre appels), **#1879**
+(web, `CALL_TIMEOUT_MS` 30s→45s), **#1884** (Android, hors périmètre appels) — les trois diffs pertinents
+lus intégralement, aucun recouvrement de fichiers avec cette vague (gateway `CallService.ts`/
+`CallEventsHandler.ts` uniquement). Un agent d'exploration dédié, briefé pour falsifier tout candidat
+contre les 37 vagues précédentes + `lessons.md`, a lu `CallEventsHandler.ts`/`CallService.ts`/
+`TURNCredentialService.ts`/`call-schemas.ts` en entier ; 2 de ses 4 candidats se sont révélés faux
+positifs après vérification manuelle complète (détaillés ci-dessous), 2 ont donné le bug réel corrigé
+cette vague.
+
+- **[FAUX POSITIF, écarté après vérification]** Le candidat "`call-schemas.ts` : la regex `reason`
+  `/^[a-z_]+$/` ne peut jamais matcher les valeurs camelCase (`connectionLost`/`heartbeatTimeout`/
+  `garbageCollected`) que `CallService.resolveEndReason()` gère" est réel textuellement mais **sans
+  scénario d'exploitation** : ces 3 raisons ne sont JAMAIS envoyées par un client — elles sont des
+  décisions **serveur-only** (`forceEndOrphanedCallSession(callId, CallEndReason.connectionLost)` au
+  disconnect, `CallCleanupService` au GC) qui appellent `endCall`/`forceEndOrphanedCallSession` avec
+  l'enum typé directement, jamais via le payload `call:end` validé par ce schéma. Vérifié par grep complet
+  des 3 clients (web `CallManager.tsx` : envoie seulement `'rejected'`/`'completed'` ; iOS : `call:end` n'a
+  **aucun `reason`** sauf `'rejected'` codé en dur pour le refus, cf. `MessageSocketManager.swift`).
+- **[NON TRANCHÉ]** Le candidat "§4.6 buffered-offer replay ne couvre pas `answer`" n'a pas été creusé
+  cette vague (temps alloué au bug confirmé ci-dessous) — reste un candidat ouvert pour une vague future,
+  non vérifié ni comme réel ni comme faux.
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD] Deux sites castaient directement la `reason` brute du
+  client en `CallEndReason` (`as CallEndReason`) au lieu de la faire passer par
+  `CallService.resolveEndReason()`, la même normalisation que le chemin autoritatif.** Le schéma Zod
+  `socketEndCallSchema` n'autorise que le charset `[a-z_]{1,50}` — PAS l'appartenance à l'enum
+  `CallEndReason` (`completed`/`missed`/`rejected`/`failed`/`connectionLost`/`heartbeatTimeout`/
+  `garbageCollected`). Une chaîne schema-valide mais hors-enum (`"busy"`, `"declined"`, `"hangup"`, ...)
+  passait donc la validation puis était castée telle quelle : (1) `CallEventsHandler.ts` (`call:end`,
+  fast-path optimiste `socket.to(...).emit('call:ended', ...)`, ~L3017) — le pair recevait cette chaîne
+  brute comme `reason`, alors que le broadcast autoritatif qui suit quelques lignes plus loin
+  (`endCall()` → `resolveEndReason()`) l'aurait normalisée en `completed` : **les deux broadcasts pouvaient
+  se contredire**, et un client fortement typé (Swift `CallEndReason`, Kotlin sealed class) décodant la
+  chaîne brute du fast-path risque un échec de désérialisation / valeur inconnue silencieusement droppée.
+  (2) `forceEndOrphanedCallAfterOptimisticBroadcast()` (~L890, appelée depuis le catch-block de `call:end`
+  quand `endCall()` échoue après le fast-path) — cast identique, mais ici la valeur est ensuite persistée
+  dans la colonne Prisma strictement typée `CallSession.endReason` : une chaîne hors-enum ferait
+  potentiellement échouer l'écriture Prisma elle-même (validation enum côté client Prisma), le catch
+  "best-effort" (commentaire du fichier : "a failure here is logged, not thrown") avalant l'échec
+  silencieusement — la session resterait bloquée `active` jusqu'au GC 120s, exactement le symptôme que ce
+  chemin de récupération existe pour éviter. **Fix** : `CallService.resolveEndReason()` passée de
+  `private` à publique (single source de vérité déjà utilisée par le chemin autoritatif, maintenant
+  réutilisée par les 2 sites) ; les 2 casts remplacés par `this.callService.resolveEndReason(reason)`.
+  Les 2 AUTRES casts `as CallEndReason` du fichier (L660, L2181 — `leftSession.endReason`/
+  `callSession.endReason`) ne sont PAS concernés : leur source est déjà une valeur enum écrite en DB par
+  le service lui-même (round-trip Prisma déjà normalisé), pas de la saisie client brute — vérifié avant
+  de les exclure du périmètre du fix.
+- **Tests TDD** : 4 nouveaux cas — 2 dans `CallEventsHandler.test.ts` (fast-path + force-end-recovery,
+  `reason: 'busy'` → `'completed'`), `CallEventsHandler-end.test.ts` (2 assertions pré-existantes qui
+  vérifiaient le passage brut de `END_DATA.reason = 'hangup'` mises à jour pour attendre la valeur
+  normalisée — ces tests figeaient le comportement buggy par construction). RED confirmé par `git stash`
+  du seul diff source (2 fichiers) en conservant les mocks de test mis à jour : échec précis attendu
+  (`Received: "reason": "busy"` / `"hangup"` au lieu de `"completed"`), aucune autre régression. GREEN
+  après restauration. Effet de bord découvert en cours de route : 3 fichiers de mock `CallService`
+  (`CallEventsHandler.test.ts`, `CallEventsHandler-end.test.ts`,
+  `CallEventsHandler-signal-cache-invalidation.test.ts`) + 1 stub e2e manuel
+  (`calls-two-socket-e2e.test.ts`, `callServiceStub as unknown as CallService`) ne définissaient pas
+  `resolveEndReason` → `TypeError` runtime dès le premier appel une fois la méthode consommée par le
+  handler ; les 4 corrigés en miroir de l'implémentation réelle (même switch), sinon 12 tests
+  préexistants auraient régressé (2 vrais bugs de comportement dans l'e2e — `endAck.success` toujours
+  `false`, y compris pour `reason: 'rejected'`, un enum pourtant valide — le TypeError crashait le handler
+  quel que soit le contenu de `reason`). Suite `Call*` : 40/40 suites, 972/972 tests verts. Suite gateway
+  complète (`test:coverage`) : 527/527 suites, 14193/14194 tests verts (1 skip pré-existant documenté,
+  sans rapport). `tsc --noEmit` gateway : 0 erreur avant et après (`packages/shared` buildé au préalable).
+  `eslint` non exécutable dans ce sandbox (config manquante `eslint.config.js` introuvable depuis
+  `services/gateway` ni la racine — même limitation pré-existante que les vagues précédentes).
+- **iOS/Android (lecture seule, aucun changement)** : hors périmètre cette vague (aucune toolchain
+  Swift/Kotlin dans ce sandbox) ; PR #1883 (iOS, autre session) à suivre séparément, aucun recouvrement.
+- **Reste ouvert (inchangé + additions)** : tout ce qui précède, plus — le candidat §4.6
+  buffered-offer/`answer` non creusé (voir faux-positif ci-dessus, en réalité "non tranché", à
+  re-évaluer) ; PR #1879/#1880/#1883/#1884 (autres sessions, même mandat) à suivre séparément.
