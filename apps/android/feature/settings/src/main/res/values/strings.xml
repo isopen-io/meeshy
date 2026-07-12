@@ -187,4 +187,24 @@
     <string name="media_cache_confirm_cancel">Cancel</string>
     <string name="media_cache_error_scan">Couldn\'t read the cache size. Pull to refresh.</string>
     <string name="media_cache_error_clear">Couldn\'t clear the cache. Please try again.</string>
+
+    <!-- Crash diagnostics -->
+    <string name="settings_diagnostics">Diagnostics</string>
+    <string name="crash_reports_title">Diagnostics</string>
+    <string name="crash_reports_info_title">Crash reports</string>
+    <string name="crash_reports_info_body">If the app closes unexpectedly, a report is saved here so you can share it with support. Nothing leaves your device until you share it.</string>
+    <string name="crash_reports_empty">No crash reports — the app has been running smoothly.</string>
+    <string name="crash_reports_share">Share reports</string>
+    <string name="crash_reports_clear_all">Clear reports</string>
+    <string name="crash_reports_confirm_title">Clear reports</string>
+    <string name="crash_reports_confirm_message">This permanently deletes all saved crash reports from this device.</string>
+    <string name="crash_reports_confirm_clear">Clear</string>
+    <string name="crash_reports_confirm_cancel">Cancel</string>
+    <string name="crash_reports_error_load">Couldn\'t read the crash reports.</string>
+    <string name="crash_reports_error_clear">Couldn\'t clear the crash reports. Please try again.</string>
+    <string name="crash_kind_exception">Exception</string>
+    <string name="crash_kind_crash">Crash</string>
+    <string name="crash_kind_anr">ANR</string>
+    <string name="crash_kind_cpu">CPU</string>
+    <string name="crash_kind_disk">Disk</string>
 </resources>

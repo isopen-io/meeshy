@@ -187,4 +187,24 @@
     <string name="media_cache_confirm_cancel">Cancelar</string>
     <string name="media_cache_error_scan">Não foi possível ler o tamanho do cache. Puxe para atualizar.</string>
     <string name="media_cache_error_clear">Não foi possível limpar o cache. Tente novamente.</string>
+
+    <!-- Diagnósticos de falhas -->
+    <string name="settings_diagnostics">Diagnósticos</string>
+    <string name="crash_reports_title">Diagnósticos</string>
+    <string name="crash_reports_info_title">Relatórios de falhas</string>
+    <string name="crash_reports_info_body">Se o aplicativo fechar inesperadamente, um relatório é salvo aqui para você compartilhar com o suporte. Nada sai do seu dispositivo até você compartilhar.</string>
+    <string name="crash_reports_empty">Nenhum relatório de falha — o aplicativo está funcionando sem problemas.</string>
+    <string name="crash_reports_share">Compartilhar relatórios</string>
+    <string name="crash_reports_clear_all">Apagar relatórios</string>
+    <string name="crash_reports_confirm_title">Apagar relatórios</string>
+    <string name="crash_reports_confirm_message">Isso exclui permanentemente todos os relatórios de falha salvos neste dispositivo.</string>
+    <string name="crash_reports_confirm_clear">Apagar</string>
+    <string name="crash_reports_confirm_cancel">Cancelar</string>
+    <string name="crash_reports_error_load">Não foi possível ler os relatórios de falha.</string>
+    <string name="crash_reports_error_clear">Não foi possível apagar os relatórios de falha. Tente novamente.</string>
+    <string name="crash_kind_exception">Exceção</string>
+    <string name="crash_kind_crash">Falha</string>
+    <string name="crash_kind_anr">ANR</string>
+    <string name="crash_kind_cpu">CPU</string>
+    <string name="crash_kind_disk">Disco</string>
 </resources>

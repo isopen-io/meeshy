@@ -1978,7 +1978,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       two previously no-op Settings → Data rows ("Clear media cache" + "Storage used") to `Routes.MEDIA_CACHE`.
       +43 tests (ByteSizeFormatter 15, MediaCacheReport 10, MediaCacheScanner 6, MediaCacheViewModel 12).
       EN/FR/ES/PT strings.
-- [ ] Crash-report diagnostics viewer with share
+- [x] Crash-report diagnostics viewer with share — **shipped** (slice `settings-crash-diagnostics`,
+      2026-07-12). Port of iOS `CrashDiagnosticsManager` + `CrashReportSheet`, with an Android-honest capture
+      layer: the directly-capturable analogue of the iOS NSException path is a process-wide
+      `Thread.setDefaultUncaughtExceptionHandler`, which persists an uncaught JVM exception and then chains to
+      the previously-installed handler (mirroring iOS's `previousExceptionHandler`). Five pure `:core:model`
+      SSOTs (package `me.meeshy.sdk.model.diagnostics`): `CrashKind` (EXCEPTION/CRASH/ANR/CPU/DISK, each with a
+      stable `severity` badge band [ERROR/WARNING/INFO, mirroring the iOS `kindBadge` colours] + a stable
+      lowercase `wireValue` share token) + `CrashSeverity`; `CrashDiagnostic` (`@Serializable`; id, epoch-millis
+      timestamp, kind, summary, details); `CrashDiagnosticFactory.fromThrowable(throwable, id, timestampMillis)`
+      — the pure port of the iOS `"name: reason"` summary + joined-stack-trace details, id/timestamp injected
+      for determinism; `CrashReportFormatter.format`/`formatAll` — the pure port of iOS `formatAllReports()`
+      (`[kind] ISO-8601-UTC` / summary / details, blocks `---`-fenced, order-preserving, empty → ""); and
+      `CrashReportRetention.sorted`/`retained`/`overflowIds` (MAX_STORED=50) — the pure port of the iOS
+      `decodeAllReports()` newest-first sort + cap + GC-overflow, so a crash loop can never grow the store
+      without bound. Durable JSON codec `List<CrashDiagnostic>.storageValue`/`crashReportsFromStorage`
+      (corruption-safe: blank/absent/malformed/non-array → empty; a single unparseable element is skipped, not
+      the whole list — mirroring iOS per-file decode resilience). `:feature:settings`: `CrashDiagnosticsStore`
+      interface + coverage-exempt `FileCrashDiagnosticsStore` (single JSON file under
+      `filesDir/diagnostics/`, `@Synchronized` synchronous `record` for the dying crash thread, retention cap
+      applied on every append/read), `CrashDiagnosticsRecorder` (installs the uncaught-exception handler),
+      `CrashReportViewModel` (UDF immutable `CrashReportUiState`; loads newest-first, exposes `shareContent`
+      derived from the pure formatter, optimistic clear with snapshot rollback, inert-when-empty + in-flight
+      guards, `CancellationException` rethrown), `CrashReportScreen` (severity-coloured kind badges, tap-to-
+      expand monospace details, `ACTION_SEND` share, confirmed clear-all, empty/loading states). Wired a new
+      "Diagnostics" row in Settings → About (`Routes.DIAGNOSTICS`) + `MeeshyApplication.onCreate` installs the
+      recorder. +42 tests (CrashKind 5, CrashDiagnosticFactory 5, CrashReportFormatter 5, CrashReportRetention
+      12, CrashReportCodec 6, CrashReportViewModel 9). EN/FR/ES/PT strings. Surpasses iOS by keeping the whole
+      capture→retain→format→share pipeline as pure, fully-covered SSOTs rather than inline sheet logic.
 - [ ] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
       open-source licenses (auto-generated), About
 

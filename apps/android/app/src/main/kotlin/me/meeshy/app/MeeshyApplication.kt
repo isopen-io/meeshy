@@ -10,6 +10,7 @@ import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.launch
 import me.meeshy.app.push.DeclinedCallStore
+import me.meeshy.app.settings.CrashDiagnosticsRecorder
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
 import me.meeshy.sdk.socket.SocketManager
@@ -34,6 +35,9 @@ class MeeshyApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var declinedCalls: DeclinedCallStore
 
+    @Inject
+    lateinit var crashDiagnosticsRecorder: CrashDiagnosticsRecorder
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -44,6 +48,7 @@ class MeeshyApplication : Application(), Configuration.Provider {
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
+        crashDiagnosticsRecorder.install()
         installAppStatePresence()
     }
 

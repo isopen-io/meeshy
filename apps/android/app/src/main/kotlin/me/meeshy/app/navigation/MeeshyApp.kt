@@ -62,6 +62,7 @@ import me.meeshy.app.profile.ReportUserScreen
 import me.meeshy.app.profile.ReportUserViewModel
 import me.meeshy.app.settings.AccountDeletionScreen
 import me.meeshy.app.settings.ChangePasswordScreen
+import me.meeshy.app.settings.CrashReportScreen
 import me.meeshy.app.settings.DataExportScreen
 import me.meeshy.app.settings.MediaCacheScreen
 import me.meeshy.app.settings.MediaDownloadScreen
@@ -92,6 +93,7 @@ object Routes {
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"
     const val DATA_EXPORT = "settings/data-export"
+    const val DIAGNOSTICS = "settings/diagnostics"
     const val DELETE_ACCOUNT = "settings/delete-account"
     const val STARRED = "starred"
     const val PROFILE_USER = "profile/{userId}"
@@ -339,6 +341,7 @@ fun MeeshyApp(
                     onOpenMediaCache = { navController.navigate(Routes.MEDIA_CACHE) },
                     onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
                     onOpenDataExport = { navController.navigate(Routes.DATA_EXPORT) },
+                    onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
                     onOpenDeleteAccount = { navController.navigate(Routes.DELETE_ACCOUNT) },
                 )
             }
@@ -356,6 +359,9 @@ fun MeeshyApp(
             }
             composable(Routes.DATA_EXPORT) {
                 DataExportScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.DIAGNOSTICS) {
+                CrashReportScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.PRIVACY) {
                 PrivacySettingsScreen(onBack = { navController.popBackStack() })
