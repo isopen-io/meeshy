@@ -58,7 +58,33 @@ function makePrisma(overrides: any = {}) {
       groupBy: jest.fn<any>().mockResolvedValue([{ targetLanguage: 'fr', _count: { _all: 20 } }]),
       ...overrides.messageTranslation,
     },
+    callParticipant: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...overrides.callParticipant,
+    },
     ...overrides,
+  };
+}
+
+function analyticsRow(overrides: Record<string, unknown> = {}) {
+  return {
+    analytics: {
+      callId: '507f1f77bcf86cd799439031',
+      setupTimeMs: 3000,
+      negotiationTimeMs: 800,
+      durationSeconds: 120,
+      reconnectionCount: 0,
+      networkTransitions: 0,
+      averageRtt: 100,
+      averagePacketLoss: 0.5,
+      maxPacketLoss: 2,
+      qualityDistribution: { excellent: 1, good: 0, fair: 0, poor: 0 },
+      platform: 'ios',
+      deviceModel: 'iPhone',
+      isVideo: false,
+      endReason: 'completed',
+      ...overrides,
+    },
   };
 }
 
@@ -580,5 +606,91 @@ describe('GET /volume-timeline — DB error', () => {
     const res = await app.inject({ method: 'GET', url: '/volume-timeline' });
     expect(res.statusCode).toBe(500);
     expect(res.json().success).toBe(false);
+  });
+});
+
+// ─── GET /calls — call reliability (READ side of call:analytics) ────────────────
+
+describe('GET /calls — call reliability aggregate', () => {
+  it('aggregates persisted per-participant analytics for an admin', async () => {
+    mockCacheGet.mockResolvedValue(null);
+    const app = await buildApp('ADMIN', {
+      callParticipant: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          analyticsRow({ platform: 'ios', reconnectionCount: 0, endReason: 'completed' }),
+          analyticsRow({ platform: 'android', reconnectionCount: 2, endReason: 'connectionLost' }),
+        ]),
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/calls' });
+
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data.totalCalls).toBe(2);
+    expect(data.rowsWithTelemetry).toBe(2);
+    expect(data.reconnectionRate).toBe(0.5);
+    expect(data.byPlatform).toEqual({ ios: 1, android: 1 });
+    expect(data.byEndReason).toEqual({ completed: 1, connectionLost: 1 });
+    expect(data.windowDays).toBe(7);
+    expect(data.sampled).toBe(false);
+    await app.close();
+  });
+
+  it('returns a zeroed summary when no call reported telemetry', async () => {
+    mockCacheGet.mockResolvedValue(null);
+    const app = await buildApp('ANALYST');
+
+    const res = await app.inject({ method: 'GET', url: '/calls' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.totalCalls).toBe(0);
+    expect(res.json().data.avgNegotiationTimeMs).toBeNull();
+    await app.close();
+  });
+
+  it('skips malformed/legacy rows instead of crashing', async () => {
+    mockCacheGet.mockResolvedValue(null);
+    const app = await buildApp('ADMIN', {
+      callParticipant: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          analyticsRow(),
+          { analytics: null },
+          { analytics: { garbage: true } },
+        ]),
+      },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/calls' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.rowsWithTelemetry).toBe(1);
+    await app.close();
+  });
+
+  it('clamps the days window and queries with the derived start', async () => {
+    mockCacheGet.mockResolvedValue(null);
+    const findMany = jest.fn<any>().mockResolvedValue([]);
+    const app = await buildApp('ADMIN', { callParticipant: { findMany } });
+
+    const res = await app.inject({ method: 'GET', url: '/calls?days=999' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.windowDays).toBe(90);
+    const whereArg = findMany.mock.calls[0][0].where;
+    expect(whereArg.joinedAt.gte).toBeInstanceOf(Date);
+    // No Json-null DB filter (JsonNull/DbNull footgun) — null rows are dropped in JS.
+    expect(whereArg.NOT).toBeUndefined();
+    await app.close();
+  });
+
+  it('forbids a non-privileged role', async () => {
+    mockCacheGet.mockResolvedValue(null);
+    const app = await buildApp('USER');
+
+    const res = await app.inject({ method: 'GET', url: '/calls' });
+
+    expect(res.statusCode).toBe(403);
+    await app.close();
   });
 });
