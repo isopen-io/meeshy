@@ -153,7 +153,7 @@ public actor EngagementOutbox {
         try? await db.write { db in try db.execute(sql: "DELETE FROM engagement_sessions") }
     }
 
-    public func flush(via dispatch: @Sendable (EngagementSession) async -> EngagementDispatchOutcome) async {
+    public func flush(via dispatch: @Sendable ([EngagementSession]) async -> EngagementDispatchOutcome) async {
         let nowTs = now().timeIntervalSince1970
         let ready: [(String, EngagementSession, Int)] = (try? await db.read { db -> [(String, EngagementSession, Int)] in
             let rows = try Row.fetchAll(db, sql: """
@@ -171,21 +171,32 @@ public actor EngagementOutbox {
             }
         }) ?? []
 
-        for (id, session, attempts) in ready {
-            // A bounded caller (background transition) cancels this task when its
-            // budget is spent. Break promptly instead of churning the remaining
-            // rows — they stay `finalized` in SQLite and are retried later.
-            if Task.isCancelled { break }
-            let outcome = await dispatch(session)
-            switch outcome {
-            case .completed:
-                try? await db.write { db in try db.execute(sql: "DELETE FROM engagement_sessions WHERE session_id = ?", arguments: [id]) }
-            case .failedPermanent:
-                try? await db.write { db in try db.execute(sql: "DELETE FROM engagement_sessions WHERE session_id = ?", arguments: [id]) }
-            case .failedTransient:
-                let next = now().addingTimeInterval(Self.backoff(attempts: attempts + 1)).timeIntervalSince1970
-                try? await db.write { db in
-                    try db.execute(sql: "UPDATE engagement_sessions SET attempts = attempts + 1, next_retry_at = ? WHERE session_id = ?", arguments: [next, id])
+        // Dispatch ALL ready rows as ONE batch. The endpoint accepts an array and
+        // is rate-limited at 20/min per user — one POST for ≤50 sessions instead
+        // of one-POST-per-session, which used to hammer /posts/engagement/batch
+        // into 429s. A bounded caller (background transition) cancels this task
+        // when its budget is spent: skip the dispatch, the rows stay `finalized`.
+        guard !ready.isEmpty, !Task.isCancelled else { return }
+        let sessions = ready.map { $0.1 }
+        let ids = ready.map { $0.0 }
+
+        switch await dispatch(sessions) {
+        case .completed, .failedPermanent:
+            let placeholders = databaseQuestionMarks(count: ids.count)
+            try? await db.write { db in
+                try db.execute(
+                    sql: "DELETE FROM engagement_sessions WHERE session_id IN (\(placeholders))",
+                    arguments: StatementArguments(ids))
+            }
+        case .failedTransient:
+            let bumps: [(String, Double)] = ready.map { (id, _, attempts) in
+                (id, now().addingTimeInterval(Self.backoff(attempts: attempts + 1)).timeIntervalSince1970)
+            }
+            try? await db.write { db in
+                for (id, next) in bumps {
+                    try db.execute(
+                        sql: "UPDATE engagement_sessions SET attempts = attempts + 1, next_retry_at = ? WHERE session_id = ?",
+                        arguments: [next, id])
                 }
             }
         }

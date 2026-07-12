@@ -23,8 +23,8 @@ final class EngagementOutboxTests: XCTestCase {
         await outbox.beginSession(makeSession("s1"))   // lifecycle = .open
 
         let dispatched = SyncBox<[String]>([])
-        await outbox.flush { session in
-            dispatched.mutate { $0.append(session.sessionId) }
+        await outbox.flush { sessions in
+            dispatched.mutate { $0.append(contentsOf: sessions.map(\.sessionId)) }
             return .completed
         }
         XCTAssertEqual(dispatched.value, [], "open sessions must be invisible to dispatch")
@@ -36,16 +36,56 @@ final class EngagementOutboxTests: XCTestCase {
         await outbox.finalizeSession(makeSession("s1", dwellMs: 5000))   // → .finalized
 
         let dispatched = SyncBox<[String]>([])
-        await outbox.flush { session in
-            dispatched.mutate { $0.append(session.sessionId) }
+        await outbox.flush { sessions in
+            dispatched.mutate { $0.append(contentsOf: sessions.map(\.sessionId)) }
             return .completed
         }
         XCTAssertEqual(dispatched.value, ["s1"])
 
-        // Second flush: row deleted on success → nothing left.
+        // Second flush: rows deleted on success → nothing left.
         let again = SyncBox<[String]>([])
-        await outbox.flush { s in again.mutate { $0.append(s.sessionId) }; return .completed }
+        await outbox.flush { sessions in again.mutate { $0.append(contentsOf: sessions.map(\.sessionId)) }; return .completed }
         XCTAssertEqual(again.value, [])
+    }
+
+    func test_flush_dispatchesAllFinalizedRowsInOneBatchCall() async {
+        let outbox = makeOutbox()
+        for i in 1...4 {
+            await outbox.beginSession(makeSession("s\(i)"))
+            await outbox.finalizeSession(makeSession("s\(i)", dwellMs: 5000))
+        }
+
+        let calls = SyncBox<[Int]>([])   // one entry per dispatch call, value = batch size
+        await outbox.flush { sessions in
+            calls.mutate { $0.append(sessions.count) }
+            return .completed
+        }
+        XCTAssertEqual(calls.value, [4],
+                       "the whole batch must go out in ONE POST, not one-per-session (429 hammering fix)")
+    }
+
+    func test_flush_transientFailure_bumpsAllRowsForRetry() async {
+        let clock = SyncBox<Date>(Date(timeIntervalSince1970: 1_700_000_000))
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("engagement-\(UUID().uuidString).db").path
+        let outbox = EngagementOutbox(dbPath: path, clock: { clock.value })
+        for i in 1...3 {
+            await outbox.beginSession(makeSession("s\(i)"))
+            await outbox.finalizeSession(makeSession("s\(i)", dwellMs: 5000))
+        }
+
+        // Transient failure → rows kept with a future next_retry_at, so an
+        // immediate re-flush (same clock) sees nothing ready.
+        await outbox.flush { _ in .failedTransient }
+        let immediate = SyncBox<[String]>([])
+        await outbox.flush { sessions in immediate.mutate { $0.append(contentsOf: sessions.map(\.sessionId)) }; return .completed }
+        XCTAssertEqual(immediate.value, [], "transiently-failed rows must back off, not re-dispatch instantly")
+
+        // After the backoff window, they become ready again.
+        clock.mutate { $0 = Date(timeIntervalSince1970: 1_700_000_000 + 3600) }
+        let later = SyncBox<[String]>([])
+        await outbox.flush { sessions in later.mutate { $0.append(contentsOf: sessions.map(\.sessionId)) }; return .completed }
+        XCTAssertEqual(Set(later.value), ["s1", "s2", "s3"], "rows re-dispatch once the backoff elapses")
     }
 
     func test_bootSweep_finalizesOrphanOpenSessions_truncated() async {
@@ -58,30 +98,32 @@ final class EngagementOutboxTests: XCTestCase {
         await recovered.bootSweep()
 
         let dispatched = SyncBox<[EngagementSession]>([])
-        await recovered.flush { s in dispatched.mutate { $0.append(s) }; return .completed }
+        await recovered.flush { sessions in dispatched.mutate { $0.append(contentsOf: sessions) }; return .completed }
         XCTAssertEqual(dispatched.value.map(\.sessionId), ["s1"])
         XCTAssertTrue(dispatched.value.first?.truncated == true)
     }
 
-    func test_flush_whenTaskCancelled_stopsBeforeDispatchingEveryRow() async {
+    func test_flush_whenTaskCancelled_skipsDispatchEntirely() async {
         let outbox = makeOutbox()
         for i in 1...5 {
             await outbox.beginSession(makeSession("s\(i)"))
-            await outbox.finalizeSession(makeSession("s\(i)"))
+            await outbox.finalizeSession(makeSession("s\(i)", dwellMs: 5000))
         }
 
-        let dispatched = SyncBox<[String]>([])
+        let dispatched = SyncBox<Int>(0)
         let task = Task {
-            await outbox.flush { session in
-                dispatched.mutate { $0.append(session.sessionId) }
+            // Cancel THIS task synchronously before flush runs → the guard sees
+            // it deterministically (no cross-thread race).
+            withUnsafeCurrentTask { $0?.cancel() }
+            await outbox.flush { sessions in
+                dispatched.mutate { $0 += sessions.count }
                 return .completed
             }
         }
-        task.cancel()   // budget spent → the loop must break, not dispatch all 5
         await task.value
 
-        XCTAssertLessThan(dispatched.value.count, 5,
-                          "a cancelled flush must break before dispatching every finalized row")
+        XCTAssertEqual(dispatched.value, 0,
+                       "an already-cancelled flush must skip the dispatch (bounded-caller budget spent)")
     }
 
     func test_purge_dropsRowsOlderThanCutoff() async {
@@ -91,7 +133,7 @@ final class EngagementOutboxTests: XCTestCase {
         await outbox.purge(olderThan: Date(timeIntervalSince1970: 9_999_999_999), maxRows: 5000)
 
         let dispatched = SyncBox<[String]>([])
-        await outbox.flush { s in dispatched.mutate { $0.append(s.sessionId) }; return .completed }
+        await outbox.flush { sessions in dispatched.mutate { $0.append(contentsOf: sessions.map(\.sessionId)) }; return .completed }
         XCTAssertEqual(dispatched.value, [], "rows older than cutoff are purged before flush")
     }
 }
