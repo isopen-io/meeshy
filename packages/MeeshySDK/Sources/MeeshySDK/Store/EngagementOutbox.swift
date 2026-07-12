@@ -172,6 +172,10 @@ public actor EngagementOutbox {
         }) ?? []
 
         for (id, session, attempts) in ready {
+            // A bounded caller (background transition) cancels this task when its
+            // budget is spent. Break promptly instead of churning the remaining
+            // rows — they stay `finalized` in SQLite and are retried later.
+            if Task.isCancelled { break }
             let outcome = await dispatch(session)
             switch outcome {
             case .completed:

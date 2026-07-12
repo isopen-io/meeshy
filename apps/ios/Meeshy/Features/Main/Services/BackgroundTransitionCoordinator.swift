@@ -169,7 +169,40 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             OutboxRetryScheduler.shared.schedule(at: nextRetry)
         }
         await withBudget("engagement.flush") {
-            await EngagementFlushTrigger.flushNow()
+            // Engagement rows are durable (SQLite) and retried by
+            // EngagementRetryScheduler + the network-reconnect observer, so this
+            // flush is NON-critical. Bound it: a slow network (serial dispatch +
+            // 429 retries, observed 15-35s) must never hold the background-task
+            // budget hostage and trip the 0x8BADF00D watchdog.
+            let completed = await Self.runBounded(seconds: Self.engagementFlushBudget) {
+                await EngagementFlushTrigger.flushNow()
+            }
+            if !completed {
+                logger.info("Step engagement.flush exceeded \(Self.engagementFlushBudget, privacy: .public)s budget — deferred to retry scheduler (durable)")
+            }
+        }
+    }
+
+    /// Max time the non-critical engagement flush may consume during a
+    /// background transition before it is abandoned to the retry scheduler.
+    private static let engagementFlushBudget: Double = 8
+
+    /// Races `operation` against a `seconds` timeout. Returns `true` if it
+    /// completed, `false` if it timed out — cancelling the still-running work so
+    /// a bounded, durable step can never block the background-task budget.
+    nonisolated static func runBounded(
+        seconds: Double,
+        _ operation: @escaping @Sendable () async -> Void
+    ) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await operation(); return true }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return false
+            }
+            let finishedFirst = await group.next() ?? false
+            group.cancelAll()
+            return finishedFirst
         }
     }
 

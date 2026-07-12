@@ -63,6 +63,27 @@ final class EngagementOutboxTests: XCTestCase {
         XCTAssertTrue(dispatched.value.first?.truncated == true)
     }
 
+    func test_flush_whenTaskCancelled_stopsBeforeDispatchingEveryRow() async {
+        let outbox = makeOutbox()
+        for i in 1...5 {
+            await outbox.beginSession(makeSession("s\(i)"))
+            await outbox.finalizeSession(makeSession("s\(i)"))
+        }
+
+        let dispatched = SyncBox<[String]>([])
+        let task = Task {
+            await outbox.flush { session in
+                dispatched.mutate { $0.append(session.sessionId) }
+                return .completed
+            }
+        }
+        task.cancel()   // budget spent → the loop must break, not dispatch all 5
+        await task.value
+
+        XCTAssertLessThan(dispatched.value.count, 5,
+                          "a cancelled flush must break before dispatching every finalized row")
+    }
+
     func test_purge_dropsRowsOlderThanCutoff() async {
         let outbox = makeOutbox()
         await outbox.beginSession(makeSession("old"))
