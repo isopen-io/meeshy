@@ -2195,7 +2195,7 @@ describe('PushNotificationService', () => {
 
       const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
       expect(sentMsg?.notification).toBeUndefined();
-      expect(sentMsg?.android).toEqual({ priority: 'high' });
+      expect(sentMsg?.android).toEqual({ priority: 'high', ttl: 60_000 });
       expect(sentMsg?.data).toEqual({ type: 'call_cancel', callId: 'call-1' });
     });
 
@@ -2220,7 +2220,7 @@ describe('PushNotificationService', () => {
       expect(sentMsg?.data?.title).toBe('Alice vous appelle');
       expect(sentMsg?.data?.body).toBe('Appel audio');
       expect(sentMsg?.data?.callId).toBe('call-1');
-      expect(sentMsg?.android).toEqual({ priority: 'high' });
+      expect(sentMsg?.android).toEqual({ priority: 'high', ttl: 60_000 });
     });
 
     it('un push d’appel iOS-via-FCM garde son bloc notification (hors périmètre android)', async () => {

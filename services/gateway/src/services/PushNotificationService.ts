@@ -144,6 +144,13 @@ function isTransientFcmErrorCode(code: string | undefined): boolean {
 const PUSH_RETRY_MAX_ATTEMPTS = 2;
 const PUSH_RETRY_BASE_DELAY_MS = 200;
 
+/**
+ * TTL FCM des pushes d'appel Android (ring data-only + stop-ring silencieux),
+ * aligné sur la fenêtre de sonnerie serveur (scheduleRingingTimeout 60 s) :
+ * un ring livré après elle sonnerait pour un appel déjà missed.
+ */
+const CALL_PUSH_TTL_MS = 60_000;
+
 // ============================================
 // SERVICE CLASS
 // ============================================
@@ -524,8 +531,12 @@ export class PushNotificationService {
         // which otherwise leaves the Android badge frozen when the app is closed.
         // Data-only (appels) : pas de sous-bloc notification non plus — il
         // réintroduirait le rendu système que le data-only vient d'éviter.
+        // TTL aligné sur la fenêtre de sonnerie serveur (60 s) : sans lui FCM
+        // garde le message ~4 semaines et un téléphone qui resurgit du
+        // hors-réseau sonne plein écran pour un appel mort depuis longtemps
+        // (et un stop-ring plus vieux que la sonnerie n'a plus rien à éteindre).
         message.android = androidCallDataOnly
-          ? { priority: 'high' }
+          ? { priority: 'high', ttl: CALL_PUSH_TTL_MS }
           : {
               priority: 'high',
               notification: {
