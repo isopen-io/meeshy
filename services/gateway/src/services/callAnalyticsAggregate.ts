@@ -42,6 +42,11 @@ export type CallReliabilitySummary = {
   /** Fraction of calls that actually connected (setupTimeMs >= 0); the rest
    *  carry the -1 « never connected » sentinel (missed/rejected/failed setup). */
   readonly connectSuccessRate: number;
+  /** The #1 reliability KPI: fraction of calls that ended in a SYSTEM failure
+   *  (failed / connectionLost / heartbeatTimeout / garbageCollected) — normal
+   *  outcomes (completed/local/remote/missed/rejected) are excluded. Surfaces
+   *  the signal an operator would otherwise hand-compute from byEndReason. */
+  readonly callFailureRate: number;
   /** Averaged over CONNECTED calls only (setupTimeMs >= 0); null if none — the
    *  -1 « never connected » sentinel must never pollute the mean. */
   readonly avgSetupTimeMs: number | null;
@@ -135,10 +140,28 @@ export function normalizeEndReason(raw: string): string {
   return base.length > 0 ? base : 'unknown';
 }
 
+/**
+ * The normalized end reasons that denote a SYSTEM failure (as opposed to a
+ * normal outcome: completed/local/remote/missed/rejected, or the deliberate
+ * in_progress periodic-snapshot label). `callFailureRate` is the fraction of
+ * calls whose normalized end reason is in this set.
+ */
+const FAILURE_END_REASONS: ReadonlySet<string> = new Set([
+  'failed',
+  'connectionLost',
+  'heartbeatTimeout',
+  'garbageCollected',
+]);
+
+export function isFailureEndReason(rawEndReason: string): boolean {
+  return FAILURE_END_REASONS.has(normalizeEndReason(rawEndReason));
+}
+
 const ZERO_SUMMARY: CallReliabilitySummary = {
   totalCalls: 0,
   videoShare: 0,
   connectSuccessRate: 0,
+  callFailureRate: 0,
   avgSetupTimeMs: null,
   avgNegotiationTimeMs: null,
   avgDurationSeconds: 0,
@@ -188,6 +211,7 @@ export function summarizeCallReliability(
     totalCalls: n,
     videoShare: records.filter((r) => r.isVideo).length / n,
     connectSuccessRate: setups.length / n,
+    callFailureRate: records.filter((r) => isFailureEndReason(r.endReason)).length / n,
     avgSetupTimeMs: avg(setups),
     avgNegotiationTimeMs: avg(negotiations),
     avgDurationSeconds: sum((r) => r.durationSeconds) / n,
