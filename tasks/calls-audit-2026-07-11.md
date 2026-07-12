@@ -476,3 +476,19 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 
 > Fix avgRtt DÉPLOYÉ (2026-07-12) : gateway ed8a56c02→fe13f1293, healthy,
 > endpoint 401. avgRtt/avgPacketLoss corrects (connectés seulement) live.
+
+> INSIGHTS OPÉRATIONNELS du pipeline analytics (2026-07-12) — le pipeline
+> désormais live révèle des anomalies d'ÉMISSION iOS (100% des 87 rows sont
+> iOS) à corriger côté client iOS (PAS l'agrégateur, qui reporte honnêtement) :
+>   1. durationSeconds émis en FLOAT 12 décimales (960.2690999507904) —
+>      devrait être un entier de secondes (l'émission web arrondit déjà).
+>   2. endReason="in_progress" (6 rows) — un STATUT non-terminal dans une
+>      émission terminale ; 5/6 connectés, durées jusqu'à 16 min. iOS capture
+>      le statut courant au lieu d'une raison terminale dans certains chemins
+>      (force-end/app-kill ?).
+>   3. averageRtt incohérent (0.489 ET 994.72 dans le même champ) — mélange
+>      probable ms/s côté mesure iOS (0.489 ms impossible).
+> Signal fiabilité : sur 87 appels, ~50 complétés, 17 missed/rejected
+> (normal), ~14 échecs réels (connectionLost 9 + failed 5) = ~20% des appels
+> répondables échouent à établir/tiennent — à investiguer (TURN/ICE/réseau,
+> device-test). C'est la 1re valeur opérationnelle du pipeline analytics.
