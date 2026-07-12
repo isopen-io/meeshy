@@ -110,7 +110,9 @@ export function createTranslationJSON(params: {
  *
  * @param messageId - ID du message
  * @param translations - Objet JSON des traductions
- * @param targetLanguage - Langue cible
+ * @param targetLanguage - Langue cible. Recherche insensible à la casse,
+ *   cohérente avec `transformTranslationsToArray` (une correspondance exacte
+ *   est privilégiée avant le repli casse-insensible).
  * @returns MessageTranslation ou undefined si pas trouvée
  */
 export function getTranslationFromJSON(
@@ -118,11 +120,19 @@ export function getTranslationFromJSON(
   translations: Record<string, MessageTranslationJSON> | null | undefined,
   targetLanguage: string
 ): MessageTranslation | undefined {
-  if (!translations || !translations[targetLanguage]) {
+  if (!translations) {
     return undefined;
   }
 
-  const data = translations[targetLanguage];
+  const target = targetLanguage.toLowerCase();
+  const data =
+    translations[targetLanguage] ??
+    Object.entries(translations).find(([lang]) => lang.toLowerCase() === target)?.[1];
+
+  if (!data) {
+    return undefined;
+  }
+
   return {
     id: `${messageId}-${targetLanguage}`,
     messageId,

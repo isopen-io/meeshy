@@ -204,4 +204,32 @@ describe('getTranslationFromJSON', () => {
     const result = getTranslationFromJSON(MSG_ID, { en: entry }, 'en');
     expect(result!.isEncrypted).toBe(false);
   });
+
+  it('matches case-insensitively when stored key is upper-case', () => {
+    const entry = makeEntry({ text: 'Bonjour' });
+    const result = getTranslationFromJSON(MSG_ID, { FR: entry }, 'fr');
+    expect(result).toBeDefined();
+    expect(result!.translatedContent).toBe('Bonjour');
+  });
+
+  it('matches case-insensitively when requested language is upper-case', () => {
+    const entry = makeEntry({ text: 'Hola' });
+    const result = getTranslationFromJSON(MSG_ID, { es: entry }, 'ES');
+    expect(result).toBeDefined();
+    expect(result!.translatedContent).toBe('Hola');
+  });
+
+  it('matches regional variants case-insensitively', () => {
+    const entry = makeEntry({ text: 'Olá' });
+    const result = getTranslationFromJSON(MSG_ID, { 'pt-BR': entry }, 'pt-br');
+    expect(result).toBeDefined();
+    expect(result!.translatedContent).toBe('Olá');
+  });
+
+  it('prefers the exact-case entry over a case-insensitive sibling', () => {
+    const lower = makeEntry({ text: 'lower' });
+    const upper = makeEntry({ text: 'upper' });
+    const result = getTranslationFromJSON(MSG_ID, { fr: lower, FR: upper }, 'fr');
+    expect(result!.translatedContent).toBe('lower');
+  });
 });
