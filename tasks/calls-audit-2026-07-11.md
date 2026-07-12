@@ -476,3 +476,51 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 
 > Fix avgRtt DÉPLOYÉ (2026-07-12) : gateway ed8a56c02→fe13f1293, healthy,
 > endpoint 401. avgRtt/avgPacketLoss corrects (connectés seulement) live.
+
+> §4.6 buffered-offer replay ne couvrait pas `answer` (2026-07-12, `3db44d7`) —
+> candidat laissé « non tranché » par la vague précédente, tranché ici. Deux
+> agents Explore en parallèle : l'un a confirmé le bug côté gateway signaling,
+> l'autre a passé le reste de la stack iOS (Privacy Manifest, accessibilité,
+> CallKit/PushKit, concurrence Swift 6) au crible sans trouver de non-conformité
+> — cette stack est déjà mature, seul un identifiant UI-test manquant
+> (MeeshyA11yID.callControl*, jamais appliqué) a été relevé, nice-to-have hors
+> périmètre gateway/TDD de cette vague (aucune toolchain Swift dans ce sandbox).
+> Bug confirmé : `bufferOffer`/`bufferedOfferFor`/`clearBufferedOffer`
+> (CallEventsHandler.ts) ne bufferaient que `offer`/`ice-restart` quand la
+> cible n'a aucun socket actif — `answer` était explicitement exclu. Scénario :
+> offer buffé pour le callee → callee (re)joint → offer rejoué → callee répond
+> immédiatement → si le socket du CALLEUR a churné entre-temps (même classe de
+> blip que celle qui motive le buffer d'offer : PushKit wake, coupure brève),
+> `resolveTargetSockets` renvoie 0 socket pour le caller → la réponse SDP était
+> jetée silencieusement, sans aucune voie de récupération — appel bloqué à sens
+> unique jusqu'au watchdog client ou au palier GC (~120 s). Mitigation client
+> incohérente et jamais suffisante : iOS retente jusqu'à 4× sur ~10,5 s (mais
+> son propre log affirmait à tort compter sur un replay gateway inexistant) ;
+> Android et web n'ont ni retry ni ack, perte irrécupérable au premier raté.
+> Fix : la branche « cible sans socket actif » buffer désormais aussi `answer`.
+> Piège identifié avant d'implémenter : `bufferedOffers` était une Map à
+> EMPLACEMENT UNIQUE par callId — bufferiser une réponse aurait écrasé une
+> offre encore en attente sur le même appel (et réciproquement). Reclé
+> `${callId}:${signal.to}` (offre→callee et réponse→caller = destinataires
+> indépendants, même schéma que `qualityDegradedStreaks` déjà présent dans ce
+> fichier) ; `clearBufferedOffer` balaie désormais par préfixe. Le site de
+> bufferisation « relais réussi, assurance anti-churn » (offer/ice-restart
+> seulement) reste inchangé à dessein : bufferiser une réponse à cet endroit
+> serait aussitôt écrasé 3 lignes plus loin par le `clearBufferedOffer` du
+> branchement `answer` — travail mort.
+> Tests TDD : 5 tests existants qui lisaient la Map en boîte blanche
+> (`bufferedOffers.has(CALL_ID)`/`.get(CALL_ID)`) migrés vers la nouvelle clé
+> composite (RED confirmé par `git stash` du seul diff source, 8 échecs
+> précis attendus, aucune régression annexe) ; 4 tests neufs — bufferisation
+> de la réponse sans socket cible, non-collision offre/réponse sur le même
+> callId, replay de la réponse bufferisée au (re)join du caller, non-fuite de
+> l'offre bufferisée du callee vers le caller qui rejoint. Effet de bord
+> détecté puis corrigé pendant le RED : `mockCallServiceGetCallSession
+> .mockResolvedValue` (persistant, non réinitialisé par `clearAllMocks`) fuyait
+> vers un test `call:toggle-video` sans rapport plus loin dans le fichier —
+> passé en `mockResolvedValueOnce` pour les 2 tests neufs qui n'ont besoin que
+> d'un seul appel. Suites Call* : 41/41, 998/998 verts. Suite gateway complète
+> (`test:coverage`) : 528/528 suites, 14224/14225 tests verts (1 skip
+> pré-existant documenté, sans rapport). `tsc --noEmit` : 0 erreur.
+> iOS/Android (lecture seule, aucun changement) : hors périmètre cette vague
+> (aucune toolchain Swift/Kotlin dans ce sandbox).
