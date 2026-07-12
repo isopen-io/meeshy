@@ -103,12 +103,33 @@ struct CallPresentationLayer: ViewModifier {
     }
 }
 
+/// Détient un `ConversationListViewModel` sans JAMAIS republier.
+///
+/// `RootView`/`iPadRootView` doivent POSSÉDER le VM (durée de vie + injection
+/// `.environmentObject` vers la liste) mais ne doivent PAS se ré-évaluer à chaque
+/// churn du VM — presence refresh, `reloadFromCache` (count=100) répété, unread
+/// counts. Or `RootView.body` ne lit AUCUN @Published du VM (seulement des
+/// `.environmentObject()` + des accès dans des closures) : l'observation venait
+/// uniquement du `@StateObject`, générant des re-render inutiles à l'idle (Instant
+/// App Principles : « Zero Unnecessary Re-render »). Ce owner n'a pas de
+/// @Published → son `objectWillChange` ne fire jamais → RootView ne re-render
+/// jamais à cause de lui. Les vues enfants observent le VM via `@EnvironmentObject`.
+@MainActor
+final class ConversationListVMOwner: ObservableObject {
+    let viewModel = ConversationListViewModel()
+}
+
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
-    @StateObject private var conversationViewModel = ConversationListViewModel()
+    // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
+    // du VM (presence, reloadFromCache) ne re-render RootView à l'idle. Exposé via
+    // la propriété calculée `conversationViewModel` ci-dessous — les 12 usages
+    // (injections + closures) restent inchangés.
+    @StateObject private var conversationVMOwner = ConversationListVMOwner()
+    private var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
     @StateObject private var router = Router()
     // CallManager n'est PLUS observé ici : sa présentation (cover + overlays) est
     // portée par `.modifier(CallPresentationLayer())`, qui isole le churn d'appel

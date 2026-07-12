@@ -27,7 +27,12 @@ struct iPadRootView: View {
     @StateObject var toastManager = FeedbackToastManager.shared
     @StateObject var storyViewModel = StoryViewModel()
     @StateObject var statusViewModel = StatusViewModel()
-    @StateObject var conversationViewModel = ConversationListViewModel()
+    // Possédé sans être observé (cf. ConversationListVMOwner, RootView.swift) :
+    // évite le re-render de iPadRootView à chaque churn du VM (presence,
+    // reloadFromCache). Exposé via la propriété calculée `conversationViewModel`,
+    // consommée telle quelle par les extensions (+Sheets, +Navigation).
+    @StateObject var conversationVMOwner = ConversationListVMOwner()
+    var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
     @StateObject var router = Router()
     /// Hoisted at the iPad root so deep-stack screens (e.g.
     /// `StoryNotificationTargetScreen` → `StoryActiveBridge`) can present
