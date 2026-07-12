@@ -141,10 +141,19 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   heartbeat/leave/typing (le re-join loop + heartbeat timer reprennent au reconnect). Emits d'appel
   ACK-bearing NON touchés (sous-système délicat, chemins dédiés). Build vert.
 
-- [ ] **#11 — Churn socket disconnect/reconnect à chaque transition BG**
+- [x] **#11 — Churn socket disconnect/reconnect à chaque transition BG** — `4c87d81d0`
   Evidence : `MessageSocket disconnected` / `reconnected — re-joined 0 room(s)` répétés.
   Fichiers : cycle de vie socket (gestion background). Fix : debounce/grâce avant suspend ;
   vérifier le re-join des rooms (0 room parfois). Note : « Skipping socket suspend — call active » OK.
+  **Cause prouvée** : `.active` lançait `forceReconnect` **inconditionnel**. Or `.active` suit aussi un
+  `.inactive` transitoire (Control Center, bannière, peek, Face ID) sans `.background` → tear-down +
+  rebuild d'une socket saine. **Fix** : flag `didEnterBackground` (posé en `.background`, consommé en
+  `.active`) → rearme seulement après un vrai background. N'affaiblit PAS l'invariant « isConnected ment
+  après suspension » (ne vaut qu'après un vrai background). Cold launch : `RootView.connect()` fait la
+  connexion. **Le « re-joined 0 room(s) » est LÉGITIME** : `suspendTransport` préserve
+  `joinedConversations` (seul logout le vide) → 0 rooms = background sans conversation ouverte. La grâce/
+  debounce avant suspend est **écartée** (rouvrirait le bug « isConnected ment » : `Task.sleep`
+  n'avance pas gelé, downside sévère = socket morte silencieuse). Build vert.
 
 - [ ] **#12 — Interaction avec appel déjà terminé**
   Evidence : `call:error CALL_ENDED "already ended"`, `call_cancel push ignored — no matching incoming ring`.
@@ -202,3 +211,6 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   `missed`. Reliable-join/ACK/retry préexistaient. Preuve finale = repro 2 devices.
 - 2026-07-12 : #10 livré `fe7bb99f6` — helper `safeEmit` gardé sur `status == .connected` pour les
   emits fire-and-forget (heartbeat/leave/typing). Supprime « Tried emitting when not connected » en BG.
+- 2026-07-12 : #11 livré `4c87d81d0` — flag `didEnterBackground` : la socket ne se rearme qu'après un
+  vrai `.background`, plus sur les `.inactive→.active` transitoires. Tue le churn évitable. « 0 room(s) »
+  jugé légitime. Grâce-avant-suspend écartée (risque « isConnected ment »).
