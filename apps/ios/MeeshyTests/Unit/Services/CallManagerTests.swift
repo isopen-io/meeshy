@@ -3324,79 +3324,15 @@ final class CallStateReconnectingTests: XCTestCase {
 }
 
 // MARK: - handleRemoteEnd rawReason Mapping
-
-@MainActor
-final class CallManagerHandleRemoteEndTests: XCTestCase {
-
-    private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    func test_handleRemoteEnd_answeredElsewhere_handlesBothVariants() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "cxReason = .remoteEnded", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-
-        XCTAssertTrue(
-            switchBlock.contains("\"answeredelsewhere\""),
-            "handleRemoteEnd must handle 'answeredelsewhere' (camelCase lowercased) from legacy gateway payloads"
-        )
-        XCTAssertTrue(
-            switchBlock.contains("\"answered_elsewhere\""),
-            "handleRemoteEnd must handle 'answered_elsewhere' (snake_case) — the gateway uses " +
-            "snake_case for multi-word event reasons as documented in CLAUDE.md"
-        )
-    }
-
-    func test_handleRemoteEnd_answeredElsewhere_casesShareSameOutcome() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "cxReason = .remoteEnded", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-
-        guard let camelIdx = switchBlock.range(of: "\"answeredelsewhere\"")?.lowerBound,
-              let snakeIdx = switchBlock.range(of: "\"answered_elsewhere\"")?.lowerBound else {
-            XCTFail("Both 'answeredelsewhere' and 'answered_elsewhere' variants must be present"); return
-        }
-        // They must appear in the same case pattern (within 60 chars of each other)
-        let distance = switchBlock.distance(from: min(camelIdx, snakeIdx), to: max(camelIdx, snakeIdx))
-        XCTAssertLessThan(distance, 60, "Both 'answeredelsewhere' variants must be in the same case pattern")
-    }
-
-    func test_handleRemoteEnd_missed_handlesAllVariants() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "default:", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-        XCTAssertTrue(switchBlock.contains("\"missed\""), "handleRemoteEnd must handle 'missed'")
-        XCTAssertTrue(switchBlock.contains("\"no_answer\""), "handleRemoteEnd must handle 'no_answer'")
-        XCTAssertTrue(switchBlock.contains("\"unanswered\""), "handleRemoteEnd must handle 'unanswered'")
-    }
-
-    func test_handleRemoteEnd_rejected_handlesAllVariants() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "default:", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-        XCTAssertTrue(switchBlock.contains("\"rejected\""), "handleRemoteEnd must handle 'rejected'")
-        XCTAssertTrue(switchBlock.contains("\"declined\""), "handleRemoteEnd must handle 'declined'")
-    }
-}
+//
+// The former source-guard tests (CallManagerHandleRemoteEndTests) string-matched
+// the `switch rawReason?.lowercased()` INSIDE handleRemoteEnd. That switch was
+// extracted to the pure `CallEndReasonMapper` (2026-07-12) — so those guards
+// broke on the refactor ("handleRemoteEnd switch not found"), the exact
+// fragility the audit flagged. They are replaced by `CallEndReasonMapperTests`
+// above, which assert the SAME variants at BEHAVIOUR (missed/no_answer/unanswered,
+// rejected/declined, answeredElsewhere/answered_elsewhere → identical outcome,
+// + nil/unknown default) instead of matching source text.
 
 // MARK: - DTMF Validation
 
