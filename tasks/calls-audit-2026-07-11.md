@@ -477,6 +477,45 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > Fix avgRtt DÉPLOYÉ (2026-07-12) : gateway ed8a56c02→fe13f1293, healthy,
 > endpoint 401. avgRtt/avgPacketLoss corrects (connectés seulement) live.
 
+> INSIGHTS OPÉRATIONNELS du pipeline analytics (2026-07-12, RÉVISÉ après
+> lecture du code d'émission iOS — l'accuracy prime sur le volume) :
+>   1. durationSeconds émis en FLOAT (callDuration TimeInterval, CallManager
+>      :3205) — vrai mais COSMÉTIQUE (l'agrégateur gère les floats ;
+>      l'émission web arrondit déjà). Pas worth toucher CallManager.
+>   2. endReason="in_progress" : PAS UN BUG — DÉLIBÉRÉ. Snapshot périodique
+>      60s (CallManager:3239 startAnalyticsSnapshots) qui persiste la
+>      télémétrie avec ce label pour ne pas perdre les données d'un appel
+>      long killé/crashé mid-call (cf. commentaire :3180, vécu 2026-07-03
+>      row perdue à 29 min). Un row "in_progress" = appel non terminé
+>      proprement, télémétrie honnête best-effort. (Ma 1re caractérisation
+>      était un MISREAD — corrigée après investigation.)
+>   3. averageRtt bas (0.489 ms) : la conversion iOS est CORRECTE
+>      (currentRoundTripTime * 1000, WebRTCTypes:232). Les valeurs basses
+>      sont un quirk probable des stats WebRTC (RTT tôt/manquant), PAS un
+>      bug de code identifiable sans device. Pas un fix propre.
+> Signal fiabilité RÉEL : sur 87 appels, ~50 complétés, 17 missed/rejected
+> (normal), ~14 échecs réels (connectionLost 9 + failed 5) = ~20% des appels
+> répondables échouent — SEUL insight actionnable, à investiguer sur device
+> (TURN/ICE/réseau). Leçon : investiguer le code d'émission AVANT de
+> qualifier une donnée d'anomalie — 2 des 3 « anomalies » étaient du
+> comportement correct.
+
+> Suivi taux d'échec (~20%) : TURN prod VÉRIFIÉ SAIN — meeshy-coturn 4.6
+> Up 2 mois healthy et relaie activement (allocations créées/libérées dans
+> les logs). Écarte la cause #1 des échecs WebRTC (TURN mort). Le ~20%
+> (14/87) est à haute variance sur petit échantillon et dans les plages
+> WebRTC mobile plausibles — à monitorer via le pipeline analytics (qui
+> accumule désormais les données 3 plateformes) avant toute conclusion.
+> Prochaine étape réelle = device-test 2 appareils sur réseaux mobiles.
+
+> callFailureRate exposé (2026-07-12, eb08aa377) : le taux d'échec (~20%
+> trouvé à la main) est LA KPI de fiabilité que l'endpoint existe pour
+> surfacer. callFailureRate = fraction finissant sur échec système
+> (failed/connectionLost/heartbeatTimeout/garbageCollected normalisés) ;
+> normal (completed/local/remote/missed/rejected) + in_progress délibéré
+> exclus. isFailureEndReason testé. 61/61. L'endpoint donne maintenant
+> directement le signal au lieu de forcer un calcul manuel depuis byEndReason.
+
 > §4.6 buffered-offer replay ne couvrait pas `answer` (2026-07-12, `3db44d7`) —
 > candidat laissé « non tranché » par la vague précédente, tranché ici. Deux
 > agents Explore en parallèle : l'un a confirmé le bug côté gateway signaling,

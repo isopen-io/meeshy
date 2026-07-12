@@ -12,6 +12,7 @@ import {
   coerceCallAnalytics,
   summarizeCallReliability,
   normalizeEndReason,
+  isFailureEndReason,
   type CallAnalyticsRecord,
 } from '../../../services/callAnalyticsAggregate';
 
@@ -68,6 +69,7 @@ describe('summarizeCallReliability', () => {
     const s = summarizeCallReliability([]);
     expect(s.totalCalls).toBe(0);
     expect(s.connectSuccessRate).toBe(0);
+    expect(s.callFailureRate).toBe(0);
     expect(s.avgSetupTimeMs).toBeNull();
     expect(s.avgRtt).toBeNull();
     expect(s.avgPacketLoss).toBeNull();
@@ -209,6 +211,54 @@ describe('summarizeCallReliability', () => {
       record({ endReason: 'completed' }),
     ]);
     expect(s.byEndReason).toEqual({ failed: 2, completed: 1 });
+  });
+});
+
+describe('callFailureRate', () => {
+  it('counts only system failures, not normal outcomes', () => {
+    const s = summarizeCallReliability([
+      record({ endReason: 'completed' }),        // normal
+      record({ endReason: 'local' }),            // normal (hung up)
+      record({ endReason: 'missed' }),           // normal (no answer)
+      record({ endReason: 'rejected' }),         // normal (declined)
+      record({ endReason: 'connectionLost' }),   // FAILURE
+      record({ endReason: 'failed("Not in call room")' }), // FAILURE (normalized)
+    ]);
+    // 2 failures out of 6.
+    expect(s.callFailureRate).toBeCloseTo(2 / 6, 5);
+  });
+
+  it('is zero when every call ended normally', () => {
+    const s = summarizeCallReliability([
+      record({ endReason: 'completed' }),
+      record({ endReason: 'missed' }),
+    ]);
+    expect(s.callFailureRate).toBe(0);
+  });
+
+  it('treats the deliberate in_progress snapshot label as NOT a failure', () => {
+    // in_progress = periodic-snapshot of a call killed mid-flight, not a
+    // system failure (verified in the iOS emission code, 2026-07-12).
+    const s = summarizeCallReliability([record({ endReason: 'in_progress' })]);
+    expect(s.callFailureRate).toBe(0);
+  });
+});
+
+describe('isFailureEndReason', () => {
+  it('flags system failures including parameterized ones', () => {
+    expect(isFailureEndReason('failed("Couldn\'t establish the call connection")')).toBe(true);
+    expect(isFailureEndReason('connectionLost')).toBe(true);
+    expect(isFailureEndReason('heartbeatTimeout')).toBe(true);
+    expect(isFailureEndReason('garbageCollected')).toBe(true);
+  });
+
+  it('does not flag normal outcomes or the in_progress label', () => {
+    expect(isFailureEndReason('completed')).toBe(false);
+    expect(isFailureEndReason('local')).toBe(false);
+    expect(isFailureEndReason('remote')).toBe(false);
+    expect(isFailureEndReason('missed')).toBe(false);
+    expect(isFailureEndReason('rejected')).toBe(false);
+    expect(isFailureEndReason('in_progress')).toBe(false);
   });
 });
 
