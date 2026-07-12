@@ -130,6 +130,7 @@ class ChatViewModelTest {
         val locallyHidden: InMemoryLocallyHiddenMessagesStore,
         val starred: InMemoryStarredMessagesStore,
         val draftStore: InMemoryConversationDraftStore,
+        val activeCallRepo: ActiveCallRepository,
     )
 
     private fun viewModel(
@@ -200,6 +201,7 @@ class ChatViewModelTest {
             locallyHidden,
             starred,
             draftStore,
+            activeCallRepo,
         )
     }
 
@@ -226,8 +228,8 @@ class ChatViewModelTest {
 
         advanceUntilIdle()
 
-        assertThat(h.viewModel.state.value.activeCall?.id).isEqualTo("call-live-1")
-        assertThat(h.viewModel.state.value.activeCall?.isVideo).isTrue()
+        assertThat(h.vm.state.value.activeCall?.id).isEqualTo("call-live-1")
+        assertThat(h.vm.state.value.activeCall?.isVideo).isTrue()
     }
 
     @Test
@@ -236,7 +238,7 @@ class ChatViewModelTest {
 
         advanceUntilIdle()
 
-        assertThat(h.viewModel.state.value.activeCall).isNull()
+        assertThat(h.vm.state.value.activeCall).isNull()
     }
 
     @Test
@@ -249,14 +251,14 @@ class ChatViewModelTest {
         )
         val h = harness(syncedConversation(), currentUser = me, activeCall = session)
         advanceUntilIdle()
-        assertThat(h.viewModel.state.value.activeCall).isNotNull()
+        assertThat(h.vm.state.value.activeCall).isNotNull()
 
         // The call ended server-side; a resume re-probe must clear the pill.
         coEvery { h.activeCallRepo.activeCallFor(any()) } returns null
-        h.viewModel.refreshActiveCall()
+        h.vm.refreshActiveCall()
         advanceUntilIdle()
 
-        assertThat(h.viewModel.state.value.activeCall).isNull()
+        assertThat(h.vm.state.value.activeCall).isNull()
     }
 
     @Test
