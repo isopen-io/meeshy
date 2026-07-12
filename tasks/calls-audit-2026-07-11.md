@@ -329,3 +329,14 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > screen-capture-detected) — accepté : l'auteur est déjà un participant
 > actif autorisé à injecter du texte ; l'usurpation intra-appel n'élargit
 > pas la surface (il pourrait aussi bien parler). 7/7 harnais.
+
+> Arc reject, chemin manquant (2026-07-12) : le refus depuis l'ÉCRAN
+> VERROUILLÉ (CXEndCallAction sur entrant pré-décroché = bouton Refuser
+> CallKit, seul chemin de refus en background) aboutissait dans endCall()
+> sans raison → missed → fausse notification « appel manqué » au refuseur,
+> encore vivante sur le chemin le plus fréquent. Fix d371f3505 : endCall()
+> détecte .ringing(isOutgoing: false) → emitCallReject +
+> endCallInternal(.rejected) ; 4 source-guards EndCallLockScreenDeclineTests ;
+> guard bye-before-teardown migré fenêtre 3000 chars → borne MARK (il
+> épinglait aussi endCallInternal(reason: .local) texte exact). Vérifié par
+> réplication Python avant push ; verdict iOS Tests attendu sur ce tip.
