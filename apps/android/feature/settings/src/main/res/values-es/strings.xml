@@ -228,6 +228,13 @@
     <string name="about_link_github">GitHub</string>
     <string name="about_copyright">2024–2026 Meeshy. Todos los derechos reservados.</string>
     <string name="settings_help_support">Ayuda y soporte</string>
+    <string name="settings_open_source_licenses">Licencias de código abierto</string>
+    <string name="licenses_title">Licencias de código abierto</string>
+    <string name="licenses_intro">Meeshy está construido con las siguientes bibliotecas de código abierto.</string>
+    <string name="licenses_type_mit">MIT</string>
+    <string name="licenses_type_apache">Apache 2.0</string>
+    <string name="licenses_type_bsd">BSD</string>
+    <string name="licenses_type_other">Otra</string>
     <string name="support_title">Ayuda y soporte</string>
     <string name="support_section_help">Obtener ayuda</string>
     <string name="support_section_contact">Contáctanos</string>
