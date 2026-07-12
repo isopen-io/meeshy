@@ -2760,6 +2760,40 @@ describe('CallService - setReapedCallCallback (sweeps GC d\'initiateCall)', () =
   });
 });
 
+describe('CallService - finalizeCallSummary (chemins terminaux REST end/leave)', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any, new Date(Date.now() - 24 * 60 * 60 * 1000));
+  });
+
+  it('notifie le callback reaped avec le callId — finalise la bulle « en cours » orpheline', () => {
+    // Les routes REST end/leave appellent callService.endCall/leaveCall SANS
+    // poster le call-summary (contrairement aux handlers socket) : la bulle
+    // live « Appel … en cours » resterait orpheline. finalizeCallSummary
+    // rebranche le même hook déjà câblé (→ postCallSummaryForTerminatedCall).
+    const reaped: string[] = [];
+    callService.setReapedCallCallback((callId) => { reaped.push(callId); });
+
+    callService.finalizeCallSummary('rest-ended-call');
+
+    expect(reaped).toContain('rest-ended-call');
+  });
+
+  it('sans callback câblé, ne throw pas (no-op — parité setReapedCallCallback)', () => {
+    expect(() => callService.finalizeCallSummary('no-callback-call')).not.toThrow();
+  });
+
+  it('un callback qui rejette ne propage jamais (fire-and-forget)', () => {
+    callService.setReapedCallCallback(() => Promise.reject(new Error('boom')));
+
+    expect(() => callService.finalizeCallSummary('rejecting-cb-call')).not.toThrow();
+  });
+});
+
 describe('CallService - initiateCall phantom cleanup & transaction', () => {
   let callService: CallService;
   let mockPrisma: ReturnType<typeof createMockPrisma>;

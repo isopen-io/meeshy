@@ -255,6 +255,24 @@ export class CallService {
   }
 
   /**
+   * P0 (bulles « Appel … en cours » orphelines) — finalise le message live
+   * après une transition terminale déclenchée par un appelant qui ne poste PAS
+   * le summary lui-même. Les handlers socket `call:end` / `call:leave` le
+   * postent explicitement ; les routes REST end/leave n'appellent que
+   * `endCall()`/`leaveCall()` et laissaient la bulle live orpheline pour
+   * toujours (GC ne re-balaye pas un CallSession déjà terminal).
+   *
+   * Réutilise le câblage reaped déjà en place (→ postCallSummaryForTerminatedCall
+   * → createCallSummaryMessage) : fire-and-forget, idempotent et auto-gardé —
+   * createCallSummaryMessage est un no-op pour un appel non-terminal et n'édite
+   * qu'une bulle encore live. Un appel redondant (chemin socket) ou un appel de
+   * groupe encore en cours est donc sans effet.
+   */
+  finalizeCallSummary(callId: string): void {
+    this.notifyReapedCall(callId);
+  }
+
+  /**
    * Phase 1 fix P2 — Schedule a 60s timeout for a ringing call. If no answer
    * arrives in time, the callback is invoked (caller will transition the call
    * to `missed`). Replaces any previously scheduled timeout for this callId.

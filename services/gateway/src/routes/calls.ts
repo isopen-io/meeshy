@@ -454,6 +454,10 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
       const callSession = await callService.endCall(callId, userId, endParticipantId);
+      // Contrairement au handler socket `call:end`, cette route REST ne poste
+      // pas le call-summary elle-même : sans ceci la bulle « Appel … en cours »
+      // resterait orpheline. Fire-and-forget + idempotent (cf. finalizeCallSummary).
+      callService.finalizeCallSummary(callId);
 
       return sendSuccess(reply, callSession);
     } catch (error: any) {
@@ -789,6 +793,10 @@ export default async function callRoutes(fastify: FastifyInstance) {
         userId: participantId,
         participantId: leaveParticipantId,
       });
+      // Idem que la route end : la route REST leave ne poste pas le summary.
+      // No-op si l'appel de groupe continue (createCallSummaryMessage se garde
+      // sur le statut terminal), finalise la bulle si l'appel s'est terminé.
+      callService.finalizeCallSummary(callId);
 
       return sendSuccess(reply, callSession);
     } catch (error: any) {
