@@ -465,3 +465,11 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > télémétrie → dashboard fiabilité plus 100% iOS. Boucle analytics complète
 > et LIVE : 3 plateformes émettent → serveur persiste → admin agrège (avec
 > failed unifié + sentinelle setup exclue).
+
+> Fix avgRtt déflaté (2026-07-12, fe13f1293) : vérif agrégat sur prod =
+> avgRtt 113.9ms sur 87 rows dont 42 connectés seulement — les 45 jamais
+> connectés (averageRtt=0, aucun échantillon) déflataient la moyenne ~2×.
+> avgRtt/avgPacketLoss moyennés sur connectés (setupTimeMs>=0) seulement,
+> null si aucun. Vérifié aussi : packetLoss en % des 2 côtés (web/iOS),
+> qualityDistribution somme ~1 sur les 87, negotiationTimeMs présent 77
+> (42 réels >=0, filtré correct). 56/56. Re-deploy gateway à suivre.
