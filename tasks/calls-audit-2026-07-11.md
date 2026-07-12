@@ -431,3 +431,12 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > ce fix. Prod entièrement à jour côté serveur+web : gateway b3a336252
 > (analytics), frontend 05daf2068 (ring 45s). Restent les builds app iOS/
 > Android (app stores).
+
+> Bug agrégateur analytics trouvé sur données PROD (2026-07-12, f87c7a71b) :
+> requête DB prod = 723 CallParticipant, 87 avec télémétrie (66 sur 7j) —
+> le pipeline collecte bien. Mais l'exemple révèle setupTimeMs=-1 (sentinelle
+> « jamais connecté », Android CallAnalytics:76). avgSetupTimeMs moyennait
+> les -1 → moyenne faussée. Fix : moyenne sur les connectés seuls (>= 0,
+> null si aucun, comme negotiationTimeMs) + connectSuccessRate (fraction
+> connectée = usage utile de la sentinelle). 16 tests agrégateur, 50/50
+> route. Re-deploy gateway nécessaire (b3a336252 live a l'agrégateur buggé).
