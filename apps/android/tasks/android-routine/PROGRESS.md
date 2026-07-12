@@ -4,6 +4,39 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload + crash-report diagnostics viewer w/ share)** → rest`
 
+> On 2026-07-12 **image compression plan** landed (slice `media-image-compression-plan`, feature-parity §P —
+> "Image/video compression before upload (context-aware quality)"). Ships the pure decision beneath the
+> app-side Bitmap re-encode — the first leg of §P compression. Pure `:core:model` SSOTs (new package
+> `me.meeshy.sdk.model.media`): `ImageUploadContext` (per-surface longest-edge ceilings in px, mirroring iOS
+> `MediaContext.maxImageDimension` — MESSAGE 1200 / STORY 1080 / FEED_POST 1600 / AVATAR 512 / FULLSCREEN 2048
+> — **plus BANNER 1600**, a wide profile hero iOS's enum lacks, so the shipped avatar/banner upload path has a
+> compression context; `forUploadTarget(ImageUploadTarget)` is the single bridge mapping the shipped upload
+> target → context so the two slices never disagree on the ceiling); `ImageCompressionPlan` (targetWidthPx,
+> targetHeightPx, quality, resizeRequired); `ImageCompressionPlanner.plan(context, w, h, quality=80)` — fits the
+> longest edge within the ceiling via one uniform aspect-preserving scale, `floor`-rounded exactly like iOS
+> `MediaCompressor.targetSize`, marks a resize **only** when the source strictly exceeds the ceiling (`>`, so an
+> image sitting exactly on the ceiling is re-encoded but not scaled), clamps quality to the encoder's `1..100`
+> band, clamps each target edge to ≥1 (surpasses iOS: a degenerate thin source never rounds to a 0-px edge), and
+> treats a non-positive source dimension as a no-op plan. The actual Bitmap decode/scale/JPEG re-encode is the
+> app-side glue that consumes the plan (grain rule: pure decision in `:core:model`, the Android-runtime pixel
+> work app-side); video compression + "save to Meeshy album" remain pending on the §P line. **+18 tests**
+> (ImageCompressionPlanner 15 — smaller-than-ceiling no-resize, exactly-on-ceiling no-resize, just-over-ceiling
+> resize, landscape + portrait downscale with aspect preserved, per-context ceiling divergence, default/in-range/
+> over-max/zero/negative quality clamp, zero-width + zero-height + negative-dim no-op, thin-portrait + thin-
+> landscape target clamp ≥1, uneven-downscale aspect preservation; ImageUploadContext 3 — avatar/banner bridge,
+> avatar ceiling < banner ceiling). `:core:model:testDebugUnitTest --tests 'me.meeshy.sdk.model.media.*'` green;
+> full `assembleDebug` + all-module `testDebugUnitTest` → **BUILD SUCCESSFUL in 4m21s** (APK produced). A
+> two-mutation RED check (boundary `<=`→`<` + drop the `coerceAtLeast(1)` edge clamp) failed exactly the 3
+> relevant tests (exactly-on-ceiling no-resize + the 2 thin-edge clamp tests), confirming they are behavioural
+> not tautological. Reviewer **PASS** (diff `apps/android` only — `:core:model` [new `media` package: 1 source +
+> 2 test files], `feature-parity.md`, routine docs; no production logic outside; **SDK purity** — pure
+> context/plan/planner in `:core:model`, Bitmap pixel work left app-side; **SSOT** — one planner owns the fit +
+> clamp math, one `forUploadTarget` bridge owns target→context, ceilings defined once on the enum; **UDF/instant-
+> app** — pure decision, no state machine or UI; **colour/UX coherence** — no UI in this slice; **no coverage
+> floor lowered, no test weakened**). **Next slice:** the app-side Bitmap re-encode that consumes the plan (the
+> actual compress-before-upload wired into the avatar/banner + attachment upload paths), ThumbHash blur
+> placeholders (§P), or the chat media view that consumes the `MediaAutoDownloadDecider`.
+
 > On 2026-07-12 **open-source licenses** landed (slice `settings-open-source-licenses`, feature-parity §L —
 > the last §L static screen; **§L static screens now complete**). Port of iOS `LicensesView`, but over an
 > **Android-accurate** curated catalog — the libraries that actually ship (Jetpack Compose, AndroidX, Material

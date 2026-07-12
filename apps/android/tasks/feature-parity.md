@@ -2122,7 +2122,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       save-to-gallery pending
 - [ ] Code attachment viewer (~16 languages, syntax highlight, GitHub light/dark, copy)
 - [ ] Document viewer (PDF/presentation/spreadsheet) with share
-- [ ] Image/video compression before upload (context-aware quality); save media to "Meeshy" album
+- [~] Image/video compression before upload (context-aware quality); save media to "Meeshy" album
+      — **image compression *plan* shipped** (slice `media-image-compression-plan`, 2026-07-12): pure
+      `:core:model` `me.meeshy.sdk.model.media` — `ImageUploadContext` (per-surface longest-edge ceilings
+      mirroring iOS `MediaContext.maxImageDimension`: MESSAGE 1200 / STORY 1080 / FEED_POST 1600 /
+      AVATAR 512 / FULLSCREEN 2048, **+ BANNER 1600** which iOS lacks; `forUploadTarget` bridges the
+      shipped avatar/banner `ImageUploadTarget`) + `ImageCompressionPlanner.plan(context,w,h,quality)` →
+      `ImageCompressionPlan(targetW,targetH,quality,resizeRequired)` (longest-edge fit, aspect preserved,
+      `floor`-rounded like iOS `targetSize`, resize only when source `>` ceiling, quality clamped 1..100,
+      target clamped ≥1, non-positive source → no-op). App-side Bitmap decode/scale/JPEG re-encode +
+      video compression + "save to Meeshy album" still pending. +18 tests.
 - [ ] ThumbHash blur placeholders for all media; audio spectrogram visualization
 
 ## Q. Cross-cutting infrastructure
