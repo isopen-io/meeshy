@@ -132,9 +132,14 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   budget ring → `missed`. **Fix (hardening)** : timeout ACK 3→6 s (≪ ring 45 s). **Preuve définitive
   = repro 2 devices (P0 en attente)** — pas cleanly unit-testable (constante socket). Build vert.
 
-- [ ] **#10 — `MessageSocket error: Tried emitting when not connected`**
+- [x] **#10 — `MessageSocket error: Tried emitting when not connected`** — `fe7bb99f6`
   Evidence : 2× pendant transitions BG.
   Fichiers : `MessageSocketManager` (emit). Fix : garder l'emit sur l'état de connexion / file d'attente.
+  **Cause prouvée** : des emits fire-and-forget non-call (heartbeat périodique, `conversation:leave`,
+  typing) partaient **sans garde** pendant que la socket se suspendait en BG. `joinConversation`
+  gardait déjà `status == .connected`, pas les autres. **Fix** : helper `safeEmit` gardé, appliqué à
+  heartbeat/leave/typing (le re-join loop + heartbeat timer reprennent au reconnect). Emits d'appel
+  ACK-bearing NON touchés (sous-système délicat, chemins dédiés). Build vert.
 
 - [ ] **#11 — Churn socket disconnect/reconnect à chaque transition BG**
   Evidence : `MessageSocket disconnected` / `reconnected — re-joined 0 room(s)` répétés.
@@ -195,3 +200,5 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 - 2026-07-12 : #9 (P2) hardening `8a2712e0b` — timeout ACK `call:join` 3→6 s. L'ACK succès gateway
   arrive après `joinCall` (DB+TURN) ; 3 s trop serré → false `NOT ACKed` + retry gâchant le ring →
   `missed`. Reliable-join/ACK/retry préexistaient. Preuve finale = repro 2 devices.
+- 2026-07-12 : #10 livré `fe7bb99f6` — helper `safeEmit` gardé sur `status == .connected` pour les
+  emits fire-and-forget (heartbeat/leave/typing). Supprime « Tried emitting when not connected » en BG.
