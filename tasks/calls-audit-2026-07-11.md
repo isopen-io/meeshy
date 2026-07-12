@@ -366,3 +366,11 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > b507ebe19). L'arc reject est complet : 3 plateformes × tous les chemins
 > de refus × tous les états de transport, contrat serveur épinglé en e2e.
 > Reste UNIQUEMENT le device-test physique 2 appareils.
+
+> DÉPLOIEMENT PROD 2026-07-12 ~03:42Z : pull isopen/meeshy-gateway:latest +
+> isopen/meeshy-web:latest, recréation chirurgicale (--no-deps gateway
+> frontend). Gateway healthy (0 motif crash-loop), meeshy.me/www 200,
+> ws/translation/db up. Le 404 Traefik ~60 s post-recréation = fenêtre
+> healthcheck→routage documentée (vérifié : app 200 en direct, routeur
+> unique, WRN réseau inoffensif). L'arc reject serveur (status=rejected)
+> et les captions web sont EN PRODUCTION.
