@@ -787,7 +787,13 @@ export class CallEventsHandler {
     }
   }
 
-  /** §4.6 — store the latest offer for a call, sweeping expired entries. */
+  /**
+   * §4.6 — store the latest signal bound for a given recipient, sweeping
+   * expired entries. Keyed `${callId}:${signal.to}` (not just `callId`): an
+   * offer buffered for the callee and an answer buffered for the caller are
+   * independent recipients on the SAME call and must not overwrite each
+   * other's slot.
+   */
   private bufferOffer(callId: string, signal: CallSignalEvent): void {
     const now = Date.now();
     for (const [key, entry] of this.bufferedOffers) {
@@ -795,12 +801,22 @@ export class CallEventsHandler {
         this.bufferedOffers.delete(key);
       }
     }
-    this.bufferedOffers.set(callId, { signal, bufferedAt: now });
+    this.bufferedOffers.set(`${callId}:${signal.signal.to}`, { signal, bufferedAt: now });
   }
 
-  /** §4.6 — drop a call's buffered offer (negotiation complete or terminated). */
+  /**
+   * §4.6 — drop every buffered signal for a call (negotiation complete or
+   * terminated). Entries are keyed `${callId}:${to}` (one per recipient, see
+   * `bufferOffer`), so — like `clearQualityDegradedStreaks` — this sweeps all
+   * matching keys rather than a single one.
+   */
   private clearBufferedOffer(callId: string): void {
-    this.bufferedOffers.delete(callId);
+    const prefix = `${callId}:`;
+    for (const key of this.bufferedOffers.keys()) {
+      if (key.startsWith(prefix)) {
+        this.bufferedOffers.delete(key);
+      }
+    }
   }
 
   /**
@@ -831,23 +847,24 @@ export class CallEventsHandler {
   }
 
   /**
-   * §4.6 — returns the buffered offer for a call IF it is destined for the
+   * §4.6 — returns the buffered signal for a call IF one is destined for the
    * (re)joining participant and not expired; otherwise null. Does NOT consume
    * the entry — a participant that churns again must be able to recover, and
    * re-delivery is epoch-safe.
    */
   private bufferedOfferFor(callId: string, joiningUserId: string, joiningParticipantId: string | null): CallSignalEvent | null {
-    const entry = this.bufferedOffers.get(callId);
-    if (!entry) return null;
+    const key = this.bufferedOffers.has(`${callId}:${joiningUserId}`)
+      ? `${callId}:${joiningUserId}`
+      : (joiningParticipantId !== null && this.bufferedOffers.has(`${callId}:${joiningParticipantId}`))
+        ? `${callId}:${joiningParticipantId}`
+        : null;
+    if (key === null) return null;
+    const entry = this.bufferedOffers.get(key)!;
     if (Date.now() - entry.bufferedAt > CallEventsHandler.OFFER_BUFFER_TTL_MS) {
-      this.bufferedOffers.delete(callId);
+      this.bufferedOffers.delete(key);
       return null;
     }
-    const to = entry.signal.signal.to;
-    if (to === joiningUserId || (joiningParticipantId !== null && to === joiningParticipantId)) {
-      return entry.signal;
-    }
-    return null;
+    return entry.signal;
   }
 
   /**
@@ -2604,14 +2621,22 @@ export class CallEventsHandler {
 
         if (targetSocketIds.length === 0) {
           // §4.6 — target not in the room yet (PushKit wake / socket churn /
-          // 2nd device). Instead of silently losing the offer, buffer it so it
-          // is replayed when the target (re)joins. ICE candidates are dropped
-          // as before (they are re-gathered after the buffered offer is
-          // applied). The caller still gets success:false so its at-least-once
-          // retry can also fire; the buffer is the backstop.
-          if (data.signal.type === 'offer' || data.signal.type === 'ice-restart') {
+          // 2nd device). Instead of silently losing the signal, buffer it so
+          // it is replayed when the target (re)joins. ICE candidates are
+          // dropped as before (they are re-gathered after the buffered offer
+          // is applied). `answer` is buffered too — the same churn that
+          // motivates offer-buffering can just as easily hit the CALLER
+          // between replaying its buffered offer to the callee and receiving
+          // the callee's answer back (offer/ice-restart buffer for the
+          // callee's slot, answer for the caller's slot — independent keys,
+          // see `bufferOffer`). Without this an answer arriving while the
+          // caller's socket is briefly down was silently dropped with no
+          // recovery path, stalling the call one-sided. The caller still gets
+          // success:false so its at-least-once retry can also fire; the
+          // buffer is the backstop.
+          if (data.signal.type === 'offer' || data.signal.type === 'ice-restart' || data.signal.type === 'answer') {
             this.bufferOffer(data.callId, validation.data as CallSignalEvent);
-            logger.info('📦 [CALL] Buffered offer for late (re)join', {
+            logger.info('📦 [CALL] Buffered signal for late (re)join', {
               callId: data.callId,
               to: data.signal.to,
               type: data.signal.type

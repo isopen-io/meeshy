@@ -2652,6 +2652,52 @@ describe('CallEventsHandler', () => {
       })).resolves.not.toThrow();
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'SIGNAL_FAILED' }));
     });
+
+    // §4.6 follow-up — the caller can churn its socket between replaying a
+    // buffered offer to the callee and receiving the callee's answer back
+    // (same class of blip that motivates offer-buffering in the first
+    // place). Before this fix, `answer` was excluded from the buffer-on-
+    // no-sockets branch: the answer was silently dropped with no recovery
+    // path, stalling the call one-sided until a client-side watchdog or the
+    // GC tier eventually reaped it.
+    it('buffers an answer when the target (caller) has no active sockets', async () => {
+      const senderPart = makeParticipant({ participant: { userId: USER_ID, user: {} } }); // callee, answering
+      const targetPart = makeParticipant({ id: 'tp', participantId: 'caller-uid', participant: { userId: 'caller-uid', user: {} } });
+      // *Once — this mock is shared file-wide and other tests rely on its
+      // persistent state; a single-call override avoids leaking into them.
+      mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({ participants: [senderPart, targetPart] }));
+
+      const { handler, socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) }); // caller has no active sockets
+
+      const answerSignal = { callId: CALL_ID, signal: { type: 'answer', from: USER_ID, to: 'caller-uid', sdp: 'v=0...' } };
+      await socket._trigger('call:signal', answerSignal);
+
+      const buffered = (handler as any).bufferedOffers.get(`${CALL_ID}:caller-uid`);
+      expect(buffered?.signal.signal.type).toBe('answer');
+    });
+
+    it('buffering an answer for the caller does not clobber a still-pending buffered offer for the callee', async () => {
+      const senderPart = makeParticipant({ participant: { userId: USER_ID, user: {} } }); // callee, answering
+      const targetPart = makeParticipant({ id: 'tp', participantId: 'caller-uid', participant: { userId: 'caller-uid', user: {} } });
+      mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({ participants: [senderPart, targetPart] }));
+
+      const { handler, socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      // An offer is still buffered for the callee (USER_ID) from earlier —
+      // must survive the answer buffering below (independent `${callId}:${to}` keys).
+      (handler as any).bufferOffer(CALL_ID, {
+        callId: CALL_ID,
+        signal: { type: 'offer', from: 'caller-uid', to: USER_ID, sdp: 'v=0...' },
+      });
+
+      const answerSignal = { callId: CALL_ID, signal: { type: 'answer', from: USER_ID, to: 'caller-uid', sdp: 'v=0...' } };
+      await socket._trigger('call:signal', answerSignal);
+
+      expect((handler as any).bufferedOffers.get(`${CALL_ID}:${USER_ID}`)?.signal.signal.type).toBe('offer');
+      expect((handler as any).bufferedOffers.get(`${CALL_ID}:caller-uid`)?.signal.signal.type).toBe('answer');
+    });
   });
 
   // ── call:toggle-audio validation branch ─────────────────────────────────
@@ -2991,7 +3037,7 @@ describe('CallEventsHandler', () => {
       // Trigger a new buffer via call:signal (should evict the expired one)
       await socket._trigger('call:signal', offerB);
 
-      expect((handler as any).bufferedOffers.has('call-old')).toBe(false);
+      expect((handler as any).bufferedOffers.has('call-old:tgt')).toBe(false);
     });
   });
 
@@ -3499,7 +3545,7 @@ describe('CallEventsHandler', () => {
       const candidateSignal = { callId: CALL_ID, signal: { type: 'candidate', from: USER_ID, to: 'tgt' } };
       await socket._trigger('call:signal', candidateSignal);
 
-      expect((handler as any).bufferedOffers.has(CALL_ID)).toBe(false);
+      expect((handler as any).bufferedOffers.has(`${CALL_ID}:tgt`)).toBe(false);
     });
 
     it('does not buffer non-offer when target has no sockets (no active connection)', async () => {
@@ -3514,7 +3560,7 @@ describe('CallEventsHandler', () => {
       const candidateSignal = { callId: CALL_ID, signal: { type: 'candidate', from: USER_ID, to: 'tgt' } };
       await socket._trigger('call:signal', candidateSignal);
 
-      expect((handler as any).bufferedOffers.has(CALL_ID)).toBe(false);
+      expect((handler as any).bufferedOffers.has(`${CALL_ID}:tgt`)).toBe(false);
     });
 
     it('resolveTargetSockets skips socket when userId does not match target', async () => {
@@ -3653,7 +3699,7 @@ describe('CallEventsHandler', () => {
       // Buffer another offer (should NOT evict the fresh one)
       await socket._trigger('call:signal', { callId: CALL_ID, signal: { type: 'offer', from: USER_ID, to: 'tgt2' } });
 
-      expect((handler as any).bufferedOffers.has('call-fresh')).toBe(true);
+      expect((handler as any).bufferedOffers.has('call-fresh:tgt2')).toBe(true);
     });
   });
 
