@@ -4,6 +4,7 @@
     <string name="chat_back">Voltar</string>
     <string name="chat_call_audio">Chamada de áudio</string>
     <string name="chat_call_video">Videochamada</string>
+    <string name="chat_call_rejoin">Voltar à chamada</string>
     <string name="chat_message_placeholder">Mensagem</string>
     <string name="chat_send">Enviar</string>
     <string name="chat_no_messages">Ainda não há mensagens</string>

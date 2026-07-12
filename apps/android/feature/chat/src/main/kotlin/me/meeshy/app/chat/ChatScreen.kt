@@ -58,6 +58,7 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -110,6 +111,8 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import me.meeshy.sdk.model.call.ActiveCallSession
 import java.time.ZoneId
 import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -142,9 +145,19 @@ import me.meeshy.ui.theme.hexColor
 fun ChatScreen(
     onBack: () -> Unit,
     onStartCall: (peerName: String, isVideo: Boolean) -> Unit = { _, _ -> },
+    onRejoinCall: (call: ActiveCallSession, peerName: String) -> Unit = { _, _ -> },
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // Re-probe the server for a still-active call each time the screen resumes
+    // (returning from the call itself, an app relaunch mid-call) so the
+    // « Rejoindre » pill reflects the server truth — appearing when a lost call
+    // is still live, clearing once it's over. Parité iOS ConversationView.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshActiveCall()
+        onPauseOrDispose { }
+    }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
@@ -274,11 +287,22 @@ fun ChatScreen(
                         IconButton(onClick = viewModel::openSearch) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.chat_search))
                         }
-                        IconButton(onClick = { onStartCall(peerName, false) }) {
-                            Icon(Icons.Filled.Call, contentDescription = stringResource(R.string.chat_call_audio))
-                        }
-                        IconButton(onClick = { onStartCall(peerName, true) }) {
-                            Icon(Icons.Filled.Videocam, contentDescription = stringResource(R.string.chat_call_video))
+                        val ongoing = state.activeCall
+                        if (ongoing != null) {
+                            // An call the local session lost is still live server-side:
+                            // offer « Rejoindre » (a tap joins the existing call via the
+                            // shared auto-answer path) instead of placing a NEW call.
+                            RejoinCallPill(
+                                isVideo = ongoing.isVideo,
+                                onClick = { onRejoinCall(ongoing, peerName) },
+                            )
+                        } else {
+                            IconButton(onClick = { onStartCall(peerName, false) }) {
+                                Icon(Icons.Filled.Call, contentDescription = stringResource(R.string.chat_call_audio))
+                            }
+                            IconButton(onClick = { onStartCall(peerName, true) }) {
+                                Icon(Icons.Filled.Videocam, contentDescription = stringResource(R.string.chat_call_video))
+                            }
                         }
                     },
                 )
@@ -2032,6 +2056,36 @@ private fun ChatSkeleton() {
                     .height(36.dp),
             )
         }
+    }
+}
+
+/**
+ * Header affordance to rejoin a call the local session lost but that is still
+ * live server-side (crash/relaunch mid-call). A green success pill — a tap joins
+ * the EXISTING call (adopting its server id via the shared auto-answer path), it
+ * never places a new one. Parité iOS pill « Rejoindre » (b69509366).
+ */
+@Composable
+private fun RejoinCallPill(isVideo: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MeeshyTheme.tokens.success,
+            contentColor = Color.White,
+        ),
+        contentPadding = PaddingValues(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+        modifier = Modifier.padding(end = MeeshySpacing.sm),
+    ) {
+        Icon(
+            imageVector = if (isVideo) Icons.Filled.Videocam else Icons.Filled.Call,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.size(MeeshySpacing.xs))
+        Text(
+            text = stringResource(R.string.chat_call_rejoin),
+            style = MaterialTheme.typography.labelLarge,
+        )
     }
 }
 
