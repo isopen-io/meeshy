@@ -553,6 +553,32 @@ describe('getTrackingLinkStats', () => {
     expect(stats.uniqueClicks).toBe(42);
   });
 
+  it('recomputes uniqueClicks from the filtered set when a date range is provided', async () => {
+    // Stored all-time counter is 40, but only 2 clicks (from 1 unique IP) fall
+    // inside the requested window. The date-filtered uniqueClicks MUST reflect
+    // the window, not the all-time counter — otherwise uniqueClicks (40) would
+    // exceed totalClicks (2), an impossible state.
+    const link = { ...LINK_FIXTURE, totalClicks: 100, uniqueClicks: 40 };
+    const windowedClicks = [
+      { country: null, device: null, browser: null, os: null, language: null, clickedAt: new Date('2024-01-10T10:00:00Z'), socialSource: null, referrer: null, ipAddress: '9.9.9.9', deviceFingerprint: null, redirectStatus: null },
+      { country: null, device: null, browser: null, os: null, language: null, clickedAt: new Date('2024-01-10T11:00:00Z'), socialSource: null, referrer: null, ipAddress: '9.9.9.9', deviceFingerprint: null, redirectStatus: null },
+    ];
+    const prisma = makePrisma({
+      trackingLink: { findUnique: jest.fn().mockResolvedValue(link) },
+      trackingLinkClick: { findMany: jest.fn().mockResolvedValue(windowedClicks) },
+    });
+    const svc = new TrackingLinkService(prisma);
+
+    const stats = await svc.getTrackingLinkStats('AbCd12', {
+      startDate: new Date('2024-01-01'),
+      endDate: new Date('2024-01-31'),
+    });
+
+    expect(stats.totalClicks).toBe(2);
+    expect(stats.uniqueClicks).toBe(1);
+    expect(stats.uniqueClicks).toBeLessThanOrEqual(stats.totalClicks);
+  });
+
   it('counts confirmedClicks correctly', async () => {
     const clicks = [
       { country: null, device: null, browser: null, os: null, language: null, clickedAt: new Date(), socialSource: null, referrer: null, ipAddress: null, deviceFingerprint: null, redirectStatus: 'confirmed' },

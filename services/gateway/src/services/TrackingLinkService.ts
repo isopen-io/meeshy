@@ -514,8 +514,19 @@ export class TrackingLinkService {
     // Source unique = le compteur STOCKÉ (incrémenté à l'écriture), pour que tous
     // les endpoints renvoient le MÊME nombre. Le recalcul max(IPs, fingerprints)
     // divergeait du compteur lu par /posts/:id/share & /tracking-links/stats.
-    const uniqueClicks = (trackingLink as TrackingLink).uniqueClicks
-      ?? Math.max(uniqueIps.size, uniqueFingerprints.size);
+    //
+    // MAIS le compteur stocké est all-time : il ne connaît pas la fenêtre
+    // [startDate, endDate]. Dès qu'un filtre de date est appliqué, `clicks`
+    // (et donc totalClicks + les histogrammes) ne couvre que la fenêtre, alors
+    // que le compteur stocké resterait sur le total historique — cassant
+    // l'invariant `uniqueClicks ≤ totalClicks`. Sur une fenêtre, on recalcule
+    // donc depuis le set filtré ; sinon on garde le compteur stocké (cohérence
+    // cross-endpoint).
+    const recomputedUniqueClicks = Math.max(uniqueIps.size, uniqueFingerprints.size);
+    const isDateFiltered = Boolean(params?.startDate || params?.endDate);
+    const uniqueClicks = isDateFiltered
+      ? recomputedUniqueClicks
+      : ((trackingLink as TrackingLink).uniqueClicks ?? recomputedUniqueClicks);
 
     const confirmedClicks = clicks.filter(click => click.redirectStatus === 'confirmed').length;
 
