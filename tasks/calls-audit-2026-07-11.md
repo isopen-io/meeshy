@@ -173,6 +173,11 @@
 > Web : handleRejectCall passe de call:leave (résolu missed) à call:end
 > {reason:'rejected'} — end permis à tout participant actif (P2P, C4),
 > broadcast immédiat à l'appelant. iOS À FAIRE (session active dessus).
+> status=rejected serveur : endCall pré-décroché + reason rejected écrit
+> enfin CallStatus.rejected (l'enum existait, RIEN ne l'écrivait) — fin de
+> la notification « appel manqué » envoyée au callee qui venait de REFUSER
+> (handleMissedCall gaté sur status missed) et le filtre « manqués » du
+> journal exclut les refus comme son commentaire le promettait.
 
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)

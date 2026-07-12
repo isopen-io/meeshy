@@ -1707,7 +1707,17 @@ export class CallService {
     const endReason = wasPreAnswered && resolvedReason === CallEndReason.completed
       ? CallEndReason.missed
       : resolvedReason;
-    const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
+    // Un refus EXPLICITE (reason=rejected, envoyé par les boutons Refuser de
+    // toutes les plateformes) garde son statut distinct : normalisé `missed`,
+    // il déclenchait handleMissedCall — une notification « appel manqué »
+    // pour un appel que le callee venait de REFUSER — et tombait dans le
+    // filtre « manqués » du journal (dont le commentaire suppose, à raison,
+    // un statut `rejected` que rien n'écrivait jusqu'ici).
+    const targetStatus = !wasPreAnswered
+      ? CallStatus.ended
+      : resolvedReason === CallEndReason.rejected
+        ? CallStatus.rejected
+        : CallStatus.missed;
 
     // Version-guarded: a plain read-modify-write here raced with any other
     // terminal writer touching this same call (a retried `call:end`, a

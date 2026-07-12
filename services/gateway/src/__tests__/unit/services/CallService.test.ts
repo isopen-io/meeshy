@@ -1527,7 +1527,7 @@ describe('CallService', () => {
       expect(updateCall[0].data.duration).toBe(0);
     });
 
-    it('audit C3/C4: preserves an explicit reason (rejected) while still marking status missed pre-answer', async () => {
+    it('un refus explicite pré-décroché garde le statut REJECTED — sinon fausse notification « manqué » + faux filtre journal', async () => {
       const initiatorParticipant = createMockParticipant({
         role: ParticipantRole.initiator
       });
@@ -1554,7 +1554,11 @@ describe('CallService', () => {
       await callService.endCall('call-123', 'user-123', 'participant-123', false, 'rejected');
 
       const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
-      expect(updateCall[0].data.status).toBe(CallStatus.missed);
+      // status REJECTED distinct : handleMissedCall (gaté sur status missed)
+      // ne notifie plus « appel manqué » au callee qui vient de refuser, et
+      // le filtre « manqués » du journal l'exclut comme son commentaire le
+      // promettait déjà.
+      expect(updateCall[0].data.status).toBe(CallStatus.rejected);
       expect(updateCall[0].data.endReason).toBe(CallEndReason.rejected);
     });
 
