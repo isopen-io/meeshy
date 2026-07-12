@@ -6,7 +6,11 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.call.CallJoinResult
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
@@ -21,8 +25,12 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class CallSignalManagerTest {
 
-    private fun managerWithHandlers(): Pair<Pair<CallSignalManager, SocketManager>, Map<String, (Array<Any>) -> Unit>> {
+    private fun managerWithHandlers(
+        connectionState: MutableStateFlow<SocketConnectionState> =
+            MutableStateFlow(SocketConnectionState.CONNECTED),
+    ): Pair<Pair<CallSignalManager, SocketManager>, Map<String, (Array<Any>) -> Unit>> {
         val socket: SocketManager = mockk(relaxed = true)
+        every { socket.connectionState } returns connectionState
         val handlers = mutableMapOf<String, (Array<Any>) -> Unit>()
         every { socket.on(any(), any()) } answers {
             handlers[firstArg()] = secondArg()
@@ -425,6 +433,55 @@ class CallSignalManagerTest {
         }
         val result = manager.emitInitiate("conv-1", isVideo = true)
         assertThat(result).isEqualTo(CallInitiateResult.ServerError("Room full"))
+    }
+
+    // --- Décroché à froid : attente bornée de la connexion avant initiate/join ---
+    // (un emit sur un _socket encore null est JETÉ en silence — l'ACK ne vient
+    // jamais et l'appel décroché depuis la notification full-screen mourait)
+
+    @Test
+    fun `a join placed before the socket connects waits for CONNECTED then joins`() = runTest {
+        val state = MutableStateFlow(SocketConnectionState.CONNECTING)
+        val (managerAndSocket, _) = managerWithHandlers(state)
+        val (manager, socket) = managerAndSocket
+        every { socket.emit("call:join", any(), any()) } answers {
+            thirdArg<(Array<Any>) -> Unit>().invoke(
+                arrayOf(JSONObject("""{"success":true,"data":{"iceServers":[]}}""")),
+            )
+        }
+
+        val pending = async { manager.emitJoinAwaitingAck("call-9") }
+        runCurrent()
+        verify(exactly = 0) { socket.emit("call:join", any(), any()) }
+
+        state.value = SocketConnectionState.CONNECTED
+
+        assertThat(pending.await()).isInstanceOf(CallJoinResult.Success::class.java)
+        verify(exactly = 1) { socket.emit("call:join", any(), any()) }
+    }
+
+    @Test
+    fun `a join whose socket never connects fails fast without burning the ack budget`() = runTest {
+        val state = MutableStateFlow(SocketConnectionState.CONNECTING)
+        val (managerAndSocket, _) = managerWithHandlers(state)
+        val (manager, socket) = managerAndSocket
+
+        val result = manager.emitJoinAwaitingAck("call-9")
+
+        assertThat(result).isEqualTo(CallJoinResult.Failure("socket not connected"))
+        verify(exactly = 0) { socket.emit("call:join", any(), any()) }
+    }
+
+    @Test
+    fun `an initiate whose socket never connects times out fast without emitting`() = runTest {
+        val state = MutableStateFlow(SocketConnectionState.DISCONNECTED)
+        val (managerAndSocket, _) = managerWithHandlers(state)
+        val (manager, socket) = managerAndSocket
+
+        val result = manager.emitInitiate("conv-1", isVideo = false)
+
+        assertThat(result).isEqualTo(CallInitiateResult.Timeout)
+        verify(exactly = 0) { socket.emit("call:initiate", any(), any()) }
     }
 
     @Test

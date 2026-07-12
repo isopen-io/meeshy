@@ -3,6 +3,7 @@ package me.meeshy.sdk.socket
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -163,6 +164,7 @@ class CallSignalManager @Inject constructor(
      * JSON object — yields [CallInitiateResult.Timeout].
      */
     suspend fun emitInitiate(conversationId: String, isVideo: Boolean): CallInitiateResult {
+        if (!awaitSocketConnected()) return CallInitiateResult.Timeout
         val payload = JSONObject()
             .put("conversationId", conversationId)
             .put("type", if (isVideo) "video" else "audio")
@@ -187,6 +189,7 @@ class CallSignalManager @Inject constructor(
      * No ACK within [JOIN_ACK_TIMEOUT_MS] yields [CallJoinResult.Failure].
      */
     suspend fun emitJoinAwaitingAck(callId: String): CallJoinResult {
+        if (!awaitSocketConnected()) return CallJoinResult.Failure(SOCKET_OFFLINE)
         val raw = withTimeoutOrNull(JOIN_ACK_TIMEOUT_MS) {
             suspendCancellableCoroutine { continuation ->
                 socketManager.emit("call:join", JSONObject().put("callId", callId)) { args ->
@@ -198,6 +201,21 @@ class CallSignalManager @Inject constructor(
         }
         return CallJoinAckParser.parse(raw)
     }
+
+    /**
+     * Attente BORNÉE de la connexion socket avant un emit à ACK. Le trou du
+     * décroché à froid : l'utilisateur répond depuis la notification FCM
+     * full-screen pendant que l'app démarre — la restauration d'auth puis le
+     * handshake socket prennent quelques secondes, et un emit sur un `_socket`
+     * encore null est JETÉ en silence (l'ACK ne vient jamais, le budget expire,
+     * l'appel décroché meurt en Failure). Immédiat quand déjà connecté ;
+     * au-delà de [CONNECT_WAIT_MS], échec rapide et explicite plutôt qu'un
+     * budget ACK brûlé dans le vide.
+     */
+    private suspend fun awaitSocketConnected(): Boolean =
+        withTimeoutOrNull(CONNECT_WAIT_MS) {
+            socketManager.connectionState.first { it == SocketConnectionState.CONNECTED }
+        } != null
 
     /** Join the call room after answering / on reconnect (fire-and-forget). */
     fun emitJoin(callId: String) = emit("call:join", callId)
@@ -412,6 +430,16 @@ class CallSignalManager @Inject constructor(
 
         /** ACK budget for `call:join`; a bit above the iOS 3 s to tolerate the emulator. */
         const val JOIN_ACK_TIMEOUT_MS = 5_000L
+
+        /**
+         * Attente max de la connexion socket avant un initiate/join (cold start
+         * depuis la notification full-screen : restauration d'auth + TLS +
+         * handshake ≈ 1-3 s ; 8 s couvre un réseau mobile faible).
+         */
+        const val CONNECT_WAIT_MS = 8_000L
+
+        /** Message du fast-fail quand la socket n'a jamais connecté dans la fenêtre. */
+        const val SOCKET_OFFLINE = "socket not connected"
 
         /** The single inbound frame that also carries incoming-offer identity. */
         const val INITIATED_EVENT = "call:initiated"

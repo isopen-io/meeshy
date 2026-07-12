@@ -63,6 +63,13 @@
 > vers missed. Parité iOS MessageSocketManager / web checkForActiveCall ;
 > dédup par callId déjà en place (start() inerte en appel, offre du callId
 > actif ignorée).
+> Décroché à froid Android : initiate/join attendent la connexion socket
+> (borné 8 s, `connectionState.first`) avant d'émettre — un emit sur un
+> `_socket` encore null (fenêtre cold-start entre la notification
+> full-screen et la restauration d'auth) était JETÉ en silence : l'ACK ne
+> venait jamais et l'appel décroché mourait en Failure après le budget.
+> Immédiat quand déjà connecté ; échec rapide explicite (« socket not
+> connected ») si la fenêtre expire.
 > Résilience réseau Android : le coordinateur WebRTC réagit enfin aux stalls
 > ICE mid-call (avant : handoff WiFi→LTE = média figé pour toujours, appel
 > « actif » côté serveur car les heartbeats socket survivent au média mort).
