@@ -572,3 +572,25 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > Autres évolutions = features délibérément différées (SFU/groupe Phase 2,
 > recording/transcription-persistence/quality-scoring : placeholders schéma
 > sans consommateur) ou hardware (device-test 2 appareils).
+
+## Retry-on-failure — plan build-ready (investigation code 2026-07-12)
+
+> Investigation du flow web pour scoper le retry recommandé ci-dessus.
+> Findings concrets qui de-risquent le build :
+> - `callEndReason` (store) est MORT des 2 côtés : setter défini
+>   (call-store:471) mais JAMAIS appelé, et lu NULLE PART. C'est la
+>   fondation à câbler — le signal « pourquoi l'appel a fini ».
+> - `startCall(type)` vit dans useVideoCall au niveau CONVERSATION
+>   (ConversationLayout), PAS accessible depuis VideoCallInterface (l'UI
+>   in-call, torn-down au fail). L'échec n'est surfacé que par un toast
+>   (VideoCallInterface:447 connectTimeout) sans persister de raison.
+> Architecture minimale (4 pas, tous requis — non décomposable) :
+>   1. Écrire callEndReason sur fin d'appel : handleCallEnded(event.reason)
+>      APRÈS reset() (reset le nulle) + sur échec client (watchdog).
+>   2. Capturer le dernier type (audio/video) à l'initiation (ref/store).
+>   3. useVideoCall/ConversationLayout observe callEndReason ; si échec
+>      retryable (failed/connectionLost), toast action « Réessayer ».
+>   4. Retry → startCall(lastType) ; clear callEndReason au nouveau call.
+> Décision PRODUIT requise avant build : auto-retry vs bouton manuel,
+> nombre de tentatives, toast vs bannière, parité iOS/Android. C'est
+> pourquoi non-fait autonome — feature UX, pas gap à combler.
