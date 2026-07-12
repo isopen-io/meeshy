@@ -620,3 +620,12 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > feature:calls 208 verts (pas de CI Android → gradle local fait foi ; ship
 > Play Store). Reste UNIQUEMENT la parité iOS (session iOS occupée — à faire
 > quand libre, en réutilisant la même règle de policy).
+
+> Retry-on-failure PARITÉ iOS (2026-07-12, 480b52da4) — parité 3 plateformes
+> COMPLÈTE. CallRetryPolicy (WebRTCTypes, pur, MÊME règle failed/connectionLost)
+> + CallManager (lastOutgoingContext à startCall, canRetryCall, retryCall()
+> re-dial, settle allongé 12s vs 1.5s pour retryable) + CallView bouton
+> « Réessayer » + String(localized:defaultValue:) sans toucher Localizable.xcstrings
+> (session iOS active dessus) + 4 source-guards (vérifiés Python) + test policy pur.
+> Les 3 plateformes offrent « Réessayer » sur un échec transitoire, MÊME
+> règle de policy (SSOT). Reste : verdict iOS Tests + ship App Store.
