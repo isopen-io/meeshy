@@ -515,3 +515,7 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > normal (completed/local/remote/missed/rejected) + in_progress délibéré
 > exclus. isFailureEndReason testé. 61/61. L'endpoint donne maintenant
 > directement le signal au lieu de forcer un calcul manuel depuis byEndReason.
+
+> callFailureRate DÉPLOYÉ (2026-07-12) : gateway fe13f1293→eb08aa377, healthy,
+> endpoint 401. L'endpoint admin donne maintenant le taux d'échec système
+> directement — la KPI de fiabilité n°1 est surfacée en production.
