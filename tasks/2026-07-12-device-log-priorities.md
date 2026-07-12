@@ -179,10 +179,18 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 
 ## P3 — Mineur / config / bruit
 
-- [ ] **#14 — Firebase non configuré (Crashlytics/Analytics NoOp)**
+- [x] **#14 — Firebase non configuré (Crashlytics/Analytics NoOp)** — décision : NoOp intentionnel (no-code)
   Evidence : `Firebase not configured … NoOp`, `FirebaseApp not configured: screen_view`.
   Attendu en debug, mais = **pas de crash-reporting** sur cette build. Décider : ajouter
   `GoogleService-Info.plist` (debug) ou documenter le NoOp intentionnel.
+  **DÉCISION : garder le NoOp intentionnel — AUCUN code, AUCUN secret ajouté.** Preuve (design
+  délibéré, `AppDelegate.bootCrashReporting`) : (1) le plist est **gitignored** (secrets hors repo) ;
+  (2) le gate `Bundle.main.path(GoogleService-Info)` → `NoOpCrashReporter` si absent ; (3) **même avec
+  le plist, `#if DEBUG` désactive la collecte** (`setCrashlyticsCollectionEnabled(false)` + NoOp) pour
+  ne pas polluer le dashboard prod ; (4) **Release** a le vrai `CrashlyticsReporter` + tagging build.
+  Ajouter un plist debug **n'activerait pas** le reporting (DEBUG le désactive). **Note opérationnelle** :
+  pour capturer les crashs du device-test watchdog, utiliser un **build Release/TestFlight** (Crashlytics
+  actif), pas un build Debug. Le design est déjà documenté dans le code (AppDelegate 365-401).
 
 - [ ] **#15 — App Group CFPrefs mal lu**
   Evidence : `Couldn't read values … group.me.meeshy.apps … kCFPreferencesAnyUser … detaching from cfprefsd`.
@@ -229,3 +237,5 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   terminale) au lieu du toast+`failCall`. `call_cancel push ignored` = garde intentionnelle bénigne.
 - 2026-07-12 : #13 livré `10090ecd2` — `forceReregister` dédupliqué sur le cooldown (prédicat pur testé).
   Tue le churn PushKit. **P2 (#9-#13) entièrement clos.**
+- 2026-07-12 : #14 (P3) décision no-code — NoOp Firebase intentionnel (plist gitignored ; DEBUG désactive
+  la collecte ; Release a Crashlytics). Device-test crash → build Release. Aucun secret ajouté.
