@@ -2189,7 +2189,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         let payload: [String: Any] = ["callId": callId]
         return await withCheckedContinuation { continuation in
             var resumed = false
-            socket.emitWithAck("call:join", payload).timingOut(after: 3) { items in
+            // 6s (was 3s): the gateway only sends the success ACK AFTER
+            // `joinCall` (Prisma transaction → 'connecting', TURN credential
+            // generation, participant enrichment, C8 same-user socket eviction
+            // via fetchSockets). Under load that work can exceed 3s, so a
+            // slow-but-successful join was falsely reported `NOT ACKed`, firing
+            // a redundant retry that burned the caller's ring budget → `missed`.
+            // Still well under the 45s ring / 30s connect budget, even with the
+            // one retry in joinCallRoomReliably.
+            socket.emitWithAck("call:join", payload).timingOut(after: 6) { items in
                 guard !resumed else { return }
                 resumed = true
                 let success = (items.first as? [String: Any])?["success"] as? Bool ?? false
