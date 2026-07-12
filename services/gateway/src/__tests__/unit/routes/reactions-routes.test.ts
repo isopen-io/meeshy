@@ -20,6 +20,7 @@ const mockAddReaction = jest.fn<any>();
 const mockRemoveReaction = jest.fn<any>();
 const mockGetMessageReactions = jest.fn<any>();
 const mockGetParticipantReactions = jest.fn<any>();
+const mockGetUserReactions = jest.fn<any>();
 const mockCreateUpdateEvent = jest.fn<any>();
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
@@ -61,6 +62,7 @@ jest.mock('../../../services/ReactionService', () => ({
     removeReaction: (...args: any[]) => mockRemoveReaction(...args),
     getMessageReactions: (...args: any[]) => mockGetMessageReactions(...args),
     getParticipantReactions: (...args: any[]) => mockGetParticipantReactions(...args),
+    getUserReactions: (...args: any[]) => mockGetUserReactions(...args),
     createUpdateEvent: (...args: any[]) => mockCreateUpdateEvent(...args),
   })),
 }));
@@ -996,7 +998,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'GET', '/reactions/user/:userId');
 
-      mockGetParticipantReactions.mockResolvedValue(userReactions);
+      mockGetUserReactions.mockResolvedValue(userReactions);
 
       const req = makeRequest({
         params: { userId: USER_ID },
@@ -1004,7 +1006,7 @@ describe('reactionRoutes', () => {
       });
       await handler(req, reply);
 
-      expect(mockGetParticipantReactions).toHaveBeenCalledWith(USER_ID);
+      expect(mockGetUserReactions).toHaveBeenCalledWith(USER_ID);
       expect(mockSendSuccess).toHaveBeenCalledWith(reply, userReactions);
       expect(reply.statusCode).toBe(200);
     });
@@ -1013,7 +1015,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'GET', '/reactions/user/:userId');
 
-      mockGetParticipantReactions.mockRejectedValue(new Error('redis down'));
+      mockGetUserReactions.mockRejectedValue(new Error('redis down'));
 
       const req = makeRequest({
         params: { userId: USER_ID },
