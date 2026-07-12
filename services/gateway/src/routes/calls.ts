@@ -18,6 +18,7 @@ import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
 import { CallService } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
+import { toCallSessionResponse } from '../utils/call-session-response.js';
 import {
   initiateCallSchema,
   getCallSchema,
@@ -204,7 +205,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         settings
       });
 
-      return sendSuccess(reply, callSession, { statusCode: 201 });
+      return sendSuccess(reply, toCallSessionResponse(callSession), { statusCode: 201 });
     } catch (error: any) {
       logger.error('❌ REST: Error initiating call', error);
 
@@ -312,7 +313,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // CVE-003: Pass requesting user ID for authorization check
       const callSession = await callService.getCallSession(callId, userId);
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error getting call', error);
 
@@ -459,7 +460,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // resterait orpheline. Fire-and-forget + idempotent (cf. finalizeCallSummary).
       callService.finalizeCallSummary(callId);
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error ending call', error);
 
@@ -605,7 +606,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         settings,
       });
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error joining call', error);
 
@@ -798,7 +799,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // sur le statut terminal), finalise la bulle si l'appel s'est terminé.
       callService.finalizeCallSummary(callId);
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error leaving call', error);
 
@@ -939,7 +940,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         conversationId
       );
 
-      return sendSuccess(reply, callSession);
+      return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call', error);
 
@@ -1056,7 +1057,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'NO_ACTIVE_CALL');
       }
 
-      return sendSuccess(reply, activeCall);
+      return sendSuccess(reply, toCallSessionResponse(activeCall));
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call for user', error);
 
