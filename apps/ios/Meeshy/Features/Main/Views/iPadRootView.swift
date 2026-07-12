@@ -36,7 +36,9 @@ struct iPadRootView: View {
     /// (iPhone) coordinator wiring; the cover is wired in
     /// `iPadRootView+Sheets.swift`.
     @StateObject var storyViewerCoordinator = StoryViewerCoordinator()
-    @ObservedObject var callManager = CallManager.shared
+    // CallManager n'est PLUS observé ici : la présentation d'appel passe par
+    // `.modifier(CallPresentationLayer())` (partagé avec RootView) qui isole le
+    // churn d'appel hors de `iPadRootView.body`. Cf. watchdog 0x8BADF00D.
     @ObservedObject var networkMonitor = NetworkMonitor.shared
     @ObservedObject var notificationManager = NotificationToastManager.shared
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
