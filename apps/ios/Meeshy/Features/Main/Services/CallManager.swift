@@ -2214,7 +2214,8 @@ final class CallManager: ObservableObject {
 
     func rejectPendingCall() {
         guard let pending = pendingIncomingCall else { return }
-        MessageSocketManager.shared.emitCallEnd(callId: pending.callId)
+        // Refus du call-waiting : porte aussi reason=rejected (cf. emitCallReject).
+        MessageSocketManager.shared.emitCallReject(callId: pending.callId)
         pendingIncomingCall = nil
         showCallWaitingBanner = false
         Logger.calls.info("Rejected pending call: \(pending.callId)")
@@ -4299,11 +4300,13 @@ final class CallManager: ObservableObject {
         Logger.calls.error("[CALL-DIAG] answer never ACK'd after \(total) attempts — relying on gateway replay (§4.6)")
     }
 
-    // Audit P3 — `toUserId` was accepted by the previous signature and
-    // never used. Dropped for clarity — `call:leave` is server-routed via
-    // the call room, no recipient field needed.
+    // Refus explicite = `call:end {reason: "rejected"}` (plus `call:leave`) :
+    // le leave pré-décroché terminait bien l'appel 1:1 mais le serveur le
+    // résolvait en `missed` — notification « appel manqué » envoyée au callee
+    // qui venait de REFUSER, et refus compté dans le filtre « manqués » du
+    // journal. Parité Android/web (fix 2026-07-12).
     private func emitCallReject(callId: String) {
-        MessageSocketManager.shared.emitCallLeave(callId: callId)
+        MessageSocketManager.shared.emitCallReject(callId: callId)
     }
 
     // MARK: - Duration Formatting

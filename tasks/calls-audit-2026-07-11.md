@@ -172,7 +172,10 @@
 > DeclineCallReceiver/drain passent rejected ; hangUp reste sans raison.
 > Web : handleRejectCall passe de call:leave (résolu missed) à call:end
 > {reason:'rejected'} — end permis à tout participant actif (P2P, C4),
-> broadcast immédiat à l'appelant. iOS À FAIRE (session active dessus).
+> broadcast immédiat à l'appelant. iOS ALIGNÉ : emitCallReject passe de
+> call:leave à call:end {reason:'rejected'} (même bug que le web), le
+> refus du call-waiting (rejectPendingCall) aussi — les 3 plateformes
+> envoient la raison.
 > status=rejected serveur : endCall pré-décroché + reason rejected écrit
 > enfin CallStatus.rejected (l'enum existait, RIEN ne l'écrivait) — fin de
 > la notification « appel manqué » envoyée au callee qui venait de REFUSER
