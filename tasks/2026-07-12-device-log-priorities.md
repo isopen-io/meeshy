@@ -89,13 +89,21 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   (les rows partent en 1 POST → pas de thundering herd). TDD ×5. Build iOS vert. Résout aussi le
   35 s réseau résiduel de #5.
 
-- [ ] **#7 — « Publishing changes from within view updates is not allowed »**
+- [x] **#7 — « Publishing changes from within view updates is not allowed »** — `1b1e4668b`
   Evidence : warning couplé à `_systemColorScheme changed` → `_theme changed`.
   Hypothèse : `ThemeManager` republie un @Published PENDANT l'évaluation du body (sync
   colorScheme→theme) → comportement indéfini + rendus parasites, sur le chemin de RootView.
   Fichiers : `ThemeManager` (sync systemColorScheme→theme), `MeeshyUI/Theme/`.
   Fix piste : différer la mutation (`Task { @MainActor }` / `DispatchQueue.main.async`) ou
   passer par `adaptiveOnChange(of: colorScheme)` au lieu de calculer dans le body. Testable.
+  **Cause prouvée** : `SystemThemeDetector` (chemin RootView, `MeeshyApp`) appelle
+  `ThemeManager.shared.syncWithSystem` (via `adaptiveOnChange`/`onAppear`), qui mutait
+  `@Published mode` **synchronement** → `objectWillChange` du theme émis DANS la transaction
+  SwiftUI déclenchée par le changement de colorScheme (lui-même observé sur RootView).
+  **Fix** : la mutation de `mode` est différée sur le tour main-actor suivant (`Task { @MainActor }`,
+  re-check preference/mode). Corrige tous les call sites au niveau racine. `ThemeManager` = singleton
+  (`init` privé) → pas de TDD propre sans refactor hors-scope ; vérif absence-warning = **sonde device**
+  (P0). Build iOS vert.
 
 - [ ] **#8 — Presence : 200 ids dans UNE URL géante (5,1 s, fragile)**
   Evidence : `GET /users/presence?ids=<200 ids> network=5118ms`, `Refreshed presence for 200 ids` en boucle.
@@ -167,3 +175,6 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   Le batching réel (perf réseau) reste pour #6.
 - 2026-07-12 : #6 livré `57f76b902` — batch le flush en 1 POST/≤50 sessions (rate-limit 20/min).
   Supprime le martèlement 429 ET le 35 s réseau résiduel de #5. Filtre cross-user pré-POST. Build vert.
+- 2026-07-12 : #7 livré `1b1e4668b` — `ThemeManager.syncWithSystem` différé (Task @MainActor) hors
+  passe d'update SwiftUI. Supprime le warning « publishing within view updates » + renders parasites
+  sur le chemin RootView (P0). Build vert ; vérif finale = sonde device.
