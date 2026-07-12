@@ -358,3 +358,11 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > par l'appelant. 8/8 harnais. Le contrat des 4 arcs (ring multi-device,
 > side-channels, reject, captions) est intégralement épinglé sur vraies
 > sockets.
+
+> **CERTIFICATION 2026-07-12 : tout vert.** iOS Tests success sur 95c6cebc4
+> (run 29178082197 — refus lock-screen d371f3505 + refus socket-down différé
+> 95c6cebc4, 7 source-guards neufs). CI success + Docker success sur
+> 8c6c75748 (harnais e2e 8 scénarios dont reject wire + captions web
+> b507ebe19). L'arc reject est complet : 3 plateformes × tous les chemins
+> de refus × tous les états de transport, contrat serveur épinglé en e2e.
+> Reste UNIQUEMENT le device-test physique 2 appareils.
