@@ -301,3 +301,18 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 `CallManager.swift:1281,3915,4788`, `P2PWebRTCClient.swift:174-190`,
 `apps/web/components/video-call/CallManager.tsx:643-648`,
 `CallSignalManager.kt:295-312`, `packages/shared/types/video-call.ts:836-885`.
+
+> Captions live 3 plateformes (2026-07-12, post-arc transcription) : le
+> gateway traduit chaque segment final par participant et relaie
+> call:translated-segment ; iOS l'affichait (CallTranscriptionService),
+> Android aussi (audit #5 — CallViewModel.onTranslatedSegment →
+> state.captionText → CallScreen), mais le web n'avait AUCUN listener :
+> un participant web face à un speaker iOS ne voyait jamais les
+> sous-titres. Comblé b507ebe19 : useCallCaptions (sémantique miroir iOS
+> appendSegment — partial remplace partial du même speaker, final efface
+> le partial, rétention 4 lignes, linger 6 s ré-armé) +
+> CallCaptionsOverlay (bandeau bas-centre, partials atténués, préfixe
+> speaker résolu) + i18n 4 locales. 19 suites appels web 103/103.
+> L'ÉMISSION reste iOS-only (SFSpeechRecognizer on-device) — émission
+> web (Web Speech API) / Android (SpeechRecognizer) = features dédiées,
+> hors périmètre parité consommation.
