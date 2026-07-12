@@ -4,6 +4,43 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload)** → rest`
 
+> On 2026-07-12 **media auto-download decision pipeline** landed (slice `media-auto-download-decider`,
+> feature-parity §L). Closes the "next slice" NB the `settings-media-auto-download` slice left open: the live
+> `ConnectivityManager` monitor + the **first consumer** of the already-tested `MediaDownloadPolicyEngine`.
+> Two pure `:core:model` SSOTs: (1) `MediaKindClassifier.fromMimeType(mime, isAudioTranslation) → MediaKind?`
+> — the bridge from an attachment's wire MIME to the policy table: strips the `;`-parameter, trims, case-folds
+> (MIME is case-insensitive), `image/`→IMAGE, `video/`→VIDEO, `audio/`→AUDIO or AUDIO_TRANSLATION per the flag;
+> a document / blank / absent / bare top-level token (`image` without a subtype) → `null` = *never auto-fetched*
+> on the user's data; (2) `MediaAutoDownloadDecider.decide(kind, availability, condition, prefs) →
+> AutoDownloadDecision` — the guard chain iOS inlines in `ConversationMediaViews`'s auto-DL `.task`, made a pure
+> state machine: `null` kind → SKIP_UNSUPPORTED (short-circuits before any network read), AVAILABLE →
+> SKIP_ALREADY_AVAILABLE, DOWNLOADING → SKIP_IN_FLIGHT, NEEDS_DOWNLOAD → the `MediaDownloadPolicyEngine` verdict
+> (DOWNLOAD / SKIP_POLICY, the offline gate surfacing as SKIP_POLICY not DOWNLOAD); `decideFor(mime,…)`
+> classifies then decides. Supporting enums `MediaAvailability` (AVAILABLE/DOWNLOADING/NEEDS_DOWNLOAD) +
+> `AutoDownloadDecision` (with a `shouldDownload` convenience). `:sdk-core` `NetworkConditionMonitor` (interface
+> + `InMemoryNetworkConditionMonitor` fake + `AndroidNetworkConditionMonitor` — the `ConnectivityManager` glue
+> that maps the default network's `NetworkCapabilities` onto the four flags the pure, already-tested
+> `NetworkConditionResolver` consumes, exposed as a `StateFlow<NetworkCondition>` via `callbackFlow`+`stateIn`),
+> Hilt-provided `@Singleton` in `SdkModule`. The future chat media view injects the monitor +
+> `MediaDownloadPreferencesStore` and calls the pure decider — the "when to actually kick the download / which
+> UI cascade" rule stays app-side (grain rule: a component wiring the named Meeshy singletons + a "when to X"
+> rule is app-side; the monitor takes opaque `Context` and is agnostic → SDK). **+24 tests**
+> (MediaKindClassifier 13, MediaAutoDownloadDecider 11), all green. `:app:assembleDebug` **BUILD SUCCESSFUL**;
+> `:core:model:testDebugUnitTest` green; full all-module `testDebugUnitTest` had its **only** failure on the
+> documented DataStore-under-parallel-load flake (`NotificationPreferencesStoreTest`, NOTES §DataStore, 1/574
+> sdk-core tests) — **green in isolation in 3s**, and this slice adds **no** DataStore store. A two-mutation RED
+> check (break the DOWNLOADING gate + break the video branch) failed exactly the 5 relevant tests, confirming
+> they are behavioural not tautological. Reviewer **PASS** (diff `apps/android` only — `:core:model` [new file],
+> `:sdk-core` [new monitor + `SdkModule` binding], `feature-parity.md`; no production logic outside; **SDK
+> purity** — pure classifier/decider in `:core:model`, agnostic `Context`-fed monitor in `:sdk-core`, "when to
+> auto-DL" left app-side; **SSOT** — one `MediaKindClassifier` bridges MIME→kind, the decider defers the network
+> verdict to the existing `MediaDownloadPolicyEngine` + `NetworkConditionResolver`, no re-implementation;
+> **UDF/instant-app** — pure decision, live `StateFlow` condition; **colour/UX coherence** — no UI in this slice
+> (decision layer + service); **no coverage floor lowered, no test weakened**). **Next slice:** the chat media
+> view that consumes the decider (the actual auto-DL trigger + a manual-download affordance for SKIP_POLICY),
+> in-place crop/resize/compress before upload (§K polish), or a §L row (crash-report diagnostics viewer; static
+> screens: Help/ToS/Privacy/licenses/About).
+
 > On 2026-07-11 **avatar + banner upload** landed (slice `profile-avatar-banner-upload`, feature-parity §K —
 > "Edit profile (avatar + banner upload …)", the last unshipped leg of profile editing). Port of iOS
 > `AttachmentUploader` + `UserService.updateAvatar`, generalised to a banner (iOS uploads only a single
@@ -2496,6 +2533,32 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-12 — slice `media-auto-download-decider` ✅ impl + reviewer PASS + MERGED
+- **Branch:** `claude/apps/android/media-auto-download-decider` (off latest `main`).
+- **What:** feature-parity §L — the live `ConnectivityManager` network monitor + the first consumer of
+  `MediaDownloadPolicyEngine`. Closes the NB the `settings-media-auto-download` slice left open.
+- **Added (production):**
+  - `:core:model` `MediaAutoDownload.kt` — `MediaKindClassifier.fromMimeType(mime, isAudioTranslation) →
+    MediaKind?` (defensive MIME parse: strip `;`-param, trim, case-fold; image/video/audio→kind, else `null`);
+    `MediaAvailability` (AVAILABLE/DOWNLOADING/NEEDS_DOWNLOAD); `AutoDownloadDecision`
+    (DOWNLOAD/SKIP_UNSUPPORTED/SKIP_ALREADY_AVAILABLE/SKIP_IN_FLIGHT/SKIP_POLICY + `shouldDownload`);
+    `MediaAutoDownloadDecider.decide(…)` (the availability-gated wrapper over the policy engine) + `decideFor(…)`.
+  - `:sdk-core` `NetworkConditionMonitor` (interface + `InMemoryNetworkConditionMonitor` fake +
+    `AndroidNetworkConditionMonitor` `ConnectivityManager` glue over `NetworkConditionResolver`, `StateFlow`);
+    `SdkModule` `@Provides @Singleton` binding.
+- **Tests (RED→GREEN):** +24 — `MediaKindClassifierTest` 13 (image/video/audio, translation flag routing +
+  ignored-for-non-audio, case-fold, `;`-param strip, whitespace trim, null/blank/non-media/bare-token → null,
+  trailing-slash boundary), `MediaAutoDownloadDeciderTest` 11 (unsupported short-circuit incl. all-availability
+  sweep, already-available, in-flight, needs+allows, needs+denies, offline→SKIP_POLICY, per-kind policy read,
+  `decideFor` classify-then-decide, unclassifiable→unsupported, translation-flag routes to the AT policy).
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model:testDebugUnitTest` green (958 total, my
+  24 pass). Full all-module run: only failure = documented DataStore flake `NotificationPreferencesStoreTest`
+  (1/574 sdk-core, green in isolation in 3s, NOTES §DataStore-under-parallel-load) — this slice adds no
+  DataStore store. Two-mutation RED proof: break DOWNLOADING gate + video branch → exactly 5 relevant tests
+  fail; reverted.
+- **Reviewer:** PASS. Diff `apps/android` only (`:core:model` new file, `:sdk-core` monitor + `SdkModule`
+  binding, `feature-parity.md`). SDK purity, SSOT, UDF, no coverage floor lowered.
 
 ### 2026-07-11 — slice `settings-account-deletion` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/settings-account-deletion` (off latest `main`).

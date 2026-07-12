@@ -4,6 +4,24 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-12, `media-auto-download-decider`)
+- **The grain rule, applied cleanly: monitor = SDK, "when to auto-DL" = app.** A `NetworkConditionMonitor`
+  takes an opaque `Context` and produces a `NetworkCondition` via the already-pure `NetworkConditionResolver` —
+  agnostic of any Meeshy product rule → `:sdk-core`. A *coordinator* that would inject the named Meeshy
+  singletons (`NetworkConditionMonitor` + `MediaDownloadPreferencesStore`) **and** encode "when to actually
+  kick the download" is app-side per the grain rule — so I did **not** add one this slice. The future chat
+  media view injects both singletons and calls the pure `MediaAutoDownloadDecider` directly (exactly the iOS
+  `.task` shape). Shipping the decision SSOT + the live service ahead of the UI consumer mirrors how
+  `MediaDownloadPolicyEngine` itself shipped — a wired, Hilt-`@Singleton` service is not "orphan" code.
+- **Pure decider = policy engine + availability gates.** `MediaDownloadPolicyEngine` only answers the *policy*
+  question. A real media view also has "already on disk / download running / unsupported type" gates. Layering
+  those as a pure `MediaAvailability` → `AutoDownloadDecision` state machine keeps the whole decision JVM-
+  testable and lets the Compose glue stay a one-liner (`decision.shouldDownload`).
+- **`ConnectivityManager` glue stays untestable-but-thin over the pure resolver.** `NetworkCapabilities` can't
+  be constructed in a JVM unit test, so `AndroidNetworkConditionMonitor` is coverage-exempt — but it holds ZERO
+  decision logic: it only maps caps→4 booleans and defers to `NetworkConditionResolver` (already 9-test
+  covered). Same pattern as the DataStore stores: framework I/O in the glue, all branches in `:core:model`.
+
 ## Lesson (2026-07-11, `profile-avatar-banner-upload`)
 - **Reuse beat rebuild: the avatar/banner upload was almost entirely wiring.** The multipart
   `MediaApi`/`MediaRepository` (pure `MediaUpload.formPart`, JVM-tested), the `PickVisualMedia` +

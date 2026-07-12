@@ -1885,8 +1885,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       policy is an inert no-op. `MediaDownloadScreen` (glue): one accent-coherent section per kind with a
       single-choice `RadioButton` list, reached from a new "Auto-download" row in Settings → Data
       (`Routes.MEDIA_DOWNLOAD`). +37 tests (engine 6, resolver 9, prefs/codec 10, store 7, VM 5). EN/FR/ES/PT
-      strings. NB: the live `ConnectivityManager` monitor + the media-pipeline consumer of the decision are the
-      next slice — this ships the fully-tested decision SSOT + the persisted preference surface.
+      strings.
+- [x] Media auto-download decision pipeline — the live `ConnectivityManager` monitor + the first consumer of
+      `MediaDownloadPolicyEngine` — **shipped** (slice `media-auto-download-decider`, 2026-07-12). Closes the
+      "next slice" NB left by `settings-media-auto-download`. Two pure `:core:model` SSOTs: `MediaKindClassifier`
+      (wire MIME → `MediaKind?`; strips the `;`-parameter, trims, case-folds; `image/`→IMAGE, `video/`→VIDEO,
+      `audio/`→AUDIO or AUDIO_TRANSLATION per the translation flag; a document / blank / bare top-level token →
+      `null` = never auto-fetched) and `MediaAutoDownloadDecider.decide(kind, availability, condition, prefs) →
+      AutoDownloadDecision` (the guard chain iOS inlines in `ConversationMediaViews`'s auto-DL `.task`: unsupported
+      kind → SKIP_UNSUPPORTED, on-disk → SKIP_ALREADY_AVAILABLE, in-flight → SKIP_IN_FLIGHT, else the
+      `MediaDownloadPolicyEngine` verdict → DOWNLOAD / SKIP_POLICY; `decideFor(mimeType,…)` classifies then decides).
+      `MediaAvailability` (AVAILABLE/DOWNLOADING/NEEDS_DOWNLOAD) + `AutoDownloadDecision` (with `shouldDownload`).
+      `:sdk-core` `NetworkConditionMonitor` (interface + `InMemoryNetworkConditionMonitor` fake +
+      `AndroidNetworkConditionMonitor` — the `ConnectivityManager` glue that maps the default network's
+      `NetworkCapabilities` onto the four flags the pure, already-tested `NetworkConditionResolver` consumes;
+      exposed as a `StateFlow<NetworkCondition>`), Hilt-provided as a `@Singleton`. The future chat media view
+      injects the monitor + `MediaDownloadPreferencesStore` and calls the pure decider — the "when to auto-DL"
+      rule stays app-side (grain rule). +24 tests (MediaKindClassifier 13, MediaAutoDownloadDecider 11). No new
+      DataStore store (no flake surface). EN/FR/ES/PT strings: none needed (no user-facing copy).
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync
 - [x] Change password with strength meter + validation — **shipped** (slice `settings-change-password`,
       2026-07-11). Port of iOS `ChangePasswordView` + `PasswordStrengthIndicator`, surpassing it with one SOTA
