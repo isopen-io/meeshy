@@ -127,8 +127,10 @@ fun CallScreen(
     // Auto-dismiss a settled call after a short beat so the "Call ended" screen does
     // not linger (parity with iOS's 1.5 s settle → full-screen cover close). The
     // manual close button on the ended view remains for an immediate back-out.
-    LaunchedEffect(state.isEnded) {
-        if (state.isEnded) {
+    // A RETRYABLE failure keeps the screen up: the user must have time to tap
+    // « Réessayer » (parity web retry-on-failure) — auto-dismiss would yank it.
+    LaunchedEffect(state.isEnded, state.canRetry) {
+        if (state.isEnded && !state.canRetry) {
             delay(CALL_ENDED_AUTO_DISMISS_MS)
             viewModel.dismiss()
             onClose()
@@ -275,6 +277,7 @@ fun CallScreen(
                     viewModel.dismiss()
                     onClose()
                 },
+                onRetry = viewModel::retry,
             )
         }
 
@@ -435,6 +438,7 @@ private fun CallControls(
     onToggleMute: () -> Unit,
     onToggleCamera: () -> Unit,
     onClose: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xl, Alignment.CenterHorizontally),
@@ -481,6 +485,17 @@ private fun CallControls(
                 background = MaterialTheme.colorScheme.error,
                 contentDescription = stringResource(R.string.call_action_hang_up),
                 onClick = onHangUp,
+            )
+        }
+
+        if (state.canRetry) {
+            // A transient failure — offer « Réessayer » (re-initiates the same
+            // call) beside the close button. Parité web retry-on-failure.
+            CallCircleButton(
+                icon = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
+                background = MeeshyTheme.tokens.success,
+                contentDescription = stringResource(R.string.call_action_retry),
+                onClick = onRetry,
             )
         }
 

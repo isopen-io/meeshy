@@ -16,6 +16,7 @@
     <string name="call_action_mute">Silenciar</string>
     <string name="call_action_camera">Cámara</string>
     <string name="call_action_close">Cerrar</string>
+    <string name="call_action_retry">Reintentar</string>
     <string name="call_action_minimize">Minimizar llamada</string>
     <string name="call_pill_ongoing">Llamada en curso con %1$s</string>
     <string name="call_pill_reopen">Volver a la llamada</string>

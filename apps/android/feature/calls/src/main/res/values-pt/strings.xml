@@ -16,6 +16,7 @@
     <string name="call_action_mute">Mudo</string>
     <string name="call_action_camera">Câmera</string>
     <string name="call_action_close">Fechar</string>
+    <string name="call_action_retry">Tentar novamente</string>
     <string name="call_action_minimize">Minimizar chamada</string>
     <string name="call_pill_ongoing">Chamada em andamento com %1$s</string>
     <string name="call_pill_reopen">Voltar à chamada</string>
