@@ -243,6 +243,28 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     } else {
+      // Busy-path parity (iOS CallManager busy-path, Android onIncomingOffer):
+      // a second incoming call while already in a DIFFERENT active call must not
+      // naively setIncomingCall. The render mounts CallNotification and
+      // VideoCallInterface independently, so an ungated notification renders
+      // OVER the live call and tapping Accept runs setCurrentCall(secondCall),
+      // clobbering the active call and orphaning its RTCPeerConnection.
+      // Auto-decline it (call:end reason=rejected, same as handleRejectCall) so
+      // the active call is untouched and the second caller is freed immediately
+      // instead of ringing into a notification that would break the ongoing call.
+      const { isInCall: busyInCall, currentCall: busyCall } = useCallStore.getState();
+      if (busyInCall && busyCall && busyCall.id !== event.callId) {
+        logger.info('[CallManager]', 'Busy in another call — auto-declining second incoming call ' + event.callId);
+        const socket = meeshySocketIOService.getSocket();
+        if (socket) {
+          (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_END, {
+            callId: event.callId,
+            reason: 'rejected',
+          });
+        }
+        return;
+      }
+
       // I am being called - show notification
       console.log('📞 [CallManager] Setting incomingCall state - should show CallNotification', {
         callId: event.callId,
