@@ -177,6 +177,35 @@ public struct ActiveCallParticipant: Codable, Sendable, Equatable {
         self.userId = userId
         self.user = user
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case userId
+        case user
+    }
+
+    /// Resilient decode: `userId` is the gateway's top-level participant key
+    /// (P1-C, 2026-07-12), but fall back to the nested `user.id` when a payload
+    /// omits it or sends it empty. `userId` is non-optional, so without this a
+    /// single participant missing `userId` would throw and fail the decode of
+    /// the WHOLE `ActiveCallSession` — silently killing crash-recovery (the pill
+    /// disappears, `joinOngoingCall` catches and toasts "impossible de rejoindre").
+    /// This makes the client robust to a gateway regression re-dropping `userId`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let nestedUser = try container.decodeIfPresent(ActiveCallParticipantUser.self, forKey: .user)
+        self.user = nestedUser
+        if let topLevel = try container.decodeIfPresent(String.self, forKey: .userId), !topLevel.isEmpty {
+            self.userId = topLevel
+        } else if let fallback = nestedUser?.id {
+            self.userId = fallback
+        } else {
+            throw DecodingError.dataCorruptedError(
+                forKey: CodingKeys.userId,
+                in: container,
+                debugDescription: "ActiveCallParticipant: neither top-level userId nor nested user.id present"
+            )
+        }
+    }
 }
 
 /// A currently-active (not yet ended) call session, as returned by
