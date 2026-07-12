@@ -165,10 +165,15 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   ignored` est une GARDE INTENTIONNELLE bénigne** (`CallReliabilityPolicy.shouldEndRingingOnCancellation` :
   un cancel tardif/rejoué au callId non-courant est ignoré à raison). Build vert.
 
-- [ ] **#13 — VoIP token re-registration churn**
+- [x] **#13 — VoIP token re-registration churn** — `10090ecd2`
   Evidence : `VoIP push unregistered` → `registration started` → `force re-registration triggered`.
   Hypothèse : la garde « same token registered Xs ago » est court-circuitée par le force-re-register.
   Fichiers : enregistrement VoIP push (iOS). Fix : dédupliquer, ne pas forcer si token identique récent.
+  **Cause prouvée** : `forceReregister` = `unregister()`+`register()` **inconditionnel** (teardown/rebuild
+  PKPushRegistry, nil le token + re-délivre), bypassant la garde cooldown qui ne protège que le POST
+  serveur (`registerTokenWithBackend`). D'où le churn sur logins/foregrounds répétés. **Fix** : prédicat
+  pur `shouldSkipForceReregister` → skip le cycle PushKit si token **inchangé & dans le cooldown (300 s)** ;
+  un token invalidé (`voipToken==nil`) ou stale force toujours un cycle complet. TDD 4 cas. Build vert.
 
 ---
 
@@ -222,3 +227,5 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   jugé légitime. Grâce-avant-suspend écartée (risque « isConnected ment »).
 - 2026-07-12 : #12 livré `c813214ea` — `call:error CALL_ENDED` routé vers `handleRemoteEnd` (réconciliation
   terminale) au lieu du toast+`failCall`. `call_cancel push ignored` = garde intentionnelle bénigne.
+- 2026-07-12 : #13 livré `10090ecd2` — `forceReregister` dédupliqué sur le cooldown (prédicat pur testé).
+  Tue le churn PushKit. **P2 (#9-#13) entièrement clos.**
