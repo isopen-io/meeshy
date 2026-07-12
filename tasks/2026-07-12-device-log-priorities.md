@@ -105,16 +105,27 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   (`init` privé) → pas de TDD propre sans refactor hors-scope ; vérif absence-warning = **sonde device**
   (P0). Build iOS vert.
 
-- [x] **#8 — Presence : 200 ids dans UNE URL géante (5,1 s, fragile)** — `ed0380dcf`
+- [x] **#8 — Presence : 200 ids dans UNE URL géante (5,1 s, fragile)** — `ba84a8a4a` (remplace `7ac810344`)
   Evidence : `GET /users/presence?ids=<200 ids> network=5118ms`, `Refreshed presence for 200 ids` en boucle.
   Hypothèse : URL énorme (limite de longueur, fragile) + requête lente.
   Fichiers : `PresenceManager` (fetch presence).
   Fix piste : chunker (ex. 50/req) ou passer en POST body ; borner la fréquence de refresh.
-  **Cause prouvée** : `PresenceService.performRefresh` joignait ≤200 ObjectIds en UNE query `?ids=`
-  → URL ~5 KB, lente + fragile vs limites header. **Fix** : chunk par 50, fetch **concurrent**
-  (`withTaskGroup`) + ingest progressif → URLs ~1,3 KB, 1re salve rafraîchit l'UI sans attendre
-  (préserve l'intention « refresh rapide »). `Array.chunked(into:)` pur + testé (200→4×50). Build vert.
-  **La FRÉQUENCE « en boucle » relève du churn socket → #11**, pas de ce fix.
+  **Cause prouvée (round 1, `7ac810344`)** : `PresenceService.performRefresh` joignait ≤200 ObjectIds
+  en UNE query `?ids=` → URL ~5 KB. Fix initial : chunk par 50, fetch concurrent (`withTaskGroup`).
+  **Round 2 — remise en cause de l'architecture (audit croisé, agent dédié sur le gateway)** :
+  `presence:snapshot` (`MeeshySocketIOManager.ts` → `AuthHandler`) se ré-émet déjà à **chaque reconnect
+  socket réel** (le gateway ré-authentifie sur chaque nouvelle connexion — pas de session resumption
+  Socket.IO en jeu). Le pull REST, chunké ou non, duplique donc un mécanisme push qui fonctionne déjà,
+  et même chunké+concurrent il tape **4×** le chemin gateway coûteux
+  (`PresenceVisibilityService.resolveForTargets`, ~5 aller-retours séquentiels) au lieu d'1×.
+  **Fix retenu : push-only.** Suppression complète de `PresenceService.swift` (chunking inclus), du
+  trigger `didReconnect`, et du step `presence.refresh` au resume BG. Route gateway
+  `GET /users/presence` conservée (web s'appuie dessus). Design + plan :
+  `docs/superpowers/specs/2026-07-12-presence-push-only-design.md` /
+  `docs/superpowers/plans/2026-07-12-presence-push-only.md`. Build vert + suite complète
+  (phase 2 : 2231 tests incl. `PresenceManagerTests`, phase 3 : verte, 0 échec sur ce périmètre).
+  **La FRÉQUENCE « en boucle » relevait du churn socket → #11 (déjà livré `4c87d81d0`)**, indépendant
+  de ce fix.
 
 ---
 
@@ -266,3 +277,9 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   no-code (#4 environnemental, #14 décision Firebase, #15/#17 bruit OS). Reste UNIQUEMENT la vérif
   device réelle = **absence de SIGKILL** pendant un appel backgroundé long (2 appareils, build Release
   pour Crashlytics — cf. #14).
+- 2026-07-12 : **#8 révisé post-clôture** `ba84a8a4a` (remplace `7ac810344`) — audit croisé (agent dédié
+  sur le gateway) montre que le pull REST, même chunké+concurrent, duplique `presence:snapshot` qui se
+  ré-émet déjà à chaque reconnect socket réel. Remplacé par push-only : suppression complète de
+  `PresenceService.swift`. Voir design/plan sous `docs/superpowers/specs/` et `docs/superpowers/plans/`.
+  Build vert + suite complète (0 échec sur le périmètre présence ; 2 échecs pré-existants sans rapport
+  dans `CallViewObservedObjectInjectionTests`, confirmés absents du diff).
