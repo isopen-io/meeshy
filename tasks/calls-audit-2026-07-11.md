@@ -718,3 +718,16 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > iOS/Android (lecture seule, aucun changement) : hors périmètre cette vague
 > (aucune toolchain Swift/Kotlin dans ce sandbox).
 
+
+> Call-waiting web + DÉPLOIEMENT prod (2026-07-12) — feature de parité complète.
+> Bannière CallWaitingBanner (f5c545f11) : 2e appel entrant pendant un appel actif
+> → bannière ambre « Refuser / Terminer & répondre » au lieu de l'auto-décline
+> silencieux (parité iOS endCurrentAndAnswerPending / Android acceptWaitingSwap).
+> Swap = call:leave actif → reset() (ferme peer connections, aucun orphelin) →
+> acceptOrJoinCall attente. handleCallEnded rendu callId-conscient (dismiss waiting
+> sans reset actif ; promotion si l'actif finit). i18n en/fr/es/pt. 24 suites/180
+> tests verts, 0 régression, CI Test web VERT.
+> DÉPLOYÉ prod 14:20 : docker compose pull+up frontend (isopen/meeshy-web:latest
+> image 1a60816, BUILD_20260712_142040), health=healthy, https://meeshy.me → 200.
+> Busy-path (3fa6f1bfb) + call-waiting sont LIVE. Le web occupé ne casse plus sur
+> un 2e appel et peut désormais swapper — parité fonctionnelle 3 plateformes.
