@@ -422,7 +422,12 @@ export function CallManager() {
       // also covering the server-authoritative call:ended path (the majority
       // real-world drop scenario for an already-established call). Read from
       // the store BEFORE reset() wipes currentCall/controls.
-      if (isRetryableCallFailure(event.reason)) {
+      // …unless a call is WAITING: it is about to be promoted to a fresh
+      // incoming ring (below), which is the user's next action. Stacking a
+      // « Réessayer » offer for the just-dropped active call behind that ring
+      // is conflicting UI, so the promotion path owns the teardown and no retry
+      // is offered.
+      if (!waitingCall && isRetryableCallFailure(event.reason)) {
         const { currentCall, controls, offerCallRetry } = useCallStore.getState();
         if (currentCall?.conversationId) {
           offerCallRetry({
