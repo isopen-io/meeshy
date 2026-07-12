@@ -890,6 +890,15 @@ export class CallEventsHandler {
       const forceEnded = await this.callService.forceEndOrphanedCallSession(callId, (reason || 'completed') as CallEndReason);
       if (!forceEnded) return;
 
+      // `forceEndOrphanedCallSession` stamped `leftAt` on every still-open
+      // participant, so honour the same invariant the happy paths follow (see
+      // `invalidateSignalSession`): this error-recovery helper runs from the
+      // call:end/call:leave/call:force-leave catch blocks, where the rolled-back
+      // transaction skipped their inline eviction — without this, a departed
+      // participant's `call:signal` (any type but `answer`) is relayed off the
+      // stale 2s snapshot for up to the TTL window.
+      this.invalidateSignalSession(callId);
+
       const forceEndedEvent: CallEndedEvent = {
         callId,
         duration: forceEnded.duration,
