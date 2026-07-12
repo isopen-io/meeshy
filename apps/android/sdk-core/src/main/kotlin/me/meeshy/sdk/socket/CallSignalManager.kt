@@ -224,7 +224,17 @@ class CallSignalManager @Inject constructor(
     fun emitLeave(callId: String) = emit("call:leave", callId)
 
     /** End the call for every participant. */
-    fun emitEnd(callId: String) = emit("call:end", callId)
+    /**
+     * End the call for every participant. [reason] optionnel au schéma gateway
+     * (`socketEndCallSchema`, minuscules+underscores) : `"rejected"` sur un
+     * refus explicite — sans lui, le serveur résout tout end pré-décroché en
+     * `missed` et le journal de l'appelant ment (« manqué » pour un refus).
+     */
+    fun emitEnd(callId: String, reason: String? = null) =
+        socketManager.emit(
+            "call:end",
+            JSONObject().put("callId", callId).apply { reason?.let { put("reason", it) } },
+        )
 
     /** Signal the peer that the local microphone was muted/unmuted. */
     fun emitToggleAudio(callId: String, enabled: Boolean) =

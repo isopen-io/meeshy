@@ -76,7 +76,7 @@ class MeeshyApplication : Application(), Configuration.Provider {
                 // Refus prononcés socket froide (bouton « Refuser » de la
                 // notification) : rejoués maintenant que le fil est vivant —
                 // call:end est idempotent, un rejeu tardif est un no-op.
-                declinedCalls.drain().forEach(callSignalManager::emitEnd)
+                declinedCalls.drain().forEach { callSignalManager.emitEnd(it, reason = "rejected") }
             }
         }
     }

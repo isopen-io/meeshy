@@ -379,14 +379,16 @@ class CallViewModel @Inject constructor(
     /** Local user declines an incoming call — reject the FSM and end it on the wire. */
     fun decline() {
         dispatch(CallEvent.Reject)
-        emitIfIdentified(signalManager::emitEnd)
+        // reason=rejected : sans elle le serveur résout ce end pré-décroché en
+        // missed et le journal de l'appelant dit « manqué » pour un refus.
+        emitIfIdentified { signalManager.emitEnd(it, reason = REASON_REJECTED) }
         coordinator.end()
     }
 
     /** Local user hangs up an active call — end the FSM and the call on the wire. */
     fun hangUp() {
         dispatch(CallEvent.LocalHangUp)
-        emitIfIdentified(signalManager::emitEnd)
+        emitIfIdentified { signalManager.emitEnd(it) }
         coordinator.end()
     }
 
@@ -495,7 +497,7 @@ class CallViewModel @Inject constructor(
     }
 
     private fun endWaiting(pending: WaitingCall) {
-        signalManager.emitEnd(pending.callId)
+        signalManager.emitEnd(pending.callId, reason = REASON_REJECTED)
         waitingReduce(CallWaitingEvent.Rejected)
     }
 
@@ -778,7 +780,7 @@ class CallViewModel @Inject constructor(
     private fun onReconnectBudgetExpired() {
         dispatch(CallEvent.ReconnectFailed)
         if (callState is CallState.Ended) {
-            emitIfIdentified(signalManager::emitEnd)
+            emitIfIdentified { signalManager.emitEnd(it) }
             coordinator.end()
         } else {
             coordinator.retryIceRestart()
@@ -810,7 +812,7 @@ class CallViewModel @Inject constructor(
         connectingWatchdogJob = viewModelScope.launch {
             connectingWatchdog.countdown().collect {
                 dispatch(CallEvent.ConnectionFailed(CONNECT_TIMED_OUT))
-                emitIfIdentified(signalManager::emitEnd)
+                emitIfIdentified { signalManager.emitEnd(it) }
                 coordinator.end()
             }
         }
@@ -833,5 +835,8 @@ class CallViewModel @Inject constructor(
         const val INITIATE_TIMED_OUT = "call:initiate timed out"
         const val INITIATE_MALFORMED = "malformed call:initiate ack"
         const val CONNECT_TIMED_OUT = "connect timed out"
+
+        /** Raison wire d'un refus explicite (schéma gateway socketEndCallSchema). */
+        const val REASON_REJECTED = "rejected"
     }
 }

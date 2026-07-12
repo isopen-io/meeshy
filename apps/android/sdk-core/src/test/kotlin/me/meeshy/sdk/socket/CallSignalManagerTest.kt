@@ -297,6 +297,27 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `emitEnd without a reason omits the field entirely`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitEnd("call-9")
+        verify { socket.emit("call:end", capture(payload)) }
+        assertThat(payload.captured.has("reason")).isFalse()
+    }
+
+    @Test
+    fun `emitEnd carries an explicit rejected reason on the wire`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitEnd("call-9", reason = "rejected")
+        verify { socket.emit("call:end", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("reason")).isEqualTo("rejected")
+    }
+
+    @Test
     fun `emitBackgrounded sends callId and the self participant id`() {
         val (managerAndSocket, _) = managerWithHandlers()
         val (manager, socket) = managerAndSocket

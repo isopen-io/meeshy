@@ -50,9 +50,14 @@ class DeclineCallReceiver : BroadcastReceiver() {
         ringStore.remember(callId, System.currentTimeMillis())
 
         if (socketManager.isConnected) {
-            signalManager.emitEnd(callId)
+            signalManager.emitEnd(callId, reason = REASON_REJECTED)
         } else {
             declinedCalls.markDeclined(callId)
         }
+    }
+
+    private companion object {
+        /** Raison wire d'un refus explicite — le journal de l'appelant dit « refusé », pas « manqué ». */
+        const val REASON_REJECTED = "rejected"
     }
 }

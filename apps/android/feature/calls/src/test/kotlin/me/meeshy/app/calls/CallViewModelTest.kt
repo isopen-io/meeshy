@@ -418,7 +418,7 @@ class CallViewModelTest {
         vm.start(incomingAudio)
         vm.decline()
 
-        verify(exactly = 1) { signalManager.emitEnd("call-9") }
+        verify(exactly = 1) { signalManager.emitEnd("call-9", "rejected") }
     }
 
     @Test
@@ -1316,9 +1316,10 @@ class CallViewModelTest {
         vm.rejectWaiting()
 
         assertThat(vm.state.value.waitingBanner).isNull()
-        verify(exactly = 1) { signalManager.emitEnd("call-77") }
+        verify(exactly = 1) { signalManager.emitEnd("call-77", "rejected") }
         // The active call is untouched by rejecting the waiting one.
         verify(exactly = 0) { signalManager.emitEnd("call-9") }
+        verify(exactly = 0) { signalManager.emitEnd("call-9", any()) }
         assertThat(vm.state.value.status).isEqualTo(CallStatus.INCOMING)
     }
 
@@ -1343,7 +1344,7 @@ class CallViewModelTest {
         waitingTimerFlow.emit(Unit) // 15 s elapsed
 
         assertThat(vm.state.value.waitingBanner).isNull()
-        verify(exactly = 1) { signalManager.emitEnd("call-77") }
+        verify(exactly = 1) { signalManager.emitEnd("call-77", "rejected") }
     }
 
     @Test

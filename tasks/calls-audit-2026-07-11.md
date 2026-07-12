@@ -165,6 +165,14 @@
 > CallScreen accept gated permissions, gardé sur INCOMING — une
 > ré-entrée ne re-join jamais ; le tap simple et l'offre socket ne
 > décrochent jamais seuls).
+> Refus = 'rejected' sur le fil : AUCUNE plateforme n'envoyait la raison
+> — tout refus explicite devenait « manqué » dans le journal de
+> l'appelant (le serveur préserve pourtant rejected pré-décroché).
+> Android : emitEnd(callId, reason?) + decline/rejectWaiting/auto-dismiss/
+> DeclineCallReceiver/drain passent rejected ; hangUp reste sans raison.
+> Web : handleRejectCall passe de call:leave (résolu missed) à call:end
+> {reason:'rejected'} — end permis à tout participant actif (P2P, C4),
+> broadcast immédiat à l'appelant. iOS À FAIRE (session active dessus).
 
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)

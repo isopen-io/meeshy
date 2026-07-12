@@ -562,11 +562,16 @@ export function CallManager() {
       logger.error('[CallManager]', 'Failed to load ringtone module: ' + error?.message);
     });
 
-    // Emit leave event
+    // call:end avec reason=rejected (et non call:leave) : le leave pré-décroché
+    // terminait bien l'appel 1:1 mais le serveur le résolvait en « missed » —
+    // le journal de l'appelant mentait sur un refus explicite. Le end est
+    // permis à tout participant actif (P2P, spec C4) et broadcast call:ended
+    // immédiatement à l'appelant.
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, {
+      (socket as unknown).emit(CLIENT_EVENTS.CALL_END, {
         callId: incomingCall.callId,
+        reason: 'rejected',
       });
     }
 
