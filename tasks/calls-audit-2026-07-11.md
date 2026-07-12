@@ -123,6 +123,10 @@
 > étendu, message d'appel vivant de l'autre session) est validé en CI.
 > Vérifs locales croisées : 1188/1188 gateway socketio (bun), tous les
 > modules Android, 118/118 web domaine appels.
+> **2e vague également VERTE (CI + Docker success sur `4975d9791`)** :
+> décroché à froid + budget 30 s, watchdogs Connecting Android (45 s) et
+> web (45 s), sémantique reconnecting précisée, harnais autorisations
+> P1-21. Prod re-vérifiée saine après déploiement (health up, front 200).
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
