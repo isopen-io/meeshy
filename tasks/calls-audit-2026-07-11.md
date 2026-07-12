@@ -440,3 +440,10 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > null si aucun, comme negotiationTimeMs) + connectSuccessRate (fraction
 > connectée = usage utile de la sentinelle). 16 tests agrégateur, 50/50
 > route. Re-deploy gateway nécessaire (b3a336252 live a l'agrégateur buggé).
+
+> Fix sentinelle setup time DÉPLOYÉ (2026-07-12) : gateway prod b3a336252 →
+> f87c7a71b (seul changement gateway = le fix). Révision conteneur = f87c7a71b
+> healthy, endpoint toujours 401, 0 crash-loop. avgSetupTimeMs correct
+> (sentinelle -1 exclue) + connectSuccessRate live sur les 87 rows réels.
+> Boucle complète : bug trouvé sur données prod → fix TDD → CI verte →
+> déployé → vérifié live.
