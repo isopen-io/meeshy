@@ -530,3 +530,10 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > le fix) produirait rejected mais les refus web sont rares. Lag
 > app-store, à ne pas confondre avec une panne de l'arc. Se manifestera
 > quand les builds mobiles avec le reject-fix shiperont.
+
+> Validation fix metadata/isVideo en prod (2026-07-12) : 482/482 CallSession
+> ont mode=p2p (JAMAIS "video") — preuve prod-wide que l'ancien iOS
+> isVideo=(mode=="video") était toujours faux → visio rejointe reprenait en
+> audio. metadata.type peuplé sur les 482 (288 audio / 194 video) = le champ
+> que le fix (223e07134) lit, avec le vrai split. Bug réel confirmé, fix
+> validé contre données réelles.
