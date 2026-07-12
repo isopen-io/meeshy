@@ -86,6 +86,12 @@
 > use-webrtc-p2p émet désormais aux vrais edges mid-call (jamais en
 > pré-connexion), attempt incrémenté par cycle, reset au cleanup. Les 3
 > plateformes tiennent le serveur informé de leurs reconnexions.
+> **CI main VERTE sur le tip `05eb54eb3`** (run 29172721298, conclusion
+> success — 11 jobs verts incl. Test gateway/web/shared) : tout l'arc
+> résilience (stalls ICE + watchdog + clamp Android, signaux web, harnais
+> étendu, message d'appel vivant de l'autre session) est validé en CI.
+> Vérifs locales croisées : 1188/1188 gateway socketio (bun), tous les
+> modules Android, 118/118 web domaine appels.
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
