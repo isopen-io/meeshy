@@ -4,6 +4,41 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload + crash-report diagnostics viewer w/ share)** → rest`
 
+> On 2026-07-12 **Help & Support** landed (slice `settings-help-support`, feature-parity §L — "Static
+> screens: … Help & Support …"). Port of iOS `SupportView`, wiring a new **Help & Support** row in
+> Settings → About. Two pure `:core:model` SSOTs (package `me.meeshy.sdk.model.support`):
+> (1) `SupportLinkResolver.resolvable(links)` — the launchability gate mirroring iOS `supportLink`'s
+> `if let URL(string:)` guard, **widened** to accept `mailto:` alongside `http(s)://` (Help & Support mixes
+> web pages and email-compose links, unlike the website-only About screen; scheme match is trim+case-folded,
+> order-preserving, drops blank/unsupported schemes); (2) `SupportPresentationBuilder.build(params)` —
+> assembles the three launchable-filtered link sections (Get help = help-center + FAQ https pages; Contact =
+> `mailto:` support email + Twitter; Report = pre-filled `mailto:` bug + feature compose links) plus the
+> Information rows (version = trimmed versionName, `1.0.0` fallback on blank; build = versionCode, `1` fallback
+> when ≤0; platform = `Android {release}`, bare `Android` on blank release). Supporting enums
+> `SupportSectionKey` (HELP/CONTACT/REPORT/INFO) / `SupportLinkKind` / `SupportInfoKey` + opaque `SupportParams`
+> (`PackageInfo`/`Build` facts injected app-side — no Android import in the pure core). `SupportScreen`
+> (`:feature:settings`, coverage-exempt glue): accent-coded section cards — Success/Info/Warning for the three
+> link sections + Neutral for Information, mirroring iOS's per-section tints — each link a tappable row opening
+> via `ACTION_VIEW`, every label resolved app-side to a localized string. Nav: one `settings/support` route
+> reached by `Routes.SUPPORT` from the wired row. **+24 tests** (SupportLinkResolver 11 — http/https/mailto
+> kept, uppercase-scheme + padded kept, blank + non-launchable (`tel:`) + schemeless dropped, mixed list keeps
+> only launchable in order; SupportPresentationBuilder 13 — section order, per-section link identity+order,
+> every curated link launchable, info-row order, version trim + blank fallback, build value + zero/negative
+> fallback, platform prefix + blank-release). `:app:assembleDebug` **BUILD SUCCESSFUL**; full all-module
+> `testDebugUnitTest` **BUILD SUCCESSFUL** (under a UTF-8 locale — see NOTES ⚙ ENVIRONMENT: the fresh
+> container's POSIX locale otherwise breaks `:sdk-core` test compile on a pre-existing em-dash test name,
+> unrelated to this diff). A two-mutation RED check (drop the `mailto:` scheme from the resolver + drop the
+> build `≤0` fallback) failed exactly the 9 relevant tests, confirming they are behavioural not tautological.
+> Reviewer **PASS** (diff `apps/android` only — `:core:model` [new `support` package], `:feature:settings`
+> [screen + 4× locale strings], `:app` nav wiring, `SettingsScreen` one new callback+row; no production logic
+> outside; **SDK purity** — pure resolver/builder in `:core:model`, localized content + "which screen / launch
+> intent" glue app-side; **SSOT** — one resolver owns launchability, one builder owns section order + fallbacks,
+> no re-implementation; **UDF/instant-app** — static content, no state machine; **colour/UX coherence** —
+> per-section accent tints matching iOS, natural row→screen→back, no dead ends; **no coverage floor lowered, no
+> test weakened**). **Next slice:** the last §L static screen (open-source licenses — an Android-accurate curated
+> catalog, not iOS's Swift deps), the chat media view that consumes the `MediaAutoDownloadDecider`, or in-place
+> crop/resize/compress before upload (§K).
+
 > On 2026-07-12 **Terms of Service + Privacy Policy** landed (slice `settings-legal-documents`,
 > feature-parity §L — "Static screens: … Terms of Service … Privacy Policy …"). Port of iOS
 > `TermsOfServiceView` + `PrivacyPolicyView`, **unified** into one data-driven screen keyed by

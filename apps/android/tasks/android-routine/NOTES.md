@@ -4,6 +4,30 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-12, `settings-help-support`) — ⚙ ENVIRONMENT: build under a UTF-8 locale
+- **The fresh container's default locale is `POSIX`/`C` (`LC_CTYPE=POSIX`, `LANG` empty), so the JVM's
+  `sun.jnu.encoding` is ASCII and the Kotlin compiler CANNOT write a `.class` file whose name contains a
+  non-ASCII char.** `:sdk-core:compileDebugUnitTestKotlin` fails with
+  `java.nio.file.InvalidPathException: Malformed input or input contains unmappable characters: …
+  ActiveCallRepositoryTest$returns null when the transport throws — a probe never crashes its surface$1.class`
+  (an **em-dash `—`** in a backtick-quoted test method name → em-dash in the synthesized class filename).
+  This is **pre-existing on `main`**, unrelated to any `apps/android`-only slice diff.
+- **Fix — run every Gradle command under a UTF-8 locale, on a freshly-started daemon:**
+  ```bash
+  /opt/gradle/bin/gradle --stop                 # kill any POSIX-started daemon (it captured sun.jnu.encoding)
+  export LANG=C.utf8 LC_ALL=C.utf8              # C.utf8 is available (locale -a); en_US.UTF-8 is NOT
+  export ANDROID_HOME=$HOME/android-sdk ANDROID_SDK_ROOT=$HOME/android-sdk
+  /opt/gradle/bin/gradle testDebugUnitTest --console=plain \
+    -Pkotlin.daemon.jvmargs="-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8"
+  ```
+  Setting `LANG` alone does NOT fix a daemon already running under POSIX — you MUST `--stop` first (the daemon
+  reads `sun.jnu.encoding` once at JVM startup). With both the UTF-8 `LANG` and the `-Pkotlin.daemon.jvmargs`
+  override, the full `testDebugUnitTest` goes green.
+- **Reuse a launchable-link gate rather than re-porting per screen.** `SupportLinkResolver` is a near-clone of
+  `AboutLinkResolver` but must accept `mailto:` (email/bug/feature compose links) — the ONE behavioural
+  difference worth its own tests. Kept it a separate object (not a shared generalised one) because the launchable
+  scheme set is a per-surface product decision, not a universal constant.
+
 ## Lesson (2026-07-12, `settings-legal-documents`)
 - **Static legal/content screens: keep the *structure* pure, the *content* in `values-*`.** Mirroring the
   About pattern, the pure `:core:model` catalog holds only the ordered section **keys** + numbering; the

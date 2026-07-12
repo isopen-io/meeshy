@@ -2034,7 +2034,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **Surpasses iOS** by (a) collapsing two near-identical views into one catalog-driven screen and (b) the
       document following the app language automatically across values-* (EN/FR/ES/PT — Prisme philosophy),
       dropping iOS's manual fr/en `Picker`. +14 tests (LegalDocumentCatalog 7, LegalDocumentKind 7). EN/FR/ES/PT
-      strings. **Pending:** Help & Support, open-source licenses screens.
+      strings.
+      **Help &amp; Support shipped** (slice `settings-help-support`, 2026-07-12). Port of iOS `SupportView`.
+      Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.support`): `SupportLinkResolver.resolvable(links)`
+      — the launchability gate mirroring iOS `supportLink`'s `if let URL(string:)` guard, **widened** to accept
+      `mailto:` alongside `http(s)://` (Help &amp; Support mixes web pages and email-compose links, unlike the
+      website-only About screen); `SupportPresentationBuilder.build(params)` — assembles the three link sections
+      (Get help = help-center + FAQ; Contact = email + Twitter; Report = bug + feature, the last two pre-filled
+      `mailto:` compose links) each launchable-filtered, plus the Information rows (version = trimmed versionName
+      with `1.0.0` fallback; build = versionCode with `1` fallback when ≤0; platform = `Android {release}`, bare
+      `Android` on blank). Supporting enums `SupportSectionKey`/`SupportLinkKind`/`SupportInfoKey` +
+      `SupportParams` (opaque `PackageInfo`/`Build` facts injected app-side, no Android import in the core).
+      `SupportScreen` (`:feature:settings`) is pure Compose glue: accent-coded section cards (Success/Info/Warning
+      for the three link sections, Neutral for Information — mirroring iOS's per-section tints), each link a
+      tappable row opening via `ACTION_VIEW`. Wired a new **Help &amp; Support** row in Settings → About
+      (`Routes.SUPPORT`). +24 tests (SupportLinkResolver 11, SupportPresentationBuilder 13). EN/FR/ES/PT strings.
+      A two-mutation RED check (drop the `mailto:` scheme + drop the build `≤0` fallback) failed exactly the 9
+      relevant tests, confirming they are behavioural not tautological. **Pending:** open-source licenses screen.
 
 ## M. Notifications
 - [ ] Notification center with category filters (messages, reactions, mentions, social,
