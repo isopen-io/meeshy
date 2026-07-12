@@ -414,3 +414,11 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > footgun Prisma évité, null droppés en JS). 908/908 routes admin +
 > privacy per-participant intacte. Le pipeline analytics est maintenant
 > complet : client émet → serveur valide+persiste → admin agrège+lit.
+
+> Analytics READ endpoint DÉPLOYÉ (2026-07-12) : gateway prod re-déployée
+> depuis a399fdb0e (qui ne l'avait pas) vers b3a336252. Preuve end-to-end :
+> GET /api/v1/admin/analytics/calls est passé de 404 (route absente) à 401
+> (route présente, auth requise) ; révision conteneur = b3a336252, healthy,
+> 0 crash-loop. Le seul changement gateway depuis la révision précédente
+> était cet endpoint (le reste = frontend/docs). Pipeline analytics
+> intégralement live en prod.
