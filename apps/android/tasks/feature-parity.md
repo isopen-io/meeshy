@@ -2141,7 +2141,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `floor`-rounded like iOS `targetSize`, resize only when source `>` ceiling, quality clamped 1..100,
       target clamped ≥1, non-positive source → no-op). App-side Bitmap decode/scale/JPEG re-encode +
       video compression + "save to Meeshy album" still pending. +18 tests.
-- [ ] ThumbHash blur placeholders for all media; audio spectrogram visualization
+- [~] ThumbHash blur placeholders for all media; audio spectrogram visualization
+      — **ThumbHash *decoder* shipped** (slice `media-thumbhash-decode`, 2026-07-12): pure `:core:model`
+      `me.meeshy.sdk.model.media.ThumbHash` — faithful port of Evan Wallace's canonical
+      `thumbHashToRGBA` / `thumbHashToAverageRGBA` / `thumbHashToApproximateAspectRatio`
+      (`averageColor`, `approximateAspectRatio`, `hasAlpha`, `isLandscape`, `decode` → `ThumbHashImage`
+      (w,h,rgba)); DC/AC YCoCg→RGB DCT over primitives, no Android `Bitmap`. **Surpasses** the reference:
+      rejects a hash too short for the region it reads (`IllegalArgumentException` vs silent OOB) and clamps
+      the raster to ≥1×1 so a degenerate header can't yield a 0-sized image. App-side raster→`Bitmap` wrap +
+      Coil placeholder wiring + slide-level ThumbHash *generation* (encode) still pending. +21 tests.
 
 ## Q. Cross-cutting infrastructure
 - [ ] Cache-first / SWR data layer (`CacheResult`, `cacheFirstFlow`, Room as single SoT)

@@ -4,6 +4,29 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-12, `media-thumbhash-decode`) — ⚙ ENVIRONMENT: the wrapper Gradle can't download; use system Gradle
+- **`./gradlew` (and `./apps/android/meeshy.sh`) fail in a fresh container:** the wrapper wants
+  `gradle-8.11.1-bin.zip` from `services.gradle.org`, which **302-redirects to `github.com/gradle/gradle-distributions/releases/…`** — a host the egress policy **403s**. The cached wrapper dir
+  `/root/.gradle/wrapper/dists/gradle-8.11.1-bin/<hash>/` exists but is **empty** (a prior failed download),
+  so the wrapper re-tries the download and dies. Do NOT retry the 403 or route around it.
+- **Fix — drive the build with the pre-installed system Gradle** (`/opt/gradle/bin/gradle`, currently **8.14.3**),
+  which is already extracted and needs no download:
+  ```bash
+  export LANG=C.utf8 LC_ALL=C.utf8 LC_CTYPE=C.utf8      # + the UTF-8 locale lesson below (em-dash ICE)
+  /opt/gradle/bin/gradle :core:model:testDebugUnitTest --console=plain
+  /opt/gradle/bin/gradle :app:assembleDebug --console=plain
+  ```
+  8.14.3 runs 8.11.1's build fine (only Gradle-9 deprecation warnings). It emits an "incompatible with Gradle
+  9.0" warning — harmless. If a Kotlin **compile worker** ICEs mid-run with an RMI/`TCPTransport` stack, that is
+  the em-dash/`sun.jnu.encoding` issue — `--stop` the daemons and re-export the UTF-8 `LANG` first.
+- **Two pre-existing flaky `:sdk-core` tests:** `NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow`
+  and `PrivacyPreferencesStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction` intermittently fail with
+  `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 5000 ms` (DataStore `StateFlow.first()`
+  under parallel test load). **Both pass on isolated retry** (`--tests '*NotificationPreferencesStoreTest' --tests
+  '*PrivacyPreferencesStoreTest'` → BUILD SUCCESSFUL). They are in `:sdk-core` (a module an additive `:core:model`
+  slice cannot touch) and are **not** a merge blocker for an `apps/android`-only pure-core slice — the monorepo CI
+  runs no Android at all, so these never reach the CI gate. Note them, don't chase them from an unrelated slice.
+
 ## Lesson (2026-07-12, `settings-help-support`) — ⚙ ENVIRONMENT: build under a UTF-8 locale
 - **The fresh container's default locale is `POSIX`/`C` (`LC_CTYPE=POSIX`, `LANG` empty), so the JVM's
   `sun.jnu.encoding` is ASCII and the Kotlin compiler CANNOT write a `.class` file whose name contains a

@@ -4,7 +4,22 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Media §P) — slice `media-waveform-interpolation` ✅
+## This loop (Phase: Media §P) — slice `media-thumbhash-decode` ✅
+**ThumbHash decoder pure core** — the decode beneath the app-side blur placeholder. Pure `:core:model`
+`me.meeshy.sdk.model.media.ThumbHash`: faithful port of Evan Wallace's `thumbHashToRGBA` /
+`thumbHashToAverageRGBA` / `thumbHashToApproximateAspectRatio` (`averageColor`, `approximateAspectRatio`,
+`hasAlpha`, `isLandscape`, `decode`→`ThumbHashImage(w,h,rgba)`) — YCoCg→RGB inverse-DCT over primitives, no
+Android `Bitmap`. Surpasses the reference: rejects a hash too short for the region it reads
+(`IllegalArgumentException` vs silent OOB) + clamps the raster to ≥1×1 (no zero-sized image from a degenerate
+header). +21 tests. `:core:model` tests green; `:app:assembleDebug` → BUILD SUCCESSFUL, APK produced.
+Two-mutation RED check (flip YCoCg blue reconstruction + drop portrait aspect scale) failed exactly the 4
+relevant tests. Reviewer PASS, diff = `apps/android` only. Full-tree tests show only 2 pre-existing flaky
+`:sdk-core` DataStore-timeout failures (pass on retry; unrelated module). The raster→`Bitmap` wrap + Coil
+placeholder wiring + ThumbHash *encoder* (slide generation) remain app-side/next. Next: raster→`Bitmap` + Coil
+placeholder consuming `ThumbHash.decode`; ThumbHash encoder; app-side Bitmap re-encode consuming
+`ImageCompressionPlan`; or app-side voice recorder pill consuming the waveform core.
+
+## Prior loop (Phase: Media §P) — slice `media-waveform-interpolation` ✅ (merged PR #1896)
 **Live-waveform pure core** — the metering→amplitude→resampling math beneath the app-side voice-note waveform,
 shared by the recorder pill and the audio-message player. Pure `:core:model` `me.meeshy.sdk.model.waveform`:
 `AudioLevelNormalizer.normalize` (dB→`0..1`, ports iOS `AudioRecorderManager.normalizeLevel`, +upper-clamp +NaN
@@ -14,8 +29,7 @@ guard), `WaveformLevelWindow` (immutable 15-sample rolling ring, ports `levelHis
 interpolator 10). `:core:model` waveform tests green (28/28); full `assembleDebug` + all-module tests green, APK
 produced. Two-mutation RED check (drop normalizer upper clamp + zero the interpolator high-sample blend) failed
 exactly the 4 relevant tests. Reviewer PASS, diff = `apps/android` only. The `MediaRecorder` capture + Compose
-`Canvas` paint remain app-side glue. Next: app-side recorder pill / player waveform consuming this core; app-side
-Bitmap re-encode consuming `ImageCompressionPlan`; or ThumbHash blur placeholders (§P).
+`Canvas` paint remain app-side glue.
 
 ## Prior loop (Phase: Settings §L) — slice `settings-open-source-licenses` ✅ (merged PR #1894)
 **Open-source licenses** — the last §L static screen (§L static screens now complete). Port of iOS `LicensesView`

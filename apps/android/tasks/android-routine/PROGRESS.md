@@ -1,5 +1,51 @@
 # Progress — state & what to do next
 
+> On 2026-07-12 **ThumbHash decoder** landed (slice `media-thumbhash-decode`, feature-parity §P —
+> "ThumbHash blur placeholders for all media", line 2144; also underpinning the progressive-image
+> item at line ~207). Ships the pure decode beneath the app-side blur placeholder. Pure `:core:model`
+> SSOTs (package `me.meeshy.sdk.model.media`, alongside the image-compression slice): `ThumbHash` — a
+> faithful port of Evan Wallace's canonical `thumbHashToRGBA` / `thumbHashToAverageRGBA` /
+> `thumbHashToApproximateAspectRatio`, exposing `averageColor(hash)→ThumbHashColor`,
+> `approximateAspectRatio(hash)→Float`, `hasAlpha(hash)`, `isLandscape(hash)`, and `decode(hash)→
+> ThumbHashImage(width,height,rgba: ByteArray)` — DC + AC YCoCg→RGB inverse-DCT over primitives, no
+> Android `Bitmap`/`Color` (the raster→Bitmap wrap + Compose paint stay app-side per the grain rule).
+> **Surpasses** the reference on two counts iOS/JS leave unguarded: (1) it rejects a hash too short for
+> the region it must read — `IllegalArgumentException` per surface (`averageColor`/`isLandscape`/
+> `approximateAspectRatio`/`decode` each guard their own minimum, `decode` computes the exact required
+> AC byte count) instead of a silent out-of-bounds read on a truncated/garbage hash; (2) it clamps the
+> decoded raster to at least 1×1 so a degenerate header (e.g. a 0 L-count portrait → aspect 0) can never
+> produce a zero-sized image the caller would choke on. **+21 tests** (averageColor 3 — zero header
+> r=0/g=1/6/b=2/3, saturated header r=1/g=5/6/b=1/3, alpha DC term 0 vs 1; metadata 2 — hasAlpha bit,
+> isLandscape bit; approximateAspectRatio 3 — portrait L/7, landscape 7/L, alpha uses 5; decode
+> dimensions 3 — square 32×32, portrait shrinks width to 18, landscape shrinks height to 18; decode
+> reconstruction 4 — DC-only (all AC scales 0) flat image byte-exact to the hand-derived average incl.
+> flatness at 3 sampled pixels [255,212,85,255], no-alpha channel fully opaque 255, zero alpha DC fully
+> transparent 0, every byte a valid unsigned channel; mean invariant 1 — a non-flat decode's per-channel
+> mean lands back on `averageColor` within 0.03 because the DCT-II basis integrates to zero over the
+> sample grid (cross-checks the full-decode path against the header-only average path with maximal-
+> headroom mid-grey so nothing clamps); guards 4 — decode rejects a truncated hash, averageColor rejects
+> a 2-byte header + an alpha hash missing its alpha byte, approximateAspectRatio rejects a 4-byte hash;
+> degenerate dims 1 — 0-count portrait clamps width to ≥1). Expected values are hand-derived from the
+> bit layout + IEEE-754 double math (the flat blue is 85, not a naïve 84: `1 − 2/3 = 0.33333333333333337`,
+> `×255 = 85.0000…001`), never copied from the decoder's own output. `:core:model:testDebugUnitTest`
+> green (all incl. 21 new); full `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced). A
+> **two-mutation RED check** (flip the YCoCg blue reconstruction `l − 2/3·p → l + 2/3·p` + drop the
+> portrait aspect scale so width never shrinks) failed exactly the 4 relevant tests (3 blue average/decode
+> + portrait-width), confirming they are behavioural not tautological. Reviewer **PASS** (diff
+> `apps/android` only — `:core:model` [new `ThumbHash.kt` + test], `feature-parity.md`, routine docs; no
+> production logic outside; **SDK purity** — pure decoder in `:core:model`, Bitmap/paint app-side;
+> **SSOT** — one decoder owns the format, `decode` derives its dimensions from the same
+> `approximateAspectRatio` the public API exposes so screen and transform can't drift; **UDF/instant-app**
+> — pure functions, no state machine or UI; **colour/UX coherence** — no UI in this slice; **no coverage
+> floor lowered, no test weakened**). Full-tree `testDebugUnitTest` shows only **2 pre-existing flaky
+> DataStore `StateFlow`-timeout failures in `:sdk-core`** (NotificationPreferencesStoreTest,
+> PrivacyPreferencesStoreTest) — a module this additive `:core:model` slice cannot affect; both pass on
+> isolated retry (see NOTES 2026-07-12 locale/flake entry). **Next slice:** the app-side raster→`Bitmap`
+> wrap + Coil placeholder wiring that consumes `ThumbHash.decode`, the ThumbHash *encoder* for slide-level
+> generation, the app-side Bitmap re-encode that consumes `ImageCompressionPlan`, the app-side voice
+> recorder pill consuming `AudioLevelNormalizer`/`WaveformLevelWindow`/`WaveformInterpolator`, or the chat
+> media view that consumes `MediaAutoDownloadDecider`.
+
 ## Current build-order position
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload + crash-report diagnostics viewer w/ share)** → rest`
