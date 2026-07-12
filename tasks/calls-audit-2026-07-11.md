@@ -473,3 +473,6 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > null si aucun. Vérifié aussi : packetLoss en % des 2 côtés (web/iOS),
 > qualityDistribution somme ~1 sur les 87, negotiationTimeMs présent 77
 > (42 réels >=0, filtré correct). 56/56. Re-deploy gateway à suivre.
+
+> Fix avgRtt DÉPLOYÉ (2026-07-12) : gateway ed8a56c02→fe13f1293, healthy,
+> endpoint 401. avgRtt/avgPacketLoss corrects (connectés seulement) live.
