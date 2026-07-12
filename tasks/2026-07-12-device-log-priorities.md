@@ -41,7 +41,7 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 
 ## P1 — Majeur (dégradation sévère)
 
-- [ ] **#4 — Requêtes réseau catastrophiques (24,7 s / 25 s / 14,6 s)**
+- [x] **#4 — Requêtes réseau catastrophiques (24,7 s / 25 s / 14,6 s)** — investigué : environnemental + volume (→ #5/#6/#8)
   Evidence : `GET /conversations/…/messages network=24717ms`, `GET /conversations?limit=100 network=24913ms`.
   Hypothèse : latence backend prod **OU** contention client (head-of-line : le flood
   presence/engagement sature la pool URLSession et bloque le fetch des messages).
@@ -49,6 +49,16 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   Fix piste : `httpMaximumConnectionsPerHost`, timeouts + annulation par requête, prioriser
   messages > presence/engagement. ⚠️ Partiellement **environnemental** — mesurer d'abord
   (le 24 s est-il réseau device ou backend ?) avant de coder. Ne pas chasser un fantôme prod.
+  **Conclusion (systematic-debugging, evidence code)** : cause « head-of-line client » **réfutée**.
+  (a) `APIClient` est `final class` (pas actor) et appelle `await session.data(for:)` sans
+  sérialisation → aucune file applicative bloquable. (b) `assumesHTTP3Capable=true` + HTTP/2
+  multiplexent les streams sur 1 connexion/host → pas d'épuisement de pool (le scénario 6-conn
+  n'existe qu'en HTTP/1.1, improbable ici). (c) `network=24717ms` est mesuré autour de
+  `session.data(for:)` = temps réseau réel de la requête, pas du queuing client. → Le 24 s est
+  **backend/réseau device** (le fantôme prod à ne pas chasser), amplifié par le **volume** de
+  requêtes. Actionnable **uniquement** via #5 (flush non-bloquant), #6 (backoff 429) et #8
+  (chunk presence). Aucun fix client indépendant pour #4 (`httpMaximumConnectionsPerHost` =
+  spéculatif, sans effet sous HTTP/2/3). **Aucun code produit — décision volontaire.**
 
 - [ ] **#5 — engagement.flush bloque 15-35 s**
   Evidence : `Step engagement.flush took 35.34s / 21.59s / 15.45s`.
@@ -132,3 +142,6 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 ## Journal
 - 2026-07-12 : P0 #1/#2/#3 livrés sur `main` (`872f7480b`, `9e1095751`, `dcd0f3220`).
   Sonde `🩺RENDER` retirée. xcstrings reverté. Suite CallService verte, builds iOS verts.
+- 2026-07-12 : #4 investigué → **environnemental** (backend/réseau device) + volume. Cause
+  client HoL réfutée par le code (APIClient non-actor sans sérialisation ; HTTP/2/3 multiplexé).
+  Pas de fix client indépendant ; effort réel basculé sur #8/#6/#5. Doc-only.
