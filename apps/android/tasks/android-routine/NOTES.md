@@ -51,6 +51,20 @@ Append-only log of gotchas and decisions that save time next run.
   difference worth its own tests. Kept it a separate object (not a shared generalised one) because the launchable
   scheme set is a per-surface product decision, not a universal constant.
 
+## Lesson (2026-07-12, `media-thumbhash-encode`) — derive an encoder's transform FROM its decoder, not from memory
+- Porting an inverse (encoder ↔ decoder) pair: **do not copy the forward transform from the reference/memory.**
+  ThumbHash's canonical `rgbaToThumbHash` uses `p=(r+b)/2−g`, `q=r−b`, but only against a decoder that reads the
+  channels back in the reference's specific variable order. THIS repo's decoder is `B=l−⅔p`, `R=(3l−B+q)/2`,
+  `G=R−q`; solving those three for `(l,p,q)` gives `l=(r+g+b)/3`, **`p=(r+g)/2−b`, `q=r−g`** — different `p`/`q`.
+  The naïve copy compiles, round-trips *luminance* fine, and passes an all-grey test, but swaps a colour channel
+  (green decoded as blue). A **colour round-trip test through the actual `decode`** (not a hand-typed expected
+  hash) catches it instantly. Rule: for an inverse pair, the SSOT is the *existing* half — derive the new half
+  algebraically against it and test the round-trip end-to-end.
+- **Don't assert "all AC bytes zero" for a perfectly-constant source image.** Float noise (~1e-16) in the forward
+  DCT makes `scale` tiny-but-positive, so `0.5 + 0.5/scale·ac` amplifies the noise into arbitrary nibbles. It is
+  harmless (decode multiplies back by the ~1e-16 scale → invisible), but the byte-level "zero" claim is testing an
+  artifact the reference doesn't guarantee either. Assert the **header bytes** + a **flat decode**, not raw AC.
+
 ## Lesson (2026-07-12, `settings-legal-documents`)
 - **Static legal/content screens: keep the *structure* pure, the *content* in `values-*`.** Mirroring the
   About pattern, the pure `:core:model` catalog holds only the ordered section **keys** + numbering; the
