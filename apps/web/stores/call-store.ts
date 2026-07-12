@@ -33,6 +33,18 @@ export interface JoinCallRequest {
   callType: 'audio' | 'video';
 }
 
+/**
+ * A « Réessayer » offer posed after a call ended in a TRANSIENT failure
+ * (failed / connectionLost). Survives the call teardown ([reset] deliberately
+ * preserves it) so `useVideoCall` — mounted at the conversation level, far from
+ * the in-call UI where the failure is detected — can surface a retry toast for
+ * ITS conversation. Cleared on retry, on a new call, or on dismiss.
+ */
+export interface PendingCallRetry {
+  conversationId: string;
+  type: 'audio' | 'video';
+}
+
 interface CallStoreState extends CallState {
   // Extended state
   callEndReason: CallEndReason | null;
@@ -40,6 +52,8 @@ interface CallStoreState extends CallState {
   connectionQuality: ConnectionQualityLevel | null;
   isReconnecting: boolean;
   joinRequest: JoinCallRequest | null;
+  /** A retry affordance owed after a transient call failure (see PendingCallRetry). */
+  pendingRetry: PendingCallRetry | null;
 
   // Server-provided ICE servers (STUN + time-limited TURN credentials).
   // Supplied by the gateway via the initiate/join acks and the
@@ -94,6 +108,10 @@ interface CallStoreState extends CallState {
   // Actions: Join an ongoing call from its live message bubble
   requestJoin: (request: JoinCallRequest) => void;
   clearJoinRequest: () => void;
+
+  // Actions: Retry a transiently-failed call
+  offerCallRetry: (retry: PendingCallRetry) => void;
+  clearCallRetry: () => void;
 
   // Actions: Cleanup
   reset: () => void;
@@ -158,6 +176,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   isReconnecting: false,
   iceServers: null,
   joinRequest: null,
+  pendingRetry: null,
 
   // ===== CALL MANAGEMENT =====
 
@@ -485,6 +504,9 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
 
   clearJoinRequest: () => set({ joinRequest: null }),
 
+  offerCallRetry: (retry) => set({ pendingRetry: retry }),
+  clearCallRetry: () => set({ pendingRetry: null }),
+
   // ===== CLEANUP =====
 
   reset: () => {
@@ -519,7 +541,11 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
     // that was cancelled/rejected before its initiate ack ever landed).
     pendingParticipantsByCallId.clear();
 
-    // Reset to initial state
+    // Reset to initial state. `pendingRetry` is DELIBERATELY preserved: a
+    // transient-failure teardown ends the call (this reset) but must leave the
+    // « Réessayer » offer standing for useVideoCall to surface — clearing it
+    // here would erase the offer the failure just posted.
+    const survivingRetry = get().pendingRetry;
     set({
       ...initialState,
       remoteStreams: new Map(),
@@ -531,6 +557,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       isReconnecting: false,
       iceServers: null,
       joinRequest: null,
+      pendingRetry: survivingRetry,
     });
   },
 }));

@@ -91,7 +91,9 @@
       "callAlreadyEnded": "L'appel est terminé",
       "videoSuspendedPoorConnection": "Connexion faible — vidéo suspendue pour maintenir l'appel",
       "videoResumed": "Connexion rétablie — vidéo réactivée",
-      "connectTimeout": "Connexion impossible — appel terminé"
+      "connectTimeout": "Connexion impossible — appel terminé",
+      "callFailed": "Échec de la connexion à l'appel",
+      "retry": "Réessayer"
     },
     "permissions": {
       "title": {
