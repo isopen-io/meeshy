@@ -3907,6 +3907,87 @@ final class EndCallLockScreenDeclineTests: XCTestCase {
     }
 }
 
+// MARK: - Deferred reject reconciliation (§arc reject 2026-07-12, parité Android DeclinedCallStore)
+
+/// A decline while the socket is down (VoIP push wakes the app cold, the user
+/// declines within seconds — before the socket handshake lands) must NOT be
+/// dropped: the caller would keep ringing the full 60 s window and the server
+/// would resolve `missed`. Android defers via DeclinedCallStore and drains on
+/// connect; iOS already defers plain hang-ups via pendingEndReconciliationCallId
+/// — the reject path must ride the same mechanism, reason included.
+final class RejectDeferredReconciliationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_emitCallReject_defersWhenSocketDown() throws {
+        // The private reject helper must mirror emitCallEndReliably's socket-down
+        // deferral — an emit into a dead socket is silently dropped by the SDK.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func emitCallReject(callId: String)", in: source) else {
+            XCTFail("emitCallReject(callId:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard MessageSocketManager.shared.isConnected"),
+            "emitCallReject must defer when the socket is down — a dropped reject leaves " +
+            "the caller ringing 60 s and the server resolving `missed`."
+        )
+        XCTAssertTrue(
+            body.contains("pendingEndReconciliationCallId = callId"),
+            "the deferred reject must be remembered in pendingEndReconciliationCallId " +
+            "so the connectionState observer replays it on reconnect."
+        )
+    }
+
+    func test_reconnectReplay_preservesRejectedReason() throws {
+        // The reconnect observer must replay a deferred DECLINE as a reject —
+        // replaying it as a plain end would resurrect the `missed` mislabel the
+        // reject arc eliminated.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("emitCallReject(callId: pending)"),
+            "the connectionState reconciliation must route a deferred reject through " +
+            "emitCallReject(callId:) — a plain replay loses reason=rejected."
+        )
+    }
+
+    func test_rejectPendingCall_routesThroughDeferralCapableHelper() throws {
+        // rejectPendingCall must use the private helper (deferral-capable), not
+        // the SDK singleton directly — a direct emit bypasses the socket-down path.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertFalse(
+            body.contains("MessageSocketManager.shared.emitCallReject"),
+            "rejectPendingCall must not call the SDK emitCallReject directly — route " +
+            "through the private emitCallReject(callId:) helper to inherit the " +
+            "socket-down deferral."
+        )
+        XCTAssertTrue(
+            body.contains("emitCallReject(callId: pending.callId)"),
+            "rejectPendingCall must still emit the reject for the pending callId."
+        )
+    }
+}
+
 // MARK: - Quality Label Mapping (§gateway connection quality ladder)
 
 /// `CallManager.connectionQualityLabel(for:)` collapses the client's 5-tier ladder
