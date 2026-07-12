@@ -611,3 +611,12 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > subissent un échec d'appel transitoire ont maintenant « Réessayer » live.
 > Feature complète end-to-end web : construite → 154/154 tests → CI Test web
 > verte → déployée → vérifiée. Reste parité iOS/Android.
+
+> Retry-on-failure PARITÉ ANDROID (2026-07-12, f05e63a93) : miroir de la
+> feature web. CallRetryPolicy (core/model, pur, MÊME règle Failed/
+> ConnectionLost que web+agrégat) + CallUiState.canRetry + CallViewModel.retry()
+> (settle→start fresh) + bouton « Réessayer » vert sur l'écran ended
+> (auto-dismiss gaté sur canRetry) + i18n 4 locales. core:model 1040 +
+> feature:calls 208 verts (pas de CI Android → gradle local fait foi ; ship
+> Play Store). Reste UNIQUEMENT la parité iOS (session iOS occupée — à faire
+> quand libre, en réutilisant la même règle de policy).
