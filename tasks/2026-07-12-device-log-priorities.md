@@ -60,11 +60,19 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   (chunk presence). Aucun fix client indépendant pour #4 (`httpMaximumConnectionsPerHost` =
   spéculatif, sans effet sous HTTP/2/3). **Aucun code produit — décision volontaire.**
 
-- [ ] **#5 — engagement.flush bloque 15-35 s**
+- [x] **#5 — engagement.flush bloque 15-35 s** — `39c0480fe`
   Evidence : `Step engagement.flush took 35.34s / 21.59s / 15.45s`.
   Hypothèse : le batcher d'engagement/impressions poste en série et attend les retries 429.
   Fichiers : batcher engagement/impression iOS (cf. projet `post_view_impression_counters`).
   Fix piste : cap taille de batch, timeout, flush non-bloquant, respect du backoff 429 (#6). Lié à #6.
+  **Cause prouvée** : `EngagementOutbox.flush` dispatch ≤50 sessions **en série** (1 POST/session
+  sur `/posts/engagement/batch` — le client n'utilise pas le batch !) ; sous 429, chaque session
+  bloque ~30 s → 15-35 s à **bloquer la background-task budget** = risque watchdog 0x8BADF00D (P0).
+  **Fix** : rows durables (SQLite) + retentées par `EngagementRetryScheduler` → flush NON critique.
+  `runBounded(seconds: 8)` (app) borne le step BG ; au-delà, abandon au retry scheduler. Boucle
+  `flush` SDK rendue cancellation-aware (break sur `Task.isCancelled`) pour un bound prompt. TDD ×2.
+  Build iOS vert. **Reste ouvert (perf, pas watchdog) → #6** : le vrai batching (1 POST/N sessions)
+  + backoff 429 réduiront le 35 s réseau lui-même.
 
 - [ ] **#6 — 429 rate-limit sur POST /posts/engagement/batch**
   Evidence : `Retryable status 429 on POST /posts/engagement/batch retry 1/3 after 30.0s` ×3.
@@ -145,3 +153,6 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 - 2026-07-12 : #4 investigué → **environnemental** (backend/réseau device) + volume. Cause
   client HoL réfutée par le code (APIClient non-actor sans sérialisation ; HTTP/2/3 multiplexé).
   Pas de fix client indépendant ; effort réel basculé sur #8/#6/#5. Doc-only.
+- 2026-07-12 : #5 livré `39c0480fe` — flush engagement borné (`runBounded` 8 s) + boucle SDK
+  cancellation-aware. Supprime le blocage 15-35 s de la transition BG (anti-watchdog). Build vert.
+  Le batching réel (perf réseau) reste pour #6.
