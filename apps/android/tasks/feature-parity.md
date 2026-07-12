@@ -2110,7 +2110,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
 - [ ] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
 - [ ] Voice-message autoplay-next chaining; full-screen swipeable audio viewer (reels-style)
-- [ ] Universal audio recorder (live waveform, duration/min-duration limits, presets)
+- [~] Universal audio recorder (live waveform, duration/min-duration limits, presets)
+      — **live-waveform pure core shipped** (slice `media-waveform-interpolation`, 2026-07-12):
+      pure `:core:model` `me.meeshy.sdk.model.waveform` — `AudioLevelNormalizer.normalize`
+      (dB→`0..1`, ports iOS `AudioRecorderManager.normalizeLevel` with added upper-clamp +
+      NaN guard), `WaveformLevelWindow` (immutable 15-sample rolling ring, ports `levelHistory`
+      + the initial `Array(repeating:0,count:15)`), `WaveformInterpolator.interpolate`
+      (levels→`barCount` linear-blend strip, ports `UniversalComposerBar.interpolatedLevel`,
+      whole strip in one pass). +28 tests. The `MediaRecorder`/`AudioRecord` capture + the
+      Compose `Canvas` that paints the strip remain app-side glue (pending); this same core
+      also underpins the audio-message-player waveform (line 2111).
 - [ ] Full-screen audio editor (waveform, trim/crop, word-level transcription, language picker)
 - [ ] On-device speech-to-text transcription of recordings
 - [ ] Full-screen image editor (crop + ratio presets, 12 filters, brightness/contrast/saturation/
