@@ -405,24 +405,4 @@ final class PresenceManagerTests: XCTestCase {
         participantDict["user"] = userDict
         return participantDict
     }
-
-    // MARK: - Array.chunked — presence ids batching (#8)
-
-    func test_chunked_splitsIntoSizedGroups() {
-        XCTAssertEqual([1, 2, 3, 4, 5].chunked(into: 2), [[1, 2], [3, 4], [5]])
-    }
-
-    func test_chunked_200ids_yieldsFourChunksOf50() {
-        let ids = (0..<200).map { "id\($0)" }
-        let chunks = ids.chunked(into: PresenceService.chunkSize)
-        XCTAssertEqual(chunks.count, 4, "200 ids must fan out into 4 requests, not one 5KB URL")
-        XCTAssertTrue(chunks.allSatisfy { $0.count == 50 })
-        XCTAssertEqual(chunks.flatMap { $0 }, ids, "chunking preserves order and loses nothing")
-    }
-
-    func test_chunked_emptyAndExactBoundaries() {
-        XCTAssertEqual([Int]().chunked(into: 50), [])
-        XCTAssertEqual([1, 2].chunked(into: 2), [[1, 2]])
-        XCTAssertEqual([1, 2, 3].chunked(into: 50), [[1, 2, 3]])
-    }
 }

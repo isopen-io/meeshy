@@ -117,14 +117,6 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
                 SocialSocketManager.shared.resumeFromBackground()
             }
         }
-        // Sync presence dots with the gateway runtime state. We may have missed
-        // `user:status` events while suspended, and `presence:snapshot` only
-        // fires on the next socket auth — which can lag by a few seconds after
-        // the resume. This REST refresh closes the gap so the conversation
-        // list lights up correctly the instant the user looks at it.
-        await withBudget("presence.refresh") {
-            PresenceService.shared.refreshKnownUsers()
-        }
         await withBudget("audio.resume") {
             await MediaLifecycleBridge.shared.resumeFromBackground()
         }
