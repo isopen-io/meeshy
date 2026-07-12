@@ -104,10 +104,19 @@
 > Signaux de reconnexion web : le web AVAIT le restart SOTA (grace timer +
 > restartIce dans webrtc-service) mais n'émettait JAMAIS
 > call:reconnecting/reconnected — le serveur ignorait le restart (statut
-> `active` pendant le stall, analytics aveugle, cleanup non suspendu).
+> `active` pendant le stall, analytics aveugle).
 > use-webrtc-p2p émet désormais aux vrais edges mid-call (jamais en
 > pré-connexion), attempt incrémenté par cycle, reset au cleanup. Les 3
 > plateformes tiennent le serveur informé de leurs reconnexions.
+> Sémantique serveur VÉRIFIÉE (2026-07-12) : `reconnecting` n'est pas une
+> « suspension du cleanup » — CallCleanupService le traite comme `active`
+> (GC 2 h ET heartbeatTimeout 120 s inclus). La protection réelle vient des
+> heartbeats qui continuent pendant un restart sur les 3 plateformes
+> (fenêtres client 30-45 s ≪ 120 s) ; un client mort en plein restart est
+> rattrapé par le heartbeatTimeout. Round-trip complet : reconnecting →
+> status reconnecting (CallEventsHandler:3264, autorisation participant
+> actif seul), reconnected → status active (:3315, garde durée). Le statut
+> sert l'observabilité/analytics — la borne de vie, elle, est toujours là.
 > **CI main VERTE sur le tip `05eb54eb3`** (run 29172721298, conclusion
 > success — 11 jobs verts incl. Test gateway/web/shared) : tout l'arc
 > résilience (stalls ICE + watchdog + clamp Android, signaux web, harnais
