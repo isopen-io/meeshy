@@ -2534,7 +2534,47 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
-### 2026-07-12 — slice `settings-crash-diagnostics` ✅ impl + reviewer PASS (PR open, awaiting CI+merge)
+### 2026-07-12 — slice `settings-about-screen` ✅ impl + reviewer PASS → merged
+- **Branch:** `claude/apps/android/settings-about-screen` (off latest `main` `32df95a`, i.e. after the
+  `settings-crash-diagnostics` PR #1884 was merged at the start of this run).
+- **Housekeeping first (routine rule 0):** the previous iteration's PR #1884
+  (`settings-crash-diagnostics`) was open with green CI (SHA `78e22d85` → success), `apps/android`-only
+  (26 files) and `mergeable_state: clean` → squash-merged to `main` (`32df95a`) before starting this slice.
+- **What:** feature-parity §L — the About screen. Port of iOS `AboutView`.
+- **Added (production):**
+  - `:core:model` `about/` (package `me.meeshy.sdk.model.about`) — `AboutModels.kt` (`AboutInfoKey`,
+    `AboutInfoRow`, `AboutLinkKind`, `AboutLink`, `AboutFeatureKey`, `AboutParams`, `AboutPresentation`),
+    `AppVersionFormatter` (pure `"name (build)"` fragment; blank name → `1.0.0`, non-positive code → `1`),
+    `AboutLinkResolver` (keeps only non-blank http(s) links, order-preserving), `AboutPresentationBuilder`
+    (assembles version label + 3 blank-safe info rows + full feature list + launchable canonical links).
+  - `:feature:settings` `AboutScreen.kt` — Compose glue (brand-gradient header, Indigo section cards,
+    info/feature rows, `ACTION_VIEW` links); reads version/platform facts from `PackageInfo`/`Build`.
+  - `:feature:settings` EN/FR/ES/PT strings (`about_*`).
+- **Wired:** `SettingsScreen` gained `onOpenAbout`; the previously-dead Settings → About "Version" row now
+  navigates to `Routes.ABOUT`; `MeeshyApp` registers `composable(Routes.ABOUT) { AboutScreen(...) }`.
+- **Tests (+27, RED→GREEN):** AppVersionFormatter 7, AboutLinkResolver 9, AboutPresentationBuilder 11.
+  Branches swept: version blank/empty/padded name × zero/negative/positive code + both-degraded; link
+  https/http/uppercase-scheme/padded kept, blank/non-http/schemeless dropped, mixed-order preserved, empty;
+  builder version-label delegation, platform prefix vs bare-Android (blank release), appId trim vs default,
+  sdk trim vs default, info-row fixed order, features = all keys, links = launchable-only canonical.
+- **Two-mutation RED proof:** leak non-positive build code (`build = versionCode.toString()`) + always-prefix
+  platform (`"$PREFIX $release"`) → exactly 4 tests failed (`format_zeroCode…`, `format_negativeCode…`,
+  `format_bothDegraded…`, `build_blankRelease_platformRowIsBareAndroid`); reverted, green again.
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model` + `:feature:settings`
+  `testDebugUnitTest` green.
+- **Reviewer PASS:** diff `apps/android` only (14 files: `:core:model` [4 new + 3 test], `:feature:settings`
+  [AboutScreen + SettingsScreen + 4 strings], `:app` nav wiring, feature-parity/PROGRESS/NOTES docs); no
+  production logic outside; **SDK purity** — pure formatter/resolver/builder in `:core:model` (no Android
+  import), the "read PackageInfo / which icon / open URL" glue app-side; **SSOT** — one `AppVersionFormatter`
+  owns the version string, one `AboutLinkResolver` the launchability gate, no re-implementation;
+  **UDF/instant-app** — pure synchronous `remember`ed projection, no network/spinner; **colour/UX coherence**
+  — Indigo brand-gradient header + Indigo section headers + Info-coloured links, natural row→screen→back,
+  no dead end (the version row was previously inert); **no coverage floor lowered, no test weakened**.
+- **Next slice:** the remaining §L static screens (Help & Support, Terms of Service, Privacy Policy,
+  open-source licenses — the licenses screen has a genuinely testable pure core: parse/group/sort an
+  auto-generated licenses manifest), or the chat media view that consumes the `MediaAutoDownloadDecider`.
+
+### 2026-07-12 — slice `settings-crash-diagnostics` ✅ merged to `main` (PR #1884, squash `32df95a`, CI green)
 - **Branch:** `claude/apps/android/settings-crash-diagnostics` (off latest `main` `4d341f2`).
 - **What:** feature-parity §L — the crash-report diagnostics viewer with share. Port of iOS
   `CrashDiagnosticsManager` + `CrashReportSheet`; Android-honest capture via

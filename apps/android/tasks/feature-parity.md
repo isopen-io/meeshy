@@ -2006,8 +2006,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       recorder. +42 tests (CrashKind 5, CrashDiagnosticFactory 5, CrashReportFormatter 5, CrashReportRetention
       12, CrashReportCodec 6, CrashReportViewModel 9). EN/FR/ES/PT strings. Surpasses iOS by keeping the whole
       capture→retain→format→share pipeline as pure, fully-covered SSOTs rather than inline sheet logic.
-- [ ] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
-      open-source licenses (auto-generated), About
+- [~] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
+      open-source licenses (auto-generated), About.
+      **About screen shipped** (slice `settings-about-screen`, 2026-07-12). Port of iOS `AboutView`.
+      Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.about`): `AppVersionFormatter.format(name, code)`
+      — the i18n-agnostic `"name (build)"` fragment (blank name → `1.0.0`, non-positive code → `1`, so the
+      label is never empty/`"()"`/negative; the screen wraps it in a localized "Version %s");
+      `AboutLinkResolver.resolvable(links)` — the port of iOS `linkRow`'s `if let URL(string:)` guard (keeps
+      only non-blank http(s) links, order-preserving, so `ACTION_VIEW` always has a launchable target);
+      `AboutPresentationBuilder.build(params)` — assembles the version label, the three info rows
+      (platform=`Android {release}` [blank release → bare `Android`], applicationId [blank → default],
+      sdkVersion [blank → `1.0.0`]), the fixed feature list and the launchable-only canonical links from the
+      opaque `AboutParams` (versionName/versionCode/osRelease/applicationId/sdkVersion — injected app-side from
+      `PackageInfo`/`Build`, no Android import in the core). `AboutScreen` (`:feature:settings`) is pure Compose
+      glue: brand-gradient header, Indigo section cards, info/feature rows, links open via `ACTION_VIEW`.
+      Wired the previously-dead Settings → About "Version" row to `Routes.ABOUT`. +27 tests (AppVersionFormatter 7,
+      AboutLinkResolver 9, AboutPresentationBuilder 11). EN/FR/ES/PT strings. **Pending:** Help & Support, ToS,
+      Privacy Policy, open-source licenses screens.
 
 ## M. Notifications
 - [ ] Notification center with category filters (messages, reactions, mentions, social,

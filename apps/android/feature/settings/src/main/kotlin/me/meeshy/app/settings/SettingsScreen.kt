@@ -103,6 +103,7 @@ fun SettingsScreen(
     onOpenPrivacy: () -> Unit = {},
     onOpenDataExport: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
+    onOpenAbout: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -312,7 +313,7 @@ fun SettingsScreen(
                 icon = Icons.Filled.Info,
                 iconColor = MeeshyPalette.Neutral500,
             ) {
-                SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = null)
+                SettingsRow(label = stringResource(R.string.settings_version), detail = null, onClick = onOpenAbout)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_diagnostics), detail = null, onClick = onOpenDiagnostics)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))

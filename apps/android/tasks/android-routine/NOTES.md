@@ -4,6 +4,21 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-12, `settings-about-screen`)
+- **Keep the i18n boundary out of the pure core.** iOS's `AboutView` builds the whole `"Version X (Y)"`
+  string (word included) in one place. On Android the word "Version" is a translatable string, so the pure
+  `AppVersionFormatter` returns only the `"X (Y)"` fragment and the screen wraps it in
+  `stringResource(R.string.about_version_label, fragment)` = `"Version %1$s"`. Same for the "Android" platform
+  prefix vs the translatable `about_info_platform` *label* — the value (`Android 14`) is data (pure builder),
+  the row *label* ("Platform"/"Plateforme") is a resource. Rule: the pure core emits values and proper nouns;
+  the Compose layer owns every translatable label.
+- **A "static" screen still has a testable core.** An About screen looks like pure glue, but the version
+  formatting (blank/negative degrade), the link launchability gate (drop non-http(s)) and the blank-safe info
+  rows are all pure branches → 27 behavioural tests, two-mutation RED-proven. Push those out of the Composable.
+- **New files aren't revertable with `git checkout --`.** The two-mutation RED proof edited untracked new
+  files; `git checkout -- <file>` errored ("did not match any file"). Had to restore the two lines by hand.
+  Next time, either `git add` before mutating (so `git checkout` works) or keep the exact original lines handy.
+
 ## Lesson (2026-07-12, `media-auto-download-decider`)
 - **The grain rule, applied cleanly: monitor = SDK, "when to auto-DL" = app.** A `NetworkConditionMonitor`
   takes an opaque `Context` and produces a `NetworkCondition` via the already-pure `NetworkConditionResolver` —
