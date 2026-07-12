@@ -2170,6 +2170,79 @@ describe('PushNotificationService', () => {
       expect(sentMsg?.android?.notification?.sound).toBe('default');
     });
 
+    // --- Pushes d'appel Android : DATA-ONLY obligatoire ---------------------
+    // Un message FCM portant un bloc `notification` est rendu par le SYSTÈME
+    // quand l'app est backgroundée/tuée : onMessageReceived ne s'exécute
+    // JAMAIS — le full-screen ring, StopRing (call_cancel/answered_elsewhere)
+    // et SeenCallRing étaient donc morts précisément dans le scénario visé.
+
+    it('un push silent android part data-only — aucun bloc notification', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android',
+        payload: {
+          title: '',
+          body: '',
+          silent: true,
+          data: { type: 'call_cancel', callId: 'call-1' },
+        } as any,
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.notification).toBeUndefined();
+      expect(sentMsg?.android).toEqual({ priority: 'high' });
+      expect(sentMsg?.data).toEqual({ type: 'call_cancel', callId: 'call-1' });
+    });
+
+    it('le ring android part data-only avec le title/body localisés DANS data', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android',
+        payload: {
+          title: 'Alice vous appelle',
+          body: 'Appel audio',
+          data: { type: 'call', callId: 'call-1', callerName: 'Alice' },
+        } as any,
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.notification).toBeUndefined();
+      expect(sentMsg?.data?.title).toBe('Alice vous appelle');
+      expect(sentMsg?.data?.body).toBe('Appel audio');
+      expect(sentMsg?.data?.callId).toBe('call-1');
+      expect(sentMsg?.android).toEqual({ priority: 'high' });
+    });
+
+    it('un push d’appel iOS-via-FCM garde son bloc notification (hors périmètre android)', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-ios', type: 'fcm', platform: 'ios', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-ios',
+        payload: {
+          title: 'Alice vous appelle',
+          body: 'Appel audio',
+          data: { type: 'call', callId: 'call-1' },
+        } as any,
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.notification).toEqual({ title: 'Alice vous appelle', body: 'Appel audio' });
+    });
+
     it('should include webpush config with link for web FCM tokens', async () => {
       const service = await getFCMService();
 

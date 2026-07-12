@@ -127,6 +127,17 @@
 > décroché à froid + budget 30 s, watchdogs Connecting Android (45 s) et
 > web (45 s), sémantique reconnecting précisée, harnais autorisations
 > P1-21. Prod re-vérifiée saine après déploiement (health up, front 200).
+> **BUG STRUCTUREL FCM Android trouvé et corrigé** : tous les pushes
+> partaient avec un bloc `notification` — or FCM le rend LUI-MÊME quand
+> l'app est backgroundée/tuée et onMessageReceived ne s'exécute JAMAIS :
+> le full-screen ring, StopRing (call_cancel/answered_elsewhere) et
+> SeenCallRing étaient morts précisément dans le seul scénario visé (le
+> foreground passe par la socket). Fix : pushes d'appel Android =
+> DATA-ONLY (sendViaFCM : android && (silent || data.type=call), aucun
+> bloc notification), title/body localisés serveur injectés DANS data ;
+> Android rend sa notification avec data.title/body (Prisme — langue
+> résolue serveur) et fallback ressources 4 locales (le « Appel entrant »
+> codé en dur en français saute). iOS/web FCM inchangés.
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`

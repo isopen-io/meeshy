@@ -22,6 +22,16 @@ data class IncomingCallPush(
     val callerName: String? = null,
     val isVideo: Boolean = false,
     val iceServers: List<SocketIceServer> = emptyList(),
+    /**
+     * Titre/corps LOCALISÉS par le serveur dans la langue résolue de
+     * l'utilisateur (Prisme — `notificationString('call.incoming.title/body')`).
+     * Le push d'appel Android est data-only (un bloc `notification` tuerait
+     * `onMessageReceived` en background) : c'est au client de rendre la
+     * notification — avec ces textes quand ils sont là, un fallback
+     * ressources sinon (gateway antérieur au data-only).
+     */
+    val title: String? = null,
+    val body: String? = null,
 ) {
     /**
      * The caller label to show on the ring, blank-skipping like the iOS
@@ -67,6 +77,8 @@ object IncomingCallPushParser {
             callerName = data["callerName"]?.takeIf { it.isNotBlank() },
             isVideo = data["isVideo"].equals("true", ignoreCase = true),
             iceServers = parseIceServers(data["iceServers"]),
+            title = data["title"]?.takeIf { it.isNotBlank() },
+            body = data["body"]?.takeIf { it.isNotBlank() },
         )
     }
 

@@ -452,14 +452,35 @@ export class PushNotificationService {
     }
 
     try {
-      const message: any = {
-        token: tokenRecord.token,
-        notification: {
-          title: payload.title,
-          body: payload.body,
-        },
-        data: payload.data || {},
-      };
+      // Pushes d'appel Android = DATA-ONLY. Un message FCM portant un bloc
+      // `notification` est rendu par le SYSTÈME quand l'app est backgroundée
+      // ou tuée : `onMessageReceived` ne s'exécute JAMAIS — le full-screen
+      // ring (MeeshyFcmService) et les handlers stop-ring
+      // (call_cancel/call_answered_elsewhere) étaient donc morts précisément
+      // dans le scénario pour lequel ils existent. Le title/body localisés
+      // serveur voyagent DANS data pour que le client rende sa notification
+      // d'appel dans la langue résolue de l'utilisateur (Prisme).
+      const androidCallDataOnly =
+        tokenRecord.platform === 'android' &&
+        (payload.silent === true || payload.data?.type === 'call');
+
+      const message: any = androidCallDataOnly
+        ? {
+            token: tokenRecord.token,
+            data: {
+              ...(payload.data || {}),
+              ...(payload.title ? { title: payload.title } : {}),
+              ...(payload.body ? { body: payload.body } : {}),
+            },
+          }
+        : {
+            token: tokenRecord.token,
+            notification: {
+              title: payload.title,
+              body: payload.body,
+            },
+            data: payload.data || {},
+          };
 
       // Platform-specific options
       if (tokenRecord.platform === 'ios') {
@@ -501,14 +522,18 @@ export class PushNotificationService {
         // the Android launcher badge in sync with the unread count carried by
         // the push payload — the same F1 guarantee already wired for iOS above,
         // which otherwise leaves the Android badge frozen when the app is closed.
-        message.android = {
-          priority: 'high',
-          notification: {
-            sound: payload.sound || 'default',
-            channelId: 'meeshy_notifications',
-            ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
-          },
-        };
+        // Data-only (appels) : pas de sous-bloc notification non plus — il
+        // réintroduirait le rendu système que le data-only vient d'éviter.
+        message.android = androidCallDataOnly
+          ? { priority: 'high' }
+          : {
+              priority: 'high',
+              notification: {
+                sound: payload.sound || 'default',
+                channelId: 'meeshy_notifications',
+                ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
+              },
+            };
       } else if (tokenRecord.platform === 'web') {
         const link = payload.link || (payload.data?.conversationId ? `/conversations/${payload.data.conversationId}` : undefined);
         message.webpush = {

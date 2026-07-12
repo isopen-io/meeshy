@@ -11,6 +11,7 @@ import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
 import me.meeshy.app.MainActivity
+import me.meeshy.app.R
 import me.meeshy.sdk.model.call.CallStopPush
 import me.meeshy.sdk.model.call.IncomingCallPush
 import me.meeshy.sdk.model.call.IncomingCallPushRoute
@@ -81,8 +82,12 @@ class MeeshyFcmService : FirebaseMessagingService() {
     private fun showIncomingCallNotification(push: IncomingCallPush) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_CALLS, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Incoming voice and video calls"
+            NotificationChannel(
+                CHANNEL_CALLS,
+                getString(R.string.call_channel_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = getString(R.string.call_channel_description)
                 setShowBadge(false)
             },
         )
@@ -101,10 +106,16 @@ class MeeshyFcmService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // Prisme : le push d'appel est data-only et le serveur a déjà résolu la
+        // langue de l'utilisateur (data.title/body localisés) — les ressources
+        // (locale appareil) ne servent que de fallback pour un gateway antérieur.
+        val fallbackBody = getString(
+            if (push.isVideo) R.string.call_incoming_video else R.string.call_incoming_audio,
+        )
         val notification = NotificationCompat.Builder(this, CHANNEL_CALLS)
             .setSmallIcon(android.R.drawable.sym_call_incoming)
-            .setContentTitle(push.displayName)
-            .setContentText(if (push.isVideo) "Appel vidéo entrant" else "Appel entrant")
+            .setContentTitle(push.title ?: push.displayName)
+            .setContentText(push.body ?: fallbackBody)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
