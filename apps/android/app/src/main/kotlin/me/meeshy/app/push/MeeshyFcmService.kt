@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import androidx.core.app.NotificationCompat
 import androidx.work.WorkManager
 import com.google.firebase.messaging.FirebaseMessagingService
@@ -89,8 +91,26 @@ class MeeshyFcmService : FirebaseMessagingService() {
             ).apply {
                 description = getString(R.string.call_channel_description)
                 setShowBadge(false)
+                // Sonnerie APPAREIL en usage ring (volume sonnerie, mode
+                // silencieux respecté) : écran allumé/déverrouillé, le ring
+                // arrive en heads-up — sans son de canal il n'émettait qu'un
+                // ding de notification. Écran verrouillé, le full-screen
+                // intent ouvre l'app qui sonne via son CallToneController.
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 1_000, 800, 1_000, 800)
             },
         )
+        // Les canaux sont IMMUABLES après création : les installs existantes
+        // gardaient l'ancien canal muet — on le supprime pour que le nouveau
+        // (id v2) porte la sonnerie partout.
+        manager.deleteNotificationChannel(LEGACY_CHANNEL_CALLS)
 
         val fullScreenIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -162,7 +182,9 @@ class MeeshyFcmService : FirebaseMessagingService() {
 
     companion object {
         const val CHANNEL_MESSAGES = "meeshy_messages"
-        const val CHANNEL_CALLS = "meeshy_calls"
+        /** v2 : les canaux sont immuables — le v1 (muet, sans sonnerie) est supprimé au passage. */
+        const val CHANNEL_CALLS = "meeshy_calls_v2"
+        const val LEGACY_CHANNEL_CALLS = "meeshy_calls"
         const val EXTRA_CALL_ID = "callId"
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_CALLER_NAME = "callerName"
