@@ -27,6 +27,7 @@ const mockJoinCall = jest.fn<any>();
 const mockLeaveCall = jest.fn<any>();
 const mockGetActiveCallForConversation = jest.fn<any>();
 const mockListHistory = jest.fn<any>();
+const mockFinalizeCallSummary = jest.fn<any>();
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
   const statusCode = opts?.statusCode ?? 200;
@@ -47,6 +48,7 @@ jest.mock('../../../services/CallService', () => ({
     getActiveCallForConversation: (...args: any[]) =>
       mockGetActiveCallForConversation(...args),
     listHistory: (...args: any[]) => mockListHistory(...args),
+    finalizeCallSummary: (...args: any[]) => mockFinalizeCallSummary(...args),
   })),
 }));
 
