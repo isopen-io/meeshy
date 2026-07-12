@@ -65,7 +65,9 @@ import me.meeshy.app.settings.AccountDeletionScreen
 import me.meeshy.app.settings.ChangePasswordScreen
 import me.meeshy.app.settings.CrashReportScreen
 import me.meeshy.app.settings.DataExportScreen
+import me.meeshy.app.settings.LegalDocumentScreen
 import me.meeshy.app.settings.MediaCacheScreen
+import me.meeshy.sdk.model.legal.LegalDocumentKind
 import me.meeshy.app.settings.MediaDownloadScreen
 import me.meeshy.app.settings.PrivacySettingsScreen
 import me.meeshy.app.settings.SettingsScreen
@@ -96,6 +98,8 @@ object Routes {
     const val DATA_EXPORT = "settings/data-export"
     const val DIAGNOSTICS = "settings/diagnostics"
     const val ABOUT = "settings/about"
+    const val LEGAL_DOC_ARG = "doc"
+    const val LEGAL = "settings/legal/{$LEGAL_DOC_ARG}"
     const val DELETE_ACCOUNT = "settings/delete-account"
     const val STARRED = "starred"
     const val PROFILE_USER = "profile/{userId}"
@@ -113,6 +117,7 @@ object Routes {
     fun reportUser(userId: String, username: String): String =
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
     fun story(userId: String): String = "story/$userId"
+    fun legal(kind: LegalDocumentKind): String = "settings/legal/${kind.arg}"
     fun call(conversationId: String, peerName: String, isVideo: Boolean): String =
         CallRoute.path(conversationId, peerName, isVideo)
 }
@@ -345,6 +350,12 @@ fun MeeshyApp(
                     onOpenDataExport = { navController.navigate(Routes.DATA_EXPORT) },
                     onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
                     onOpenAbout = { navController.navigate(Routes.ABOUT) },
+                    onOpenTerms = {
+                        navController.navigate(Routes.legal(LegalDocumentKind.TERMS_OF_SERVICE))
+                    },
+                    onOpenPrivacyPolicy = {
+                        navController.navigate(Routes.legal(LegalDocumentKind.PRIVACY_POLICY))
+                    },
                     onOpenDeleteAccount = { navController.navigate(Routes.DELETE_ACCOUNT) },
                 )
             }
@@ -368,6 +379,15 @@ fun MeeshyApp(
             }
             composable(Routes.ABOUT) {
                 AboutScreen(onBack = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.LEGAL,
+                arguments = listOf(navArgument(Routes.LEGAL_DOC_ARG) { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val kind = LegalDocumentKind.fromArg(
+                    backStackEntry.arguments?.getString(Routes.LEGAL_DOC_ARG),
+                ) ?: LegalDocumentKind.TERMS_OF_SERVICE
+                LegalDocumentScreen(kind = kind, onBack = { navController.popBackStack() })
             }
             composable(Routes.PRIVACY) {
                 PrivacySettingsScreen(onBack = { navController.popBackStack() })

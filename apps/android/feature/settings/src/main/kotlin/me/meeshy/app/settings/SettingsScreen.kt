@@ -104,6 +104,8 @@ fun SettingsScreen(
     onOpenDataExport: () -> Unit = {},
     onOpenDiagnostics: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
+    onOpenTerms: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -317,9 +319,9 @@ fun SettingsScreen(
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_diagnostics), detail = null, onClick = onOpenDiagnostics)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = onOpenTerms)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
-                SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = {})
+                SettingsRow(label = stringResource(R.string.settings_privacy_policy), detail = null, onClick = onOpenPrivacyPolicy)
             }
 
             SettingsSection(

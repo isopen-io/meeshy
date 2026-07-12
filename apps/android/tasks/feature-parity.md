@@ -2021,8 +2021,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `PackageInfo`/`Build`, no Android import in the core). `AboutScreen` (`:feature:settings`) is pure Compose
       glue: brand-gradient header, Indigo section cards, info/feature rows, links open via `ACTION_VIEW`.
       Wired the previously-dead Settings → About "Version" row to `Routes.ABOUT`. +27 tests (AppVersionFormatter 7,
-      AboutLinkResolver 9, AboutPresentationBuilder 11). EN/FR/ES/PT strings. **Pending:** Help & Support, ToS,
-      Privacy Policy, open-source licenses screens.
+      AboutLinkResolver 9, AboutPresentationBuilder 11). EN/FR/ES/PT strings.
+      **ToS + Privacy Policy shipped** (slice `settings-legal-documents`, 2026-07-12). Port of iOS
+      `TermsOfServiceView` + `PrivacyPolicyView`, **unified** into one data-driven screen keyed by
+      `LegalDocumentKind`. Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.legal`):
+      `LegalDocumentKind.fromArg(raw)` — the case-folded/trimmed route-arg parser (`terms`/`privacy`, null on
+      blank/unknown so an unrecognised deep link never resolves to the wrong doc); `LegalSectionKey` (the 9 ToS
+      + 7 Privacy sections); `LegalDocumentCatalog.sections(kind)` + `.numbered(kind)` (ordered section keys +
+      iOS's `index + 1` 1-based numbering). `LegalDocumentScreen` (`:feature:settings`) is pure Compose glue:
+      numbered Info-blue section cards, each key resolved to a localized heading/body. Wired the two previously
+      **dead-end** Settings → About rows ("Terms of Service", "Privacy Policy") to `Routes.legal(kind)`.
+      **Surpasses iOS** by (a) collapsing two near-identical views into one catalog-driven screen and (b) the
+      document following the app language automatically across values-* (EN/FR/ES/PT — Prisme philosophy),
+      dropping iOS's manual fr/en `Picker`. +14 tests (LegalDocumentCatalog 7, LegalDocumentKind 7). EN/FR/ES/PT
+      strings. **Pending:** Help & Support, open-source licenses screens.
 
 ## M. Notifications
 - [ ] Notification center with category filters (messages, reactions, mentions, social,
