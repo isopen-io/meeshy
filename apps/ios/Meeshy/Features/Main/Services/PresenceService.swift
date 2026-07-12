@@ -14,7 +14,7 @@ public struct PresenceRefreshEntry: Decodable, Sendable {
     public let lastActiveAt: Date?
 }
 
-private struct PresenceRefreshPayload: Decodable {
+private struct PresenceRefreshPayload: Decodable, Sendable {
     let users: [PresenceRefreshEntry]
 }
 
@@ -50,30 +50,60 @@ final class PresenceService {
         }
     }
 
+    /// Max ids per `?ids=` request. A single 200-id query built a ~5 KB URL that
+    /// was slow (5.1s observed) and fragile against server header-size limits.
+    static let chunkSize = 50
+
     private func performRefresh() async {
         guard APIClient.shared.authToken != nil else { return }
         let ids = PresenceManager.shared.knownUserIds
         guard !ids.isEmpty else { return }
 
-        // Gateway accepts max 200 ids per call. Take the first chunk — the
-        // remaining contacts will catch up on the next snapshot or status
-        // event. We intentionally don't paginate here because the typical
-        // contact set on iOS is <200 and adding a loop would defer the UI
-        // refresh past the moment the user is actually looking at the list.
-        let trimmed = Array(ids.prefix(200))
-        let query = trimmed.joined(separator: ",")
+        // Chunk the ids and fetch chunks CONCURRENTLY, ingesting each as it lands.
+        // This keeps every URL small (~1.3 KB) and lets the first chunk refresh
+        // the UI immediately instead of blocking behind a single giant request —
+        // preserving the "fast refresh" intent while killing the URL-size risk.
+        let chunks = Array(ids.prefix(200)).chunked(into: Self.chunkSize)
+        await withTaskGroup(of: [PresenceRefreshEntry].self) { group in
+            for chunk in chunks {
+                group.addTask { await Self.fetchChunk(chunk) }
+            }
+            var total = 0
+            for await entries in group where !entries.isEmpty {
+                PresenceManager.shared.ingestRefresh(entries)
+                total += entries.count
+            }
+            logger.info("Refreshed presence for \(total, privacy: .public) ids in \(chunks.count, privacy: .public) chunk(s)")
+        }
+    }
 
+    // MainActor-isolated (module default) so it can touch `logger` and the
+    // Decodable payload; the requests still overlap because `APIClient.request`
+    // is nonisolated async — each `await` releases the MainActor.
+    private static func fetchChunk(_ chunk: [String]) async -> [PresenceRefreshEntry] {
+        let query = chunk.joined(separator: ",")
         do {
             let response: APIResponse<PresenceRefreshPayload> = try await APIClient.shared.request(
                 endpoint: "/users/presence",
                 queryItems: [URLQueryItem(name: "ids", value: query)]
             )
-            PresenceManager.shared.ingestRefresh(response.data.users)
-            logger.info("Refreshed presence for \(response.data.users.count, privacy: .public) ids")
+            return response.data.users
         } catch {
-            // Network errors are expected on a flaky reconnect — log and move
-            // on. The next foreground or snapshot will paper over the miss.
-            logger.error("Presence refresh failed: \(error.localizedDescription, privacy: .public)")
+            // Network errors are expected on a flaky reconnect — log and move on.
+            // The next foreground or snapshot will paper over the miss.
+            logger.error("Presence refresh chunk failed: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
+    }
+}
+
+extension Array {
+    /// Splits into consecutive sub-arrays of at most `size` elements
+    /// (`[1,2,3,4,5].chunked(into: 2)` → `[[1,2],[3,4],[5]]`).
+    func chunked(into size: Int) -> [[Element]] {
+        guard size > 0 else { return isEmpty ? [] : [self] }
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0 ..< Swift.min($0 + size, count)])
         }
     }
 }
