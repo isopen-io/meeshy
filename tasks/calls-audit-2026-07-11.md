@@ -605,3 +605,9 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > web. Le callEndReason mort n'a PAS été utilisé (approche pendingRetry
 > dédiée plus robuste, découplée du reset). Reste : parité iOS/Android (à
 > suivre quand la session iOS sera disponible), déploiement frontend.
+
+> Retry-on-failure DÉPLOYÉ (2026-07-12) : frontend a619bfbcd→7e6ea5d49
+> (seul delta = le retry), healthy, meeshy.me 200. Les utilisateurs web qui
+> subissent un échec d'appel transitoire ont maintenant « Réessayer » live.
+> Feature complète end-to-end web : construite → 154/154 tests → CI Test web
+> verte → déployée → vérifiée. Reste parité iOS/Android.
