@@ -138,6 +138,13 @@
 > Android rend sa notification avec data.title/body (Prisme — langue
 > résolue serveur) et fallback ressources 4 locales (le « Appel entrant »
 > codé en dur en français saute). iOS/web FCM inchangés.
+> Compagnons anti-ring-fantôme : TTL FCM 60 s (android.ttl) ET expiration
+> APNs 60 s (notification.expiry) sur les pushes d'appel — sans eux, un
+> téléphone qui resurgit du hors-réseau recevait le ring d'un appel missed
+> depuis longtemps (FCM conserve ~4 semaines par défaut ; PushKit force le
+> report CallKit → le téléphone sonne pour rien). Alignés sur la fenêtre
+> de sonnerie serveur (60 s). Scoping : silent n'a qu'UN producteur
+> (call-push-mirroring) — les pushes messages/badges inchangés.
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
