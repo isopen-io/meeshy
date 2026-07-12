@@ -75,15 +75,27 @@ const session = {
   ],
 };
 
+/** Chaque flip de statut demandé au service — le harnais y lit l'effet
+ * observable du round-trip reconnecting/reconnected et de son autorisation. */
+const statusUpdates: Array<{ callId: string; status: string }> = [];
+
 const callServiceStub = {
   initiateCall: async () => session,
   joinCall: async () => ({ callSession: session, iceServers: [] }),
-  getCallSession: async () => session,
+  // Statut DYNAMIQUE : la garde FSM du handler reconnected exige que le
+  // statut courant soit reconnecting|active — un stub figé sur ringing
+  // ferait mentir le harnais (le serveur ignorerait, à raison, le retour).
+  getCallSession: async () => ({
+    ...session,
+    status: statusUpdates.at(-1)?.status ?? session.status,
+  }),
   generateIceServers: () => [],
   getIceServerTtl: () => 86400,
   scheduleRingingTimeout: () => undefined,
   clearRingingTimeout: () => undefined,
-  updateCallStatus: async () => undefined,
+  updateCallStatus: async (callId: string, status: string) => {
+    statusUpdates.push({ callId, status });
+  },
   createCallSummaryMessage: async () => null,
   createLiveCallMessage: async () => null,
   endCall: async () => ({ ...session, status: 'ended', endReason: 'completed', duration: 30 }),
@@ -338,6 +350,44 @@ describe('Appels — e2e 2 sockets « deux devices, un répond »', () => {
         )
       )
     ).resolves.toBe(true);
+  }, 20_000);
+
+  it('round-trip reconnecting/reconnected : statut flippé pour un participant, REJETÉ pour un tiers', async () => {
+    // Les 3 plateformes émettent désormais ces signaux : l'autorisation
+    // (audit P1-21 — participant ACTIF seul) est un contrat de sécurité à
+    // verrouiller au niveau du fil, pas seulement en unitaire.
+    statusUpdates.length = 0;
+
+    clientB1.emit(CALL_EVENTS.RECONNECTING, {
+      callId: CALL_ID,
+      participantId: USER_B,
+      attempt: 1,
+    });
+    await expect(
+      waitUntil(() => statusUpdates.some((u) => u.callId === CALL_ID && u.status === 'reconnecting'))
+    ).resolves.toBe(true);
+
+    clientB1.emit(CALL_EVENTS.RECONNECTED, { callId: CALL_ID, participantId: USER_B });
+    await expect(
+      waitUntil(() => statusUpdates.some((u) => u.callId === CALL_ID && u.status === 'active'))
+    ).resolves.toBe(true);
+
+    // Un utilisateur authentifié mais NON participant ne peut pas basculer
+    // le statut d'un appel arbitraire.
+    statusUpdates.length = 0;
+    const intruder = await connectClient(port, 'user-charlie');
+    try {
+      intruder.emit(CALL_EVENTS.RECONNECTING, {
+        callId: CALL_ID,
+        participantId: 'user-charlie',
+        attempt: 1,
+      });
+      // Fenêtre d'observation : l'absence d'effet est le contrat.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(statusUpdates).toHaveLength(0);
+    } finally {
+      intruder.disconnect();
+    }
   }, 20_000);
 
   // Message d'appel VIVANT (feature 2026-07-11) — cycle complet sur vraies
