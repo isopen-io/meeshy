@@ -93,3 +93,36 @@ arme un `setTimeout` par message (`pendingMessageTimeouts`), nettoyé sur le che
 sur les 3 chemins de retrait (traité / expulsé / cleanup) — source unique, la fuite
 ne peut plus réapparaître. TDD : 2 tests RED d'abord (`jest.getTimerCount()` +
 taille de Map), puis GREEN. Suite orchestrateur 104/104, socketio web 423/423.
+
+## Cycle 3 (2026-07-12) — défaut de robustesse ZMQ corrigé (audio pipeline, Phase 3/5)
+
+Passage ciblé sur des surfaces temps-réel NON couvertes par les cycles 1–2 : le
+handler ZMQ `ZmqMessageHandler` (SUB translator→gateway), hors périmètre des audits
+précédents (qui couvraient handlers Socket.IO, read-status, MessageProcessor, utils).
+
+**Un défaut de correction réel corrigé (perte permanente de résultat audio) :**
+
+`services/gateway/src/services/zmq-translation/ZmqMessageHandler.ts:341` —
+`handleAudioProcessCompleted` déréférençait `event.translatedAudios.map(...)` SANS
+garde, alors que la même méthode traite le champ comme optionnel 27 lignes plus haut
+(`event.translatedAudios?.length || 0`, :314). Les events sont du JSON non typé parsé
+au fil du socket (`JSON.parse`, :98) — le type TS `TranslatedAudioData[]` n'est PAS
+une garantie runtime. Sur une frame `audio_process_completed` de transcription seule
+(aucune langue cible → `translatedAudios` absent) :
+1. `.map()` lève `TypeError` ;
+2. le throw remonte au catch de `handleMessage` (:111) qui ne fait que logger →
+   `audioProcessCompleted` JAMAIS émis → transcription + audio du message PERDUS ;
+3. pire : la clé de dédup `audio_${taskId}` est ajoutée AVANT le `.map()` (:304) →
+   tout retry portant le même taskId est silencieusement écarté (:300-302) → **perte
+   PERMANENTE**.
+
+**Fix** : `(event.translatedAudios ?? []).map(...)` — aligné sur la défensivité `?.`
+déjà présente à :314 ; comportement byte-identique pour les events bien formés.
+TDD : 1 test RED d'abord (frame transcription-seule sans `translatedAudios` →
+`toHaveLength(1)` échoue car pas d'émission), puis GREEN. Suite ZmqMessageHandler
+69/69 verte.
+
+Reste vérifié sain ce cycle (balayage, pas de défaut) : StatusHandler typing fan-out,
+AuthHandler room-rejoin/retry, LocationHandler, SocialEventsHandler, MessageHandler
+edit/delete/broadcast + `_emitMessageNewByLanguage`, `emitWithSeq`,
+`participant-resolver`, `message-payload-filter`, presence/drain/delivery-receipt.
