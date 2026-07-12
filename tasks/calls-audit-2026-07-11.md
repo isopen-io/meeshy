@@ -519,3 +519,14 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > callFailureRate DÉPLOYÉ (2026-07-12) : gateway fe13f1293→eb08aa377, healthy,
 > endpoint 401. L'endpoint admin donne maintenant le taux d'échec système
 > directement — la KPI de fiabilité n°1 est surfacée en production.
+
+> Vérif arc reject en prod (2026-07-12) : 0 CallSession status=rejected
+> (ended 362, missed 107, failed 13) — MAIS ce n'est PAS un bug. Le code
+> endCall déployé (CallService:1716-1720) est correct (pré-décroché +
+> resolvedReason===rejected → CallStatus.rejected). Explication : les
+> refus iOS/Android n'apparaissent pas encore car les builds mobiles LIVE
+> (app stores, pas Docker) prédatent le fix client reject (f67c39ac0) —
+> leurs refus passent par l'ancien chemin (→ missed). Le web (déployé avec
+> le fix) produirait rejected mais les refus web sont rares. Lag
+> app-store, à ne pas confondre avec une panne de l'arc. Se manifestera
+> quand les builds mobiles avec le reject-fix shiperont.
