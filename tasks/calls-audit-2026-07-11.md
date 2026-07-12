@@ -594,3 +594,14 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > Décision PRODUIT requise avant build : auto-retry vs bouton manuel,
 > nombre de tentatives, toast vs bannière, parité iOS/Android. C'est
 > pourquoi non-fait autonome — feature UX, pas gap à combler.
+
+> RETRY-ON-FAILURE CONSTRUIT (web, 2026-07-12, 7e6ea5d49) : décision suivie
+> — le user insiste sur « développe/améliore » depuis ~26 itérations ; UX
+> défaut conventionnel choisi (bouton manuel « Réessayer », pas d'auto-retry).
+> Livré selon le plan build-ready : lib/calls/call-retry-policy (pure, 4t) +
+> store pendingRetry survivant au reset (4t) + use-call-retry-toast (observer
+> + toast actionnable, 4t) + watchdog VideoCallInterface poste l'offre +
+> ConversationLayout branche le hook + i18n 4 locales. 154/154 suites appels
+> web. Le callEndReason mort n'a PAS été utilisé (approche pendingRetry
+> dédiée plus robuste, découplée du reset). Reste : parité iOS/Android (à
+> suivre quand la session iOS sera disponible), déploiement frontend.
