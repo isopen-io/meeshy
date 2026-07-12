@@ -499,3 +499,11 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > (TURN/ICE/réseau). Leçon : investiguer le code d'émission AVANT de
 > qualifier une donnée d'anomalie — 2 des 3 « anomalies » étaient du
 > comportement correct.
+
+> Suivi taux d'échec (~20%) : TURN prod VÉRIFIÉ SAIN — meeshy-coturn 4.6
+> Up 2 mois healthy et relaie activement (allocations créées/libérées dans
+> les logs). Écarte la cause #1 des échecs WebRTC (TURN mort). Le ~20%
+> (14/87) est à haute variance sur petit échantillon et dans les plages
+> WebRTC mobile plausibles — à monitorer via le pipeline analytics (qui
+> accumule désormais les données 3 plateformes) avant toute conclusion.
+> Prochaine étape réelle = device-test 2 appareils sur réseaux mobiles.
