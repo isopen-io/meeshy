@@ -9,8 +9,8 @@ import type { Post, PostComment } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData, InfiniteCommentsData } from './types';
 import { useAuthStore } from '@/stores/auth-store';
 import { decrementReactionSummary } from '@/lib/reaction-summary';
+import { HEART_EMOJI } from '@/lib/reactions';
 
-const HEART_EMOJI = '❤️';
 const SOCKET_ACK_TIMEOUT_MS = 10_000;
 
 // Monotonic counter so two optimistic comments created within the same
