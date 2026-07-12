@@ -68,6 +68,9 @@
       "qualityDegraded": "La connexion de {name} est instable",
       "screenCapturing": "{name} enregistre peut-être l'écran"
     },
+    "captions": {
+      "region": "Sous-titres traduits en direct"
+    },
     "stream": {
       "disconnected": "Déconnecté",
       "participantLeft": "{name} a quitté l'appel",

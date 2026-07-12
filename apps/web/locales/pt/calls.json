@@ -68,6 +68,9 @@
       "qualityDegraded": "A conexão de {name} está instável",
       "screenCapturing": "{name} pode estar gravando a tela"
     },
+    "captions": {
+      "region": "Legendas traduzidas ao vivo"
+    },
     "stream": {
       "disconnected": "Desconectado",
       "participantLeft": "{name} saiu",

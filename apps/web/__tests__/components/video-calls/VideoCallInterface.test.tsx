@@ -65,6 +65,9 @@ jest.mock('@/hooks/use-call-quality', () => ({
 jest.mock('@/hooks/use-remote-call-alerts', () => ({
   useRemoteCallAlerts: () => ({ remoteQualityDegraded: false, remoteScreenCapturing: false }),
 }));
+jest.mock('@/hooks/use-call-captions', () => ({
+  useCallCaptions: () => ({ captions: [] }),
+}));
 jest.mock('@/hooks/use-active-peer-connection', () => ({
   useActivePeerConnection: () => null,
 }));

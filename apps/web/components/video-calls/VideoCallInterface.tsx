@@ -12,6 +12,7 @@ import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
 import { useRemoteCallAlerts } from '@/hooks/use-remote-call-alerts';
+import { useCallCaptions } from '@/hooks/use-call-captions';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
 import {
   useAdaptiveDegradation,
@@ -24,6 +25,7 @@ import { CallControls } from './CallControls';
 import { CallStatusIndicator } from './CallStatusIndicator';
 import { AudioEffectsCarousel } from './AudioEffectsCarousel';
 import { CallQualityOverlay } from './CallQualityOverlay';
+import { CallCaptionsOverlay } from './CallCaptionsOverlay';
 import { CallInfoOverlay } from './CallInfoOverlay';
 import { LocalVideoTile } from './LocalVideoTile';
 import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
@@ -124,6 +126,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // sustained degradation (transient pill, 15 s auto-clear) and the privacy
   // signal when the peer captures the call screen.
   const { remoteQualityDegraded, remoteScreenCapturing } = useRemoteCallAlerts(callId);
+  const { captions } = useCallCaptions(callId);
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -594,6 +597,16 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         remoteQualityDegraded={remoteQualityDegraded}
         remoteScreenCapturing={remoteScreenCapturing}
         participantName={remoteParticipant?.username || ''}
+      />
+
+      {/* Live translated captions from peers (call:translated-segment) */}
+      <CallCaptionsOverlay
+        captions={captions}
+        resolveSpeakerName={(speakerId) =>
+          currentCall?.participants?.find(
+            (p) => (p.userId || p.participantId) === speakerId
+          )?.username
+        }
       />
 
       {/* Audio Effects Panel (Sliding from bottom) */}

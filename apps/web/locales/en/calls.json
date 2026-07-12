@@ -68,6 +68,9 @@
       "qualityDegraded": "{name}'s connection is unstable",
       "screenCapturing": "{name} may be recording the screen"
     },
+    "captions": {
+      "region": "Live translated captions"
+    },
     "stream": {
       "disconnected": "Disconnected",
       "participantLeft": "{name} has left",
