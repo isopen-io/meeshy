@@ -181,6 +181,12 @@
 > la notification « appel manqué » envoyée au callee qui venait de REFUSER
 > (handleMissedCall gaté sur status missed) et le filtre « manqués » du
 > journal exclut les refus comme son commentaire le promettait.
+> Post-fix iOS Tests ROUGE (2/3685) : les source-guards RejectPendingCallTests
+> exigeaient la sous-chaîne emitCallEnd(callId: pending.callId) — remplacée
+> par emitCallReject. Guards mis à jour vers le nouveau contrat + nouveau
+> verrou test_sdkEmitCallReject_emitsCallEndWithRejectedReason (le SDK doit
+> émettre call:end AVEC reason rejected, sinon le guard app passerait à vide).
+> CI/SDK Tests verts sur f67c39ac0 ; iOS Tests re-certifié sur le commit guard.
 
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
