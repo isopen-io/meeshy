@@ -87,7 +87,8 @@
       "joinFailed": "Error al unirse a la llamada",
       "callAlreadyEnded": "La llamada ha terminado",
       "videoSuspendedPoorConnection": "Conexión débil — vídeo en pausa para mantener la llamada",
-      "videoResumed": "Conexión recuperada — vídeo reactivado"
+      "videoResumed": "Conexión recuperada — vídeo reactivado",
+      "connectTimeout": "No se pudo establecer la conexión — llamada finalizada"
     },
     "permissions": {
       "title": {

@@ -78,6 +78,13 @@
 > « Connexion… » à vie (2 côtés, jusqu'au GC 2 h). Expiry = même devoir
 > terminal que hangUp (ConnectionFailed + emitEnd + teardown). Parité
 > d'intention iOS connectingFailSeconds.
+> Watchdog Connecting web : même trou, même borne (45 s dans
+> VideoCallInterface) — un échec ICE ne produisait qu'un toast pendant
+> que webrtc-service retentait en boucle sans escalade ; l'appel jamais
+> connecté se termine désormais (handleHangUp via ref, fenêtre unique
+> par callId, seedée de l'état courant — un remontage sur appel connecté
+> ne ré-ouvre jamais de fenêtre de kill). i18n connectTimeout 4 locales.
+> Les 3 plateformes bornent désormais chaque phase d'appel.
 > Résilience réseau Android : le coordinateur WebRTC réagit enfin aux stalls
 > ICE mid-call (avant : handoff WiFi→LTE = média figé pour toujours, appel
 > « actif » côté serveur car les heartbeats socket survivent au média mort).

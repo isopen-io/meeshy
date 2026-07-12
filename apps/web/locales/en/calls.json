@@ -87,7 +87,8 @@
       "joinFailed": "Failed to join call",
       "callAlreadyEnded": "The call has ended",
       "videoSuspendedPoorConnection": "Weak connection — video paused to keep the call going",
-      "videoResumed": "Connection recovered — video back on"
+      "videoResumed": "Connection recovered — video back on",
+      "connectTimeout": "Could not establish the connection — call ended"
     },
     "permissions": {
       "title": {
