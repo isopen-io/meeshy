@@ -404,3 +404,13 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > seul appel à la fois, un booléen suffit. ChatScreen ne reçoit qu'un
 > Boolean (pas de dép feature:calls). feature:chat 467/467. Parité iOS
 > guard de réconciliation. La feature rejoin Android est COMPLÈTE.
+
+> Analytics — côté LECTURE (2026-07-12, b3a336252) : call:analytics était
+> persisté (CallParticipant.analytics) mais JAMAIS lu — télémétrie
+> write-only invisible aux dashboards. Comblé end-to-end : agrégateur pur
+> callAnalyticsAggregate (coerce défensif + summarize, 13 tests) +
+> GET /api/v1/admin/analytics/calls?days=7 (admin-gated, cache 10min,
+> fenêtre 1-90j, ROW_CAP 5000+flag sampled, pas de filtre Json-null DB =
+> footgun Prisma évité, null droppés en JS). 908/908 routes admin +
+> privacy per-participant intacte. Le pipeline analytics est maintenant
+> complet : client émet → serveur valide+persiste → admin agrège+lit.
