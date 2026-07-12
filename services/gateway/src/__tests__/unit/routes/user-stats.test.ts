@@ -20,6 +20,14 @@ type StatsPrismaOverrides = {
   languages?: Array<string | null>;
   createdAt?: Date | null;
   resolvedId?: string | null;
+  /**
+   * Count returned when `participant.count` is called WITHOUT an
+   * `isActive: true` filter (i.e. counting every conversation the user has
+   * ever joined, including left/banned/removed ones). Defaults to
+   * `totalConversations` so existing tests are unaffected; set it higher than
+   * `totalConversations` to prove the helper only counts active memberships.
+   */
+  totalConversationsIncludingInactive?: number;
 };
 
 /**
@@ -36,6 +44,7 @@ function buildPrisma(overrides: StatsPrismaOverrides = {}): PrismaClient {
     languages = [],
     createdAt = new Date(),
     resolvedId = 'resolved-user-id',
+    totalConversationsIncludingInactive = totalConversations,
   } = overrides;
 
   const prisma = {
@@ -49,7 +58,17 @@ function buildPrisma(overrides: StatsPrismaOverrides = {}): PrismaClient {
       findMany: jest.fn(() => Promise.resolve([])),
     },
     participant: {
-      count: jest.fn(() => Promise.resolve(totalConversations)),
+      // Honors the `isActive` filter so the double distinguishes
+      // "active conversations" from "every conversation ever joined". A count
+      // without `isActive: true` sweeps in left/banned/removed memberships
+      // (Participant rows are soft-deactivated, never deleted).
+      count: jest.fn((args: { where?: { isActive?: boolean } }) =>
+        Promise.resolve(
+          args?.where?.isActive === true
+            ? totalConversations
+            : totalConversationsIncludingInactive
+        )
+      ),
     },
     friendRequest: {
       count: jest.fn(() => Promise.resolve(friendRequestsReceived)),
@@ -157,6 +176,42 @@ describe('computeUserStats', () => {
   it('treats a missing user as zero member days', async () => {
     const stats = await computeUserStats(buildPrisma({ createdAt: null }), 'u1');
     expect(stats.memberDays).toBe(0);
+  });
+
+  it('counts only ACTIVE conversations, not left/banned/removed ones', async () => {
+    // The user is currently in 5 conversations but has ever joined 15
+    // (10 rows soft-deactivated by leave/ban/delete-for-me — Participant rows
+    // are never hard-deleted). totalConversations must reflect the 5 active,
+    // NOT the 15 historical.
+    const stats = await computeUserStats(
+      buildPrisma({
+        totalConversations: 5,
+        totalConversationsIncludingInactive: 15,
+      }),
+      'u1'
+    );
+
+    expect(stats.totalConversations).toBe(5);
+
+    // The `connecteur` achievement (threshold 10) must stay locked: the user is
+    // actively in 5 conversations, so the over-count must not falsely unlock it.
+    const connecteur = stats.achievements.find((a) => a.id === 'connecteur');
+    expect(connecteur).toMatchObject({ isUnlocked: false, current: 5 });
+  });
+
+  it('filters participant.count by isActive: true', async () => {
+    const prisma = buildPrisma();
+    await computeUserStats(prisma, 'u1');
+
+    const participantCount = (prisma as unknown as {
+      participant: { count: jest.Mock };
+    }).participant.count;
+
+    expect(participantCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: 'u1', isActive: true }),
+      })
+    );
   });
 });
 
