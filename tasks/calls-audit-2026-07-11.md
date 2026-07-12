@@ -457,3 +457,11 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > 6 tests) + câblage VideoCallInterface. platform='web', honest defaults.
 > 107/107 suites appels web. Les 3 plateformes émettent désormais la
 > télémétrie de fiabilité (parité complète émission↔lecture).
+
+> Émission web + fix endReason DÉPLOYÉS (2026-07-12) : gateway f87c7a71b→
+> ed8a56c02 (failed(msg) agrégés), frontend 05daf2068→a619bfbcd (web émet
+> call:analytics). Deltas propres (1 commit chacun), les deux healthy,
+> meeshy.me 200. À partir de maintenant les appels web reportent leur
+> télémétrie → dashboard fiabilité plus 100% iOS. Boucle analytics complète
+> et LIVE : 3 plateformes émettent → serveur persiste → admin agrège (avec
+> failed unifié + sentinelle setup exclue).
