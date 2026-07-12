@@ -2,7 +2,7 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload + crash-report diagnostics viewer w/ share)** → rest`
 
 > On 2026-07-12 **media auto-download decision pipeline** landed (slice `media-auto-download-decider`,
 > feature-parity §L). Closes the "next slice" NB the `settings-media-auto-download` slice left open: the live
@@ -2533,6 +2533,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-12 — slice `settings-crash-diagnostics` ✅ impl + reviewer PASS (PR open, awaiting CI+merge)
+- **Branch:** `claude/apps/android/settings-crash-diagnostics` (off latest `main` `4d341f2`).
+- **What:** feature-parity §L — the crash-report diagnostics viewer with share. Port of iOS
+  `CrashDiagnosticsManager` + `CrashReportSheet`; Android-honest capture via
+  `Thread.setDefaultUncaughtExceptionHandler` (analogue of iOS `NSSetUncaughtExceptionHandler`, chains to the
+  previous handler).
+- **Added (production):**
+  - `:core:model` `diagnostics/` — `CrashKind`(+`CrashSeverity`) severity/wire-token SSOT, `CrashDiagnostic`
+    (`@Serializable`), `CrashDiagnosticFactory.fromThrowable` (throwable→diagnostic, id/ts injected),
+    `CrashReportFormatter` (share text, port of `formatAllReports()`), `CrashReportRetention`
+    (sort-newest-first + cap 50 + overflow GC, port of `decodeAllReports()`), `CrashReportCodec`
+    (`storageValue`/`crashReportsFromStorage`, corruption-safe, skips bad elements).
+  - `:feature:settings` — `CrashDiagnosticsStore` (interface) + `FileCrashDiagnosticsStore` (exempt I/O glue,
+    `@Synchronized` sync `record`), `CrashDiagnosticsRecorder` (installer), `CrashDiagnosticsModule` (Hilt
+    binding), `CrashReportViewModel` (UDF), `CrashReportScreen` (glue), SettingsScreen "Diagnostics" row.
+  - `:app` — `Routes.DIAGNOSTICS` + composable + SettingsScreen callback; `MeeshyApplication` installs the
+    recorder in `onCreate`.
+- **Tests (RED→GREEN):** +42 — CrashKind 5, CrashDiagnosticFactory 5, CrashReportFormatter 5,
+  CrashReportRetention 12, CrashReportCodec 6, CrashReportViewModel 9. Branches swept: severity/wire per kind;
+  null-message placeholder; cause-in-details; formatter empty/single/multi/order/ISO; retention
+  empty/single/newest-first/tie-break/under-cap/at-boundary/over-cap/cap≤0/overflow; codec
+  roundtrip/blank/malformed/non-array/skip-corrupt/unknown-keys; VM load success+failure, empty+shareContent,
+  optimistic clear+rollback+inert+in-flight guard+cancellation.
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model` + `:feature:settings` diagnostics
+  tests green. Full all-module `testDebugUnitTest`: only failure = documented DataStore flake
+  `NotificationPreferencesStoreTest` (1/576 sdk-core, green in isolation in 4s, NOTES §DataStore) — this slice
+  adds no DataStore store and touches no sdk-core code. Two-mutation RED proof: misclassify DISK severity +
+  drop the retention cap → exactly 3 relevant tests fail (`severity_mapsInfoKinds`,
+  `retained_overCap_dropsOldestBeyondCap`, `retained_capZeroOrNegative_isEmpty`); reverted.
+- **Reviewer:** PASS. Diff `apps/android` only (`:core:model` new `diagnostics/` files, `:feature:settings`
+  new store/recorder/module/VM/screen + SettingsScreen row + EN/FR/ES/PT strings, `:app` nav + Application
+  install); no production logic outside `apps/android`. SDK purity — pure classify/format/retain/codec in
+  `:core:model`, "when to record / on-disk layout / cache→UI" orchestration in `:feature:settings`. SSOT — one
+  formatter/retention/codec, no re-implementation. UDF/instant-app — immutable `StateFlow<UiState>`, skeleton
+  only on cold empty, optimistic clear with rollback. Colour/UX — severity badges from `MeeshyPalette`
+  (Error/Warning/Info), natural back nav, share + confirmed clear, no dead end. No coverage floor lowered, no
+  test weakened.
+- **Env note:** the gradle **wrapper** dist download is proxy-blocked (403 on services.gradle.org→github);
+  use the pre-installed `/opt/gradle/bin/gradle` (8.14.3, compatible with AGP 8.7.3). See NOTES §Gradle.
+- **Next:** the chat media view that consumes the `MediaAutoDownloadDecider` (auto-DL trigger + manual-download
+  affordance for SKIP_POLICY); in-place crop/resize/compress before avatar/banner upload (§K); or the §L
+  static screens (Help/ToS/Privacy/licenses/About).
 
 ### 2026-07-12 — slice `media-auto-download-decider` ✅ impl + reviewer PASS + MERGED
 - **Branch:** `claude/apps/android/media-auto-download-decider` (off latest `main`).
