@@ -8,6 +8,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
 import androidx.work.WorkManager
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -126,12 +127,26 @@ class MeeshyFcmService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // Bouton « Refuser » (CallStyle) : coupe la sonnerie ET prévient le
+        // correspondant — sans lui, refuser n'existait pas et l'appelant
+        // sonnait 60 s dans le vide.
+        val declinePendingIntent = PendingIntent.getBroadcast(
+            this,
+            ("decline:" + push.callId).hashCode(),
+            Intent(this, DeclineCallReceiver::class.java).putExtra(EXTRA_CALL_ID, push.callId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         // Prisme : le push d'appel est data-only et le serveur a déjà résolu la
         // langue de l'utilisateur (data.title/body localisés) — les ressources
         // (locale appareil) ne servent que de fallback pour un gateway antérieur.
         val fallbackBody = getString(
             if (push.isVideo) R.string.call_incoming_video else R.string.call_incoming_audio,
         )
+        val caller = Person.Builder()
+            .setName(push.displayName)
+            .setImportant(true)
+            .build()
         val notification = NotificationCompat.Builder(this, CHANNEL_CALLS)
             .setSmallIcon(android.R.drawable.sym_call_incoming)
             .setContentTitle(push.title ?: push.displayName)
@@ -142,6 +157,10 @@ class MeeshyFcmService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setFullScreenIntent(pendingIntent, true)
+            // Répondre = le full-screen intent existant (écran d'appel entrant) ;
+            // Refuser = DeclineCallReceiver. Sur API < 31, CallStyle dégrade en
+            // notification standard avec les deux actions.
+            .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declinePendingIntent, pendingIntent))
             .build()
 
         manager.notify(push.callId.hashCode(), notification)

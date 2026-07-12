@@ -9,6 +9,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.work.Configuration
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.launch
+import me.meeshy.app.push.DeclinedCallStore
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
 import me.meeshy.sdk.socket.SocketManager
@@ -29,6 +30,9 @@ class MeeshyApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var callSignalManager: CallSignalManager
+
+    @Inject
+    lateinit var declinedCalls: DeclinedCallStore
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -69,6 +73,10 @@ class MeeshyApplication : Application(), Configuration.Provider {
                 // mid-ring a manqué le call:initiated live — le gateway rejoue
                 // les appels encore sonnants (< 60 s), le client dédoublonne.
                 callSignalManager.emitCheckActive()
+                // Refus prononcés socket froide (bouton « Refuser » de la
+                // notification) : rejoués maintenant que le fil est vivant —
+                // call:end est idempotent, un rejeu tardif est un no-op.
+                declinedCalls.drain().forEach(callSignalManager::emitEnd)
             }
         }
     }

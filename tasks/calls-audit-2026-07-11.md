@@ -152,6 +152,14 @@
 > (pur) → CallRoute.incoming, chemins push et socket convergents.
 > **3e vague VERTE (CI success sur le tip post-arc pushes)** : data-only,
 > TTL/expiration, canal sonnerie — certifiés.
+> Refuser depuis la notification (CallStyle) : avant, « Refuser »
+> n'existait pas — le correspondant sonnait 60 s dans le vide. CallStyle
+> forIncomingCall (Répondre = full-screen intent existant, Refuser =
+> DeclineCallReceiver) ; le refus coupe la sonnerie, mémorise l'id dans le
+> ring (une redélivrance ne re-sonne pas) et prévient le correspondant :
+> call:end immédiat si socket vivante, sinon DeclinedCallStore drainé au
+> prochain connect (collect MeeshyApplication, emitEnd idempotent).
+> Dégrade en notification à actions sur API < 31.
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
 > et `call:screen-capture-alert` (pill privacy) — hook `useRemoteCallAlerts`
