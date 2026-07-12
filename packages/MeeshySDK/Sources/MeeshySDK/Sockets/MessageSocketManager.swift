@@ -1698,7 +1698,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // Include clientTime so the gateway can compute round-trip latency
             // and return it in heartbeat:ack for connection quality monitoring.
             let clientTimeMs = Int64(Date().timeIntervalSince1970 * 1000)
-            self.socket?.emit("heartbeat", ["clientTime": clientTimeMs])
+            self.safeEmit("heartbeat", ["clientTime": clientTimeMs])
         }
     }
 
@@ -1726,18 +1726,32 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func leaveConversation(_ conversationId: String) {
         guard joinedConversations.contains(conversationId) else { return }
-        socket?.emit("conversation:leave", ["conversationId": conversationId])
+        safeEmit("conversation:leave", ["conversationId": conversationId])
         joinedConversations.remove(conversationId)
+    }
+
+    /// Emits only when the socket is actually `.connected`. Fire-and-forget
+    /// events (typing, heartbeat, leave) that race a background transition would
+    /// otherwise hit "Tried emitting when not connected" as the socket suspends —
+    /// the emit is lost either way, so drop it quietly. The re-join loop and the
+    /// heartbeat timer resume these on reconnect. NOT for user-critical or
+    /// ACK-bearing emits (call signaling / translation buffer via their own paths).
+    private func safeEmit(_ event: String, _ payload: [String: Any]) {
+        guard socket?.status == .connected else {
+            Logger.socket.debug("Skipping \(event, privacy: .public) emit — socket not connected")
+            return
+        }
+        socket?.emit(event, payload)
     }
 
     // MARK: - Typing Emission
 
     public func emitTypingStart(conversationId: String) {
-        socket?.emit("typing:start", ["conversationId": conversationId])
+        safeEmit("typing:start", ["conversationId": conversationId])
     }
 
     public func emitTypingStop(conversationId: String) {
-        socket?.emit("typing:stop", ["conversationId": conversationId])
+        safeEmit("typing:stop", ["conversationId": conversationId])
     }
 
     // MARK: - Attachment Reactions (BUG2 A')
