@@ -374,3 +374,16 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > healthcheck→routage documentée (vérifié : app 200 en direct, routeur
 > unique, WRN réseau inoffensif). L'arc reject serveur (status=rejected)
 > et les captions web sont EN PRODUCTION.
+
+> Bug rejoin visio (2026-07-12) : callSessionSchema ne whitelist ait PAS
+> metadata → le type audio/video était strippé du payload REST active-call
+> (privacy fix 2026-05-12 trop large) ; mode transporte l'architecture
+> (p2p|sfu), jamais 'video' — iOS ActiveCallSession.isVideo lisait
+> mode=="video" → une VISIO rejointe après crash reprenait en AUDIO
+> (pill Rejoindre b69509366). Fix racine : metadata whitelisted {type}
+> dans le schema + enum mode corrigée (p2p|sfu) + test de SÉRIALISATION
+> fast-json-stringify (les tests de routes mockent sendSuccess — le
+> schema n'y est jamais exercé, d'où l'invisibilité) ; iOS decode
+> metadata.type (fallback mode), tests SDK ré-encodés sur la vraie forme
+> wire. Web non affecté (lit callType du message call-live). Reste :
+> parité Android rejoin (aucune découverte active-call côté Android).
