@@ -186,7 +186,9 @@
 > par emitCallReject. Guards mis à jour vers le nouveau contrat + nouveau
 > verrou test_sdkEmitCallReject_emitsCallEndWithRejectedReason (le SDK doit
 > émettre call:end AVEC reason rejected, sinon le guard app passerait à vide).
-> CI/SDK Tests verts sur f67c39ac0 ; iOS Tests re-certifié sur le commit guard.
+> CI/SDK Tests verts sur f67c39ac0 ; iOS Tests VERT sur 2cbf13bc9
+> (run 29177219556, conclusion=success, 3685 tests) — arc reject CLOS
+> et certifié sur les 3 plateformes.
 
 > Parité web (post-audit) `280c1ed96` : le web écoute désormais aussi
 > `call:quality-alert` (pill « connexion de X instable », auto-clear 15 s)
