@@ -387,3 +387,11 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > metadata.type (fallback mode), tests SDK ré-encodés sur la vraie forme
 > wire. Web non affecté (lit callType du message call-live). Reste :
 > parité Android rejoin (aucune découverte active-call côté Android).
+
+> Parité Android rejoin — tranche 1 (2026-07-12) : découverte active-call
+> posée. ActiveCallSession/Metadata/Participant (core/model, décode pur de
+> callSessionSchema, 5 tests XML-vérifiés — isVideo lit metadata.type dès
+> le départ, jamais le bug iOS mode=='video') + ActiveCallApi Retrofit
+> (GET conversations/:id/active-call + GET calls/active crash-recovery)
+> + provider Hilt. Reste tranche 2 : affordance (bulle call-live ou pill
+> header) + flux join depuis la découverte.
