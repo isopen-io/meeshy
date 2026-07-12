@@ -3919,6 +3919,20 @@ final class CallManager: ObservableObject {
                     Logger.calls.warning("call:error TARGET_NOT_FOUND — transient relay failure, keeping the call")
                     return
                 }
+                // CALL_ENDED is terminal-state reconciliation, NOT a user error:
+                // the gateway rejected a late emit (join/signal/end) because the
+                // call already ended — a benign race with the normal end fanout
+                // (#12). Route through the canonical remote-end path (dedup on
+                // .ended + correct Recents reason) instead of toasting "already
+                // ended" and calling failCall, which would flag a healthy end as
+                // a failure. Idempotent: handleRemoteEnd no-ops if already ended.
+                if event.code == "CALL_ENDED" {
+                    Logger.calls.info("call:error CALL_ENDED — reconciling to ended (benign terminal race, #12)")
+                    if let endCallId = event.callId ?? self.currentCallId {
+                        self.handleRemoteEnd(callId: endCallId)
+                    }
+                    return
+                }
                 FeedbackToastManager.shared.showError(message)
                 // Ne teardown que si un appel est réellement en vol (ringing →
                 // reconnecting). Une erreur hors-appel ne fait qu'afficher le toast.
