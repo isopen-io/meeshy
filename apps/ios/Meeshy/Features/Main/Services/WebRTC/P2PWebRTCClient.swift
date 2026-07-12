@@ -1493,7 +1493,7 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
     // `!==` guard makes a second delivery of the same track a no-op.
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didStartReceivingOn transceiver: RTCRtpTransceiver) {
         Logger.webrtc.info("[WEBRTC] didStartReceivingOn mediaType=\(transceiver.mediaType.rawValue)")
-        deliverRemoteTrack(transceiver.receiver.track)
+        deliverRemoteTrack(transceiver.receiver.track, from: peerConnection)
     }
 
     // P0-2 (FIX 2026-06-06) — onTrack under Unified-Plan. Fires on
@@ -1505,22 +1505,31 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
     // is a Plan-B legacy callback that libwebrtc may not emit under Unified-Plan.
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
         Logger.webrtc.info("[WEBRTC] didAddReceiver kind=\(rtpReceiver.track?.kind ?? "nil", privacy: .public)")
-        deliverRemoteTrack(rtpReceiver.track)
+        deliverRemoteTrack(rtpReceiver.track, from: peerConnection)
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
-        deliverRemoteTrack(stream.videoTracks.first)
-        deliverRemoteTrack(stream.audioTracks.first)
+        deliverRemoteTrack(stream.videoTracks.first, from: peerConnection)
+        deliverRemoteTrack(stream.audioTracks.first, from: peerConnection)
     }
 
     /// Routes a freshly-received remote track to the delegate exactly once. Both
     /// `didStartReceivingOn` (unified-plan, primary) and `didAdd stream:` (legacy
     /// fallback) can fire for the same track — the `!==` guard prevents attaching
     /// the same track to the renderer twice.
-    nonisolated private func deliverRemoteTrack(_ track: RTCMediaStreamTrack?) {
+    ///
+    /// `disconnect()` calls `peerConnection?.close()` then nils the property —
+    /// `.close()` synchronously queues these WebRTC-thread callbacks, which land
+    /// on the main queue AFTER `disconnect()` has already returned. If a new call
+    /// reuses this client (redial, or a fast VoIP-push-driven incoming call) and
+    /// calls `configure()` before the stale block runs, it would otherwise deliver
+    /// call A's track into call B's state. Comparing against the originating
+    /// `RTCPeerConnection` instance (captured at the delegate call site, not the
+    /// `self.peerConnection` snapshotted here) makes every stale callback a no-op.
+    nonisolated private func deliverRemoteTrack(_ track: RTCMediaStreamTrack?, from peerConnection: RTCPeerConnection) {
         guard let track else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.peerConnection === peerConnection else { return }
             if let videoTrack = track as? RTCVideoTrack {
                 guard self.remoteVideoTrack_ !== videoTrack else { return }
                 self.remoteVideoTrack_ = videoTrack
@@ -1563,8 +1572,11 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         @unknown default: .new
         }
         Logger.webrtc.info("peerConnectionState (authority): \(state.rawValue, privacy: .public)")
+        // Identity guard: see `deliverRemoteTrack` — a stale `.closed`/`.failed` from a
+        // just-torn-down connection must not drive the FSM of a call that has already
+        // moved on (e.g. attemptReconnection() firing on a healthy new call).
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.peerConnection === peerConnection else { return }
             self.delegate?.webRTCClient(self, didChangeConnectionState: state)
         }
     }
@@ -1593,8 +1605,12 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
             return String(candidate.sdp[r.upperBound...].split(separator: " ").first ?? "?")
         }()
         Logger.webrtc.info("ICE_OUT typ=\(diagTyp, privacy: .public) mid=\(candidate.sdpMid ?? "nil", privacy: .public)")
+        // Identity guard: see `deliverRemoteTrack` — without this, a candidate generated
+        // by a connection that's already being torn down gets tagged with the CURRENT
+        // call's callId/remoteUserId by CallManager and relayed into the new call's
+        // signaling, polluting its negotiation.
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.peerConnection === peerConnection else { return }
             self.delegate?.webRTCClient(self, didGenerateCandidate: iceCandidate)
         }
     }
@@ -1607,8 +1623,11 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         Logger.webrtc.info("Data channel opened: \(dataChannel.label)")
         guard dataChannel.label == "transcription" else { return }
         dataChannel.delegate = self
+        // Identity guard: see `deliverRemoteTrack` — a data channel opened by a torn-down
+        // connection must not overwrite the new call's transcriptionDataChannel.
         DispatchQueue.main.async { [weak self] in
-            self?.transcriptionDataChannel = dataChannel
+            guard let self, self.peerConnection === peerConnection else { return }
+            self.transcriptionDataChannel = dataChannel
         }
     }
 }
