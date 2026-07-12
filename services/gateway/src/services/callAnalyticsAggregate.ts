@@ -39,7 +39,12 @@ export type CallAnalyticsRecord = {
 export type CallReliabilitySummary = {
   readonly totalCalls: number;
   readonly videoShare: number;
-  readonly avgSetupTimeMs: number;
+  /** Fraction of calls that actually connected (setupTimeMs >= 0); the rest
+   *  carry the -1 « never connected » sentinel (missed/rejected/failed setup). */
+  readonly connectSuccessRate: number;
+  /** Averaged over CONNECTED calls only (setupTimeMs >= 0); null if none — the
+   *  -1 « never connected » sentinel must never pollute the mean. */
+  readonly avgSetupTimeMs: number | null;
   /** Averaged over rows carrying a real value only (present and >= 0); null if none. */
   readonly avgNegotiationTimeMs: number | null;
   readonly avgDurationSeconds: number;
@@ -116,7 +121,8 @@ export function coerceCallAnalytics(value: unknown): CallAnalyticsRecord | null 
 const ZERO_SUMMARY: CallReliabilitySummary = {
   totalCalls: 0,
   videoShare: 0,
-  avgSetupTimeMs: 0,
+  connectSuccessRate: 0,
+  avgSetupTimeMs: null,
   avgNegotiationTimeMs: null,
   avgDurationSeconds: 0,
   avgReconnectionCount: 0,
@@ -140,9 +146,15 @@ export function summarizeCallReliability(
   const sum = (pick: (r: CallAnalyticsRecord) => number): number =>
     records.reduce((acc, r) => acc + pick(r), 0);
 
+  // Both setup and negotiation times use -1 (or absent) as the « never
+  // connected » sentinel — averaging them in would deflate the mean with a
+  // fake value. Aggregate each over its connected rows only.
+  const setups = records.map((r) => r.setupTimeMs).filter((v) => v >= 0);
   const negotiations = records
     .map((r) => r.negotiationTimeMs)
     .filter((v): v is number => typeof v === 'number' && v >= 0);
+  const avg = (xs: readonly number[]): number | null =>
+    xs.length > 0 ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
 
   const byCount = (pick: (r: CallAnalyticsRecord) => string): Record<string, number> =>
     records.reduce<Record<string, number>>((acc, r) => {
@@ -154,10 +166,9 @@ export function summarizeCallReliability(
   return {
     totalCalls: n,
     videoShare: records.filter((r) => r.isVideo).length / n,
-    avgSetupTimeMs: sum((r) => r.setupTimeMs) / n,
-    avgNegotiationTimeMs: negotiations.length > 0
-      ? negotiations.reduce((a, b) => a + b, 0) / negotiations.length
-      : null,
+    connectSuccessRate: setups.length / n,
+    avgSetupTimeMs: avg(setups),
+    avgNegotiationTimeMs: avg(negotiations),
     avgDurationSeconds: sum((r) => r.durationSeconds) / n,
     avgReconnectionCount: sum((r) => r.reconnectionCount) / n,
     reconnectionRate: records.filter((r) => r.reconnectionCount > 0).length / n,

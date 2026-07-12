@@ -66,7 +66,8 @@ describe('summarizeCallReliability', () => {
   it('returns a zeroed summary for an empty set (no divide-by-zero)', () => {
     const s = summarizeCallReliability([]);
     expect(s.totalCalls).toBe(0);
-    expect(s.avgSetupTimeMs).toBe(0);
+    expect(s.connectSuccessRate).toBe(0);
+    expect(s.avgSetupTimeMs).toBeNull();
     expect(s.avgRtt).toBe(0);
     expect(s.maxPacketLoss).toBe(0);
     expect(s.reconnectionRate).toBe(0);
@@ -74,6 +75,35 @@ describe('summarizeCallReliability', () => {
     expect(s.qualityDistribution).toEqual({ excellent: 0, good: 0, fair: 0, poor: 0 });
     expect(s.byPlatform).toEqual({});
     expect(s.byEndReason).toEqual({});
+  });
+
+  it('excludes the -1 « never connected » sentinel from the setup-time average', () => {
+    // A missed/rejected/failed-setup call reports setupTimeMs=-1; averaging it
+    // in would deflate the mean (prod data 2026-07-12: real -1 rows exist).
+    const s = summarizeCallReliability([
+      record({ setupTimeMs: 2000 }),
+      record({ setupTimeMs: 4000 }),
+      record({ setupTimeMs: -1 }),
+    ]);
+    expect(s.avgSetupTimeMs).toBe(3000);
+  });
+
+  it('leaves avgSetupTimeMs null when no call ever connected', () => {
+    const s = summarizeCallReliability([
+      record({ setupTimeMs: -1 }),
+      record({ setupTimeMs: -1 }),
+    ]);
+    expect(s.avgSetupTimeMs).toBeNull();
+  });
+
+  it('reports the connect success rate as the fraction that actually connected', () => {
+    const s = summarizeCallReliability([
+      record({ setupTimeMs: 1500 }),  // connected
+      record({ setupTimeMs: -1 }),    // never connected
+      record({ setupTimeMs: 0 }),     // connected (instant, edge)
+      record({ setupTimeMs: -1 }),    // never connected
+    ]);
+    expect(s.connectSuccessRate).toBe(0.5);
   });
 
   it('counts total calls and the video share', () => {
