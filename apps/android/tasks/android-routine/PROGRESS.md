@@ -4,6 +4,42 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload + crash-report diagnostics viewer w/ share)** → rest`
 
+> On 2026-07-12 **waveform interpolation core** landed (slice `media-waveform-interpolation`, feature-parity §P/§O —
+> "Universal audio recorder (live waveform …)" line 2113, also underpinning the audio-message-player waveform line
+> 2111). Ships the pure decision beneath the app-side live voice-note waveform — the metering→amplitude→resampling
+> math that both the recorder pill and the message player consume, with the `MediaRecorder`/`AudioRecord` capture
+> and the Compose `Canvas` painting left app-side per the SDK-purity grain rule. Pure `:core:model` SSOTs (new
+> package `me.meeshy.sdk.model.waveform`): `AudioLevelNormalizer.normalize(powerDb)` — floors a dB reading at
+> `FLOOR_DB=-50`, maps `[-50,0]→[0,1]` linearly, ports iOS `AudioRecorderManager.normalizeLevel` **and surpasses
+> it** with an upper clamp to `1f` + a `NaN`→silence guard (byte-identical on every real `averagePower ≤ 0` frame,
+> but no bogus/`NaN` frame can produce an out-of-range bar); `WaveformLevelWindow` — an immutable, fixed-capacity
+> rolling ring of the most-recent levels (oldest→newest), ports the `levelHistory` append-and-drop-front window +
+> the initial `Array(repeating:0,count:15)` via `filled()`, `DEFAULT_CAPACITY=15`, a non-positive requested
+> capacity collapses to a permanently-empty (inert-`push`) window so the model never over-allocates;
+> `WaveformInterpolator.interpolate(levels, barCount)` — resamples the levels onto exactly `barCount` evenly-spaced
+> bars by linear interpolation, ports the per-bar math of iOS `UniversalComposerBar.interpolatedLevel`
+> (`position = i*(n-1)/(barCount-1)`, blend of the two bracketing samples) but **returns the whole strip in one
+> pass** and pins the degenerate cases iOS left implicit (`barCount≤0`→empty; single sample or single bar→every
+> bar = that level; no samples→flat silent strip; endpoints always exact). **+28 tests** (AudioLevelNormalizer 7 —
+> 0dB→1, floor→0, midpoint→0.5, below-floor + `-∞`→0, positive→1 clamp, `NaN`→0, monotonic rise at -40/-10;
+> WaveformLevelWindow 11 — empty/filled/default-15, append-below-cap, drop-oldest-over-cap, keep-exactly-N-in-order,
+> filled-slides-zeros-out, zero-capacity-stays-empty, negative-capacity→0, push-is-immutable, value-equality;
+> WaveformInterpolator 10 — non-positive-barCount→empty, no-samples→zeros, single-sample-fills, single-bar→first,
+> upsample-midpoints + quarter-points, downsample-aligned, endpoints-exact, non-uniform-neighbours, identity-mapping).
+> `:core:model:testDebugUnitTest --tests 'me.meeshy.sdk.model.waveform.*'` green (28/28); full `assembleDebug` +
+> all-module `testDebugUnitTest` → BUILD SUCCESSFUL (APK produced). A **two-mutation RED check** (drop the
+> normalizer upper clamp + zero out the interpolator's high-sample blend term) failed exactly the 4 relevant tests
+> (positive-clamp + the 3 linear-blend tests), confirming they are behavioural not tautological. Reviewer **PASS**
+> (diff `apps/android` only — `:core:model` [new `waveform` package: 2 sources + 3 test files], `feature-parity.md`,
+> routine docs; no production logic outside; **SDK purity** — pure metering/window/resampler in `:core:model`, the
+> Android capture + Canvas paint left app-side; **SSOT** — one normalizer owns the dB→amplitude map, one window owns
+> the ring invariant, one interpolator owns the resampling, shared by recorder + player so the two can't drift;
+> **UDF/instant-app** — pure functions, no state machine or UI; **colour/UX coherence** — no UI in this slice; **no
+> coverage floor lowered, no test weakened**). **Next slice:** the app-side voice recorder pill (`MediaRecorder`
+> capture → `AudioLevelNormalizer`/`WaveformLevelWindow` → Compose `Canvas` waveform via `WaveformInterpolator`),
+> the audio-message-player waveform that consumes the same core, the app-side Bitmap re-encode that consumes the
+> `ImageCompressionPlan`, or ThumbHash blur placeholders (§P).
+
 > On 2026-07-12 **image compression plan** landed (slice `media-image-compression-plan`, feature-parity §P —
 > "Image/video compression before upload (context-aware quality)"). Ships the pure decision beneath the
 > app-side Bitmap re-encode — the first leg of §P compression. Pure `:core:model` SSOTs (new package

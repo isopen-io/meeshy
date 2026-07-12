@@ -4,7 +4,20 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-open-source-licenses` ⚠ blocked (unrelated CI)
+## This loop (Phase: Media §P) — slice `media-waveform-interpolation` ✅
+**Live-waveform pure core** — the metering→amplitude→resampling math beneath the app-side voice-note waveform,
+shared by the recorder pill and the audio-message player. Pure `:core:model` `me.meeshy.sdk.model.waveform`:
+`AudioLevelNormalizer.normalize` (dB→`0..1`, ports iOS `AudioRecorderManager.normalizeLevel`, +upper-clamp +NaN
+guard), `WaveformLevelWindow` (immutable 15-sample rolling ring, ports `levelHistory` + initial 15-zero fill),
+`WaveformInterpolator.interpolate` (levels→`barCount` linear-blend strip in one pass, ports
+`UniversalComposerBar.interpolatedLevel`, degenerate cases pinned). +28 tests (normalizer 7, window 11,
+interpolator 10). `:core:model` waveform tests green (28/28); full `assembleDebug` + all-module tests green, APK
+produced. Two-mutation RED check (drop normalizer upper clamp + zero the interpolator high-sample blend) failed
+exactly the 4 relevant tests. Reviewer PASS, diff = `apps/android` only. The `MediaRecorder` capture + Compose
+`Canvas` paint remain app-side glue. Next: app-side recorder pill / player waveform consuming this core; app-side
+Bitmap re-encode consuming `ImageCompressionPlan`; or ThumbHash blur placeholders (§P).
+
+## Prior loop (Phase: Settings §L) — slice `settings-open-source-licenses` ✅ (merged PR #1894)
 **Open-source licenses** — the last §L static screen (§L static screens now complete). Port of iOS `LicensesView`
 over an **Android-accurate** curated catalog (Compose/AndroidX/Material/Hilt/Coroutines/Serialization/Coil/OkHttp/
 Retrofit/Media3/Room/Timber/ZXing/Firebase/Socket.IO-java/WebRTC-android) — the libs that actually ship, not iOS's
