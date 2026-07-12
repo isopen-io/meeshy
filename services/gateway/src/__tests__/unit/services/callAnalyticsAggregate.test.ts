@@ -69,7 +69,8 @@ describe('summarizeCallReliability', () => {
     expect(s.totalCalls).toBe(0);
     expect(s.connectSuccessRate).toBe(0);
     expect(s.avgSetupTimeMs).toBeNull();
-    expect(s.avgRtt).toBe(0);
+    expect(s.avgRtt).toBeNull();
+    expect(s.avgPacketLoss).toBeNull();
     expect(s.maxPacketLoss).toBe(0);
     expect(s.reconnectionRate).toBe(0);
     expect(s.avgNegotiationTimeMs).toBeNull();
@@ -126,6 +127,27 @@ describe('summarizeCallReliability', () => {
     expect(s.avgRtt).toBe(150);
     expect(s.avgPacketLoss).toBe(1.5);
     expect(s.maxPacketLoss).toBe(9);
+  });
+
+  it('excludes never-connected calls (0 rtt/loss, no samples) from the rtt & loss means', () => {
+    // Prod data 2026-07-12: ~half of calls never connect and report rtt=0/loss=0;
+    // including them halved avgRtt. Average over connected (setupTimeMs>=0) only.
+    const s = summarizeCallReliability([
+      record({ setupTimeMs: 3000, averageRtt: 200, averagePacketLoss: 4 }), // connected
+      record({ setupTimeMs: -1, averageRtt: 0, averagePacketLoss: 0 }),     // never connected
+      record({ setupTimeMs: -1, averageRtt: 0, averagePacketLoss: 0 }),     // never connected
+    ]);
+    expect(s.avgRtt).toBe(200);        // not 200/3 ≈ 67
+    expect(s.avgPacketLoss).toBe(4);   // not 4/3 ≈ 1.33
+  });
+
+  it('leaves avgRtt & avgPacketLoss null when no call connected', () => {
+    const s = summarizeCallReliability([
+      record({ setupTimeMs: -1, averageRtt: 0, averagePacketLoss: 0 }),
+      record({ setupTimeMs: -1, averageRtt: 0, averagePacketLoss: 0 }),
+    ]);
+    expect(s.avgRtt).toBeNull();
+    expect(s.avgPacketLoss).toBeNull();
   });
 
   it('computes the reconnection rate as the fraction of calls that reconnected', () => {

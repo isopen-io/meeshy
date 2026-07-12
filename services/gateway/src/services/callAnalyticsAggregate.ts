@@ -52,8 +52,11 @@ export type CallReliabilitySummary = {
   /** Fraction of calls that reconnected at least once. */
   readonly reconnectionRate: number;
   readonly avgNetworkTransitions: number;
-  readonly avgRtt: number;
-  readonly avgPacketLoss: number;
+  /** Averaged over CONNECTED calls only (setupTimeMs >= 0); null if none. A
+   *  never-connected call reports rtt/loss = 0 (no samples) — averaging those
+   *  in deflates the mean (prod 2026-07-12: ~half of rows never connected). */
+  readonly avgRtt: number | null;
+  readonly avgPacketLoss: number | null;
   readonly maxPacketLoss: number;
   readonly qualityDistribution: QualityDistribution;
   readonly byPlatform: Record<string, number>;
@@ -142,8 +145,8 @@ const ZERO_SUMMARY: CallReliabilitySummary = {
   avgReconnectionCount: 0,
   reconnectionRate: 0,
   avgNetworkTransitions: 0,
-  avgRtt: 0,
-  avgPacketLoss: 0,
+  avgRtt: null,
+  avgPacketLoss: null,
   maxPacketLoss: 0,
   qualityDistribution: { excellent: 0, good: 0, fair: 0, poor: 0 },
   byPlatform: {},
@@ -167,6 +170,10 @@ export function summarizeCallReliability(
   const negotiations = records
     .map((r) => r.negotiationTimeMs)
     .filter((v): v is number => typeof v === 'number' && v >= 0);
+  // rtt/packet-loss are only measured while connected; a never-connected call
+  // reports 0 (no samples). Average them over connected calls (setupTimeMs>=0)
+  // so the « never connected » majority doesn't halve the mean.
+  const connected = records.filter((r) => r.setupTimeMs >= 0);
   const avg = (xs: readonly number[]): number | null =>
     xs.length > 0 ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
 
@@ -187,8 +194,8 @@ export function summarizeCallReliability(
     avgReconnectionCount: sum((r) => r.reconnectionCount) / n,
     reconnectionRate: records.filter((r) => r.reconnectionCount > 0).length / n,
     avgNetworkTransitions: sum((r) => r.networkTransitions) / n,
-    avgRtt: sum((r) => r.averageRtt) / n,
-    avgPacketLoss: sum((r) => r.averagePacketLoss) / n,
+    avgRtt: avg(connected.map((r) => r.averageRtt)),
+    avgPacketLoss: avg(connected.map((r) => r.averagePacketLoss)),
     maxPacketLoss: records.reduce((acc, r) => Math.max(acc, r.maxPacketLoss), 0),
     qualityDistribution: {
       excellent: sum((r) => r.qualityDistribution.excellent) / n,
