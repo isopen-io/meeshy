@@ -395,3 +395,12 @@ Fichiers-clés : `services/gateway/src/socketio/CallEventsHandler.ts` (3730 l),
 > (GET conversations/:id/active-call + GET calls/active crash-recovery)
 > + provider Hilt. Reste tranche 2 : affordance (bulle call-live ou pill
 > header) + flux join depuis la découverte.
+
+> Rejoin Android — garde local (2026-07-12, ee8e74745) : la pill
+> « Rejoindre » se masquait sur state.activeCall != null sans savoir si
+> CE device est déjà en appel (minimisé). RejoinPillPolicy.shouldOffer
+> (pure, 4 tests) n'offre que si appel vivant serveur ET aucun localement ;
+> MeeshyApp passe CallPillPresenter.isMinimizable(callState.status) — un
+> seul appel à la fois, un booléen suffit. ChatScreen ne reçoit qu'un
+> Boolean (pas de dép feature:calls). feature:chat 467/467. Parité iOS
+> guard de réconciliation. La feature rejoin Android est COMPLÈTE.
