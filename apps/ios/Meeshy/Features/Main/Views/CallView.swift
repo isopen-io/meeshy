@@ -1554,6 +1554,25 @@ struct CallView: View {
                     .foregroundColor(.white.opacity(0.45))
             }
 
+            if callManager.canRetryCall {
+                // Transient failure — offer a one-tap re-dial (parité web/Android).
+                Button {
+                    callManager.retryCall()
+                } label: {
+                    Label(
+                        String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main),
+                        systemImage: "arrow.clockwise"
+                    )
+                    .font(.callout.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(Color.green))
+                }
+                .padding(.top, 8)
+                .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))
+            }
+
             Spacer()
         }
     }
