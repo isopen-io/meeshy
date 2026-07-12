@@ -694,6 +694,11 @@ describe('PushNotificationService', () => {
       expect(sentNotification.payload).toEqual(
         expect.objectContaining({ type: 'call_cancel', callId: 'call-123' })
       );
+      // Expiration ~60 s (fenêtre de sonnerie) : un stop-ring livré plus tard
+      // n'a plus rien à éteindre — miroir du TTL FCM Android.
+      const nowSec = Math.floor(Date.now() / 1000);
+      expect(sentNotification.expiry).toBeGreaterThanOrEqual(nowSec + 55);
+      expect(sentNotification.expiry).toBeLessThanOrEqual(nowSec + 65);
     });
 
     it('should filter tokens by type when specified', async () => {

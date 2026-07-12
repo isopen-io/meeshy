@@ -702,6 +702,16 @@ export class PushNotificationService {
         notification.priority = 5;
       }
 
+      // Expiration alignée sur la fenêtre de sonnerie (60 s), miroir du TTL
+      // FCM Android : sans elle APNs peut livrer un ring VoIP ou un stop-ring
+      // périmé à la reconnexion — CallKit fait sonner le téléphone pour un
+      // appel missed depuis longtemps. `silent` n'a qu'un producteur
+      // (call-push-mirroring), le scoping est donc strictement « appels ».
+      const isCallPush = isVoIP || payload.silent === true || payload.data?.type === 'call';
+      if (isCallPush) {
+        notification.expiry = Math.floor(Date.now() / 1000) + CALL_PUSH_TTL_MS / 1000;
+      }
+
       if (payload.category) {
         (notification as any).category = payload.category;
       }
