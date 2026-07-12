@@ -139,6 +139,13 @@
       "forParticipant": "Waiting for participant...",
       "noVideo": "No video"
     },
+    "callWaiting": {
+      "title": "Call waiting",
+      "reject": "Decline",
+      "endAndAnswer": "End & answer",
+      "rejectLabel": "Decline waiting call",
+      "endAndAnswerLabel": "End current call and answer"
+    },
     "info": {
       "participant": "{count} participant",
       "participants": "{count} participants"

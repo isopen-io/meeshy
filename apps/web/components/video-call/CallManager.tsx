@@ -10,6 +10,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
 import { CallNotification } from './CallNotification';
+import { CallWaitingBanner } from './CallWaitingBanner';
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
@@ -61,6 +62,12 @@ export function CallManager() {
 
   const [incomingCall, setIncomingCall] = useState<CallInitiatedEvent | null>(null);
   const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Call-waiting (busy-path): a SECOND incoming call arriving while already in
+  // an active call. Kept separate from `incomingCall` so it renders a compact
+  // CallWaitingBanner (Decline / End & answer) OVER the live call instead of the
+  // full-screen fresh-incoming CallNotification. Parity iOS/Android.
+  const [waitingCall, setWaitingCall] = useState<CallInitiatedEvent | null>(null);
+  const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Re-entrancy guard: `incomingCall` (and the Accept button it renders)
   // isn't cleared until the getUserMedia + call:join ack round-trip settles,
   // so a double-click/double-tap on Accept before then reaches
@@ -137,6 +144,52 @@ export function CallManager() {
 
     logger.debug('[CallManager]', `Call timeout started - ${CALL_TIMEOUT_MS/1000}s`);
   }, [clearCallTimeout, reset]);
+
+  const clearWaitingTimeout = useCallback(() => {
+    if (waitingTimeoutRef.current) {
+      clearTimeout(waitingTimeoutRef.current);
+      waitingTimeoutRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Decline the waiting call: end it on the wire (keyed by ITS own callId, so
+   * the active call is untouched) and dismiss the banner. Mirrors iOS
+   * `rejectWaiting` / the gateway's callee-busy semantics — a call:end
+   * reason=rejected frees the second caller immediately.
+   */
+  const rejectWaitingCall = useCallback((callId: string) => {
+    const socket = meeshySocketIOService.getSocket();
+    if (socket) {
+      (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_END, {
+        callId,
+        reason: 'rejected',
+      });
+    }
+  }, []);
+
+  /**
+   * Auto-decline the waiting call if the user ignores the banner for the full
+   * ring window — same duration as a normal no-answer (the second caller's own
+   * ring times out around then). Without this the banner could linger after the
+   * caller already gave up.
+   */
+  const startWaitingTimeout = useCallback((callId: string) => {
+    if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+    waitingTimeoutRef.current = setTimeout(() => {
+      logger.info('[CallManager]', 'Call-waiting banner timed out — auto-declining ' + callId);
+      rejectWaitingCall(callId);
+      setWaitingCall((w) => (w?.callId === callId ? null : w));
+    }, CALL_TIMEOUT_MS);
+  }, [rejectWaitingCall]);
+
+  const handleRejectWaiting = useCallback(() => {
+    if (!waitingCall) return;
+    logger.debug('[CallManager]', 'Rejecting waiting call - callId: ' + waitingCall.callId);
+    clearWaitingTimeout();
+    rejectWaitingCall(waitingCall.callId);
+    setWaitingCall(null);
+  }, [waitingCall, clearWaitingTimeout, rejectWaitingCall]);
 
   /**
    * Bug fix (2026-07-06, follow-up to the 682c35279 P0 fix) — the initiator's
@@ -249,20 +302,15 @@ export function CallManager() {
       // naively setIncomingCall. The render mounts CallNotification and
       // VideoCallInterface independently, so an ungated notification renders
       // OVER the live call and tapping Accept runs setCurrentCall(secondCall),
-      // clobbering the active call and orphaning its RTCPeerConnection.
-      // Auto-decline it (call:end reason=rejected, same as handleRejectCall) so
-      // the active call is untouched and the second caller is freed immediately
-      // instead of ringing into a notification that would break the ongoing call.
+      // clobbering the active call and orphaning its RTCPeerConnection. Surface a
+      // compact CallWaitingBanner (Decline / End & answer) instead — the user
+      // stays in control of the live call and can either free the second caller
+      // or swap to them. Auto-declines on timeout if ignored (busy for real).
       const { isInCall: busyInCall, currentCall: busyCall } = useCallStore.getState();
       if (busyInCall && busyCall && busyCall.id !== event.callId) {
-        logger.info('[CallManager]', 'Busy in another call — auto-declining second incoming call ' + event.callId);
-        const socket = meeshySocketIOService.getSocket();
-        if (socket) {
-          (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_END, {
-            callId: event.callId,
-            reason: 'rejected',
-          });
-        }
+        logger.info('[CallManager]', 'Busy in another call — showing call-waiting banner for ' + event.callId);
+        setWaitingCall(event);
+        startWaitingTimeout(event.callId);
         return;
       }
 
@@ -278,7 +326,7 @@ export function CallManager() {
       startCallTimeout(event.callId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout]);
+  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout, startWaitingTimeout]);
 
   /**
    * Handle participant joined
@@ -354,6 +402,17 @@ export function CallManager() {
     (event: CallEndedEvent) => {
       logger.info('[CallManager]', 'Call ended - callId: ' + event.callId + ', duration: ' + event.duration);
 
+      // Call-waiting: the SECOND (waiting) call ended — its caller cancelled or
+      // it timed out. Dismiss the banner ONLY; the active call and its retry
+      // policy are untouched. This guard MUST run before the reset() below,
+      // which is otherwise callId-agnostic and would tear down the healthy
+      // active call on a waiting call's teardown.
+      if (waitingCall && waitingCall.callId === event.callId) {
+        clearWaitingTimeout();
+        setWaitingCall(null);
+        return;
+      }
+
       // Clear timeout
       clearCallTimeout();
 
@@ -373,6 +432,19 @@ export function CallManager() {
         }
       }
 
+      // The ACTIVE call ended while a call was WAITING: promote the waiting call
+      // to a normal incoming ring (parity iOS re-present-after-teardown) instead
+      // of leaving a stale banner floating with no active call behind it.
+      if (waitingCall) {
+        clearWaitingTimeout();
+        reset();
+        const promoted = waitingCall;
+        setWaitingCall(null);
+        setIncomingCall(promoted);
+        startCallTimeout(promoted.callId);
+        return;
+      }
+
       // Reset call state - CallInterface will handle WebRTC cleanup
       reset();
 
@@ -381,7 +453,7 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [reset, clearCallTimeout]
+    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall]
   );
 
   /**
@@ -589,6 +661,50 @@ export function CallManager() {
       acceptingCallIdRef.current = null;
     }
   }, [incomingCall, acceptOrJoinCall, clearCallTimeout, t]);
+
+  /**
+   * End & answer (call-waiting swap): hang up the ACTIVE call, then answer the
+   * WAITING one. Parity iOS `endCurrentAndAnswerPending` / Android
+   * `acceptWaitingSwap` (both hang up → settle → answer). reset() closes the
+   * active call's peer connections and stops its tracks (call-store.ts), so no
+   * orphaned RTCPeerConnection survives the swap.
+   */
+  const handleEndAndAnswerWaiting = useCallback(async () => {
+    if (!waitingCall) return;
+    const swapTo = waitingCall;
+    logger.info('[CallManager]', 'End & answer — swapping active call for waiting call ' + swapTo.callId);
+
+    clearWaitingTimeout();
+    setWaitingCall(null);
+
+    // 1. End the ACTIVE call on the wire (call:leave, like VideoCallInterface's
+    //    hangup) so the gateway ends it and notifies the peer.
+    const { currentCall: active } = useCallStore.getState();
+    const socket = meeshySocketIOService.getSocket();
+    if (socket && active?.id) {
+      (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_LEAVE, {
+        callId: active.id,
+      });
+    }
+
+    // 2. Tear down the active call's WebRTC before answering the waiting one.
+    reset();
+
+    // 3. Answer the waiting call — same flow as accepting a fresh incoming call.
+    try {
+      await acceptOrJoinCall({
+        callId: swapTo.callId,
+        conversationId: swapTo.conversationId,
+        mode: swapTo.mode,
+        initiatorId: swapTo.initiator.userId,
+        participants: swapTo.participants as CallSession['participants'],
+        isVideo: swapTo.type === 'video',
+      });
+    } catch (error: unknown) {
+      logger.error('[CallManager]', 'End & answer failed to join waiting call: ' + ((error as Error)?.message || 'Unknown error'));
+      toast.error(t('calls.toasts.joinFailed'));
+    }
+  }, [waitingCall, clearWaitingTimeout, reset, acceptOrJoinCall, t]);
 
   /**
    * Reject incoming call
@@ -922,6 +1038,15 @@ export function CallManager() {
           call={incomingCall}
           onAccept={handleAcceptCall}
           onReject={handleRejectCall}
+        />
+      )}
+
+      {/* Call-waiting banner — a second incoming call while already busy */}
+      {waitingCall && (
+        <CallWaitingBanner
+          call={waitingCall}
+          onReject={handleRejectWaiting}
+          onEndAndAnswer={handleEndAndAnswerWaiting}
         />
       )}
 

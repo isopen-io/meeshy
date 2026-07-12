@@ -1,21 +1,26 @@
 /**
- * CallManager — busy-path parity (2026-07-12)
+ * CallManager — call-waiting (busy-path) parity (2026-07-12)
  *
  * A second `call:initiated` arriving while the user is ALREADY in a different
- * active call must not naively `setIncomingCall`. The render shows
- * `CallNotification` and `VideoCallInterface` independently (they are NOT
- * mutually exclusive), so an ungated incoming notification renders OVER the
- * live call, and tapping Accept runs `setCurrentCall(secondCall)` — clobbering
- * the active call's state and orphaning its RTCPeerConnection.
+ * active call must not naively `setIncomingCall` — the render mounts
+ * `CallNotification` and `VideoCallInterface` independently, so an ungated
+ * incoming notification renders OVER the live call and Accept clobbers the
+ * active call. iOS (`showCallWaitingBanner` + `endCurrentAndAnswerPending`) and
+ * Android (`onIncomingOffer` + `acceptWaitingSwap`/`rejectWaiting`) both handle
+ * this deliberately with a waiting banner.
  *
- * iOS (`CallManager` busy-path) and Android (`CallViewModel.onIncomingOffer`)
- * both handle this deliberately. Web had no guard at all. The minimal, correct
- * parity is to AUTO-DECLINE the second call (`call:end` reason=rejected): the
- * active call is left untouched and the second caller is freed immediately
- * instead of ringing into a notification that would break the ongoing call.
+ * Web now shows a compact `CallWaitingBanner` with two actions:
+ *   - Decline: reject the waiting call (call:end reason=rejected), keep active.
+ *   - End & answer: hang up the active call (call:leave) then answer the
+ *     waiting one (call:join) — a clean swap; reset() closes the active peer
+ *     connections first so nothing is orphaned.
+ *
+ * The waiting call's own teardown (its caller cancelled) must dismiss the
+ * banner ONLY — never reset the healthy active call (handleCallEnded's reset()
+ * is otherwise callId-agnostic).
  */
 
-import { render, act, screen } from '@testing-library/react';
+import { render, act, fireEvent, screen } from '@testing-library/react';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 jest.mock('@/hooks/use-auth', () => ({
@@ -26,11 +31,25 @@ jest.mock('@/hooks/use-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
+jest.mock('@/hooks/useI18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}));
+
 jest.mock('@/components/video-call/CallNotification', () => ({
-  CallNotification: (props: { onAccept: () => void }) => (
-    <button data-testid="accept-call-btn" onClick={props.onAccept}>
-      Accept
-    </button>
+  CallNotification: (props: { onAccept: () => void; onReject: () => void }) => (
+    <div>
+      <button data-testid="accept-call-btn" onClick={props.onAccept}>Accept</button>
+      <button data-testid="reject-call-btn" onClick={props.onReject}>Reject</button>
+    </div>
+  ),
+}));
+
+jest.mock('@/components/video-call/CallWaitingBanner', () => ({
+  CallWaitingBanner: (props: { onReject: () => void; onEndAndAnswer: () => void }) => (
+    <div data-testid="call-waiting-banner">
+      <button data-testid="reject-waiting-btn" onClick={props.onReject}>Decline</button>
+      <button data-testid="end-answer-btn" onClick={props.onEndAndAnswer}>End &amp; answer</button>
+    </div>
   ),
 }));
 
@@ -49,6 +68,7 @@ jest.mock('@/utils/logger', () => ({
 jest.mock('@/utils/ringtone', () => ({
   stopRingtone: jest.fn(),
   playRingtone: jest.fn(),
+  getRingtone: () => ({ play: jest.fn(), stop: jest.fn() }),
 }));
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
@@ -60,34 +80,35 @@ import { useCallStore } from '@/stores/call-store';
 import { CallManager } from '@/components/video-call/CallManager';
 
 const ACTIVE_CALL_ID = 'active-call-1';
-const SECOND_CALL_ID = 'second-call-2';
+const WAITING_CALL_ID = 'waiting-call-2';
 
 type Handler = (...args: unknown[]) => void;
+type JoinAck = { success: boolean; data?: { iceServers?: unknown[] }; error?: unknown };
 
 function makeFakeSocket() {
   const handlers: Record<string, Handler[]> = {};
+  let capturedJoinAck: ((r: JoinAck) => void) | undefined;
   return {
     connected: true,
     id: 'fake-socket-id',
-    emit: jest.fn(),
-    on: jest.fn((event: string, fn: Handler) => {
-      (handlers[event] ||= []).push(fn);
+    emit: jest.fn((event: string, _payload: unknown, ack?: (r: JoinAck) => void) => {
+      if (event === CLIENT_EVENTS.CALL_JOIN) capturedJoinAck = ack;
     }),
+    on: jest.fn((event: string, fn: Handler) => { (handlers[event] ||= []).push(fn); }),
     off: jest.fn((event: string, fn?: Handler) => {
       if (!fn) { handlers[event] = []; return; }
       handlers[event] = (handlers[event] || []).filter((h) => h !== fn);
     }),
     onAny: jest.fn(),
     offAny: jest.fn(),
-    fire: (event: string, ...args: unknown[]) => {
-      (handlers[event] || []).forEach((h) => h(...args));
-    },
+    fire: (event: string, ...args: unknown[]) => { (handlers[event] || []).forEach((h) => h(...args)); },
+    resolveJoin: (r: JoinAck) => capturedJoinAck?.(r),
   };
 }
 
-function secondIncomingCallEvent() {
+function waitingIncomingCallEvent() {
   return {
-    callId: SECOND_CALL_ID,
+    callId: WAITING_CALL_ID,
     conversationId: 'conv-other',
     mode: 'p2p',
     type: 'audio',
@@ -97,8 +118,6 @@ function secondIncomingCallEvent() {
 }
 
 function enterActiveCall() {
-  // setCurrentCall flips isInCall=true (call-store.ts) — the user is now busy
-  // in a live call with someone else.
   const activeCall = {
     id: ACTIVE_CALL_ID,
     conversationId: 'conv-active',
@@ -113,74 +132,102 @@ function enterActiveCall() {
   useCallStore.getState().setInCall(true);
 }
 
-describe('CallManager — busy-path auto-declines a second incoming call', () => {
+const mockGetUserMedia = jest.fn();
+
+describe('CallManager — call-waiting banner (busy-path swap)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useCallStore.getState().reset();
+    mockGetUserMedia.mockResolvedValue({ getTracks: () => [{ stop: jest.fn() }] });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      value: { getUserMedia: mockGetUserMedia }, writable: true, configurable: true,
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).__preauthorizedMediaStream;
   });
 
-  it('does NOT show an incoming-call notification while already in a different call', () => {
+  it('shows the waiting banner (not the full incoming notification) while already in a call', () => {
     const socket = makeFakeSocket();
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
-
     render(<CallManager />);
     act(() => { enterActiveCall(); });
 
-    act(() => {
-      socket.fire(SERVER_EVENTS.CALL_INITIATED, secondIncomingCallEvent());
-    });
+    act(() => { socket.fire(SERVER_EVENTS.CALL_INITIATED, waitingIncomingCallEvent()); });
 
+    expect(screen.queryByTestId('call-waiting-banner')).not.toBeNull();
     expect(screen.queryByTestId('accept-call-btn')).toBeNull();
   });
 
-  it('leaves the active call untouched (no clobber of currentCall)', () => {
+  it('does NOT auto-emit call:end just for showing the banner, and leaves the active call untouched', () => {
     const socket = makeFakeSocket();
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
-
     render(<CallManager />);
     act(() => { enterActiveCall(); });
 
-    act(() => {
-      socket.fire(SERVER_EVENTS.CALL_INITIATED, secondIncomingCallEvent());
-    });
+    act(() => { socket.fire(SERVER_EVENTS.CALL_INITIATED, waitingIncomingCallEvent()); });
 
+    expect(socket.emit.mock.calls.find(([e]: [string]) => e === CLIENT_EVENTS.CALL_END)).toBeUndefined();
     expect(useCallStore.getState().isInCall).toBe(true);
     expect(useCallStore.getState().currentCall?.id).toBe(ACTIVE_CALL_ID);
   });
 
-  it('auto-declines the second call via call:end reason=rejected (frees the caller)', () => {
+  it('Decline: rejects the waiting call (call:end rejected) and keeps the active call', () => {
     const socket = makeFakeSocket();
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
-
     render(<CallManager />);
     act(() => { enterActiveCall(); });
+    act(() => { socket.fire(SERVER_EVENTS.CALL_INITIATED, waitingIncomingCallEvent()); });
 
-    act(() => {
-      socket.fire(SERVER_EVENTS.CALL_INITIATED, secondIncomingCallEvent());
-    });
+    act(() => { fireEvent.click(screen.getByTestId('reject-waiting-btn')); });
 
-    const endCall = socket.emit.mock.calls.find(
-      ([event]: [string]) => event === CLIENT_EVENTS.CALL_END
-    );
-    expect(endCall).toBeDefined();
-    expect(endCall?.[1]).toEqual(
-      expect.objectContaining({ callId: SECOND_CALL_ID, reason: 'rejected' })
-    );
+    const endCall = socket.emit.mock.calls.find(([e]: [string]) => e === CLIENT_EVENTS.CALL_END);
+    expect(endCall?.[1]).toEqual(expect.objectContaining({ callId: WAITING_CALL_ID, reason: 'rejected' }));
+    expect(screen.queryByTestId('call-waiting-banner')).toBeNull();
+    expect(useCallStore.getState().isInCall).toBe(true);
+    expect(useCallStore.getState().currentCall?.id).toBe(ACTIVE_CALL_ID);
   });
 
-  it('still shows the notification for an incoming call when NOT busy', () => {
+  it('End & answer: leaves the active call (call:leave) then joins the waiting call (call:join)', async () => {
     const socket = makeFakeSocket();
     (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+    render(<CallManager />);
+    act(() => { enterActiveCall(); });
+    act(() => { socket.fire(SERVER_EVENTS.CALL_INITIATED, waitingIncomingCallEvent()); });
 
+    await act(async () => { fireEvent.click(screen.getByTestId('end-answer-btn')); });
+
+    const leave = socket.emit.mock.calls.find(([e]: [string]) => e === CLIENT_EVENTS.CALL_LEAVE);
+    expect(leave?.[1]).toEqual(expect.objectContaining({ callId: ACTIVE_CALL_ID }));
+
+    const join = socket.emit.mock.calls.find(([e]: [string]) => e === CLIENT_EVENTS.CALL_JOIN);
+    expect(join?.[1]).toEqual(expect.objectContaining({ callId: WAITING_CALL_ID }));
+
+    expect(screen.queryByTestId('call-waiting-banner')).toBeNull();
+  });
+
+  it('waiting caller cancels (call:ended for the waiting call) dismisses the banner without resetting the active call', () => {
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+    render(<CallManager />);
+    act(() => { enterActiveCall(); });
+    act(() => { socket.fire(SERVER_EVENTS.CALL_INITIATED, waitingIncomingCallEvent()); });
+
+    act(() => { socket.fire(SERVER_EVENTS.CALL_ENDED, { callId: WAITING_CALL_ID, duration: 0 }); });
+
+    expect(screen.queryByTestId('call-waiting-banner')).toBeNull();
+    expect(useCallStore.getState().isInCall).toBe(true);
+    expect(useCallStore.getState().currentCall?.id).toBe(ACTIVE_CALL_ID);
+  });
+
+  it('still shows the normal incoming notification (no banner) when NOT busy', () => {
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
     render(<CallManager />); // fresh store: isInCall=false
 
-    act(() => {
-      socket.fire(SERVER_EVENTS.CALL_INITIATED, secondIncomingCallEvent());
-    });
+    act(() => { socket.fire(SERVER_EVENTS.CALL_INITIATED, waitingIncomingCallEvent()); });
 
     expect(screen.queryByTestId('accept-call-btn')).not.toBeNull();
-    expect(
-      socket.emit.mock.calls.find(([event]: [string]) => event === CLIENT_EVENTS.CALL_END)
-    ).toBeUndefined();
+    expect(screen.queryByTestId('call-waiting-banner')).toBeNull();
+    expect(socket.emit.mock.calls.find(([e]: [string]) => e === CLIENT_EVENTS.CALL_END)).toBeUndefined();
   });
 });

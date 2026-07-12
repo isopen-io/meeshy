@@ -139,6 +139,13 @@
       "forParticipant": "Aguardando o participante...",
       "noVideo": "Sem vídeo"
     },
+    "callWaiting": {
+      "title": "Chamada em espera",
+      "reject": "Recusar",
+      "endAndAnswer": "Encerrar e atender",
+      "rejectLabel": "Recusar a chamada em espera",
+      "endAndAnswerLabel": "Encerrar a chamada atual e atender"
+    },
     "info": {
       "participant": "{count} participante",
       "participants": "{count} participantes"
