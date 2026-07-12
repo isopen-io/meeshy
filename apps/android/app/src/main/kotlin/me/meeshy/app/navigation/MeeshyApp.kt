@@ -312,6 +312,21 @@ fun MeeshyApp(
                     onStartCall = { peerName, isVideo ->
                         navController.navigate(Routes.call(conversationId, peerName, isVideo))
                     },
+                    onRejoinCall = { call, peerName ->
+                        // Rejoin an existing, still-live call: reuse the incoming
+                        // deep-link with autoAnswer so the shared join path adopts
+                        // the server callId and connects straight away — never a
+                        // new outgoing call.
+                        navController.navigate(
+                            CallRoute.incoming(
+                                callId = call.id,
+                                conversationId = conversationId,
+                                callerName = peerName,
+                                isVideo = call.isVideo,
+                                autoAnswer = true,
+                            ),
+                        )
+                    },
                 )
             }
             composable(Routes.FEED) {
