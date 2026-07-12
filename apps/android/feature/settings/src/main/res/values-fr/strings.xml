@@ -227,4 +227,19 @@
     <string name="about_link_twitter">Twitter / X</string>
     <string name="about_link_github">GitHub</string>
     <string name="about_copyright">2024–2026 Meeshy. Tous droits réservés.</string>
+    <string name="settings_help_support">Aide et support</string>
+    <string name="support_title">Aide et support</string>
+    <string name="support_section_help">Obtenir de l\'aide</string>
+    <string name="support_section_contact">Nous contacter</string>
+    <string name="support_section_report">Signaler un problème</string>
+    <string name="support_section_info">Informations</string>
+    <string name="support_link_help_center">Centre d\'aide</string>
+    <string name="support_link_faq">FAQ</string>
+    <string name="support_link_email">Email support</string>
+    <string name="support_link_twitter">Twitter / X</string>
+    <string name="support_link_bug">Signaler un bug</string>
+    <string name="support_link_feature">Suggérer une fonctionnalité</string>
+    <string name="support_info_version">Version</string>
+    <string name="support_info_build">Build</string>
+    <string name="support_info_platform">Plateforme</string>
 </resources>
