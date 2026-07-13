@@ -1,4 +1,4 @@
-# Iteration 173 — `getTrackingLinkStats` date-filtered `uniqueClicks` returned the all-time count
+# Iteration 177 — `getTrackingLinkStats` date-filtered `uniqueClicks` returned the all-time count
 
 ## État actuel
 `TrackingLinkService.getTrackingLinkStats(token, { startDate?, endDate? })`
