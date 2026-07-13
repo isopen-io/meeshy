@@ -1160,9 +1160,11 @@ struct PostDetailView: View {
     @State private var repostSecondaryLangCode: String? = nil
     @State private var repostActiveDisplayLangCode: String? = nil
 
-    /// Attribution compacte d'une STORY republiée en story : « via @auteur »
-    /// tappable vers l'original. Remplace l'embed canvas complet (qui
-    /// doublait le contenu sous le canvas principal — IMG_1161, 2026-07-13).
+    /// Attribution compacte d'une STORY republiée en story : icône repost +
+    /// « @auteur » (SANS « via » — l'icône dit déjà la republication, même
+    /// règle que le header du viewer, directive user 2026-07-13) tappable
+    /// vers l'original. Remplace l'embed canvas complet (qui doublait le
+    /// contenu sous le canvas principal — IMG_1161, 2026-07-13).
     private func storyRepostAttributionRow(_ repost: RepostContent) -> some View {
         Button {
             HapticFeedback.light()
@@ -1172,7 +1174,7 @@ struct PostDetailView: View {
                 Image(systemName: "arrow.2.squarepath")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted)
-                Text(String(format: String(localized: "post.detail.story_repost.via", defaultValue: "via @%@", bundle: .main), repost.authorUsername ?? repost.author))
+                Text("@\(repost.authorUsername ?? repost.author)")
                     .font(.footnote)
                     .foregroundColor(theme.accentText(repost.authorColor))
                 Spacer()

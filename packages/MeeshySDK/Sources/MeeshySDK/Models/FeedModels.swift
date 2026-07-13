@@ -744,24 +744,30 @@ public extension StoryItem {
     /// On retombe donc sur la source, avec la MÊME politique que
     /// `toStoryGroups` (StoryModels.swift, extension `[APIPost]`) — seule
     /// cascade équivalente côté API/tray/viewer — pour que les deux ponts
-    /// résolvent un repost identiquement : `storyEffects`/`audioUrl` gardent
-    /// leurs propres valeurs si posées, sinon retombent sur la source ; les
-    /// médias sont XOR (source UNIQUEMENT quand `media` propre est vide,
-    /// jamais fusionnés) — un merge divergeait silencieusement du chemin
-    /// tray/viewer pour un repost qui ajoute ses propres médias (bug
-    /// 2026-07-13 « la story partagée s'affiche en double et ne joue pas
-    /// l'audio de fond », alignement post-revue).
+    /// résolvent un repost identiquement.
+    ///
+    /// `media` et `storyEffects` sont couplés en UNE SEULE décision de
+    /// fallback (`hasOwnContent`), jamais résolus indépendamment : les
+    /// `mediaObjects`/`audioPlayerObjects` des effects référencent leurs
+    /// médias par `postMediaId`, donc mélanger des effects de la SOURCE avec
+    /// des médias PROPRES (ou l'inverse) casse silencieusement toute
+    /// résolution audio/vidéo — le composer de repost (`StoryComposerViewModel
+    /// (reposting:authorHandle:)`) ne produit d'ailleurs jamais l'un sans
+    /// l'autre : il clone `story.storyEffects` dès qu'il y a un ajout. Durci
+    /// ici en profondeur pour ne jamais dépendre de cette garantie côté
+    /// composer (post-revue 2026-07-13).
     init(feedPost: FeedPost) {
         let storySource: RepostContent? = {
             guard let repost = feedPost.repost,
                   (repost.type ?? "").uppercased() == "STORY" else { return nil }
             return repost
         }()
+        let hasOwnContent = !feedPost.media.isEmpty || feedPost.storyEffects != nil
         self.init(
             id: feedPost.id,
             content: feedPost.content,
-            media: feedPost.media.isEmpty ? (storySource?.media ?? []) : feedPost.media,
-            storyEffects: feedPost.storyEffects ?? storySource?.storyEffects,
+            media: hasOwnContent ? feedPost.media : (storySource?.media ?? []),
+            storyEffects: hasOwnContent ? feedPost.storyEffects : storySource?.storyEffects,
             createdAt: feedPost.timestamp,
             expiresAt: nil,
             repostOfId: storySource?.id,

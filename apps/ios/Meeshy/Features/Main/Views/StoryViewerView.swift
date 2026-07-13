@@ -560,6 +560,12 @@ struct StoryViewerView: View {
                     // auteur hors contacts.
                     presence: PresenceManager.shared.presenceMap[intro.userId]
                         ?? currentGroup?.authorPresence,
+                    // Détail « en ligne » réservé aux amis (directive user
+                    // 2026-07-13) : lookup O(1) synchrone, primitive Bool
+                    // descendue à la leaf view (règle "Zero Unnecessary
+                    // Re-render" — pas d'@ObservedObject sur le singleton
+                    // dans StoryGroupIntroOverlay).
+                    isFriend: FriendshipCache.shared.isFriend(intro.userId),
                     onSkip: { skipGroupIntro() }
                 )
                 .transition(.opacity)
@@ -1563,6 +1569,12 @@ private struct StoryGroupIntroOverlay: View {
     let avatarURL: String?
     let avatarColor: String
     let presence: UserPresence?
+    /// `true` quand l'auteur du groupe est un ami — gate le détail de
+    /// présence (« En ligne » / « Actif·ve récemment » / « Absent·e ») dans
+    /// `presenceBadge`. Directive user 2026-07-13 : le statut « en ligne »
+    /// est une information réservée aux amis, pas affichée pour un auteur
+    /// hors contacts.
+    let isFriend: Bool
     let onSkip: () -> Void
 
     var body: some View {
@@ -1642,7 +1654,9 @@ private struct StoryGroupIntroOverlay: View {
                         .foregroundStyle(.white.opacity(0.75))
                 }
             }
-            presenceBadge
+            if isFriend {
+                presenceBadge
+            }
             if let emoji = intro.moodEmoji {
                 HStack(spacing: 8) {
                     Text(emoji).font(.title3)
@@ -1689,7 +1703,9 @@ private struct StoryGroupIntroOverlay: View {
 
     private var accessibilitySummary: String {
         var parts = [intro.displayName ?? intro.username]
-        parts.append(presenceLabel(presence?.state ?? .offline))
+        // Même règle que le badge visuel : le statut de présence n'est
+        // annoncé à VoiceOver que pour un ami.
+        if isFriend { parts.append(presenceLabel(presence?.state ?? .offline)) }
         if let message = intro.moodMessage { parts.append(message) }
         return parts.joined(separator: ", ")
     }

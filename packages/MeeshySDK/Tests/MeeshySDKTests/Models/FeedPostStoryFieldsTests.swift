@@ -119,7 +119,7 @@ final class FeedPostStoryFieldsTests: XCTestCase {
         XCTAssertEqual(item.repostAuthorUsername, "jcharles")
     }
 
-    /// Politique XOR — alignée sur `toStoryGroups` (StoryModels.swift, la
+    /// Politique couplée — alignée sur `toStoryGroups` (StoryModels.swift, la
     /// cascade API/tray/viewer équivalente) : un post qui apporte SES
     /// PROPRES médias les affiche exclusivement, il ne les fusionne PAS avec
     /// ceux de la source. Un merge divergerait silencieusement du chemin
@@ -139,6 +139,27 @@ final class FeedPostStoryFieldsTests: XCTestCase {
         XCTAssertEqual(item.storyEffects?.backgroundAudioId, "own-bg")
         XCTAssertEqual(item.media.map(\.id), [ownMedia.id])
         XCTAssertEqual(item.content, "mon ajout")
+    }
+
+    /// Régression ciblée (revue 2026-07-13, itération post-PR) : un repost
+    /// qui ajoute SES PROPRES médias mais n'a PAS d'effects propres ne doit
+    /// JAMAIS mélanger media=own + storyEffects=source — les `mediaObjects`/
+    /// `audioPlayerObjects` de la source référencent leurs médias par
+    /// `postMediaId`, qui ne matcheraient plus rien dans `media=own` et
+    /// casseraient silencieusement toute résolution audio/vidéo. `media` et
+    /// `storyEffects` doivent provenir de la MÊME origine (couplés via
+    /// `hasOwnContent`), jamais résolus indépendamment.
+    func test_storyItem_fromFeedPost_ownMediaWithoutOwnEffects_doesNotMixSourceEffects() {
+        let ownMedia = FeedMedia.image()
+        let sourceMedia = FeedMedia.image()
+        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "")
+        post.media = [ownMedia]
+        post.repost = makeStoryRepostSource(media: [sourceMedia])
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertEqual(item.media.map(\.id), [ownMedia.id])
+        XCTAssertNil(item.storyEffects, "les effects ne doivent PAS retomber sur la source quand le media est propre — sinon les postMediaId référencés ne correspondent plus à rien dans `media`")
     }
 
     func test_storyItem_fromFeedPost_nonStoryRepost_noFallback() {

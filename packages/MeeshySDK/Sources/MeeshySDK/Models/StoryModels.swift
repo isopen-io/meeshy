@@ -1922,9 +1922,19 @@ extension Array where Element == APIPost {
             // feed embed already resolves this via `RepostContent`; this aligns the
             // tray/viewer path. Reported 2026-06-26 « la republication ne joue pas
             // la story comme si c'était la mienne ».
+            //
+            // `media` et `storyEffects` sont couplés en une seule décision
+            // (`hasOwnContent`) — jamais résolus indépendamment. Les
+            // `mediaObjects`/`audioPlayerObjects` des effects référencent
+            // leurs médias par `postMediaId` ; mélanger des effects de la
+            // SOURCE avec des médias PROPRES casserait silencieusement toute
+            // résolution audio/vidéo (même durcissement que `StoryItem
+            // (feedPost:)` dans FeedModels.swift — single source de la
+            // politique de fallback, post-revue 2026-07-13).
             let repostSource = post.repostOf
             let ownMedia = post.media ?? []
-            let mediaSource: [APIPostMedia] = ownMedia.isEmpty ? (repostSource?.media ?? []) : ownMedia
+            let hasOwnContent = !ownMedia.isEmpty || post.storyEffects != nil
+            let mediaSource: [APIPostMedia] = hasOwnContent ? ownMedia : (repostSource?.media ?? [])
             let media: [FeedMedia] = mediaSource.map { m in
                 // Propage `thumbnailUrl` + `thumbHash` du gateway — sinon le
                 // tray (`StoryTrayView.latestStoryThumbnailURL`) tombe sur
@@ -1943,7 +1953,7 @@ extension Array where Element == APIPost {
                 ?? Calendar.current.date(byAdding: .hour, value: 21, to: post.createdAt)
             let totalReactions = post.reactionSummary?.values.reduce(0, +) ?? 0
             let item = StoryItem(id: post.id, content: post.content, media: media,
-                                 storyEffects: post.storyEffects ?? repostSource?.storyEffects,
+                                 storyEffects: hasOwnContent ? post.storyEffects : repostSource?.storyEffects,
                                  createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
                                  repostOfId: post.repostOf?.id,
                                  originalRepostOfId: post.originalRepostOfId,
