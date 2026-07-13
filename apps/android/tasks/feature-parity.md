@@ -2228,6 +2228,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       -tested), the `AbsoluteDate` rung → locale/zone date (year only when it differs). `time_relative_*`
       strings EN/FR/ES/PT + `@Composable rememberRelativeTimeStrings()` glue; **wired into the feed post
       timestamp** (raw absolute date → discreet relative label, Prisme framing; unparsable → absolute fallback)
+- [x] Conversation-row trailing timestamp (parity with iOS `ThemedConversationRow`'s
+      `RelativeTimeFormatter.shortString(for: conversation.lastMessageAt)`) — pure `:feature:conversations`
+      `ConversationRowTime.epochMillis` resolves the row's instant (last message `createdAt` → conversation
+      `updatedAt` → `createdAt`, first parseable ISO wins via the `isoToEpochMillisOrNull` SSOT, null = no
+      label) and the row renders it via `RelativeTimeFormat.short` in a trailing column above the unread
+      badge; **colour follows unread state** (error when unread > 0, else the conversation `accentColor`,
+      matching iOS `timestampColor`)
 - [x] Relative-time *long* rendering layer (`RelativeTimeLongText.long` + `RelativeTimeLongStrings`;
       port of the iOS `RelativeTimeFormatter.longString` detail form `maintenant / il y a 5 min / hier /
       il y a 3j / date`) — pure `:sdk-ui/format`, delegates to `RelativeTimeLongFormat.label` (thresholds +
