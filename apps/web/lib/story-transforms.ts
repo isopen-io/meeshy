@@ -1,7 +1,20 @@
-import type { Post } from '@meeshy/shared/types/post';
+import type { Post, PostAuthor } from '@meeshy/shared/types/post';
 import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
+import { getUserDisplayName } from '@/utils/user-display-name';
 import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
+
+// Résolution du bloc auteur affiché d'une story — SOURCE UNIQUE.
+// Délègue le nom à `getUserDisplayName` (displayName non-vide > username >
+// fallback) plutôt qu'un `??` brut qui laissait passer un displayName vide ou
+// blanc et rendait un libellé de bulle vide. L'avatar vide (`''`) est normalisé
+// en `undefined` pour ne jamais émettre un `<img src="">`.
+function toDisplayAuthor(author?: PostAuthor | null): { name: string; avatar?: string } {
+  return {
+    name: getUserDisplayName(author, 'Unknown'),
+    avatar: author?.avatar || undefined,
+  };
+}
 
 // ============================================================================
 // Shared StoryEffects shape (used by StoryViewer)
@@ -147,10 +160,7 @@ export function postToStoryItem(
   const author = post.author;
   return {
     id: post.id,
-    author: {
-      name: author?.displayName ?? author?.username ?? 'Unknown',
-      avatar: author?.avatar ?? undefined,
-    },
+    author: toDisplayAuthor(author),
     thumbnailUrl: post.media?.[0]?.thumbnailUrl ?? post.media?.[0]?.fileUrl ?? undefined,
     hasUnviewed: !viewedIds.has(post.id),
     isOwn: post.authorId === currentUserId,
@@ -175,10 +185,7 @@ export function groupToStoryItem(
   const author = first.author;
   return {
     id: first.authorId,
-    author: {
-      name: author?.displayName ?? author?.username ?? 'Unknown',
-      avatar: author?.avatar ?? undefined,
-    },
+    author: toDisplayAuthor(author),
     thumbnailUrl: first.media?.[0]?.thumbnailUrl ?? first.media?.[0]?.fileUrl ?? undefined,
     hasUnviewed: group.some((post) => !viewedIds.has(post.id)),
     isOwn: first.authorId === currentUserId,
@@ -311,10 +318,7 @@ export function postToStoryData(post: Post): StoryData {
   return {
     id: post.id,
     authorId: post.authorId,
-    author: {
-      name: author?.displayName ?? author?.username ?? 'Unknown',
-      avatar: author?.avatar ?? undefined,
-    },
+    author: toDisplayAuthor(author),
     content: post.content ?? undefined,
     originalLanguage: post.originalLanguage ?? undefined,
     translations: translations && translations.length > 0 ? translations : undefined,
