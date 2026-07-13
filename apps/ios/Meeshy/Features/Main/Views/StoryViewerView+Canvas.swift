@@ -984,11 +984,22 @@ struct StoryCardView: View {
                     .accessibilityAction(named: String(
                         localized: "story.viewer.a11y.next",
                         defaultValue: "Story suivante"
-                    )) { goToNext() }
+                    )) {
+                        // Rotor VoiceOver = navigation MANUELLE au même titre
+                        // qu'un tap — sans ce tick, un utilisateur VoiceOver
+                        // perdait tout retour haptique de navigation (post-revue
+                        // 2026-07-13 : seuls les deux gestes tactiles avaient
+                        // été raccordés au tick unique).
+                        HapticFeedback.light()
+                        goToNext()
+                    }
                     .accessibilityAction(named: String(
                         localized: "story.viewer.a11y.previous",
                         defaultValue: "Story précédente"
-                    )) { goToPrevious() }
+                    )) {
+                        HapticFeedback.light()
+                        goToPrevious()
+                    }
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, `geometry.size.height` étirait le canvas
                     // hors ratio design et décalait visuellement le contenu.
