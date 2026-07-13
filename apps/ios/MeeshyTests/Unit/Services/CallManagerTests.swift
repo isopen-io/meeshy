@@ -5486,15 +5486,19 @@ final class SignalingDegradedIndicatorTests: XCTestCase {
         )
     }
 
-    func test_callView_rendersSignalingDegradedBanner() throws {
+    func test_callView_surfacesSignalingDegradedState_viaDiscreetStatusPill() throws {
         let source = try sourceFile("Meeshy/Features/Main/Views/CallView.swift")
         XCTAssertTrue(
             source.contains("callManager.isSignalingDegraded"),
-            "CallView must render a discreet banner while signaling is degraded"
+            "CallView must still react to the signaling-degraded state"
         )
         XCTAssertTrue(
+            source.contains("call.status.signaling"),
+            "the state must be surfaced by the discreet inline status pill « Serveur déconnecté »"
+        )
+        XCTAssertFalse(
             source.contains("signalingDegradedBanner"),
-            "the banner must follow the reconnecting/quality banner pattern (stacked capsules)"
+            "the intrusive pop-up banner was removed (user feedback 2026-07-13) — no more transient pop-up for network weakness"
         )
     }
 }
