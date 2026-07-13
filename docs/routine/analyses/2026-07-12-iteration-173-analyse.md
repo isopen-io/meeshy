@@ -1,68 +1,72 @@
-# Iteration 173 — `totalConversations` sur-comptait les conversations quittées / bannies / supprimées
+# Iteration 173 — Retry offer stacked on top of a promoted waiting call (web calls)
 
-## Symptôme
-Les statistiques utilisateur (`totalConversations`) et le succès
-« Connecteur » (« Rejoindre 10+ conversations », seuil 10) comptaient **toutes**
-les conversations jamais rejointes par l'utilisateur — y compris celles qu'il a
-quittées, dont il a été banni, ou qu'il a masquées via « supprimer pour moi ».
-Un utilisateur actuellement dans 5 conversations mais en ayant quitté 8 + banni
-de 2 voyait `totalConversations = 15` et débloquait « Connecteur » à tort.
+## Current state
+La bannière call-waiting web (busy-path) a été livrée récemment (`f5c545f`,
+`8df5439`, série de la Vague 44). Quand l'utilisateur est déjà en appel et qu'un
+SECOND appel arrive, `CallManager` affiche `CallWaitingBanner` au lieu d'un
+`setIncomingCall` naïf. Si l'appel ACTIF se termine pendant qu'un appel attend,
+`handleCallEnded` **promeut** l'appel en attente en sonnerie entrante normale
+(parité iOS re-present-after-teardown).
+
+En parallèle, la feature retry-on-failure (`7e6ea5d49`, puis câblée sur le chemin
+`call:ended` en Vague 40) pose un `pendingRetry` (offre « Réessayer ») quand un
+appel actif tombe sur une raison transitoire (`failed` / `connectionLost`).
+
+## Problème identifié
+Ces deux comportements, corrects isolément, **se cumulent** de façon conflictuelle.
+Dans `handleCallEnded`, quand l'appel ACTIF se termine avec une raison transitoire
+**alors qu'un appel est en attente** :
+
+1. Le bloc retry (`isRetryableCallFailure(event.reason)`) pose `pendingRetry` pour
+   l'appel qui vient de tomber.
+2. Le bloc de promotion (`if (waitingCall) { … }`) promeut l'appel en attente en
+   sonnerie entrante et `return`.
+
+Résultat : l'utilisateur voit **une sonnerie entrante** (le call promu, sa
+prochaine action) **ET**, derrière, une offre « Réessayer » pour l'appel mort —
+deux UI d'appel empilées et contradictoires. Il peut ré-appeler la partie tombée
+pendant qu'un nouvel appel sonne.
 
 ## Cause racine
-`Participant` n'est **jamais** hard-delete : quitter / bannir / « delete for me »
-passe la ligne en `isActive: false` (+ `leftAt` / `bannedAt`) :
-- `routes/conversations/leave.ts:66` → `isActive: false, leftAt`
-- `routes/conversations/participants.ts` → `isActive: false, leftAt`
-- `routes/conversations/ban.ts:81` → `bannedAt, isActive: false, leftAt`
-- `routes/conversations/delete-for-me.ts` → `isActive: false`
-
-Deux implémentations parallèles du calcul de stats comptaient les participants
-avec un filtre nu `{ userId }`, **sans** `isActive: true` :
-1. `routes/user-stats.ts:61-63` — `computeUserStats` (endpoints `/users/me/stats*`)
-2. `routes/users/preferences.ts:414-416` — `getUserStats` (endpoint public `/users/:userId/stats`)
-
-Le reste du codebase filtre uniformément l'appartenance active :
-`ConversationStatsService.computeStats` (`isActive: true`),
-`PostFeedService.getDirectConversationContactIds`, le dashboard admin, et —
-révélateur — les compteurs de complétion de profil **dans le même fichier**
-`preferences.ts:117,123` (`isActive: true`). Les deux compteurs de stats étaient
-les seuls outliers.
+Le bloc retry a été ajouté (Vague 40) sur le chemin `call:ended` **sans tenir
+compte** de l'interaction avec le chemin call-waiting (Vague 44), ajouté plus tard.
+Aucun des deux n'a de garde sur l'autre. Le `return` de la promotion empêche le
+double-teardown de l'état d'appel mais **pas** la pose du `pendingRetry`, exécutée
+avant.
 
 ## Impact
-- **Métrique** : `totalConversations` gonflé de façon monotone (n'inclut jamais
-  de décrément) — l'utilisateur ne peut pas voir ce chiffre baisser en quittant.
-- **Gamification** : succès « Connecteur » débloqué / `progress: 1.0` de façon
-  erronée pour des utilisateurs actifs dans < 10 conversations.
-- **Sémantique** : compter des conversations dont on a été **banni** ou qu'on a
-  **explicitement supprimées** est faux sous toute interprétation.
+- **Business** : UX d'appel confuse dans le scénario multi-appels — l'offre retry
+  parasite la sonnerie entrante promue. Edge-case mais 100 % reproductible dès
+  qu'un appel actif tombe (réseau) pendant un second appel entrant.
+- **Technique** : deux surfaces UI d'appel actives simultanément ; `pendingRetry`
+  survivant (`reset()` le préserve volontairement) pouvant fuiter sur l'écran
+  suivant.
+
+## Risk assessment
+Très faible. La correction est une garde `!waitingCall` sur le bloc retry — elle
+ne change RIEN au chemin retry hors call-waiting (couvert par
+`CallManager.callEndedRetry.test.tsx`, 8 tests inchangés). Elle supprime une offre
+parasite dans un seul scénario.
 
 ## Correctif (TDD)
-- **RED** :
-  - `user-stats.test.ts` : le double `participant.count` honore désormais le
-    filtre `isActive` (retourne le compte actif si `where.isActive === true`,
-    sinon le compte historique). 2 nouveaux tests : comptage actif-seul (5 vs 15
-    + « Connecteur » verrouillé), et assertion du `where: { userId, isActive: true }`.
-  - `preferences-stats.test.ts` : 1 nouveau test assertant que `getUserStats`
-    filtre `participant.count` par `isActive: true`.
-  Les 3 échouaient sur le code actuel (`where: { userId }` seul).
-- **GREEN** : ajout de `isActive: true` aux deux `participant.count` de stats.
+- **RED** : 2 tests dans `CallManager.callWaiting.test.tsx` —
+  1. appel actif terminé (raison `completed`) pendant attente → l'appel en attente
+     est promu en sonnerie entrante (documente le comportement existant, vert).
+  2. appel actif terminé (raison transitoire `connectionLost`) pendant attente →
+     l'appel est promu **ET** `pendingRetry === null` (échoue : `pendingRetry`
+     valait `{conversationId:'conv-active', type:'video'}`).
+- **GREEN** : garde le bloc retry sur `!waitingCall` dans `handleCallEnded`.
+  La promotion est propriétaire du teardown quand un appel attend ; aucun retry
+  n'est offert.
 
-## Vérification
-- `user-stats` + `preferences-stats` : 3 suites / 27 tests verts.
-- Répertoire `routes/users` complet : 26 suites / 401 tests verts.
-- `tsc --noEmit` : exit 0.
-- Contrat d'endpoint inchangé (forme `UserStats` identique iOS) — corrige
-  uniquement le périmètre du comptage.
+## Validation
+- `CallManager.callWaiting.test.tsx` : 8/8 (2 nouveaux verts).
+- `CallManager.callEndedRetry.test.tsx` : 8/8 (feature retry intacte hors
+  call-waiting).
+- Répertoire `__tests__/components/video-call/` : 11 suites / 49 tests verts.
+- `tsc --noEmit` : aucune nouvelle erreur introduite (les erreurs `unknown`/mock
+  restantes sont pré-existantes, identiques sur la version pristine).
 
 ## Environnement
-Linux (pas de toolchain Swift/Xcode). Surface 100 % TypeScript testable en
-isolation via le stub prisma. `bun install --ignore-scripts` + `prisma generate`
-+ `bun run build` (shared) + `jest`.
-
-## Dette résiduelle (hors périmètre)
-`computeUserStats` (user-stats.ts) et `getUserStats` (preferences.ts) restent
-**deux copies** de la même logique de stats/achievements (seuils, mapping,
-member-days). Une unification vers `computeUserStats` unique éliminerait ce
-risque de divergence (dont ce bug était une manifestation), mais les formes de
-requête diffèrent — `getUserStats` utilise `$runCommandRaw` pour les traductions
-et résout l'utilisateur par id/username. Candidat pour une itération dédiée.
+Linux (pas de toolchain Swift/Xcode). Surface web 100 % testable sous jest/bun.
+`bun install` (root) + `bunx jest`.

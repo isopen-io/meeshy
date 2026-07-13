@@ -1,43 +1,51 @@
-# Iteration 173 — Plan : `totalConversations` = conversations actives uniquement
+# Iteration 173 — Plan d'implémentation (2026-07-12)
 
-## Objectif
-Cesser de compter les conversations quittées / bannies / supprimées dans les
-statistiques utilisateur et le succès « Connecteur ».
+## Objectives
+Empêcher `CallManager.handleCallEnded` d'empiler une offre « Réessayer »
+(`pendingRetry`) sur la sonnerie entrante promue quand l'appel ACTIF tombe
+(raison transitoire) alors qu'un appel est en attente (call-waiting busy-path).
 
-## Modules affectés
-- `services/gateway/src/routes/user-stats.ts` (`computeUserStats`)
-- `services/gateway/src/routes/users/preferences.ts` (`getUserStats`)
-- Tests : `user-stats.test.ts`, `preferences-stats.test.ts`
+## Affected modules
+- `apps/web/components/video-call/CallManager.tsx` (prod, `handleCallEnded`).
+- `apps/web/__tests__/components/video-call/CallManager.callWaiting.test.tsx`
+  (2 tests + `clearCallRetry()` dans `beforeEach`).
 
-## Phases
-1. **RED** — durcir les doubles `participant.count` pour honorer `isActive`,
-   ajouter les tests de comptage actif-seul + assertions de `where`.
-2. **GREEN** — ajouter `isActive: true` aux deux `participant.count` de stats.
-3. **VALIDATION** — suites ciblées + répertoire `routes/users` + `tsc`.
+## Implementation phases
+1. **RED** — 2 tests call-waiting : promotion sur end (existant, vert) +
+   suppression du retry sur end transitoire pendant attente (échec : `pendingRetry`
+   posé). → 1 échec.
+2. **GREEN** — garde `!waitingCall &&` sur le bloc `isRetryableCallFailure`. → vert.
+3. **REFACTOR** — aucun (garde minimale, commentaire explicatif ajouté).
 
-## Dépendances
-Aucune (changement local, contrat d'API inchangé).
+## Dependencies
+Aucune. Isolé au composant web `CallManager` + son test. Aucun changement
+gateway/shared/SDK/iOS.
 
-## Risques
-Faible. Le seul changement de comportement est la correction voulue : un
-utilisateur ayant quitté des conversations voit un `totalConversations` plus bas
-(exact). Aucune migration de données. Rétro-compatible côté clients (même forme).
+## Estimated risks
+Très faibles. Le chemin retry hors call-waiting est inchangé (garde `false` quand
+`waitingCall` est `null`) — couvert par `CallManager.callEndedRetry.test.tsx`.
 
-## Stratégie de rollback
-Révert du commit unique — les deux hunks sont indépendants et purement additifs
-(`isActive: true`).
+## Rollback strategy
+Revert du commit unique. Aucun état persisté impacté.
 
-## Critères de validation
-- [x] Tests RED écrits et rouges avant fix
-- [x] `user-stats` + `preferences-stats` verts (27 tests)
-- [x] `routes/users` complet vert (401 tests)
-- [x] `tsc --noEmit` exit 0
-- [x] Contrat d'endpoint `UserStats` inchangé
+## Validation criteria
+- [x] RED : le test retry-suppression échoue avant le fix
+      (`pendingRetry = {conversationId:'conv-active', type:'video'}`).
+- [x] GREEN : 8/8 call-waiting + 8/8 callEndedRetry verts après le fix.
+- [x] `__tests__/components/video-call/` : 11 suites / 49 tests verts.
+- [x] `tsc --noEmit` : aucune nouvelle erreur (baseline pristine identique).
 
-## Statut : COMPLÉTÉ
+## Completion status
+**COMPLETE** — implémenté, testé (RED→GREEN), documenté. Prêt à pousser sur
+`claude/brave-archimedes-a3glpl`.
 
-## Améliorations futures
-- Unifier `computeUserStats` / `getUserStats` (deux copies de la logique de
-  stats/achievements) pour supprimer le risque de divergence dont ce bug était
-  une instance. Nécessite d'harmoniser les formes de requête (`$runCommandRaw`
-  vs `message.count` pour les traductions ; résolution id/username).
+## Progress tracking
+- Analyse : `docs/routine/analyses/2026-07-12-iteration-173-analyse.md`.
+- Commit unique regroupant prod + test + docs routine.
+
+## Future improvements
+- **iOS parité** : vérifier que `CallManager` iOS (busy-path
+  `endCurrentAndAnswerPending` + retry) n'a pas la même interaction retry↔promotion
+  (non testable ici, pas de toolchain Swift). À auditer lors d'une itération iOS.
+- **P1 backlog device-log** (`tasks/2026-07-12-device-log-priorities.md`) : #5/#6/#8
+  restent iOS-side (batcher engagement, chunk presence) — hors périmètre TS.

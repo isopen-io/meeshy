@@ -138,6 +138,10 @@ describe('CallManager — call-waiting banner (busy-path swap)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useCallStore.getState().reset();
+    // `reset()` preserves `pendingRetry` (it must survive the teardown a retry
+    // offer is posted during) — clear it between tests so one case's offer can't
+    // leak into the next.
+    useCallStore.getState().clearCallRetry();
     mockGetUserMedia.mockResolvedValue({ getTracks: () => [{ stop: jest.fn() }] });
     Object.defineProperty(navigator, 'mediaDevices', {
       value: { getUserMedia: mockGetUserMedia }, writable: true, configurable: true,
@@ -217,6 +221,37 @@ describe('CallManager — call-waiting banner (busy-path swap)', () => {
     expect(screen.queryByTestId('call-waiting-banner')).toBeNull();
     expect(useCallStore.getState().isInCall).toBe(true);
     expect(useCallStore.getState().currentCall?.id).toBe(ACTIVE_CALL_ID);
+  });
+
+  it('active call ends while a call is waiting: promotes the waiting call to a normal incoming ring', () => {
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+    render(<CallManager />);
+    act(() => { enterActiveCall(); });
+    act(() => { socket.fire(SERVER_EVENTS.CALL_INITIATED, waitingIncomingCallEvent()); });
+
+    act(() => { socket.fire(SERVER_EVENTS.CALL_ENDED, { callId: ACTIVE_CALL_ID, duration: 30, reason: 'completed' }); });
+
+    // Banner gone, waiting call now rings as a normal incoming call, active reset.
+    expect(screen.queryByTestId('call-waiting-banner')).toBeNull();
+    expect(screen.queryByTestId('accept-call-btn')).not.toBeNull();
+    expect(useCallStore.getState().isInCall).toBe(false);
+  });
+
+  it('active call ends with a TRANSIENT reason while a call is waiting: promotes the waiting call and does NOT stack a retry offer', () => {
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+    render(<CallManager />);
+    act(() => { enterActiveCall(); });
+    act(() => { socket.fire(SERVER_EVENTS.CALL_INITIATED, waitingIncomingCallEvent()); });
+
+    act(() => { socket.fire(SERVER_EVENTS.CALL_ENDED, { callId: ACTIVE_CALL_ID, duration: 12, reason: 'connectionLost' }); });
+
+    // The waiting call is promoted to a fresh incoming ring — the user's next
+    // action. A « Réessayer » offer for the DROPPED active call stacked behind
+    // it would be conflicting UI, so the promotion suppresses the retry offer.
+    expect(screen.queryByTestId('accept-call-btn')).not.toBeNull();
+    expect(useCallStore.getState().pendingRetry).toBeNull();
   });
 
   it('still shows the normal incoming notification (no banner) when NOT busy', () => {
