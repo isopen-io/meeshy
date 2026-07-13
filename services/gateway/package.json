@@ -88,7 +88,7 @@
     "@types/ws": "^8.18.1",
     "@types/zxcvbn": "^4.4.5",
     "fast-json-stringify": "^7.0.1",
-    "glob": "^11.1.0",
+    "glob": "^13.0.6",
     "grpc-tools": "^1.13.1",
     "jest": "^30.4.2",
     "mongodb": "^7.5.0",
