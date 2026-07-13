@@ -401,7 +401,10 @@ public struct ClipInspector: View {
     }
 
     /// Durées proposées pour les animations d'entrée/sortie (fondu). `0` = off.
-    public static let fadePresets: [Float] = [0, 0.3, 0.5, 1.0, 2.0]
+    // `nonisolated`: an immutable Sendable constant that the `nonisolated`
+    // `nearestFadePreset(to:)` reads from a non-MainActor context (the struct is
+    // a `View`, so members are @MainActor-isolated by default).
+    public nonisolated static let fadePresets: [Float] = [0, 0.3, 0.5, 1.0, 2.0]
 
     /// Rattache une valeur legacy arbitraire (ex. 0.4 s posée au slider
     /// d'avant) au preset le plus proche pour l'état sélectionné des chips.

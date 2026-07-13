@@ -123,6 +123,24 @@ final class RouterTests: XCTestCase {
         XCTAssertFalse(router.isDeepRoute)
     }
 
+    // MARK: - Router.replaceStack — atomic stack replacement (#16)
+
+    func test_replaceStack_iPhone_collapsesToSingleRouteInOneMutation() {
+        let router = Router()   // no onRouteRequested → iPhone NavigationStack path
+        router.push(.settings)
+        router.push(.notifications)
+        router.replaceStack(with: .profile)
+        XCTAssertEqual(router.path, [.profile],
+                       "replaceStack must set the whole stack to one route (no popToRoot + delayed push)")
+    }
+
+    func test_replaceStack_iPad_forwardsViaCallback_withoutMutatingPath() {
+        let router = Router()
+        router.onRouteRequested = { _ in true }   // iPad two-column intercept
+        router.replaceStack(with: .links)
+        XCTAssertTrue(router.path.isEmpty, "iPad forwards via the callback, never the NavigationStack path")
+    }
+
     func test_isHubRoute_afterPushProfile_returnsTrue() {
         let router = Router()
         router.push(.profile)

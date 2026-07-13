@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { CommentItem } from './CommentItem';
 import { Skeleton } from './Skeleton';
+import { isHeartLikedByMe } from '@/lib/reactions';
 import type { PostComment } from '@meeshy/shared/types/post';
 
 export interface CommentThreadProps {
@@ -25,7 +26,6 @@ export interface CommentThreadProps {
 }
 
 function CommentThread({
-  _postId,
   parentComment,
   replies,
   currentUserId,
@@ -93,7 +93,7 @@ function CommentThread({
           comment={reply}
           userLanguage={userLanguage}
           isAuthor={currentUserId === reply.authorId}
-          isLiked={likedCommentIds.has(reply.id)}
+          isLiked={likedCommentIds.has(reply.id) || isHeartLikedByMe(reply)}
           onLike={onLikeComment}
           onUnlike={onUnlikeComment}
           onReply={onReply}

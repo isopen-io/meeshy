@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallAnalytics
 import me.meeshy.sdk.model.call.CallEndReason
+import me.meeshy.sdk.model.call.CallRetryPolicy
 import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
@@ -418,6 +419,21 @@ class CallViewModel @Inject constructor(
 
     /** Settle a terminal call back to idle (dismissing the ended screen). */
     fun dismiss() = dispatch(CallEvent.Settle)
+
+    /**
+     * « Réessayer » a transiently-failed call (Failed/ConnectionLost) — parité
+     * web retry-on-failure. Settles the ended screen back to idle, then
+     * re-initiates a FRESH outgoing call to the same conversation/type (blank
+     * callId → the initiate ACK mints a new one). Inert unless the ended reason
+     * is retryable, so a normal hangup / rejection can never re-dial.
+     */
+    fun retry() {
+        val ended = callState as? CallState.Ended ?: return
+        if (!CallRetryPolicy.isRetryable(ended.reason)) return
+        val previous = config
+        dispatch(CallEvent.Settle)
+        start(previous.copy(callId = "", isOutgoing = true))
+    }
 
     // --- Call waiting: a second incoming call while this one is active ------
 

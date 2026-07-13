@@ -227,4 +227,26 @@
     <string name="about_link_twitter">Twitter / X</string>
     <string name="about_link_github">GitHub</string>
     <string name="about_copyright">2024–2026 Meeshy. All rights reserved.</string>
+    <string name="settings_help_support">Help &amp; Support</string>
+    <string name="settings_open_source_licenses">Open source licenses</string>
+    <string name="licenses_title">Open source licenses</string>
+    <string name="licenses_intro">Meeshy is built with the following open-source libraries.</string>
+    <string name="licenses_type_mit">MIT</string>
+    <string name="licenses_type_apache">Apache 2.0</string>
+    <string name="licenses_type_bsd">BSD</string>
+    <string name="licenses_type_other">Other</string>
+    <string name="support_title">Help &amp; Support</string>
+    <string name="support_section_help">Get help</string>
+    <string name="support_section_contact">Contact us</string>
+    <string name="support_section_report">Report a problem</string>
+    <string name="support_section_info">Information</string>
+    <string name="support_link_help_center">Help center</string>
+    <string name="support_link_faq">FAQ</string>
+    <string name="support_link_email">Email support</string>
+    <string name="support_link_twitter">Twitter / X</string>
+    <string name="support_link_bug">Report a bug</string>
+    <string name="support_link_feature">Suggest a feature</string>
+    <string name="support_info_version">Version</string>
+    <string name="support_info_build">Build</string>
+    <string name="support_info_platform">Platform</string>
 </resources>

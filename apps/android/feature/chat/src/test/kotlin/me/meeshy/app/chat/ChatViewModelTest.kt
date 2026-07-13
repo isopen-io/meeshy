@@ -25,6 +25,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.call.ActiveCallRepository
+import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.sdk.model.call.ActiveCallMetadata
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.chat.InMemoryLocallyHiddenMessagesStore
 import me.meeshy.sdk.chat.InMemoryStarredMessagesStore
@@ -35,6 +38,7 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
@@ -127,6 +131,7 @@ class ChatViewModelTest {
         val locallyHidden: InMemoryLocallyHiddenMessagesStore,
         val starred: InMemoryStarredMessagesStore,
         val draftStore: InMemoryConversationDraftStore,
+        val activeCallRepo: ActiveCallRepository,
     )
 
     private fun viewModel(
@@ -145,6 +150,7 @@ class ChatViewModelTest {
         hidden: LocallyHiddenMessages = LocallyHiddenMessages(),
         drafts: Map<String, ConversationDraft> = emptyMap(),
         targetConversations: List<ApiConversation> = emptyList(),
+        activeCall: ActiveCallSession? = null,
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -158,6 +164,8 @@ class ChatViewModelTest {
         coEvery { reactions.fetchDetails(any()) } returns
             NetworkResult.Failure(ApiError("offline"))
         val workManager = mockk<WorkManager>(relaxed = true)
+        val activeCallRepo = mockk<ActiveCallRepository>(relaxed = true)
+        coEvery { activeCallRepo.activeCallFor(any()) } returns activeCall
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
@@ -182,6 +190,7 @@ class ChatViewModelTest {
                 MeeshyConfig(),
                 clock,
                 draftStore,
+                activeCallRepo,
                 handle,
             ),
             repo,
@@ -193,6 +202,7 @@ class ChatViewModelTest {
             locallyHidden,
             starred,
             draftStore,
+            activeCallRepo,
         )
     }
 
@@ -204,6 +214,52 @@ class ChatViewModelTest {
 
         coVerify(exactly = 1) { h.conversations.markReadOptimistic("c1") }
         coVerify(atLeast = 1) { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun probing_on_open_surfaces_a_server_side_active_call() = runTest(dispatcher) {
+        val session = ActiveCallSession(
+            id = "call-live-1",
+            conversationId = "c1",
+            mode = "p2p",
+            status = "active",
+            metadata = ActiveCallMetadata(type = "video"),
+        )
+        val h = harness(syncedConversation(), currentUser = me, activeCall = session)
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.activeCall?.id).isEqualTo("call-live-1")
+        assertThat(h.vm.state.value.activeCall?.isVideo).isTrue()
+    }
+
+    @Test
+    fun no_active_call_leaves_the_rejoin_state_empty() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me, activeCall = null)
+
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.activeCall).isNull()
+    }
+
+    @Test
+    fun refreshActiveCall_re_probes_after_a_call_ends() = runTest(dispatcher) {
+        val session = ActiveCallSession(
+            id = "call-live-2",
+            conversationId = "c1",
+            mode = "p2p",
+            status = "active",
+        )
+        val h = harness(syncedConversation(), currentUser = me, activeCall = session)
+        advanceUntilIdle()
+        assertThat(h.vm.state.value.activeCall).isNotNull()
+
+        // The call ended server-side; a resume re-probe must clear the pill.
+        coEvery { h.activeCallRepo.activeCallFor(any()) } returns null
+        h.vm.refreshActiveCall()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.activeCall).isNull()
     }
 
     @Test
@@ -1639,15 +1695,59 @@ class ChatViewModelTest {
         assertThat(h.vm.state.value.actionMessageId).isNull()
     }
 
+    private fun imageMessage(id: String, vararg urls: String) = synced(
+        ApiMessage(
+            id = id,
+            conversationId = "c1",
+            senderId = "other",
+            content = "",
+            attachments = urls.mapIndexed { index, url ->
+                ApiMessageAttachment(
+                    id = "$id-a$index",
+                    mimeType = "image/jpeg",
+                    fileUrl = url,
+                )
+            },
+        ),
+    )
+
+    private fun imageConversation() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                imageMessage("m1", "https://cdn/1.jpg", "https://cdn/2.jpg"),
+                imageMessage("m2", "https://cdn/3.jpg"),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
     @Test
-    fun tapping_an_image_opens_the_viewer_and_dismissing_clears_it() = runTest(dispatcher) {
+    fun tapping_an_image_opens_a_conversation_wide_gallery_and_dismissing_clears_it() = runTest(dispatcher) {
+        val h = harness(imageConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.openImageViewer("m2", 0)
+
+        // The gallery spans every image in the conversation (not just m2's), and
+        // starts on the tapped one (m1 contributes 2 images, so m2's first is #2).
+        assertThat(h.vm.state.value.imageViewer).isEqualTo(
+            ConversationGallery(
+                imageUrls = listOf("https://cdn/1.jpg", "https://cdn/2.jpg", "https://cdn/3.jpg"),
+                startIndex = 2,
+            ),
+        )
+
+        h.vm.dismissImageViewer()
+        assertThat(h.vm.state.value.imageViewer).isNull()
+    }
+
+    @Test
+    fun tapping_a_message_with_no_images_opens_no_gallery() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
 
         h.vm.openImageViewer("m2", 1)
-        assertThat(h.vm.state.value.imageViewer).isEqualTo(ImageViewerTarget("m2", 1))
 
-        h.vm.dismissImageViewer()
         assertThat(h.vm.state.value.imageViewer).isNull()
     }
 

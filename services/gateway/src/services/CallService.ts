@@ -12,7 +12,7 @@
 
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
-import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
+import { CALL_ERROR_CODES, type CallEndedEvent } from '@meeshy/shared/types/video-call';
 import {
   buildCallSummaryWithMetadata,
   buildGarbageCollectedConversion,
@@ -215,6 +215,13 @@ export class CallService {
   // an orphaned live message to `failed`. Fire-and-forget, never blocking.
   private reapedCallCallback: ((callId: string) => Promise<void> | void) | null = null;
 
+  // Wired in server.ts to CallEventsHandler.broadcastCallEndedForTerminatedCall.
+  // The REST end/leave routes have no `io`, so they delegate the `call:ended`
+  // fanout through this callback (same audience as the socket handlers).
+  private callEndedBroadcaster:
+    | ((callId: string, conversationId: string | undefined, endedEvent: CallEndedEvent) => Promise<void> | void)
+    | null = null;
+
   constructor(
     private prisma: PrismaClient,
     // CALL-RESILIENCE (item H bug class, re-opened by the 2026-07-06 P0 fix)
@@ -251,6 +258,83 @@ export class CallService {
       });
     } catch (error) {
       logger.warn('reaped-call callback failed synchronously', { callId, error });
+    }
+  }
+
+  /**
+   * P0 (bulles « Appel … en cours » orphelines) — finalise le message live
+   * après une transition terminale déclenchée par un appelant qui ne poste PAS
+   * le summary lui-même. Les handlers socket `call:end` / `call:leave` le
+   * postent explicitement ; les routes REST end/leave n'appellent que
+   * `endCall()`/`leaveCall()` et laissaient la bulle live orpheline pour
+   * toujours (GC ne re-balaye pas un CallSession déjà terminal).
+   *
+   * Réutilise le câblage reaped déjà en place (→ postCallSummaryForTerminatedCall
+   * → createCallSummaryMessage) : fire-and-forget, idempotent et auto-gardé —
+   * createCallSummaryMessage est un no-op pour un appel non-terminal et n'édite
+   * qu'une bulle encore live. Un appel redondant (chemin socket) ou un appel de
+   * groupe encore en cours est donc sans effet.
+   */
+  finalizeCallSummary(callId: string): void {
+    this.notifyReapedCall(callId);
+  }
+
+  /**
+   * Register the broadcaster that emits `call:ended` to the full termination
+   * audience (call room + conversation room + member user rooms). Wired in
+   * server.ts to `CallEventsHandler.broadcastCallEndedForTerminatedCall`
+   * (which owns `io`). Pattern mirrors `setReapedCallCallback`.
+   */
+  setCallEndedBroadcaster(
+    callback: (callId: string, conversationId: string | undefined, endedEvent: CallEndedEvent) => Promise<void> | void
+  ): void {
+    this.callEndedBroadcaster = callback;
+  }
+
+  /**
+   * Bug (parité socket) — les routes REST `DELETE /calls/:id` (end) et
+   * `.../participants/:pid` (leave) appellent endCall()/leaveCall() puis
+   * renvoient, SANS jamais diffuser `call:ended`. Contrairement aux handlers
+   * socket `call:end`/`call:leave` (broadcastCallEnded), le pair n'apprenait
+   * la fin qu'au balayage GC (~120s) : son UI WebRTC/CallKit restait « en
+   * appel » (classe d'incident 2026-07-03 que broadcastCallEnded corrige).
+   *
+   * Auto-gardé sur le statut terminal : no-op pour un leave de groupe qui
+   * continue (endedAt null, statut actif). Fire-and-forget — un broadcaster
+   * qui échoue ne casse jamais la réponse REST (parité finalizeCallSummary).
+   */
+  broadcastCallEndedIfTerminal(
+    callSession: { id: string; conversationId?: string; status?: CallStatus | string; endedAt?: Date | null; duration?: number | null; endReason?: CallEndReason | string | null } | null | undefined,
+    endedBy: string
+  ): void {
+    if (!callSession) {
+      return;
+    }
+
+    const status = callSession.status as CallStatus | undefined;
+    const isTerminal = callSession.endedAt != null || (status != null && TERMINAL_STATUSES.includes(status));
+    if (!isTerminal) {
+      return;
+    }
+
+    const broadcaster = this.callEndedBroadcaster;
+    if (!broadcaster) {
+      return;
+    }
+
+    const endedEvent: CallEndedEvent = {
+      callId: callSession.id,
+      duration: callSession.duration || 0,
+      endedBy,
+      reason: (callSession.endReason || CallEndReason.completed) as CallEndReason
+    };
+
+    try {
+      Promise.resolve(broadcaster(callSession.id, callSession.conversationId, endedEvent)).catch((error) => {
+        logger.warn('call-ended broadcaster failed', { callId: callSession.id, error });
+      });
+    } catch (error) {
+      logger.warn('call-ended broadcaster failed synchronously', { callId: callSession.id, error });
     }
   }
 
@@ -2125,9 +2209,11 @@ export class CallService {
   }
 
   /**
-   * Resolve a string reason to a Prisma CallEndReason enum
+   * Resolve a string reason to a Prisma CallEndReason enum. Public: the single
+   * normalization point for any raw client-supplied `reason` string reaching a
+   * `CallEndReason`-typed field — callers must never cast client input directly.
    */
-  private resolveEndReason(reason?: string): CallEndReason {
+  resolveEndReason(reason?: string): CallEndReason {
     switch (reason) {
       case 'missed': return CallEndReason.missed;
       case 'rejected': return CallEndReason.rejected;

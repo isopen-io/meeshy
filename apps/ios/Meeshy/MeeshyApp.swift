@@ -27,6 +27,10 @@ struct MeeshyApp: App {
     @State private var crashReportsToShow: [CrashDiagnostic] = []
     @State private var showCrashSheet = false
     @State private var hasSurfacedCrashReports = false
+    /// True once we've actually reached `.background` (socket suspended), so the
+    /// next `.active` knows to rearm. A transient `.inactive→.active` leaves it
+    /// false → no needless socket churn (#11).
+    @State private var didEnterBackground = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
@@ -471,11 +475,22 @@ struct MeeshyApp: App {
                         // incoming calls use the in-app banner (socket) instead of a
                         // VoIP push / CallKit.
                         MessageSocketManager.shared.emitAppForeground(true)
-                        Task { await handleForegroundTransition() }
+                        // Only rearm the socket + backfill if we ACTUALLY backgrounded.
+                        // A transient .inactive→.active (Control Center, notification
+                        // banner, app-switcher peek, Face ID) never suspended the
+                        // socket, so force-reconnecting a healthy socket here is pure
+                        // churn — disconnect/reconnect + the presence-refresh loop (#11).
+                        // Cold launch also lands here with the flag false: RootView's
+                        // own connect() handles the initial connection.
+                        if didEnterBackground {
+                            didEnterBackground = false
+                            Task { await handleForegroundTransition() }
+                        }
                         // Drain any mark-as-read actions the user tapped from the
                         // widget while the app was suspended.
                         Task { await WidgetActionFlusher.shared.flush() }
                     case .background:
+                        didEnterBackground = true
                         // CALL-FIX 2026-06-06 — tell the gateway we're backgrounded
                         // FIRST (while the socket is still alive, before the
                         // coordinator may suspend it) so incoming calls fall back to

@@ -25,9 +25,14 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   },
 }));
 
-jest.mock('../../../utils/logger-enhanced', () => ({
-  enhancedLogger: { child: () => ({ info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }) },
-}));
+jest.mock('../../../utils/logger-enhanced', () => {
+  const sharedLogger = { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() };
+  return { enhancedLogger: { child: () => sharedLogger } };
+});
+
+// `child()` returns the same stable instance the handler binds at import time,
+// so tests can assert on the exact logger the ReactionHandler writes to.
+const mockLogger = require('../../../utils/logger-enhanced').enhancedLogger.child();
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn((schema: any, data: any) => ({ success: true, data })),
@@ -119,7 +124,7 @@ function buildHandler(overrides: Record<string, any> = {}) {
   const notificationService = { sendNotification: jest.fn<any>() } as any;
   const reactionService = makeReactionService(overrides.reactionService);
   const prisma = makePrisma(overrides.prisma);
-  const io = makeIo();
+  const io = overrides.io ?? makeIo();
   const connectedUsers = overrides.connectedUsers ?? makeConnectedUsers();
   const socketToUser = overrides.socketToUser ?? makeSocketToUser();
 
@@ -240,6 +245,43 @@ describe('ReactionHandler', () => {
         expect.objectContaining({ event: 'reaction:removed', payload: expect.objectContaining({ emoji: '👍' }) }),
         expect.objectContaining({ event: 'reaction:added', payload: expect.objectContaining({ emoji: '🔥' }) }),
       ]));
+    });
+
+    it('routes a swap-remove broadcast rejection to logger.error instead of an escaping unhandled rejection', async () => {
+      // Single-reaction swap: the REACTION_REMOVED broadcast for the replaced
+      // emoji is `async` (it awaits normalizeConversationId, then emits). If the
+      // emit itself rejects — e.g. socket.io fails to encode the packet — that
+      // rejection must reach the handler's `.catch`, exactly like the sibling
+      // REACTION_ADDED broadcast a few lines below. Otherwise it floats free as
+      // an unhandledRejection (gateway crash under Node's default handler) and
+      // the failure is never logged. This asserts parity between the two paths.
+      const createUpdateEvent = jest.fn<any>()
+        .mockImplementation((_messageId: string, emoji: string, action: string) =>
+          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
+      const emit = jest.fn<any>((event: string) => {
+        if (event === 'reaction:removed') throw new Error('packet encode failed');
+      });
+      const io = { to: jest.fn<any>().mockReturnValue({ emit }), _emit: emit };
+      const { handler } = buildHandler({
+        io,
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({
+            reaction: { id: 'reaction-2', emoji: '🔥' },
+            replacedEmojis: ['👍'],
+          }),
+          createUpdateEvent,
+        },
+      });
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, jest.fn<any>());
+      // Let the fire-and-forget broadcast promises settle.
+      await new Promise(resolve => setImmediate(resolve));
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'reaction:add replaced-emoji broadcast failed',
+        expect.objectContaining({ conversationId: CONV_ID }),
+      );
     });
 
     it('replies idempotent success without broadcasting or notifying when addReaction reports unchanged (no-op re-react)', async () => {

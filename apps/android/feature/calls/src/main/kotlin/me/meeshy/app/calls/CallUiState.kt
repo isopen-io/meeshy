@@ -2,6 +2,7 @@ package me.meeshy.app.calls
 
 import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallEndReason
+import me.meeshy.sdk.model.call.CallRetryPolicy
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallWaitingState
 import me.meeshy.sdk.model.call.ConnectionQuality
@@ -174,6 +175,15 @@ data class CallUiState(
 
     val isEnded: Boolean
         get() = status == CallStatus.ENDED
+
+    /**
+     * True when the ended call failed transiently (Failed/ConnectionLost) and a
+     * « Réessayer » is worth offering — parité web retry-on-failure. Uses the
+     * shared [CallRetryPolicy] so the failure set stays one rule across
+     * platforms.
+     */
+    val canRetry: Boolean
+        get() = status == CallStatus.ENDED && CallRetryPolicy.isRetryable(endReason)
 }
 
 /**

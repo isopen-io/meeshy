@@ -40,14 +40,101 @@ private enum AudioOverlayConstants {
     static let iPhoneBottomPadding: CGFloat = 60
 }
 
+/// Découple la présentation d'appel (cover plein écran + pastille flottante +
+/// bulle + bannière call-waiting) du corps de `RootView` / `iPadRootView`.
+///
+/// AVANT : ces 4 modifiers lisaient `CallManager.shared` directement dans
+/// `RootView.body`, donc chaque `objectWillChange` de CallManager — tick
+/// `callDuration` 1 Hz **plus** chaque stat qualité WebRTC / ajustement bitrate —
+/// invalidait TOUT le body, y compris en arrière-plan pendant un appel. Résultat :
+/// tempête de re-layout CoreText → watchdog scene-update `0x8BADF00D`
+/// (`ProcessVisibility: Background`, budget 10 s dépassé). Prouvé par la sonde
+/// `🩺RENDER` (`RootView: _callManager changed` en rafale, `phase=BG`) + MetricKit.
+///
+/// APRÈS : l'unique `@ObservedObject callManager` vit ici. SwiftUI ne ré-évalue
+/// que `body(content:)` (les overlays d'appel, légers) et ne reconstruit JAMAIS
+/// le `content` sous-jacent (liste de conversations, NavigationStack, tabs) —
+/// celui-ci est un placeholder opaque que le framework diffe sans re-layout.
+struct CallPresentationLayer: ViewModifier {
+    @ObservedObject private var callManager = CallManager.shared
+
+    func body(content: Content) -> some View {
+        content
+            // Le `set: false` est un "minimize" (→ PiP), PAS un "end call" :
+            // swiper le cover vers le bas ne raccroche pas. Le bouton hangup de
+            // chaque UI passe explicitement par `callManager.endCall()`.
+            .fullScreenCover(isPresented: Binding(
+                get: {
+                    CallState.shouldPresentFullScreenCover(
+                        callState: callManager.callState,
+                        displayMode: callManager.displayMode
+                    )
+                },
+                set: { if !$0 { callManager.displayMode = .pip } }
+            )) {
+                CallView(callManager: callManager)
+            }
+            .overlay(alignment: .top) {
+                FloatingCallPillView(callManager: callManager)
+                    .padding(.top, MeeshySpacing.sm)
+            }
+            .overlay {
+                CallBubbleView(callManager: callManager)
+            }
+            // §7.6 — call-waiting : un 2e appel entrant pendant un appel actif.
+            // Reject termine le nouvel appel ; "end & answer" raccroche l'appel
+            // courant et accepte le nouveau. L'`.id(pending.callId)` force un
+            // remount (fresh onAppear/timer 15 s) à chaque supersession — sinon
+            // un 3e appelant réutilise l'identité du 2e et se fait auto-rejeter
+            // 5-10 s trop tôt (Audit Vague 27).
+            .overlay(alignment: .top) {
+                if callManager.showCallWaitingBanner {
+                    CallWaitingBannerView(
+                        callerName: callManager.pendingIncomingCall?.fromUsername
+                            ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
+                        isVisible: $callManager.showCallWaitingBanner,
+                        onReject: { callManager.rejectPendingCall() },
+                        onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
+                    )
+                    .id(callManager.pendingIncomingCall?.callId)
+                    .padding(.top, MeeshySpacing.sm)
+                }
+            }
+    }
+}
+
+/// Détient un `ConversationListViewModel` sans JAMAIS republier.
+///
+/// `RootView`/`iPadRootView` doivent POSSÉDER le VM (durée de vie + injection
+/// `.environmentObject` vers la liste) mais ne doivent PAS se ré-évaluer à chaque
+/// churn du VM — presence refresh, `reloadFromCache` (count=100) répété, unread
+/// counts. Or `RootView.body` ne lit AUCUN @Published du VM (seulement des
+/// `.environmentObject()` + des accès dans des closures) : l'observation venait
+/// uniquement du `@StateObject`, générant des re-render inutiles à l'idle (Instant
+/// App Principles : « Zero Unnecessary Re-render »). Ce owner n'a pas de
+/// @Published → son `objectWillChange` ne fire jamais → RootView ne re-render
+/// jamais à cause de lui. Les vues enfants observent le VM via `@EnvironmentObject`.
+@MainActor
+final class ConversationListVMOwner: ObservableObject {
+    let viewModel = ConversationListViewModel()
+}
+
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
-    @StateObject private var conversationViewModel = ConversationListViewModel()
+    // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
+    // du VM (presence, reloadFromCache) ne re-render RootView à l'idle. Exposé via
+    // la propriété calculée `conversationViewModel` ci-dessous — les 12 usages
+    // (injections + closures) restent inchangés.
+    @StateObject private var conversationVMOwner = ConversationListVMOwner()
+    private var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
     @StateObject private var router = Router()
-    @ObservedObject private var callManager = CallManager.shared
+    // CallManager n'est PLUS observé ici : sa présentation (cover + overlays) est
+    // portée par `.modifier(CallPresentationLayer())`, qui isole le churn d'appel
+    // (callDuration 1 Hz + stats qualité) hors de `RootView.body`. Cf. watchdog
+    // 0x8BADF00D. RootView ne se ré-évalue donc plus à chaque tick d'appel.
     @StateObject private var connectionStatus = ConnectionStatusViewModel()
     @ObservedObject private var notificationManager = NotificationToastManager.shared
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
@@ -547,63 +634,13 @@ struct RootView: View {
             // deep link), iOS retombe sur la transition cover standard.
             .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
         }
-        // Call presentation is split between fullScreen and PiP modes so the
-        // user can keep using the rest of the app during an active call:
-        //   - `displayMode == .fullScreen` → present `CallView` via
-        //     `.fullScreenCover` like before.
-        //   - `displayMode == .pip` → the cover dismisses and
-        //     `FloatingCallPillView` (mounted as an overlay below) takes
-        //     over. Tapping the pill or pressing its expand button bumps
-        //     `displayMode` back to `.fullScreen`, which re-presents the
-        //     cover.
-        // The Binding's `set: false` branch is now a "minimize" instead of
-        // an "end call" — swiping down on the cover should NOT terminate
-        // the call. The hangup button on either UI still routes through
-        // `callManager.endCall()` explicitly.
-        .fullScreenCover(isPresented: Binding(
-            get: {
-                CallState.shouldPresentFullScreenCover(
-                    callState: callManager.callState,
-                    displayMode: callManager.displayMode
-                )
-            },
-            set: { if !$0 { callManager.displayMode = .pip } }
-        )) {
-            CallView(callManager: callManager)
-        }
-        .overlay(alignment: .top) {
-            FloatingCallPillView(callManager: callManager)
-                .padding(.top, MeeshySpacing.sm)
-        }
-        .overlay {
-            CallBubbleView(callManager: callManager)
-        }
-        // §7.6 — call-waiting: a 2nd incoming call while one is active. Was dead
-        // code (CallManager API + CallWaitingBannerView existed but were never
-        // mounted). Reject ends the new call; "end & answer" drops the current
-        // call and accepts the new one.
-        .overlay(alignment: .top) {
-            if callManager.showCallWaitingBanner {
-                CallWaitingBannerView(
-                    callerName: callManager.pendingIncomingCall?.fromUsername
-                        ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
-                    isVisible: $callManager.showCallWaitingBanner,
-                    onReject: { callManager.rejectPendingCall() },
-                    onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
-                )
-                // Audit Vague 27 — a 3rd caller superseding a 2nd (still
-                // pending) one overwrites `pendingIncomingCall` in place
-                // without ever setting `showCallWaitingBanner` back to
-                // false-then-true, so SwiftUI reused this view's identity:
-                // `onAppear`'s 15s auto-dismiss Task (armed for the 2nd
-                // caller) kept counting down unchanged and auto-rejected the
-                // 3rd caller ~5-10s early. Keying identity to the pending
-                // call forces a remount (fresh `onAppear`/timer) on every
-                // supersession.
-                .id(callManager.pendingIncomingCall?.callId)
-                .padding(.top, MeeshySpacing.sm)
-            }
-        }
+        // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
+        // bannière call-waiting) extraite dans `CallPresentationLayer` : le tick
+        // `callDuration` 1 Hz et les stats qualité WebRTC n'invalident plus TOUT
+        // `RootView.body` (cause du watchdog 0x8BADF00D en arrière-plan pendant un
+        // appel). Toute la logique/les commentaires détaillés vivent dans le
+        // ViewModifier ci-dessus.
+        .modifier(CallPresentationLayer())
         // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
         // single-label "Synchronisation..." pill) via .safeAreaInset on the
         // NavigationStack root. Same emplacement, same chrome dimensions —

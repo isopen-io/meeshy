@@ -13,6 +13,7 @@ import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
 import { useRemoteCallAlerts } from '@/hooks/use-remote-call-alerts';
 import { useCallCaptions } from '@/hooks/use-call-captions';
+import { useCallAnalyticsReporter } from '@/hooks/use-call-analytics-reporter';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
 import {
   useAdaptiveDegradation,
@@ -127,6 +128,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // signal when the peer captures the call screen.
   const { remoteQualityDegraded, remoteScreenCapturing } = useRemoteCallAlerts(callId);
   const { captions } = useCallCaptions(callId);
+
+  // Report per-call reliability telemetry at teardown (parité iOS/Android) —
+  // the web was the one client that never emitted call:analytics, leaving the
+  // reliability dashboard blind to web calls.
+  useCallAnalyticsReporter({ callId, connectionState, qualityStats, isVideo: controls.videoEnabled });
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -438,7 +444,19 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       logger.warn('[VideoCallInterface]', 'Connect watchdog expired — ending the never-connected call', {
         callId,
       });
-      toast.error(t('calls.toasts.connectTimeout'));
+      // A never-connected call is a TRANSIENT failure — post a « Réessayer »
+      // offer (consumed by useCallRetryToast at the conversation level, which
+      // survives this teardown) instead of a dead-end toast. Fall back to the
+      // plain timeout toast if the call context is already gone.
+      const { currentCall, controls, offerCallRetry } = useCallStore.getState();
+      if (currentCall?.conversationId) {
+        offerCallRetry({
+          conversationId: currentCall.conversationId,
+          type: controls.videoEnabled ? 'video' : 'audio',
+        });
+      } else {
+        toast.error(t('calls.toasts.connectTimeout'));
+      }
       handleHangUpRef.current();
     }, CONNECT_WATCHDOG_MS);
     return () => clearTimeout(timer);

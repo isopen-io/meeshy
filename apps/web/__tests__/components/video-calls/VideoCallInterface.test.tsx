@@ -32,6 +32,7 @@ const storeState: Record<string, unknown> = {
   setLocalStream: jest.fn(),
   removeRemoteStream: jest.fn(),
   removePeerConnection: jest.fn(),
+  offerCallRetry: jest.fn(),
 };
 
 const useAdaptiveDegradationMock = jest.fn(() => ({ videoSuspended: false }));
@@ -67,6 +68,9 @@ jest.mock('@/hooks/use-remote-call-alerts', () => ({
 }));
 jest.mock('@/hooks/use-call-captions', () => ({
   useCallCaptions: () => ({ captions: [] }),
+}));
+jest.mock('@/hooks/use-call-analytics-reporter', () => ({
+  useCallAnalyticsReporter: () => {},
 }));
 jest.mock('@/hooks/use-active-peer-connection', () => ({
   useActivePeerConnection: () => null,
@@ -148,6 +152,28 @@ describe('VideoCallInterface (container)', () => {
       });
 
       expect(fakeSocket.emit).toHaveBeenCalledWith('call:leave', { callId: 'call1' });
+    } finally {
+      webrtc.connectionState = 'connected';
+      jest.useRealTimers();
+    }
+  });
+
+  it('à l’expiration du watchdog, offre un « Réessayer » pour la conversation', () => {
+    jest.useFakeTimers();
+    const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+    (storeState.offerCallRetry as jest.Mock).mockClear();
+    storeState.currentCall = { id: 'call1', conversationId: 'conv-1', participants: [] };
+    storeState.controls = { audioEnabled: true, videoEnabled: false };
+    webrtc.connectionState = 'connecting';
+    try {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => {
+        jest.advanceTimersByTime(45_000);
+      });
+
+      expect(storeState.offerCallRetry).toHaveBeenCalledWith({ conversationId: 'conv-1', type: 'audio' });
     } finally {
       webrtc.connectionState = 'connected';
       jest.useRealTimers();

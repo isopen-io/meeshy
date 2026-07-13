@@ -126,4 +126,48 @@ struct ActiveCallSessionTests {
         )
         #expect(session.remoteParticipant(currentUserId: "user-1") == nil)
     }
+
+    // --- Resilient participant decode (P1-C defence-in-depth) ---
+
+    @Test func participant_fallsBackToNestedUserId_whenTopLevelMissing() throws {
+        let json = """
+        { "user": { "id": "u2", "username": "bob", "displayName": "Bob" } }
+        """.data(using: .utf8)!
+        let p = try JSONDecoder().decode(ActiveCallParticipant.self, from: json)
+        #expect(p.userId == "u2")
+        #expect(p.user?.username == "bob")
+    }
+
+    @Test func participant_prefersTopLevelUserId_overNestedId() throws {
+        let json = """
+        { "userId": "u1", "user": { "id": "u2", "username": "bob" } }
+        """.data(using: .utf8)!
+        let p = try JSONDecoder().decode(ActiveCallParticipant.self, from: json)
+        #expect(p.userId == "u1")
+    }
+
+    @Test func participant_emptyTopLevelUserId_fallsBackToNestedId() throws {
+        let json = """
+        { "userId": "", "user": { "id": "u2", "username": "bob" } }
+        """.data(using: .utf8)!
+        let p = try JSONDecoder().decode(ActiveCallParticipant.self, from: json)
+        #expect(p.userId == "u2")
+    }
+
+    @Test func session_decodesWhenAParticipantUsesNestedUserIdFallback() throws {
+        // A degraded payload (one participant missing top-level userId) must
+        // still yield a usable remoteParticipant instead of failing the WHOLE
+        // ActiveCallSession decode and killing crash-recovery.
+        let json = """
+        {
+            "id": "call-1", "conversationId": "conv-1", "mode": "p2p", "status": "active",
+            "participants": [
+                { "userId": "user-1", "user": { "id": "user-1", "username": "alice" } },
+                { "user": { "id": "user-2", "username": "bob" } }
+            ]
+        }
+        """.data(using: .utf8)!
+        let session = try JSONDecoder().decode(ActiveCallSession.self, from: json)
+        #expect(session.remoteParticipant(currentUserId: "user-1")?.userId == "user-2")
+    }
 }

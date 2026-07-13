@@ -376,15 +376,16 @@ describe('CallEventsHandler — call:force-leave handler', () => {
 
       const handler = new CallEventsHandler(prisma);
       handler.setupCallEvents(socket as any, io, () => USER_ID);
-      // Seed a buffered offer for this callId the way `call:signal` would.
-      (handler as any).bufferedOffers.set(CALL_ID, {
+      // Seed a buffered offer for this callId the way `call:signal` would —
+      // keyed `${callId}:${to}` (see bufferOffer).
+      (handler as any).bufferedOffers.set(`${CALL_ID}:some-recipient`, {
         signal: { type: 'offer', sdp: 'v=0' },
         bufferedAt: Date.now(),
       });
 
       await handlers['call:force-leave'](FORCE_LEAVE_DATA);
 
-      expect((handler as any).bufferedOffers.has(CALL_ID)).toBe(false);
+      expect((handler as any).bufferedOffers.has(`${CALL_ID}:some-recipient`)).toBe(false);
     });
   });
 

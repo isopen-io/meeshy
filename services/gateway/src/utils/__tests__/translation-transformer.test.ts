@@ -105,4 +105,35 @@ describe('getTranslationFromJSON', () => {
     const result = getTranslationFromJSON('msg-1', noFlag, 'es');
     expect(result?.isEncrypted).toBe(false);
   });
+
+  it('matches the target language case-insensitively (upper-cased request)', () => {
+    const result = getTranslationFromJSON('msg-1', translations, 'EN');
+    expect(result).toMatchObject({
+      id: 'msg-1-en',
+      messageId: 'msg-1',
+      targetLanguage: 'en',
+      translatedContent: 'Hello',
+    });
+  });
+
+  it('normalises the returned key to the stored casing when the store is upper-cased', () => {
+    const upper: Record<string, MessageTranslationJSON> = {
+      EN: { text: 'Hello', translationModel: 'basic', createdAt: new Date('2026-01-01') },
+    };
+    const result = getTranslationFromJSON('msg-1', upper, 'en');
+    expect(result).toMatchObject({ id: 'msg-1-EN', targetLanguage: 'EN', translatedContent: 'Hello' });
+  });
+
+  it('prefers an exact-case match over a case-insensitive one', () => {
+    const mixed: Record<string, MessageTranslationJSON> = {
+      EN: { text: 'Upper', translationModel: 'basic', createdAt: new Date('2026-01-01') },
+      en: { text: 'Lower', translationModel: 'basic', createdAt: new Date('2026-01-02') },
+    };
+    const result = getTranslationFromJSON('msg-1', mixed, 'en');
+    expect(result).toMatchObject({ targetLanguage: 'en', translatedContent: 'Lower' });
+  });
+
+  it('still returns undefined when no language matches under any casing', () => {
+    expect(getTranslationFromJSON('msg-1', translations, 'DE')).toBeUndefined();
+  });
 });
