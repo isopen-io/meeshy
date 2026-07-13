@@ -113,7 +113,9 @@ struct StoryViewerView: View {
     /// l'interstitiel du switch s'affiche COMPLET (nom, bannière, mood) dès la
     /// première frame — plus d'enrichissement visible en second temps.
     @State var groupIntroCache: [String: StoryViewModel.StoryGroupIntro] = [:]
-    static let groupIntroDuration: TimeInterval = 2.2
+    /// ~1,2 s (directive user 2026-07-13) : l'intro présente l'identité sans
+    /// ralentir l'enchaînement — assez pour lire nom + présence, pas plus.
+    static let groupIntroDuration: TimeInterval = 1.2
     /// True once the visible slide's background media is fully usable (real
     /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
     /// and the centered loading spinner.
@@ -515,8 +517,11 @@ struct StoryViewerView: View {
             slideTimer.markContentReady(slideId: id)
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
-            // U2 — tick haptique léger au passage de slide (parité Instagram).
-            HapticFeedback.light()
+            // Pas de haptic au changement de slide : ce onChange fire pour
+            // TOUTE navigation (auto-advance compris) et doublait le tick du
+            // point de geste — 2 à 3 vibrations par slide qui ralentissaient
+            // la lecture (retour user 2026-07-13). Le tick unique vit dans
+            // le geste manuel (+Canvas touchUp, commit de swipe de groupe).
             // U6 — VoiceOver : annonce du changement de slide (« Story 2 sur
             // 5 ») — sans elle, un utilisateur non-voyant n'a AUCUN signal
             // que le contenu vient de changer sous ses doigts.
@@ -540,7 +545,7 @@ struct StoryViewerView: View {
             transitionEngagement(to: currentStory)
         }
         // Interstitiel d'identité inter-groupes — au-dessus du canvas ET des
-        // contrôles (identité pleine pendant 2,2 s, tap = skip).
+        // contrôles (identité pleine pendant ~1,2 s, tap = skip).
         .overlay {
             if showGroupIntro, let intro = groupIntroData {
                 StoryGroupIntroOverlay(
@@ -555,6 +560,12 @@ struct StoryViewerView: View {
                     // auteur hors contacts.
                     presence: PresenceManager.shared.presenceMap[intro.userId]
                         ?? currentGroup?.authorPresence,
+                    // Détail « en ligne » réservé aux amis (directive user
+                    // 2026-07-13) : lookup O(1) synchrone, primitive Bool
+                    // descendue à la leaf view (règle "Zero Unnecessary
+                    // Re-render" — pas d'@ObservedObject sur le singleton
+                    // dans StoryGroupIntroOverlay).
+                    isFriend: FriendshipCache.shared.isFriend(intro.userId),
                     onSkip: { skipGroupIntro() }
                 )
                 .transition(.opacity)
@@ -1122,6 +1133,7 @@ struct StoryViewerView: View {
             isStoryCommentsEmpty: storyComments.isEmpty,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
+            storyHasBackgroundAudio: storyHasBackgroundAudio,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
             onReplyToStory: onReplyToStory,
@@ -1335,6 +1347,20 @@ struct StoryViewerView: View {
         )
     }
 
+    /// `true` quand la slide courante POSSÈDE un audio de fond — pilote la
+    /// note musicale affichée après la date dans le header. La note signale
+    /// la PRÉSENCE de l'audio de fond, indépendamment du mute global ou du
+    /// moment de la timeline où il joue (directive user 2026-07-13, précision
+    /// itération 2). Délègue à `StoryAudioAvailability.hasBackgroundAudioTrack`
+    /// (SDK, single source of truth) plutôt que de réinliner le prédicat.
+    var storyHasBackgroundAudio: Bool { // internal for cross-file extension access
+        guard let story = currentStory else { return false }
+        return StoryAudioAvailability.hasBackgroundAudioTrack(
+            effects: story.storyEffects,
+            backgroundAudio: story.backgroundAudio
+        )
+    }
+
     /// Probes each foreground video of the current slide for a real audio track.
     /// Until a video is confirmed to carry audio it does NOT count toward
     /// `storyHasAudibleSound`, so the sound button never appears for a clip that
@@ -1467,7 +1493,7 @@ extension StoryViewerView {
     /// Présente l'interstitiel d'identité au passage au groupe d'une AUTRE
     /// personne : placeholder immédiat (username/avatar du groupe, déjà en
     /// main — cache-first), enrichi async (nom complet, bannière, mood) par
-    /// `resolveGroupIntro` PENDANT l'affichage. Dismiss auto à 2,2 s ; le tap
+    /// `resolveGroupIntro` PENDANT l'affichage. Dismiss auto à 1,2 s ; le tap
     /// skippe. Mes propres stories et le mode preview n'ont pas d'interstitiel.
     /// Le gel de lecture passe par `shouldPauseTimer || showGroupIntro`
     /// (timer + canvas + audio gelés en phase, reprise sans saut).
@@ -1543,6 +1569,12 @@ private struct StoryGroupIntroOverlay: View {
     let avatarURL: String?
     let avatarColor: String
     let presence: UserPresence?
+    /// `true` quand l'auteur du groupe est un ami — gate le détail de
+    /// présence (« En ligne » / « Actif·ve récemment » / « Absent·e ») dans
+    /// `presenceBadge`. Directive user 2026-07-13 : le statut « en ligne »
+    /// est une information réservée aux amis, pas affichée pour un auteur
+    /// hors contacts.
+    let isFriend: Bool
     let onSkip: () -> Void
 
     var body: some View {
@@ -1570,16 +1602,33 @@ private struct StoryGroupIntroOverlay: View {
                                   defaultValue: "Touchez pour passer à la story"))
     }
 
+    /// Fallback UNIQUE (pas de banner / banner en échec ou en chargement) —
+    /// une seule définition consommée par les deux branches de
+    /// `bannerBackground` pour qu'elles ne puissent jamais diverger visuellement.
+    private var avatarColorFallbackGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: avatarColor), .black],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+    }
+
     private var bannerBackground: some View {
         Group {
             if let banner = intro.bannerURL, !banner.isEmpty {
-                CachedAsyncImage(url: banner, thumbHash: intro.bannerThumbHash)
-                    .scaledToFill()
+                // `showsStatusOverlays: false` : en échec/chargement de la
+                // bannière, AUCUN spinner ni bouton Retry ne doit saigner au
+                // centre de l'écran sous l'avatar (IMG_1155/1158, directive
+                // user 2026-07-13) — le fallback reste le gradient/thumbHash.
+                CachedAsyncImage(
+                    url: banner,
+                    thumbHash: intro.bannerThumbHash,
+                    showsStatusOverlays: false
+                ) {
+                    avatarColorFallbackGradient
+                }
+                .scaledToFill()
             } else {
-                LinearGradient(
-                    colors: [Color(hex: avatarColor), .black],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
+                avatarColorFallbackGradient
             }
         }
     }
@@ -1605,7 +1654,9 @@ private struct StoryGroupIntroOverlay: View {
                         .foregroundStyle(.white.opacity(0.75))
                 }
             }
-            presenceBadge
+            if isFriend {
+                presenceBadge
+            }
             if let emoji = intro.moodEmoji {
                 HStack(spacing: 8) {
                     Text(emoji).font(.title3)
@@ -1652,7 +1703,9 @@ private struct StoryGroupIntroOverlay: View {
 
     private var accessibilitySummary: String {
         var parts = [intro.displayName ?? intro.username]
-        parts.append(presenceLabel(presence?.state ?? .offline))
+        // Même règle que le badge visuel : le statut de présence n'est
+        // annoncé à VoiceOver que pour un ami.
+        if isFriend { parts.append(presenceLabel(presence?.state ?? .offline)) }
         if let message = intro.moodMessage { parts.append(message) }
         return parts.joined(separator: ", ")
     }

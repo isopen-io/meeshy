@@ -253,19 +253,6 @@ extension StoryReaderRepresentable {
                   onContentProgress: nil)
     }
 
-    /// Construct from a story `FeedPost` (post-detail inline rendering).
-    /// Audio active by default; `isPaused` is driven by the host for
-    /// viewport-visibility + call-aware pausing.
-    public init(feedPost: FeedPost,
-                preferredContentLanguages: [String]? = nil,
-                mute: Bool = false,
-                isPaused: Bool = false) {
-        self.init(story: StoryItem(feedPost: feedPost),
-                  preferredContentLanguages: preferredContentLanguages ?? [],
-                  mute: mute,
-                  isPaused: isPaused)
-    }
-
     /// Construct from an `APIPost` (used in feed contexts where stories arrive
     /// as posts). Converts `APIPostMedia` → `FeedMedia` inline.
     public init(post: APIPost,

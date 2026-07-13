@@ -14,6 +14,13 @@ public struct CachedAsyncImage<Placeholder: View>: View {
     /// placeholder — the bubble fills in instantly with a recognisable preview
     /// rather than an empty shimmer while the network fetch runs.
     public let thumbHash: String?
+    /// When `false`, the loading spinner and the failure retry button are
+    /// never rendered — the view silently stays on the thumbHash blur or the
+    /// caller's placeholder. Use for decorative surfaces (fullscreen
+    /// backdrops, interstitials) where a centered spinner/retry control would
+    /// read as UI chrome bleeding through the content. Defaults to `true`
+    /// (existing behaviour).
+    public let showsStatusOverlays: Bool
     public let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
@@ -26,11 +33,13 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         url urlString: String?,
         targetSize: CGSize? = nil,
         thumbHash: String? = nil,
+        showsStatusOverlays: Bool = true,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.urlString = urlString
         self.targetSize = targetSize
         self.thumbHash = thumbHash
+        self.showsStatusOverlays = showsStatusOverlays
         self.placeholder = placeholder
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
@@ -55,23 +64,25 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                 Image(uiImage: image).resizable()
             } else if hasFailed {
                 thumbHashBackdrop {
-                    Button {
-                        hasFailed = false
-                        retryCount += 1
-                    } label: {
-                        VStack(spacing: 4) {
-                            Image(systemName: "arrow.clockwise.circle.fill")
-                                .font(.system(size: 22, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.7))
-                            Text(String(localized: "common.retry", defaultValue: "Retry", bundle: .module))
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.5))
+                    if showsStatusOverlays {
+                        Button {
+                            hasFailed = false
+                            retryCount += 1
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: "arrow.clockwise.circle.fill")
+                                    .font(.system(size: 22, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                Text(String(localized: "common.retry", defaultValue: "Retry", bundle: .module))
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(.white.opacity(0.5))
+                            }
                         }
                     }
                 }
             } else {
                 thumbHashBackdrop {
-                    if isLoading { ProgressView().tint(.white.opacity(0.6)) }
+                    if isLoading && showsStatusOverlays { ProgressView().tint(.white.opacity(0.6)) }
                 }
             }
         }

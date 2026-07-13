@@ -518,6 +518,9 @@ struct StoryHeaderView: View {
     let currentGroup: StoryGroup?
     let currentStory: StoryItem?
     let isOwnStory: Bool
+    /// Primitive passée par le parent (règle « Zero Unnecessary Re-render » —
+    /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
+    let hasBackgroundAudio: Bool
 
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
@@ -576,6 +579,28 @@ struct StoryHeaderView: View {
     @Binding var chromeVisible: Bool
 
     @State private var avatarLongPressGlow = false
+    /// Cache du label VoiceOver du bouton profil auteur — recalculé
+    /// UNIQUEMENT au changement de slide (`.onChange(of: currentStory?.id)`),
+    /// jamais inline dans `body`. `StoryHeaderView` est reconstruit à chaque
+    /// tick de la barre de progression (jusqu'à 60 Hz, cf.
+    /// `StoryViewerView.storyCard(geometry:)`) — sans ce cache, `String
+    /// (format:)` + plusieurs `String(localized:)` s'exécutaient des
+    /// dizaines de fois par seconde pour un contenu inchangé (post-revue
+    /// 2026-07-13, angle optimisation).
+    @State private var cachedProfileLabel: String = ""
+
+    /// Label VoiceOver du bouton profil auteur — inclut l'attribution de
+    /// republication (icône + @handle visuels que ce label unique remplace).
+    private func computeProfileLabel(for group: StoryGroup) -> String {
+        guard let story = currentStory, story.repostOfId != nil,
+              let handle = story.repostAuthorUsername ?? story.repostAuthorName else {
+            return String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main)
+        }
+        return String(
+            format: String(localized: "story.viewer.a11y.profileOf.repost", defaultValue: "Profil de %@, republication de @%@", bundle: .main),
+            group.username, handle
+        )
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -639,9 +664,28 @@ struct StoryHeaderView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(group.username)
-                                .font(MeeshyFont.relative(15, weight: .bold))
-                                .foregroundColor(.white)
+                            HStack(spacing: 5) {
+                                Text(group.username)
+                                    .font(MeeshyFont.relative(15, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+
+                                // Republication : icône repost + "@handle" à la
+                                // SUITE du nom, en graisse normale, SANS « via »
+                                // (l'icône dit déjà la republication — directive
+                                // user 2026-07-13, IMG_1154).
+                                if let story = currentStory, story.repostOfId != nil {
+                                    Image(systemName: "arrow.2.squarepath")
+                                        .font(MeeshyFont.relative(10, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.6))
+                                    if let handle = story.repostAuthorUsername ?? story.repostAuthorName {
+                                        Text("@\(handle)")
+                                            .font(MeeshyFont.relative(12, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.65))
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
 
                             if let story = currentStory {
                                 HStack(spacing: 4) {
@@ -649,15 +693,15 @@ struct StoryHeaderView: View {
                                         .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
 
-                                    if story.repostOfId != nil {
-                                        Image(systemName: "arrow.2.squarepath")
+                                    // Note musicale juste après la date : signale la
+                                    // PRÉSENCE d'un audio de fond sur la story — pas
+                                    // son état de lecture (ni mute, ni timing de la
+                                    // timeline). Directive user 2026-07-13.
+                                    if hasBackgroundAudio {
+                                        Image(systemName: "music.note")
                                             .font(MeeshyFont.relative(10, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.6))
-                                        if let authorName = story.repostAuthorName {
-                                            Text(String(localized: "story.viewer.via", defaultValue: "via @\(authorName)", bundle: .main))
-                                                .font(MeeshyFont.relative(11, weight: .medium))
-                                                .foregroundColor(.white.opacity(0.55))
-                                        }
+                                            .foregroundColor(.white.opacity(0.7))
+                                            .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
                                     }
 
                                     if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {
@@ -678,8 +722,16 @@ struct StoryHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(minHeight: 44)
-                .accessibilityLabel(String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main))
+                // Le bouton porte un SEUL accessibilityLabel qui remplace tout
+                // le contenu de son label closure (icône repost + @handle
+                // inclus) — VoiceOver ne lirait jamais la republication sans
+                // l'inclure explicitement ici (post-revue 2026-07-13).
+                .accessibilityLabel(cachedProfileLabel)
                 .accessibilityHint(String(localized: "story.viewer.a11y.profileOf.hint", defaultValue: "Ouvre le profil de \(group.username)", bundle: .main))
+                .onAppear { cachedProfileLabel = computeProfileLabel(for: group) }
+                .adaptiveOnChange(of: currentStory?.id) { _, _ in
+                    cachedProfileLabel = computeProfileLabel(for: group)
+                }
             }
 
             Spacer()

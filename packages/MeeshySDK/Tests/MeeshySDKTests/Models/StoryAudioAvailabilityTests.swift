@@ -119,4 +119,42 @@ final class StoryAudioAvailabilityTests: XCTestCase {
         let result = StoryAudioAvailability.videosNeedingAudioProbe(effects: effects)
         XCTAssertEqual(result.map(\.id), ["v1"])
     }
+
+    // MARK: - hasBackgroundAudioTrack (header music-note presence, distinct
+    // from hasAudibleSound's sound-button predicate — voice notes / audio
+    // objects / audible video must NOT trip this one).
+
+    private func makeBackgroundAudioEntry() -> StoryBackgroundAudioEntry {
+        StoryBackgroundAudioEntry(id: "bg-entry", title: "Track", duration: 30, fileUrl: "https://cdn/track.mp3")
+    }
+
+    func test_hasBackgroundAudioTrack_nilEffectsAndEntry_returnsFalse() {
+        XCTAssertFalse(StoryAudioAvailability.hasBackgroundAudioTrack(effects: nil, backgroundAudio: nil))
+    }
+
+    func test_hasBackgroundAudioTrack_storyLevelEntry_returnsTrueRegardlessOfEffects() {
+        XCTAssertTrue(StoryAudioAvailability.hasBackgroundAudioTrack(effects: nil, backgroundAudio: makeBackgroundAudioEntry()))
+    }
+
+    func test_hasBackgroundAudioTrack_effectsBackgroundAudioId_volumeNil_returnsTrue() {
+        let effects = StoryEffects(backgroundAudioId: "bg-1", backgroundAudioVolume: nil)
+        XCTAssertTrue(StoryAudioAvailability.hasBackgroundAudioTrack(effects: effects, backgroundAudio: nil))
+    }
+
+    func test_hasBackgroundAudioTrack_effectsBackgroundAudioId_volumeZero_returnsFalse() {
+        let effects = StoryEffects(backgroundAudioId: "bg-1", backgroundAudioVolume: 0)
+        XCTAssertFalse(StoryAudioAvailability.hasBackgroundAudioTrack(effects: effects, backgroundAudio: nil))
+    }
+
+    func test_hasBackgroundAudioTrack_voiceAttachmentOnly_returnsFalse() {
+        // Distinguishes from hasAudibleSound: a voice note is audible sound
+        // but is NOT a "background audio" track for the header icon's purpose.
+        let effects = StoryEffects(voiceAttachmentId: "voice-1")
+        XCTAssertFalse(StoryAudioAvailability.hasBackgroundAudioTrack(effects: effects, backgroundAudio: nil))
+    }
+
+    func test_hasBackgroundAudioTrack_audibleVideoOnly_returnsFalse() {
+        let effects = StoryEffects(mediaObjects: [makeVideo(id: "v1", volume: 1.0)])
+        XCTAssertFalse(StoryAudioAvailability.hasBackgroundAudioTrack(effects: effects, backgroundAudio: nil))
+    }
 }

@@ -203,8 +203,14 @@ struct StoryGestureOverlayView: View {
                             holdActive = false
                             HapticFeedback.medium()
                         case .navigatePrevious:
+                            // Tick UNIQUE par navigation manuelle — les
+                            // chemins goToNext/goToPrevious et le onChange
+                            // de slide ne vibrent plus (l'auto-advance passe
+                            // par eux et doit rester silencieux).
+                            HapticFeedback.light()
                             onPrevious()
                         case .navigateNext:
+                            HapticFeedback.light()
                             onNext()
                         case .resumeFromPause:
                             break  // décidé au touchDown, pas au touchUp
@@ -630,6 +636,11 @@ struct StoryCardView: View {
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
+    /// Présence d'un audio de fond sur la slide — pilote la note musicale du
+    /// header (`StoryHeaderView`). Primitive calculée par le viewer parent
+    /// (`StoryViewerView.storyHasBackgroundAudio`) et descendue en `let`
+    /// jusqu'à la leaf view, comme `storyHasAudibleSound` juste au-dessus.
+    let storyHasBackgroundAudio: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
     let onReplyToStory: ((ReplyContext) -> Void)?
@@ -817,10 +828,13 @@ struct StoryCardView: View {
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
             state: canvasPresentation,
             cardedCornerRadius: 22,
-            // Directive user 2026-07-04 : la carte se place DIRECTEMENT sous
-            // la ligne d'expiration — le mou vertical va en bas, plus de vide
-            // entre le header et la story.
-            verticalAlignment: .top,
+            // Portrait : la carte se place DIRECTEMENT sous la ligne
+            // d'expiration (directive 2026-07-04) — le mou vertical va en bas.
+            // Paysage (16:9) : la carte est CENTRÉE dans la région libre
+            // (directive 2026-07-13 « la position des vidéos landscape doit
+            // être au centre ») — collée au header elle laissait tout le vide
+            // en bas de l'écran.
+            verticalAlignment: readerCanvasRatio > 1 ? .center : .top,
             canvasRatio: readerCanvasRatio))
     }
 
@@ -970,11 +984,22 @@ struct StoryCardView: View {
                     .accessibilityAction(named: String(
                         localized: "story.viewer.a11y.next",
                         defaultValue: "Story suivante"
-                    )) { goToNext() }
+                    )) {
+                        // Rotor VoiceOver = navigation MANUELLE au même titre
+                        // qu'un tap — sans ce tick, un utilisateur VoiceOver
+                        // perdait tout retour haptique de navigation (post-revue
+                        // 2026-07-13 : seuls les deux gestes tactiles avaient
+                        // été raccordés au tick unique).
+                        HapticFeedback.light()
+                        goToNext()
+                    }
                     .accessibilityAction(named: String(
                         localized: "story.viewer.a11y.previous",
                         defaultValue: "Story précédente"
-                    )) { goToPrevious() }
+                    )) {
+                        HapticFeedback.light()
+                        goToPrevious()
+                    }
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, `geometry.size.height` étirait le canvas
                     // hors ratio design et décalait visuellement le contenu.
@@ -1216,6 +1241,7 @@ struct StoryCardView: View {
                     currentGroup: currentGroup,
                     currentStory: currentStory,
                     isOwnStory: isOwnStory,
+                    hasBackgroundAudio: storyHasBackgroundAudio,
                     selectedProfileUser: $selectedProfileUser,
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
@@ -1560,19 +1586,16 @@ struct StoryCardView: View {
         stallIndicatorGraceTask?.cancel()
         stallIndicatorGraceTask = nil
         if progressing {
-            // U2 — reprise perceptible au toucher UNIQUEMENT si le gel avait
-            // été montré (pas de haptic sur les micro-stalls absorbés par la
-            // grâce ci-dessous).
-            if showStallIndicator { HapticFeedback.light() }
             withAnimation(.easeOut(duration: 0.15)) { showStallIndicator = false }
             return
         }
         stallIndicatorGraceTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
+            // Signal VISUEL uniquement : les haptics de stall/reprise
+            // s'empilaient sur celle de navigation et hachaient la lecture
+            // (retour user 2026-07-13) — le spinner suffit.
             withAnimation(.easeIn(duration: 0.2)) { showStallIndicator = true }
-            // U2 — le gel devient perceptible en même temps que le spinner.
-            HapticFeedback.light()
         }
     }
 

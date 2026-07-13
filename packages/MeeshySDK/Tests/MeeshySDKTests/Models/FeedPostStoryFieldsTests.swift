@@ -88,4 +88,91 @@ final class FeedPostStoryFieldsTests: XCTestCase {
         XCTAssertNotNil(item.storyEffects)
         XCTAssertEqual(item.audioUrl, "https://cdn/voice.mp3")
     }
+
+    // MARK: - Republication de story (fallback source)
+
+    private func makeStoryRepostSource(
+        id: String = "src1",
+        effects: StoryEffects? = StoryEffects(),
+        media: [FeedMedia] = [],
+        audioUrl: String? = nil
+    ) -> RepostContent {
+        RepostContent(
+            id: id, author: "J. Charles", authorId: "u9", authorUsername: "jcharles",
+            content: "original caption", type: "STORY",
+            audioUrl: audioUrl, storyEffects: effects, media: media
+        )
+    }
+
+    func test_storyItem_fromFeedPost_storyRepostWithoutOwnContent_fallsBackToSource() {
+        let sourceMedia = FeedMedia.image()
+        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "")
+        post.repost = makeStoryRepostSource(media: [sourceMedia], audioUrl: "https://cdn/bg.mp3")
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertNotNil(item.storyEffects)
+        XCTAssertEqual(item.media.map(\.id), [sourceMedia.id])
+        XCTAssertEqual(item.audioUrl, "https://cdn/bg.mp3")
+        XCTAssertEqual(item.repostOfId, "src1")
+        XCTAssertEqual(item.repostAuthorName, "J. Charles")
+        XCTAssertEqual(item.repostAuthorUsername, "jcharles")
+    }
+
+    /// Politique couplée — alignée sur `toStoryGroups` (StoryModels.swift, la
+    /// cascade API/tray/viewer équivalente) : un post qui apporte SES
+    /// PROPRES médias les affiche exclusivement, il ne les fusionne PAS avec
+    /// ceux de la source. Un merge divergerait silencieusement du chemin
+    /// tray/viewer pour un même repost (post-revue 2026-07-13).
+    func test_storyItem_fromFeedPost_storyRepostWithOwnMedia_ownMediaWinsExclusively() {
+        let ownMedia = FeedMedia.image()
+        let sourceMedia = FeedMedia.image()
+        var ownEffects = StoryEffects()
+        ownEffects.backgroundAudioId = "own-bg"
+        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "mon ajout")
+        post.storyEffects = ownEffects
+        post.media = [ownMedia]
+        post.repost = makeStoryRepostSource(media: [sourceMedia])
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertEqual(item.storyEffects?.backgroundAudioId, "own-bg")
+        XCTAssertEqual(item.media.map(\.id), [ownMedia.id])
+        XCTAssertEqual(item.content, "mon ajout")
+    }
+
+    /// Régression ciblée (revue 2026-07-13, itération post-PR) : un repost
+    /// qui ajoute SES PROPRES médias mais n'a PAS d'effects propres ne doit
+    /// JAMAIS mélanger media=own + storyEffects=source — les `mediaObjects`/
+    /// `audioPlayerObjects` de la source référencent leurs médias par
+    /// `postMediaId`, qui ne matcheraient plus rien dans `media=own` et
+    /// casseraient silencieusement toute résolution audio/vidéo. `media` et
+    /// `storyEffects` doivent provenir de la MÊME origine (couplés via
+    /// `hasOwnContent`), jamais résolus indépendamment.
+    func test_storyItem_fromFeedPost_ownMediaWithoutOwnEffects_doesNotMixSourceEffects() {
+        let ownMedia = FeedMedia.image()
+        let sourceMedia = FeedMedia.image()
+        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "")
+        post.media = [ownMedia]
+        post.repost = makeStoryRepostSource(media: [sourceMedia])
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertEqual(item.media.map(\.id), [ownMedia.id])
+        XCTAssertNil(item.storyEffects, "les effects ne doivent PAS retomber sur la source quand le media est propre — sinon les postMediaId référencés ne correspondent plus à rien dans `media`")
+    }
+
+    func test_storyItem_fromFeedPost_nonStoryRepost_noFallback() {
+        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "")
+        post.repost = RepostContent(
+            id: "post1", author: "J. Charles", content: "plain post",
+            type: "POST", storyEffects: StoryEffects(), media: [FeedMedia.image()]
+        )
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertNil(item.storyEffects)
+        XCTAssertTrue(item.media.isEmpty)
+        XCTAssertNil(item.repostOfId)
+    }
 }

@@ -1656,6 +1656,11 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public let repostOfId: String?
     public let originalRepostOfId: String?
     public let repostAuthorName: String?
+    /// @handle de l'auteur original d'une republication — affiché à la suite
+    /// du nom de l'auteur (icône repost + "@handle", sans « via »). Optionnel :
+    /// les payloads/rows antérieurs décodent en nil et l'UI retombe sur
+    /// `repostAuthorName`.
+    public let repostAuthorUsername: String?
     public let visibility: String?
     public let audioUrl: String?
     public var isViewed: Bool
@@ -1740,6 +1745,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
                 createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil,
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
+                repostAuthorUsername: String? = nil,
                 visibility: String? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
@@ -1749,6 +1755,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
         self.originalRepostOfId = originalRepostOfId
         self.repostAuthorName = repostAuthorName
+        self.repostAuthorUsername = repostAuthorUsername
         self.visibility = visibility; self.audioUrl = audioUrl
         self.isViewed = isViewed; self.viewedAt = viewedAt; self.updatedAt = updatedAt
         self.translations = translations; self.backgroundAudio = backgroundAudio
@@ -1802,6 +1809,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             id: id, content: content, media: media, storyEffects: effects,
             createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
             originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
+            repostAuthorUsername: repostAuthorUsername,
             visibility: visibility, audioUrl: audioUrl, isViewed: isViewed,
             translations: self.translations,
             backgroundAudio: backgroundAudio,
@@ -1914,9 +1922,19 @@ extension Array where Element == APIPost {
             // feed embed already resolves this via `RepostContent`; this aligns the
             // tray/viewer path. Reported 2026-06-26 « la republication ne joue pas
             // la story comme si c'était la mienne ».
+            //
+            // `media` et `storyEffects` sont couplés en une seule décision
+            // (`hasOwnContent`) — jamais résolus indépendamment. Les
+            // `mediaObjects`/`audioPlayerObjects` des effects référencent
+            // leurs médias par `postMediaId` ; mélanger des effects de la
+            // SOURCE avec des médias PROPRES casserait silencieusement toute
+            // résolution audio/vidéo (même durcissement que `StoryItem
+            // (feedPost:)` dans FeedModels.swift — single source de la
+            // politique de fallback, post-revue 2026-07-13).
             let repostSource = post.repostOf
             let ownMedia = post.media ?? []
-            let mediaSource: [APIPostMedia] = ownMedia.isEmpty ? (repostSource?.media ?? []) : ownMedia
+            let hasOwnContent = !ownMedia.isEmpty || post.storyEffects != nil
+            let mediaSource: [APIPostMedia] = hasOwnContent ? ownMedia : (repostSource?.media ?? [])
             let media: [FeedMedia] = mediaSource.map { m in
                 // Propage `thumbnailUrl` + `thumbHash` du gateway — sinon le
                 // tray (`StoryTrayView.latestStoryThumbnailURL`) tombe sur
@@ -1935,11 +1953,12 @@ extension Array where Element == APIPost {
                 ?? Calendar.current.date(byAdding: .hour, value: 21, to: post.createdAt)
             let totalReactions = post.reactionSummary?.values.reduce(0, +) ?? 0
             let item = StoryItem(id: post.id, content: post.content, media: media,
-                                 storyEffects: post.storyEffects ?? repostSource?.storyEffects,
+                                 storyEffects: hasOwnContent ? post.storyEffects : repostSource?.storyEffects,
                                  createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
                                  repostOfId: post.repostOf?.id,
                                  originalRepostOfId: post.originalRepostOfId,
                                  repostAuthorName: post.repostOf?.author.name,
+                                 repostAuthorUsername: post.repostOf?.author.username,
                                  visibility: post.visibility,
                                  audioUrl: post.audioUrl ?? repostSource?.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,

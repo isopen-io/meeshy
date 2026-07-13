@@ -53,4 +53,34 @@ public enum StoryAudioAvailability {
     public static func videosNeedingAudioProbe(effects: StoryEffects?) -> [StoryMediaObject] {
         (effects?.mediaObjects ?? []).filter { $0.kind == .video && $0.volume > 0 }
     }
+
+    /// Single source of truth for whether a slide **carries** a background
+    /// audio track — used by the header's music-note indicator, which signals
+    /// PRESENCE (not playback state, not mute state: directive user
+    /// 2026-07-13). Deliberately separate from `hasAudibleSound` (the
+    /// sound-button predicate): the two answer different questions and must
+    /// stay independently evolvable — `hasAudibleSound` also counts voice
+    /// notes, audio-player objects and audible video, none of which are a
+    /// "background audio" in the product sense this icon represents.
+    /// - Parameters:
+    ///   - effects: the story's effects payload — checked for the
+    ///     `backgroundAudioId` field (non-zero volume). This is the ONLY
+    ///     signal populated by the current production decode path
+    ///     (`toStoryGroups`, StoryModels.swift) — `APIPost` has no
+    ///     `backgroundAudio` field, so the parameter below is always `nil`
+    ///     for network-fetched stories today.
+    ///   - backgroundAudio: the story-level `StoryBackgroundAudioEntry` (an
+    ///     audio-library entry, distinct from the effects field above) —
+    ///     when present, always counts (it carries no independent volume
+    ///     field). Forward-looking: no production call site currently
+    ///     populates `StoryItem.backgroundAudio`, but the field already
+    ///     drives `backgroundAudioBadge` in the reader UI, so this check
+    ///     stays wired rather than silently dropped — verify at the API
+    ///     layer before assuming this branch is live for a given payload.
+    public static func hasBackgroundAudioTrack(effects: StoryEffects?,
+                                                backgroundAudio: StoryBackgroundAudioEntry?) -> Bool {
+        if backgroundAudio != nil { return true }
+        guard let effects else { return false }
+        return effects.backgroundAudioId != nil && (effects.backgroundAudioVolume ?? 1) > 0
+    }
 }
