@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Combine
 import MeeshySDK
 
@@ -18,35 +19,35 @@ public enum RegistrationStep: Int, CaseIterable, Identifiable {
 
     public var funHeader: String {
         switch self {
-        case .pseudo: return "C'est comment mon gars?"
-        case .phone: return "Ton numero pour le kwatt!"
-        case .email: return "Ton adresse la, c'est quoi?"
-        case .identity: return "Dis-moi ton nom!"
-        case .password: return "Mets un code beton!"
-        case .language: return "Tu parles quoi meme?"
-        case .profile: return "Montre-toi un peu!"
-        case .recap: return "On est ensemble!"
+        case .pseudo: return "Un pseudo unique, comme toi"
+        case .phone: return "Ton numéro, ta clé de secours"
+        case .email: return "Ton email, ton filet de sécurité"
+        case .identity: return "Dis-nous qui tu es"
+        case .password: return "Mets un code béton!"
+        case .language: return "Parle ta langue, on traduit"
+        case .profile: return "Montre-toi sous ton plus beau jour"
+        case .recap: return "Le monde t'attend!"
         }
     }
 
     public var funSubtitle: String {
         switch self {
         case .pseudo:
-            return "Choisis un nom de boss que tout Meeshy va connaitre! Sois creatif!"
+            return "Choisis le nom que le monde va retenir — de Douala à Paris, de São Paulo à Tokyo. Sois créatif!"
         case .phone:
-            return "Optionnel. Permet la recuperation du compte si tu perds ton mot de passe."
+            return "Il vérifie que ton compte est unique, sécurise tes engagements et te le rend si tu perds l'accès. Jamais affiché publiquement."
         case .email:
-            return "Ton email c'est ta carte d'identite sur internet. On va pas te spam!"
+            return "Indispensable pour récupérer ton compte et confirmer tes engagements. Zéro spam, promis!"
         case .identity:
-            return "Ton vrai nom pour que tes amis te reconnaissent. On est entre nous!"
+            return "Ton vrai nom, c'est ce qui permet à tes proches de te retrouver — et de prouver que ton compte est bien à toi."
         case .password:
-            return "Faut que ce soit fort comme le ndole de maman! Minimum 8 caracteres!"
+            return "Faut que ce soit fort comme le ndolé de maman! Minimum 8 caractères!"
         case .language:
-            return "Choisis ta langue principale et ta langue regionale. Meeshy traduit tout automatiquement!"
+            return "Choisis ta langue, Meeshy traduit tout: tes amis du Sénégal, du Canada, du Brésil, du Japon ou d'Australie te liront dans la leur."
         case .profile:
-            return "Dis au monde qui tu es! C'est optionnel mais ca fait du bien."
+            return "Une belle photo et une bannière soignée ouvrent toutes les portes: c'est comme ça qu'on rencontre la crème de la crème, ici et sur les 5 continents."
         case .recap:
-            return "Tu es dedans maintenant! Bienvenue dans la famille Meeshy!"
+            return "Tu y es! Des rencontres t'attendent sur les 5 continents. Bienvenue dans la famille Meeshy!"
         }
     }
 
@@ -100,6 +101,8 @@ public final class RegistrationViewModel: ObservableObject {
     @Published public var systemLanguage = "fr"
     @Published public var regionalLanguage = "fr"
     @Published public var bio = ""
+    @Published public var profileImage: UIImage?
+    @Published public var bannerImage: UIImage?
     @Published public var acceptTerms = false
 
     // MARK: - API Validation State
