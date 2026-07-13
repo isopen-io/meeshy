@@ -27,6 +27,7 @@ const mockLeaveCall = jest.fn<any>();
 const mockEndCall = jest.fn<any>();
 const mockClearRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
+const mockForceEndOrphanedCallSession = jest.fn<any>();
 const mockResolveEndReason = jest.fn((reason?: string) => {
   switch (reason) {
     case 'missed': return 'missed';
@@ -46,6 +47,7 @@ jest.mock('../../../services/CallService', () => ({
     endCall: mockEndCall,
     clearRingingTimeout: mockClearRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
+    forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
     updateCallStatus: jest.fn<any>().mockResolvedValue(undefined),
     getIceServerTtl: jest.fn<any>().mockReturnValue(86400),
     resolveEndReason: mockResolveEndReason,
@@ -231,6 +233,29 @@ describe('CallEventsHandler — signalSessionCache invalidated on leave/end', ()
     mockEndCall.mockResolvedValue(makeEndedSession());
     await handlers['call:end']({ callId: CALL_ID, reason: 'completed' }, jest.fn<any>());
 
+    expect((handler as any).signalSessionCache.has(CALL_ID)).toBe(false);
+  });
+
+  it('call:end error-recovery (endCall throws) still evicts the cached session', async () => {
+    // When endCall() rejects with a non-authorization error, its transaction
+    // rolls back and the happy-path invalidateSignalSession is skipped. The
+    // catch block force-ends the call via forceEndOrphanedCallSession, which
+    // stamps CallParticipant.leftAt for every still-open participant — so the
+    // same "every leftAt write evicts the cache" invariant applies here too.
+    const { handler, handlers } = makeHarness();
+    await primeCache(handlers);
+    expect((handler as any).signalSessionCache.has(CALL_ID)).toBe(true);
+
+    mockEndCall.mockRejectedValue(new Error('transient write failure'));
+    mockForceEndOrphanedCallSession.mockResolvedValue({
+      duration: 42,
+      conversationId: CONV_ID,
+      status: 'ended',
+      endReason: 'completed',
+    });
+    await handlers['call:end']({ callId: CALL_ID, reason: 'completed' }, jest.fn<any>());
+
+    expect(mockForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
     expect((handler as any).signalSessionCache.has(CALL_ID)).toBe(false);
   });
 
