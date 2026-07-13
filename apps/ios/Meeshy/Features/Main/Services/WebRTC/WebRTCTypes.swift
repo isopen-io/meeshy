@@ -509,6 +509,24 @@ nonisolated enum CallReliabilityPolicy {
         return true
     }
 
+    /// Idempotence guard for `handleRemoteEnd` (a `call:ended` fanout). The
+    /// gateway can emit `call:ended` more than once for the same call — the
+    /// native hangup/reject path AND (2026-07-12) the REST DELETE end/leave
+    /// broadcast both reach the handler through the single `callEnded`
+    /// publisher. Process the first, drop the rest: a duplicate while already
+    /// `.ended` is a no-op, and an event for a DIFFERENT call must never tear
+    /// down the current one. A `call:ended` during the ring (remote cancel)
+    /// still processes — only a terminal `.ended` state is deduplicated.
+    static func shouldProcessRemoteEnd(
+        currentCallId: String?,
+        incomingCallId: String,
+        callState: CallState
+    ) -> Bool {
+        guard incomingCallId == currentCallId else { return false }
+        if case .ended = callState { return false }
+        return true
+    }
+
     /// Delay before the periodic TURN credential refresh, at 80% of the TTL.
     /// A degenerate TTL (zero, negative, or shorter than the floor) clamps to
     /// `minimumDelay` instead of disarming the refresh — silently skipping it
@@ -844,6 +862,25 @@ extension CallEndReason {
     }
 }
 
+// MARK: - Call Retry Policy
+
+/// Pure decision: which end reasons warrant a « Réessayer » (retry) affordance.
+/// Only TRANSIENT establishment/drop failures — a retry genuinely recovers those
+/// (prod 2026-07-12: ~16% of calls end in failed/connectionLost, commonly
+/// transient ICE-gathering / TURN-allocation hiccups). Normal outcomes
+/// (local/remote hangup, missed, rejected) are never retried.
+///
+/// Parité web `isRetryableCallFailure` and Android `CallRetryPolicy` — one rule,
+/// three platforms.
+nonisolated enum CallRetryPolicy {
+    static func isRetryable(_ reason: CallEndReason) -> Bool {
+        switch reason {
+        case .failed, .connectionLost: return true
+        case .local, .remote, .missed, .rejected: return false
+        }
+    }
+}
+
 // MARK: - Call Display Mode
 
 enum CallDisplayMode: Sendable {
@@ -1122,6 +1159,11 @@ nonisolated enum QualityThresholds {
     /// call identity (callId / remoteUserId / callDuration) is cleared.
     /// Gives the UI time to read final stats before teardown completes.
     static let callEndSettleSeconds: TimeInterval = 1.5
+
+    /// Longer settle window for a RETRYABLE transient failure — the ended screen
+    /// holds its « Réessayer » affordance this long before auto-dismissing, so
+    /// the user has a real chance to re-dial (parité web/Android retry).
+    static let callEndRetryableSettleSeconds: TimeInterval = 12.0
 
     /// Delay `endCurrentAndAnswerPending()` waits after calling `endCall()`
     /// before answering the waiting call — gives CallKit's `CXEndCallAction`

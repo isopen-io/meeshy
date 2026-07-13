@@ -1677,3 +1677,64 @@ tout proprement.
   autres fichiers (nom de classe = namespace des constantes).
 - Une absence de résultat grep n'est pas une preuve d'absence : avant d'annoncer « rien ne consomme
   X », refaire la recherche sans AUCUN filtre d'exclusion.
+
+## 2026-07-12 — Renommer un appel dans CallManager.swift casse les source-guards de CallManagerTests.swift
+
+**Contexte** : le fix reject iOS (`f67c39ac0`, `emitCallEnd` → `emitCallReject` dans
+`rejectPendingCall()`) a fait tomber iOS Tests (2/3685) : `RejectPendingCallTests` sont des
+source-guards qui lisent CallManager.swift en TEXTE et exigent des sous-chaînes exactes
+(`emitCallEnd(callId: pending.callId)`). CI + SDK Tests verts n'ont rien vu — seul iOS Tests
+exécute MeeshyTests.
+
+**Règles** :
+- Avant tout push qui renomme/déplace un appel dans CallManager.swift (ou tout fichier prod
+  couvert par des guards) : `grep -n "<ancien-symbole>" apps/ios/MeeshyTests/` et adapter les
+  guards DANS LE MÊME commit.
+- Un source-guard cassé se répare en ré-encodant le NOUVEAU contrat (jamais en dégradant la
+  prod) et en le RENFORÇANT si la substitution ouvre un trou (ex : verrou SDK
+  `emitCallReject` doit émettre `call:end` AVEC `reason=rejected`, sinon le guard app
+  passerait à vide).
+- Ces guards se vérifient sans Xcode : répliquer l'extraction `functionBody` en Python sur
+  les vraies sources (10 s au lieu d'un build de 15 min).
+
+## 2026-07-12 — Lire le code d'émission AVANT de qualifier une donnée de prod d'anomalie
+
+**Contexte** : le pipeline analytics live révélait 3 « anomalies » dans les données prod
+(endReason="in_progress", averageRtt=0.489ms, durationSeconds float). J'ai d'abord documenté
+les 3 comme des bugs d'émission iOS. Après lecture du code d'émission (CallManager:3182-3239,
+WebRTCTypes:232), **2 sur 3 étaient du comportement CORRECT** :
+- `in_progress` = snapshot périodique 60s délibéré (anti-perte de télémétrie sur appel long
+  killé mid-call), pas un statut qui « leake ».
+- `averageRtt` bas = conversion `*1000` correcte + quirk des stats WebRTC, pas un bug de code.
+
+**Règle** :
+- Une donnée qui « semble » anormale n'est pas une anomalie tant qu'on n'a pas lu le code qui
+  la produit. Avant de documenter un « bug » à partir de données observées, ouvrir le site
+  d'émission et vérifier l'intention.
+- Un faux rapport de bug coûte plus cher qu'un silence : il envoie l'équipe chasser un
+  comportement voulu. Corriger publiquement un finding erroné dès qu'on le découvre.
+- L'accuracy prime sur le volume : 1 insight actionnable vérifié (ici : ~20% des appels
+  répondables échouent réellement) vaut mieux que 3 « anomalies » dont 2 fausses.
+
+## Parité cross-platform : certifier la RÈGLE ne suffit pas — vérifier les MAPPINGS d'entrée (2026-07-12)
+En livrant retry-on-failure sur web/iOS/Android, j'avais certifié que les 3 `CallRetryPolicy`
+encodaient une règle byte-identique (failed/connectionLost → retryable). Vrai mais insuffisant :
+la même règle nourrie par des MAPPINGS d'entrée différents produit un comportement différent.
+Android `CallSignalMapper.endedEvent` collapsait toute fin distante non-`missed` en `Remote`
+(non-retryable), tandis qu'iOS/web mappaient `failed`/`connectionLost` serveur vers du retryable
+→ divergence reachable côté appelant. **Règle : après avoir prouvé qu'une décision partagée est
+identique, tracer TOUS les chemins qui alimentent son entrée sur chaque plateforme (décodage
+socket, détection locale, valeurs par défaut) et vérifier qu'ils produisent des entrées
+équivalentes. La parité d'une fonction pure est vide si ses arguments divergent en amont.**
+
+## CI concurrency : un push docs juste après un push de code ANNULE le run CI du code (2026-07-12)
+La CI Meeshy (workflow « CI ») a un groupe de concurrence par branche : chaque nouveau push
+sur `main` annule le run en cours. En poussant un commit `docs(...)` immédiatement après un
+commit `fix(...)`/`feat(...)`, j'ai annulé à répétition (5+ fois cette session) le run CI qui
+validait le commit de code — verdict `cancelled`, jamais `success`. Pire : si le commit docs
+ne matche pas les path-filters du job de test concerné, ce job est SKIP sur le commit docs →
+le code n'obtient JAMAIS de verdict CI propre. **Règle : après un commit de code qui a besoin
+de validation CI, NE PAS pousser de commit docs/lessons par-dessus tant que le run CI du code
+n'est pas terminé. Grouper la doc AVEC le commit de code, OU attendre le vert avant de pousser
+la doc.** Vérifier le verdict sur le job pertinent (`Test web`/`Test gateway`), pas juste sur le
+run global — le run peut être `in_progress` alors que le job qui m'intéresse est déjà `success`.

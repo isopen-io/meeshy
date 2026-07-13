@@ -898,6 +898,59 @@ describe('ReactionService', () => {
   });
 
   // ==============================================
+  // GET USER REACTIONS (across the user's participants) TESTS
+  // ==============================================
+
+  describe('getUserReactions', () => {
+    const testUserId = '507f1f77bcf86cd799439055';
+
+    it('resolves the user\'s participant rows, then filters reactions by those participant ids', async () => {
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId },
+        { id: testParticipantId2 }
+      ]);
+      mockPrisma.reaction.findMany.mockResolvedValue([
+        createMockReaction({ participantId: testParticipantId, emoji: '👍' }),
+        createMockReaction({ participantId: testParticipantId2, emoji: '❤️' })
+      ]);
+
+      const result = await service.getUserReactions(testUserId);
+
+      expect(mockPrisma.participant.findMany).toHaveBeenCalledWith({
+        where: { userId: testUserId },
+        select: { id: true }
+      });
+      expect(mockPrisma.reaction.findMany).toHaveBeenCalledWith({
+        where: { participantId: { in: [testParticipantId, testParticipantId2] } },
+        orderBy: { createdAt: 'desc' },
+        take: 100
+      });
+      expect(result.length).toBe(2);
+      expect(result.map(r => r.emoji)).toEqual(['👍', '❤️']);
+    });
+
+    it('returns an empty array without querying reactions when the user has no participants', async () => {
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+
+      const result = await service.getUserReactions(testUserId);
+
+      expect(result).toEqual([]);
+      expect(mockPrisma.reaction.findMany).not.toHaveBeenCalled();
+    });
+
+    it('caps the result set at 100 for performance', async () => {
+      mockPrisma.participant.findMany.mockResolvedValue([{ id: testParticipantId }]);
+      mockPrisma.reaction.findMany.mockResolvedValue([]);
+
+      await service.getUserReactions(testUserId);
+
+      expect(mockPrisma.reaction.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 100 })
+      );
+    });
+  });
+
+  // ==============================================
   // HAS USER REACTED TESTS
   // ==============================================
 

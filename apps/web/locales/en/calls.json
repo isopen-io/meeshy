@@ -68,6 +68,9 @@
       "qualityDegraded": "{name}'s connection is unstable",
       "screenCapturing": "{name} may be recording the screen"
     },
+    "captions": {
+      "region": "Live translated captions"
+    },
     "stream": {
       "disconnected": "Disconnected",
       "participantLeft": "{name} has left",
@@ -88,7 +91,9 @@
       "callAlreadyEnded": "The call has ended",
       "videoSuspendedPoorConnection": "Weak connection — video paused to keep the call going",
       "videoResumed": "Connection recovered — video back on",
-      "connectTimeout": "Could not establish the connection — call ended"
+      "connectTimeout": "Could not establish the connection — call ended",
+      "callFailed": "Call connection failed",
+      "retry": "Retry"
     },
     "permissions": {
       "title": {
@@ -133,6 +138,13 @@
     "waiting": {
       "forParticipant": "Waiting for participant...",
       "noVideo": "No video"
+    },
+    "callWaiting": {
+      "title": "Call waiting",
+      "reject": "Decline",
+      "endAndAnswer": "End & answer",
+      "rejectLabel": "Decline waiting call",
+      "endAndAnswerLabel": "End current call and answer"
     },
     "info": {
       "participant": "{count} participant",

@@ -1079,4 +1079,38 @@ describe('CallStore', () => {
       expect(state.callEndReason).toBeNull();
     });
   });
+
+  describe('Pending retry (« Réessayer » after a transient failure)', () => {
+    beforeEach(() => {
+      act(() => { useCallStore.getState().clearCallRetry(); });
+    });
+
+    it('offerCallRetry records the conversation + type', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'video' });
+      });
+      expect(useCallStore.getState().pendingRetry).toEqual({ conversationId: 'conv-1', type: 'video' });
+    });
+
+    it('clearCallRetry drops the offer', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'audio' });
+        useCallStore.getState().clearCallRetry();
+      });
+      expect(useCallStore.getState().pendingRetry).toBeNull();
+    });
+
+    it('reset() PRESERVES a pending retry (the failed call teardown must not erase the offer)', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'video' });
+        useCallStore.getState().reset();
+      });
+      expect(useCallStore.getState().pendingRetry).toEqual({ conversationId: 'conv-1', type: 'video' });
+    });
+
+    it('reset() with no pending retry leaves it null', () => {
+      act(() => { useCallStore.getState().reset(); });
+      expect(useCallStore.getState().pendingRetry).toBeNull();
+    });
+  });
 });

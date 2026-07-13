@@ -1,6 +1,7 @@
 package me.meeshy.sdk.net
 
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.net.api.ActiveCallApi
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.api.BlockApi
 import me.meeshy.sdk.net.api.CallHistoryApi
@@ -39,6 +40,7 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
     val communities: CommunityApi = retrofit.create()
     val stories: StoryApi = retrofit.create()
     val callHistory: CallHistoryApi = retrofit.create()
+    val activeCall: ActiveCallApi = retrofit.create()
     val translation: TranslationApi = retrofit.create()
     val media: MediaApi = retrofit.create()
     val preferences: PreferencesApi = retrofit.create()

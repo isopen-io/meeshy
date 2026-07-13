@@ -2961,6 +2961,38 @@ describe('MessageReadStatusService', () => {
 
       expect(result.get('p1')).toBe(0);
     });
+
+    it("subtracts a participant's OWN messages correctly even when rows arrive out of createdAt order", async () => {
+      // Defensive-ordering contract: `countAbove` is a binary search that assumes the
+      // arrays it walks are ascending. The service sorts BOTH the merged `allTimestamps`
+      // AND every per-sender bucket precisely so the counts hold "regardless of source
+      // ordering". If only the total were defensively sorted (leaving the per-sender
+      // subtrahend in raw row order), the own-message cut would miscount the moment rows
+      // are unordered — producing a bogus unread count.
+      //
+      // All three candidates are p2's OWN messages, so p2's unread MUST be 0. p2's floor
+      // (13:00) falls in the MIDDLE of them, so an unsorted own-bucket binary search
+      // undercounts p2's own messages after the floor and leaves phantom unread.
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockCandidates([
+        { at: '2024-01-01T15:00:00Z', from: 'p2' },
+        { at: '2024-01-01T11:00:00Z', from: 'p2' },
+        { at: '2024-01-01T14:00:00Z', from: 'p2' },
+      ]);
+
+      const result = await service.getUnreadCountsForParticipants(
+        [
+          { id: 'p1', joinedAt: new Date('2024-01-01T10:00:00Z') },
+          { id: 'p2', joinedAt: new Date('2024-01-01T13:00:00Z') },
+        ],
+        testConversationId
+      );
+
+      // p1 (floor 10:00, no own messages) sees all three of p2's messages.
+      expect(result.get('p1')).toBe(3);
+      // p2 authored every candidate → zero unread, whatever order the rows arrived in.
+      expect(result.get('p2')).toBe(0);
+    });
   });
 
   describe('markMessagesAsReceived error path', () => {
@@ -3057,6 +3089,36 @@ describe('MessageReadStatusService', () => {
       expect(result.statuses[0].deliveredAt).not.toBeNull();
       expect(result.statuses[0].readAt).not.toBeNull();
       expect(result.pagination.total).toBe(1);
+    });
+
+    // Regression: this detail sheet must resolve avatars with the SAME rule as
+    // its sibling getMessageReadStatus — participant-local avatar first, then the
+    // linked account avatar, with blank/whitespace strings treated as absent.
+    // A raw `participant.avatar` (a) dropped the account fallback and (b) leaked
+    // `''` to the client, rendering a parasitic `<img src="">`.
+    it('falls back to the linked account avatar when the participant-local avatar is blank', async () => {
+      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: msgCreatedAt,
+        conversationId: testConversationId,
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null },
+        { participantId: 'p2', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        // Local avatar empty → account avatar wins.
+        { id: 'p1', displayName: 'Alice', avatar: '', user: { avatar: 'account-alice.png' } },
+        // Both blank → null (no parasitic <img src="">).
+        { id: 'p2', displayName: 'Bob', avatar: '   ', user: { avatar: null } },
+      ]);
+
+      const result = await service.getMessageStatusDetails(testMessageId);
+
+      const alice = result.statuses.find(s => s.participantId === 'p1');
+      const bob = result.statuses.find(s => s.participantId === 'p2');
+      expect(alice?.avatar).toBe('account-alice.png');
+      expect(bob?.avatar).toBeNull();
     });
 
     it('prefers the frozen per-message timestamps over the moving cursor', async () => {
@@ -3268,6 +3330,39 @@ describe('MessageReadStatusService', () => {
       expect(result.statuses[0].username).toBe('Charlie');
       expect(result.statuses[0].viewedAt).toBe(viewedAt);
       expect(result.pagination.total).toBe(1);
+    });
+
+    // Regression: same avatar-resolution rule as the message read-status lists —
+    // local avatar first, account avatar fallback, blank/whitespace = absent.
+    it('falls back to the linked account avatar when the participant-local avatar is blank', async () => {
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(2);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          participantId: 'p1',
+          viewedAt: new Date('2024-06-01T11:00:00Z'),
+          downloadedAt: null, listenedAt: null, watchedAt: null,
+          listenCount: 0, watchCount: 0, listenedComplete: false, watchedComplete: false,
+          lastPlayPositionMs: null, lastWatchPositionMs: null,
+        },
+        {
+          participantId: 'p2',
+          viewedAt: new Date('2024-06-01T11:00:00Z'),
+          downloadedAt: null, listenedAt: null, watchedAt: null,
+          listenCount: 0, watchCount: 0, listenedComplete: false, watchedComplete: false,
+          lastPlayPositionMs: null, lastWatchPositionMs: null,
+        },
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'p1', displayName: 'Charlie', avatar: '', user: { avatar: 'account-charlie.png' } },
+        { id: 'p2', displayName: 'Dana', avatar: '   ', user: { avatar: null } },
+      ]);
+
+      const result = await service.getAttachmentStatusDetails(testAttachmentId);
+
+      const charlie = result.statuses.find(s => s.participantId === 'p1');
+      const dana = result.statuses.find(s => s.participantId === 'p2');
+      expect(charlie?.avatar).toBe('account-charlie.png');
+      expect(dana?.avatar).toBeNull();
     });
 
     it('filters by viewed status', async () => {

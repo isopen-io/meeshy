@@ -30,9 +30,12 @@ export function looksLikePhoneNumber(value: string): boolean {
     return false;
   }
 
-  // Un numéro de téléphone commence par + ou un chiffre
-  // et contient principalement des chiffres, espaces, tirets, parenthèses
-  const phonePattern = /^[+\d][\d\s\-().]*$/;
+  // Un numéro de téléphone commence par +, un chiffre, ou une parenthèse
+  // ouvrante (format local NANP `(555) 123-4567`, où l'indicatif régional est
+  // entre parenthèses) et contient principalement des chiffres, espaces, tirets,
+  // parenthèses. Sans le `(` en tête, un numéro local nord-américain saisi tel
+  // quel était rejeté à tort — un faux négatif pour un format très courant.
+  const phonePattern = /^[+\d(][\d\s\-().]*$/;
   return phonePattern.test(trimmed) && trimmed.replace(/\D/g, '').length >= 6;
 }
 

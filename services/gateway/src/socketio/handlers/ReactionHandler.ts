@@ -173,10 +173,15 @@ export class ReactionHandler {
             message.conversationId
           )
             .then(removeEvent => {
-              this._broadcastReactionEventWithConversationId(message.conversationId, removeEvent, SERVER_EVENTS.REACTION_REMOVED);
+              // Attach the broadcast's own `.catch` — it is async (awaits
+              // normalizeConversationId, then emits), so its rejection escapes
+              // the outer chain otherwise, surfacing as an unhandledRejection.
+              // Parity with the REACTION_ADDED broadcast below.
+              this._broadcastReactionEventWithConversationId(message.conversationId, removeEvent, SERVER_EVENTS.REACTION_REMOVED)
+                .catch(err => logger.error('reaction:add replaced-emoji broadcast failed', { error: err, conversationId: message.conversationId }));
               void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, removedEmoji, removeEvent as unknown as Record<string, unknown>);
             })
-            .catch(err => logger.error('reaction:add replaced-emoji broadcast failed', { error: err, conversationId: message.conversationId }));
+            .catch(err => logger.error('reaction:add replaced-emoji createUpdateEvent failed', { error: err, conversationId: message.conversationId }));
         }
         this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
           .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));

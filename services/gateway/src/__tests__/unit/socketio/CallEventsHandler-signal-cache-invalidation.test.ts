@@ -28,6 +28,17 @@ const mockEndCall = jest.fn<any>();
 const mockClearRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
 const mockForceEndOrphanedCallSession = jest.fn<any>();
+const mockResolveEndReason = jest.fn((reason?: string) => {
+  switch (reason) {
+    case 'missed': return 'missed';
+    case 'rejected': return 'rejected';
+    case 'failed': return 'failed';
+    case 'connectionLost': return 'connectionLost';
+    case 'heartbeatTimeout': return 'heartbeatTimeout';
+    case 'garbageCollected': return 'garbageCollected';
+    default: return 'completed';
+  }
+}) as jest.Mock<any>;
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -39,6 +50,7 @@ jest.mock('../../../services/CallService', () => ({
     forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
     updateCallStatus: jest.fn<any>().mockResolvedValue(undefined),
     getIceServerTtl: jest.fn<any>().mockReturnValue(86400),
+    resolveEndReason: mockResolveEndReason,
   })),
 }));
 

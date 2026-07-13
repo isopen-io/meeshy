@@ -16,6 +16,7 @@
     <string name="call_action_mute">Mute</string>
     <string name="call_action_camera">Camera</string>
     <string name="call_action_close">Close</string>
+    <string name="call_action_retry">Retry</string>
     <string name="call_action_minimize">Minimize call</string>
     <string name="call_pill_ongoing">Ongoing call with %1$s</string>
     <string name="call_pill_reopen">Return to call</string>

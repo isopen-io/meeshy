@@ -562,25 +562,30 @@ export class NotificationService {
     if (!prefs.dndEnabled) return false;
 
     const now = new Date();
-
-    // Si dndDays est défini et non vide, vérifier le jour
-    if (prefs.dndDays && prefs.dndDays.length > 0) {
-      const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-      const today = dayMap[now.getUTCDay()];
-      if (!prefs.dndDays.includes(today as any)) return false;
-    }
-
     const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
     const start = prefs.dndStartTime;
     const end = prefs.dndEndTime;
+    const overnight = start > end;
+    const inWindow = overnight
+      ? currentTime >= start || currentTime < end // nocturne (ex: 22:00 - 08:00)
+      : currentTime >= start && currentTime < end; // diurne (ex: 14:00 - 16:00)
 
-    // DND nocturne (ex: 22:00 - 08:00)
-    if (start > end) {
-      return currentTime >= start || currentTime < end;
+    if (!inWindow) return false;
+
+    // Si dndDays est défini et non vide, vérifier le jour de DÉBUT de la fenêtre.
+    // Une fenêtre nocturne (start > end) déborde sur le lendemain : sa tranche du
+    // matin (00:00 → end) appartient à la nuit qui a COMMENCÉ la veille. Le filtre
+    // dndDays doit donc être testé contre le jour de début, pas le jour courant —
+    // sinon un matin est rattaché au mauvais jour (silence quand il faut notifier,
+    // et vice-versa). Cf. PushNotificationService.isPushAllowed (même logique).
+    if (prefs.dndDays && prefs.dndDays.length > 0) {
+      const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+      const inMorningTail = overnight && currentTime < end;
+      const windowStartDay = dayMap[inMorningTail ? (now.getUTCDay() + 6) % 7 : now.getUTCDay()];
+      if (!prefs.dndDays.includes(windowStartDay as any)) return false;
     }
 
-    // DND diurne (ex: 14:00 - 16:00)
-    return currentTime >= start && currentTime < end;
+    return true;
   }
 
   // ==============================================

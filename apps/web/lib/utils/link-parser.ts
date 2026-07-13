@@ -37,44 +37,60 @@ export function parseMessageLinks(message: string): ParsedLink[] {
   const parts: ParsedLink[] = [];
   let lastIndex = 0;
 
-  // Créer un tableau de toutes les correspondances
-  const matches: Array<{ match: RegExpExecArray; type: 'tracking' | 'mshy' | 'url' }> = [];
+  // Collecter toutes les correspondances candidates des trois regex, chacune
+  // avec un rang de priorité (mshy > tracking > url) servant uniquement de
+  // départage quand deux matches partagent exactement le même span.
+  type Candidate = {
+    match: RegExpExecArray;
+    type: 'tracking' | 'mshy' | 'url';
+    start: number;
+    end: number;
+    priority: number;
+  };
+  const candidates: Candidate[] = [];
 
-  // Trouver tous les liens m+<token> (priorité la plus haute)
-  let mshyMatch: RegExpExecArray | null;
-  const mshyRegex = new RegExp(MSHY_SHORT_REGEX.source, 'gi');
-  while ((mshyMatch = mshyRegex.exec(message)) !== null) {
-    matches.push({ match: mshyMatch, type: 'mshy' });
-  }
-
-  // Trouver tous les liens de tracking meeshy.me/l/<token>
-  let trackingMatch: RegExpExecArray | null;
-  const trackingRegex = new RegExp(TRACKING_LINK_REGEX.source, 'gi');
-  while ((trackingMatch = trackingRegex.exec(message)) !== null) {
-    // Vérifier si ce n'est pas déjà un lien mshy
-    const isAlreadyMshy = matches.some(
-      (m) => m.match.index === trackingMatch!.index
-    );
-    if (!isAlreadyMshy) {
-      matches.push({ match: trackingMatch, type: 'tracking' });
+  const collect = (
+    source: string,
+    type: Candidate['type'],
+    priority: number
+  ): void => {
+    const regex = new RegExp(source, 'gi');
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(message)) !== null) {
+      candidates.push({
+        match: m,
+        type,
+        start: m.index,
+        end: m.index + m[0].length,
+        priority,
+      });
+      // Garde-fou contre une regex à largeur nulle (boucle infinie).
+      if (m.index === regex.lastIndex) regex.lastIndex++;
     }
-  }
+  };
 
-  // Trouver tous les liens normaux (qui ne sont pas des liens de tracking ou mshy)
-  let urlMatch: RegExpExecArray | null;
-  const urlRegex = new RegExp(URL_REGEX.source, 'gi');
-  while ((urlMatch = urlRegex.exec(message)) !== null) {
-    // Vérifier si ce lien n'est pas déjà un lien de tracking ou mshy
-    const isAlreadyProcessed = matches.some(
-      (m) => m.match.index === urlMatch!.index
-    );
-    if (!isAlreadyProcessed) {
-      matches.push({ match: urlMatch, type: 'url' });
-    }
-  }
+  collect(MSHY_SHORT_REGEX.source, 'mshy', 0);
+  collect(TRACKING_LINK_REGEX.source, 'tracking', 1);
+  collect(URL_REGEX.source, 'url', 2);
 
-  // Trier les correspondances par position
-  matches.sort((a, b) => a.match.index - b.match.index);
+  // Résolution des chevauchements par balayage glouton : on trie par début
+  // croissant, puis span le plus large d'abord (une URL absorbe un m+<token>
+  // qui tombe dans son chemin/query), puis priorité. On ne retient qu'un match
+  // dont le début dépasse la fin du dernier accepté — garantit des intervalles
+  // disjoints et l'invariant de reconstruction sans perte (F91).
+  candidates.sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    if (a.end !== b.end) return b.end - a.end;
+    return a.priority - b.priority;
+  });
+
+  const matches: Array<{ match: RegExpExecArray; type: Candidate['type'] }> = [];
+  let coveredEnd = 0;
+  for (const c of candidates) {
+    if (c.start < coveredEnd) continue;
+    matches.push({ match: c.match, type: c.type });
+    coveredEnd = c.end;
+  }
 
   // Construire les parts
   matches.forEach(({ match, type }) => {
@@ -162,7 +178,7 @@ export async function createTrackingLink(
     conversationId?: string;
     messageId?: string;
   } = {}
-): Promise<{ success: boolean; trackingLink?: unknown; error?: string }> {
+): Promise<{ success: boolean; trackingLink?: { token: string }; error?: string }> {
   // Vérifier que nous sommes côté client
   if (typeof window === 'undefined') {
     return { success: false, error: 'Function only available on client side' };

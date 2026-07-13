@@ -1,17 +1,18 @@
 import XCTest
 @testable import Meeshy
 
-// MARK: - Alertes qualité transitoires + glyphe signal (2026-07-04)
+// MARK: - Indicateurs réseau discrets, sans bannière pop-up (2026-07-13)
 
-/// Retour user : la pill orange « Réseau faible chez votre contact » restait
-/// affichée en continu pendant l'appel (et pouvait rendre en capsule géante).
-/// Invariants verrouillés ici :
-///  1. Les bannières qualité/signaling sont PONCTUELLES — gouvernées par des
-///     flags UI auto-expirants, jamais directement par l'état dégradé persistant.
-///  2. L'état persistant est porté par des indicateurs discrets : glyphe
-///     signal code couleur + status pills.
-///  3. Le morph d'émergence de l'île n'interpole plus de frame `nil`
-///     (cause racine de la capsule pleine-écran) — il passe par `scaleEffect`.
+/// Retour user (2026-07-13) : la pill « Réseau faible chez votre contact » était
+/// du bruit inutile en plein appel. Les bannières pop-up transitoires (qualité
+/// ET signaling) ont été retirées. Invariants verrouillés ici :
+///  1. Aucune bannière pop-up de faiblesse réseau ne subsiste dans CallView —
+///     ni la machinerie de flags/auto-retrait qui la pilotait.
+///  2. L'état de faiblesse réseau vit UNIQUEMENT dans des indicateurs discrets :
+///     glyphe signal code couleur + status pills inline.
+///  3. VoiceOver reste notifié à la bascule en dégradé (annonce a11y conservée).
+///  4. Le morph d'émergence de l'île (composant partagé encore utilisé ailleurs)
+///     n'interpole toujours pas de frame `nil` — il passe par `scaleEffect`.
 @MainActor
 final class CallQualityIndicatorsUITests: XCTestCase {
 
@@ -29,34 +30,40 @@ final class CallQualityIndicatorsUITests: XCTestCase {
         try source("Meeshy/Features/Main/Views/CallView.swift")
     }
 
-    // MARK: - Transient quality alert pills
+    // MARK: - No transient pop-up banners
 
-    func test_remoteQualityBanner_isGatedOnTransientFlag_notPersistentState() throws {
+    func test_remoteQualityPopupBanner_isRemoved() throws {
         let view = try callViewSource()
-        XCTAssertTrue(
-            view.contains("if showRemoteQualityAlertPill {"),
-            "The remote-quality banner must be gated on the transient UI flag — gating it " +
-            "directly on callManager.isRemoteQualityDegraded kept it on screen for the " +
-            "whole degradation (user bug: the orange pill never disappeared)."
+        XCTAssertFalse(
+            view.contains("remoteQualityDegradedBanner") || view.contains("showRemoteQualityAlertPill"),
+            "The transient remote-quality pop-up banner must be gone — the degraded peer " +
+            "link is surfaced only by discreet inline indicators, never a pop-up (user " +
+            "feedback 2026-07-13: the orange pill was useless noise)."
         )
     }
 
-    func test_signalingBanner_isGatedOnTransientFlag() throws {
+    func test_signalingPopupBanner_isRemoved() throws {
         let view = try callViewSource()
-        XCTAssertTrue(
-            view.contains("if showSignalingAlertPill {"),
-            "The signaling-degraded banner must be transient like the quality one."
+        XCTAssertFalse(
+            view.contains("signalingDegradedBanner") || view.contains("showSignalingAlertPill"),
+            "The transient signaling-degraded pop-up banner must be gone too — same doctrine."
         )
     }
 
-    func test_alertPills_autoDismiss_viaTaskKeyedOnFlag() throws {
+    func test_noAutoDismissMachineryForAlertPills() throws {
+        let view = try callViewSource()
+        XCTAssertFalse(
+            view.contains("qualityAlertPillSeconds"),
+            "With no transient banner left, the auto-dismiss task/timer machinery must be removed."
+        )
+    }
+
+    func test_networkDegradation_stillAnnouncedToVoiceOver() throws {
         let view = try callViewSource()
         XCTAssertTrue(
-            view.contains(".task(id: showRemoteQualityAlertPill)")
-                && view.contains(".task(id: showSignalingAlertPill)")
-                && view.contains("qualityAlertPillSeconds"),
-            "Both alert pills must auto-dismiss after qualityAlertPillSeconds via a " +
-            ".task keyed on their visibility flag (cancelled automatically on early hide)."
+            view.contains("call.a11y.remote.quality.poor") && view.contains("call.a11y.signaling.degraded"),
+            "Even without a visible banner, VoiceOver must still be notified when the peer's " +
+            "link or the signaling degrades — the a11y announcements survive the banner removal."
         )
     }
 

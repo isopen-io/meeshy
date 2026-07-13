@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/gateway",
-  "version": "1.10.0",
+  "version": "1.11.0",
   "description": "Fastify Gateway service for Meeshy real-time messaging",
   "private": true,
   "main": "dist/src/server.js",
@@ -87,6 +87,7 @@
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.1",
     "@types/zxcvbn": "^4.4.5",
+    "fast-json-stringify": "^7.0.1",
     "glob": "^11.1.0",
     "grpc-tools": "^1.13.1",
     "jest": "^30.4.2",

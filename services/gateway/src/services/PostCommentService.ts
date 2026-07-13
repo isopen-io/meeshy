@@ -344,10 +344,18 @@ export class PostCommentService {
     });
     if (!comment) return null;
 
-    // Source de vérité = table `CommentReaction` (comme le chemin socket). `upsert`
-    // sur la contrainte unique (commentId,userId,emoji) → IDEMPOTENT (un seul like
-    // par user). Ainsi le REST devient un FALLBACK sûr quand le socket échoue : pas
-    // de double-comptage même si socket + REST se déclenchent sur le même like.
+    // Source de vérité = table `CommentReaction` (comme le chemin socket).
+    // Invariant « max 1 réaction par user » (identique à `CommentReactionService`
+    // et au modèle canonique `ReactionService`) : la réaction REST REMPLACE toute
+    // autre réaction de ce user sur ce commentaire. Sans cette purge, un client
+    // envoyant successivement ❤️ puis 👍 via REST accumulerait 2 réactions
+    // distinctes, contournant l'invariant que le socket applique.
+    // On purge d'abord les autres emojis, puis on upsert l'emoji demandé —
+    // idempotent (❤️/❤️ inchangé), donc le REST reste un FALLBACK sûr du socket
+    // sans double-comptage même si socket + REST se déclenchent sur le même like.
+    await this.prisma.commentReaction.deleteMany({
+      where: { commentId, userId, emoji: { not: emoji } },
+    });
     await this.prisma.commentReaction.upsert({
       where: { comment_user_reaction_unique: { commentId, userId, emoji } },
       create: { commentId, userId, emoji },

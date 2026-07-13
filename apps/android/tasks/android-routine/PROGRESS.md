@@ -1,8 +1,430 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **relative-time short rendering layer** landed (slice `time-relative-format-strings`,
+> feature-parity §Q — the *rendering half* of the relative-time SSOT, the consumer the two prior pure
+> classifiers (`RelativeTime.classify`, `RelativeTimeLongFormat.label`) were waiting for so they stop being
+> dead code). Ships pure `:sdk-ui/format` `RelativeTimeFormat.short(epochMillis, referenceMillis, zone,
+> locale, strings)` + the `RelativeTimeStrings` template bundle — the view-layer wording atop the pure ladder.
+> The thresholds are **not re-implemented**: `short` delegates to `RelativeTime.classify` (the SSOT) and only
+> maps the returned `RelativeTimeUnit` rung to its localized template, so future/skew→`Now`, the exact rung
+> boundaries and the `Long`-overflow safety are all *inherited*. Localized strings are **injected as
+> parameters** (the established `CallTimeLabel` pattern) — the formatter has zero Android dependency and is
+> 100% JVM-testable; a `@Composable rememberRelativeTimeStrings()` binds the `time_relative_*` resources
+> (EN/FR/ES/PT) at the call site. Faithful to the iOS `RelativeTimeFormatter` compact form (`maintenant /
+> Nmin / Nh / Nj / Nsem`); the three-months-or-older rung falls back to the locale/zone absolute date with
+> the year shown only when it differs from the reference year (matching `CallTimeLabel`). **Wired for real
+> (no dead ends):** the **feed post timestamp** now renders the discreet relative label ("5 min", "2 h",
+> "3 j") in place of the raw absolute `shortDateTimeLabel` — the Prisme "native, discreet" framing — parsing
+> via the tested `isoToEpochMillisOrNull` SSOT and falling back to the absolute short label when the instant
+> is absent/unparsable (a malformed timestamp never blanks or crashes the row). **+13 tests** (under-30s→now;
+> future/skew→now; 30s boundary→seconds rung; 45s substitution; 5min; 59min-still-minutes; 2h; 3d; 2wk; 2mo;
+> substitution uses the real value not a constant [7min vs 11min]; >90d same-year→date w/o year; >90d
+> prior-year→date w/ year). **Two-mutation RED check:** minutes-rung→`hoursAgo` template + `year != ` →
+> `year == ` failed exactly the 5 relevant tests (2 minutes + substitution + 2 absolute-date), reverted green.
+> **Verification:** `:sdk-ui:testDebugUnitTest` + `:feature:feed:testDebugUnitTest` full suites green +
+> `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced, feed Compose glue compiles). Reviewer **PASS**
+> (diff `apps/android` only — `:sdk-ui` [new `RelativeTimeFormat.kt` + `RelativeTimeStringsCompose.kt` + test,
+> `time_relative_*` strings ×4 locales], `:feature:feed` [3 imports + one `@Composable postRelativeTime`
+> helper + one call-site swap], `feature-parity.md`, routine docs; no production logic outside; **SDK purity**
+> — pure formatter takes opaque injected strings, stays agnostic → `:sdk-ui` building block alongside
+> `DateTimeLabels`/`CallTimeLabel`; the "when/where to render relative" orchestration stays app-side in feed;
+> **SSOT** — thresholds owned once by `RelativeTime`, reused not duplicated; **UDF/instant-app** — pure fn,
+> no state, feed cache path unchanged; **colour/UX coherence** — no colour change, discreet Prisme framing;
+> **no coverage floor lowered, no test weakened**). **Next slice:** the *long* rendering layer
+> (`RelativeTimeLongFormat` → localized `il y a … / hier / date` for contacts/participants/friend-requests/
+> message-detail, incl. the `Yesterday` special case + `lastSeen` presence framing), wiring the short
+> formatter into the conversation-row / notification-row timestamps, or resume the media-wiring hints below.
+
+> On 2026-07-13 **per-conversation message ordering** landed (slice `chat-message-ordering`, feature-parity
+> "Message ordering" — the ordering half of the bundled `seq` sort + gap-detection + server-offset roadmap item).
+> Ships the pure `:feature:chat` SSOT `MessageOrdering.order(items, selector) → List<T>` (+ a bare-input overload)
+> that lays a message list out in **stable ascending (oldest→newest) timeline order** — the foundation every
+> downstream chat computation already trusted implicitly (consecutive `MessageGrouping`, day labels, scroll
+> anchoring) but that nothing actually enforced: `toBubbles` rendered messages in whatever order the repository
+> handed back, so an out-of-order socket arrival or a merged older-page could jumble the list. The order is a
+> total, deterministic projection of two keys via `compareBy`: **send time first** (`createdAtMillis`; a message
+> with no parsed timestamp → `Long.MAX_VALUE` = newest, pinned to the bottom, so a freshly-composed local echo
+> lands at the end not hoisted above dated history), **`seq` breaks ties** (ascending; a null seq = an un-acked
+> optimistic send → `Long.MAX_VALUE` so it trails its acked same-instant sibling), and **server order is the final
+> tiebreak** — `sortedWith` is stable, so a fully-tied pair keeps the caller's incoming order rather than being
+> reshuffled (this is exactly what keeps the existing all-null-`createdAt` ViewModel test fixtures unperturbed:
+> all equal → input order preserved). **Wired for real (no dead ends):** `ChatViewModel.toBubbles` now orders the
+> hidden-filtered list *before* grouping/mapping, reusing `isoToEpochMillisOrNull`, so grouping + day labels
+> cluster a provably-ascending list. **+16 tests** (empty→∅; single unchanged; already-ascending kept;
+> reversed-by-time re-sorted; out-of-order arrival placed by timestamp not position; equal-time→ascending seq;
+> equal-time no-seq trails seq'd; full tie preserves input order; no-timestamp sorts after timestamped; two untimed
+> fall back to seq then input order; two fully-tied untimed keep input order; negative pre-epoch orders; near-MAX
+> timestamps don't overflow; idempotent; `order` returns original items not projected inputs; bare-input overload).
+> **Two-mutation RED check:** `?: Long.MAX_VALUE`→`?: Long.MIN_VALUE` on both keys failed exactly the 2 relevant
+> tests (no-timestamp-sorts-after + no-seq-trails-seq'd), confirming behavioural not tautological; reverted green.
+> **Verification:** `:feature:chat:testDebugUnitTest` full suite + `:app:assembleDebug` → **BUILD SUCCESSFUL**
+> (APK produced, no existing chat test regressed by the new `toBubbles` sort). Reviewer **PASS** (diff `apps/android`
+> only — `:feature:chat` [new `MessageOrdering.kt` + test, one-line `ChatViewModel` wiring], `feature-parity.md`,
+> routine docs; no production logic outside; **SDK purity** — pure ordering in `:feature:chat`, the established home
+> for chat reducers/SSOTs alongside `MessageGrouping`; **SSOT** — one ordering owns the timeline every downstream
+> computation reads; **UDF/instant-app** — pure fn, cache-first path unchanged; **colour/UX coherence** — no UI
+> change; **no coverage floor lowered, no test weakened**). **Next slice:** continuity **gap detection** once a
+> `seq` source lands (or add a nullable `seq` to the android `LocalMessage`/DTO first), the app-side relative-time
+> rendering layer (maps `RelativeTimeUnit`/`RelativeTimeLongLabel` → 5 app languages), or resume the media-wiring
+> hints below.
+
+> On 2026-07-13 **relative-time long framing SSOT** landed (slice `time-relative-long-label`, feature-parity §Q —
+> the detail-surface framing, port of iOS `RelativeTimeFormatter.longString`). Companion to the just-landed
+> `RelativeTime.classify` flat ladder: where `classify` is a bare `now/5m/2h/3d/…` ladder for dense lists, the
+> *long* framing is the `maintenant / il y a 45s / il y a 5 min / hier / il y a 3j / il y a 2sem / il y a 2mois /
+> date` form used on contacts, participants, friend-requests and message detail. New `:core:model/time`
+> `RelativeTimeLongLabel` — a sealed framing rung (`Now` / `AgoSeconds` / `AgoMinutes` / `AgoHours` / `Yesterday`
+> / `AgoDays` / `AgoWeeks` / `AgoMonths` / `AbsoluteDate(epochMillis)`) carrying the numeric value + the *framing
+> intent* but **no localized text** (the `time.long.*` wording stays UI-side, exactly as iOS keeps `il y a %@` /
+> `hier` in the formatter catalog); `RelativeTimeLongFormat.label(epochMillis, referenceMillis, zoneId)`. The
+> sub-hour rungs **reuse `RelativeTime`'s second thresholds** (SSOT — no duplicated constants), then from an hour
+> up the ladder switches to **calendar-day** boundaries rather than 24-hour windows — the key divergence from
+> `classify`: an event at 23:00 seen at 01:00 the next day is `Yesterday`, not `il y a 2h`. Because the boundary
+> is the *user's* midnight, the label needs a `ZoneId`: the very same instant reads `hier` in UTC and `il y a 2h`
+> three hours west (pinned by a two-assertion zone test). Future / clock-skew (negative interval) → `Now`, like
+> `classify`. **+21 tests** (every rung; both sides of every boundary — 29/30s, 59/60s, 59min, 1h-same-day,
+> 23h-same-day-not-yesterday, 2h-across-midnight-IS-yesterday, prev-day, 2/6d, exactly-7d→1week, 29d→4weeks,
+> 30d→1month, 89d→2months, 90d→AbsoluteDate carrying the instant; the cross-zone divergence). **Two-mutation RED
+> check:** `dayDelta <= 0`→`< 0` (steals the same-day hours rung) + `dayDelta == 1`→`== 2` (steals `Yesterday`)
+> failed exactly the 6 calendar-day tests (hours/yesterday/days/zone), reverted green. `:core:model:testDebugUnitTest`
+> 21/21 new; `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced). Reviewer **PASS** (diff `apps/android` only
+> — `:core:model` [`time/RelativeTimeLongLabel.kt` + test], `feature-parity.md`, routine docs; no production logic
+> outside; **SDK purity** — pure framing in `:core:model`, `time.long.*` localized strings + `Locale`-aware
+> absolute date stay UI-side; **SSOT** — second thresholds reused from `RelativeTime`, calendar-day framing owned
+> once here; **UDF/instant-app** — pure fn, no state/UI; **colour/UX coherence** — no UI in this slice; **no
+> coverage floor lowered, no test weakened**). **Next slice:** the app-side Compose/string layer that maps
+> `RelativeTimeUnit` (short) + `RelativeTimeLongLabel` (long) + the `lastSeen` presence framing → the five app
+> languages, or resume the media-wiring hints below.
+
+> On 2026-07-13 **relative-time classification SSOT** landed (slice `time-relative-classify`, feature-parity §Q —
+> "Relative-time classification SSOT"). Ships the pure threshold ladder beneath every conversation-row / feed /
+> notification / presence timestamp — a faithful port of iOS `RelativeTime.classify` (the SSOT the iOS
+> `RelativeTimeFormatter` builds on), with rendering (localized strings, absolute-date formatting) deliberately
+> left UI-side per the grain rule. New `:core:model` package `me.meeshy.sdk.model.time`: `RelativeTimeUnit` — a
+> sealed ladder rung (`Now`/`Seconds`/`Minutes`/`Hours`/`Days`/`Weeks`/`Months`/`AbsoluteDate(epochMillis)`)
+> carrying the numeric value but no text; `RelativeTime.classify(epochMillis, referenceMillis)` — `Now` (<30s) →
+> seconds (<1min) → minutes (<1h) → hours (<1day) → days (<7d) → weeks (<30d) → months (<90d) → absolute date,
+> with the thresholds exposed as named `const` (the single source of truth). **Surpasses** the reference on two
+> edges iOS leaves implicit: (1) a future / clock-skewed timestamp (negative interval) collapses to `Now` instead
+> of emitting a negative count; (2) the whole ladder runs on `Long` arithmetic, so a decades-old timestamp (whose
+> elapsed seconds overflow a 32-bit `Int`) still reaches the absolute-date rung rather than wrapping to a spurious
+> near rung — pinned by a ~30-year and a unix-epoch test. **+24 tests**: every rung, both sides of every
+> threshold boundary (29s→Now vs 30s→Seconds, 59s vs 60s→Minutes, 3599s vs 3600s→Hours, 6d vs 7d→Weeks, 29d vs
+> 30d→Months, 89d vs 90d→AbsoluteDate), integer-floor of trailing units (119s→1min, 13d→1week), and the
+> future/overflow/epoch edges. A **two-mutation RED check** (`< NOW_THRESHOLD`→`< MINUTE_SECONDS` collapsing the
+> seconds rung + `days < WEEK_DAYS`→`days <= WEEK_DAYS` stealing the 7-day boundary) failed exactly the 3 relevant
+> tests (30s + 59s seconds rungs + exactly-7-days→weeks), reverted green. `:core:model:testDebugUnitTest` green
+> (24/24 new); `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced). Reviewer **PASS** (diff `apps/android`
+> only — `:core:model` [new `time/RelativeTime.kt` + test], `feature-parity.md`, routine docs; no production logic
+> outside; **SDK purity** — pure classifier in `:core:model`, localized strings + absolute-date `DateFormatter`
+> stay app/UI-side exactly as iOS keeps them in the view layer; **SSOT** — thresholds live once here as named
+> consts; **UDF/instant-app** — pure function, no state or UI; **colour/UX coherence** — no UI in this slice; **no
+> coverage floor lowered, no test weakened**). **Next slice:** the app-side `RelativeTimeFormatter` Compose/string
+> layer that maps `RelativeTimeUnit` → the five localized app languages + the `Locale`-aware absolute date (the
+> rendering half), the `lastSeen`/`long` framing variants, or resume any of the media wiring hints below.
+
+> On 2026-07-13 **consecutive-sender message grouping** landed (slice `chat-message-grouping`, feature-parity §C —
+> the message-list rendering, a WhatsApp/iMessage-style improvement Android now has that **iOS never actually
+> implemented** — `MessageListViewController` hardcodes `isLastInGroup: true` and `showAvatar: !direct`, so every
+> incoming message re-shows the sender name). Pure `:feature:chat` SSOT `MessageGrouping.positions(messages,
+> gapMillis=DEFAULT_GAP_MILLIS) → Map<id, MessageGroupPosition>` clusters the ascending list into consecutive
+> same-author runs: two adjacent messages group iff **same author** (both outgoing share one "self" identity; both
+> incoming match on equal non-null `senderId`; a null incoming sender never groups; outgoing/incoming never group)
+> **and within the time gap** (absolute delta ≤ `gapMillis`=5min, so an out-of-order pair is judged by proximity;
+> a missing timestamp skips the time test and rides with the previous same-author message). Each `MessageGroupInput`
+> projects `(id, senderId, isOutgoing, createdAtMillis)`; each `MessageGroupPosition(isFirstInGroup, isLastInGroup)`
+> exposes `isStandalone`. **Wired for real (no dead ends):** `ChatViewModel.toBubbles` computes positions over the
+> **filtered** (hidden-message-excluded) list so they align with what's rendered, derives `showSenderName` from
+> `isFirstInGroup` (name shown once per run, replacing the old hardcoded `showSenderName = true` on every incoming),
+> and threads `isFirstInGroup`/`isLastInGroup` onto `BubbleContent` (two new fields, default `true` so every
+> existing call-site/test is untouched). The exempt `MessageBubble` composable consumes them for spacing — a run
+> stacks tightly (top gap only on the first, bottom gap only on the last) while distinct messages keep their 4dp
+> breathing room — so header + visual run share **one** SSOT and can't drift. **+15 tests** (empty→∅; single→
+> standalone; same-sender within gap → [first,¬last]/[¬first,last]; beyond gap → both standalone; exactly-on-gap
+> still groups (`<=`); different incoming senders never group; two outgoing group as self; outgoing→incoming breaks;
+> null incoming sender never groups; missing timestamp rides with previous; middle-of-three is neither first nor
+> last; a sender change splits two runs; custom gap overrides default; out-of-order uses the absolute delta;
+> positions keyed by every id). A **two-mutation RED check** (`<=`→`<` on the gap + `isOutgoing → return false` in
+> `sameAuthor`) failed exactly the 2 relevant tests (exactly-on-threshold + two-outgoing-self), confirming they are
+> behavioural not tautological; reverted, green again. **Verification:** `assembleDebug` → BUILD SUCCESSFUL (APK,
+> all Compose glue incl. `MessageBubble` compiles); `:feature:chat` + `:sdk-ui` `testDebugUnitTest` → **0 failures**
+> (MessageGroupingTest 15/15). Full-tree `testDebugUnitTest` shows only the **3 documented pre-existing flaky
+> `:sdk-core` DataStore `StateFlow`-timeout tests** (MediaDownload/Notification/PrivacyPreferencesStoreTest — a
+> module this `:feature:chat`/`:sdk-ui` slice cannot touch); the count varied 3→1 across runs and each passes on
+> isolated retry (see NOTES). Reviewer **PASS** (diff `apps/android` only — `:feature:chat` [new `MessageGrouping.kt`
+> + test, `ChatViewModel` wiring], `:sdk-ui` [`BubbleContent` +2 fields, `MessageBubble` spacing], `feature-parity.md`,
+> routine docs; no production logic outside; **SDK purity** — pure clustering algorithm in `:feature:chat` (the
+> established home for chat reducers ReplyThreads/PinnedMessages/ForwardTargets), the Compose spacing app-side;
+> **SSOT** — one grouping owns both the header (`showSenderName`) and the visual run (spacing); **UDF/instant-app** —
+> pure function, cache-first path unchanged; **colour/UX coherence** — no colour change, natural tightly-stacked runs;
+> **no coverage floor lowered, no test weakened**). **Next slice:** the app-side wiring of the already-shipped media
+> pure cores (ThumbHash placeholder via Coil, Bitmap re-encode via `ImageCompressionPlan`, voice recorder pill via the
+> waveform cores), the §C carousel/contact bubble attachments, or §B communities carousel + category filter chips.
+
+> On 2026-07-12 **ThumbHash encoder** landed (slice `media-thumbhash-encode`, feature-parity §P —
+> "ThumbHash blur placeholders for all media", line 2144; the generation half of the placeholder pipeline,
+> companion to the decoder that landed earlier the same day). Ships the pure `ThumbHash.encode(width, height,
+> rgba: ByteArray) → ByteArray` in the existing `me.meeshy.sdk.model.media.ThumbHash` object — a faithful port
+> of Evan Wallace's canonical `rgbaToThumbHash`: alpha-weighted average colour → RGBA→LPQA transform composited
+> atop that average → forward DCT of each channel (via a new private `encodeChannel`/`EncodedChannel`) into a DC
+> term plus scale-normalised AC nibbles, with fewer luminance basis bits when an alpha channel is present, exactly
+> as `decode` expects. The `p`/`q` colour-difference transform is **derived as the exact algebraic inverse of THIS
+> repo's decoder** (`B=l−⅔p`, `R=(3l−B+q)/2`, `G=R−q` ⟹ `l=(r+g+b)/3`, `p=(r+g)/2−b`, `q=r−g`) rather than copied
+> from memory — the RED phase caught a channel-swap (green decoded 0.807 instead of 0.4) from the naïve
+> `p=(r+b)/2−g`, `q=r−b` and the derivation fixed it. **Surpasses** the reference on its unguarded inputs: rejects
+> a non-positive or >100 side and an `rgba` buffer shorter than `width·height·4` with `IllegalArgumentException`
+> (the reference reads past the buffer and emits `NaN`-derived garbage). **+13 tests**: hand-derived header bytes
+> for a solid grey (`[32,8,2,7,0]`, independent of `decode`); solid-colour round-trip through the independent
+> `decode` (average tint + flat corner within 6-bit quantisation); opaque→no-alpha-channel; landscape/portrait/
+> square orientation; a left→right luminance gradient decoding brighter on the right (exercises the AC/DCT
+> encode + scale-normalisation branch); uniform partial transparency detection + level round-trip; a left→right
+> alpha gradient (exercises the alpha 5×5 encode branch); a fully-transparent image (`avgA=0` skip-normalise
+> branch); and the three input guards. A **two-mutation RED check** (flip `q=r−g`→`g−r` + force `isLandscape=false`)
+> failed exactly the 2 relevant tests (colour round-trip + landscape), confirming they are behavioural not
+> tautological. `:core:model:testDebugUnitTest --tests 'me.meeshy.sdk.model.media.*'` green (13 new + 21 decoder
+> = 34); full `assembleDebug testDebugUnitTest` across every module → **BUILD SUCCESSFUL** (APK produced, all unit
+> tests pass). One environment note (see NOTES 2026-07-12 locale entry): the full-tree test compile needs
+> `LANG=C.utf8` because a `:sdk-core` test method name carries an em-dash — under the container's default POSIX
+> locale `sun.jnu.encoding` is ASCII and Kotlin throws `InvalidPathException` writing that class file; a UTF-8
+> locale (daemon restarted) fixes it. Reviewer **PASS** (diff `apps/android` only — `:core:model` [`ThumbHash.kt`
+> +encoder, new `ThumbHashEncodeTest.kt`], `feature-parity.md`, routine docs; no production logic outside; **SDK
+> purity** — pure encoder in `:core:model`, the app-side `Bitmap`→`rgba` extraction stays app-side; **SSOT** — one
+> object owns both directions of the format so encode and decode can't drift, `p`/`q` derived FROM the decoder;
+> **UDF/instant-app** — pure function, no state or UI; **colour/UX coherence** — no UI in this slice; **no coverage
+> floor lowered, no test weakened**). **Next slice:** the app-side `Bitmap`→`rgba` extraction + `ThumbHash.encode`
+> wired into the upload path to generate the placeholder seed, the app-side raster→`Bitmap` wrap + Coil placeholder
+> that consumes `ThumbHash.decode`, the app-side Bitmap re-encode consuming `ImageCompressionPlan`, the voice
+> recorder pill consuming the `waveform` cores, or the chat media view consuming `MediaAutoDownloadDecider`.
+
+> On 2026-07-12 **ThumbHash decoder** landed (slice `media-thumbhash-decode`, feature-parity §P —
+> "ThumbHash blur placeholders for all media", line 2144; also underpinning the progressive-image
+> item at line ~207). Ships the pure decode beneath the app-side blur placeholder. Pure `:core:model`
+> SSOTs (package `me.meeshy.sdk.model.media`, alongside the image-compression slice): `ThumbHash` — a
+> faithful port of Evan Wallace's canonical `thumbHashToRGBA` / `thumbHashToAverageRGBA` /
+> `thumbHashToApproximateAspectRatio`, exposing `averageColor(hash)→ThumbHashColor`,
+> `approximateAspectRatio(hash)→Float`, `hasAlpha(hash)`, `isLandscape(hash)`, and `decode(hash)→
+> ThumbHashImage(width,height,rgba: ByteArray)` — DC + AC YCoCg→RGB inverse-DCT over primitives, no
+> Android `Bitmap`/`Color` (the raster→Bitmap wrap + Compose paint stay app-side per the grain rule).
+> **Surpasses** the reference on two counts iOS/JS leave unguarded: (1) it rejects a hash too short for
+> the region it must read — `IllegalArgumentException` per surface (`averageColor`/`isLandscape`/
+> `approximateAspectRatio`/`decode` each guard their own minimum, `decode` computes the exact required
+> AC byte count) instead of a silent out-of-bounds read on a truncated/garbage hash; (2) it clamps the
+> decoded raster to at least 1×1 so a degenerate header (e.g. a 0 L-count portrait → aspect 0) can never
+> produce a zero-sized image the caller would choke on. **+21 tests** (averageColor 3 — zero header
+> r=0/g=1/6/b=2/3, saturated header r=1/g=5/6/b=1/3, alpha DC term 0 vs 1; metadata 2 — hasAlpha bit,
+> isLandscape bit; approximateAspectRatio 3 — portrait L/7, landscape 7/L, alpha uses 5; decode
+> dimensions 3 — square 32×32, portrait shrinks width to 18, landscape shrinks height to 18; decode
+> reconstruction 4 — DC-only (all AC scales 0) flat image byte-exact to the hand-derived average incl.
+> flatness at 3 sampled pixels [255,212,85,255], no-alpha channel fully opaque 255, zero alpha DC fully
+> transparent 0, every byte a valid unsigned channel; mean invariant 1 — a non-flat decode's per-channel
+> mean lands back on `averageColor` within 0.03 because the DCT-II basis integrates to zero over the
+> sample grid (cross-checks the full-decode path against the header-only average path with maximal-
+> headroom mid-grey so nothing clamps); guards 4 — decode rejects a truncated hash, averageColor rejects
+> a 2-byte header + an alpha hash missing its alpha byte, approximateAspectRatio rejects a 4-byte hash;
+> degenerate dims 1 — 0-count portrait clamps width to ≥1). Expected values are hand-derived from the
+> bit layout + IEEE-754 double math (the flat blue is 85, not a naïve 84: `1 − 2/3 = 0.33333333333333337`,
+> `×255 = 85.0000…001`), never copied from the decoder's own output. `:core:model:testDebugUnitTest`
+> green (all incl. 21 new); full `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced). A
+> **two-mutation RED check** (flip the YCoCg blue reconstruction `l − 2/3·p → l + 2/3·p` + drop the
+> portrait aspect scale so width never shrinks) failed exactly the 4 relevant tests (3 blue average/decode
+> + portrait-width), confirming they are behavioural not tautological. Reviewer **PASS** (diff
+> `apps/android` only — `:core:model` [new `ThumbHash.kt` + test], `feature-parity.md`, routine docs; no
+> production logic outside; **SDK purity** — pure decoder in `:core:model`, Bitmap/paint app-side;
+> **SSOT** — one decoder owns the format, `decode` derives its dimensions from the same
+> `approximateAspectRatio` the public API exposes so screen and transform can't drift; **UDF/instant-app**
+> — pure functions, no state machine or UI; **colour/UX coherence** — no UI in this slice; **no coverage
+> floor lowered, no test weakened**). Full-tree `testDebugUnitTest` shows only **2 pre-existing flaky
+> DataStore `StateFlow`-timeout failures in `:sdk-core`** (NotificationPreferencesStoreTest,
+> PrivacyPreferencesStoreTest) — a module this additive `:core:model` slice cannot affect; both pass on
+> isolated retry (see NOTES 2026-07-12 locale/flake entry). **Next slice:** the app-side raster→`Bitmap`
+> wrap + Coil placeholder wiring that consumes `ThumbHash.decode`, the ThumbHash *encoder* for slide-level
+> generation, the app-side Bitmap re-encode that consumes `ImageCompressionPlan`, the app-side voice
+> recorder pill consuming `AudioLevelNormalizer`/`WaveformLevelWindow`/`WaveformInterpolator`, or the chat
+> media view that consumes `MediaAutoDownloadDecider`.
+
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ (+ message-effects lifecycle + honest delivery indicator + rich-text rendering: markdown/mentions/m+/URL/highlight + in-conversation search + @-mention autocomplete & roster display-name resolution + forward + local-only message star/unstar + quoted-reply previews incl. story/mood previews with counts+thumbnails) → Feed ✅ (+ per-post Prisme language flag strip + interactive language switch) → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit incl. first/last-name + persisted theme + interface language + notification master toggles + DND schedule editor + per-event notification type toggles + offline-queued notification backend sync + regional content language + change-password w/ strength meter + media auto-download prefs + privacy & visibility toggles + privacy backend sync + report-a-user + profile share/QR + account deletion + GDPR data export + media cache management + avatar/banner upload + crash-report diagnostics viewer w/ share)** → rest`
+
+> On 2026-07-12 **waveform interpolation core** landed (slice `media-waveform-interpolation`, feature-parity §P/§O —
+> "Universal audio recorder (live waveform …)" line 2113, also underpinning the audio-message-player waveform line
+> 2111). Ships the pure decision beneath the app-side live voice-note waveform — the metering→amplitude→resampling
+> math that both the recorder pill and the message player consume, with the `MediaRecorder`/`AudioRecord` capture
+> and the Compose `Canvas` painting left app-side per the SDK-purity grain rule. Pure `:core:model` SSOTs (new
+> package `me.meeshy.sdk.model.waveform`): `AudioLevelNormalizer.normalize(powerDb)` — floors a dB reading at
+> `FLOOR_DB=-50`, maps `[-50,0]→[0,1]` linearly, ports iOS `AudioRecorderManager.normalizeLevel` **and surpasses
+> it** with an upper clamp to `1f` + a `NaN`→silence guard (byte-identical on every real `averagePower ≤ 0` frame,
+> but no bogus/`NaN` frame can produce an out-of-range bar); `WaveformLevelWindow` — an immutable, fixed-capacity
+> rolling ring of the most-recent levels (oldest→newest), ports the `levelHistory` append-and-drop-front window +
+> the initial `Array(repeating:0,count:15)` via `filled()`, `DEFAULT_CAPACITY=15`, a non-positive requested
+> capacity collapses to a permanently-empty (inert-`push`) window so the model never over-allocates;
+> `WaveformInterpolator.interpolate(levels, barCount)` — resamples the levels onto exactly `barCount` evenly-spaced
+> bars by linear interpolation, ports the per-bar math of iOS `UniversalComposerBar.interpolatedLevel`
+> (`position = i*(n-1)/(barCount-1)`, blend of the two bracketing samples) but **returns the whole strip in one
+> pass** and pins the degenerate cases iOS left implicit (`barCount≤0`→empty; single sample or single bar→every
+> bar = that level; no samples→flat silent strip; endpoints always exact). **+28 tests** (AudioLevelNormalizer 7 —
+> 0dB→1, floor→0, midpoint→0.5, below-floor + `-∞`→0, positive→1 clamp, `NaN`→0, monotonic rise at -40/-10;
+> WaveformLevelWindow 11 — empty/filled/default-15, append-below-cap, drop-oldest-over-cap, keep-exactly-N-in-order,
+> filled-slides-zeros-out, zero-capacity-stays-empty, negative-capacity→0, push-is-immutable, value-equality;
+> WaveformInterpolator 10 — non-positive-barCount→empty, no-samples→zeros, single-sample-fills, single-bar→first,
+> upsample-midpoints + quarter-points, downsample-aligned, endpoints-exact, non-uniform-neighbours, identity-mapping).
+> `:core:model:testDebugUnitTest --tests 'me.meeshy.sdk.model.waveform.*'` green (28/28); full `assembleDebug` +
+> all-module `testDebugUnitTest` → BUILD SUCCESSFUL (APK produced). A **two-mutation RED check** (drop the
+> normalizer upper clamp + zero out the interpolator's high-sample blend term) failed exactly the 4 relevant tests
+> (positive-clamp + the 3 linear-blend tests), confirming they are behavioural not tautological. Reviewer **PASS**
+> (diff `apps/android` only — `:core:model` [new `waveform` package: 2 sources + 3 test files], `feature-parity.md`,
+> routine docs; no production logic outside; **SDK purity** — pure metering/window/resampler in `:core:model`, the
+> Android capture + Canvas paint left app-side; **SSOT** — one normalizer owns the dB→amplitude map, one window owns
+> the ring invariant, one interpolator owns the resampling, shared by recorder + player so the two can't drift;
+> **UDF/instant-app** — pure functions, no state machine or UI; **colour/UX coherence** — no UI in this slice; **no
+> coverage floor lowered, no test weakened**). **Next slice:** the app-side voice recorder pill (`MediaRecorder`
+> capture → `AudioLevelNormalizer`/`WaveformLevelWindow` → Compose `Canvas` waveform via `WaveformInterpolator`),
+> the audio-message-player waveform that consumes the same core, the app-side Bitmap re-encode that consumes the
+> `ImageCompressionPlan`, or ThumbHash blur placeholders (§P).
+
+> On 2026-07-12 **image compression plan** landed (slice `media-image-compression-plan`, feature-parity §P —
+> "Image/video compression before upload (context-aware quality)"). Ships the pure decision beneath the
+> app-side Bitmap re-encode — the first leg of §P compression. Pure `:core:model` SSOTs (new package
+> `me.meeshy.sdk.model.media`): `ImageUploadContext` (per-surface longest-edge ceilings in px, mirroring iOS
+> `MediaContext.maxImageDimension` — MESSAGE 1200 / STORY 1080 / FEED_POST 1600 / AVATAR 512 / FULLSCREEN 2048
+> — **plus BANNER 1600**, a wide profile hero iOS's enum lacks, so the shipped avatar/banner upload path has a
+> compression context; `forUploadTarget(ImageUploadTarget)` is the single bridge mapping the shipped upload
+> target → context so the two slices never disagree on the ceiling); `ImageCompressionPlan` (targetWidthPx,
+> targetHeightPx, quality, resizeRequired); `ImageCompressionPlanner.plan(context, w, h, quality=80)` — fits the
+> longest edge within the ceiling via one uniform aspect-preserving scale, `floor`-rounded exactly like iOS
+> `MediaCompressor.targetSize`, marks a resize **only** when the source strictly exceeds the ceiling (`>`, so an
+> image sitting exactly on the ceiling is re-encoded but not scaled), clamps quality to the encoder's `1..100`
+> band, clamps each target edge to ≥1 (surpasses iOS: a degenerate thin source never rounds to a 0-px edge), and
+> treats a non-positive source dimension as a no-op plan. The actual Bitmap decode/scale/JPEG re-encode is the
+> app-side glue that consumes the plan (grain rule: pure decision in `:core:model`, the Android-runtime pixel
+> work app-side); video compression + "save to Meeshy album" remain pending on the §P line. **+18 tests**
+> (ImageCompressionPlanner 15 — smaller-than-ceiling no-resize, exactly-on-ceiling no-resize, just-over-ceiling
+> resize, landscape + portrait downscale with aspect preserved, per-context ceiling divergence, default/in-range/
+> over-max/zero/negative quality clamp, zero-width + zero-height + negative-dim no-op, thin-portrait + thin-
+> landscape target clamp ≥1, uneven-downscale aspect preservation; ImageUploadContext 3 — avatar/banner bridge,
+> avatar ceiling < banner ceiling). `:core:model:testDebugUnitTest --tests 'me.meeshy.sdk.model.media.*'` green;
+> full `assembleDebug` + all-module `testDebugUnitTest` → **BUILD SUCCESSFUL in 4m21s** (APK produced). A
+> two-mutation RED check (boundary `<=`→`<` + drop the `coerceAtLeast(1)` edge clamp) failed exactly the 3
+> relevant tests (exactly-on-ceiling no-resize + the 2 thin-edge clamp tests), confirming they are behavioural
+> not tautological. Reviewer **PASS** (diff `apps/android` only — `:core:model` [new `media` package: 1 source +
+> 2 test files], `feature-parity.md`, routine docs; no production logic outside; **SDK purity** — pure
+> context/plan/planner in `:core:model`, Bitmap pixel work left app-side; **SSOT** — one planner owns the fit +
+> clamp math, one `forUploadTarget` bridge owns target→context, ceilings defined once on the enum; **UDF/instant-
+> app** — pure decision, no state machine or UI; **colour/UX coherence** — no UI in this slice; **no coverage
+> floor lowered, no test weakened**). **Next slice:** the app-side Bitmap re-encode that consumes the plan (the
+> actual compress-before-upload wired into the avatar/banner + attachment upload paths), ThumbHash blur
+> placeholders (§P), or the chat media view that consumes the `MediaAutoDownloadDecider`.
+
+> On 2026-07-12 **open-source licenses** landed (slice `settings-open-source-licenses`, feature-parity §L —
+> the last §L static screen; **§L static screens now complete**). Port of iOS `LicensesView`, but over an
+> **Android-accurate** curated catalog — the libraries that actually ship (Jetpack Compose, AndroidX, Material
+> Components, Dagger Hilt, Kotlin Coroutines/Serialization, Coil, OkHttp, Retrofit, Media3 ExoPlayer, Room,
+> Timber, ZXing, Firebase Android SDK, Socket.IO Client Java, WebRTC-Android), not iOS's Swift deps. Pure
+> `:core:model` SSOTs (package `me.meeshy.sdk.model.licenses`): `OpenSourceLicenseType` (MIT/APACHE_2_0/BSD/OTHER
+> — declaration order = render order); `OpenSourceLicense` + `OpenSourceLicenseGroup`;
+> `OpenSourceLicenseResolver.resolvable(licenses)` — the launchability gate porting iOS `licenseCard`'s
+> `if let URL(string:)` guard, **narrowed** to `http(s)://` only (unlike Help & Support, licenses only ever open
+> repo web pages — never `mailto:`; trim + case-fold, order-preserving, blank/other-scheme dropped);
+> `OpenSourceLicensePresentationBuilder.build(licenses)` — **surpasses iOS's flat list** by grouping the
+> launchable licenses by type in enum order (not insertion order), sorting each group by name case-insensitively,
+> excluding non-launchable entries up front, and dropping empty groups; `OpenSourceLicenseCatalog` (the curated
+> list + `groups()`). `LicensesScreen` (`:feature:settings`, coverage-exempt glue): a localized intro line + one
+> accent-coded section card per family (MIT=Success green, Apache=Warning amber, BSD=Info blue, Other=Neutral,
+> matching the codebase's semantic palette), each row a tappable card (name + author + open-in-new) opening the
+> repository via `ACTION_VIEW`. Nav: one `settings/licenses` route reached by `Routes.LICENSES` from a new
+> **Open source licenses** row in Settings → About. **+26 tests** (OpenSourceLicenseResolver 9 — http/https/upper/
+> padded kept, blank + mailto + schemeless dropped, mixed list keeps only launchable in order;
+> OpenSourceLicensePresentationBuilder 8 — empty, single group/entry, enum-order-not-insertion-order, within-group
+> case-insensitive sort, empty-groups dropped, non-launchable excluded before grouping, multi-group each sorted,
+> distinct same-name entries kept; OpenSourceLicenseCatalog 7 — non-empty, non-blank name/author, every entry
+> launchable, no duplicate name/url, `groups()` == builder over raw list, groups cover every license once). Full
+> `:app:assembleDebug` + all-module `testDebugUnitTest` → **BUILD SUCCESSFUL in 6m36s** (APK produced). A
+> two-mutation RED check (drop the group `.sortedBy` + widen the resolver to accept `mailto:`) failed exactly the
+> 3 relevant tests (2 sort tests + the mailto-drop test), confirming they are behavioural not tautological.
+> Reviewer **PASS** (diff `apps/android` only — `:core:model` [new `licenses` package], `:feature:settings`
+> [screen + 7× strings EN/FR/ES/PT], `:app` nav wiring, `SettingsScreen` one new callback + row; no production
+> logic outside; **SDK purity** — pure type/resolver/builder/catalog in `:core:model`, localized labels + accent
+> colours + "which screen / launch intent" glue app-side; **SSOT** — one resolver owns launchability, one builder
+> owns grouping + ordering, one catalog owns the shipped list, `groups()` defers to the builder so screen and
+> tested transform can't drift; **UDF/instant-app** — static content, no state machine; **colour/UX coherence** —
+> semantic per-family accents, natural row→screen→back, no dead ends; **no coverage floor lowered, no test
+> weakened**). ⚠ **MERGE BLOCKED (not my diff):** PR #1894's CI is red only on a **pre-existing, unrelated**
+> gateway failure — `services/gateway/.../calls-routes.test.ts` (3 endCall/leaveCall tests returning
+> `success:false`). The **same "Test gateway" job also fails on main's own push CI** (sha `6d0b17d`, run
+> 29196093956), so it is a broken gateway test on main from in-flight gateway/calls work, **not** caused by this
+> apps/android-only slice (which cannot touch gateway logic). Per the hard rule *never merge past red CI* and the
+> scope rule *diff is apps/android only* (so I can't fix gateway prod code), the slice is **held ⚠ blocked at the
+> merge gate**; it is code-complete + locally green (full `assembleDebug` + all-module tests) and will squash-merge
+> once main's gateway tests go green (maintainer is actively pushing gateway/calls fixes). **Next slice (after
+> merge unblocks):** the chat media view that consumes the `MediaAutoDownloadDecider` (the actual auto-DL trigger
+> + a manual-download affordance for `SKIP_POLICY`), in-place crop/resize/compress before upload (§K polish), or a
+> §K row (device-sessions / 2FA / voice-cloning / blocked-users management).
+
+> On 2026-07-12 **Help & Support** landed (slice `settings-help-support`, feature-parity §L — "Static
+> screens: … Help & Support …"). Port of iOS `SupportView`, wiring a new **Help & Support** row in
+> Settings → About. Two pure `:core:model` SSOTs (package `me.meeshy.sdk.model.support`):
+> (1) `SupportLinkResolver.resolvable(links)` — the launchability gate mirroring iOS `supportLink`'s
+> `if let URL(string:)` guard, **widened** to accept `mailto:` alongside `http(s)://` (Help & Support mixes
+> web pages and email-compose links, unlike the website-only About screen; scheme match is trim+case-folded,
+> order-preserving, drops blank/unsupported schemes); (2) `SupportPresentationBuilder.build(params)` —
+> assembles the three launchable-filtered link sections (Get help = help-center + FAQ https pages; Contact =
+> `mailto:` support email + Twitter; Report = pre-filled `mailto:` bug + feature compose links) plus the
+> Information rows (version = trimmed versionName, `1.0.0` fallback on blank; build = versionCode, `1` fallback
+> when ≤0; platform = `Android {release}`, bare `Android` on blank release). Supporting enums
+> `SupportSectionKey` (HELP/CONTACT/REPORT/INFO) / `SupportLinkKind` / `SupportInfoKey` + opaque `SupportParams`
+> (`PackageInfo`/`Build` facts injected app-side — no Android import in the pure core). `SupportScreen`
+> (`:feature:settings`, coverage-exempt glue): accent-coded section cards — Success/Info/Warning for the three
+> link sections + Neutral for Information, mirroring iOS's per-section tints — each link a tappable row opening
+> via `ACTION_VIEW`, every label resolved app-side to a localized string. Nav: one `settings/support` route
+> reached by `Routes.SUPPORT` from the wired row. **+24 tests** (SupportLinkResolver 11 — http/https/mailto
+> kept, uppercase-scheme + padded kept, blank + non-launchable (`tel:`) + schemeless dropped, mixed list keeps
+> only launchable in order; SupportPresentationBuilder 13 — section order, per-section link identity+order,
+> every curated link launchable, info-row order, version trim + blank fallback, build value + zero/negative
+> fallback, platform prefix + blank-release). `:app:assembleDebug` **BUILD SUCCESSFUL**; full all-module
+> `testDebugUnitTest` **BUILD SUCCESSFUL** (under a UTF-8 locale — see NOTES ⚙ ENVIRONMENT: the fresh
+> container's POSIX locale otherwise breaks `:sdk-core` test compile on a pre-existing em-dash test name,
+> unrelated to this diff). A two-mutation RED check (drop the `mailto:` scheme from the resolver + drop the
+> build `≤0` fallback) failed exactly the 9 relevant tests, confirming they are behavioural not tautological.
+> Reviewer **PASS** (diff `apps/android` only — `:core:model` [new `support` package], `:feature:settings`
+> [screen + 4× locale strings], `:app` nav wiring, `SettingsScreen` one new callback+row; no production logic
+> outside; **SDK purity** — pure resolver/builder in `:core:model`, localized content + "which screen / launch
+> intent" glue app-side; **SSOT** — one resolver owns launchability, one builder owns section order + fallbacks,
+> no re-implementation; **UDF/instant-app** — static content, no state machine; **colour/UX coherence** —
+> per-section accent tints matching iOS, natural row→screen→back, no dead ends; **no coverage floor lowered, no
+> test weakened**). **Next slice:** the last §L static screen (open-source licenses — an Android-accurate curated
+> catalog, not iOS's Swift deps), the chat media view that consumes the `MediaAutoDownloadDecider`, or in-place
+> crop/resize/compress before upload (§K).
+
+> On 2026-07-12 **Terms of Service + Privacy Policy** landed (slice `settings-legal-documents`,
+> feature-parity §L — "Static screens: … Terms of Service … Privacy Policy …"). Port of iOS
+> `TermsOfServiceView` + `PrivacyPolicyView`, **unified** into one data-driven screen keyed by
+> `LegalDocumentKind`, wiring the **two previously dead-end** Settings → About rows ("Terms of Service",
+> "Privacy Policy", both `onClick = {}`). Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.legal`):
+> `LegalDocumentKind` (enum with a stable route `arg` + `fromArg(raw)` — the case-folded, trimmed parser that
+> returns `null` on a blank / absent / unrecognised token so an unknown deep link never silently resolves to the
+> wrong document); `LegalSectionKey` (the 9 ToS + 7 Privacy section keys, in iOS order); `LegalNumberedSection`;
+> `LegalDocumentCatalog.sections(kind)` (ordered section keys per document) + `.numbered(kind)` (iOS's
+> `index + 1`, contiguous 1-based numbering). `LegalDocumentScreen` (`:feature:settings`, coverage-exempt glue):
+> a "last updated" line + numbered Info-blue section cards (accent circle number + heading + body), every key
+> resolved app-side to a localized string. Nav: one `settings/legal/{doc}` route parsed via `fromArg`
+> (defensive fallback to ToS), reached by `Routes.legal(kind)` from the two wired rows. **Surpasses iOS twice:**
+> (a) two near-identical iOS views collapse into one catalog-driven screen (one place to add/reorder a section),
+> and (b) the document follows the app's content language automatically across values-* (EN/FR/ES/PT — Prisme
+> philosophy: content in the user's language with no friction), replacing iOS's manual fr/en `Picker`. **+14
+> tests** (LegalDocumentCatalog 7 — per-document order, contiguous 1-based numbering, `numbered↔sections` key
+> parity, no intra-doc duplicate, the two docs disjoint, and every `LegalSectionKey` partitioned across exactly
+> one document; LegalDocumentKind 7 — token resolution, case-insensitivity, trimming, null-on-blank/unknown,
+> arg round-trip). `:app:assembleDebug` **BUILD SUCCESSFUL**; full all-module `testDebugUnitTest` **BUILD
+> SUCCESSFUL**. A one-mutation RED check (dropping `TOS_CONTACT` from the TERMS list) failed exactly the order +
+> partition tests, confirming they are behavioural not tautological. Reviewer **PASS** (diff `apps/android` only
+> — `:core:model` [new `legal` package], `:feature:settings` [screen + 4× `legal.xml` EN/FR/ES/PT], `:app` nav
+> wiring, `SettingsScreen` two callbacks; no production logic outside; **SDK purity** — pure kind/catalog in
+> `:core:model`, localized content + "which screen / route parse" glue app-side; **SSOT** — one catalog owns the
+> section order + numbering, one `fromArg` parses the route, no re-implementation; **UDF/instant-app** — static
+> content, no state machine; **colour/UX coherence** — Info-blue numbered cards, natural row→screen→back, no dead
+> ends left; **no coverage floor lowered, no test weakened**). **Next slice:** the remaining §L static screens
+> (Help & Support; open-source licenses — an Android-accurate curated catalog, not iOS's Swift deps), the chat
+> media view that consumes the `MediaAutoDownloadDecider`, or in-place crop/resize/compress before upload (§K).
 
 > On 2026-07-12 **media auto-download decision pipeline** landed (slice `media-auto-download-decider`,
 > feature-parity §L). Closes the "next slice" NB the `settings-media-auto-download` slice left open: the live
@@ -1652,7 +2074,21 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `chat-bubble-audio`** — audio (voice-message) bubble attachment (§C line ~533,
+**Just shipped (2026-07-13): `chat-conversation-media-gallery`** — fullscreen media gallery now spans the
+whole conversation (port of iOS `ConversationMediaGalleryView`); pure `:feature:chat`
+`ConversationMediaGallery.of` flattens every non-deleted bubble's images and resolves the tapped start
+index, consumed by the reused `:sdk-ui` `MeeshyImageViewer`. See run log 2026-07-13.
+**Recommended next (highest value):**
+- **Media gallery follow-ups** (same §C line): neighbour prefetch ±2 (Coil `ImageLoader.enqueue`),
+  per-page author/caption metadata overlay, and save-to-gallery (`MediaStore`) — each a thin add on top of
+  the shipped `ConversationGallery` (extend the model with `prefetchAround`/item metadata and consume it).
+- **Message bubble contact attachment** (§C, still pending) — share-a-contact card; the wire has no
+  dedicated fields yet, so scope the DTO first.
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
+
+---
+
+**Earlier (2026-07-09): `chat-bubble-audio`** — audio (voice-message) bubble attachment (§C line ~533,
 `carousel / audio / location / contact` list — **audio now done**; carousel + contact remain). Port of iOS
 `AudioPlayerView` message-bubble context, surpassing it on the Prisme Linguistique. An `audio/…`-mime
 attachment becomes a pure `BubbleAudio` (`:sdk-ui`) instead of being mis-bucketed as a generic file:
@@ -2533,6 +2969,240 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-13 — slice `time-relative-long-label` ✅ impl + reviewer PASS → PR + merge
+- **Branch:** `claude/apps/android/time-relative-long-label` (off latest `main` `819fcd9`).
+- **Housekeeping first (routine rule 0):** the prior-iteration Android PR **#1902** (`chat-conversation-media-gallery`,
+  `apps/android`-only) was open, CI green (run `29228329978` success), reviewer re-verified **PASS** — but its base had
+  fallen behind `main` (#1904/`time-relative-classify` merged after) so the rebase re-conflicted on the `PROGRESS.md`
+  run-log head. Rebased #1902 onto `main` `819fcd9` resolving the run-log adjacency by **keeping both** entries (code
+  files auto-merged, byte-identical), force-pushed (`54adc22`); CI re-ran green and #1902 merged to `main` before this
+  slice's PR. No production logic touched by either.
+- **What:** feature-parity §Q — the *long* (detail-surface) relative-time framing, port of iOS
+  `RelativeTimeFormatter.longString` (`maintenant / il y a 45s / il y a 5 min / hier / il y a 3j / il y a 2sem /
+  il y a 2mois / date`), companion to the flat `RelativeTime.classify` ladder that shipped earlier the same day.
+- **Added (production):**
+  - `:core:model` `time/RelativeTimeLongLabel.kt` — `RelativeTimeLongLabel` sealed framing rung
+    (`Now`/`AgoSeconds`/`AgoMinutes`/`AgoHours`/`Yesterday`/`AgoDays`/`AgoWeeks`/`AgoMonths`/`AbsoluteDate(epochMillis)`,
+    value + framing intent, no text); `RelativeTimeLongFormat.label(epochMillis, referenceMillis, zoneId)`. Sub-hour
+    rungs **reuse `RelativeTime`'s second thresholds** (SSOT), then switch to **calendar-day** boundaries (local-date
+    delta via the injected `ZoneId`): `dayDelta <= 0` → `AgoHours`; `== 1` → `Yesterday`; `<7` → `AgoDays`; `<30` →
+    `AgoWeeks`; `<90` → `AgoMonths`; else `AbsoluteDate`. Future/skew (negative interval) → `Now`.
+- **Divergence from `classify` (the point of the slice):** from an hour up the ladder is calendar-day, not 24-hour —
+  23:00→01:00-next-day (2h) reads `Yesterday`; and the boundary is the *user's* midnight, so the same instant reads
+  `hier` in UTC vs `il y a 2h` three hours west (both pinned by tests).
+- **Tests (+21, RED→GREEN):** every rung; both sides of every boundary (29/30s, 59/60s, 59min, 1h-same-day,
+  23h-same-day-still-hours, 2h-across-midnight-IS-yesterday, prev-day, 2/6d, exactly-7d→1week, 29d→4weeks, 30d→1month,
+  89d→2months, 90d→AbsoluteDate carrying the exact instant); the cross-zone divergence (one instant → `Yesterday` in
+  UTC, `AgoHours(2)` at UTC−3). **Two-mutation RED check:** `dayDelta <= 0`→`< 0` + `dayDelta == 1`→`== 2` failed
+  exactly the 6 calendar-day tests (hours/yesterday/days/zone), reverted green.
+- **Verification (local, `LANG=C.utf8`, system Gradle 8.14.3):** `:core:model:testDebugUnitTest` green (21/21 new);
+  `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced, ~74 MB).
+- **Reviewer PASS:** diff `apps/android` only (`:core:model` [`time/RelativeTimeLongLabel.kt` + `RelativeTimeLongLabelTest.kt`],
+  `feature-parity.md`, PROGRESS/NOTES docs); no production logic outside; behaviour-through-public-API, no tautologies
+  (mutation-proven); **SDK purity** — pure framing in `:core:model`, the `time.long.*` wording + `Locale`-aware
+  absolute date stay UI-side exactly as iOS keeps them in the formatter catalog; **SSOT** — second thresholds reused
+  from `RelativeTime`, the calendar-day framing owned once here; **UDF/instant-app** — pure fn, no state/UI;
+  **colour/UX coherence** — no UI in this slice; no coverage floor lowered, no test weakened.
+
+### 2026-07-13 — slice `time-relative-classify` ✅ impl + reviewer PASS → PR + merge
+- **Branch:** `claude/apps/android/time-relative-classify` (off latest `main` `c93fa81`).
+- **Housekeeping first (routine rule 0):** two prior-iteration Android PRs were open. Merged **#1900**
+  (`chat-message-grouping`, `apps/android`-only, `mergeable_state: clean`) → `main` (squash `c93fa81`). **#1902**
+  (`chat-conversation-media-gallery`) then went `dirty` (both touch `ChatViewModel`/`ChatScreen`); rebased it
+  onto the new `main` resolving the only conflict (a `PROGRESS.md` run-log adjacency) by keeping **both** entries,
+  built `:feature:chat`+`:sdk-ui` green — but a concurrent session (`session_01Cx8…`) had already rebased/pushed
+  the same result (`a81fd8c`) and its CI was `in_progress`, so #1902 is left to that session to merge on green
+  (cannot merge past a pending check; hard rule). No production logic touched by either.
+- **What:** feature-parity §Q — the relative-time classification SSOT, port of iOS `RelativeTime.classify` (the
+  threshold source of truth the iOS `RelativeTimeFormatter` builds on). Underpins every conversation-row / feed /
+  notification / presence timestamp.
+- **Added (production):**
+  - `:core:model` new package `me.meeshy.sdk.model.time` — `RelativeTimeUnit` sealed ladder
+    (`Now`/`Seconds`/`Minutes`/`Hours`/`Days`/`Weeks`/`Months`/`AbsoluteDate(epochMillis)`, value but no text);
+    `RelativeTime.classify(epochMillis, referenceMillis)` with thresholds as named `const` (SSOT): `Now`<30s →
+    seconds<1min → minutes<1h → hours<1day → days<7d → weeks<30d → months<90d → absolute date. Rendering
+    (localized strings + `Locale`-aware absolute date) stays UI-side, exactly as iOS keeps it in the view layer.
+- **Surpasses iOS** on two implicit edges: future/skew (negative interval) → `Now` (no negative counts); `Long`
+  arithmetic throughout → a decades-old timestamp reaches the absolute-date rung without 32-bit `Int` overflow.
+- **Tests (+24, RED→GREEN):** every rung; both sides of every boundary (29/30s, 59/60s, 3599/3600s, 6/7d, 29/30d,
+  89/90d); integer-floor of trailing units (119s→1min, 13d→1week); future, far-future, ~30-year (overflow), and
+  unix-epoch edges. **Two-mutation RED check:** `< NOW_THRESHOLD`→`< MINUTE_SECONDS` + `days < WEEK_DAYS`→`days <=
+  WEEK_DAYS` failed exactly the 3 relevant tests (30s + 59s seconds rungs + exactly-7-days→weeks); reverted green.
+- **Verification (local, `LANG=C.utf8`, system Gradle 8.14.3):** `:core:model:testDebugUnitTest` green (24/24 new);
+  `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced, 74 MB).
+- **Reviewer PASS:** diff `apps/android` only (`:core:model` [`time/RelativeTime.kt` + `RelativeTimeTest.kt`],
+  `feature-parity.md`, PROGRESS/NOTES docs); no production logic outside; behaviour-through-public-API, no
+  tautologies (mutation-proven); SDK purity — pure classifier in `:core:model`, presentation UI-side; SSOT —
+  thresholds once as named consts; UDF/instant-app — pure fn, no state/UI; colour/UX coherence — no UI in slice;
+  no coverage floor lowered, no test weakened.
+
+### 2026-07-13 — slice `chat-conversation-media-gallery` ✅ impl + reviewer PASS → PR #1902, rebased on `main` after #1900 merged
+- **Branch:** `claude/apps/android/chat-conversation-media-gallery` (branched off `e0027ae`, then rebased
+  cleanly onto `main` `c93fa81` once #1900 merged — only a `PROGRESS.md` run-log conflict, resolved by
+  keeping both entries; `ChatViewModel` auto-merged, different region than #1900's `toBubbles`).
+- **Housekeeping (routine rule 0):** the previous iteration's PR **#1900** (`chat-message-grouping`) was
+  open, `apps/android`-only (8 files), `mergeable_state: clean`, reviewer re-verified **PASS** — but its
+  **CI run `29219800275` was stuck `queued`** for 30+ min (shared GitHub-Actions runner backlog, not a PR
+  defect). Cannot merge past a non-green check (hard rule), so #1900 is left open to merge the moment CI
+  goes green; #1900 has since merged to `main` (`c93fa81`) and this slice was rebased on top.
+- **What:** feature-parity §C — the fullscreen media gallery, port of iOS `ConversationMediaGalleryView`.
+  Tapping an image no longer opens a viewer scoped to the tapped message; it opens a gallery that spans
+  **every image in the conversation**, in order, starting on the tapped one.
+- **Added (production):**
+  - `:feature:chat` `ConversationMediaGallery.kt` — pure SSOT `of(messages, messageId, imageIndex)` →
+    `ConversationGallery(imageUrls, startIndex)`. Flattens each non-deleted bubble's images in conversation
+    order; `startIndex` = running image count before the tapped message + `imageIndex` clamped into that
+    message's own bounds; unknown/deleted/imageless tapped message → falls back to the start; empty → the
+    inert `EMPTY`.
+- **Changed (production):**
+  - `ChatViewModel`: `openImageViewer` now builds the conversation-wide gallery via the pure SSOT and stores
+    it (`imageViewer: ConversationGallery?`, `null` when there is nothing to show); removed the old
+    single-message `ImageViewerTarget`.
+  - `ChatScreen`: renders `MeeshyImageViewer` (unchanged `:sdk-ui` building block — pinch-zoom + `n/total`
+    counter already there) over `gallery.imageUrls` at `gallery.startIndex`.
+- **Tests (+14, RED→GREEN):** `ConversationMediaGalleryTest` 12 (empty; imageless→empty; single→0; later
+  index within a message; spans-all-messages in order; imageless messages skipped without shifting start;
+  out-of-range index clamps to the message's last image *with a trailing message present* so the per-message
+  clamp is genuinely exercised; negative index clamps to first; unknown id → whole gallery from 0; deleted
+  message contributes no images; tapping a deleted message → start; matched-but-imageless → start).
+  `ChatViewModelTest` +2 (tap builds conversation-wide gallery with correct `startIndex` + dismiss clears;
+  tap on an imageless message opens no gallery). **Two-mutation RED check:** dropping the per-message
+  `coerceIn` clamp + the `isDeleted` skip failed exactly the negative-clamp + 2 deleted tests (the
+  out-of-range test was then strengthened with a trailing message so the clamp isn't masked by the final
+  global clamp).
+- **Verification (local, `LANG=C.utf8`):** `gradle assembleDebug testDebugUnitTest` → `assembleDebug`
+  **SUCCESSFUL**; `:feature:chat` (`ConversationMediaGalleryTest` 12/12, `ChatViewModelTest` 166/166) +
+  `:sdk-ui` green. Full-tree run: only failure is the **known pre-existing `:sdk-core`
+  `PrivacyPreferencesStoreTest` DataStore `StateFlow`-timeout flake** (untouched module; passes on isolated
+  retry — re-run green). **Env note:** the system-Gradle daemon must launch under `LANG=C.utf8` or
+  `:sdk-core:compileDebugUnitTestKotlin` dies with `InvalidPathException` on the em-dash in
+  `ActiveCallRepositoryTest`'s method name (`sun.jnu.encoding` fallback) — `gradle --stop` then re-run with
+  the UTF-8 locale exported.
+- **Reviewer:** **PASS** — diff `apps/android` only; behaviour-through-public-API (`ConversationMediaGallery.of`
+  + VM `openImageViewer`), no tautologies, boundary coverage (empty/single/clamps/unknown/deleted); **SDK
+  purity** — the "which media, starting where" decision is a pure `:feature:chat` atom, the fullscreen viewer
+  stays the generic stateless `:sdk-ui` `MeeshyImageViewer` (opaque url list); **SSOT** — one flatten owns
+  ordering + start resolution; **instant-app/UDF** — pure function + immutable `StateFlow` state, `null` when
+  empty (no blank viewer); **UX coherence** — natural tap-to-open / swipe-across / dismiss-back, no dead end;
+  no coverage floor lowered, no test weakened.
+
+### 2026-07-13 — slice `chat-message-grouping` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/chat-message-grouping` (off latest `main` `e0027ae`).
+- **Housekeeping first (routine rule 0):** no open Android PR from a prior iteration (the two open PRs were an
+  unrelated gateway async-safety fix #1897 and a dependabot #1842). Nothing to merge before starting.
+- **What:** feature-parity §C — consecutive-sender message grouping (WhatsApp/iMessage-style runs). A genuine
+  improvement over iOS, whose `MessageListViewController` hardcodes `isLastInGroup: true` + `showAvatar: !direct`
+  (every incoming message re-shows the sender name).
+- **Added (production):**
+  - `:feature:chat` `MessageGrouping.kt` — `MessageGroupInput(id, senderId, isOutgoing, createdAtMillis?)`,
+    `MessageGroupPosition(isFirstInGroup, isLastInGroup)` (+`isStandalone`), `object MessageGrouping`
+    (`DEFAULT_GAP_MILLIS`=5min, `positions(list, gapMillis)`): same-author (self for outgoing / equal non-null
+    `senderId` for incoming, null sender never groups) AND absolute-delta ≤ gap; missing timestamp rides with prev.
+  - `:sdk-ui` `BubbleContent` +`isFirstInGroup`/`isLastInGroup` (default `true`).
+- **Wired:** `ChatViewModel.toBubbles` computes positions over the hidden-filtered list, derives `showSenderName`
+  from `isFirstInGroup` (was hardcoded `true`), threads first/last onto the bubble; `MessageBubble` (exempt Compose)
+  stacks a run tightly — top gap only on first, bottom gap only on last — distinct messages keep 4dp.
+- **Tests (+15, RED→GREEN):** MessageGroupingTest 15 (empty, single-standalone, within/beyond/exactly-on gap,
+  different senders, two-outgoing-self, outgoing→incoming break, null sender, missing-timestamp-rides, middle-of-
+  three, sender-change split, custom gap, out-of-order abs-delta, keyed-by-every-id). Branches swept: both arms of
+  `sameAuthor` (isOutgoing mismatch / self / null sender / equal id), both arms of `withinGap` (null-either → true,
+  `<=` boundary), first/last edges (no prev / no next), middle (neither).
+- **Two-mutation RED proof:** `<=`→`<` on the gap + `if (a.isOutgoing) return false` in `sameAuthor` → exactly 2
+  tests failed (`a_gap_exactly_on_the_threshold_still_groups`, `two_outgoing_messages_group_as_the_same_self_sender`);
+  reverted, green again.
+- **Verification:** `assembleDebug` BUILD SUCCESSFUL (APK; MessageBubble spacing compiles); `:feature:chat` +
+  `:sdk-ui` `testDebugUnitTest` → 0 failures (MessageGroupingTest 15/15). Full-tree run had only the 3 documented
+  pre-existing flaky `:sdk-core` DataStore timeout tests (Media/Notification/PrivacyPreferencesStoreTest) — count
+  varied 3→1 across runs, each green on isolated retry; not in the two modules this slice touches.
+- **Reviewer PASS:** diff `apps/android` only (6 files: `:feature:chat` [MessageGrouping.kt + test + ChatViewModel],
+  `:sdk-ui` [BubbleContent + MessageBubble], feature-parity/PROGRESS/NOTES docs); no production logic outside;
+  SDK purity — pure clustering in `:feature:chat` (home of ReplyThreads/PinnedMessages/ForwardTargets), Compose
+  spacing app-side; SSOT — one grouping owns header + run; UDF/instant-app — pure fn, cache-first path unchanged;
+  colour/UX coherence — no colour change, natural tightly-stacked runs; no coverage floor lowered, no test weakened.
+
+### 2026-07-12 — slice `settings-about-screen` ✅ impl + reviewer PASS → merged
+- **Branch:** `claude/apps/android/settings-about-screen` (off latest `main` `32df95a`, i.e. after the
+  `settings-crash-diagnostics` PR #1884 was merged at the start of this run).
+- **Housekeeping first (routine rule 0):** the previous iteration's PR #1884
+  (`settings-crash-diagnostics`) was open with green CI (SHA `78e22d85` → success), `apps/android`-only
+  (26 files) and `mergeable_state: clean` → squash-merged to `main` (`32df95a`) before starting this slice.
+- **What:** feature-parity §L — the About screen. Port of iOS `AboutView`.
+- **Added (production):**
+  - `:core:model` `about/` (package `me.meeshy.sdk.model.about`) — `AboutModels.kt` (`AboutInfoKey`,
+    `AboutInfoRow`, `AboutLinkKind`, `AboutLink`, `AboutFeatureKey`, `AboutParams`, `AboutPresentation`),
+    `AppVersionFormatter` (pure `"name (build)"` fragment; blank name → `1.0.0`, non-positive code → `1`),
+    `AboutLinkResolver` (keeps only non-blank http(s) links, order-preserving), `AboutPresentationBuilder`
+    (assembles version label + 3 blank-safe info rows + full feature list + launchable canonical links).
+  - `:feature:settings` `AboutScreen.kt` — Compose glue (brand-gradient header, Indigo section cards,
+    info/feature rows, `ACTION_VIEW` links); reads version/platform facts from `PackageInfo`/`Build`.
+  - `:feature:settings` EN/FR/ES/PT strings (`about_*`).
+- **Wired:** `SettingsScreen` gained `onOpenAbout`; the previously-dead Settings → About "Version" row now
+  navigates to `Routes.ABOUT`; `MeeshyApp` registers `composable(Routes.ABOUT) { AboutScreen(...) }`.
+- **Tests (+27, RED→GREEN):** AppVersionFormatter 7, AboutLinkResolver 9, AboutPresentationBuilder 11.
+  Branches swept: version blank/empty/padded name × zero/negative/positive code + both-degraded; link
+  https/http/uppercase-scheme/padded kept, blank/non-http/schemeless dropped, mixed-order preserved, empty;
+  builder version-label delegation, platform prefix vs bare-Android (blank release), appId trim vs default,
+  sdk trim vs default, info-row fixed order, features = all keys, links = launchable-only canonical.
+- **Two-mutation RED proof:** leak non-positive build code (`build = versionCode.toString()`) + always-prefix
+  platform (`"$PREFIX $release"`) → exactly 4 tests failed (`format_zeroCode…`, `format_negativeCode…`,
+  `format_bothDegraded…`, `build_blankRelease_platformRowIsBareAndroid`); reverted, green again.
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model` + `:feature:settings`
+  `testDebugUnitTest` green.
+- **Reviewer PASS:** diff `apps/android` only (14 files: `:core:model` [4 new + 3 test], `:feature:settings`
+  [AboutScreen + SettingsScreen + 4 strings], `:app` nav wiring, feature-parity/PROGRESS/NOTES docs); no
+  production logic outside; **SDK purity** — pure formatter/resolver/builder in `:core:model` (no Android
+  import), the "read PackageInfo / which icon / open URL" glue app-side; **SSOT** — one `AppVersionFormatter`
+  owns the version string, one `AboutLinkResolver` the launchability gate, no re-implementation;
+  **UDF/instant-app** — pure synchronous `remember`ed projection, no network/spinner; **colour/UX coherence**
+  — Indigo brand-gradient header + Indigo section headers + Info-coloured links, natural row→screen→back,
+  no dead end (the version row was previously inert); **no coverage floor lowered, no test weakened**.
+- **Next slice:** the remaining §L static screens (Help & Support, Terms of Service, Privacy Policy,
+  open-source licenses — the licenses screen has a genuinely testable pure core: parse/group/sort an
+  auto-generated licenses manifest), or the chat media view that consumes the `MediaAutoDownloadDecider`.
+
+### 2026-07-12 — slice `settings-crash-diagnostics` ✅ merged to `main` (PR #1884, squash `32df95a`, CI green)
+- **Branch:** `claude/apps/android/settings-crash-diagnostics` (off latest `main` `4d341f2`).
+- **What:** feature-parity §L — the crash-report diagnostics viewer with share. Port of iOS
+  `CrashDiagnosticsManager` + `CrashReportSheet`; Android-honest capture via
+  `Thread.setDefaultUncaughtExceptionHandler` (analogue of iOS `NSSetUncaughtExceptionHandler`, chains to the
+  previous handler).
+- **Added (production):**
+  - `:core:model` `diagnostics/` — `CrashKind`(+`CrashSeverity`) severity/wire-token SSOT, `CrashDiagnostic`
+    (`@Serializable`), `CrashDiagnosticFactory.fromThrowable` (throwable→diagnostic, id/ts injected),
+    `CrashReportFormatter` (share text, port of `formatAllReports()`), `CrashReportRetention`
+    (sort-newest-first + cap 50 + overflow GC, port of `decodeAllReports()`), `CrashReportCodec`
+    (`storageValue`/`crashReportsFromStorage`, corruption-safe, skips bad elements).
+  - `:feature:settings` — `CrashDiagnosticsStore` (interface) + `FileCrashDiagnosticsStore` (exempt I/O glue,
+    `@Synchronized` sync `record`), `CrashDiagnosticsRecorder` (installer), `CrashDiagnosticsModule` (Hilt
+    binding), `CrashReportViewModel` (UDF), `CrashReportScreen` (glue), SettingsScreen "Diagnostics" row.
+  - `:app` — `Routes.DIAGNOSTICS` + composable + SettingsScreen callback; `MeeshyApplication` installs the
+    recorder in `onCreate`.
+- **Tests (RED→GREEN):** +42 — CrashKind 5, CrashDiagnosticFactory 5, CrashReportFormatter 5,
+  CrashReportRetention 12, CrashReportCodec 6, CrashReportViewModel 9. Branches swept: severity/wire per kind;
+  null-message placeholder; cause-in-details; formatter empty/single/multi/order/ISO; retention
+  empty/single/newest-first/tie-break/under-cap/at-boundary/over-cap/cap≤0/overflow; codec
+  roundtrip/blank/malformed/non-array/skip-corrupt/unknown-keys; VM load success+failure, empty+shareContent,
+  optimistic clear+rollback+inert+in-flight guard+cancellation.
+- **Verification:** `:app:assembleDebug` BUILD SUCCESSFUL; `:core:model` + `:feature:settings` diagnostics
+  tests green. Full all-module `testDebugUnitTest`: only failure = documented DataStore flake
+  `NotificationPreferencesStoreTest` (1/576 sdk-core, green in isolation in 4s, NOTES §DataStore) — this slice
+  adds no DataStore store and touches no sdk-core code. Two-mutation RED proof: misclassify DISK severity +
+  drop the retention cap → exactly 3 relevant tests fail (`severity_mapsInfoKinds`,
+  `retained_overCap_dropsOldestBeyondCap`, `retained_capZeroOrNegative_isEmpty`); reverted.
+- **Reviewer:** PASS. Diff `apps/android` only (`:core:model` new `diagnostics/` files, `:feature:settings`
+  new store/recorder/module/VM/screen + SettingsScreen row + EN/FR/ES/PT strings, `:app` nav + Application
+  install); no production logic outside `apps/android`. SDK purity — pure classify/format/retain/codec in
+  `:core:model`, "when to record / on-disk layout / cache→UI" orchestration in `:feature:settings`. SSOT — one
+  formatter/retention/codec, no re-implementation. UDF/instant-app — immutable `StateFlow<UiState>`, skeleton
+  only on cold empty, optimistic clear with rollback. Colour/UX — severity badges from `MeeshyPalette`
+  (Error/Warning/Info), natural back nav, share + confirmed clear, no dead end. No coverage floor lowered, no
+  test weakened.
+- **Env note:** the gradle **wrapper** dist download is proxy-blocked (403 on services.gradle.org→github);
+  use the pre-installed `/opt/gradle/bin/gradle` (8.14.3, compatible with AGP 8.7.3). See NOTES §Gradle.
+- **Next:** the chat media view that consumes the `MediaAutoDownloadDecider` (auto-DL trigger + manual-download
+  affordance for SKIP_POLICY); in-place crop/resize/compress before avatar/banner upload (§K); or the §L
+  static screens (Help/ToS/Privacy/licenses/About).
 
 ### 2026-07-12 — slice `media-auto-download-decider` ✅ impl + reviewer PASS + MERGED
 - **Branch:** `claude/apps/android/media-auto-download-decider` (off latest `main`).
@@ -7635,6 +8305,12 @@ After Stories richness is sufficient, advance to the **Calls** area
   PROGRESS,REVIEWER,TDD-COVERAGE,NOTES}.md`.
 
 ## Blocked / risks
+- ⚠ **PR #1894 (`settings-open-source-licenses`) merge-blocked on a pre-existing, unrelated gateway CI
+  failure.** The monorepo "Test gateway" job fails 3 tests in `services/gateway/.../calls-routes.test.ts`
+  (endCall/leaveCall returning `success:false`). The **same job also fails on main's own push CI** (sha
+  `6d0b17d`), so main is red independently of this apps/android-only slice. Can't fix without touching
+  gateway production logic (out of scope). Held blocked; will squash-merge once main's gateway suite is
+  green. Code-complete + locally green (`assembleDebug` + all-module unit tests).
 - No Android CI workflow → CI green is the JS/Python monorepo suite; local
   `meeshy.sh check` is the real Android gate. (Follow-up: add Android CI.)
 - No Kover/Jacoco gate wired → coverage is a discipline (see `TDD-COVERAGE.md`).

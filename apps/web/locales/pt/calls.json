@@ -68,6 +68,9 @@
       "qualityDegraded": "A conexão de {name} está instável",
       "screenCapturing": "{name} pode estar gravando a tela"
     },
+    "captions": {
+      "region": "Legendas traduzidas ao vivo"
+    },
     "stream": {
       "disconnected": "Desconectado",
       "participantLeft": "{name} saiu",
@@ -88,7 +91,9 @@
       "callAlreadyEnded": "A chamada terminou",
       "videoSuspendedPoorConnection": "Conexão fraca — vídeo pausado para manter a chamada",
       "videoResumed": "Conexão recuperada — vídeo reativado",
-      "connectTimeout": "Não foi possível estabelecer a conexão — chamada encerrada"
+      "connectTimeout": "Não foi possível estabelecer a conexão — chamada encerrada",
+      "callFailed": "Falha na conexão da chamada",
+      "retry": "Tentar novamente"
     },
     "permissions": {
       "title": {
@@ -133,6 +138,13 @@
     "waiting": {
       "forParticipant": "Aguardando o participante...",
       "noVideo": "Sem vídeo"
+    },
+    "callWaiting": {
+      "title": "Chamada em espera",
+      "reject": "Recusar",
+      "endAndAnswer": "Encerrar e atender",
+      "rejectLabel": "Recusar a chamada em espera",
+      "endAndAnswerLabel": "Encerrar a chamada atual e atender"
     },
     "info": {
       "participant": "{count} participante",

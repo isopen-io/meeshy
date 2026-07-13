@@ -284,6 +284,32 @@ export class ReactionService {
     return reactions.map(r => this.mapReactionToData(r));
   }
 
+  // A user has a distinct Participant.id per conversation, and reactions are
+  // keyed by Participant.id — never by User.id (they are ObjectIds from
+  // different collections and never collide). Resolving the user's reactions
+  // therefore requires expanding userId → their participant ids first, then
+  // filtering reactions across all of them. Passing a User.id straight into
+  // `getParticipantReactions` (the previous route behaviour) matched zero rows.
+  async getUserReactions(userId: string): Promise<ReactionData[]> {
+    const participants = await this.prisma.participant.findMany({
+      where: { userId },
+      select: { id: true }
+    });
+
+    const participantIds = participants.map(p => p.id);
+    if (participantIds.length === 0) {
+      return [];
+    }
+
+    const reactions = await this.prisma.reaction.findMany({
+      where: { participantId: { in: participantIds } },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+
+    return reactions.map(r => this.mapReactionToData(r));
+  }
+
   async hasParticipantReacted(
     messageId: string,
     emoji: string,

@@ -175,10 +175,13 @@ final class CallHangupFastPathTests: XCTestCase {
             XCTFail("CallManager must define endCall()")
             return
         }
-        let end = manager.index(endCallRange.lowerBound, offsetBy: 3000, limitedBy: manager.endIndex) ?? manager.endIndex
+        let end = manager.range(
+            of: "// MARK: - System Picture-in-Picture",
+            range: endCallRange.upperBound ..< manager.endIndex
+        )?.lowerBound ?? manager.endIndex
         let body = String(manager[endCallRange.lowerBound ..< end])
         guard let byeIndex = body.range(of: "sendHangupBye()"),
-              let teardownIndex = body.range(of: "endCallInternal(reason: .local)") else {
+              let teardownIndex = body.range(of: "endCallInternal(reason:") else {
             XCTFail("endCall() must send the in-band bye AND perform the local teardown")
             return
         }

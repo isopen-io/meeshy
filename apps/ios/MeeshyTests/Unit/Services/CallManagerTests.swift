@@ -1039,6 +1039,84 @@ final class CallReliabilityPolicyDefaultsTests: XCTestCase {
             .retry
         )
     }
+
+    // --- Remote-end idempotence (call:ended dedup — native + REST broadcast, P1-B) ---
+
+    func test_shouldProcessRemoteEnd_matchingCallIdOnConnected_returnsTrue() {
+        XCTAssertTrue(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .connected))
+    }
+
+    func test_shouldProcessRemoteEnd_duplicateWhileEnded_returnsFalse() {
+        // Second `call:ended` (native hangup + REST end/leave broadcast) while
+        // already terminal must be a no-op.
+        XCTAssertFalse(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .ended(reason: .remote)))
+    }
+
+    func test_shouldProcessRemoteEnd_differentCallId_returnsFalse() {
+        // An event for another call must never tear down the current one.
+        XCTAssertFalse(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c2", callState: .connected))
+    }
+
+    func test_shouldProcessRemoteEnd_nilCurrentCallId_returnsFalse() {
+        XCTAssertFalse(Policy.shouldProcessRemoteEnd(
+            currentCallId: nil, incomingCallId: "c1", callState: .connected))
+    }
+
+    func test_shouldProcessRemoteEnd_duringRing_returnsTrue() {
+        // A remote cancel during the ring must still be processed.
+        XCTAssertTrue(Policy.shouldProcessRemoteEnd(
+            currentCallId: "c1", incomingCallId: "c1", callState: .ringing(isOutgoing: true)))
+    }
+}
+
+// MARK: - CallEndReasonMapper (rawReason → CXCallEndedReason + CallEndReason)
+
+final class CallEndReasonMapperTests: XCTestCase {
+
+    func test_map_missedVariants_returnUnansweredMissed() {
+        // camelCase + snake_case + case-insensitivity (mapper lowercases).
+        for raw in ["missed", "no_answer", "unanswered", "MISSED", "No_Answer"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .unanswered, "raw=\(raw)")
+            XCTAssertEqual(r.local, .missed, "raw=\(raw)")
+        }
+    }
+
+    func test_map_rejectedVariants_returnDeclinedElsewhereRejected() {
+        for raw in ["rejected", "declined"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .declinedElsewhere, "raw=\(raw)")
+            XCTAssertEqual(r.local, .rejected, "raw=\(raw)")
+        }
+    }
+
+    func test_map_answeredElsewhereVariants_returnAnsweredElsewhereRemote() {
+        for raw in ["answeredElsewhere", "answered_elsewhere"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .answeredElsewhere, "raw=\(raw)")
+            XCTAssertEqual(r.local, .remote, "raw=\(raw)")
+        }
+    }
+
+    func test_map_failedVariants_returnFailedConnectionLost() {
+        for raw in ["failed", "connectionLost"] {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .failed, "raw=\(raw)")
+            XCTAssertEqual(r.local, .connectionLost, "raw=\(raw)")
+        }
+    }
+
+    func test_map_unknownOrNil_defaultsToRemoteEnded() {
+        let inputs: [String?] = [nil, "completed", "garbage", ""]
+        for raw in inputs {
+            let r = CallEndReasonMapper.map(raw)
+            XCTAssertEqual(r.cx, .remoteEnded, "raw=\(raw ?? "nil")")
+            XCTAssertEqual(r.local, .remote, "raw=\(raw ?? "nil")")
+        }
+    }
 }
 
 // MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)
@@ -3246,79 +3324,15 @@ final class CallStateReconnectingTests: XCTestCase {
 }
 
 // MARK: - handleRemoteEnd rawReason Mapping
-
-@MainActor
-final class CallManagerHandleRemoteEndTests: XCTestCase {
-
-    private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    func test_handleRemoteEnd_answeredElsewhere_handlesBothVariants() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "cxReason = .remoteEnded", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-
-        XCTAssertTrue(
-            switchBlock.contains("\"answeredelsewhere\""),
-            "handleRemoteEnd must handle 'answeredelsewhere' (camelCase lowercased) from legacy gateway payloads"
-        )
-        XCTAssertTrue(
-            switchBlock.contains("\"answered_elsewhere\""),
-            "handleRemoteEnd must handle 'answered_elsewhere' (snake_case) — the gateway uses " +
-            "snake_case for multi-word event reasons as documented in CLAUDE.md"
-        )
-    }
-
-    func test_handleRemoteEnd_answeredElsewhere_casesShareSameOutcome() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "cxReason = .remoteEnded", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-
-        guard let camelIdx = switchBlock.range(of: "\"answeredelsewhere\"")?.lowerBound,
-              let snakeIdx = switchBlock.range(of: "\"answered_elsewhere\"")?.lowerBound else {
-            XCTFail("Both 'answeredelsewhere' and 'answered_elsewhere' variants must be present"); return
-        }
-        // They must appear in the same case pattern (within 60 chars of each other)
-        let distance = switchBlock.distance(from: min(camelIdx, snakeIdx), to: max(camelIdx, snakeIdx))
-        XCTAssertLessThan(distance, 60, "Both 'answeredelsewhere' variants must be in the same case pattern")
-    }
-
-    func test_handleRemoteEnd_missed_handlesAllVariants() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "default:", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-        XCTAssertTrue(switchBlock.contains("\"missed\""), "handleRemoteEnd must handle 'missed'")
-        XCTAssertTrue(switchBlock.contains("\"no_answer\""), "handleRemoteEnd must handle 'no_answer'")
-        XCTAssertTrue(switchBlock.contains("\"unanswered\""), "handleRemoteEnd must handle 'unanswered'")
-    }
-
-    func test_handleRemoteEnd_rejected_handlesAllVariants() throws {
-        let source = try callManagerSource()
-        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
-            XCTFail("handleRemoteEnd switch not found"); return
-        }
-        let blockEnd = source.range(of: "default:", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
-        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
-        XCTAssertTrue(switchBlock.contains("\"rejected\""), "handleRemoteEnd must handle 'rejected'")
-        XCTAssertTrue(switchBlock.contains("\"declined\""), "handleRemoteEnd must handle 'declined'")
-    }
-}
+//
+// The former source-guard tests (CallManagerHandleRemoteEndTests) string-matched
+// the `switch rawReason?.lowercased()` INSIDE handleRemoteEnd. That switch was
+// extracted to the pure `CallEndReasonMapper` (2026-07-12) — so those guards
+// broke on the refactor ("handleRemoteEnd switch not found"), the exact
+// fragility the audit flagged. They are replaced by `CallEndReasonMapperTests`
+// above, which assert the SAME variants at BEHAVIOUR (missed/no_answer/unanswered,
+// rejected/declined, answeredElsewhere/answered_elsewhere → identical outcome,
+// + nil/unknown default) instead of matching source text.
 
 // MARK: - DTMF Validation
 
@@ -3811,6 +3825,252 @@ final class RejectPendingCallTests: XCTestCase {
             "emitCallReject must carry reason=rejected — without it the gateway resolves a " +
             "pre-answer end to `missed` and notifies the decliner of a call they just refused."
         )
+    }
+}
+
+// MARK: - Lock-screen decline = reject (§arc reject 2026-07-12)
+
+/// A CallKit `CXEndCallAction` on an INCOMING ringing call is the lock-screen
+/// « Refuser » button — the single decline path for background calls. It routes
+/// through `endCall()`, not `rejectCall()`: without a dedicated branch there,
+/// the end reaches the gateway without reason=rejected, the server resolves the
+/// pre-answer end to `missed`, and the decliner gets the false "missed call"
+/// notification the reject arc just eliminated on every other path.
+final class EndCallLockScreenDeclineTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_endCall_detectsPreAnswerIncomingDecline() throws {
+        // endCall() must distinguish a pre-answer INCOMING call (lock-screen
+        // decline via CXEndCallAction) from a regular hang-up.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(".ringing(isOutgoing: false)"),
+            "endCall() must detect the pre-answer incoming state — a CXEndCallAction " +
+            "on a ringing incoming call is the lock-screen decline, not a hang-up."
+        )
+    }
+
+    func test_endCall_declineBranchEmitsCallReject() throws {
+        // The decline branch must emit call:end {reason: rejected} via
+        // emitCallReject — a plain end resolves to `missed` server-side.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallReject(callId:"),
+            "endCall() must route the pre-answer incoming decline through " +
+            "emitCallReject — otherwise the lock-screen decline resolves to `missed` " +
+            "and the decliner is notified of a call they just refused."
+        )
+    }
+
+    func test_endCall_declineEmit_beforeEndCallInternal() throws {
+        // The reject emit must fire BEFORE endCallInternal tears down local
+        // state — mirroring the emit-then-teardown order of the regular path.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        guard let emitRange = body.range(of: "emitCallReject(callId:"),
+              let teardownRange = body.range(of: "endCallInternal(") else {
+            XCTFail("Expected emitCallReject and endCallInternal in endCall()"); return
+        }
+        XCTAssertLessThan(
+            emitRange.lowerBound,
+            teardownRange.lowerBound,
+            "endCall() must emit the reject BEFORE endCallInternal — teardown clears " +
+            "the identifiers the emit needs."
+        )
+    }
+
+    func test_endCall_declineTeardownCarriesRejectedReason() throws {
+        // Local teardown must record .rejected (journal/analytics coherence with
+        // rejectCall) instead of .local when the end is a decline.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains(".rejected"),
+            "endCall()'s decline branch must pass .rejected to endCallInternal — " +
+            "the decliner's own journal must not label a refusal as a local hang-up."
+        )
+    }
+}
+
+// MARK: - Deferred reject reconciliation (§arc reject 2026-07-12, parité Android DeclinedCallStore)
+
+/// A decline while the socket is down (VoIP push wakes the app cold, the user
+/// declines within seconds — before the socket handshake lands) must NOT be
+/// dropped: the caller would keep ringing the full 60 s window and the server
+/// would resolve `missed`. Android defers via DeclinedCallStore and drains on
+/// connect; iOS already defers plain hang-ups via pendingEndReconciliationCallId
+/// — the reject path must ride the same mechanism, reason included.
+final class RejectDeferredReconciliationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_emitCallReject_defersWhenSocketDown() throws {
+        // The private reject helper must mirror emitCallEndReliably's socket-down
+        // deferral — an emit into a dead socket is silently dropped by the SDK.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func emitCallReject(callId: String)", in: source) else {
+            XCTFail("emitCallReject(callId:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard MessageSocketManager.shared.isConnected"),
+            "emitCallReject must defer when the socket is down — a dropped reject leaves " +
+            "the caller ringing 60 s and the server resolving `missed`."
+        )
+        XCTAssertTrue(
+            body.contains("pendingEndReconciliationCallId = callId"),
+            "the deferred reject must be remembered in pendingEndReconciliationCallId " +
+            "so the connectionState observer replays it on reconnect."
+        )
+    }
+
+    func test_reconnectReplay_preservesRejectedReason() throws {
+        // The reconnect observer must replay a deferred DECLINE as a reject —
+        // replaying it as a plain end would resurrect the `missed` mislabel the
+        // reject arc eliminated.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("emitCallReject(callId: pending)"),
+            "the connectionState reconciliation must route a deferred reject through " +
+            "emitCallReject(callId:) — a plain replay loses reason=rejected."
+        )
+    }
+
+    func test_rejectPendingCall_routesThroughDeferralCapableHelper() throws {
+        // rejectPendingCall must use the private helper (deferral-capable), not
+        // the SDK singleton directly — a direct emit bypasses the socket-down path.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertFalse(
+            body.contains("MessageSocketManager.shared.emitCallReject"),
+            "rejectPendingCall must not call the SDK emitCallReject directly — route " +
+            "through the private emitCallReject(callId:) helper to inherit the " +
+            "socket-down deferral."
+        )
+        XCTAssertTrue(
+            body.contains("emitCallReject(callId: pending.callId)"),
+            "rejectPendingCall must still emit the reject for the pending callId."
+        )
+    }
+}
+
+// MARK: - Retry-on-failure (« Réessayer », parité web/Android)
+
+/// Source-guards for the transient-failure retry: `canRetryCall` gates on the
+/// shared [CallRetryPolicy], `retryCall()` re-dials the captured outgoing
+/// context, and a retryable end holds the ended screen longer so the user can
+/// tap « Réessayer » before it auto-dismisses.
+final class RetryCallSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    var ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_canRetryCall_gatesOnPolicyAndOutgoingContext() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "var canRetryCall: Bool", in: source) else {
+            XCTFail("canRetryCall not found"); return
+        }
+        XCTAssertTrue(body.contains("CallRetryPolicy.isRetryable(reason)"),
+            "canRetryCall must gate on the shared CallRetryPolicy (one rule, 3 platforms).")
+        XCTAssertTrue(body.contains("lastOutgoingContext != nil"),
+            "canRetryCall must require a captured outgoing context — an incoming-call " +
+            "failure has nothing to re-dial.")
+    }
+
+    func test_retryCall_reDialsTheCapturedContext() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func retryCall()", in: source) else {
+            XCTFail("retryCall() not found"); return
+        }
+        XCTAssertTrue(body.contains("guard canRetryCall"),
+            "retryCall must be inert unless canRetryCall — a normal hangup must never re-dial.")
+        XCTAssertTrue(body.contains("startCall("),
+            "retryCall must re-enter startCall with the captured dial context.")
+    }
+
+    func test_startCall_capturesTheOutgoingContextForRetry() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func startCall(conversationId:", in: source) else {
+            XCTFail("startCall not found"); return
+        }
+        XCTAssertTrue(body.contains("lastOutgoingContext = (conversationId, userId, displayName, isVideo)"),
+            "startCall must snapshot the dial context so a transient failure is retryable.")
+    }
+
+    func test_endCallInternal_holdsARetryableFailureLongerBeforeAutoSettle() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCallInternal(reason:", in: source) else {
+            XCTFail("endCallInternal not found"); return
+        }
+        XCTAssertTrue(body.contains("callEndRetryableSettleSeconds"),
+            "a retryable failure must use the longer settle window so « Réessayer » " +
+            "isn't yanked before the user can tap it.")
     }
 }
 
@@ -5226,15 +5486,19 @@ final class SignalingDegradedIndicatorTests: XCTestCase {
         )
     }
 
-    func test_callView_rendersSignalingDegradedBanner() throws {
+    func test_callView_surfacesSignalingDegradedState_viaDiscreetStatusPill() throws {
         let source = try sourceFile("Meeshy/Features/Main/Views/CallView.swift")
         XCTAssertTrue(
             source.contains("callManager.isSignalingDegraded"),
-            "CallView must render a discreet banner while signaling is degraded"
+            "CallView must still react to the signaling-degraded state"
         )
         XCTAssertTrue(
+            source.contains("call.status.signaling"),
+            "the state must be surfaced by the discreet inline status pill « Serveur déconnecté »"
+        )
+        XCTAssertFalse(
             source.contains("signalingDegradedBanner"),
-            "the banner must follow the reconnecting/quality banner pattern (stacked capsules)"
+            "the intrusive pop-up banner was removed (user feedback 2026-07-13) — no more transient pop-up for network weakness"
         )
     }
 }

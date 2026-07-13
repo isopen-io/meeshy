@@ -96,9 +96,19 @@ public class ThemeManager: ObservableObject, @unchecked Sendable {
     }
 
     public func syncWithSystem(_ colorScheme: ColorScheme) {
-        if preference == .system {
-            let resolved: ThemeMode = colorScheme == .dark ? .dark : .light
-            if mode != resolved { mode = resolved }
+        guard preference == .system else { return }
+        let resolved: ThemeMode = colorScheme == .dark ? .dark : .light
+        guard mode != resolved else { return }
+        // Defer the @Published mutation off the current SwiftUI update pass. The
+        // colorScheme change that triggers this (SystemThemeDetector, on the
+        // RootView path) is itself observed by views in-flight, so mutating
+        // `mode` synchronously here republishes ThemeManager *within* that pass →
+        // "Publishing changes from within view updates is not allowed" + parasitic
+        // re-renders on the watchdog-sensitive root path (P0). Re-check on the
+        // next main-actor turn in case `preference` changed meanwhile.
+        Task { @MainActor [weak self] in
+            guard let self, self.preference == .system, self.mode != resolved else { return }
+            self.mode = resolved
         }
     }
 
