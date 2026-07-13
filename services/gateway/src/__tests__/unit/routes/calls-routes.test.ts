@@ -27,6 +27,8 @@ const mockJoinCall = jest.fn<any>();
 const mockLeaveCall = jest.fn<any>();
 const mockGetActiveCallForConversation = jest.fn<any>();
 const mockListHistory = jest.fn<any>();
+const mockFinalizeCallSummary = jest.fn<any>();
+const mockBroadcastCallEndedIfTerminal = jest.fn<any>();
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
   const statusCode = opts?.statusCode ?? 200;
@@ -47,6 +49,8 @@ jest.mock('../../../services/CallService', () => ({
     getActiveCallForConversation: (...args: any[]) =>
       mockGetActiveCallForConversation(...args),
     listHistory: (...args: any[]) => mockListHistory(...args),
+    finalizeCallSummary: (...args: any[]) => mockFinalizeCallSummary(...args),
+    broadcastCallEndedIfTerminal: (...args: any[]) => mockBroadcastCallEndedIfTerminal(...args),
   })),
 }));
 
@@ -461,6 +465,8 @@ describe('callRoutes', () => {
 
       expect(mockEndCall).toHaveBeenCalledWith(CALL_ID, USER_ID, PART_ID);
       expect(reply._body).toMatchObject({ success: true, data: session });
+      // Parité socket call:end — le pair est notifié en temps réel via call:ended.
+      expect(mockBroadcastCallEndedIfTerminal).toHaveBeenCalledWith(session, USER_ID);
     });
 
     it('allows an admin member to end the call', async () => {
@@ -789,6 +795,9 @@ describe('callRoutes', () => {
         participantId: PART_ID,
       });
       expect(reply._body).toMatchObject({ success: true, data: session });
+      // Parité socket call:leave — call:ended diffusé si le leave a terminé l'appel
+      // (broadcastCallEndedIfTerminal auto-gardé sur le statut terminal).
+      expect(mockBroadcastCallEndedIfTerminal).toHaveBeenCalledWith(session, USER_ID);
     });
 
     it('uses authContext.participantId for leaveParticipantId even when leaving own slot', async () => {

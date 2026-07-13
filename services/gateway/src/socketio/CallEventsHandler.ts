@@ -1116,6 +1116,23 @@ export class CallEventsHandler {
   }
 
   /**
+   * Public entry point for the REST `DELETE /calls/:id` (end) and
+   * `.../participants/:pid` (leave) routes, via
+   * `CallService.setCallEndedBroadcaster` (wired in server.ts). Those routes
+   * hold no `io`, so they delegate the `call:ended` fanout here. Thin wrapper
+   * over the private `broadcastCallEnded` — the pair on a socket now learns of
+   * a REST-terminated call in real time instead of waiting for the ~120s GC.
+   */
+  async broadcastCallEndedForTerminatedCall(
+    io: SocketIOServer,
+    callId: string,
+    conversationId: string | undefined,
+    endedEvent: CallEndedEvent
+  ): Promise<void> {
+    return this.broadcastCallEnded(io, callId, conversationId, endedEvent);
+  }
+
+  /**
    * Translates a final transcription segment to each active participant's
    * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
    * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.

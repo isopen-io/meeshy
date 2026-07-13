@@ -105,6 +105,7 @@ fun SettingsScreen(
     onOpenDiagnostics: () -> Unit = {},
     onOpenAbout: () -> Unit = {},
     onOpenSupport: () -> Unit = {},
+    onOpenLicenses: () -> Unit = {},
     onOpenTerms: () -> Unit = {},
     onOpenPrivacyPolicy: () -> Unit = {},
     onOpenDeleteAccount: () -> Unit = {},
@@ -321,6 +322,8 @@ fun SettingsScreen(
                 SettingsRow(label = stringResource(R.string.settings_help_support), detail = null, onClick = onOpenSupport)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_diagnostics), detail = null, onClick = onOpenDiagnostics)
+                HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
+                SettingsRow(label = stringResource(R.string.settings_open_source_licenses), detail = null, onClick = onOpenLicenses)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))
                 SettingsRow(label = stringResource(R.string.settings_terms_of_service), detail = null, onClick = onOpenTerms)
                 HorizontalDivider(modifier = Modifier.padding(start = MeeshySpacing.lg))

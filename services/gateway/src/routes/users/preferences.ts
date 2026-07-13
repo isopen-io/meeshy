@@ -411,8 +411,13 @@ export async function getUserStats(fastify: FastifyInstance) {
         fastify.prisma.message.count({
           where: { sender: { userId }, deletedAt: null },
         }),
+        // Active memberships only: Participant rows are soft-deactivated on
+        // leave/ban/delete-for-me (isActive: false), never deleted. A bare
+        // `{ userId }` count over-reports `totalConversations` and can falsely
+        // unlock `connecteur`. Matches the `isActive: true` filter used for the
+        // profile-completion counts above and the `/users/me/stats` endpoint.
         fastify.prisma.participant.count({
-          where: { userId },
+          where: { userId, isActive: true },
         }),
         fastify.prisma.$runCommandRaw({
           count: 'Message',

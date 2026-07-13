@@ -70,7 +70,12 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.format.RelativeTimeFormat
+import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import java.time.ZoneId
+import java.util.Locale
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
@@ -161,6 +166,24 @@ fun FeedScreen(
     }
 }
 
+/**
+ * The feed post timestamp as a compact relative label ("5 min", "2 h", "3 j", …) rather than a
+ * raw absolute date — the Prisme-style discreet framing. Falls back to the absolute short label
+ * when the instant is absent/unparsable, so a malformed timestamp never blanks or crashes the row.
+ */
+@Composable
+private fun postRelativeTime(iso: String): String {
+    val strings = rememberRelativeTimeStrings()
+    val epochMillis = isoToEpochMillisOrNull(iso) ?: return shortDateTimeLabel(iso)
+    return RelativeTimeFormat.short(
+        epochMillis = epochMillis,
+        referenceMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault(),
+        locale = Locale.getDefault(),
+        strings = strings,
+    )
+}
+
 @Composable
 private fun PostCard(
     post: FeedPostPresentation,
@@ -210,7 +233,7 @@ private fun PostCard(
                     }
                     post.createdAtIso?.let {
                         Text(
-                            text = shortDateTimeLabel(it),
+                            text = postRelativeTime(it),
                             style = MaterialTheme.typography.bodySmall,
                             color = MeeshyTheme.tokens.textSecondary,
                         )

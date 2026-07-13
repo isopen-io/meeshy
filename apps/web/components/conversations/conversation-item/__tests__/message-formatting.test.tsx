@@ -64,3 +64,23 @@ describe('formatLastMessage — parité dark-mode des icônes de pièce jointe',
     expect(span?.className).toContain('dark:text-gray-400');
   });
 });
+
+/**
+ * Durée vidéo : au même titre que l'audio, une vidéo d'au moins une heure doit
+ * factoriser la composante heures (`h:mm:ss.cc`) plutôt que déborder les minutes
+ * (`mmm:ss.cc`). formatVideoDuration est testé via l'API publique formatLastMessage.
+ */
+describe('formatLastMessage — durée vidéo', () => {
+  it('vidéo < 1h : format mm:ss.cc sans heures', () => {
+    // 5 min 07 s 250 ms
+    const { container } = renderPreview({ mimeType: 'video/mp4', duration: 5 * 60_000 + 7_000 + 250 });
+    expect(container.textContent).toContain('5:07.25');
+  });
+
+  it('vidéo ≥ 1h : factorise les heures (h:mm:ss.cc)', () => {
+    // 1 h 12 min 15 s 300 ms
+    const { container } = renderPreview({ mimeType: 'video/mp4', duration: 3600_000 + 12 * 60_000 + 15_000 + 300 });
+    expect(container.textContent).toContain('1:12:15.30');
+    expect(container.textContent).not.toContain('72:15.30');
+  });
+});

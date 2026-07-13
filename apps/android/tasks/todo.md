@@ -4,7 +4,53 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-legal-documents` ✅
+## This loop (Phase: Media §P) — slice `media-thumbhash-decode` ✅
+**ThumbHash decoder pure core** — the decode beneath the app-side blur placeholder. Pure `:core:model`
+`me.meeshy.sdk.model.media.ThumbHash`: faithful port of Evan Wallace's `thumbHashToRGBA` /
+`thumbHashToAverageRGBA` / `thumbHashToApproximateAspectRatio` (`averageColor`, `approximateAspectRatio`,
+`hasAlpha`, `isLandscape`, `decode`→`ThumbHashImage(w,h,rgba)`) — YCoCg→RGB inverse-DCT over primitives, no
+Android `Bitmap`. Surpasses the reference: rejects a hash too short for the region it reads
+(`IllegalArgumentException` vs silent OOB) + clamps the raster to ≥1×1 (no zero-sized image from a degenerate
+header). +21 tests. `:core:model` tests green; `:app:assembleDebug` → BUILD SUCCESSFUL, APK produced.
+Two-mutation RED check (flip YCoCg blue reconstruction + drop portrait aspect scale) failed exactly the 4
+relevant tests. Reviewer PASS, diff = `apps/android` only. Full-tree tests show only 2 pre-existing flaky
+`:sdk-core` DataStore-timeout failures (pass on retry; unrelated module). The raster→`Bitmap` wrap + Coil
+placeholder wiring + ThumbHash *encoder* (slide generation) remain app-side/next. Next: raster→`Bitmap` + Coil
+placeholder consuming `ThumbHash.decode`; ThumbHash encoder; app-side Bitmap re-encode consuming
+`ImageCompressionPlan`; or app-side voice recorder pill consuming the waveform core.
+
+## Prior loop (Phase: Media §P) — slice `media-waveform-interpolation` ✅ (merged PR #1896)
+**Live-waveform pure core** — the metering→amplitude→resampling math beneath the app-side voice-note waveform,
+shared by the recorder pill and the audio-message player. Pure `:core:model` `me.meeshy.sdk.model.waveform`:
+`AudioLevelNormalizer.normalize` (dB→`0..1`, ports iOS `AudioRecorderManager.normalizeLevel`, +upper-clamp +NaN
+guard), `WaveformLevelWindow` (immutable 15-sample rolling ring, ports `levelHistory` + initial 15-zero fill),
+`WaveformInterpolator.interpolate` (levels→`barCount` linear-blend strip in one pass, ports
+`UniversalComposerBar.interpolatedLevel`, degenerate cases pinned). +28 tests (normalizer 7, window 11,
+interpolator 10). `:core:model` waveform tests green (28/28); full `assembleDebug` + all-module tests green, APK
+produced. Two-mutation RED check (drop normalizer upper clamp + zero the interpolator high-sample blend) failed
+exactly the 4 relevant tests. Reviewer PASS, diff = `apps/android` only. The `MediaRecorder` capture + Compose
+`Canvas` paint remain app-side glue.
+
+## Prior loop (Phase: Settings §L) — slice `settings-open-source-licenses` ✅ (merged PR #1894)
+**Open-source licenses** — the last §L static screen (§L static screens now complete). Port of iOS `LicensesView`
+over an **Android-accurate** curated catalog (Compose/AndroidX/Material/Hilt/Coroutines/Serialization/Coil/OkHttp/
+Retrofit/Media3/Room/Timber/ZXing/Firebase/Socket.IO-java/WebRTC-android) — the libs that actually ship, not iOS's
+Swift deps. Pure `:core:model` SSOTs (`me.meeshy.sdk.model.licenses`): `OpenSourceLicenseType` (MIT/APACHE_2_0/BSD/
+OTHER, decl order = render order), `OpenSourceLicenseResolver.resolvable` (launchability gate, `http(s)://` only —
+narrowed vs Support's `mailto:`), `OpenSourceLicensePresentationBuilder.build` (**surpasses iOS's flat list**:
+groups by type in enum order, sorts each group by name case-insensitively, drops empty groups, excludes
+non-launchable up front), `OpenSourceLicenseCatalog` (curated list + `groups()`). `LicensesScreen` glue:
+accent-coded per-family section cards, tappable repo rows via `ACTION_VIEW`. Wired a new **Open source licenses**
+row in Settings → About (`Routes.LICENSES`). +26 tests (resolver 9, builder 8, catalog 7). Full `:app:assembleDebug`
++ all-module tests green (6m36s, APK produced); two-mutation RED check (break sort + widen resolver to `mailto:`)
+failed exactly the 3 relevant tests. Reviewer PASS, diff = `apps/android` only, EN/FR/ES/PT. **⚠ Merge held:**
+PR #1894 CI is red only on a pre-existing, unrelated gateway failure (`calls-routes.test.ts`, 3 tests) that also
+fails on main's own push CI (sha `6d0b17d`) — can't fix without touching gateway prod logic (out of scope), and
+hard rule = never merge past red CI. Will squash-merge once main's gateway suite is green. Next: chat media view
+consuming `MediaAutoDownloadDecider`; §K crop/resize/compress before upload; or a §K row (device-sessions / 2FA /
+voice-cloning / blocked-users).
+
+## Prior loop (Phase: Settings §L) — slice `settings-legal-documents` ✅
 **Terms of Service + Privacy Policy** — port of iOS `TermsOfServiceView` + `PrivacyPolicyView`, **unified**
 into one data-driven screen keyed by `LegalDocumentKind`, wiring the two previously **dead-end** Settings → About
 rows. Pure `:core:model` SSOTs (`me.meeshy.sdk.model.legal`): `LegalDocumentKind` (route `arg` + `fromArg` parser,

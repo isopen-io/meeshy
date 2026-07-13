@@ -296,10 +296,16 @@ jobs:
           cd services/translator
           # Create virtual environment first
           uv venv --python ${{ env.PYTHON_VERSION }}
-          # Install build dependencies first (required for pkuseg build with no-build-isolation)
-          uv pip install numpy setuptools wheel cython
-          # Then sync all dependencies
-          uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
+          # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
+          # build deps required for pkuseg build with no-build-isolation)
+          for i in 1 2 3; do
+            uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
+              && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Run tests with coverage (80% minimum)
         env:
@@ -395,10 +401,16 @@ jobs:
           cd services/translator
           # Create virtual environment first
           uv venv --python ${{ env.PYTHON_VERSION }}
-          # Install build dependencies first (required for pkuseg build with no-build-isolation)
-          uv pip install numpy setuptools wheel cython
-          # Then sync all dependencies
-          uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
+          # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
+          # build deps required for pkuseg build with no-build-isolation)
+          for i in 1 2 3; do
+            uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
+              && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Create audio output directory
         run: |
@@ -506,10 +518,16 @@ jobs:
           cd services/translator
           # Create virtual environment first
           uv venv --python ${{ env.PYTHON_VERSION }}
-          # Install build dependencies first (required for pkuseg build with no-build-isolation)
-          uv pip install numpy setuptools wheel cython
-          # Then sync all dependencies
-          uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
+          # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
+          # build deps required for pkuseg build with no-build-isolation)
+          for i in 1 2 3; do
+            uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
+              && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Run UnifiedTTSService tests
         env:
@@ -627,10 +645,16 @@ jobs:
           cd services/translator
           # Create virtual environment first
           uv venv --python ${{ env.PYTHON_VERSION }}
-          # Install build dependencies first (required for pkuseg build with no-build-isolation)
-          uv pip install numpy setuptools wheel cython
-          # Then sync all dependencies
-          uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev
+          # Install build deps then sync, with retry (pytorch mirror returns transient 503s;
+          # build deps required for pkuseg build with no-build-isolation)
+          for i in 1 2 3; do
+            uv pip install numpy setuptools wheel cython \
+              && uv sync --python ${{ env.PYTHON_VERSION }} --extra cpu --extra dev \
+              && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       # Generate JavaScript Prisma client (required for Gateway Voice API tests)
       - name: Generate Prisma client (JavaScript)

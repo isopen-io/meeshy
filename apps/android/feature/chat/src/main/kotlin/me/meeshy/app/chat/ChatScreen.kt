@@ -474,15 +474,11 @@ fun ChatScreen(
         }
     }
 
-    val viewerTarget = state.imageViewer?.let { target ->
-        state.messages.firstOrNull { it.messageId == target.messageId }
-            ?.takeIf { it.images.isNotEmpty() }
-            ?.let { bubble -> bubble.images.map { it.url } to target.imageIndex }
-    }
-    if (viewerTarget != null) {
+    val gallery = state.imageViewer
+    if (gallery != null) {
         MeeshyImageViewer(
-            imageUrls = viewerTarget.first,
-            initialIndex = viewerTarget.second,
+            imageUrls = gallery.imageUrls,
+            initialIndex = gallery.startIndex,
             onDismiss = viewModel::dismissImageViewer,
         )
     }

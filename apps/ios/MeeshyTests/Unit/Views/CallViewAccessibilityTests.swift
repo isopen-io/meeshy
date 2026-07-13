@@ -543,9 +543,10 @@ final class CallViewAccessibilityTests: XCTestCase {
 
 /// Retour user : « la pill doit apparaître plus lentement avec une
 /// accélération à mi-chemin — on doit voir comment ça sort de l'encoche, et
-/// comment ça y retourne ». Le mouvement (les DEUX sens) vit dans la
-/// transition interne d'IslandEmergingBanner ; un `.transition` externe au
-/// call-site l'écraserait et la capsule disparaîtrait en fondu sur place.
+/// comment ça y retourne ». Le mouvement (les DEUX sens) vit dans la transition
+/// interne d'IslandEmergingBanner — verrouillé ici pour le jour où le composant
+/// resservira (il n'est plus monté dans CallView depuis le retrait des bannières
+/// réseau pop-up, 2026-07-13).
 @MainActor
 final class IslandBannerEmergenceTransitionTests: XCTestCase {
 
@@ -576,17 +577,4 @@ final class IslandBannerEmergenceTransitionTests: XCTestCase {
         )
     }
 
-    func test_callSites_haveNoExternalTransition_thatWouldOverrideEmergence() throws {
-        let callView = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let start = callView.range(of: "if showRemoteQualityAlertPill {"),
-              let end = callView.range(of: "Effects overlay") else {
-            XCTFail("CallView banner block markers not found")
-            return
-        }
-        let bannerBlock = String(callView[start.lowerBound ..< end.lowerBound])
-        XCTAssertFalse(
-            bannerBlock.contains(".transition("),
-            "Island banner call-sites must NOT attach an external .transition — it overrides the internal island-emergence transition and the capsule would fade in place instead of returning into the island."
-        )
-    }
 }

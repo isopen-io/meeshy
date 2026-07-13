@@ -231,6 +231,22 @@ final class Router: ObservableObject {
         path = [.conversation(conversation)]
     }
 
+    /// Replaces the whole nav stack with a single route. On iPhone this is ONE
+    /// `path` mutation (no `popToRoot()` + delayed `push()`, which fired two
+    /// mutations in quick succession → "NavigationRequestObserver tried to update
+    /// multiple times per frame", #16). iPad two-column forwards via the callback,
+    /// unchanged. Also lands on the target directly instead of flashing root.
+    func replaceStack(with route: Route) {
+        if onRouteRequested != nil {
+            popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self.push(route)
+            }
+            return
+        }
+        path = [route]
+    }
+
     // MARK: - Deep Link Handling
 
     func handleDeepLink(_ url: URL) {
@@ -238,10 +254,7 @@ final class Router: ObservableObject {
             guard let self else { return }
             switch destination {
             case .ownProfile:
-                popToRoot()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self.push(.profile)
-                }
+                replaceStack(with: .profile)
 
             case .userProfile(let username):
                 deepLinkProfileUser = ProfileSheetUser(username: username)
@@ -279,10 +292,7 @@ final class Router: ObservableObject {
                 handleShareDeepLink(text: text, urlString: urlString)
 
             case .userLinks:
-                popToRoot()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self.push(.links)
-                }
+                replaceStack(with: .links)
 
             case .post(let postId), .postDetail(let postId):
                 // `.post` is the legacy short-form (e.g. `meeshy://post/<id>`

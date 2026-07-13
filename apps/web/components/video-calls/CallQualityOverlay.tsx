@@ -9,6 +9,7 @@
 'use client';
 
 import React, { memo } from 'react';
+import { WifiLow } from 'lucide-react';
 import type { ConnectionQualityStats } from '@meeshy/shared/types/video-call';
 import { useI18n } from '@/hooks/useI18n';
 import { ConnectionQualityBadge } from './ConnectionQualityBadge';
@@ -54,10 +55,12 @@ export const CallQualityOverlay = memo(function CallQualityOverlay({
       {remoteQualityDegraded && (
         <div
           role="status"
-          data-testid="remote-quality-pill"
-          className="rounded-full bg-slate-800/90 px-3 py-1 text-xs font-medium text-white shadow"
+          data-testid="remote-quality-indicator"
+          title={t('calls.remoteAlerts.qualityDegraded').replace('{name}', participantName)}
+          aria-label={t('calls.remoteAlerts.qualityDegraded').replace('{name}', participantName)}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/90 text-white shadow"
         >
-          {t('calls.remoteAlerts.qualityDegraded').replace('{name}', participantName)}
+          <WifiLow className="h-4 w-4" aria-hidden="true" />
         </div>
       )}
       {remoteScreenCapturing && (

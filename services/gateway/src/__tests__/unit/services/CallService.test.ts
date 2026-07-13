@@ -2794,6 +2794,92 @@ describe('CallService - finalizeCallSummary (chemins terminaux REST end/leave)',
   });
 });
 
+describe('CallService - broadcastCallEndedIfTerminal (call:ended sur chemins REST end/leave)', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any, new Date(Date.now() - 24 * 60 * 60 * 1000));
+  });
+
+  const terminalSession = {
+    id: 'rest-ended',
+    conversationId: 'conv-1',
+    status: 'ended',
+    endedAt: new Date('2026-07-12T04:00:00.000Z'),
+    duration: 42,
+    endReason: 'completed',
+  };
+
+  // Les routes REST end/leave appellent endCall/leaveCall mais, contrairement
+  // aux handlers socket call:end/call:leave, ne diffusaient jamais call:ended
+  // au pair — qui restait « en appel » jusqu'au GC (~120s). Ce hook rebranche
+  // le même broadcastCallEnded (câblé server.ts vers le CallEventsHandler).
+  it('délègue au broadcaster avec l’endedEvent normalisé quand l’appel est terminal', () => {
+    const calls: Array<{ callId: string; conversationId?: string; endedEvent: any }> = [];
+    callService.setCallEndedBroadcaster((callId, conversationId, endedEvent) => {
+      calls.push({ callId, conversationId, endedEvent });
+    });
+
+    callService.broadcastCallEndedIfTerminal(terminalSession as any, 'user-ender');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      callId: 'rest-ended',
+      conversationId: 'conv-1',
+      endedEvent: { callId: 'rest-ended', duration: 42, endedBy: 'user-ender', reason: 'completed' },
+    });
+  });
+
+  it('ne diffuse PAS pour un appel non terminal (leave de groupe qui continue)', () => {
+    const calls: unknown[] = [];
+    callService.setCallEndedBroadcaster(() => { calls.push(true); });
+
+    callService.broadcastCallEndedIfTerminal(
+      { id: 'grp', conversationId: 'conv-1', status: 'active', endedAt: null, duration: null } as any,
+      'user-leaver'
+    );
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('reason par défaut = completed quand endReason est absent', () => {
+    let captured: any;
+    callService.setCallEndedBroadcaster((_c, _cv, endedEvent) => { captured = endedEvent; });
+
+    callService.broadcastCallEndedIfTerminal(
+      { id: 'x', conversationId: 'c', status: 'ended', endedAt: new Date(), duration: 0 } as any,
+      'u'
+    );
+
+    expect(captured.reason).toBe('completed');
+  });
+
+  it('sans broadcaster câblé, ne throw pas (no-op — parité setReapedCallCallback)', () => {
+    expect(() =>
+      callService.broadcastCallEndedIfTerminal(terminalSession as any, 'u')
+    ).not.toThrow();
+  });
+
+  it('un broadcaster qui rejette ne propage jamais (fire-and-forget)', () => {
+    callService.setCallEndedBroadcaster(() => Promise.reject(new Error('boom')));
+
+    expect(() =>
+      callService.broadcastCallEndedIfTerminal(terminalSession as any, 'u')
+    ).not.toThrow();
+  });
+
+  it('null callSession → no-op sans throw', () => {
+    const calls: unknown[] = [];
+    callService.setCallEndedBroadcaster(() => { calls.push(true); });
+
+    expect(() => callService.broadcastCallEndedIfTerminal(null as any, 'u')).not.toThrow();
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe('CallService - initiateCall phantom cleanup & transaction', () => {
   let callService: CallService;
   let mockPrisma: ReturnType<typeof createMockPrisma>;

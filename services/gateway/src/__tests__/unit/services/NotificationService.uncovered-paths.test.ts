@@ -569,6 +569,38 @@ describe('NotificationService — Uncovered Paths', () => {
       jest.useRealTimers();
       expect(result).toBe(false);
     });
+
+    // Overnight window + dndDays: the morning tail (00:00 → end) belongs to the
+    // night that STARTED the previous day, so dndDays must key on the window's
+    // start day, not the current wall-clock day. Mirrors PushNotificationService.
+    it('nocturne DND — morning tail belongs to the previous day (Monday night → Tuesday morning)', () => {
+      // dndDays ['mon'] + 22:00→08:00 = "quiet Monday night → Tuesday morning".
+      // 2024-01-16 is a Tuesday; 02:00 is still inside the Monday-night window.
+      const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: ['mon'] };
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-16T02:00:00Z'));
+      const result = (service as any).isDNDActive(prefs);
+      jest.useRealTimers();
+      expect(result).toBe(true);
+    });
+
+    it('nocturne DND — morning tail of an unselected night is NOT quiet (Sunday night not selected)', () => {
+      // dndDays ['mon']; 2024-01-15 is a Monday, 02:00 is the tail of the
+      // Sunday-night window — which the user did not select — so DND is inactive.
+      const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: ['mon'] };
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-15T02:00:00Z'));
+      const result = (service as any).isDNDActive(prefs);
+      jest.useRealTimers();
+      expect(result).toBe(false);
+    });
+
+    it('nocturne DND — evening portion keys on the current (start) day', () => {
+      // 2024-01-15 is a Monday, 23:00 opens the Monday-night window.
+      const prefs = { dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndDays: ['mon'] };
+      jest.useFakeTimers().setSystemTime(new Date('2024-01-15T23:00:00Z'));
+      const result = (service as any).isDNDActive(prefs);
+      jest.useRealTimers();
+      expect(result).toBe(true);
+    });
   });
 
   // ==============================================
