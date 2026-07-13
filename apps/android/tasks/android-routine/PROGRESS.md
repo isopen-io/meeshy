@@ -1,5 +1,42 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **notification-row per-type accent colour** landed (slice `notifications-type-accent-color`,
+> feature-parity §M — the notification list previously rendered EVERY row in the brand indigo (`Indigo500`
+> hardcoded on the unread background tint, the unread dot, and the avatar), a flat, category-blind surface vs
+> iOS `NotificationRowView` which colour-codes each row by `notifType.accentHex`). Ships the pure `:core:model`
+> SSOT `notificationTypeAccentHex(type: String): String` — a faithful port of iOS
+> `MeeshyNotificationType.accentHex` that maps all ~80 backend `type` strings (both the lowercase current form
+> AND the historical uppercase alias the gateway still emits for some events) onto the 10 category colours: blue
+> messages/replies/lifecycle (`3498DB`), coral reactions/likes (`FF6B6B`), purple mentions/reposts (`9B59B6`),
+> teal friend-graph/conversation (`4ECDC4`), gold community/membership/achievements (`F8B500`), pink calls
+> (`E91E63`), green affiliate (`2ECC71`), red security (`EF4444`), cyan translation/voice (`08D9D6`), and brand
+> indigo system+friend-new (`6366F1`) — with `else -> "6366F1"` reproducing iOS's `rawValue ?? .system` collapse
+> so an unknown/absent type is never a crash or a blank, just the brand fallback. Keyed on the raw string (not
+> the enum) because the row holds `notification.type: String` and the `MeeshyNotificationType` enum was
+> declared-but-unused — one pure function, no 80-entry enum churn, same colours. **Wired for real (no dead
+> ends):** `NotificationsScreen`'s row computes `val accent = hexColor(notificationTypeAccentHex(notification.type))`
+> once and drives the unread background tint (`accent.copy(alpha = 0.12f)`, intensity unchanged — only the hue
+> now varies by category), the unread dot, and the avatar `containerColor` — matching iOS's `accentColor` on all
+> three. **+14 tests** on `notificationTypeAccentHex` (each of the 10 colour families via a representative;
+> legacy-uppercase↔lowercase equality for 8 aliases so a row never flips accent by wire-form age; unknown-type→
+> indigo; empty-type→indigo; and a `distinct categories never collapse onto one colour` set-size guard that
+> catches any future typo merging two families). **Mutation check (RED proof):** collapsing the coral group into
+> blue failed exactly 2 tests (`coral family` + `distinct categories`), reverted green — the suite is
+> behavioural, not tautological. **Verification:** `:core:model:testDebugUnitTest` +
+> `:feature:notifications:testDebugUnitTest` full suites green + `:app:assembleDebug` → **BUILD SUCCESSFUL**
+> (5m5s, APK produced, notifications Compose glue compiles, no module regressed). Reviewer **PASS** (diff
+> `apps/android` only — `:core:model` [new `NotificationAccent.kt` + test], `:feature:notifications`
+> [`NotificationsScreen` 3 imports + accent derivation + 3 call-site swaps], `feature-parity.md`, routine docs;
+> no production logic outside; **SDK purity** — pure stateless `type → hex` mapping in `:core:model` alongside
+> the enum it ports, no Compose/singletons, the row does the `hexColor` bridge app-side; **SSOT** — colour
+> pipeline reuses `hexColor`, mapping owned once; **instant-app** — pure fn, no state, list cache path
+> unchanged; **colour/UX coherence** — per-category accent replaces flat indigo, exactly the iOS row semantics,
+> Prisme-discreet 0.12 tint intensity preserved; **no coverage floor lowered, no test weakened**). **Next
+> slice:** port the companion `MeeshyNotificationType.systemIcon` → per-type leading icon (iOS row draws a
+> category glyph badge on the avatar), wire the short relative formatter into the notification-row *arrival*
+> timestamp (currently raw `shortDateTimeLabel`, iOS uses `RelativeTimeFormatter.shortString`), or add the
+> `context.postCreatedAt` "content published" subtitle via a `NotificationDateFormatter` port.
+
 > On 2026-07-13 **conversation-row relative timestamp** landed (slice `conversations-row-relative-time`,
 > feature-parity §B/§Q — the highest-value consumer of the just-shipped short relative-time renderer: the
 > conversation list rows previously showed **no timestamp at all**, a visible gap vs iOS
