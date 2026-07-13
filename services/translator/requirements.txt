@@ -176,7 +176,7 @@ loguru==0.7.3
 prometheus-client==0.25.0
 
 # Tests
-pytest==8.3.4
+pytest==9.1.1
 pytest-asyncio==0.25.2
 pytest-cov==7.1.0
 # FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
