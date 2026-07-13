@@ -21,6 +21,7 @@ struct DiscoverTab: View {
             ContactsScrollSentinel()
             VStack(spacing: 16) {
                 inviteSection
+                contactMatchesSection
                 searchSection
             }
             .padding(.top, 8)
@@ -134,13 +135,19 @@ struct DiscoverTab: View {
 
     private var importContactsButton: some View {
         Button {
-            FeedbackToastManager.shared.show(String(localized: "common.coming-soon", defaultValue: "Bientot disponible", bundle: .main), type: .success)
             HapticFeedback.light()
+            Task { await viewModel.importContacts() }
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "person.crop.circle.badge.plus")
-                    .font(.callout.weight(.medium))
-                Text(String(localized: "contacts.discover.import", defaultValue: "Importer mes contacts", bundle: .main))
+                if viewModel.isImportingContacts {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .tint(MeeshyColors.indigo500)
+                } else {
+                    Image(systemName: "person.crop.circle.badge.plus")
+                        .font(.callout.weight(.medium))
+                }
+                Text(String(localized: "contacts.discover.import", defaultValue: "Retrouver mes contacts sur Meeshy", bundle: .main))
                     .font(.subheadline.weight(.semibold))
             }
             .foregroundColor(MeeshyColors.indigo500)
@@ -151,6 +158,87 @@ struct DiscoverTab: View {
                     .stroke(MeeshyColors.indigo500.opacity(0.3), lineWidth: 1)
             )
         }
+        .disabled(viewModel.isImportingContacts)
+        .accessibilityLabel(String(localized: "contacts.discover.import.a11y", defaultValue: "Retrouver mes contacts qui sont deja sur Meeshy", bundle: .main))
+    }
+
+    // MARK: - Contact Matches Section
+
+    @ViewBuilder
+    private var contactMatchesSection: some View {
+        if !viewModel.contactMatches.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Label(String(localized: "contacts.discover.matches.title", defaultValue: "Deja sur Meeshy", bundle: .main), systemImage: "person.2.wave.2.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(theme.textPrimary)
+
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(viewModel.contactMatches.enumerated()), id: \.element.id) { index, match in
+                        contactMatchRow(match, index: index)
+                    }
+                }
+            }
+            .padding(14)
+            .glassCard()
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func contactMatchRow(_ match: ContactMatch, index: Int) -> some View {
+        let name = match.user.displayName
+            ?? [match.user.firstName, match.user.lastName].compactMap { $0 }.joined(separator: " ")
+        let displayName = name.isEmpty ? match.user.username : name
+        let color = DynamicColorGenerator.colorForName(displayName)
+        let profileUser = ProfileSheetUser(
+            userId: match.user.id,
+            username: match.user.username,
+            displayName: match.user.displayName,
+            avatarURL: match.user.avatar
+        )
+
+        return HStack(spacing: 14) {
+            MeeshyAvatar(
+                name: displayName,
+                context: .userListItem,
+                accentColor: color,
+                avatarURL: match.user.avatar,
+                moodEmoji: statusViewModel.statusForUser(userId: match.user.id)?.moodEmoji,
+                presenceState: PresenceManager.shared.resolvedState(userId: match.user.id, isOnline: match.user.isOnline ?? false),
+                onMoodTap: statusViewModel.moodTapHandler(for: match.user.id)
+            )
+            .onTapGesture { router.deepLinkProfileUser = profileUser }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+                if let contactName = match.contactDisplayName, contactName != displayName {
+                    Text(String(format: String(localized: "contacts.discover.matches.in-contacts", defaultValue: "Dans tes contacts : %@", bundle: .main), contactName))
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(1)
+                } else {
+                    Text("@\(match.user.username)")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+            .onTapGesture { router.deepLinkProfileUser = profileUser }
+
+            Spacer()
+
+            ConnectionActionView(
+                userId: match.user.id,
+                userName: displayName,
+                accentColor: MeeshyColors.indigo500,
+                onError: { FeedbackToastManager.shared.showError($0) },
+                onSuccess: { FeedbackToastManager.shared.showSuccess($0) }
+            )
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 10)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.contactMatches.count)
     }
 
     // MARK: - Search Section

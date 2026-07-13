@@ -11,6 +11,9 @@ final class DiscoverViewModel: ObservableObject {
     @Published var emailText: String = ""
     @Published var phoneText: String = ""
     @Published var isSendingInvite = false
+    @Published var contactMatches: [ContactMatch] = []
+    @Published var isImportingContacts = false
+    @Published var hasImportedContacts = false
 
     /// Backwards-compatibility shim — earlier consumers read `isSearching`
     /// directly. Derived from `loadState` so existing call sites keep
@@ -19,6 +22,7 @@ final class DiscoverViewModel: ObservableObject {
 
     private let friendService: FriendServiceProviding
     private let userService: UserServiceProviding
+    private let contactSync: ContactSyncProviding
     private let cache = FriendshipCache.shared
     private let resolver: UserRelationshipResolver
     private var cancellables: Set<AnyCancellable> = []
@@ -29,10 +33,12 @@ final class DiscoverViewModel: ObservableObject {
     init(
         friendService: FriendServiceProviding = FriendService.shared,
         userService: UserServiceProviding = UserService.shared,
+        contactSync: ContactSyncProviding = ContactSyncService.shared,
         resolver: UserRelationshipResolver = .shared
     ) {
         self.friendService = friendService
         self.userService = userService
+        self.contactSync = contactSync
         self.resolver = resolver
         // Bridge external state changes into our own objectWillChange so the
         // Discover row badges flip when a request is accepted/blocked from
@@ -163,6 +169,31 @@ final class DiscoverViewModel: ObservableObject {
             HapticFeedback.error()
         }
         isSendingInvite = false
+    }
+
+    // MARK: - Contact Import (carnet d'adresses → suggestions)
+
+    /// Demande l'accès aux contacts (hors main thread, géré par le service),
+    /// puis matche le carnet contre les comptes Meeshy existants.
+    func importContacts() async {
+        guard !isImportingContacts else { return }
+        isImportingContacts = true
+        defer { isImportingContacts = false }
+        do {
+            contactMatches = try await contactSync.findFriendsFromContacts()
+            hasImportedContacts = true
+            if contactMatches.isEmpty {
+                FeedbackToastManager.shared.show(String(localized: "contacts.discover.import.none", defaultValue: "Aucun de tes contacts n'est encore sur Meeshy — invite-les!", bundle: .main), type: .success)
+            } else {
+                HapticFeedback.success()
+            }
+        } catch let error as ContactSyncError {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(error.localizedDescription)
+        } catch {
+            HapticFeedback.error()
+            FeedbackToastManager.shared.showError(String(localized: "contacts.discover.import.failed", defaultValue: "Impossible d'importer les contacts", bundle: .main))
+        }
     }
 
     // MARK: - SMS Message
