@@ -88,4 +88,76 @@ final class FeedPostStoryFieldsTests: XCTestCase {
         XCTAssertNotNil(item.storyEffects)
         XCTAssertEqual(item.audioUrl, "https://cdn/voice.mp3")
     }
+
+    // MARK: - Republication de story (fallback source)
+
+    private func makeStoryRepostSource(
+        id: String = "src1",
+        effects: StoryEffects? = StoryEffects(),
+        media: [FeedMedia] = [],
+        audioUrl: String? = nil
+    ) -> RepostContent {
+        RepostContent(
+            id: id, author: "J. Charles", authorId: "u9", authorUsername: "jcharles",
+            content: "original caption", type: "STORY",
+            audioUrl: audioUrl, storyEffects: effects, media: media
+        )
+    }
+
+    func test_storyItem_fromFeedPost_storyRepostWithoutOwnContent_fallsBackToSource() {
+        let sourceMedia = FeedMedia.image()
+        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "")
+        post.repost = makeStoryRepostSource(media: [sourceMedia], audioUrl: "https://cdn/bg.mp3")
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertNotNil(item.storyEffects)
+        XCTAssertEqual(item.media.map(\.id), [sourceMedia.id])
+        XCTAssertEqual(item.audioUrl, "https://cdn/bg.mp3")
+        XCTAssertEqual(item.repostOfId, "src1")
+        XCTAssertEqual(item.repostAuthorName, "J. Charles")
+        XCTAssertEqual(item.repostAuthorUsername, "jcharles")
+    }
+
+    func test_storyItem_fromFeedPost_storyRepostWithOwnEffects_keepsOwnEffectsAndMergesMedia() {
+        let ownMedia = FeedMedia.image()
+        let sourceMedia = FeedMedia.image()
+        var ownEffects = StoryEffects()
+        ownEffects.backgroundAudioId = "own-bg"
+        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "mon ajout")
+        post.storyEffects = ownEffects
+        post.media = [ownMedia]
+        post.repost = makeStoryRepostSource(media: [sourceMedia])
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertEqual(item.storyEffects?.backgroundAudioId, "own-bg")
+        XCTAssertEqual(item.media.map(\.id), [ownMedia.id, sourceMedia.id])
+        XCTAssertEqual(item.content, "mon ajout")
+    }
+
+    func test_storyItem_fromFeedPost_nonStoryRepost_noFallback() {
+        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "")
+        post.repost = RepostContent(
+            id: "post1", author: "J. Charles", content: "plain post",
+            type: "POST", storyEffects: StoryEffects(), media: [FeedMedia.image()]
+        )
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertNil(item.storyEffects)
+        XCTAssertTrue(item.media.isEmpty)
+        XCTAssertNil(item.repostOfId)
+    }
+
+    func test_storyItem_fromFeedPost_mergeDeduplicatesSharedMediaIds() {
+        let shared = FeedMedia.image()
+        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "")
+        post.media = [shared]
+        post.repost = makeStoryRepostSource(media: [shared])
+
+        let item = StoryItem(feedPost: post)
+
+        XCTAssertEqual(item.media.map(\.id), [shared.id])
+    }
 }
