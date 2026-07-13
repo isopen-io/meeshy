@@ -735,15 +735,36 @@ public extension StoryItem {
     /// rendering). Mirrors the `RepostContent` bridge used by
     /// `StoryReaderRepresentable.init(repost:)`. `FeedPost` has no `expiresAt`,
     /// which is irrelevant to in-place playback.
+    ///
+    /// REPUBLICATION DE STORY : quand le post reposte une STORY sans ajouts
+    /// propres, ses `storyEffects`/`audioUrl` sont nil et ses `media` vides —
+    /// le contenu vit sur la source. Sans fallback, la page détail rendait un
+    /// canvas VIDE (flou) et l'audio de fond / les audios timeline ne se
+    /// résolvaient jamais (le resolver cherche `postMediaId` dans `media`).
+    /// On retombe donc sur la source (même cascade que `toStoryItem` du feed :
+    /// `post.storyEffects ?? repostSource?.storyEffects`) et on fusionne les
+    /// médias de la source pour que TOUTES les pistes (bg audio, audios
+    /// timeline, vidéos) se résolvent (bug 2026-07-13 « la story partagée
+    /// s'affiche en double et ne joue pas l'audio de fond »).
     init(feedPost: FeedPost) {
+        let storySource: RepostContent? = {
+            guard let repost = feedPost.repost,
+                  (repost.type ?? "").uppercased() == "STORY" else { return nil }
+            return repost
+        }()
+        let ownMediaIds = Set(feedPost.media.map(\.id))
+        let sourceMedia = (storySource?.media ?? []).filter { !ownMediaIds.contains($0.id) }
         self.init(
             id: feedPost.id,
             content: feedPost.content,
-            media: feedPost.media,
-            storyEffects: feedPost.storyEffects,
+            media: feedPost.media + sourceMedia,
+            storyEffects: feedPost.storyEffects ?? storySource?.storyEffects,
             createdAt: feedPost.timestamp,
             expiresAt: nil,
-            audioUrl: feedPost.audioUrl,
+            repostOfId: storySource?.id,
+            repostAuthorName: storySource?.author,
+            repostAuthorUsername: storySource?.authorUsername,
+            audioUrl: feedPost.audioUrl ?? storySource?.audioUrl,
             isViewed: false
         )
     }

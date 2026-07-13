@@ -545,7 +545,7 @@ struct StoryViewerView: View {
             transitionEngagement(to: currentStory)
         }
         // Interstitiel d'identité inter-groupes — au-dessus du canvas ET des
-        // contrôles (identité pleine pendant 2,2 s, tap = skip).
+        // contrôles (identité pleine pendant ~1,2 s, tap = skip).
         .overlay {
             if showGroupIntro, let intro = groupIntroData {
                 StoryGroupIntroOverlay(

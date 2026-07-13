@@ -393,8 +393,19 @@ struct PostDetailView: View {
         }
 
         // Repost embed
+        //
+        // STORY qui reposte une STORY : le canvas principal ci-dessus rend
+        // DÉJÀ la republication complète (effects/médias/audio retombent sur
+        // la source via `StoryItem(feedPost:)`). Rendre en plus l'embed de
+        // l'original doublait le contenu à l'écran (bug 2026-07-13,
+        // IMG_1161) — on le remplace par une ligne d'attribution « via
+        // @auteur » qui ouvre l'original.
         if let repost = post.repost {
-            repostEmbed(repost)
+            if post.isStory && isSharedStory {
+                storyRepostAttributionRow(repost)
+            } else {
+                repostEmbed(repost)
+            }
         }
 
         // Actions bar
@@ -1149,6 +1160,34 @@ struct PostDetailView: View {
     @State private var repostSecondaryLangCode: String? = nil
     @State private var repostActiveDisplayLangCode: String? = nil
 
+    /// Attribution compacte d'une STORY republiée en story : « via @auteur »
+    /// tappable vers l'original. Remplace l'embed canvas complet (qui
+    /// doublait le contenu sous le canvas principal — IMG_1161, 2026-07-13).
+    private func storyRepostAttributionRow(_ repost: RepostContent) -> some View {
+        Button {
+            HapticFeedback.light()
+            router.push(.postDetail(repost.id))
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.2.squarepath")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(theme.textMuted)
+                Text(String(format: String(localized: "post.detail.story_repost.via", defaultValue: "via @%@", bundle: .main), repost.authorUsername ?? repost.author))
+                    .font(.footnote)
+                    .foregroundColor(theme.accentText(repost.authorColor))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(theme.textMuted)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
+        .accessibilityHint(String(localized: "a11y.post.repost_author.hint", defaultValue: "Ouvre la publication d'origine", bundle: .main))
+    }
+
     @ViewBuilder
     private func repostEmbed(_ repost: RepostContent) -> some View {
         let isStoryRepost = (repost.type ?? "").uppercased() == "STORY"
@@ -1500,7 +1539,13 @@ struct PostDetailView: View {
     /// Empty guard covers an expired/asset-less story (no black box).
     @ViewBuilder
     private func storyCanvasSection(_ post: FeedPost) -> some View {
-        if post.storyEffects == nil && !post.hasMedia {
+        // Le garde « indisponible » s'évalue sur la conversion ENRICHIE
+        // (`StoryItem(feedPost:)` retombe sur la source d'une republication) :
+        // une story-repost sans ajouts propres a `storyEffects`/`media` nil
+        // côté post mais un contenu complet côté source — elle doit rendre
+        // son canvas, pas le placeholder.
+        let renderedItem = StoryItem(feedPost: post)
+        if renderedItem.storyEffects == nil && renderedItem.media.isEmpty {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles.rectangle.stack")
                 Text(String(localized: "feed.post.detail.story_unavailable", defaultValue: "Story indisponible", bundle: .main))
