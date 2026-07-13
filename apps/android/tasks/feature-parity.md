@@ -2207,3 +2207,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       port of iOS `RelativeTime.classify`, the threshold source of truth beneath `RelativeTimeFormatter`)
       — pure `:core:model/time`, locale-agnostic (rendering stays UI-side), `Long` arithmetic so a
       decades-old timestamp reaches the absolute-date rung without 32-bit overflow, future/skew → `Now`
+- [x] Relative-time *long* framing SSOT (`RelativeTimeLongFormat.label` → `RelativeTimeLongLabel`;
+      port of iOS `RelativeTimeFormatter.longString`, the detail-surface `il y a … / hier / date` framing)
+      — pure `:core:model/time`, locale-agnostic (the `time.long.*` wording stays UI-side), reuses the
+      `RelativeTime` second thresholds as SSOT then switches to **calendar-day** boundaries via an injected
+      `ZoneId` (2h across midnight → `Yesterday`; the same instant reads `hier` vs `il y a Nh` per zone),
+      future/skew → `Now`
