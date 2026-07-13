@@ -58,8 +58,14 @@ export async function computeUserStats(
     prisma.message.count({
       where: { sender: { userId }, deletedAt: null },
     }),
+    // Only conversations the user is CURRENTLY in. Leaving, being banned, or
+    // "delete for me" soft-deactivates the Participant row (isActive: false,
+    // leftAt) — it is never hard-deleted — so a bare `{ userId }` count would
+    // include every conversation ever joined and inflate `totalConversations`
+    // (and falsely unlock the `connecteur` achievement). Mirrors the
+    // `isActive: true` membership filter used everywhere else in the codebase.
     prisma.participant.count({
-      where: { userId },
+      where: { userId, isActive: true },
     }),
     prisma.message.count({
       where: {

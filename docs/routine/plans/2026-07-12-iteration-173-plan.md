@@ -1,47 +1,43 @@
-# Iteration 173 — Plan : durcir `parseMessageLinks` contre les chevauchements
+# Iteration 173 — Plan : `totalConversations` = conversations actives uniquement
 
-## Objectifs
-1. Éliminer les parts chevauchantes/dupliquées quand une URL contient un
-   segment `m+<token>` (violation de l'invariant de reconstruction F91).
-2. Exprimer la priorité réelle (URL ⊃ mshy interne) par une résolution
-   d'intervalles, pas par une égalité d'index fragile.
-3. Résoudre l'erreur TS pré-existante du même fichier sans élargir le périmètre.
+## Objectif
+Cesser de compter les conversations quittées / bannies / supprimées dans les
+statistiques utilisateur et le succès « Connecteur ».
 
 ## Modules affectés
-- `apps/web/lib/utils/link-parser.ts` (implémentation).
-- `apps/web/__tests__/lib/link-parser.test.ts` (couverture régression).
+- `services/gateway/src/routes/user-stats.ts` (`computeUserStats`)
+- `services/gateway/src/routes/users/preferences.ts` (`getUserStats`)
+- Tests : `user-stats.test.ts`, `preferences-stats.test.ts`
 
 ## Phases
-- [x] **P1 — RED** : 5 tests de chevauchement (chemin + query + reconstruction
-      + intervalles disjoints + m+ autonome hors URL). Confirmés rouges sur le
-      code d'origine, 14 existants verts.
-- [x] **P2 — GREEN** : collecte unifiée des candidats + tri (début ↑, span ↓,
-      priorité) + balayage glouton `start >= coveredEnd`. Suppression du
-      dédoublonnage exact-index et du `sort` redondant.
-- [x] **P3 — Tech-debt** : `createTrackingLink` → `trackingLink?: { token: string }`.
-- [x] **P4 — Validation** : jest lib (34 suites), preprocessContent (8),
-      `tsc --noEmit` (0 erreur link-parser).
+1. **RED** — durcir les doubles `participant.count` pour honorer `isActive`,
+   ajouter les tests de comptage actif-seul + assertions de `where`.
+2. **GREEN** — ajouter `isActive: true` aux deux `participant.count` de stats.
+3. **VALIDATION** — suites ciblées + répertoire `routes/users` + `tsc`.
 
 ## Dépendances
-Aucune (fonction pure, aucun changement de contrat public : signature et types
-de `ParsedLink` inchangés).
+Aucune (changement local, contrat d'API inchangé).
 
-## Risques & rollback
-- Risque : régression sur un cas non-chevauchant. Mitigé par les 14 tests
-  existants + 826 tests de `__tests__/lib/` restés verts.
-- Rollback : `git revert` du commit (fichier + test isolés).
+## Risques
+Faible. Le seul changement de comportement est la correction voulue : un
+utilisateur ayant quitté des conversations voit un `totalConversations` plus bas
+(exact). Aucune migration de données. Rétro-compatible côté clients (même forme).
+
+## Stratégie de rollback
+Révert du commit unique — les deux hunks sont indépendants et purement additifs
+(`isActive: true`).
 
 ## Critères de validation
-- [x] 5 nouveaux tests rouges avant / verts après.
-- [x] Zéro régression sur les suites lib + consommateur.
-- [x] Aucune nouvelle erreur `tsc`.
-- [x] Invariant F91 (concat des `content` == message ; intervalles disjoints
-      croissants) vérifié par assertion pour le cas chevauchant.
+- [x] Tests RED écrits et rouges avant fix
+- [x] `user-stats` + `preferences-stats` verts (27 tests)
+- [x] `routes/users` complet vert (401 tests)
+- [x] `tsc --noEmit` exit 0
+- [x] Contrat d'endpoint `UserStats` inchangé
 
-## Statut : COMPLET
+## Statut : COMPLÉTÉ
 
 ## Améliorations futures
-- Envisager d'exposer la résolution gloutonne d'intervalles comme util partagé
-  si d'autres parseurs (mentions, hashtags) apparaissent.
-- Candidats tech-debt tracés hors périmètre : `getTranslationFromJSON`
-  (casse-insensible, iter-130), `sanitizeFileName` overlong (F69).
+- Unifier `computeUserStats` / `getUserStats` (deux copies de la logique de
+  stats/achievements) pour supprimer le risque de divergence dont ce bug était
+  une instance. Nécessite d'harmoniser les formes de requête (`$runCommandRaw`
+  vs `message.count` pour les traductions ; résolution id/username).
