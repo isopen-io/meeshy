@@ -19,7 +19,7 @@
 
 [project]
 name = "meeshy-translator"
-version = "1.8.0"
+version = "1.10.0"
 description = "Meeshy Translator - FastAPI ML Service for translation, STT, and TTS"
 readme = "README.md"
 license = { text = "Proprietary" }
@@ -111,7 +111,7 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
-    "pytest-cov>=5.0.0",
+    "pytest-cov>=6.0.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
     "ipython>=8.0.0",

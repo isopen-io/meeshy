@@ -16,6 +16,13 @@
     <string name="profile_save">Save</string>
     <string name="profile_unknown">Unknown</string>
     <string name="profile_avatar">Avatar</string>
+    <string name="profile_change_avatar">Change photo</string>
+    <string name="profile_change_banner">Change cover photo</string>
+    <string name="profile_image_error_empty">That file is empty. Pick another photo.</string>
+    <string name="profile_image_error_type">Only images can be used here.</string>
+    <string name="profile_image_error_too_large">That image is too large. Pick a smaller one.</string>
+    <string name="profile_image_error_upload">Upload failed. Check your connection and try again.</string>
+    <string name="profile_image_error_update">Could not update your profile photo. Please try again.</string>
     <string name="profile_e2ee">End-to-end encrypted</string>
     <string name="profile_member_since">Member since %1$s</string>
     <string name="profile_completion">Profile %1$d%% complete</string>
@@ -51,4 +58,11 @@
     <string name="report_reason_inappropriate">Inappropriate content</string>
     <string name="report_reason_impersonation">Impersonation</string>
     <string name="report_reason_other">Other</string>
+    <string name="profile_share_action">Share profile</string>
+    <string name="profile_share_title">Share profile</string>
+    <string name="profile_share_qr_cd">QR code for %1$s</string>
+    <string name="profile_share_copy">Copy link</string>
+    <string name="profile_share_send">Share</string>
+    <string name="profile_share_via">Share profile via</string>
+    <string name="profile_share_message">%1$s on Meeshy: %2$s</string>
 </resources>

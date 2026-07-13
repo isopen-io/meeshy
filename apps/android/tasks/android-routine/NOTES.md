@@ -4,6 +4,251 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-13, `time-relative-format-strings`) — a pure formatter reaches localized strings by *injection*, so it stays JVM-testable and reuses the classifier
+The rendering half of a relative-time SSOT does NOT need Robolectric to be tested. `RelativeTimeFormat.short` is a plain `object` in `:sdk-ui/format` that takes a `RelativeTimeStrings` **parameter** (the localized templates) — the same trick `CallTimeLabel` uses with its `yesterday: String` arg — so every rung/boundary/substitution branch is a pure JUnit assertion, and the `@Composable rememberRelativeTimeStrings()` that reads `stringResource(R.string.time_relative_*)` is thin, exempt glue. Two things that keep it honest: (1) it **delegates to `RelativeTime.classify`** rather than re-testing thresholds — the mutation check therefore targets the *mapping* (minutes-rung→hours-template) and the *only real new logic*, the absolute-date `year != reference.year` include-year branch; (2) the `%d` templates are fed through `String.format(locale, template, value)`, so an injected `"%d min"` in the test and the real `"%1$d min"` resource behave identically (positional and non-positional both bind arg 1). When wiring a new shared UI formatter, prefer parameter-injected strings over an Android-coupled signature — it is the difference between a 13-test pure suite and an instrumentation dependency. Also: this makes the two prior pure classifiers (`RelativeTimeUnit`, `RelativeTimeLongLabel`) *live* — a reminder that a pure-core slice should be followed within a slice or two by its rendering consumer, or it accrues as dead code the "no dead ends" rule forbids.
+
+## Lesson (2026-07-13, `chat-message-ordering`) — a stable sort with a *partial* comparator lets you add ordering under existing tests without reshuffling them
+Wiring `MessageOrdering.order` into `ChatViewModel.toBubbles` was safe because the comparator is a **partial order** (`compareBy(createdAtMillis, seq)`) run through the **stable** `sortedWith` — it deliberately does NOT tiebreak on `id`. Every existing ViewModel fixture builds `ApiMessage(id=…, content=…)` with **no `createdAt`**, so all rows collapse to `Long.MAX_VALUE`/`Long.MAX_VALUE` → all equal → stable sort preserves the exact input (repository/server) order. Had I added an `id` tiebreak "for determinism", those all-equal rows would re-sort alphabetically and silently reorder several multi-message harnesses. Rule of thumb when retrofitting a sort beneath a live surface: **tie → preserve input order (stable sort), never invent a total order on a synthetic key**, unless a test proves you need it. The `null → Long.MAX_VALUE` (newest/bottom) convention for both keys also matters: a message with no parsed time is a fresh local echo and belongs at the end, and an un-acked (no-`seq`) message trails its acked same-instant sibling — both fall out of the same elvis default.
+
+## Lesson (2026-07-13, `time-relative-long-label`) — split a formatter into a pure framing SSOT + a UI wording layer, and reuse the sibling's thresholds
+iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND localized wording in one enum. Porting it whole would drag `String(localized:)`-style strings into `:core:model`. Instead the pure half is a **framing descriptor**: `RelativeTimeLongLabel` carries the rung + numeric value + intent (`Yesterday`, `AgoHours(n)`, …) but no text, so the Compose/string layer owns the five app languages — same grain as the already-shipped `RelativeTimeUnit`. Two reuse wins that keep it SSOT: (1) the sub-hour rungs reference `RelativeTime.NOW_THRESHOLD_SECONDS`/`MINUTE_SECONDS`/`HOUR_SECONDS`/`WEEK_DAYS`/`MONTH_DAYS`/`ABSOLUTE_DAYS` rather than re-declaring constants; (2) the *interesting* new behaviour — calendar-day boundaries via an injected `ZoneId` (2h across midnight → `Yesterday`; same instant reads differently per zone) — is exactly what makes the tests behavioural rather than a copy of `classify`. `:core:model` already depends on `java.time` (DndWindow/IsoTime/CallRecord) and minSdk 26 means it's native (no desugaring), so `Instant`/`ZoneId`/`ChronoUnit.DAYS.between` are free to use for pure, zone-injectable, deterministic tests.
+
+## Lesson (2026-07-12, `media-thumbhash-decode`) — ⚙ ENVIRONMENT: the wrapper Gradle can't download; use system Gradle
+- **`./gradlew` (and `./apps/android/meeshy.sh`) fail in a fresh container:** the wrapper wants
+  `gradle-8.11.1-bin.zip` from `services.gradle.org`, which **302-redirects to `github.com/gradle/gradle-distributions/releases/…`** — a host the egress policy **403s**. The cached wrapper dir
+  `/root/.gradle/wrapper/dists/gradle-8.11.1-bin/<hash>/` exists but is **empty** (a prior failed download),
+  so the wrapper re-tries the download and dies. Do NOT retry the 403 or route around it.
+- **Fix — drive the build with the pre-installed system Gradle** (`/opt/gradle/bin/gradle`, currently **8.14.3**),
+  which is already extracted and needs no download:
+  ```bash
+  export LANG=C.utf8 LC_ALL=C.utf8 LC_CTYPE=C.utf8      # + the UTF-8 locale lesson below (em-dash ICE)
+  /opt/gradle/bin/gradle :core:model:testDebugUnitTest --console=plain
+  /opt/gradle/bin/gradle :app:assembleDebug --console=plain
+  ```
+  8.14.3 runs 8.11.1's build fine (only Gradle-9 deprecation warnings). It emits an "incompatible with Gradle
+  9.0" warning — harmless. If a Kotlin **compile worker** ICEs mid-run with an RMI/`TCPTransport` stack, that is
+  the em-dash/`sun.jnu.encoding` issue — `--stop` the daemons and re-export the UTF-8 `LANG` first.
+- **Pre-existing flaky `:sdk-core` DataStore tests** (whole family, in `:sdk-core`): the `dataStore_*` methods of
+  `NotificationPreferencesStoreTest`, `PrivacyPreferencesStoreTest` **and `MediaDownloadPreferencesStoreTest`**
+  intermittently fail with `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for … ms` — a real
+  androidx DataStore `StateFlow.first()` under parallel test load (2026-07-13: one such method timed out at 15s).
+  **The failing COUNT is non-deterministic** — a single full-tree run produced 3 failures, an immediate rerun of the
+  same three classes produced 1, and each fails-then-passes on isolated retry (`--tests '*PrivacyPreferencesStoreTest'`
+  → BUILD SUCCESSFUL). That varying count is itself the signature of timing flakiness, NOT a real breakage. They live
+  in `:sdk-core` (a module a `:feature:chat`/`:sdk-ui`/`:core:model` slice cannot touch) and are **not** a merge
+  blocker for an `apps/android`-only slice — the monorepo CI runs no Android at all, so they never reach the CI gate.
+  Note them, confirm they're green on isolated retry, don't chase them from an unrelated slice. (A tracked follow-up:
+  give these tests a longer/injected timeout or a non-parallel test task so full-tree runs stop going red.)
+
+## Lesson (2026-07-12, `settings-help-support`) — ⚙ ENVIRONMENT: build under a UTF-8 locale
+- **The fresh container's default locale is `POSIX`/`C` (`LC_CTYPE=POSIX`, `LANG` empty), so the JVM's
+  `sun.jnu.encoding` is ASCII and the Kotlin compiler CANNOT write a `.class` file whose name contains a
+  non-ASCII char.** `:sdk-core:compileDebugUnitTestKotlin` fails with
+  `java.nio.file.InvalidPathException: Malformed input or input contains unmappable characters: …
+  ActiveCallRepositoryTest$returns null when the transport throws — a probe never crashes its surface$1.class`
+  (an **em-dash `—`** in a backtick-quoted test method name → em-dash in the synthesized class filename).
+  This is **pre-existing on `main`**, unrelated to any `apps/android`-only slice diff.
+- **Fix — run every Gradle command under a UTF-8 locale, on a freshly-started daemon:**
+  ```bash
+  /opt/gradle/bin/gradle --stop                 # kill any POSIX-started daemon (it captured sun.jnu.encoding)
+  export LANG=C.utf8 LC_ALL=C.utf8              # C.utf8 is available (locale -a); en_US.UTF-8 is NOT
+  export ANDROID_HOME=$HOME/android-sdk ANDROID_SDK_ROOT=$HOME/android-sdk
+  /opt/gradle/bin/gradle testDebugUnitTest --console=plain \
+    -Pkotlin.daemon.jvmargs="-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8"
+  ```
+  Setting `LANG` alone does NOT fix a daemon already running under POSIX — you MUST `--stop` first (the daemon
+  reads `sun.jnu.encoding` once at JVM startup). With both the UTF-8 `LANG` and the `-Pkotlin.daemon.jvmargs`
+  override, the full `testDebugUnitTest` goes green.
+- **Reuse a launchable-link gate rather than re-porting per screen.** `SupportLinkResolver` is a near-clone of
+  `AboutLinkResolver` but must accept `mailto:` (email/bug/feature compose links) — the ONE behavioural
+  difference worth its own tests. Kept it a separate object (not a shared generalised one) because the launchable
+  scheme set is a per-surface product decision, not a universal constant.
+
+## Lesson (2026-07-12, `media-thumbhash-encode`) — derive an encoder's transform FROM its decoder, not from memory
+- Porting an inverse (encoder ↔ decoder) pair: **do not copy the forward transform from the reference/memory.**
+  ThumbHash's canonical `rgbaToThumbHash` uses `p=(r+b)/2−g`, `q=r−b`, but only against a decoder that reads the
+  channels back in the reference's specific variable order. THIS repo's decoder is `B=l−⅔p`, `R=(3l−B+q)/2`,
+  `G=R−q`; solving those three for `(l,p,q)` gives `l=(r+g+b)/3`, **`p=(r+g)/2−b`, `q=r−g`** — different `p`/`q`.
+  The naïve copy compiles, round-trips *luminance* fine, and passes an all-grey test, but swaps a colour channel
+  (green decoded as blue). A **colour round-trip test through the actual `decode`** (not a hand-typed expected
+  hash) catches it instantly. Rule: for an inverse pair, the SSOT is the *existing* half — derive the new half
+  algebraically against it and test the round-trip end-to-end.
+- **Don't assert "all AC bytes zero" for a perfectly-constant source image.** Float noise (~1e-16) in the forward
+  DCT makes `scale` tiny-but-positive, so `0.5 + 0.5/scale·ac` amplifies the noise into arbitrary nibbles. It is
+  harmless (decode multiplies back by the ~1e-16 scale → invisible), but the byte-level "zero" claim is testing an
+  artifact the reference doesn't guarantee either. Assert the **header bytes** + a **flat decode**, not raw AC.
+
+## Lesson (2026-07-12, `settings-legal-documents`)
+- **Static legal/content screens: keep the *structure* pure, the *content* in `values-*`.** Mirroring the
+  About pattern, the pure `:core:model` catalog holds only the ordered section **keys** + numbering; the
+  localized heading/body text lives in Android string resources resolved app-side. This gives automatic
+  EN/FR/ES/PT (Prisme philosophy) and lets us **collapse iOS's per-view fr/en `Picker`** — a legitimate
+  "better at the base" simplification, not just a port.
+- **When two iOS views are near-identical (ToS + Privacy), unify them into one data-driven screen keyed by an
+  enum.** One `LegalDocumentCatalog` owns both section lists; one `LegalDocumentScreen` renders either. Adding
+  or reordering a section is then a one-line catalog edit.
+- **Partition invariant as a drift guard (non-tautological).** For an enum split across N buckets, assert the
+  buckets are pairwise-disjoint AND together cover the enum exactly once (`containsExactlyElementsIn(entries)` +
+  `containsNoDuplicates()`). This catches a future section key that is added to the enum but forgotten in a
+  document, or listed in both — a real bug the per-list order tests alone would miss. Confirmed non-tautological:
+  dropping one key from a list fails exactly the order + partition tests.
+- **Wire *every* dead-end you touch.** Two Settings rows were `onClick = {}` placeholders; the slice removed
+  both. Grep the target screen for `onClick = {}` before picking the next slice — placeholders are the cheapest
+  parity wins.
+
+## Lesson (2026-07-12, `settings-about-screen`)
+- **Keep the i18n boundary out of the pure core.** iOS's `AboutView` builds the whole `"Version X (Y)"`
+  string (word included) in one place. On Android the word "Version" is a translatable string, so the pure
+  `AppVersionFormatter` returns only the `"X (Y)"` fragment and the screen wraps it in
+  `stringResource(R.string.about_version_label, fragment)` = `"Version %1$s"`. Same for the "Android" platform
+  prefix vs the translatable `about_info_platform` *label* — the value (`Android 14`) is data (pure builder),
+  the row *label* ("Platform"/"Plateforme") is a resource. Rule: the pure core emits values and proper nouns;
+  the Compose layer owns every translatable label.
+- **A "static" screen still has a testable core.** An About screen looks like pure glue, but the version
+  formatting (blank/negative degrade), the link launchability gate (drop non-http(s)) and the blank-safe info
+  rows are all pure branches → 27 behavioural tests, two-mutation RED-proven. Push those out of the Composable.
+- **New files aren't revertable with `git checkout --`.** The two-mutation RED proof edited untracked new
+  files; `git checkout -- <file>` errored ("did not match any file"). Had to restore the two lines by hand.
+  Next time, either `git add` before mutating (so `git checkout` works) or keep the exact original lines handy.
+
+## Lesson (2026-07-12, `media-auto-download-decider`)
+- **The grain rule, applied cleanly: monitor = SDK, "when to auto-DL" = app.** A `NetworkConditionMonitor`
+  takes an opaque `Context` and produces a `NetworkCondition` via the already-pure `NetworkConditionResolver` —
+  agnostic of any Meeshy product rule → `:sdk-core`. A *coordinator* that would inject the named Meeshy
+  singletons (`NetworkConditionMonitor` + `MediaDownloadPreferencesStore`) **and** encode "when to actually
+  kick the download" is app-side per the grain rule — so I did **not** add one this slice. The future chat
+  media view injects both singletons and calls the pure `MediaAutoDownloadDecider` directly (exactly the iOS
+  `.task` shape). Shipping the decision SSOT + the live service ahead of the UI consumer mirrors how
+  `MediaDownloadPolicyEngine` itself shipped — a wired, Hilt-`@Singleton` service is not "orphan" code.
+- **Pure decider = policy engine + availability gates.** `MediaDownloadPolicyEngine` only answers the *policy*
+  question. A real media view also has "already on disk / download running / unsupported type" gates. Layering
+  those as a pure `MediaAvailability` → `AutoDownloadDecision` state machine keeps the whole decision JVM-
+  testable and lets the Compose glue stay a one-liner (`decision.shouldDownload`).
+- **`ConnectivityManager` glue stays untestable-but-thin over the pure resolver.** `NetworkCapabilities` can't
+  be constructed in a JVM unit test, so `AndroidNetworkConditionMonitor` is coverage-exempt — but it holds ZERO
+  decision logic: it only maps caps→4 booleans and defers to `NetworkConditionResolver` (already 9-test
+  covered). Same pattern as the DataStore stores: framework I/O in the glue, all branches in `:core:model`.
+
+## Lesson (2026-07-11, `profile-avatar-banner-upload`)
+- **Reuse beat rebuild: the avatar/banner upload was almost entirely wiring.** The multipart
+  `MediaApi`/`MediaRepository` (pure `MediaUpload.formPart`, JVM-tested), the `PickVisualMedia` +
+  `readMediaUploadItem` picker precedent (from stories), and the `UserRepository.updateAvatar`/`updateBanner`
+  URL-taking endpoints all existed. The only *new* pure logic was the validator + the optimistic-paint merge +
+  the URL-select — so the whole slice added 4 tiny `:core:model` objects + one VM, and no new endpoint. When a
+  feature "needs a media pipeline", check what's already built before adding surface.
+- **Keep the pure validator on primitives, not the sdk-core `MediaUploadItem`.** `:core:model` cannot depend on
+  `:sdk-core` (reverse dependency). `ImageUploadValidator.validate(target, byteCount: Int, mimeType: String)`
+  takes `item.bytes.size` + `item.mimeType` at the call site, so the branch table stays in `:core:model` and
+  JVM-testable with no Android/sdk-core coupling.
+- **"Which REST endpoint" is orchestration, not model.** `ImageUploadTarget` is a pure enum carrying only its
+  `maxBytes`; the `AVATAR → updateAvatar` / `BANNER → updateBanner` routing lives in the VM. Putting the
+  endpoint choice on the enum would drag `UserRepository` into `:core:model`. The grain test: the enum takes
+  opaque data (a byte ceiling) and stays agnostic → model; the "call this repo method" decision → feature.
+- **The `PickVisualMedia` launcher needs `androidx.activity.compose` explicitly.** It is NOT in the
+  `bundles.compose` set (that bundle is `compose-ui`/`graphics`/`tooling-preview`/`material3`/`material-icons`
+  only). Stories/calls/app already list `implementation(libs.androidx.activity.compose)`; the profile module
+  did not, so `rememberLauncherForActivityResult` was unresolved until I added it. Check the module's own
+  `build.gradle.kts` before using an activity-compose API.
+- **Use CORE material icons only.** `Icons.Default.PhotoCamera` is in the *extended* icon set (not depended on
+  here). The camera badge reuses `Icons.Default.Edit` (already imported, part of the core set) — no new
+  dependency. The core set present in this app: Edit, Share, Flag, Lock, ArrowBack, ArrowDropDown.
+- **Cheap, honest RED without many gradle cycles:** author the behavioural tests + the real implementation,
+  run once to GREEN, then do a single one-line mutation (here: delete the `TOO_LARGE` size branch) and rerun —
+  it must fail exactly the size tests, then restore. One extra ~5s `:core:model` run proves the tests are not
+  tautological, which the reviewer rubric demands.
+
+## Lesson (2026-07-11, `settings-media-cache`)
+- **Kotlin block comments NEST — a `/*` inside a KDoc opens a nested comment that must be
+  closed.** A doc comment mentioning a path like `media/*` (or any `/*` glob) makes the whole
+  file fail to compile with `Unclosed comment`. KSP surfaces this as a cascade of
+  `error.NonExistentClass` on the module's Hilt `@Binds` before you even see the real cause —
+  read to the LAST `e:` line (`Unclosed comment`), not the first. Fix: write `media` sub-folders
+  or `media/{audio,video}` instead of `media/*` in prose.
+- **`java.io.File` logic is JVM-testable without Robolectric.** A pure `MediaCacheScanner`
+  (`sizeOf(File)` recursive `walkTopDown` sum, `clear(File)` content-wipe) runs against JUnit4
+  `TemporaryFolder` in a plain unit test — real coverage of recursion, missing-dir, and
+  keep-the-dir behaviours with no Android runtime. Keep the app-specific dir *layout* in the
+  exempt Context-bound store; keep the size/delete arithmetic pure and opaque-`File`.
+- **Surpass-iOS pattern paid off again**: iOS `DataStorageView` shows no sizes / single clear-all;
+  its own audit flagged `estimatedDiskBytes()` as an unused future TODO. Porting *the intent* (a
+  cache screen) while adding the readout + per-category clear is a clean, honest improvement — no
+  fabricated behaviour, just wiring the size primitive iOS left dormant.
+- **Coil 2 default disk cache = `context.cacheDir/image_cache`.** No custom `ImageLoader` is
+  configured in this app, so the singleton uses that path — the honest "images" cache dir to scan
+  today. audio/video/thumbnail dirs don't exist yet (media pipeline is future); scanning/clearing a
+  missing dir is a graceful 0/no-op, so declaring them now is forward-compatible, not dead code.
+
+## Lesson (2026-07-11, `settings-data-export`)
+- **The Gradle wrapper distribution download is blocked by the egress proxy (403 from
+  `github.com/gradle/gradle-distributions/releases`).** `./gradlew` / `./apps/android/meeshy.sh` fail at
+  bootstrap ("Server returned HTTP 403 … gradle-8.11.1-bin.zip"). **Fix: use the preinstalled system Gradle at
+  `/opt/gradle/bin/gradle` (8.14.3)** — it runs the build fine (AGP is compatible; Maven Central + Google Maven
+  are reachable through the proxy). First run downloads deps (~3 min for `:core:model`, ~5 min for a run that
+  also does `:app:assembleDebug`); subsequent runs reuse the warm daemon/caches. `local.properties` still needs
+  `sdk.dir=$HOME/android-sdk` after the SDK bootstrap.
+- **GDPR export: the pure builders are where the parity wins live, and iOS had a real bug to surpass.** iOS
+  `DataExportView.ExportWrapper` only encoded `exportDate/format/requestedTypes/messagesCount/contactsCount` —
+  it **dropped** the actual `profile`/`messages`/`contacts` payload from the shared file. Modelling the full
+  `DataExportData` (timestamps as raw ISO `String`s, not `Instant`) lets `DataExportFileBuilder` re-serialise the
+  whole payload losslessly, so the Android export file actually contains the user's data.
+- **Key the export file's format on what the server returned, not the request.** The gateway only populates the
+  `csv` map when `format=csv`; a `csv` request that comes back with an empty/absent map must fall back to a JSON
+  file (never an empty `.csv`). Deriving `isCsv = data.format == "csv" && !csv.isNullOrEmpty()` covers that.
+- **Filesystem-safe file names from server timestamps: sanitise, don't format.** The ISO `exportDate` carries
+  `:` (illegal-ish) and a `T`. Taking the part before `T` and keeping only `[0-9A-Za-z-]` yields a clean
+  `YYYY-MM-DD` stamp with a pure, deterministic function (no clock injection needed — the stamp comes from the
+  response), and an all-illegal/blank date degrades to the plain base name.
+- **Sharing a file needs a FileProvider; the app had none (only ProfileShareSheet, which shares text).** Added
+  `<provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.fileprovider">`
+  + `res/xml/file_paths.xml` (`<cache-path name="exports" path="exports/"/>`) to the **app** module (still
+  apps/android-only). The screen resolves the authority as `"${context.packageName}.fileprovider"` — `packageName`
+  == `applicationId` (incl. the debug `.debug` suffix), so it matches the manifest placeholder in every variant.
+
+## Lesson (2026-07-11, `settings-account-deletion`)
+- **Retrofit cannot attach a body to `@DELETE` — use `@HTTP(method="DELETE", path="…", hasBody=true)`.** The
+  gateway `DELETE /api/v1/me/delete-account` takes a JSON body (`{ confirmationPhrase }`). `@DELETE("…")` +
+  `@Body` compiles but throws at runtime ("Non-body HTTP method cannot contain @Body"); `@HTTP(hasBody=true)` is
+  the supported form. Note `@HTTP`'s `path` is on the annotation, not a separate value arg.
+- **A typed-phrase deletion gate has a subtle SSOT invariant: the gate string *is* the wire string.** The gateway
+  validates against `z.literal('SUPPRIMER MON COMPTE')` (`.strict()`), so the match must be **verbatim** — no
+  `.trim()`, no case-fold — and the request body must send the canonical constant, never the raw typed buffer.
+  Making both read from one `AccountDeletionConfirmation.REQUIRED_PHRASE` means a future gate-loosening can never
+  desync the client check from the server literal. Mirrors the iOS `requiredPhrase` (it sends `requiredPhrase`,
+  not `confirmationText`).
+- **Deletion is online-only like change-password, and does NOT log the user out.** The gateway soft-deletes into a
+  90-day grace period and mails a confirm/cancel link, so the correct success UX is an in-place "check your inbox"
+  state (iOS `showEmailConfirmation`), not a session teardown. The `409 ALREADY_PENDING` path (a deletion already
+  in progress) deserves its own error state — iOS folds it into a single generic message.
+- **`val x by vm.state.collectAsStateWithLifecycle()` needs `import androidx.compose.runtime.getValue`** — the
+  `by`-delegate `getValue` is an extension. Its absence compiles everything else then fails only at the delegate
+  site with "State<…> has no method getValue(...) so it cannot serve as a delegate". Easy to miss when hand-writing
+  a new screen; copy the import block from a sibling screen (`ChangePasswordScreen`).
+
+## Lesson (2026-07-11, `profile-share`)
+- **A "share/QR" feature is really a link-SSOT feature — build the deep-link contract first, and reuse
+  the app's existing `DeepLinkParser` shape, don't invent a URL.** iOS `DeepLinkParser`
+  (apps/ios/Meeshy/Features/Main/Navigation/DeepLinkRouter.swift) already defines the profile URL shape:
+  web `https://meeshy.me/u/{username}` and custom-scheme `meeshy://u/{username}` (`u` is the AASA-claimed
+  segment). The QR, the copied link and the shared text must **all** encode that one shape, so the whole
+  slice bottoms out in a single pure `:core:model` `ProfileShareLink` (canonicalize handle + percent-encode
+  as an RFC 3986 path segment); the presentation builder and the QR just consume it. Percent-encoding is
+  genuine branch-rich pure logic worth testing through the public `webLink`/`appLink` (unreserved
+  passthrough, space→`%20`, non-ASCII→UTF-8 `%XX`, reserved delimiters) — assert via the emitted URL, not
+  a private helper. iOS having **no** such feature is not a reason to skip it: "parity" means the feature
+  set, and a share/QR affordance is table-stakes messaging UX → this slice surpasses iOS.
+- **QR rendering is glue, not core — add `com.google.zxing:core` (pure-Java) and draw the `BitMatrix`.**
+  A hand-rolled QR encoder (Reed–Solomon + masking) is ~600 lines and error-prone; the SOTA move is the
+  zxing core encoder. The tested value is the *payload* (`ProfileShareLink`), not the matrix. Render on a
+  fixed **white** card (never theme-tinted) so the code stays scannable in dark mode; encode the module
+  colour as **fixed black** (NOT the theme's `textPrimary`, which is light in dark mode → an unscannable
+  light-on-white QR — caught in self-review), transparent quiet zone. Adding a Maven-Central dep resolves fine
+  through the agent proxy (only the Gradle *wrapper* github zip is blocked). Version-catalog entry +
+  one `implementation(libs.zxing.core)` in `:feature:profile` — an `apps/android`-only diff.
+- **`MeeshyTheme` exposes `tokens` (colours) but NOT `typography`** — text styles come from
+  `MaterialTheme.typography.*` (as `ProfileScreen` already does). `MeeshyTheme.typography.titleMedium`
+  does not compile. And there is no `Color.toArgb()` member — import the extension
+  `androidx.compose.ui.graphics.toArgb`. Both are one-line traps that only surface at `compileDebugKotlin`.
+
 ## Lesson (2026-07-11, `report-user`)
 - **iOS raw enum values are NOT automatically the gateway wire contract — verify against the zod
   schema.** iOS `ReportUserView.ReportReason` uses UPPERCASE `rawValue` (`"SPAM"`,

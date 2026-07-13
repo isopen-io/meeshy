@@ -38,28 +38,15 @@ struct ConversationOverlayState {
     var showOverlayMenu = false
     var longPressEnabled = false
     var detailSheetMessage: Message? = nil
+    /// Message whose call-detail sheet (transcript-aware, `CallSummaryDetailSheet`)
+    /// is presented — separate from `detailSheetMessage`, which stays wired to
+    /// `MessageMoreSheet` for regular messages.
+    var callDetailMessage: Message? = nil
     var moreSheetInitialItem: MoreItem? = nil
     /// Message dont le picker d'emoji complet (réaction) est présenté.
     var fullReactionPickerMessage: Message? = nil
     var quickReactionMessageId: String? = nil
 
-    // MARK: - Context overlay (iMessage-style long-press)
-    /// Phase of the new long-press overlay (`MessageContextOverlay`).
-    /// `.closed` = idle, `.opening`/`.open`/`.closing` = transitions and live state.
-    var contextOverlayPhase: OverlayPhase = .closed
-    /// Message currently elevated by the context overlay. Frozen at long-press
-    /// time so subsequent message updates don't shift the visible bubble.
-    var contextOverlayMessage: Message? = nil
-    /// Source frame captured at long-press time. Used by the layout engine
-    /// to compute lift / menu placement; the overlay reads this snapshot
-    /// rather than tracking the live frame (which can shift during scroll).
-    var contextOverlayTargetFrame: CGRect? = nil
-    /// Output of `MessageOverlayLayoutEngine.compute` — pre-computed once
-    /// at opening so the algorithm doesn't re-run on every drag tick.
-    var contextOverlayLayoutOutput: OverlayLayoutOutput? = nil
-    /// Interactive swipe-down dismiss progress (pixels). Resets to 0 when
-    /// the gesture is cancelled or the overlay closes.
-    var contextOverlayDragOffset: CGFloat = 0
     /// Bubble cell frame (window coordinates) of the message whose
     /// add-reaction button opened the quick-reaction bar. Anchors the bar's
     /// placement; `nil` falls back to the legacy bottom-pinned position.
@@ -285,7 +272,7 @@ struct ConversationView: View {
     /// Per-cell screen-frame map populated by `MessageFramePreferenceKey`
     /// publishes from each `BubbleSwipeContainer`. The long-press handler
     /// looks up the target message's frame here at gesture fire time and
-    /// freezes it into `overlayState.contextOverlayTargetFrame`.
+    /// passes it to `MessageOverlayMenu` as the source frame.
     @State var frameTracker = MessageFrameTracker()
 
     // Scroll, Media & Swipe state
@@ -730,6 +717,17 @@ struct ConversationView: View {
                     }
                 )
             }
+            .sheet(item: $overlayState.callDetailMessage) { msg in
+                if let summary = msg.callSummary {
+                    CallSummaryDetailSheet(
+                        summary: summary,
+                        isOutgoing: summary.initiatorId == viewModel.currentUserIdForView,
+                        accentHex: accentColor,
+                        timestamp: msg.createdAt,
+                        onCallBack: { s in viewModel.callBack(for: s) }
+                    )
+                }
+            }
             .sheet(item: $overlayState.fullReactionPickerMessage) { msg in
                 EmojiPickerSheet(
                     quickReactions: ["❤️", "😂", "👍", "🔥", "😍", "😮", "😢", "👏", "🎉"],
@@ -969,15 +967,15 @@ struct ConversationView: View {
     /// `SkeletonMessageBubble` so the column reads like a real
     /// conversation thread while the first network/cache pass runs.
     private var messageSkeletonOverlay: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             ForEach(0..<6, id: \.self) { index in
                 SkeletonMessageBubble(index: index)
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MeeshySpacing.md + 2)
         .padding(.top, 96)
-        .padding(.bottom, composerHeight + 24)
+        .padding(.bottom, composerHeight + MeeshySpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(String(localized: "conversation.view.loading_messages", bundle: .main)))
@@ -1108,12 +1106,16 @@ struct ConversationView: View {
                     // du menu existant (sans remplacer le menu lui-même).
                     guard overlayState.longPressEnabled else { return }
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    // Bulles système (journal d'appel, notices) : réactions,
-                    // édition, traduction, épinglage… n'ont aucun sens dessus.
-                    // Le call-notice garde son propre long-press (sheet détails).
-                    guard msg.messageSource != .system else { return }
-                    overlayState.overlayMessage = msg
-                    overlayState.showOverlayMenu = true
+                    if msg.callSummary != nil {
+                        overlayState.callDetailMessage = msg
+                    } else if msg.messageSource != .system {
+                        overlayState.overlayMessage = msg
+                        overlayState.showOverlayMenu = true
+                    }
+                },
+                onCallDetailRequest: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.callDetailMessage = msg
                 },
                 onAddReaction: { messageId, bubbleFrame in
                     // Spring-open the emoji bar anchored to the tapped bubble
@@ -1338,7 +1340,7 @@ struct ConversationView: View {
                     Button {
                         composerText.text = viewModel.insertMention(candidate, into: composerText.text)
                     } label: {
-                        HStack(spacing: 10) {
+                        HStack(spacing: MeeshySpacing.sm + 2) {
                             MeeshyAvatar(
                                 name: candidate.displayName,
                                 context: .userListItem,
@@ -1355,8 +1357,8 @@ struct ConversationView: View {
                             }
                             Spacer()
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.sm)
                     }
                     .accessibilityLabel(String(localized: "conversation.view.mention", bundle: .main))
                     if candidate.id != viewModel.mentionSuggestions.last?.id {
@@ -1381,7 +1383,7 @@ struct ConversationView: View {
             if isAnonymous {
                 anonymousHeaderBar
             } else if isTyping {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                     Spacer()
                     ThemedAvatarButton(
@@ -1395,7 +1397,8 @@ struct ConversationView: View {
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
                     }
                 }
-                .padding(.horizontal, 16).padding(.top, 8)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.sm)
                 .transition(.opacity)
             } else {
                 expandedHeaderBand
@@ -1455,17 +1458,17 @@ struct ConversationView: View {
     @ViewBuilder
     private var expandedHeaderBandBody: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ThemedBackButton(color: accentColor, compactMode: composerState.showOptions, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                 expandedHeaderMidContent
                 headerAvatarView
             }
         }
-        .padding(.horizontal, composerState.showOptions ? 10 : 0)
-        .padding(.vertical, composerState.showOptions ? 6 : 0)
+        .padding(.horizontal, composerState.showOptions ? MeeshySpacing.sm + 2 : 0)
+        .padding(.vertical, composerState.showOptions ? MeeshySpacing.sm - 2 : 0)
         .background(expandedHeaderBackground)
-        .padding(.horizontal, composerState.showOptions ? 8 : 16)
-        .padding(.top, 8)
+        .padding(.horizontal, composerState.showOptions ? MeeshySpacing.sm : MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     /// Middle slot of the header band (between back button and avatar).
@@ -1485,17 +1488,31 @@ struct ConversationView: View {
             // (expandedHeaderTitleAndTags), never the call button's presence.
             HStack {
                 Spacer()
-                headerCallButtons.layoutPriority(1)
-                expandedHeaderSearchButton
+                headerButtonsCluster
             }
+        }
+    }
+
+    /// Call + search buttons, grouped with zero extra spacing between them
+    /// (user-requested 2026-07-11: "les boutons n'ont pas besoin d'être si
+    /// loin l'un de l'autre"). Each button already carries its own ~8pt of
+    /// invisible padding via `.meeshyTapTarget()`'s 44×44 HIG minimum around
+    /// a visually 28×28 glass circle — stacking the HStack's own spacing ON
+    /// TOP of that built-in padding is what pushed them apart. `spacing: 0`
+    /// still leaves that built-in padding as the visible gap (no tap-target
+    /// overlap between the two 44×44 hit areas).
+    private var headerButtonsCluster: some View {
+        HStack(spacing: 0) {
+            headerCallButtons.layoutPriority(1)
+            expandedHeaderSearchButton
         }
     }
 
     /// Title + tags column shown when the composer-options drawer is open.
     @ViewBuilder
     private var expandedHeaderTitleAndTags: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .top, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
+            HStack(alignment: .top, spacing: MeeshySpacing.xs) {
                 Button { composerState.showConversationInfo = true } label: {
                     expandedHeaderTitleLabel
                         .meeshyTapTarget()
@@ -1504,8 +1521,7 @@ struct ConversationView: View {
                 .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
 
                 Spacer(minLength: 4)
-                headerCallButtons.layoutPriority(1)
-                expandedHeaderSearchButton
+                headerButtonsCluster
             }
 
             // Tags row: aligned with title, scrolls under the search icon
@@ -1527,7 +1543,7 @@ struct ConversationView: View {
     /// SwiftUI from baking it into the parent's already-complex type tree.
     @ViewBuilder
     private var expandedHeaderTitleLabel: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xs + 2) {
             ConversationTitleLabel(
                 name: conversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
@@ -1590,12 +1606,10 @@ struct ConversationView: View {
             MessageOverlayMenu(
                 message: msg,
                 contactColor: accentColor,
-                conversationId: viewModel.conversationId,
                 messageBubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,
-                onReply: { triggerReply(for: msg) },
                 onCopy: { UIPasteboard.general.string = msg.content; HapticFeedback.success() },
                 onEdit: {
                     composerState.editingMessageId = msg.id
@@ -1615,32 +1629,13 @@ struct ConversationView: View {
                 textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                 transcription: viewModel.messageTranscriptions[msg.id],
                 translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
-                onSelectTranslation: { translation in
-                    viewModel.setActiveTranslation(for: msg.id, translation: translation)
-                },
-                onSelectAudioLanguage: { langCode in
-                    viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
-                },
-                onRequestTranslation: { messageId, lang in
-                    MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
-                },
                 onReact: { emoji in
                     viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                },
-                onReport: { type, reason in
-                    Task {
-                        let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
-                        if success { HapticFeedback.success() }
-                        else { HapticFeedback.error() }
-                    }
                 },
                 onDelete: {
                     // Show the confirmation dialog so the user can pick
                     // between local-only and server-broadcast deletion.
                     overlayState.deleteConfirmMessageId = msg.id
-                },
-                onDeleteAttachment: { attachmentId in
-                    Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
                 },
                 onSaveMedia: {
                     // Composant unifié « Enregistrer » — l'action n'apparaît
@@ -1653,10 +1648,6 @@ struct ConversationView: View {
                         suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                         attachmentId: attachment.id.isEmpty ? nil : attachment.id
                     ))
-                },
-                onShowThread: {
-                    overlayState.replyThreadParentId = msg.id
-                    overlayState.showReplyThread = true
                 },
                 isDirect: isDirect,
                 preferredTranslation: viewModel.preferredTranslation(for: msg.id),

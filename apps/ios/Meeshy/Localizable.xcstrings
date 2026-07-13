@@ -9051,35 +9051,6 @@
         }
       }
     },
-    "action.copy.success" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nachricht kopiert"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Message copied"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensaje copiado"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensagem copiada"
-          }
-        }
-      }
-    },
     "action.delete" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13753,6 +13724,56 @@
         }
       }
     },
+    "call.transcript.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dieses Transkript löschen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete this transcript" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar esta transcripción" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer ce transcript" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Excluir esta transcrição" } }
+      }
+    },
+    "call.transcript.delete.confirm.message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Diese Aktion ist endgültig." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This action is permanent." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esta acción es definitiva." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Cette action est définitive." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Esta ação é definitiva." } }
+      }
+    },
+    "call.transcript.delete.confirm.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dieses Transkript löschen?" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete this transcript?" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Eliminar esta transcripción?" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer ce transcript ?" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Excluir esta transcrição?" } }
+      }
+    },
+    "call.transcript.disclaimer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Transkription lokal auf diesem Gerät, niemals an den Meeshy-Server gesendet — kann in einem iCloud/Finder-Backup dieses Geräts enthalten sein. Enthält die während des Anrufs empfangenen Worte Ihres Gesprächspartners." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Transcription local to this device, never sent to the Meeshy server — may be included in this device's iCloud/Finder backup. Includes your interlocutor's words as received during the call." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Transcripción local en este dispositivo, nunca enviada al servidor de Meeshy — puede incluirse en una copia de seguridad de iCloud/Finder de este dispositivo. Incluye las palabras de tu interlocutor tal como se recibieron durante la llamada." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Transcription locale à cet appareil, jamais envoyée au serveur Meeshy — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Transcrição local neste aparelho, nunca enviada ao servidor Meeshy — pode estar incluída em um backup iCloud/Finder deste aparelho. Inclui as palavras do seu interlocutor, conforme recebidas durante a chamada." } }
+      }
+    },
+    "calls.detail.transcript" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Transkription" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Transcript" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Transcripción" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Transcription" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Transcrição" } }
+      }
+    },
     "call.transcript.you" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -13784,6 +13805,111 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Você"
+          }
+        }
+      }
+    },
+    "call.transcription.error.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Untertitel konnten nicht aktiviert werden. Versuchen Sie es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't enable captions. Please try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudieron activar los subtítulos. Inténtalo de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'activer les sous-titres. Réessayez."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível ativar as legendas. Tente novamente."
+          }
+        }
+      }
+    },
+    "call.transcription.error.permissionDenied" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erlauben Sie die Spracherkennung in den Einstellungen, um Untertitel zu aktivieren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow speech recognition in Settings to enable captions."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permite el reconocimiento de voz en Ajustes para activar los subtítulos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Autorisez la reconnaissance vocale dans Réglages pour activer les sous-titres."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permita o reconhecimento de voz em Ajustes para ativar as legendas."
+          }
+        }
+      }
+    },
+    "call.transcription.error.unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Untertitel für Ihre Sprache auf diesem Gerät nicht verfügbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Captions unavailable for your language on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtítulos no disponibles para tu idioma en este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sous-titres indisponibles pour votre langue sur cet appareil."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legendas indisponíveis para seu idioma neste dispositivo."
           }
         }
       }

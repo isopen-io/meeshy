@@ -23,14 +23,27 @@ const mockClearRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
 const mockForceEndOrphanedCallSession = jest.fn<any>();
 const mockGetCallSession = jest.fn<any>();
+const mockResolveEndReason = jest.fn((reason?: string) => {
+  switch (reason) {
+    case 'missed': return 'missed';
+    case 'rejected': return 'rejected';
+    case 'failed': return 'failed';
+    case 'connectionLost': return 'connectionLost';
+    case 'heartbeatTimeout': return 'heartbeatTimeout';
+    case 'garbageCollected': return 'garbageCollected';
+    default: return 'completed';
+  }
+}) as jest.Mock<any>;
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
     endCall: mockEndCall,
     clearRingingTimeout: mockClearRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
     getCallSession: mockGetCallSession,
+    resolveEndReason: mockResolveEndReason,
   })),
 }));
 
@@ -253,12 +266,15 @@ describe('CallEventsHandler — call:end handler', () => {
       await handlers[CALL_EVENTS.END](END_DATA, jest.fn<any>());
 
       expect(socket.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
+      // END_DATA.reason ('hangup') is schema-valid but not a CallEndReason
+      // member — the fast path must normalize it via resolveEndReason(),
+      // same as the authoritative broadcast, not forward it raw.
       expect(socketToEmit).toHaveBeenCalledWith(
         CALL_EVENTS.ENDED,
         expect.objectContaining({
           callId: CALL_ID,
           endedBy: CALLER_ID,
-          reason: END_DATA.reason,
+          reason: 'completed',
         })
       );
     });
@@ -396,7 +412,41 @@ describe('CallEventsHandler — call:end handler', () => {
     // an authorization rejection — the orphaned-session recovery must still
     // run so the call session isn't left stuck ACTIVE for other callers.
     it('force-ends the orphaned call session (recovery preserved for non-authorization errors)', () => {
-      expect(mockForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, END_DATA.reason);
+      // Same normalization requirement as the fast-path broadcast: 'hangup'
+      // is schema-valid but not a CallEndReason member.
+      expect(mockForceEndOrphanedCallSession).toHaveBeenCalledWith(CALL_ID, 'completed');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Room-membership leak: forceEndOrphanedCallAfterOptimisticBroadcast (the
+  // recovery path shared by call:end/call:leave/call:force-leave's catch
+  // blocks) terminates the call session but, unlike their happy paths, never
+  // evicted straggling sockets from the call room — leaking Socket.IO room
+  // membership for any device that never explicitly left. Regression guard.
+  // -------------------------------------------------------------------------
+  describe('error path: endCall throws, orphaned-session recovery actually ends the call', () => {
+    it('evicts every remaining socket from the call room', async () => {
+      mockEndCall.mockRejectedValue(new Error('CALL_NOT_FOUND: call does not exist'));
+      mockForceEndOrphanedCallSession.mockResolvedValue({
+        conversationId: CONV_ID,
+        duration: 30,
+        endReason: 'connectionLost',
+        status: 'ended',
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io, fetchSockets } = makeIo();
+      const staleSocket = { id: 'stale-device', leave: jest.fn() };
+      fetchSockets.mockResolvedValue([staleSocket]);
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect(staleSocket.leave).toHaveBeenCalledWith(`call:${CALL_ID}`);
     });
   });
 

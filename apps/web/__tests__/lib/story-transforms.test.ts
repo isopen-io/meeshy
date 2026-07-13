@@ -1,4 +1,4 @@
-import { postToStoryItem, postToStoryData, groupStoriesByAuthor, timeRemaining } from '@/lib/story-transforms';
+import { postToStoryItem, groupToStoryItem, postToStoryData, groupStoriesByAuthor, timeRemaining } from '@/lib/story-transforms';
 import type { Post } from '@meeshy/shared/types/post';
 
 function createPost(overrides: Partial<Post> = {}): Post {
@@ -71,6 +71,33 @@ describe('postToStoryItem', () => {
     expect(result.author.avatar).toBeUndefined();
   });
 
+  it('falls back to username when displayName is an empty string', () => {
+    const post = createPost({
+      author: { id: 'a1', username: 'john', displayName: '', avatar: 'a.jpg' },
+    });
+    const result = postToStoryItem(post, 'x', new Set());
+
+    expect(result.author.name).toBe('john');
+  });
+
+  it('falls back to username when displayName is whitespace only', () => {
+    const post = createPost({
+      author: { id: 'a1', username: 'john', displayName: '   ', avatar: 'a.jpg' },
+    });
+    const result = postToStoryItem(post, 'x', new Set());
+
+    expect(result.author.name).toBe('john');
+  });
+
+  it('normalizes an empty-string avatar to undefined (no blank <img src="">)', () => {
+    const post = createPost({
+      author: { id: 'a1', username: 'john', displayName: 'John', avatar: '' },
+    });
+    const result = postToStoryItem(post, 'x', new Set());
+
+    expect(result.author.avatar).toBeUndefined();
+  });
+
   it('uses first media thumbnailUrl when available', () => {
     const post = createPost({
       media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'https://img.jpg', thumbnailUrl: 'https://thumb.jpg', order: 0 }],
@@ -81,7 +108,37 @@ describe('postToStoryItem', () => {
   });
 });
 
+describe('groupToStoryItem', () => {
+  it('uses the first story author display name', () => {
+    const group = [createPost({ id: '1', authorId: 'a1' }), createPost({ id: '2', authorId: 'a1' })];
+    const result = groupToStoryItem(group, 'x', new Set());
+
+    expect(result.id).toBe('a1');
+    expect(result.author.name).toBe('Test User');
+  });
+
+  it('falls back to username when the first author displayName is empty', () => {
+    const group = [
+      createPost({ id: '1', authorId: 'a1', author: { id: 'a1', username: 'john', displayName: '', avatar: '' } }),
+    ];
+    const result = groupToStoryItem(group, 'x', new Set());
+
+    expect(result.author.name).toBe('john');
+    expect(result.author.avatar).toBeUndefined();
+  });
+});
+
 describe('postToStoryData', () => {
+  it('falls back to username when displayName is empty', () => {
+    const post = createPost({
+      author: { id: 'a1', username: 'john', displayName: '   ', avatar: '' },
+    });
+    const result = postToStoryData(post);
+
+    expect(result.author.name).toBe('john');
+    expect(result.author.avatar).toBeUndefined();
+  });
+
   it('maps Post to StoryData with correct story effects', () => {
     const post = createPost();
     const result = postToStoryData(post);

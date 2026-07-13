@@ -62,6 +62,7 @@ import { useMessageActions } from '@/hooks/conversations/useMessageActions';
 import { useTranslationState } from '@/hooks/conversations/use-translation-state';
 import { useParticipants } from '@/hooks/conversations/use-participants';
 import { useVideoCall } from '@/hooks/conversations/use-video-call';
+import { useCallRetryToast } from '@/hooks/conversations/use-call-retry-toast';
 
 // Dynamic imports (bundle-dynamic-imports) - chargés uniquement quand nécessaires
 const AttachmentGallery = dynamic(
@@ -207,6 +208,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const { startCall: handleStartCall } = useVideoCall({
     conversation: selectedConversation,
   });
+
+  // « Réessayer » après un échec transitoire d'appel (failed/connectionLost) —
+  // toast actionnable qui re-initie le même type d'appel pour cette conversation.
+  useCallRetryToast(selectedConversation?.id ?? null, handleStartCall);
 
   // États locaux
   const [selectedLanguage, setSelectedLanguage] = useState('fr');

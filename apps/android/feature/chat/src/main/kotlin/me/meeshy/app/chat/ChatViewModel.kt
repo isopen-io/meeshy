@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.call.ActiveCallRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.LocallyHiddenMessages
 import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
@@ -31,6 +32,7 @@ import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
@@ -38,6 +40,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
@@ -57,13 +60,13 @@ import me.meeshy.ui.component.bubble.MessageDetailExplorer
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import javax.inject.Inject
 
-data class ImageViewerTarget(
-    val messageId: String,
-    val imageIndex: Int,
-)
-
 data class ChatUiState(
     val messages: List<BubbleContent> = emptyList(),
+    /** L'appel encore actif serveur-side pour CETTE conversation (probe REST
+     * active-call) — alimente la pill « Rejoindre » du header (parité iOS
+     * b69509366 / bulle call-live web) après un crash/relaunch mid-call. Null
+     * quand aucun appel n'est en cours ou que la sonde échoue. */
+    val activeCall: ActiveCallSession? = null,
     val draft: String = "",
     val isSyncing: Boolean = false,
     val showSkeleton: Boolean = false,
@@ -81,7 +84,7 @@ data class ChatUiState(
     val ownReactions: Map<String, Set<String>> = emptyMap(),
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
-    val imageViewer: ImageViewerTarget? = null,
+    val imageViewer: ConversationGallery? = null,
     val scrollToMessageId: String? = null,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
@@ -163,6 +166,7 @@ class ChatViewModel @Inject constructor(
     private val config: MeeshyConfig,
     private val clock: CacheClock,
     private val draftStore: ConversationDraftStore,
+    private val activeCallRepository: ActiveCallRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -211,6 +215,8 @@ class ChatViewModel @Inject constructor(
 
     init {
         viewModelScope.launch { markConversationRead() }
+
+        refreshActiveCall()
 
         viewModelScope.launch {
             val stored = draftStore.load(conversationId)
@@ -490,6 +496,21 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Re-probe the server for a still-active call in this conversation. Called
+     * on init and by the screen when it resumes (returning from the call, an
+     * app relaunch) so the « Rejoindre » pill reflects the server truth: it
+     * appears when a call the local session lost is still live, and clears once
+     * the call is over. The probe never breaks the screen — a failure degrades
+     * to `null` (see [ActiveCallRepository]).
+     */
+    fun refreshActiveCall() {
+        viewModelScope.launch {
+            val active = activeCallRepository.activeCallFor(conversationId)
+            _state.update { it.copy(activeCall = active) }
+        }
+    }
+
+    /**
      * Own echoes are skipped — the optimistic toggle already moved the cached
      * summary; replaying the echo would double-count it.
      */
@@ -648,7 +669,8 @@ class ChatViewModel @Inject constructor(
     }
 
     fun openImageViewer(messageId: String, imageIndex: Int) {
-        _state.update { it.copy(imageViewer = ImageViewerTarget(messageId, imageIndex)) }
+        val gallery = ConversationMediaGallery.of(_state.value.messages, messageId, imageIndex)
+        _state.update { it.copy(imageViewer = gallery.takeUnless(ConversationGallery::isEmpty)) }
     }
 
     /**
@@ -1375,21 +1397,44 @@ private fun List<LocalMessage>.toBubbles(
     hidden: LocallyHiddenMessages,
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
-): List<BubbleContent> = filterNot { hidden.isHidden(it.message.id) }.map { local ->
-    BubbleContentBuilder.build(
-        message = local.message,
-        currentUserId = currentUser?.id,
-        preferences = currentUser ?: EmptyContentPreferences,
-        showSenderName = true,
-        isPending = local.sendState == LocalSendState.SENDING,
-        isFailed = local.sendState == LocalSendState.FAILED,
-        ownReactions = ownReactions[local.message.id] ?: emptySet(),
-        recipientCount = recipientCount,
-        showOriginal = local.message.id in showingOriginal,
-        activeLanguageCode = activeLanguageOverride[local.message.id],
-        mediaBaseUrl = mediaBaseUrl,
-    ).copy(isStarred = local.message.id in starredIds)
+): List<BubbleContent> {
+    val visible = MessageOrdering.order(filterNot { hidden.isHidden(it.message.id) }) { local ->
+        MessageOrderInput(createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt))
+    }
+    val groupPositions = MessageGrouping.positions(
+        visible.map { local ->
+            MessageGroupInput(
+                id = local.message.id,
+                senderId = local.message.senderId,
+                isOutgoing = currentUser?.id != null && local.message.senderId == currentUser.id,
+                createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt),
+            )
+        },
+    )
+    return visible.map { local ->
+        val position = groupPositions[local.message.id] ?: STANDALONE_GROUP_POSITION
+        BubbleContentBuilder.build(
+            message = local.message,
+            currentUserId = currentUser?.id,
+            preferences = currentUser ?: EmptyContentPreferences,
+            showSenderName = position.isFirstInGroup,
+            isPending = local.sendState == LocalSendState.SENDING,
+            isFailed = local.sendState == LocalSendState.FAILED,
+            ownReactions = ownReactions[local.message.id] ?: emptySet(),
+            recipientCount = recipientCount,
+            showOriginal = local.message.id in showingOriginal,
+            activeLanguageCode = activeLanguageOverride[local.message.id],
+            mediaBaseUrl = mediaBaseUrl,
+        ).copy(
+            isStarred = local.message.id in starredIds,
+            isFirstInGroup = position.isFirstInGroup,
+            isLastInGroup = position.isLastInGroup,
+        )
+    }
 }
+
+private val STANDALONE_GROUP_POSITION =
+    MessageGroupPosition(isFirstInGroup = true, isLastInGroup = true)
 
 /**
  * Project the visible bubbles into the opaque searchable model. Deleted bubbles

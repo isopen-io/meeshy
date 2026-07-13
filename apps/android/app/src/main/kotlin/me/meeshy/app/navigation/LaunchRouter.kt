@@ -17,6 +17,8 @@ data class LaunchExtras(
     val conversationId: String? = null,
     val callerName: String? = null,
     val isVideo: Boolean = false,
+    /** Bouton « Répondre » de la notification CallStyle : décrocher directement. */
+    val autoAnswer: Boolean = false,
 )
 
 /**
@@ -42,6 +44,7 @@ object LaunchRouter {
             conversationId = extras.conversationId.orEmpty(),
             callerName = extras.callerName.orEmpty(),
             isVideo = extras.isVideo,
+            autoAnswer = extras.autoAnswer,
         )
         !extras.conversationId.isNullOrBlank() -> Routes.chat(extras.conversationId)
         else -> null

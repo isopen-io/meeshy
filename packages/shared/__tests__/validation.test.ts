@@ -37,6 +37,32 @@ describe('CommonSchemas', () => {
     expect(result).toEqual({ limit: 20, offset: 0 });
   });
 
+  it('pagination parses valid numeric strings', () => {
+    expect(CommonSchemas.pagination.parse({ limit: '50', offset: '10' })).toEqual({ limit: 50, offset: 10 });
+  });
+
+  it('pagination coerces non-numeric input to safe defaults', () => {
+    expect(CommonSchemas.pagination.parse({ limit: 'abc' })).toEqual({ limit: 20, offset: 0 });
+    expect(CommonSchemas.pagination.parse({ offset: 'xyz' })).toEqual({ limit: 20, offset: 0 });
+  });
+
+  it('pagination clamps negative and zero to safe bounds', () => {
+    const result = CommonSchemas.pagination.parse({ limit: '-5', offset: '-10' });
+    expect(result.limit).toBeGreaterThanOrEqual(1);
+    expect(result.offset).toBeGreaterThanOrEqual(0);
+    expect(CommonSchemas.pagination.parse({ limit: '0' }).limit).toBeGreaterThanOrEqual(1);
+  });
+
+  it('pagination caps limit at the maximum', () => {
+    expect(CommonSchemas.pagination.parse({ limit: '9999' }).limit).toBe(100);
+  });
+
+  it('messagePagination coerces garbage/negative like pagination', () => {
+    const result = CommonSchemas.messagePagination.parse({ limit: 'abc', offset: '-3' });
+    expect(result.limit).toBe(20);
+    expect(result.offset).toBeGreaterThanOrEqual(0);
+  });
+
   it('mongoId should validate format', () => {
     expect(CommonSchemas.mongoId.safeParse('507f1f77bcf86cd799439011').success).toBe(true);
     expect(CommonSchemas.mongoId.safeParse('invalid').success).toBe(false);

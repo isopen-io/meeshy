@@ -9,6 +9,32 @@ import MeeshyUI
 @preconcurrency import WebRTC
 import os
 
+// MARK: - Call End Reason Mapping
+
+/// Maps the gateway's raw `call:ended` reason string to the CallKit
+/// `CXCallEndedReason` (drives the Recents UX) and the local `CallEndReason`
+/// (drives analytics + in-app UI). Pure + `nonisolated` so the mapping is unit
+/// tested at behaviour instead of by string-matching the switch source — a
+/// wrong mapping (e.g. `"missed" → .rejected`) previously slipped past the
+/// source-string tests. Handles both camelCase and snake_case gateway variants;
+/// any unknown/`nil` reason is a plain remote hang-up.
+nonisolated enum CallEndReasonMapper {
+    static func map(_ raw: String?) -> (cx: CXCallEndedReason, local: CallEndReason) {
+        switch raw?.lowercased() {
+        case "missed", "no_answer", "unanswered":
+            return (.unanswered, .missed)
+        case "rejected", "declined":
+            return (.declinedElsewhere, .rejected)
+        case "answeredelsewhere", "answered_elsewhere":
+            return (.answeredElsewhere, .remote)
+        case "failed", "connectionlost":
+            return (.failed, .connectionLost)
+        default:
+            return (.remoteEnded, .remote)
+        }
+    }
+}
+
 // MARK: - Call State
 
 enum CallState: Equatable, Sendable {
@@ -390,6 +416,11 @@ final class CallManager: ObservableObject {
     /// is fulfilled. Calling reportOutgoingCall on the callee silently no-ops
     /// and the Phone-app Recents entry shows no duration.
     private var lastCallWasOutgoing: Bool = false
+    /// The last OUTGOING call's dial context, captured at `startCall`. Powers
+    /// `retryCall()` (« Réessayer ») — `resetEndedStateForNewCall` clears the
+    /// live identity fields, so the retry must re-dial from this snapshot rather
+    /// than the (already-torn-down) call state. Parité web/Android retry.
+    private var lastOutgoingContext: (conversationId: String, userId: String, displayName: String, isVideo: Bool)?
     /// `private(set)` (not `private`) so CallView can compute a "since call
     /// start" elapsed time for each live-caption row — the only other
     /// existing consumer of call timing is `callDuration`, which is a ticking
@@ -844,6 +875,8 @@ final class CallManager: ObservableObject {
         displayMode = .fullScreen
         callState = .ringing(isOutgoing: true)
         lastCallWasOutgoing = true
+        // Snapshot the dial context so a transient failure can be « Réessayer »-ed.
+        lastOutgoingContext = (conversationId, userId, displayName, isVideo)
 
         // Phase 1.5 — Ringback tone démarré dans `provider:didActivate:audioSession`
         // (PAS ici). Démarrer AVAudioPlayer AVANT que CallKit ait posé sa
@@ -984,6 +1017,30 @@ final class CallManager: ObservableObject {
 
         HapticFeedback.medium()
         return true
+    }
+
+    // MARK: - Retry a transiently-failed call (« Réessayer »)
+
+    /// True when the ended call failed transiently (`.failed`/`.connectionLost`)
+    /// and its outgoing dial context is known — the ended view offers
+    /// « Réessayer ». Parité web/Android retry-on-failure.
+    var canRetryCall: Bool {
+        guard case .ended(let reason) = callState else { return false }
+        return CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil
+    }
+
+    /// Re-dial the last outgoing call after a transient failure. `startCall`
+    /// resets the ended state to idle before re-initiating, so this simply
+    /// replays the captured dial context. Inert unless `canRetryCall`.
+    @discardableResult
+    func retryCall() -> Bool {
+        guard canRetryCall, let ctx = lastOutgoingContext else { return false }
+        return startCall(
+            conversationId: ctx.conversationId,
+            userId: ctx.userId,
+            displayName: ctx.displayName,
+            isVideo: ctx.isVideo
+        )
     }
 
     // MARK: - Rejoin Active Call (crash/reconnect recovery)
@@ -1828,10 +1885,14 @@ final class CallManager: ObservableObject {
     /// hang-up happens during a signaling outage; the gateway end handler is
     /// idempotent and resolves pre-answer ends to `missed` (C3/C4).
     private var pendingEndReconciliationCallId: String?
+    /// `"rejected"` quand l'end différé est un REFUS — le replay doit préserver
+    /// la raison, sinon il ressuscite le mislabel `missed` (arc reject 2026-07-12).
+    private var pendingEndReconciliationReason: String?
 
     private func emitCallEndReliably(callId: String) {
         guard MessageSocketManager.shared.isConnected else {
             pendingEndReconciliationCallId = callId
+            pendingEndReconciliationReason = nil
             Logger.calls.warning("call:end deferred — socket down, will reconcile on reconnect (callId=\(callId))")
             return
         }
@@ -1846,6 +1907,7 @@ final class CallManager: ObservableObject {
                 // on the next connect — the gateway end handler is idempotent,
                 // a duplicate is a logged no-op.
                 self?.pendingEndReconciliationCallId = callId
+                self?.pendingEndReconciliationReason = nil
                 Logger.calls.warning("call:end ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
             }
         }
@@ -1853,6 +1915,17 @@ final class CallManager: ObservableObject {
 
     func endCall() {
         guard callState.isActive else { return }
+
+        // Refus lock-screen (arc reject 2026-07-12) : un `CXEndCallAction` sur
+        // un entrant PRÉ-décroché est le bouton « Refuser » de CallKit — le
+        // seul chemin de refus d'un appel reçu en background. Il aboutit ici,
+        // pas dans rejectCall() : sans cette branche, l'end part sans raison,
+        // le gateway le résout `missed` et notifie « appel manqué » celui qui
+        // vient de refuser (exactement le bug corrigé sur les autres chemins).
+        let isDecliningIncoming: Bool = {
+            if case .ringing(isOutgoing: false) = callState { return true }
+            return false
+        }()
 
         // Le second guard historique (`guard let callId = currentCallId`)
         // retournait early si l'ACK call:initiate n'avait pas encore
@@ -1882,7 +1955,14 @@ final class CallManager: ObservableObject {
         webRTCService.sendHangupBye()
 
         if let callId {
-            emitCallEndReliably(callId: callId)
+            if isDecliningIncoming {
+                // Mêmes garanties que rejectCall() (fire-and-forget) : le refus
+                // porte reason=rejected, l'ACK/réconciliation reste le filet du
+                // chemin raccroché.
+                emitCallReject(callId: callId)
+            } else {
+                emitCallEndReliably(callId: callId)
+            }
         }
 
         // H1 — rendre le teardown local atomique vis-à-vis de CallKit. On capture
@@ -1894,7 +1974,7 @@ final class CallManager: ObservableObject {
         // locale ci-dessus.)
         let endUUID = activeCallUUID
         let endUsedCallKit = callUsesCallKit
-        endCallInternal(reason: .local)
+        endCallInternal(reason: isDecliningIncoming ? .rejected : .local)
         if let endUUID, endUsedCallKit {
             let endAction = CXEndCallAction(call: endUUID)
             callController.request(CXTransaction(action: endAction)) { error in
@@ -2214,7 +2294,9 @@ final class CallManager: ObservableObject {
 
     func rejectPendingCall() {
         guard let pending = pendingIncomingCall else { return }
-        MessageSocketManager.shared.emitCallEnd(callId: pending.callId)
+        // Refus du call-waiting : porte aussi reason=rejected et hérite du
+        // différé socket-down via le helper (cf. emitCallReject).
+        emitCallReject(callId: pending.callId)
         pendingIncomingCall = nil
         showCallWaitingBanner = false
         Logger.calls.info("Rejected pending call: \(pending.callId)")
@@ -2257,7 +2339,7 @@ final class CallManager: ObservableObject {
         endCall()
 
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(0.5))
+            try? await Task.sleep(for: .seconds(QualityThresholds.endAndAnswerPendingHandoffSeconds))
             guard let self else { return }
             // The waiting call may have been ended, answered elsewhere, or
             // replaced by a newer incoming call while we were asleep — only
@@ -2341,37 +2423,22 @@ final class CallManager: ObservableObject {
     }
 
     func handleRemoteEnd(callId: String, rawReason: String? = nil) {
-        guard currentCallId == callId else { return }
-        // Dedup : le serveur peut émettre `call:ended` plusieurs fois
-        // (e.g. CXEndCallAction côté peer + cleanup serveur), et le user
-        // local peut aussi avoir déjà raccroché en local. Si l'état est
-        // déjà `.ended`, on ignore les doublons.
-        if case .ended = callState { return }
+        // Dedup (idempotence testable — cf. CallReliabilityPolicy.shouldProcessRemoteEnd) :
+        // le serveur peut émettre `call:ended` plusieurs fois (CXEndCallAction côté
+        // peer + cleanup serveur, et depuis 2026-07-12 le broadcast REST end/leave),
+        // tous routés vers ce handler via le publisher `callEnded`. On traite le
+        // premier ; un doublon sur un état déjà `.ended`, ou un event d'un AUTRE
+        // call, est ignoré.
+        guard CallReliabilityPolicy.shouldProcessRemoteEnd(
+            currentCallId: currentCallId,
+            incomingCallId: callId,
+            callState: callState
+        ) else { return }
 
         // Audit P1-24 — map the gateway's `reason` string to the right
-        // CXCallEndedReason (drives Recents UX) and CallEndReason (drives
-        // local analytics + UI). Without this, every remote end was reported
-        // as `.remoteEnded`, which Recents displays as "Ended" — wrong for
-        // missed/declined/answered-elsewhere.
-        let cxReason: CXCallEndedReason
-        let localReason: CallEndReason
-        switch rawReason?.lowercased() {
-        case "missed", "no_answer", "unanswered":
-            cxReason = .unanswered
-            localReason = .missed
-        case "rejected", "declined":
-            cxReason = .declinedElsewhere
-            localReason = .rejected
-        case "answeredelsewhere", "answered_elsewhere":
-            cxReason = .answeredElsewhere
-            localReason = .remote
-        case "failed", "connectionlost":
-            cxReason = .failed
-            localReason = .connectionLost
-        default:
-            cxReason = .remoteEnded
-            localReason = .remote
-        }
+        // CXCallEndedReason (Recents UX) + CallEndReason (analytics + in-app UI).
+        // Extracted to the pure, unit-tested CallEndReasonMapper.
+        let (cxReason, localReason) = CallEndReasonMapper.map(rawReason)
 
         if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: cxReason)
@@ -3275,7 +3342,14 @@ final class CallManager: ObservableObject {
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
-        transcriptionService.resetForCallEnd()
+        transcriptionService.resetForCallEnd(
+            callId: currentCallId,
+            conversationId: conversationId ?? "",
+            callStartedAt: callStartDate,
+            localUserId: AuthManager.shared.currentUser?.id ?? "",
+            localSpeakerName: AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? "",
+            remoteSpeakerName: remoteUsername ?? ""
+        )
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
         sdpOfferTimeoutTask?.cancel()
@@ -3371,8 +3445,15 @@ final class CallManager: ObservableObject {
         // we must NOT clobber its freshly-assigned identity.
         let token = UUID()
         settleToken = token
+        // A retryable transient failure holds the ended screen LONGER so the user
+        // has time to tap « Réessayer » (parité web/Android), then auto-dismisses
+        // like any other ended call. Tapping retry re-enters startCall, whose
+        // resetEndedStateForNewCall nils this token so the pending settle bails.
+        let settleDelay = (CallRetryPolicy.isRetryable(reason) && lastOutgoingContext != nil)
+            ? QualityThresholds.callEndRetryableSettleSeconds
+            : QualityThresholds.callEndSettleSeconds
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.callEndSettleSeconds))
+            try? await Task.sleep(for: .seconds(settleDelay))
             guard let self else { return }
             guard self.settleToken == token else { return }
             if case .ended = self.callState {
@@ -3672,8 +3753,16 @@ final class CallManager: ObservableObject {
                 // call is active anymore (the gateway end handler is idempotent).
                 if state == .connected, let pending = self.pendingEndReconciliationCallId {
                     self.pendingEndReconciliationCallId = nil
-                    Logger.calls.info("Reconciling deferred call:end after reconnect (callId=\(pending))")
-                    self.emitCallEndReliably(callId: pending)
+                    let wasReject = self.pendingEndReconciliationReason == "rejected"
+                    self.pendingEndReconciliationReason = nil
+                    Logger.calls.info("Reconciling deferred call:end after reconnect (callId=\(pending), rejected=\(wasReject))")
+                    if wasReject {
+                        // Rejouer un refus en end plat ressusciterait le mislabel
+                        // `missed` — la raison voyage avec la réconciliation.
+                        self.emitCallReject(callId: pending)
+                    } else {
+                        self.emitCallEndReliably(callId: pending)
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -3841,6 +3930,20 @@ final class CallManager: ObservableObject {
                     Logger.calls.warning("call:error TARGET_NOT_FOUND — transient relay failure, keeping the call")
                     return
                 }
+                // CALL_ENDED is terminal-state reconciliation, NOT a user error:
+                // the gateway rejected a late emit (join/signal/end) because the
+                // call already ended — a benign race with the normal end fanout
+                // (#12). Route through the canonical remote-end path (dedup on
+                // .ended + correct Recents reason) instead of toasting "already
+                // ended" and calling failCall, which would flag a healthy end as
+                // a failure. Idempotent: handleRemoteEnd no-ops if already ended.
+                if event.code == "CALL_ENDED" {
+                    Logger.calls.info("call:error CALL_ENDED — reconciling to ended (benign terminal race, #12)")
+                    if let endCallId = event.callId ?? self.currentCallId {
+                        self.handleRemoteEnd(callId: endCallId)
+                    }
+                    return
+                }
                 FeedbackToastManager.shared.showError(message)
                 // Ne teardown que si un appel est réellement en vol (ringing →
                 // reconnecting). Une erreur hors-appel ne fait qu'afficher le toast.
@@ -3988,6 +4091,18 @@ final class CallManager: ObservableObject {
                 self.webRTCService.updateIceServers(updated)
                 Logger.calls.info("TURN credentials refreshed — \(updated.count) ICE servers updated")
                 self.scheduleTURNCredentialRefresh(ttl: TimeInterval(event.ttl))
+                // Audit #9 — `updateIceServers` is setConfiguration-only. When
+                // these credentials were requested BY a reconnection cycle
+                // (attemptReconnection → requestFreshTurnCredentials), the
+                // in-flight restart may already be gathering with the
+                // near-expiry ones; re-arm it now (same coalesce path as a
+                // redundant network edge — no budget burned) so the re-gather
+                // runs with the credentials just applied instead of idling
+                // until the `.reconnecting` watchdog escalates.
+                if CallReliabilityPolicy.shouldRearmRestartOnCredentialRefresh(state: self.callState) {
+                    Logger.calls.info("fresh TURN credentials mid-reconnect — re-arming ICE restart (attempt \(self.reconnectAttempt))")
+                    self.scheduleICERestart(attempt: self.reconnectAttempt, backoffSeconds: 0)
+                }
             }
             .store(in: &cancellables)
 
@@ -4280,11 +4395,24 @@ final class CallManager: ObservableObject {
         Logger.calls.error("[CALL-DIAG] answer never ACK'd after \(total) attempts — relying on gateway replay (§4.6)")
     }
 
-    // Audit P3 — `toUserId` was accepted by the previous signature and
-    // never used. Dropped for clarity — `call:leave` is server-routed via
-    // the call room, no recipient field needed.
+    // Refus explicite = `call:end {reason: "rejected"}` (plus `call:leave`) :
+    // le leave pré-décroché terminait bien l'appel 1:1 mais le serveur le
+    // résolvait en `missed` — notification « appel manqué » envoyée au callee
+    // qui venait de REFUSER, et refus compté dans le filtre « manqués » du
+    // journal. Parité Android/web (fix 2026-07-12).
     private func emitCallReject(callId: String) {
-        MessageSocketManager.shared.emitCallLeave(callId: callId)
+        // Refus socket-down (parité Android DeclinedCallStore) : un refus émis
+        // dans une socket morte est JETÉ par le SDK — l'appelant sonnerait les
+        // 60 s de la fenêtre serveur et l'appel se résoudrait `missed`. Cas
+        // typique : push VoIP à froid, l'utilisateur refuse avant la fin du
+        // handshake socket. Différé + rejoué avec sa raison au reconnect.
+        guard MessageSocketManager.shared.isConnected else {
+            pendingEndReconciliationCallId = callId
+            pendingEndReconciliationReason = "rejected"
+            Logger.calls.warning("call:end (rejected) deferred — socket down, will reconcile on reconnect (callId=\(callId))")
+            return
+        }
+        MessageSocketManager.shared.emitCallReject(callId: callId)
     }
 
     // MARK: - Duration Formatting

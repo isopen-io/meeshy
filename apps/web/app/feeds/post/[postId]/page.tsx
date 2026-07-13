@@ -33,6 +33,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuthStore } from '@/stores/auth-store';
 import { postsService, recordAnonymousView } from '@/services/posts.service';
 import { getOrCreateWebSessionKey } from '@/lib/anonymous-session';
+import { isHeartLikedByMe } from '@/lib/reactions';
 import { copyToClipboard } from '@/lib/clipboard';
 
 /**
@@ -209,14 +210,14 @@ export default function PostDetailPage() {
             currentUserId={currentUser?.id}
             currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
             userLanguage={userLanguage}
-            isLiked={(post.currentUserReactions ?? []).includes('❤️') || (post.isLikedByMe ?? false)}
+            isLiked={isHeartLikedByMe(post)}
             isBookmarked={!!post.bookmarkedAt}
             userReaction={post.currentUserReactions?.[0]}
             commentsLoading={commentsQuery.isLoading}
             commentsHasMore={commentsQuery.hasNextPage ?? false}
             commentsLoadingMore={commentsQuery.isFetchingNextPage}
             onLike={() => {
-              const isLiked = (post.currentUserReactions ?? []).includes('❤️') || (post.isLikedByMe ?? false);
+              const isLiked = isHeartLikedByMe(post);
               if (isLiked) {
                 unlikeMutation.mutate({ postId: post.id });
               } else {

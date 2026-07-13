@@ -280,3 +280,99 @@ describe('CallService.leaveCall() — clearHeartbeats memory leak regression', (
     expect(clearSpy).toHaveBeenCalledWith(callId);
   });
 });
+
+describe('CallService.leaveCall() — endedBy stampé sur les DEUX branches terminales', () => {
+  let prisma: ReturnType<typeof buildMockPrisma>;
+  let service: CallService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = buildMockPrisma();
+    service = new CallService(prisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const captureTerminalWrite = () => {
+    let capturedData: any;
+    prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        callSession: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
+            if (data?.status !== undefined) {
+              capturedData = data;
+            }
+            return { count: 1 };
+          }),
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+      };
+      return cb(tx);
+    });
+    return () => capturedData;
+  };
+
+  it('branche principale : le dernier leave écrit metadata.endedBy = userId en préservant type', async () => {
+    const callId = 'call-main-1';
+    const participantId = 'part-1';
+    const userId = 'user-leaver';
+
+    const callParticipantRow = { id: 'cp-1', callSessionId: callId, participantId, leftAt: null };
+    prisma.callParticipant.findFirst.mockResolvedValue(callParticipantRow);
+    prisma.callSession.findUnique
+      .mockResolvedValueOnce({
+        id: callId,
+        conversationId: 'conv-1',
+        status: CallStatus.ringing,
+        startedAt: new Date(Date.now() - 20_000),
+        answeredAt: null,
+        endedAt: null,
+        version: 3,
+        participants: [callParticipantRow],
+        metadata: { type: 'video', mode: 'p2p' },
+      })
+      .mockResolvedValue({ id: callId, status: CallStatus.missed, participants: [] });
+    prisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+    const getData = captureTerminalWrite();
+
+    await service.leaveCall({ callId, userId, participantId });
+
+    expect(getData()).toBeDefined();
+    expect(getData().metadata).toEqual({ type: 'video', mode: 'p2p', endedBy: userId });
+  });
+
+  it('branche idempotente : le force-end écrit aussi metadata.endedBy = userId', async () => {
+    const callId = 'call-idem-2';
+    const participantId = 'part-missing';
+    const userId = 'user-canceller';
+
+    prisma.callParticipant.findFirst.mockResolvedValue(null);
+    prisma.callSession.findUnique
+      .mockResolvedValueOnce({
+        id: callId,
+        conversationId: 'conv-direct',
+        status: CallStatus.ringing,
+        startedAt: new Date(Date.now() - 10_000),
+        answeredAt: null,
+        endedAt: null,
+        version: 1,
+        participants: [],
+        metadata: { type: 'audio' },
+      })
+      .mockResolvedValue({ id: callId, status: CallStatus.missed, endedAt: new Date(), participants: [] });
+    prisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+    const getData = captureTerminalWrite();
+
+    await service.leaveCall({ callId, userId, participantId });
+
+    expect(getData()).toBeDefined();
+    expect(getData().metadata).toEqual({ type: 'audio', endedBy: userId });
+  });
+});

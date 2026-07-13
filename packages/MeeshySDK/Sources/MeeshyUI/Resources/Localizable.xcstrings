@@ -241,12 +241,6 @@
     "Activer le son de la vidéo" : {
 
     },
-    "Activer lecture en boucle" : {
-
-    },
-    "Activer picture in picture" : {
-
-    },
     "AirPlay" : {
 
     },
@@ -2905,6 +2899,12 @@
           }
         }
       }
+    },
+    "Avancer de 10 secondes" : {
+
+    },
+    "Boucle" : {
+
     },
     "Choisir ou créer une catégorie..." : {
 
@@ -9127,9 +9127,6 @@
     "Créer le tag %@" : {
 
     },
-    "Desactiver lecture en boucle" : {
-
-    },
     "Deutsch" : {
 
     },
@@ -14029,10 +14026,16 @@
     "Pause" : {
 
     },
+    "Picture in Picture" : {
+
+    },
     "Placez la tête de lecture puis divisez la vidéo en segments." : {
 
     },
     "Play" : {
+
+    },
+    "Plus d'options" : {
 
     },
     "Polski" : {
@@ -16126,7 +16129,10 @@
         }
       }
     },
-    "Reactiver le son" : {
+    "Quitter le Picture in Picture" : {
+
+    },
+    "Réactiver le son" : {
 
     },
     "Read" : {
@@ -16146,6 +16152,9 @@
       }
     },
     "Recommencer" : {
+
+    },
+    "Reculer de 10 secondes" : {
 
     },
     "Réinitialiser" : {
@@ -16468,9 +16477,6 @@
 
     },
     "Son" : {
-
-    },
-    "Sortir du picture in picture" : {
 
     },
     "Sticker %@" : {
@@ -24938,6 +24944,9 @@
       }
     },
     "Vidéo" : {
+
+    },
+    "Vitesse" : {
 
     },
     "voiceProfile.age.birthDate" : {

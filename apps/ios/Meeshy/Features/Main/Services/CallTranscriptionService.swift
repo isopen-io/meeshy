@@ -133,6 +133,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     private enum Constants {
         static let segmentRetentionLimit = 50
+        /// Safety ceiling for the PERSISTENCE accumulator (`persistedSegments`)
+        /// — never hit in normal use (a multi-hour call at continuous speech
+        /// is still well under this), just a memory guard against pathological
+        /// growth. NOT the live display cap, which stays 50 — see
+        /// docs/superpowers/specs/2026-07-11-call-transcript-history-design.md §2.
+        static let persistedSegmentCeiling = 2000
     }
 
     @Published private(set) var segments: [TranscriptionSegment] = []
@@ -158,6 +164,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var callId: String?
     private var localUserId = ""
     private var allSegments: [TranscriptionSegment] = []
+    /// Full-call accumulator for local persistence at call end — append-only,
+    /// NOT re-sorted per append (unlike `allSegments`/`segments`, which drive
+    /// the live UI and must stay cheap to re-render), bounded only by
+    /// `Constants.persistedSegmentCeiling`.
+    private var persistedSegments: [TranscriptionSegment] = []
 
     private let audioEngine = AVAudioEngine()
     private var recognizer: SFSpeechRecognizer?
@@ -179,6 +190,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     func setTranscribingForTesting(_ value: Bool) {
         isTranscribing = value
     }
+
+    var persistedSegmentsForTesting: [TranscriptionSegment] { persistedSegments }
     #endif
 
     // MARK: - Permission
@@ -263,6 +276,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         recognizer = nil
 
         allSegments.removeAll()
+        persistedSegments.removeAll()
         segments.removeAll()
         isTranscribing = false
         lastError = nil
@@ -271,12 +285,35 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         callsLogger.info("Call transcription stopped")
     }
 
-    /// Teardown de fin d'appel — purge INCONDITIONNELLE, y compris si ce
-    /// device n'a jamais transcrit lui-même (isTranscribing == false) mais a
-    /// reçu des segments traduits de l'autre participant via
-    /// `receiveTranslatedSegment`. Sans ce garde, le transcript de l'appel
-    /// précédent resterait visible au suivant.
-    func resetForCallEnd() {
+    /// End-of-call teardown — PERSISTS before purging. `callId`/`conversationId`/
+    /// `callStartedAt`/speaker names are threaded in as parameters (this
+    /// service has no stored `conversationId`/`callStartDate`, and its own
+    /// `callId` is nil whenever this device never called `startTranscribing`
+    /// — see the `callId: String?` guard below, which fixes a real bug: a
+    /// receive-only device (never transcribed locally, only received the
+    /// other participant's segments) must NOT persist under an empty-string
+    /// key. `CallManager` — the sole caller, always at definite end-of-call —
+    /// has every value in hand at its call site.
+    func resetForCallEnd(callId: String?, conversationId: String, callStartedAt: Date?, localUserId: String, localSpeakerName: String, remoteSpeakerName: String) {
+        if let callId, !persistedSegments.isEmpty {
+            let snapshot = CallTranscript(
+                callId: callId,
+                conversationId: conversationId,
+                callStartedAt: callStartedAt ?? Date(),
+                segments: persistedSegments.map { seg in
+                    CallTranscriptSegment(
+                        speakerId: seg.speakerId,
+                        speakerName: seg.speakerId == localUserId ? localSpeakerName : remoteSpeakerName,
+                        isLocal: seg.speakerId == localUserId,
+                        text: seg.text,
+                        translatedText: seg.translatedText,
+                        translatedLanguage: seg.translatedLanguage,
+                        capturedAt: seg.capturedAt
+                    )
+                }
+            )
+            Task { await CallTranscriptStore.shared.saveMerging(snapshot) }
+        }
         stopTranscribing()
         isShowingOverlay = false
     }
@@ -506,6 +543,14 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         }
 
         guard let result else { return }
+        // Captured HERE, at true callback-arrival time on the recognizer's
+        // serial queue — not inside applyRecognitionResult after the
+        // Task.detached hop below, which gives no ordering guarantee between
+        // two independently detached callbacks. Re-stamping `Date()` at
+        // application time could sort a later-arriving-but-earlier-applied
+        // result ahead of one that truly arrived first (see appendSegment's
+        // capturedAt-based sort and TranscriptionSegment's doc comment).
+        let capturedAt = Date()
         let isFinal = result.isFinal
         let text = result.bestTranscription.formattedString
         let asrSegments = result.bestTranscription.segments
@@ -517,16 +562,19 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         Task.detached(priority: .utility) { [weak self] in
             await self?.applyRecognitionResult(
                 text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
-                isFinal: isFinal, confidence: confidence, language: language
+                isFinal: isFinal, confidence: confidence, language: language, capturedAt: capturedAt
             )
         }
     }
 
     /// Internal (not `private`) so `CallTranscriptionServiceTests` can drive
     /// it directly, matching the stale-callback-after-teardown guard test.
+    /// `capturedAt` is caller-supplied (arrival time), never re-stamped here
+    /// — see `handleRecognizerCallback`'s comment on why application time is
+    /// the wrong clock for this value.
     func applyRecognitionResult(
         text: String, speakerId: String, startMs: Int, endMs: Int,
-        isFinal: Bool, confidence: Double, language: String
+        isFinal: Bool, confidence: Double, language: String, capturedAt: Date
     ) {
         guard isTranscribing else { return }
         guard isFinal || isShowingOverlay else { return }
@@ -535,7 +583,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             id: UUID(), text: text, speakerId: speakerId,
             startTime: Double(startMs) / 1000, endTime: Double(endMs) / 1000,
             isFinal: isFinal, confidence: confidence, language: language,
-            capturedAt: Date()
+            capturedAt: capturedAt
         )
         appendSegment(segment)
 
@@ -599,6 +647,13 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // rotation, which would scramble the order of a local speaker's own
         // consecutive utterances once more than one final segment has fired.
         segments = allSegments.sorted { $0.capturedAt < $1.capturedAt }
+
+        if segment.isFinal {
+            persistedSegments.append(segment)
+            if persistedSegments.count > Constants.persistedSegmentCeiling {
+                persistedSegments = Array(persistedSegments.suffix(Constants.persistedSegmentCeiling))
+            }
+        }
     }
 
     private func mapAuthorizationStatus(_ status: SFSpeechRecognizerAuthorizationStatus) -> TranscriptionPermission {

@@ -200,9 +200,12 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
 
   // Call-summary system message → rich, actionable call bubble (bypasses the
   // view-mode machine; it has no reactions/edit/translation affordances).
+  // 'call' = terminal summary; 'call-live' = ongoing call posted at initiate,
+  // edited in-place at the terminal (message:edited).
+  const messageKind = (message.metadata as CallSummaryMetadata | undefined)?.kind;
   const callMetadata =
     message.messageSource === 'system' &&
-    (message.metadata as CallSummaryMetadata | undefined)?.kind === 'call'
+    (messageKind === 'call' || messageKind === 'call-live')
       ? (message.metadata as CallSummaryMetadata)
       : null;
   if (callMetadata) {
@@ -212,6 +215,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
         currentUserId={currentUser?.id ?? ''}
         conversationId={conversationId ?? message.conversationId}
         conversationType={conversationType}
+        isAnonymous={isAnonymous}
       />
     );
   }

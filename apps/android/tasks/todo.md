@@ -4,7 +4,117 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Settings §L) — slice `settings-media-auto-download` ✅
+## This loop (Phase: Media §P) — slice `media-thumbhash-decode` ✅
+**ThumbHash decoder pure core** — the decode beneath the app-side blur placeholder. Pure `:core:model`
+`me.meeshy.sdk.model.media.ThumbHash`: faithful port of Evan Wallace's `thumbHashToRGBA` /
+`thumbHashToAverageRGBA` / `thumbHashToApproximateAspectRatio` (`averageColor`, `approximateAspectRatio`,
+`hasAlpha`, `isLandscape`, `decode`→`ThumbHashImage(w,h,rgba)`) — YCoCg→RGB inverse-DCT over primitives, no
+Android `Bitmap`. Surpasses the reference: rejects a hash too short for the region it reads
+(`IllegalArgumentException` vs silent OOB) + clamps the raster to ≥1×1 (no zero-sized image from a degenerate
+header). +21 tests. `:core:model` tests green; `:app:assembleDebug` → BUILD SUCCESSFUL, APK produced.
+Two-mutation RED check (flip YCoCg blue reconstruction + drop portrait aspect scale) failed exactly the 4
+relevant tests. Reviewer PASS, diff = `apps/android` only. Full-tree tests show only 2 pre-existing flaky
+`:sdk-core` DataStore-timeout failures (pass on retry; unrelated module). The raster→`Bitmap` wrap + Coil
+placeholder wiring + ThumbHash *encoder* (slide generation) remain app-side/next. Next: raster→`Bitmap` + Coil
+placeholder consuming `ThumbHash.decode`; ThumbHash encoder; app-side Bitmap re-encode consuming
+`ImageCompressionPlan`; or app-side voice recorder pill consuming the waveform core.
+
+## Prior loop (Phase: Media §P) — slice `media-waveform-interpolation` ✅ (merged PR #1896)
+**Live-waveform pure core** — the metering→amplitude→resampling math beneath the app-side voice-note waveform,
+shared by the recorder pill and the audio-message player. Pure `:core:model` `me.meeshy.sdk.model.waveform`:
+`AudioLevelNormalizer.normalize` (dB→`0..1`, ports iOS `AudioRecorderManager.normalizeLevel`, +upper-clamp +NaN
+guard), `WaveformLevelWindow` (immutable 15-sample rolling ring, ports `levelHistory` + initial 15-zero fill),
+`WaveformInterpolator.interpolate` (levels→`barCount` linear-blend strip in one pass, ports
+`UniversalComposerBar.interpolatedLevel`, degenerate cases pinned). +28 tests (normalizer 7, window 11,
+interpolator 10). `:core:model` waveform tests green (28/28); full `assembleDebug` + all-module tests green, APK
+produced. Two-mutation RED check (drop normalizer upper clamp + zero the interpolator high-sample blend) failed
+exactly the 4 relevant tests. Reviewer PASS, diff = `apps/android` only. The `MediaRecorder` capture + Compose
+`Canvas` paint remain app-side glue.
+
+## Prior loop (Phase: Settings §L) — slice `settings-open-source-licenses` ✅ (merged PR #1894)
+**Open-source licenses** — the last §L static screen (§L static screens now complete). Port of iOS `LicensesView`
+over an **Android-accurate** curated catalog (Compose/AndroidX/Material/Hilt/Coroutines/Serialization/Coil/OkHttp/
+Retrofit/Media3/Room/Timber/ZXing/Firebase/Socket.IO-java/WebRTC-android) — the libs that actually ship, not iOS's
+Swift deps. Pure `:core:model` SSOTs (`me.meeshy.sdk.model.licenses`): `OpenSourceLicenseType` (MIT/APACHE_2_0/BSD/
+OTHER, decl order = render order), `OpenSourceLicenseResolver.resolvable` (launchability gate, `http(s)://` only —
+narrowed vs Support's `mailto:`), `OpenSourceLicensePresentationBuilder.build` (**surpasses iOS's flat list**:
+groups by type in enum order, sorts each group by name case-insensitively, drops empty groups, excludes
+non-launchable up front), `OpenSourceLicenseCatalog` (curated list + `groups()`). `LicensesScreen` glue:
+accent-coded per-family section cards, tappable repo rows via `ACTION_VIEW`. Wired a new **Open source licenses**
+row in Settings → About (`Routes.LICENSES`). +26 tests (resolver 9, builder 8, catalog 7). Full `:app:assembleDebug`
++ all-module tests green (6m36s, APK produced); two-mutation RED check (break sort + widen resolver to `mailto:`)
+failed exactly the 3 relevant tests. Reviewer PASS, diff = `apps/android` only, EN/FR/ES/PT. **⚠ Merge held:**
+PR #1894 CI is red only on a pre-existing, unrelated gateway failure (`calls-routes.test.ts`, 3 tests) that also
+fails on main's own push CI (sha `6d0b17d`) — can't fix without touching gateway prod logic (out of scope), and
+hard rule = never merge past red CI. Will squash-merge once main's gateway suite is green. Next: chat media view
+consuming `MediaAutoDownloadDecider`; §K crop/resize/compress before upload; or a §K row (device-sessions / 2FA /
+voice-cloning / blocked-users).
+
+## Prior loop (Phase: Settings §L) — slice `settings-legal-documents` ✅
+**Terms of Service + Privacy Policy** — port of iOS `TermsOfServiceView` + `PrivacyPolicyView`, **unified**
+into one data-driven screen keyed by `LegalDocumentKind`, wiring the two previously **dead-end** Settings → About
+rows. Pure `:core:model` SSOTs (`me.meeshy.sdk.model.legal`): `LegalDocumentKind` (route `arg` + `fromArg` parser,
+null on blank/unknown), `LegalSectionKey` (9 ToS + 7 Privacy), `LegalDocumentCatalog.sections`/`.numbered`
+(ordered keys + iOS `index + 1` numbering). `LegalDocumentScreen` glue: numbered Info-blue cards, content resolved
+app-side across values-* → **automatic EN/FR/ES/PT**, surpassing iOS's manual fr/en picker. +14 tests
+(catalog 7 order/numbering/partition invariants, kind 7 parse/case/trim/null). `:app:assembleDebug` + all-module
+`testDebugUnitTest` green; one-mutation RED check (drop `TOS_CONTACT`) failed exactly the order+partition tests.
+Reviewer PASS, diff = `apps/android` only. Next: remaining §L static screens (Help & Support; open-source
+licenses — Android-accurate curated catalog), the chat media view consuming `MediaAutoDownloadDecider`, or §K
+crop/resize/compress before upload.
+
+## Prior loop (Phase: Profile §K) — slice `profile-avatar-banner-upload` ✅
+**Avatar + banner upload** — port of iOS `AttachmentUploader` + `UserService.updateAvatar`, generalised to a
+banner (iOS uploads only a single compressed JPEG avatar). Four pure `:core:model` SSOTs: `ImageUploadTarget`
+(AVATAR/BANNER + per-target `maxBytes` 8/12 MiB), `ImageUploadValidator` (priority gate empty → non-image →
+oversize → Accepted; MIME parsed before `;` + case-folded; a 10 MiB image passes as banner, fails as avatar),
+`AvatarBannerUpload.firstUploadedUrl` (first non-blank URL else null), `AvatarBannerApply` (optimistic-paint
+merge mirroring `ProfileEditApply`). Dedicated `AvatarBannerUploadViewModel` validates (reject → typed
+`ImageUploadError`, no network) → uploads via the existing `MediaRepository`/`MediaApi` → optimistic session
+paint → confirms via existing `UserRepository.updateAvatar`/`updateBanner` → adopts server user / rolls back on
+failure; single-flight + cancellation-safe. `ProfileScreen`: tappable edit-mode avatar (Indigo camera badge +
+spinner) via `PickVisualMedia` + "Change cover photo" banner button, snackbar errors, EN/FR/ES/PT; added
+`androidx.activity.compose` to the module. +36 tests (validator 14, apply 4, url-select 4, VM 14); one-mutation
+RED check on the size branch confirmed the size tests. Full `assembleDebug` + all-module tests green, diff =
+`apps/android` only. Next: crop/resize/compress before upload (§K polish); live `ConnectivityManager` monitor
+(§L); or another §K/§L row (crash diagnostics, static pages, device-sessions/2FA/voice-cloning).
+
+## Prior loop (Phase: Settings §L) — slice `settings-media-cache` ✅
+**Media cache management** — port of iOS `DataStorageView` + `CacheCoordinator.clearAll`, **surpassing iOS**: iOS
+shows **no sizes** and offers only a single "clear all" (its own audit flags a size readout as a future TODO;
+`estimatedDiskBytes()` is unused); Android shows the **total + every per-category size** and clears **per-category
+or all**. Two pure `:core:model` SSOTs: `ByteSizeFormatter` (binary KB/MB/GB, adaptive 1-decimal, negatives→0,
+sub-KB still in KB — ports the shared iOS `ByteCountFormatter` convention) + `MediaCacheReport`/`MediaCacheCategory`
+(per-category bytes, `of` normalisation + clamp, derived `totalBytes`/`isEmpty`/`nonEmptyCategories`, optimistic
+`withCleared`). `:feature:settings` pure `MediaCacheScanner` (recursive `walkTopDown` size + content-wipe-keep-dir,
+missing-dir = 0/no-op, tested on real temp dirs), `MediaCacheStore`/`AndroidMediaCacheStore` (4 categories →
+`cacheDir/image_cache` [Coil default, populated today] + `cacheDir/media/{audio,video,thumbnails}` [pipeline-ready];
+`Dispatchers.IO`), `MediaCacheViewModel` (init scan, SWR refresh, optimistic per-/all-category clear with snapshot
+rollback, single-flight guard, SCAN/CLEAR mapping, cancellation-safe) + `MediaCacheScreen` (amber info card, Indigo
+total card, per-category rows with inline clear, destructive clear-all behind an `AlertDialog`). Wired the two
+previously no-op Settings → Data rows ("Clear media cache" + "Storage used") to `Routes.MEDIA_CACHE`. +43 tests
+(ByteSizeFormatter 15, MediaCacheReport 10, MediaCacheScanner 6, VM 12); full `assembleDebug` + all-module tests for
+verification, diff = `apps/android` only, EN/FR/ES/PT. Next: live `ConnectivityManager` monitor + first pipeline
+consumer of the media policy engine; avatar/banner upload (§K); or another §L row (crash diagnostics, static pages).
+
+## Prior loop (Phase: Settings §L) — slice `settings-data-export` ✅
+**GDPR data export** — port of iOS `DataExportView` + `DataExportService`, surpassing iOS twice: iOS shared only
+the summary counts (dropping the real payload) and shared truncatable text — Android shares the **full** payload
+as a real **file** via FileProvider. Three pure `:core:model` SSOTs: `DataExportRequestBuilder` (always-on
+`profile` + `types` order + format token, mirrors gateway `parseTypes`), `DataExportData` (full response model,
+timestamps as raw ISO strings → lossless round-trip), `DataExportFileBuilder` (safe fileName from the ISO
+`exportDate`; `text/csv` on a non-empty server `csv` map else a JSON re-encode of the whole payload). `:core:network`
+`DataExportApi` (`GET me/export`); `:sdk-core` `DataExportRepository` online + session-gated. `DataExportViewModel`
+(double-tap guard; any selection change invalidates a stale artifact; re-select = inert; NETWORK/GENERIC mapping) +
+`DataExportScreen` (format picker + content toggles + success card whose Share writes to `cacheDir/exports` and
+launches the chooser). Added an app-module FileProvider (`${applicationId}.fileprovider` + `file_paths.xml`), wired
+Settings → Data "Export my data" (`Routes.DATA_EXPORT`). +34 tests (RequestBuilder 7, FileBuilder 8, DataDecode 3,
+Repository 4, VM 12); `:app:assembleDebug` + touched-module tests green (the 2 sdk-core DataStore-store failures are
+the documented parallel-load flake — green in isolation, untouched here), diff = `apps/android` only, EN/FR/ES/PT.
+Next: media cache management (§L), live `ConnectivityManager` monitor + first pipeline consumer of the media policy
+engine, or avatar/banner upload (§K).
+
+## Prior loop (Phase: Settings §L) — slice `settings-media-auto-download` ✅
 **Media auto-download preferences** — port of iOS `MediaDownloadSettingsView` + the
 `MediaDownloadPreferences`/`MediaDownloadPolicyEngine`/`NetworkConditionMonitor` trio. Pure `:core:model` SSOTs:
 `AutoDownloadPolicy` × `MediaKind` → `MediaDownloadPreferences` (per-kind policy, `policy`/`withPolicy` lenses,

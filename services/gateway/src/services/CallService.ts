@@ -12,8 +12,13 @@
 
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
-import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
-import { buildCallSummaryWithMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
+import { CALL_ERROR_CODES, type CallEndedEvent } from '@meeshy/shared/types/video-call';
+import {
+  buildCallSummaryWithMetadata,
+  buildGarbageCollectedConversion,
+  buildLiveCallMetadata,
+  callSummaryClientMessageId
+} from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
 import {
   buildCallHistoryItem,
@@ -181,6 +186,13 @@ export class CallService {
   // Participants that signalled call:backgrounded; they receive an extended
   // heartbeat grace period so CallKit audio calls survive iOS socket suspension.
   private backgroundedParticipants: Map<string, Set<string>> = new Map();
+  // Étage 2 de la cascade de budgets de sonnerie (audit 2026-07-11 #7) — les
+  // trois valeurs sont VOLONTAIREMENT distinctes, chaque étage rattrape le
+  // précédent s'il ne se déclenche pas :
+  //   45s  client iOS (WebRTCTypes.outgoingRingTimeoutSeconds — fail rapide UX)
+  //   60s  serveur missed (ICI — autorité : marque l'appel missed + push)
+  //  120s  GC (CallCleanupService.MAX_INITIATED_RINGING_MS — filet VoIP lent)
+  // Toute évolution doit préserver l'ordre strict 45 < 60 < 120.
   private readonly RINGING_TIMEOUT_MS = 60_000;   // Phase 1 fix P2 — FaceTime parity
   private readonly RINGING_REHYDRATE_FLOOR_MS = 5_000; // item H — min budget after boot rehydration
   private readonly HEARTBEAT_DB_DEBOUNCE_MS = 30_000; // Write at most every 30s per participant
@@ -196,6 +208,19 @@ export class CallService {
   // on CallCleanupService, which already type-imports CallService.
   private readonly PHANTOM_CONNECTING_GRACE_MS = 90 * 1000;
   private readonly PHANTOM_HEARTBEAT_GRACE_MS = 120 * 1000;
+  // Live-call message — initiateCall's own GC sweeps (phantom/zombie) end
+  // calls with `garbageCollected` WITHOUT going through any summary path: an
+  // already-posted live message would read "en cours" forever. The socket
+  // layer wires this to `postCallSummaryForTerminatedCall`, which converts
+  // an orphaned live message to `failed`. Fire-and-forget, never blocking.
+  private reapedCallCallback: ((callId: string) => Promise<void> | void) | null = null;
+
+  // Wired in server.ts to CallEventsHandler.broadcastCallEndedForTerminatedCall.
+  // The REST end/leave routes have no `io`, so they delegate the `call:ended`
+  // fanout through this callback (same audience as the socket handlers).
+  private callEndedBroadcaster:
+    | ((callId: string, conversationId: string | undefined, endedEvent: CallEndedEvent) => Promise<void> | void)
+    | null = null;
 
   constructor(
     private prisma: PrismaClient,
@@ -209,6 +234,108 @@ export class CallService {
     private readonly bootedAt: Date = new Date()
   ) {
     this.turnCredentialService = new TURNCredentialService();
+  }
+
+  /**
+   * Register the callback notified with every callId force-ended by
+   * `initiateCall`'s own GC sweeps (phantom stale participations + zombie
+   * active call). Pattern mirrors CallCleanupService's
+   * `setPostSummaryCallback`; wired in server.ts.
+   */
+  setReapedCallCallback(callback: (callId: string) => Promise<void> | void): void {
+    this.reapedCallCallback = callback;
+  }
+
+  /** Fire-and-forget notification — a failing callback never affects initiate. */
+  private notifyReapedCall(callId: string): void {
+    const callback = this.reapedCallCallback;
+    if (!callback) {
+      return;
+    }
+    try {
+      Promise.resolve(callback(callId)).catch((error) => {
+        logger.warn('reaped-call callback failed', { callId, error });
+      });
+    } catch (error) {
+      logger.warn('reaped-call callback failed synchronously', { callId, error });
+    }
+  }
+
+  /**
+   * P0 (bulles « Appel … en cours » orphelines) — finalise le message live
+   * après une transition terminale déclenchée par un appelant qui ne poste PAS
+   * le summary lui-même. Les handlers socket `call:end` / `call:leave` le
+   * postent explicitement ; les routes REST end/leave n'appellent que
+   * `endCall()`/`leaveCall()` et laissaient la bulle live orpheline pour
+   * toujours (GC ne re-balaye pas un CallSession déjà terminal).
+   *
+   * Réutilise le câblage reaped déjà en place (→ postCallSummaryForTerminatedCall
+   * → createCallSummaryMessage) : fire-and-forget, idempotent et auto-gardé —
+   * createCallSummaryMessage est un no-op pour un appel non-terminal et n'édite
+   * qu'une bulle encore live. Un appel redondant (chemin socket) ou un appel de
+   * groupe encore en cours est donc sans effet.
+   */
+  finalizeCallSummary(callId: string): void {
+    this.notifyReapedCall(callId);
+  }
+
+  /**
+   * Register the broadcaster that emits `call:ended` to the full termination
+   * audience (call room + conversation room + member user rooms). Wired in
+   * server.ts to `CallEventsHandler.broadcastCallEndedForTerminatedCall`
+   * (which owns `io`). Pattern mirrors `setReapedCallCallback`.
+   */
+  setCallEndedBroadcaster(
+    callback: (callId: string, conversationId: string | undefined, endedEvent: CallEndedEvent) => Promise<void> | void
+  ): void {
+    this.callEndedBroadcaster = callback;
+  }
+
+  /**
+   * Bug (parité socket) — les routes REST `DELETE /calls/:id` (end) et
+   * `.../participants/:pid` (leave) appellent endCall()/leaveCall() puis
+   * renvoient, SANS jamais diffuser `call:ended`. Contrairement aux handlers
+   * socket `call:end`/`call:leave` (broadcastCallEnded), le pair n'apprenait
+   * la fin qu'au balayage GC (~120s) : son UI WebRTC/CallKit restait « en
+   * appel » (classe d'incident 2026-07-03 que broadcastCallEnded corrige).
+   *
+   * Auto-gardé sur le statut terminal : no-op pour un leave de groupe qui
+   * continue (endedAt null, statut actif). Fire-and-forget — un broadcaster
+   * qui échoue ne casse jamais la réponse REST (parité finalizeCallSummary).
+   */
+  broadcastCallEndedIfTerminal(
+    callSession: { id: string; conversationId?: string; status?: CallStatus | string; endedAt?: Date | null; duration?: number | null; endReason?: CallEndReason | string | null } | null | undefined,
+    endedBy: string
+  ): void {
+    if (!callSession) {
+      return;
+    }
+
+    const status = callSession.status as CallStatus | undefined;
+    const isTerminal = callSession.endedAt != null || (status != null && TERMINAL_STATUSES.includes(status));
+    if (!isTerminal) {
+      return;
+    }
+
+    const broadcaster = this.callEndedBroadcaster;
+    if (!broadcaster) {
+      return;
+    }
+
+    const endedEvent: CallEndedEvent = {
+      callId: callSession.id,
+      duration: callSession.duration || 0,
+      endedBy,
+      reason: (callSession.endReason || CallEndReason.completed) as CallEndReason
+    };
+
+    try {
+      Promise.resolve(broadcaster(callSession.id, callSession.conversationId, endedEvent)).catch((error) => {
+        logger.warn('call-ended broadcaster failed', { callId: callSession.id, error });
+      });
+    } catch (error) {
+      logger.warn('call-ended broadcaster failed synchronously', { callId: callSession.id, error });
+    }
   }
 
   /**
@@ -842,6 +969,7 @@ export class CallService {
           this.clearHeartbeats(staleCallId);
           this.clearRingingTimeout(staleCallId);
           await this.releaseActiveCallClaim(staleSession?.conversationId ?? conversationId, staleCallId);
+          this.notifyReapedCall(staleCallId);
         } catch (cleanupErr) {
           logger.error('phantom-cleanup failed for stale call', { staleCallId, error: cleanupErr });
         }
@@ -903,6 +1031,7 @@ export class CallService {
         this.clearHeartbeats(activeCall.id);
         this.clearRingingTimeout(activeCall.id);
         await this.releaseActiveCallClaim(conversationId, activeCall.id);
+        this.notifyReapedCall(activeCall.id);
 
         logger.info('Zombie call cleaned up', { zombieCallId: activeCall.id });
       } else {
@@ -1312,6 +1441,14 @@ export class CallService {
             endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
             endedAt: idemNow,
             duration: idemDuration,
+            // Mirror endCall(): record WHO ended the call in the metadata
+            // blob. A pre-answer leave by the initiator is how the summary
+            // distinguishes "Appel annulé" (cancelled by caller) from a plain
+            // "Appel manqué" (endedByInitiator, see createCallSummaryMessage).
+            metadata: {
+              ...(existing.metadata as Record<string, unknown>),
+              endedBy: userId
+            },
             version: { increment: 1 }
           }
         });
@@ -1461,6 +1598,13 @@ export class CallService {
             endReason: targetEndReason,
             endedAt: leftAt,
             duration,
+            // Mirror endCall(): record WHO ended the call. The callee's
+            // decline and the caller's cancel both land here — the summary
+            // uses initiator equality to render "Appel annulé" per-viewer.
+            metadata: {
+              ...(call.metadata as Record<string, unknown>),
+              endedBy: userId
+            },
             version: { increment: 1 }
           }
         });
@@ -1647,7 +1791,17 @@ export class CallService {
     const endReason = wasPreAnswered && resolvedReason === CallEndReason.completed
       ? CallEndReason.missed
       : resolvedReason;
-    const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
+    // Un refus EXPLICITE (reason=rejected, envoyé par les boutons Refuser de
+    // toutes les plateformes) garde son statut distinct : normalisé `missed`,
+    // il déclenchait handleMissedCall — une notification « appel manqué »
+    // pour un appel que le callee venait de REFUSER — et tombait dans le
+    // filtre « manqués » du journal (dont le commentaire suppose, à raison,
+    // un statut `rejected` que rien n'écrivait jusqu'ici).
+    const targetStatus = !wasPreAnswered
+      ? CallStatus.ended
+      : resolvedReason === CallEndReason.rejected
+        ? CallStatus.rejected
+        : CallStatus.missed;
 
     // Version-guarded: a plain read-modify-write here raced with any other
     // terminal writer touching this same call (a retried `call:end`, a
@@ -1944,7 +2098,14 @@ export class CallService {
 
     // Mettre à jour le statut de l'appel
     const now = new Date();
-    const duration = Math.floor((now.getTime() - callSession.startedAt.getTime()) / 1000);
+    // Anchor on answeredAt (talk time), mirroring every sibling terminal
+    // writer (endCall/leaveCall/forceEndCall/the phantom+zombie cleanup
+    // sweeps — Vague 25/27/30). The guard above only lets `initiated`/
+    // `ringing` calls reach here, and `answeredAt` is stamped exclusively on
+    // the transition to `active`, so a call resolved `missed` here was NEVER
+    // answered — its duration must be 0, not `now - startedAt` (ring time),
+    // else call history shows a phantom "Manqué · N:NN" instead of "Manqué".
+    const duration = 0;
 
     // Version/status-scoped write, mirroring updateCallStatus()'s optimistic
     // lock — a concurrent terminal writer (call:end, call:leave, the ringing
@@ -2048,9 +2209,11 @@ export class CallService {
   }
 
   /**
-   * Resolve a string reason to a Prisma CallEndReason enum
+   * Resolve a string reason to a Prisma CallEndReason enum. Public: the single
+   * normalization point for any raw client-supplied `reason` string reaching a
+   * `CallEndReason`-typed field — callers must never cast client input directly.
    */
-  private resolveEndReason(reason?: string): CallEndReason {
+  resolveEndReason(reason?: string): CallEndReason {
     switch (reason) {
       case 'missed': return CallEndReason.missed;
       case 'rejected': return CallEndReason.rejected;
@@ -2115,27 +2278,32 @@ export class CallService {
   }
 
   /**
-   * P3 — post the call-summary system message into the conversation when a
-   * call reaches a terminal state ("Appel vidéo · 04:32", "Appel audio
-   * manqué", "Appel refusé").
+   * P3 — post (or now UPDATE) the call-summary system message when a call
+   * reaches a terminal state ("Appel vidéo · 04:32", "Appel audio manqué",
+   * "Appel refusé").
    *
-   * Idempotent by construction: the message's `clientMessageId` is derived
-   * deterministically from the callId, and the partial unique index on
-   * `Message(conversationId, clientMessageId)` guarantees exactly one summary
-   * per call even though several gateway terminal paths (ringing timeout,
-   * participant leave, force cleanup) may all call this. A duplicate insert
-   * raises Prisma P2002 and is swallowed as a no-op.
+   * Upsert semantics (live-call message): `call:initiate` may already have
+   * posted the live "Appel … en cours" message under the SAME deterministic
+   * `clientMessageId`. Every terminal path therefore:
+   *   1. looks the message up with `findFirst(conversationId, clientMessageId)`
+   *      (the composite `findUnique` selector does NOT exist in the generated
+   *      client — the schema comment is misleading);
+   *   2. live found → edits it in-place to the canonical terminal state
+   *      (`kind: 'call'`) → `{ kind: 'updated' }`;
+   *   3. terminal found → `null` (all 7 terminal paths stay idempotent);
+   *   4. absent → creates it → `{ kind: 'created' }`; on P2002 it RE-READS:
+   *      a live message that committed mid-race is updated (anti-freeze —
+   *      otherwise the bubble stays "en cours" forever), an already-terminal
+   *      one is left alone (`null`).
+   * `garbageCollected` stays silent when no message exists (housekeeping),
+   * but converts an orphaned live message to `failed` ("Appel … interrompu").
    *
-   * Returns the created `Message` (with sender populated for Socket.IO
-   * broadcast) or `null` when nothing should be posted: the call is not
-   * terminal, the end reason is housekeeping (garbage collection), the message
-   * already exists, or the initiator has no participant row to attribute it to.
-   * The pure status/reason → label mapping lives in
-   * `@meeshy/shared/utils/call-summary`.
+   * The caller routes the result: `created` → `message:new` broadcast,
+   * `updated` → `message:edited` broadcast.
    */
   async createCallSummaryMessage(
     callId: string
-  ): Promise<Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> | null> {
+  ): Promise<{ kind: 'created' | 'updated'; message: Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> } | null> {
     const call = await this.prisma.callSession.findUnique({
       where: { id: callId },
       select: {
@@ -2145,6 +2313,7 @@ export class CallService {
         status: true,
         endReason: true,
         duration: true,
+        answeredAt: true,
         metadata: true,
         bytesSent: true,
         bytesReceived: true,
@@ -2155,8 +2324,41 @@ export class CallService {
       return null;
     }
 
-    const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
+    const sessionMetadata = call.metadata as Record<string, unknown> | null;
+    const metadataType = sessionMetadata?.type;
     const callType = typeof metadataType === 'string' ? metadataType : null;
+    const endedBy = sessionMetadata?.endedBy;
+    const endedById = typeof endedBy === 'string' ? endedBy : null;
+
+    const findExisting = () => this.prisma.message.findFirst({
+      where: {
+        conversationId: call.conversationId,
+        clientMessageId: callSummaryClientMessageId(call.id)
+      },
+      select: { id: true, metadata: true }
+    });
+    const isLiveMessage = (existing: { metadata: unknown } | null): boolean =>
+      (existing?.metadata as Record<string, unknown> | null)?.kind === 'call-live';
+    const applyUpdate = async (
+      messageId: string,
+      content: string,
+      metadata: unknown
+    ): Promise<{ kind: 'updated'; message: Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> }> => {
+      const message = await this.prisma.message.update({
+        where: { id: messageId },
+        data: {
+          content,
+          metadata: metadata as Prisma.InputJsonValue
+        },
+        include: CALL_SUMMARY_MESSAGE_INCLUDE
+      });
+      logger.info('Live call message updated to terminal state', {
+        callId,
+        conversationId: call.conversationId
+      });
+      return { kind: 'updated', message };
+    };
+
     // Compute the human-readable label AND the structured call facts the client
     // renders into a rich, actionable bubble (direction resolved per-viewer from
     // initiatorId, media glyph, outcome tint, and the "duration · data · quality"
@@ -2171,12 +2373,38 @@ export class CallService {
       initiatorId: call.initiatorId,
       bytesSent: call.bytesSent,
       bytesReceived: call.bytesReceived,
-      networkQuality: call.networkQuality
+      networkQuality: call.networkQuality,
+      answeredAt: call.answeredAt,
+      endedById
     });
     if (!built) {
-      return null;
+      // Non-terminal → nothing to do. GC housekeeping stays silent UNLESS a
+      // live message was already posted: that bubble would read "en cours"
+      // forever, so it converts to the failed terminal state.
+      if (call.endReason !== 'garbageCollected') {
+        return null;
+      }
+      const existing = await findExisting();
+      if (!existing || !isLiveMessage(existing)) {
+        return null;
+      }
+      const conversion = buildGarbageCollectedConversion({
+        callId: call.id,
+        initiatorId: call.initiatorId,
+        callType
+      });
+      return applyUpdate(existing.id, conversion.summary.content, conversion.metadata);
     }
     const { summary, metadata: callMetadata } = built;
+
+    const existing = await findExisting();
+    if (existing) {
+      if (!isLiveMessage(existing)) {
+        // A concurrent terminal path already posted the final summary.
+        return null;
+      }
+      return applyUpdate(existing.id, summary.content, callMetadata);
+    }
 
     // `Message.senderId` references a Participant (not a User); resolve the
     // initiator's participant row in this conversation to attribute the
@@ -2215,10 +2443,100 @@ export class CallService {
         outcome: summary.outcome,
         callType: summary.callType
       });
+      return { kind: 'created', message };
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        // Anti-freeze: the losing side of the race MUST re-read. If the
+        // live-create committed between our lookup and this insert, nobody
+        // else will ever edit that message — convert it here. If the winner
+        // was another terminal path, stay idempotent.
+        const raced = await findExisting();
+        if (raced && isLiveMessage(raced)) {
+          return applyUpdate(raced.id, summary.content, callMetadata);
+        }
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Post the LIVE call message ("Appel audio/vidéo en cours", `kind:
+   * 'call-live'`) into the conversation at `call:initiate`, BEFORE any
+   * terminal fact exists. It shares the terminal summary's deterministic
+   * `clientMessageId`, so the terminal path later edits this same message
+   * in-place — one message per call, at its chronological position.
+   *
+   * Returns `null` (never throws P2002) when nothing should be posted:
+   * unknown call, call already terminal (a fast terminal path won the race —
+   * its own create posted the final summary), no initiator participant row,
+   * or the unique index rejected a duplicate.
+   */
+  async createLiveCallMessage(
+    callId: string
+  ): Promise<Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> | null> {
+    const call = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      select: {
+        id: true,
+        conversationId: true,
+        initiatorId: true,
+        status: true,
+        metadata: true
+      }
+    });
+    if (!call) {
+      return null;
+    }
+    if (TERMINAL_STATUSES.includes(call.status)) {
+      return null;
+    }
+
+    const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
+    const callType = typeof metadataType === 'string' ? metadataType : null;
+    const { summary, metadata: callMetadata } = buildLiveCallMetadata({
+      callId: call.id,
+      initiatorId: call.initiatorId,
+      callType
+    });
+
+    const initiatorParticipant = await this.prisma.participant.findFirst({
+      where: { userId: call.initiatorId, conversationId: call.conversationId },
+      select: { id: true }
+    });
+    if (!initiatorParticipant) {
+      logger.warn('Cannot attribute live call message: initiator has no participant row', {
+        callId,
+        conversationId: call.conversationId,
+        initiatorId: call.initiatorId
+      });
+      return null;
+    }
+
+    try {
+      const message = await this.prisma.message.create({
+        data: {
+          conversationId: call.conversationId,
+          senderId: initiatorParticipant.id,
+          content: summary.content,
+          originalLanguage: 'fr',
+          messageType: 'system',
+          messageSource: 'system',
+          metadata: callMetadata as unknown as Prisma.InputJsonValue,
+          clientMessageId: callSummaryClientMessageId(call.id)
+        },
+        include: CALL_SUMMARY_MESSAGE_INCLUDE
+      });
+      logger.info('Live call message posted', {
+        callId,
+        conversationId: call.conversationId,
+        callType: summary.callType
+      });
       return message;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        // A concurrent terminal path already posted the summary — idempotent.
+        // The call terminated concurrently and its terminal path already
+        // posted the final summary — the live message must not exist.
         return null;
       }
       throw error;

@@ -56,15 +56,12 @@ struct CallView: View {
     // so the user knows the call is ringing, not stuck.
     @State private var sdpOfferSlow = false
     private let sdpOfferSlowSeconds: UInt64 = 6
-    // 2026-07-04 — les alertes qualité (« réseau faible chez votre contact »,
-    // « connexion au serveur perdue ») sont PONCTUELLES : la pill s'affiche
-    // quelques secondes à chaque bascule en dégradé puis se retire — l'état
-    // persistant est porté par le glyphe signal / les status pills, pas par
-    // une bannière permanente (retour user : la pill orange qui ne disparaît
-    // jamais est problématique en plein appel).
-    @State private var showRemoteQualityAlertPill = false
-    @State private var showSignalingAlertPill = false
-    private let qualityAlertPillSeconds: UInt64 = 5
+    // 2026-07-13 — les alertes qualité (« réseau faible chez votre contact »,
+    // « connexion au serveur perdue ») ne s'affichent plus en bannière pop-up
+    // (retour user : la pill était du bruit inutile en plein appel). L'état de
+    // faiblesse réseau vit UNIQUEMENT dans les indicateurs discrets déjà
+    // présents dans la vue : glyphe de signal près du chrono + status pills
+    // inline. VoiceOver reste notifié via les annonces a11y dans les onChange.
     // Profil du correspondant (avatar + bannière) — résolu cache-first dès que
     // `remoteUserId` est connu, refresh API silencieux (Instant App). Sert
     // l'avatar des cercles d'appel et le fond pleine page.
@@ -161,27 +158,12 @@ struct CallView: View {
             // inline dans le badge durée de videoCallLayout) — jamais par un overlay
             // plein-écran. VoiceOver reste notifié via l'annonce a11y ci-dessous.
 
-            // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
-            // when the remote end reports sustained poor stats; CallManager sets
-            // `isRemoteQualityDegraded`. La pill est TRANSITOIRE (auto-retrait
-            // après `qualityAlertPillSeconds`) — l'état qui persiste vit dans le
-            // glyphe signal + la status pill « Réseau faible (contact) ».
-            if showRemoteQualityAlertPill {
-                remoteQualityDegradedBanner
-                    .padding(.horizontal, 56)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
-
-            // EXIGENCE №1 — signaling dégradé : le socket est tombé pendant un
-            // appel établi. Le média P2P continue ; annonce ponctuelle, empilée
-            // sous la bannière qualité éventuelle — l'état persistant est porté
-            // par la status pill dédiée.
-            if showSignalingAlertPill {
-                signalingDegradedBanner
-                    .padding(.horizontal, 56)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, showRemoteQualityAlertPill ? 44 : 0)
-            }
+            // §4.4 — la dégradation réseau du pair (`call:quality-alert`) et la
+            // perte du signaling (`isSignalingDegraded`) ne sont plus surfacées
+            // par une bannière pop-up : l'état persiste dans les indicateurs
+            // discrets de la vue (glyphe signal + status pills « Réseau faible
+            // (contact) » / « Serveur déconnecté »). Annonces VoiceOver dans les
+            // onChange plus bas.
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement
             // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
@@ -315,10 +297,9 @@ struct CallView: View {
             }
         }
         .adaptiveOnChange(of: callManager.isRemoteQualityDegraded) { _, isDegraded in
-            // Pill ponctuelle : levée à chaque bascule en dégradé, retirée
-            // sitôt le lien rétabli (le retrait anticipé est le comportement
-            // attendu — plus de « réseau faible » affiché sur un lien sain).
-            showRemoteQualityAlertPill = isDegraded
+            // Plus de bannière pop-up : l'état persiste dans la status pill
+            // discrète « Réseau faible (contact) ». On notifie seulement VoiceOver
+            // à la bascule en dégradé.
             guard isDegraded else { return }
             UIAccessibility.post(
                 notification: .announcement,
@@ -327,27 +308,14 @@ struct CallView: View {
                                 bundle: .main))
         }
         .adaptiveOnChange(of: callManager.isSignalingDegraded) { _, isDegraded in
-            showSignalingAlertPill = isDegraded
+            // Idem : l'état vit dans la status pill « Serveur déconnecté » ;
+            // simple annonce VoiceOver à la bascule.
             guard isDegraded else { return }
             UIAccessibility.post(
                 notification: .announcement,
                 argument: String(localized: "call.a11y.signaling.degraded",
                                 defaultValue: "Connexion au serveur perdue, l'appel continue",
                                 bundle: .main))
-        }
-        // Auto-retrait des pills d'alerte : visibles `qualityAlertPillSeconds`
-        // puis retour dans l'île, MÊME si l'état reste dégradé (chaque nouvelle
-        // bascule false→true du flag les re-présente). SwiftUI annule le Task
-        // au retrait anticipé (lien rétabli) — pas de timer orphelin.
-        .task(id: showRemoteQualityAlertPill) {
-            guard showRemoteQualityAlertPill else { return }
-            try? await Task.sleep(nanoseconds: qualityAlertPillSeconds * 1_000_000_000)
-            if !Task.isCancelled { showRemoteQualityAlertPill = false }
-        }
-        .task(id: showSignalingAlertPill) {
-            guard showSignalingAlertPill else { return }
-            try? await Task.sleep(nanoseconds: qualityAlertPillSeconds * 1_000_000_000)
-            if !Task.isCancelled { showSignalingAlertPill = false }
         }
     }
 
@@ -773,6 +741,43 @@ struct CallView: View {
             }
         }
         .onDisappear { showControls = true }
+        // Surfaces a start failure that `advanceCaptionsMode()` couldn't see at
+        // tap time (the start path is async — permission request + on-device
+        // recognizer/audio-engine checks all happen after the button already
+        // optimistically opened the transcript panel). Without this, a failed
+        // start (e.g. no on-device speech recognizer for the user's language —
+        // never falls back to Apple's server-side recognizer, privacy decision)
+        // left the panel open and empty with zero feedback — user-reported
+        // 2026-07-11: "on dirait que la transcription ne fonctionne pas".
+        .adaptiveOnChange(of: transcriptionService.lastError) { _, newError in
+            guard let newError else { return }
+            FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))
+            showTranscript = false
+            transcriptionService.isShowingOverlay = false
+        }
+        // First segment ever received this call (local OR remote) reveals the
+        // panel even if captionsCycleButton was never tapped — a device must
+        // never silently accumulate the other participant's words with
+        // nothing visible. See docs/superpowers/specs/2026-07-11-call-transcript-history-design.md §4.
+        .adaptiveOnChange(of: transcriptionService.segments.isEmpty) { wasEmpty, isEmpty in
+            if wasEmpty, !isEmpty, !showTranscript {
+                showTranscript = true
+            }
+        }
+    }
+
+    /// User-facing translation of `TranscriptionError` — `errorDescription` on
+    /// the error type itself is an untranslated diagnostic string for logs,
+    /// never meant for display (see its own doc comment).
+    private func transcriptionErrorMessage(for error: TranscriptionError) -> String {
+        switch error {
+        case .permissionDenied:
+            return String(localized: "call.transcription.error.permissionDenied", defaultValue: "Autorisez la reconnaissance vocale dans Réglages pour activer les sous-titres.", bundle: .main)
+        case .recognizerUnavailable, .onDeviceNotSupported:
+            return String(localized: "call.transcription.error.unavailable", defaultValue: "Sous-titres indisponibles pour votre langue sur cet appareil.", bundle: .main)
+        case .recognitionFailed, .audioEngineFailed:
+            return String(localized: "call.transcription.error.failed", defaultValue: "Impossible d'activer les sous-titres. Réessayez.", bundle: .main)
+        }
     }
 
     /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
@@ -965,64 +970,6 @@ struct CallView: View {
             parts.append(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
         }
         return parts.joined(separator: ", ")
-    }
-
-    /// §4.3 — reconnecting banner shown over the frozen call layout while an
-    /// ICE restart recovers a dropped connection (warning-tinted capsule with a
-    /// spinner). The call is NOT torn down; the peer's last frame stays visible.
-    /// §4.4 — remote peer quality alert. Présentée PONCTUELLEMENT (flag
-    /// `showRemoteQualityAlertPill`, auto-expirant) quand `call:quality-alert`
-    /// fait basculer `isRemoteQualityDegraded` ; l'état persistant vit dans la
-    /// status pill « Réseau faible (contact) » + le glyphe du badge vidéo.
-    /// Mirrors FaceTime's "Contact has a poor connection" indicator.
-    private var remoteQualityDegradedBanner: some View {
-        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
-            HStack(spacing: 6) {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .accessibilityHidden(true)
-                Text(String(localized: "call.remote.quality.degraded",
-                            defaultValue: "Réseau faible chez votre contact",
-                            bundle: .main))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "call.remote.quality.degraded",
-                                   defaultValue: "Réseau faible chez votre contact",
-                                   bundle: .main))
-    }
-
-    /// EXIGENCE №1 — the signaling socket dropped while the call is connected.
-    /// The P2P media keeps flowing; annonce PONCTUELLE (flag
-    /// `showSignalingAlertPill` auto-expirant), l'état persistant vit dans la
-    /// status pill « Serveur déconnecté ». Never implies the call is at risk.
-    private var signalingDegradedBanner: some View {
-        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
-            HStack(spacing: 6) {
-                Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
-                    .accessibilityHidden(true)
-                Text(String(localized: "call.signaling.degraded",
-                            defaultValue: "Connexion au serveur perdue — l'appel continue",
-                            bundle: .main))
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "call.signaling.degraded",
-                                   defaultValue: "Connexion au serveur perdue — l'appel continue",
-                                   bundle: .main))
     }
 
     private var isConnectionDegraded: Bool {
@@ -1515,6 +1462,25 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
                     .foregroundColor(.white.opacity(0.45))
+            }
+
+            if callManager.canRetryCall {
+                // Transient failure — offer a one-tap re-dial (parité web/Android).
+                Button {
+                    callManager.retryCall()
+                } label: {
+                    Label(
+                        String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main),
+                        systemImage: "arrow.clockwise"
+                    )
+                    .font(.callout.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(Color.green))
+                }
+                .padding(.top, 8)
+                .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))
             }
 
             Spacer()

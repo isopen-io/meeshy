@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/shared",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "description": "Shared library for Meeshy - Types, Prisma Schema, Utilities",
   "private": true,
   "type": "module",
@@ -114,7 +114,7 @@
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
     "prisma": "^6.19.3",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "engines": {

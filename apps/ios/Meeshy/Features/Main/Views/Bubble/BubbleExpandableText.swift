@@ -58,7 +58,7 @@ struct BubbleExpandableText: View, Equatable {
                     .fixedSize(horizontal: false, vertical: true)
                     .tint(linkTint)
                     // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir
-                    // le menu contextuel custom Meeshy (`ContextActionMenu`, qui
+                    // le menu contextuel custom Meeshy (`MessageActionsMenu`, qui
                     // porte « Copier »), jamais le menu d'édition natif iOS
                     // (liquid glass « Copier / Rechercher / Traduire »).
 

@@ -76,6 +76,8 @@ fun CallScreen(
     config: CallConfig,
     onClose: () -> Unit,
     onMinimize: () -> Unit = {},
+    /** Bouton « Répondre » de la notification : décrocher dès l'arrivée (gated permissions). */
+    autoAnswer: Boolean = false,
     viewModel: CallViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -108,14 +110,27 @@ fun CallScreen(
     }
 
     LaunchedEffect(config.peerId, config.isOutgoing, config.isVideo) {
-        if (config.isOutgoing) withMediaPermissions { viewModel.start(config) } else viewModel.start(config)
+        if (config.isOutgoing) {
+            withMediaPermissions { viewModel.start(config) }
+        } else {
+            viewModel.start(config)
+            // Bouton « Répondre » de la notification : décrocher directement —
+            // même chemin gated permissions que le bouton Accepter de l'écran.
+            // Gardé sur INCOMING : une ré-entrée (second tap de notification,
+            // onNewIntent) sur un appel déjà décroché ne re-join jamais.
+            if (autoAnswer && viewModel.state.value.status == CallStatus.INCOMING) {
+                withMediaPermissions { viewModel.accept() }
+            }
+        }
     }
 
     // Auto-dismiss a settled call after a short beat so the "Call ended" screen does
     // not linger (parity with iOS's 1.5 s settle → full-screen cover close). The
     // manual close button on the ended view remains for an immediate back-out.
-    LaunchedEffect(state.isEnded) {
-        if (state.isEnded) {
+    // A RETRYABLE failure keeps the screen up: the user must have time to tap
+    // « Réessayer » (parity web retry-on-failure) — auto-dismiss would yank it.
+    LaunchedEffect(state.isEnded, state.canRetry) {
+        if (state.isEnded && !state.canRetry) {
             delay(CALL_ENDED_AUTO_DISMISS_MS)
             viewModel.dismiss()
             onClose()
@@ -198,6 +213,56 @@ fun CallScreen(
                     Spacer(Modifier.height(MeeshySpacing.sm))
                     ConnectionQualityBars(quality = quality, accent = accent)
                 }
+                if (state.isPeerQualityDegraded) {
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    Text(
+                        text = stringResource(R.string.call_peer_quality_degraded, state.peerName),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.warning,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                if (state.isPeerScreenCapturing) {
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    Text(
+                        text = stringResource(R.string.call_peer_screen_capturing, state.peerName),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.error,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                if (state.isPeerMuted) {
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    Text(
+                        text = stringResource(R.string.call_peer_muted, state.peerName),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textSecondary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+                if (state.isPeerCameraOff) {
+                    Spacer(Modifier.height(MeeshySpacing.sm))
+                    Text(
+                        text = stringResource(R.string.call_peer_camera_off, state.peerName),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MeeshyTheme.tokens.textSecondary,
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+
+            state.captionText?.let { caption ->
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .padding(horizontal = MeeshySpacing.lg)
+                        .clip(RoundedCornerShape(MeeshyRadius.md))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                )
             }
 
             CallControls(
@@ -212,6 +277,7 @@ fun CallScreen(
                     viewModel.dismiss()
                     onClose()
                 },
+                onRetry = viewModel::retry,
             )
         }
 
@@ -372,6 +438,7 @@ private fun CallControls(
     onToggleMute: () -> Unit,
     onToggleCamera: () -> Unit,
     onClose: () -> Unit,
+    onRetry: () -> Unit,
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xl, Alignment.CenterHorizontally),
@@ -418,6 +485,17 @@ private fun CallControls(
                 background = MaterialTheme.colorScheme.error,
                 contentDescription = stringResource(R.string.call_action_hang_up),
                 onClick = onHangUp,
+            )
+        }
+
+        if (state.canRetry) {
+            // A transient failure — offer « Réessayer » (re-initiates the same
+            // call) beside the close button. Parité web retry-on-failure.
+            CallCircleButton(
+                icon = if (state.isVideoCall) Icons.Filled.Videocam else Icons.Filled.Call,
+                background = MeeshyTheme.tokens.success,
+                contentDescription = stringResource(R.string.call_action_retry),
+                onClick = onRetry,
             )
         }
 

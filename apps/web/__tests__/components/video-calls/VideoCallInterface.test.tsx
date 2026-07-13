@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 // ---- Mocks for the container's heavy dependencies -------------------------
 
@@ -32,6 +32,7 @@ const storeState: Record<string, unknown> = {
   setLocalStream: jest.fn(),
   removeRemoteStream: jest.fn(),
   removePeerConnection: jest.fn(),
+  offerCallRetry: jest.fn(),
 };
 
 const useAdaptiveDegradationMock = jest.fn(() => ({ videoSuspended: false }));
@@ -61,6 +62,15 @@ jest.mock('@/hooks/use-audio-effects', () => ({
 }));
 jest.mock('@/hooks/use-call-quality', () => ({
   useCallQuality: () => ({ qualityStats: null }),
+}));
+jest.mock('@/hooks/use-remote-call-alerts', () => ({
+  useRemoteCallAlerts: () => ({ remoteQualityDegraded: false, remoteScreenCapturing: false }),
+}));
+jest.mock('@/hooks/use-call-captions', () => ({
+  useCallCaptions: () => ({ captions: [] }),
+}));
+jest.mock('@/hooks/use-call-analytics-reporter', () => ({
+  useCallAnalyticsReporter: () => {},
 }));
 jest.mock('@/hooks/use-active-peer-connection', () => ({
   useActivePeerConnection: () => null,
@@ -95,6 +105,13 @@ import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface'
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { toast } from 'sonner';
 
+// Capture keyed by event name, never by registration order: the component may
+// legitimately register other call listeners before this one.
+const participantLeftHandler = (fakeSocket: { on: jest.Mock }) =>
+  fakeSocket.on.mock.calls.find(([event]) => event === 'call:participant-left')?.[1] as (
+    event: unknown,
+  ) => void;
+
 describe('VideoCallInterface (container)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -116,6 +133,68 @@ describe('VideoCallInterface (container)', () => {
     expect(screen.getByRole('toolbar')).toBeInTheDocument();
     expect(screen.getByTestId('local-video-tile')).toBeInTheDocument();
     expect(screen.getByTestId('call-duration')).toBeInTheDocument();
+  });
+
+  // --- watchdog de connexion : un appel jamais connecté est borné à 45 s ---
+  // (parité iOS connectingFailSeconds / Android CallConnectingWatchdog — un
+  // échec ICE ne produisait qu'un toast, l'UI d'appel restait à vie)
+
+  it('termine l’appel jamais connecté à l’expiration du watchdog', () => {
+    jest.useFakeTimers();
+    const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+    webrtc.connectionState = 'connecting';
+    try {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => {
+        jest.advanceTimersByTime(45_000);
+      });
+
+      expect(fakeSocket.emit).toHaveBeenCalledWith('call:leave', { callId: 'call1' });
+    } finally {
+      webrtc.connectionState = 'connected';
+      jest.useRealTimers();
+    }
+  });
+
+  it('à l’expiration du watchdog, offre un « Réessayer » pour la conversation', () => {
+    jest.useFakeTimers();
+    const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+    (storeState.offerCallRetry as jest.Mock).mockClear();
+    storeState.currentCall = { id: 'call1', conversationId: 'conv-1', participants: [] };
+    storeState.controls = { audioEnabled: true, videoEnabled: false };
+    webrtc.connectionState = 'connecting';
+    try {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => {
+        jest.advanceTimersByTime(45_000);
+      });
+
+      expect(storeState.offerCallRetry).toHaveBeenCalledWith({ conversationId: 'conv-1', type: 'audio' });
+    } finally {
+      webrtc.connectionState = 'connected';
+      jest.useRealTimers();
+    }
+  });
+
+  it('le watchdog est inerte pour un appel déjà connecté', () => {
+    jest.useFakeTimers();
+    const fakeSocket = { on: jest.fn(), off: jest.fn(), emit: jest.fn() };
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(fakeSocket);
+    try {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => {
+        jest.advanceTimersByTime(45_000);
+      });
+
+      expect(fakeSocket.emit).not.toHaveBeenCalledWith('call:leave', expect.anything());
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('shows NO survival affordances when video is healthy', () => {
@@ -182,7 +261,7 @@ describe('VideoCallInterface (container)', () => {
         expect(webrtc.createOffer).toHaveBeenCalledWith('peer1');
 
         // The peer leaves: participant-left fires, then the 2s cleanup runs.
-        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        const handleParticipantLeft = participantLeftHandler(fakeSocket);
         handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
         jest.advanceTimersByTime(2000);
         expect(storeState.removeRemoteStream).toHaveBeenCalledWith('peer1');
@@ -233,7 +312,7 @@ describe('VideoCallInterface (container)', () => {
 
         render(<VideoCallInterface callId="call1" />);
 
-        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        const handleParticipantLeft = participantLeftHandler(fakeSocket);
         handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
 
         // Rejoin before the grace window elapses: a fresh RTCPeerConnection
@@ -262,7 +341,7 @@ describe('VideoCallInterface (container)', () => {
 
         render(<VideoCallInterface callId="call1" />);
 
-        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        const handleParticipantLeft = participantLeftHandler(fakeSocket);
         handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
 
         jest.advanceTimersByTime(2000);
@@ -290,7 +369,7 @@ describe('VideoCallInterface (container)', () => {
 
         const { unmount } = render(<VideoCallInterface callId="call1" />);
 
-        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        const handleParticipantLeft = participantLeftHandler(fakeSocket);
         handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
 
         unmount();
@@ -320,7 +399,7 @@ describe('VideoCallInterface (container)', () => {
 
         render(<VideoCallInterface callId="call1" />);
 
-        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        const handleParticipantLeft = participantLeftHandler(fakeSocket);
         handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
         jest.advanceTimersByTime(2000);
 
@@ -340,7 +419,7 @@ describe('VideoCallInterface (container)', () => {
 
         render(<VideoCallInterface callId="call1" />);
 
-        const handleParticipantLeft = fakeSocket.on.mock.calls[0][1] as (event: unknown) => void;
+        const handleParticipantLeft = participantLeftHandler(fakeSocket);
         handleParticipantLeft({ callId: 'call1', userId: 'peer1' });
         storeState.peerConnections = new Map([['peer1', {} as RTCPeerConnection]]);
         jest.advanceTimersByTime(2000);

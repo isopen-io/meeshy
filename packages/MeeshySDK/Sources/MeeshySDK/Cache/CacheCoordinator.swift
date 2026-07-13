@@ -35,6 +35,9 @@ public actor CacheCoordinator {
     /// synced to the server, so the cache IS the source of truth. Reads
     /// always hit the `.fresh` branch (see `CachePolicy.drafts`).
     public let drafts: GRDBCacheStore<String, ConversationDraft>
+    /// Local-only call transcripts — never sent to the Meeshy server. See
+    /// `CachePolicy.callTranscripts`.
+    public let callTranscripts: GRDBCacheStore<String, CallTranscript>
     public let statuses: GRDBCacheStore<String, StatusEntry>
     public let friends: GRDBCacheStore<String, FriendRequestUser>
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
@@ -241,6 +244,7 @@ public actor CacheCoordinator {
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
         self.communities = GRDBCacheStore(policy: .communities, db: db, namespace: "communities")
         self.drafts = GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")
+        self.callTranscripts = GRDBCacheStore(policy: .callTranscripts, db: db, namespace: "calltx", encrypted: true)
         self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
@@ -317,6 +321,7 @@ public actor CacheCoordinator {
         await communityLinks.invalidateAll()
         await communities.invalidateAll()
         await drafts.invalidateAll()
+        await callTranscripts.invalidateAll()
         await statuses.invalidateAll()
         await friends.invalidateAll()
         await friendRequests.invalidateAll()

@@ -178,8 +178,16 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] `cmid`↔serverId reconciliation: optimistic Room row (`sendState`
       SENDING/FAILED) swapped atomically on REST ACK, plus `clientMessageId`
       echo-matching during list sync; FAILED bubbles retry via outbox revive
-- [ ] **Message ordering**: per-conversation `seq` sort key + continuity gap
-      detection + server-time offset (ADR-021)
+- [~] **Message ordering**: per-conversation `seq` sort key + continuity gap
+      detection + server-time offset (ADR-021). **Ordering half shipped**
+      (`chat-message-ordering`): pure `MessageOrdering.order` SSOT — stable
+      ascending timeline by `createdAtMillis` (null → newest/bottom), `seq`
+      tiebreak (null → newest, trails acked siblings), server order preserved on
+      a full tie via stable sort. Wired into `ChatViewModel.toBubbles` so an
+      out-of-order socket arrival / merged page can never render jumbled, and
+      `MessageGrouping`/day-labels now cluster a provably-ascending list. 16 tests.
+      **Still open:** continuity gap detection + server-time offset (need a `seq`
+      source from the sync engine — deferred, no dead-end code shipped for them).
 - [ ] Transport spike: WebSocket vs long-polling on Android (ADR-015) →
       Socket.IO wrappers ×2 exposing sealed-class `SharedFlow`s
 - [ ] Foreground-socket / background-FCM delivery doctrine
@@ -426,6 +434,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       time, per-target sent checkmark, only a server-acked source is forwardable (an unsent bubble is refused).
       EN/FR/ES/PT strings.
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
+- [x] Consecutive-sender message grouping (WhatsApp/iMessage-style runs) — **surpasses iOS**, which
+      hardcodes `isLastInGroup: true` + always shows the avatar. Pure `:feature:chat` `MessageGrouping`
+      SSOT clusters the ascending list into same-author runs (outgoing = one "self" identity; incoming =
+      equal non-null `senderId`; a null incoming sender never groups; a pair breaks across a
+      `DEFAULT_GAP_MILLIS`=5min window compared on the absolute delta; a missing timestamp rides with the
+      previous same-author message) → `MessageGroupPosition(isFirstInGroup, isLastInGroup, isStandalone)`.
+      `ChatViewModel.toBubbles` derives `showSenderName` from `isFirstInGroup` (name shown once per run,
+      no longer on every incoming) and threads first/last onto `BubbleContent`; `MessageBubble` stacks a run
+      tightly (top gap only on first, bottom gap only on last) while distinct messages keep 4dp breathing
+      room (slice `chat-message-grouping`, +15 tests). Header and visual run share one SSOT so they can't drift.
 - [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
       `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine
       ≤6j, date complète + année si différente, label recalculé au rendu pour
@@ -540,7 +558,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       langue préférée traduite sinon transcription originale, `formattedDuration` `m:ss`) rendu en player
       compact (glyphe play/download + durée-ou-taille + ligne de transcription) tappable → URL au host ;
       iOS affiche `orig` par défaut + sélecteur manuel, Android affiche la langue préférée d'emblée) ;
-      carousel / contact pending
+      **galerie média plein écran conversation-wide done** (`chat-conversation-media-gallery` 2026-07-13 :
+      port iOS `ConversationMediaGalleryView` — taper une image n'ouvre plus un visionneur limité au
+      message tapé mais une galerie qui balaie TOUTES les images de la conversation, dans l'ordre, en
+      démarrant sur l'image tapée. Pur `:feature:chat` `ConversationMediaGallery.of(messages, messageId,
+      imageIndex)` → `ConversationGallery(imageUrls, startIndex)` : aplatit chaque bulle non-supprimée en
+      ordre de conversation, résout `startIndex` = compteur d'images avant le message tapé + `imageIndex`
+      clampé aux bornes du message ; message inconnu/supprimé/sans image → repli sur le début ; consommé
+      par `MeeshyImageViewer` (bloc `:sdk-ui` réutilisé, pinch-zoom + compteur `n/total` déjà présents).
+      +14 tests. Reste : contact card, save-to-gallery, prefetch ±2, métadonnées auteur/légende) ;
+      contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
@@ -1664,7 +1691,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Last name `OutlinedTextField`s above Display name (Words capitalization, EN/FR/ES/PT). +6 tests
       (ProfileEditRequestBuilder +3, ProfileViewModelEdit +3; existing save/cancel cases hardened to assert the
       name legs too). Reuses the whole optimistic/offline machinery — no new store, no new outbox kind.
-      **Pending:** avatar + banner upload (media pipeline).
+      **Avatar + banner upload shipped** (slice `profile-avatar-banner-upload`, 2026-07-11): the media
+      pipeline is now wired to the profile image. Pure `:core:model` SSOTs: `ImageUploadTarget`
+      (AVATAR/BANNER, each with a per-target `maxBytes` ceiling — 8 MiB / 12 MiB), `ImageUploadValidator`
+      (priority-ordered gate: empty → non-image → oversize → Accepted; MIME parsed before any `;` param,
+      case-folded; so a `video/mp4` or blank type is rejected and a 10 MiB file passes as a banner yet fails
+      as an avatar), `AvatarBannerUpload.firstUploadedUrl` (first non-blank uploaded URL, else `null`), and
+      `AvatarBannerApply.apply(user, target, url)` — the optimistic-paint merge SSOT mirroring
+      `ProfileEditApply` (overwrites only the targeted field). Orchestration: a dedicated
+      `AvatarBannerUploadViewModel` (`:feature:profile`) validates the pick (reject → typed
+      `ImageUploadError`, no network touched) → uploads via the existing `MediaRepository`/`MediaApi` (reused
+      unchanged) → paints the returned URL optimistically onto the session → confirms with the existing
+      `UserRepository.updateAvatar`/`updateBanner` PATCH → adopts the server's canonical identity, or rolls
+      the session back to the snapshot on failure. Single-flight guard drops a second pick mid-flight;
+      `viewModelScope` work rethrows `CancellationException`. `ProfileScreen` glue: the edit-mode avatar is
+      tappable (Indigo camera badge, spinner overlay while uploading) via `PickVisualMedia` (image-only), and
+      a "Change cover photo" button uploads the banner; errors surface in the snackbar (EN/FR/ES/PT). Reuses
+      the media pipeline entirely — no new endpoint. Surpasses iOS, which uploads only a single compressed
+      JPEG avatar (no banner). +36 tests (ImageUploadValidator 14, AvatarBannerApply 4, AvatarBannerUpload 4,
+      AvatarBannerUploadViewModel 14). **Pending:** in-place crop/resize/compress step before upload.
 - [~] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges —
       **stats projection SSOT + read-only dashboard shipped** (slice `profile-stats-presentation`,
       2026-07-05): the pure `UserStatsBuilder.build(stats) → UserStatsPresentation` (`:feature:profile`,
@@ -1701,7 +1746,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
       `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
       over/under-fills the ring), plus a "Profile N% complete" label. 22 `ProfileHeaderBuilderTest` cases.
-- [ ] Profile QR code display + save/share; share profile via message/email/copy link
+- [x] Profile QR code display + save/share; share profile via message/email/copy link —
+      **shipped** (slice `profile-share`, 2026-07-11), and it **surpasses iOS**, which has no
+      profile-share affordance. Pure `:core:model` `ProfileShareLink` is the cross-platform link SSOT:
+      `https://meeshy.me/u/{username}` Universal Link + `meeshy://u/{username}` custom scheme, mirroring
+      the iOS `DeepLinkParser` contract (`u` = the AASA-claimed user segment) so a QR/link made on
+      Android resolves in every client. `canonicalUsername` trims + strips a display-only leading `@`
+      (blank / lone-`@` → `null`); `webLink`/`appLink` percent-encode the handle as an RFC 3986 path
+      segment (unreserved passthrough, space→`%20`, non-ASCII→uppercase UTF-8 bytes, reserved→`%XX`).
+      Pure `:feature:profile` `ProfileShareBuilder.build(user) → ProfileSharePresentation?` (precedent
+      `ProfileHeaderBuilder`) projects `effectiveDisplayName`, `@handle` (same `canonicalUsername` SSOT
+      so handle ⇄ link never diverge) and both links; `null` when the handle is blank so the affordance
+      hides instead of emitting a dead URL. Glue (exempt): `ProfileShareSheet` (ModalBottomSheet with a
+      zxing-rendered QR of the web link on a white card + Copy-link + system Share-chooser), a **Share**
+      app-bar action on both own and other profiles, EN/FR/ES/PT strings; added `com.google.zxing:core`.
+      +22 tests (ProfileShareLink 16, ProfileShareBuilder 6). **Pending:** save the QR image to a file.
 - [x] Block / unblock users; report a user (reason + details) — **complete**. Block/unblock shipped
       earlier (durable `BlockRepository` + `BlockedTab`). **Report a user shipped** (slice `report-user`,
       2026-07-11): port of iOS `ReportUserView`, corrected to the gateway contract. Pure `:core:model`
@@ -1853,8 +1912,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       policy is an inert no-op. `MediaDownloadScreen` (glue): one accent-coherent section per kind with a
       single-choice `RadioButton` list, reached from a new "Auto-download" row in Settings → Data
       (`Routes.MEDIA_DOWNLOAD`). +37 tests (engine 6, resolver 9, prefs/codec 10, store 7, VM 5). EN/FR/ES/PT
-      strings. NB: the live `ConnectivityManager` monitor + the media-pipeline consumer of the decision are the
-      next slice — this ships the fully-tested decision SSOT + the persisted preference surface.
+      strings.
+- [x] Media auto-download decision pipeline — the live `ConnectivityManager` monitor + the first consumer of
+      `MediaDownloadPolicyEngine` — **shipped** (slice `media-auto-download-decider`, 2026-07-12). Closes the
+      "next slice" NB left by `settings-media-auto-download`. Two pure `:core:model` SSOTs: `MediaKindClassifier`
+      (wire MIME → `MediaKind?`; strips the `;`-parameter, trims, case-folds; `image/`→IMAGE, `video/`→VIDEO,
+      `audio/`→AUDIO or AUDIO_TRANSLATION per the translation flag; a document / blank / bare top-level token →
+      `null` = never auto-fetched) and `MediaAutoDownloadDecider.decide(kind, availability, condition, prefs) →
+      AutoDownloadDecision` (the guard chain iOS inlines in `ConversationMediaViews`'s auto-DL `.task`: unsupported
+      kind → SKIP_UNSUPPORTED, on-disk → SKIP_ALREADY_AVAILABLE, in-flight → SKIP_IN_FLIGHT, else the
+      `MediaDownloadPolicyEngine` verdict → DOWNLOAD / SKIP_POLICY; `decideFor(mimeType,…)` classifies then decides).
+      `MediaAvailability` (AVAILABLE/DOWNLOADING/NEEDS_DOWNLOAD) + `AutoDownloadDecision` (with `shouldDownload`).
+      `:sdk-core` `NetworkConditionMonitor` (interface + `InMemoryNetworkConditionMonitor` fake +
+      `AndroidNetworkConditionMonitor` — the `ConnectivityManager` glue that maps the default network's
+      `NetworkCapabilities` onto the four flags the pure, already-tested `NetworkConditionResolver` consumes;
+      exposed as a `StateFlow<NetworkCondition>`), Hilt-provided as a `@Singleton`. The future chat media view
+      injects the monitor + `MediaDownloadPreferencesStore` and calls the pure decider — the "when to auto-DL"
+      rule stays app-side (grain rule). +24 tests (MediaKindClassifier 13, MediaAutoDownloadDecider 11). No new
+      DataStore store (no flake surface). EN/FR/ES/PT strings: none needed (no user-facing copy).
 - [ ] Local-first user preferences (7 categories) — instant UI + debounced offline-queued sync
 - [x] Change password with strength meter + validation — **shipped** (slice `settings-change-password`,
       2026-07-11). Port of iOS `ChangePasswordView` + `PasswordStrengthIndicator`, surpassing it with one SOTA
@@ -1872,12 +1947,158 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       toggles, a 5-bar accent-coherent strength meter, per-rule hint rows, submit gated on `canSubmit`, reachable via
       a new "Change password" row in the Settings → Privacy section (`Routes.CHANGE_PASSWORD`). +32 tests
       (PasswordStrength 14, ChangePasswordForm 9, ChangePasswordViewModel 9). EN/FR/ES/PT strings.
-- [ ] GDPR data export (JSON/CSV, selectable scope, share/save file)
-- [ ] Account deletion (typed-phrase confirmation + email-confirmation flow)
-- [ ] Media cache management (clear cached images/audio/video/thumbnails)
-- [ ] Crash-report diagnostics viewer with share
-- [ ] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
-      open-source licenses (auto-generated), About
+- [x] GDPR data export (JSON/CSV, selectable scope, share/save file) — **shipped** (slice
+      `settings-data-export`, 2026-07-11). Port of iOS `DataExportView` + `DataExportService`,
+      **surpassing iOS** on two counts: (1) iOS's share wrapper dropped the actual profile/messages/
+      contacts payload and shared only the summary counts — Android shares the **full** payload; (2)
+      the export is shared as a real **file** via FileProvider, not truncatable `EXTRA_TEXT`. Three
+      pure `:core:model` SSOTs: `DataExportRequestBuilder.build(selection) → DataExportQuery` (the
+      always-on `profile` rule + `types` order `profile,messages,contacts` + `format` token, mirroring
+      the gateway `parseTypes`), `DataExportData` (the full response model — timestamps kept as raw
+      ISO strings so the payload round-trips losslessly to a JSON file), and
+      `DataExportFileBuilder.build(data) → ExportArtifact` (fileName from a filesystem-safe stamp of
+      the ISO `exportDate`; `text/csv` when the server returned a non-empty `csv` map, else an
+      `application/json` re-encoding of the whole payload — so a CSV request with no sections is never
+      an empty file). `:core:network` `DataExportApi` (`GET me/export`); `:sdk-core`
+      `DataExportRepository` is **deliberately online** + session-gated (the gateway builds the export
+      on demand from a live DB read — nothing to defer; a signed-out caller can't fire a guaranteed
+      `401`, inert `null`). `:feature:settings` `DataExportViewModel` (UDF immutable state; double-tap
+      guard; any selection change invalidates a stale artifact so the user never shares a file that
+      doesn't match the current scope; re-selecting the current value is inert; failure → NETWORK/
+      GENERIC) + `DataExportScreen` (format picker + content toggles + summary card whose Share action
+      writes the artifact to `cacheDir/exports` and launches the chooser). Added a FileProvider
+      (`${applicationId}.fileprovider` + `res/xml/file_paths.xml`) to the app module, wired the
+      previously no-op Settings → Data "Export my data" row (`Routes.DATA_EXPORT`). +34 tests
+      (RequestBuilder 7, FileBuilder 8, DataDecode 3, Repository 4, ViewModel 12). EN/FR/ES/PT strings.
+- [x] Account deletion (typed-phrase confirmation + email-confirmation flow) — **shipped** (slice
+      `settings-account-deletion`, 2026-07-11). Port of iOS `DeleteAccountView` + `AccountService.deleteAccount`.
+      Pure `:core:model` `AccountDeletionConfirmation` SSOT: `REQUIRED_PHRASE = "SUPPRIMER MON COMPTE"` (the gateway
+      `z.literal` contract, delete-account-schemas.ts) + `isConfirmed(typed)` — a **verbatim** match (no trim, no
+      case-fold: any leniency that cleared the client gate would be a guaranteed server `400 INVALID_CONFIRMATION`);
+      the wire always carries the canonical `REQUIRED_PHRASE`, never the raw buffer, so gate ⇄ body can never
+      diverge. `:core:model` `DeleteAccountRequest`/`DeleteAccountResponse`; `:core:network`
+      `UserApi.deleteAccount` (`@HTTP(method="DELETE", hasBody=true)` on `me/delete-account` — Retrofit needs the
+      explicit `@HTTP` to attach a body to a DELETE); `:sdk-core` `UserRepository.deleteAccount` (online-only
+      `apiCall` — the gateway opens a 90-day grace period and mails a confirmation link, so it can't be
+      optimistic/offline). `:feature:settings` `AccountDeletionViewModel` (+ `AccountDeletionUiState`,
+      `AccountDeletionError`): gates the destructive submit behind the verbatim phrase, double-tap safe
+      (`isDeleting` set synchronously), flips `isEmailSent` on success (no logout — mirrors iOS's email-confirmation
+      view), maps failure → `409 = ALREADY_PENDING` / transport = NETWORK / else GENERIC. `AccountDeletionScreen`
+      (glue): red danger warning card enumerating what is lost + monospace confirmation field + gated destructive
+      button, swapping to a "check your inbox" state on success; reached from the (previously no-op) "Delete
+      account" row in Settings → Danger zone (`Routes.DELETE_ACCOUNT`). +18 tests (AccountDeletionConfirmation 8,
+      AccountDeletionViewModel 10). EN/FR/ES/PT strings. Surpasses iOS with the distinct `ALREADY_PENDING` (409)
+      error state iOS folds into a single generic message.
+- [x] Media cache management (clear cached images/audio/video/thumbnails) — slice `settings-media-cache`
+      (2026-07-11). **Surpasses iOS**: iOS `DataStorageView` shows **no sizes** and offers only a single
+      "clear all" (its own audit flags the size readout as a future TODO, `estimatedDiskBytes()` unused);
+      Android shows the **total + every per-category size** and clears **per-category or all**. Pure
+      `:core:model` SSOTs: `ByteSizeFormatter` (binary KB/MB/GB, adaptive 1-decimal, negatives→0 — ports the
+      shared iOS `ByteCountFormatter` convention) + `MediaCacheReport`/`MediaCacheCategory` (per-category
+      bytes, derived total/`isEmpty`/`nonEmptyCategories`, optimistic `withCleared`). `:feature:settings`
+      pure `MediaCacheScanner` (recursive dir size + content wipe, missing-dir = 0/no-op, tested on temp
+      dirs), `MediaCacheStore`/`AndroidMediaCacheStore` (maps the 4 categories to `cacheDir/image_cache`
+      [Coil default, populated today] + `cacheDir/media/{audio,video,thumbnails}` [pipeline-ready]),
+      `MediaCacheViewModel` (init scan, SWR refresh, optimistic per-/all-category clear with rollback,
+      in-flight guard, SCAN/CLEAR error mapping, cancellation-safe) + `MediaCacheScreen` (total card,
+      per-category rows with size + inline clear, destructive clear-all with confirmation dialog). Wired the
+      two previously no-op Settings → Data rows ("Clear media cache" + "Storage used") to `Routes.MEDIA_CACHE`.
+      +43 tests (ByteSizeFormatter 15, MediaCacheReport 10, MediaCacheScanner 6, MediaCacheViewModel 12).
+      EN/FR/ES/PT strings.
+- [x] Crash-report diagnostics viewer with share — **shipped** (slice `settings-crash-diagnostics`,
+      2026-07-12). Port of iOS `CrashDiagnosticsManager` + `CrashReportSheet`, with an Android-honest capture
+      layer: the directly-capturable analogue of the iOS NSException path is a process-wide
+      `Thread.setDefaultUncaughtExceptionHandler`, which persists an uncaught JVM exception and then chains to
+      the previously-installed handler (mirroring iOS's `previousExceptionHandler`). Five pure `:core:model`
+      SSOTs (package `me.meeshy.sdk.model.diagnostics`): `CrashKind` (EXCEPTION/CRASH/ANR/CPU/DISK, each with a
+      stable `severity` badge band [ERROR/WARNING/INFO, mirroring the iOS `kindBadge` colours] + a stable
+      lowercase `wireValue` share token) + `CrashSeverity`; `CrashDiagnostic` (`@Serializable`; id, epoch-millis
+      timestamp, kind, summary, details); `CrashDiagnosticFactory.fromThrowable(throwable, id, timestampMillis)`
+      — the pure port of the iOS `"name: reason"` summary + joined-stack-trace details, id/timestamp injected
+      for determinism; `CrashReportFormatter.format`/`formatAll` — the pure port of iOS `formatAllReports()`
+      (`[kind] ISO-8601-UTC` / summary / details, blocks `---`-fenced, order-preserving, empty → ""); and
+      `CrashReportRetention.sorted`/`retained`/`overflowIds` (MAX_STORED=50) — the pure port of the iOS
+      `decodeAllReports()` newest-first sort + cap + GC-overflow, so a crash loop can never grow the store
+      without bound. Durable JSON codec `List<CrashDiagnostic>.storageValue`/`crashReportsFromStorage`
+      (corruption-safe: blank/absent/malformed/non-array → empty; a single unparseable element is skipped, not
+      the whole list — mirroring iOS per-file decode resilience). `:feature:settings`: `CrashDiagnosticsStore`
+      interface + coverage-exempt `FileCrashDiagnosticsStore` (single JSON file under
+      `filesDir/diagnostics/`, `@Synchronized` synchronous `record` for the dying crash thread, retention cap
+      applied on every append/read), `CrashDiagnosticsRecorder` (installs the uncaught-exception handler),
+      `CrashReportViewModel` (UDF immutable `CrashReportUiState`; loads newest-first, exposes `shareContent`
+      derived from the pure formatter, optimistic clear with snapshot rollback, inert-when-empty + in-flight
+      guards, `CancellationException` rethrown), `CrashReportScreen` (severity-coloured kind badges, tap-to-
+      expand monospace details, `ACTION_SEND` share, confirmed clear-all, empty/loading states). Wired a new
+      "Diagnostics" row in Settings → About (`Routes.DIAGNOSTICS`) + `MeeshyApplication.onCreate` installs the
+      recorder. +42 tests (CrashKind 5, CrashDiagnosticFactory 5, CrashReportFormatter 5, CrashReportRetention
+      12, CrashReportCodec 6, CrashReportViewModel 9). EN/FR/ES/PT strings. Surpasses iOS by keeping the whole
+      capture→retain→format→share pipeline as pure, fully-covered SSOTs rather than inline sheet logic.
+- [~] Static screens: Help & Support, Terms of Service (FR/EN), Privacy Policy (FR/EN),
+      open-source licenses (auto-generated), About.
+      **All five code-complete & locally green.** Licenses (PR #1894) is built + fully tested but **not yet
+      merged** — its CI is red only on a **pre-existing, unrelated** gateway failure (`calls-routes.test.ts`,
+      3 tests) that also fails on main's own push CI (sha `6d0b17d`); the apps/android-only diff cannot
+      touch gateway logic. Slice ⚠ blocked at the merge gate until main's gateway tests go green.
+      **About screen shipped** (slice `settings-about-screen`, 2026-07-12). Port of iOS `AboutView`.
+      Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.about`): `AppVersionFormatter.format(name, code)`
+      — the i18n-agnostic `"name (build)"` fragment (blank name → `1.0.0`, non-positive code → `1`, so the
+      label is never empty/`"()"`/negative; the screen wraps it in a localized "Version %s");
+      `AboutLinkResolver.resolvable(links)` — the port of iOS `linkRow`'s `if let URL(string:)` guard (keeps
+      only non-blank http(s) links, order-preserving, so `ACTION_VIEW` always has a launchable target);
+      `AboutPresentationBuilder.build(params)` — assembles the version label, the three info rows
+      (platform=`Android {release}` [blank release → bare `Android`], applicationId [blank → default],
+      sdkVersion [blank → `1.0.0`]), the fixed feature list and the launchable-only canonical links from the
+      opaque `AboutParams` (versionName/versionCode/osRelease/applicationId/sdkVersion — injected app-side from
+      `PackageInfo`/`Build`, no Android import in the core). `AboutScreen` (`:feature:settings`) is pure Compose
+      glue: brand-gradient header, Indigo section cards, info/feature rows, links open via `ACTION_VIEW`.
+      Wired the previously-dead Settings → About "Version" row to `Routes.ABOUT`. +27 tests (AppVersionFormatter 7,
+      AboutLinkResolver 9, AboutPresentationBuilder 11). EN/FR/ES/PT strings.
+      **ToS + Privacy Policy shipped** (slice `settings-legal-documents`, 2026-07-12). Port of iOS
+      `TermsOfServiceView` + `PrivacyPolicyView`, **unified** into one data-driven screen keyed by
+      `LegalDocumentKind`. Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.legal`):
+      `LegalDocumentKind.fromArg(raw)` — the case-folded/trimmed route-arg parser (`terms`/`privacy`, null on
+      blank/unknown so an unrecognised deep link never resolves to the wrong doc); `LegalSectionKey` (the 9 ToS
+      + 7 Privacy sections); `LegalDocumentCatalog.sections(kind)` + `.numbered(kind)` (ordered section keys +
+      iOS's `index + 1` 1-based numbering). `LegalDocumentScreen` (`:feature:settings`) is pure Compose glue:
+      numbered Info-blue section cards, each key resolved to a localized heading/body. Wired the two previously
+      **dead-end** Settings → About rows ("Terms of Service", "Privacy Policy") to `Routes.legal(kind)`.
+      **Surpasses iOS** by (a) collapsing two near-identical views into one catalog-driven screen and (b) the
+      document following the app language automatically across values-* (EN/FR/ES/PT — Prisme philosophy),
+      dropping iOS's manual fr/en `Picker`. +14 tests (LegalDocumentCatalog 7, LegalDocumentKind 7). EN/FR/ES/PT
+      strings.
+      **Help &amp; Support shipped** (slice `settings-help-support`, 2026-07-12). Port of iOS `SupportView`.
+      Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.support`): `SupportLinkResolver.resolvable(links)`
+      — the launchability gate mirroring iOS `supportLink`'s `if let URL(string:)` guard, **widened** to accept
+      `mailto:` alongside `http(s)://` (Help &amp; Support mixes web pages and email-compose links, unlike the
+      website-only About screen); `SupportPresentationBuilder.build(params)` — assembles the three link sections
+      (Get help = help-center + FAQ; Contact = email + Twitter; Report = bug + feature, the last two pre-filled
+      `mailto:` compose links) each launchable-filtered, plus the Information rows (version = trimmed versionName
+      with `1.0.0` fallback; build = versionCode with `1` fallback when ≤0; platform = `Android {release}`, bare
+      `Android` on blank). Supporting enums `SupportSectionKey`/`SupportLinkKind`/`SupportInfoKey` +
+      `SupportParams` (opaque `PackageInfo`/`Build` facts injected app-side, no Android import in the core).
+      `SupportScreen` (`:feature:settings`) is pure Compose glue: accent-coded section cards (Success/Info/Warning
+      for the three link sections, Neutral for Information — mirroring iOS's per-section tints), each link a
+      tappable row opening via `ACTION_VIEW`. Wired a new **Help &amp; Support** row in Settings → About
+      (`Routes.SUPPORT`). +24 tests (SupportLinkResolver 11, SupportPresentationBuilder 13). EN/FR/ES/PT strings.
+      A two-mutation RED check (drop the `mailto:` scheme + drop the build `≤0` fallback) failed exactly the 9
+      relevant tests, confirming they are behavioural not tautological.
+      **Open-source licenses shipped** (slice `settings-open-source-licenses`, 2026-07-12) — the last §L static
+      screen. Port of iOS `LicensesView`, but over an **Android-accurate** curated catalog (Jetpack Compose,
+      AndroidX, Material Components, Hilt, Kotlin Coroutines/Serialization, Coil, OkHttp, Retrofit, Media3
+      ExoPlayer, Room, Timber, ZXing, Firebase Android SDK, Socket.IO Client Java, WebRTC-Android) — the libs that
+      actually ship, not iOS's Swift deps. Pure `:core:model` SSOTs (package `me.meeshy.sdk.model.licenses`):
+      `OpenSourceLicenseType` (MIT/APACHE_2_0/BSD/OTHER — declaration order = render order); `OpenSourceLicense`
+      /`OpenSourceLicenseGroup`; `OpenSourceLicenseResolver.resolvable(licenses)` — the launchability gate porting
+      iOS `licenseCard`'s `if let URL(string:)` guard, narrowed to `http(s)://` only (licenses only open repo web
+      pages, no `mailto:`); `OpenSourceLicensePresentationBuilder.build(licenses)` — **surpasses iOS's flat list**
+      by grouping launchable licenses by type in enum order, sorting each group by name case-insensitively, and
+      dropping empty groups; `OpenSourceLicenseCatalog` (the curated list + `groups()`). `LicensesScreen`
+      (`:feature:settings`) is pure Compose glue: intro line + one accent-coded section per family (MIT=Success,
+      Apache=Warning, BSD=Info, Other=Neutral), each row a tappable card opening the repo via `ACTION_VIEW`. Wired
+      a new **Open source licenses** row in Settings → About (`Routes.LICENSES`). +26 tests (OpenSourceLicenseResolver
+      9, OpenSourceLicensePresentationBuilder 8, OpenSourceLicenseCatalog 7). EN/FR/ES/PT strings. A two-mutation
+      RED check (break the group sort + widen the resolver to `mailto:`) failed exactly the 3 relevant tests,
+      confirming they are behavioural not tautological. **§L static screens now complete.**
 
 ## M. Notifications
 - [ ] Notification center with category filters (messages, reactions, mentions, social,
@@ -1916,7 +2137,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Video watch-progress reporting; synchronized karaoke-style transcription (tap-to-seek)
 - [ ] Audio message player (waveform, speed control, seek); disk-cache-first instant replay
 - [ ] Voice-message autoplay-next chaining; full-screen swipeable audio viewer (reels-style)
-- [ ] Universal audio recorder (live waveform, duration/min-duration limits, presets)
+- [~] Universal audio recorder (live waveform, duration/min-duration limits, presets)
+      — **live-waveform pure core shipped** (slice `media-waveform-interpolation`, 2026-07-12):
+      pure `:core:model` `me.meeshy.sdk.model.waveform` — `AudioLevelNormalizer.normalize`
+      (dB→`0..1`, ports iOS `AudioRecorderManager.normalizeLevel` with added upper-clamp +
+      NaN guard), `WaveformLevelWindow` (immutable 15-sample rolling ring, ports `levelHistory`
+      + the initial `Array(repeating:0,count:15)`), `WaveformInterpolator.interpolate`
+      (levels→`barCount` linear-blend strip, ports `UniversalComposerBar.interpolatedLevel`,
+      whole strip in one pass). +28 tests. The `MediaRecorder`/`AudioRecord` capture + the
+      Compose `Canvas` that paints the strip remain app-side glue (pending); this same core
+      also underpins the audio-message-player waveform (line 2111).
 - [ ] Full-screen audio editor (waveform, trim/crop, word-level transcription, language picker)
 - [ ] On-device speech-to-text transcription of recordings
 - [ ] Full-screen image editor (crop + ratio presets, 12 filters, brightness/contrast/saturation/
@@ -1928,8 +2158,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       save-to-gallery pending
 - [ ] Code attachment viewer (~16 languages, syntax highlight, GitHub light/dark, copy)
 - [ ] Document viewer (PDF/presentation/spreadsheet) with share
-- [ ] Image/video compression before upload (context-aware quality); save media to "Meeshy" album
-- [ ] ThumbHash blur placeholders for all media; audio spectrogram visualization
+- [~] Image/video compression before upload (context-aware quality); save media to "Meeshy" album
+      — **image compression *plan* shipped** (slice `media-image-compression-plan`, 2026-07-12): pure
+      `:core:model` `me.meeshy.sdk.model.media` — `ImageUploadContext` (per-surface longest-edge ceilings
+      mirroring iOS `MediaContext.maxImageDimension`: MESSAGE 1200 / STORY 1080 / FEED_POST 1600 /
+      AVATAR 512 / FULLSCREEN 2048, **+ BANNER 1600** which iOS lacks; `forUploadTarget` bridges the
+      shipped avatar/banner `ImageUploadTarget`) + `ImageCompressionPlanner.plan(context,w,h,quality)` →
+      `ImageCompressionPlan(targetW,targetH,quality,resizeRequired)` (longest-edge fit, aspect preserved,
+      `floor`-rounded like iOS `targetSize`, resize only when source `>` ceiling, quality clamped 1..100,
+      target clamped ≥1, non-positive source → no-op). App-side Bitmap decode/scale/JPEG re-encode +
+      video compression + "save to Meeshy album" still pending. +18 tests.
+- [~] ThumbHash blur placeholders for all media; audio spectrogram visualization
+      — **ThumbHash *decoder* shipped** (slice `media-thumbhash-decode`, 2026-07-12): pure `:core:model`
+      `me.meeshy.sdk.model.media.ThumbHash` — faithful port of Evan Wallace's canonical
+      `thumbHashToRGBA` / `thumbHashToAverageRGBA` / `thumbHashToApproximateAspectRatio`
+      (`averageColor`, `approximateAspectRatio`, `hasAlpha`, `isLandscape`, `decode` → `ThumbHashImage`
+      (w,h,rgba)); DC/AC YCoCg→RGB DCT over primitives, no Android `Bitmap`. **Surpasses** the reference:
+      rejects a hash too short for the region it reads (`IllegalArgumentException` vs silent OOB) and clamps
+      the raster to ≥1×1 so a degenerate header can't yield a 0-sized image. +21 tests.
+      — **ThumbHash *encoder* shipped** (slice `media-thumbhash-encode`, 2026-07-12): `ThumbHash.encode(width,
+      height, rgba)` → hash `ByteArray`, faithful port of Evan Wallace's `rgbaToThumbHash` (alpha-weighted
+      average colour, RGBA→LPQA composited atop the average, forward DCT per channel into DC + scale-normalised
+      AC nibbles, fewer luminance bits when alpha present). The `p`/`q` transform is derived as the exact inverse
+      of *this repo's* decoder (`p=(r+g)/2−b`, `q=r−g`) so encode∘decode round-trips. **Surpasses** the
+      reference's unguarded inputs: rejects a non-positive / over-100 side and a buffer shorter than
+      `w·h·4` (`IllegalArgumentException` vs reading past the buffer into `NaN` garbage). +13 tests (hand-derived
+      header bytes, solid-colour/gradient/alpha round-trips through `decode`, orientation, guards). App-side
+      raster→`Bitmap` wrap + Coil placeholder wiring + slide-level generation (encode → upload) still pending.
 
 ## Q. Cross-cutting infrastructure
 - [ ] Cache-first / SWR data layer (`CacheResult`, `cacheFirstFlow`, Room as single SoT)
@@ -1956,3 +2211,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Adaptive iPad/tablet/foldable two-column layout (feed + conversation list/detail, resizable splitter)
 - [ ] Deterministic conversation/post accent colour + name-hash palette + theme-adaptive readability
 - [ ] Scroll-collapsing navigation header; animated brand logo; branded pull-to-refresh
+- [x] Relative-time classification SSOT (`RelativeTime.classify` → `RelativeTimeUnit` ladder;
+      port of iOS `RelativeTime.classify`, the threshold source of truth beneath `RelativeTimeFormatter`)
+      — pure `:core:model/time`, locale-agnostic (rendering stays UI-side), `Long` arithmetic so a
+      decades-old timestamp reaches the absolute-date rung without 32-bit overflow, future/skew → `Now`
+- [x] Relative-time *long* framing SSOT (`RelativeTimeLongFormat.label` → `RelativeTimeLongLabel`;
+      port of iOS `RelativeTimeFormatter.longString`, the detail-surface `il y a … / hier / date` framing)
+      — pure `:core:model/time`, locale-agnostic (the `time.long.*` wording stays UI-side), reuses the
+      `RelativeTime` second thresholds as SSOT then switches to **calendar-day** boundaries via an injected
+      `ZoneId` (2h across midnight → `Yesterday`; the same instant reads `hier` vs `il y a Nh` per zone),
+      future/skew → `Now`
+- [x] Relative-time *short* rendering layer (`RelativeTimeFormat.short` + `RelativeTimeStrings`;
+      port of the iOS `RelativeTimeFormatter` compact form `maintenant / Nmin / Nh / Nj / Nsem`)
+      — pure `:sdk-ui/format`, delegates to `RelativeTime.classify` (thresholds not re-implemented) and
+      maps each rung to an **injected** localized template (the `CallTimeLabel` pattern; no Android dep, JVM
+      -tested), the `AbsoluteDate` rung → locale/zone date (year only when it differs). `time_relative_*`
+      strings EN/FR/ES/PT + `@Composable rememberRelativeTimeStrings()` glue; **wired into the feed post
+      timestamp** (raw absolute date → discreet relative label, Prisme framing; unparsable → absolute fallback)

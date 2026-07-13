@@ -3,6 +3,7 @@ package me.meeshy.sdk.socket
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallEndedSignal
@@ -11,7 +12,12 @@ import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallJoinAckParser
 import me.meeshy.sdk.model.call.CallJoinResult
+import me.meeshy.sdk.model.call.CallMediaTogglePayload
+import me.meeshy.sdk.model.call.CallParticipantLeftPayload
+import me.meeshy.sdk.model.call.CallQualityAlertPayload
 import me.meeshy.sdk.model.call.CallQualityReport
+import me.meeshy.sdk.model.call.CallScreenCaptureAlertPayload
+import me.meeshy.sdk.model.call.CallTranslatedSegmentPayload
 import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.CallSignalMapper
 import me.meeshy.sdk.model.call.SocketIceServer
@@ -96,6 +102,49 @@ class CallSignalManager @Inject constructor(
     private val _iceServersRefreshed = MutableSharedFlow<List<SocketIceServer>>(replay = 0, extraBufferCapacity = 8)
     val iceServersRefreshed: SharedFlow<List<SocketIceServer>> = _iceServersRefreshed.asSharedFlow()
 
+    /**
+     * A participant left the room WITHOUT ending the call (`call:participant-left`
+     * — group calls; a 1:1 teardown rides [endedCalls] instead). Inert to the
+     * FSM-facing [events]; the consumer prunes the leaver's media by identity.
+     * Hot, no replay — like [events]. (Audit appels 2026-07-11 #5.)
+     */
+    private val _participantLeft = MutableSharedFlow<CallParticipantLeftPayload>(replay = 0, extraBufferCapacity = 16)
+    val participantLeft: SharedFlow<CallParticipantLeftPayload> = _participantLeft.asSharedFlow()
+
+    /**
+     * The gateway flagging the REMOTE peer's sustained bad network
+     * (`call:quality-alert`). Drives the transient "your contact's connection is
+     * unstable" indicator — iOS `isRemoteQualityDegraded` parity. Hot, no replay.
+     */
+    private val _qualityAlerts = MutableSharedFlow<CallQualityAlertPayload>(replay = 0, extraBufferCapacity = 16)
+    val qualityAlerts: SharedFlow<CallQualityAlertPayload> = _qualityAlerts.asSharedFlow()
+
+    /**
+     * The remote peer started/stopped capturing the call screen
+     * (`call:screen-capture-alert`). Drives the privacy warning banner — iOS
+     * `isRemoteScreenCapturing` parity. Hot, no replay.
+     */
+    private val _screenCaptureAlerts = MutableSharedFlow<CallScreenCaptureAlertPayload>(replay = 0, extraBufferCapacity = 16)
+    val screenCaptureAlerts: SharedFlow<CallScreenCaptureAlertPayload> = _screenCaptureAlerts.asSharedFlow()
+
+    /**
+     * Live caption segments from the remote speaker (`call:translated-segment`),
+     * translated server-side when available (`translatedText == null` → display
+     * the original `text`). Dense during speech — buffered like [incomingSignals].
+     * Hot, no replay.
+     */
+    private val _translatedSegments = MutableSharedFlow<CallTranslatedSegmentPayload>(replay = 0, extraBufferCapacity = 128)
+    val translatedSegments: SharedFlow<CallTranslatedSegmentPayload> = _translatedSegments.asSharedFlow()
+
+    /**
+     * The remote peer muted/unmuted the mic or turned the camera off/on
+     * (`call:media-toggled`). Inert to the FSM; feeds the "peer is muted /
+     * camera off" indicators — iOS `isRemoteAudioEnabled`/`isRemoteVideoEnabled`
+     * parity. Hot, no replay.
+     */
+    private val _mediaToggles = MutableSharedFlow<CallMediaTogglePayload>(replay = 0, extraBufferCapacity = 16)
+    val mediaToggles: SharedFlow<CallMediaTogglePayload> = _mediaToggles.asSharedFlow()
+
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
     }
@@ -115,6 +164,7 @@ class CallSignalManager @Inject constructor(
      * JSON object — yields [CallInitiateResult.Timeout].
      */
     suspend fun emitInitiate(conversationId: String, isVideo: Boolean): CallInitiateResult {
+        if (!awaitSocketConnected()) return CallInitiateResult.Timeout
         val payload = JSONObject()
             .put("conversationId", conversationId)
             .put("type", if (isVideo) "video" else "audio")
@@ -139,6 +189,7 @@ class CallSignalManager @Inject constructor(
      * No ACK within [JOIN_ACK_TIMEOUT_MS] yields [CallJoinResult.Failure].
      */
     suspend fun emitJoinAwaitingAck(callId: String): CallJoinResult {
+        if (!awaitSocketConnected()) return CallJoinResult.Failure(SOCKET_OFFLINE)
         val raw = withTimeoutOrNull(JOIN_ACK_TIMEOUT_MS) {
             suspendCancellableCoroutine { continuation ->
                 socketManager.emit("call:join", JSONObject().put("callId", callId)) { args ->
@@ -151,6 +202,21 @@ class CallSignalManager @Inject constructor(
         return CallJoinAckParser.parse(raw)
     }
 
+    /**
+     * Attente BORNÉE de la connexion socket avant un emit à ACK. Le trou du
+     * décroché à froid : l'utilisateur répond depuis la notification FCM
+     * full-screen pendant que l'app démarre — la restauration d'auth puis le
+     * handshake socket prennent quelques secondes, et un emit sur un `_socket`
+     * encore null est JETÉ en silence (l'ACK ne vient jamais, le budget expire,
+     * l'appel décroché meurt en Failure). Immédiat quand déjà connecté ;
+     * au-delà de [CONNECT_WAIT_MS], échec rapide et explicite plutôt qu'un
+     * budget ACK brûlé dans le vide.
+     */
+    private suspend fun awaitSocketConnected(): Boolean =
+        withTimeoutOrNull(CONNECT_WAIT_MS) {
+            socketManager.connectionState.first { it == SocketConnectionState.CONNECTED }
+        } != null
+
     /** Join the call room after answering / on reconnect (fire-and-forget). */
     fun emitJoin(callId: String) = emit("call:join", callId)
 
@@ -158,7 +224,17 @@ class CallSignalManager @Inject constructor(
     fun emitLeave(callId: String) = emit("call:leave", callId)
 
     /** End the call for every participant. */
-    fun emitEnd(callId: String) = emit("call:end", callId)
+    /**
+     * End the call for every participant. [reason] optionnel au schéma gateway
+     * (`socketEndCallSchema`, minuscules+underscores) : `"rejected"` sur un
+     * refus explicite — sans lui, le serveur résout tout end pré-décroché en
+     * `missed` et le journal de l'appelant ment (« manqué » pour un refus).
+     */
+    fun emitEnd(callId: String, reason: String? = null) =
+        socketManager.emit(
+            "call:end",
+            JSONObject().put("callId", callId).apply { reason?.let { put("reason", it) } },
+        )
 
     /** Signal the peer that the local microphone was muted/unmuted. */
     fun emitToggleAudio(callId: String, enabled: Boolean) =
@@ -223,6 +299,65 @@ class CallSignalManager @Inject constructor(
     fun emitRequestIceServers(callId: String) = emit("call:request-ice-servers", callId)
 
     /**
+     * Le device passe en arrière-plan pendant CET appel — le gateway étend la
+     * tolérance heartbeat (grâce 5 min, `BACKGROUND_HEARTBEAT_TIMEOUT_MS`) au
+     * lieu de couper l'appel à 120 s de silence. Le schéma gateway exige un
+     * `participantId` non vide mais le serveur résout le SIEN depuis la socket
+     * authentifiée (jamais de confiance client) — le userId local suffit.
+     */
+    fun emitBackgrounded(callId: String, participantId: String) =
+        socketManager.emit(
+            "call:backgrounded",
+            JSONObject().put("callId", callId).put("participantId", participantId),
+        )
+
+    /** Retour au premier plan pendant CET appel — tolérance heartbeat normale. */
+    fun emitForegrounded(callId: String, participantId: String) =
+        socketManager.emit(
+            "call:foregrounded",
+            JSONObject().put("callId", callId).put("participantId", participantId),
+        )
+
+    /**
+     * CET appareil a commencé/arrêté de capturer l'écran de l'appel — le gateway
+     * relaie `call:screen-capture-alert` au pair (signal privacy que les 3
+     * plateformes affichent désormais). Parité iOS `emitCallScreenCaptureDetected` :
+     * le schéma gateway exige un `participantId` non vide mais le serveur résout
+     * le SIEN depuis la socket authentifiée (anti-usurpation, fix 2026-07-03) —
+     * le userId local suffit.
+     */
+    fun emitScreenCaptureDetected(callId: String, participantId: String, isCapturing: Boolean) =
+        socketManager.emit(
+            "call:screen-capture-detected",
+            JSONObject()
+                .put("callId", callId)
+                .put("participantId", participantId)
+                .put("isCapturing", isCapturing),
+        )
+
+    /**
+     * Demande au gateway de REJOUER tout appel encore en train de sonner que
+     * cette socket a manqué — un ring parti pendant que l'app était fermée, un
+     * blip réseau mid-ring, une reconnexion. Le serveur re-émet
+     * `call:initiated` (fenêtre sonnerie < 60 s, jamais l'initiateur, jamais un
+     * appel déjà quitté) ; le client dédoublonne par callId. À émettre à CHAQUE
+     * connexion, parité iOS `MessageSocketManager` / web `checkForActiveCall` —
+     * sans lui, un callee Android qui (re)connecte mid-ring laisse l'appel
+     * sonner dans le vide jusqu'au missed.
+     */
+    fun emitCheckActive() = socketManager.emit("call:check-active", JSONObject())
+
+    /**
+     * Télémétrie de cycle de vie émise UNE fois à la fin de l'appel (parité iOS
+     * `emitCallAnalytics`, fire-and-forget — le gateway log/persiste pour les
+     * dashboards qualité). Le payload est décidé une seule fois par le pur
+     * [me.meeshy.sdk.model.call.CallAnalytics.fields] ; cette méthode ne possède
+     * que le transport (l'enveloppe JSON + la clé `callId`).
+     */
+    fun emitAnalytics(callId: String, fields: Map<String, Any>) =
+        socketManager.emit("call:analytics", JSONObject(fields).put("callId", callId))
+
+    /**
      * Liveness beat the gateway uses to detect a dead peer (heartbeat timeout →
      * zombie-call cleanup) instead of waiting for the multi-hour GC. Parity with
      * iOS `emitCallHeartbeat` — the gateway resolves the participant from the
@@ -280,6 +415,21 @@ class CallSignalManager @Inject constructor(
             if (event == ICE_SERVERS_REFRESHED_EVENT) {
                 CallSignalMapper.iceServersRefreshed(raw)?.let(_iceServersRefreshed::tryEmit)
             }
+            if (event == PARTICIPANT_LEFT_EVENT) {
+                CallSignalMapper.participantLeft(raw)?.let(_participantLeft::tryEmit)
+            }
+            if (event == QUALITY_ALERT_EVENT) {
+                CallSignalMapper.qualityAlert(raw)?.let(_qualityAlerts::tryEmit)
+            }
+            if (event == SCREEN_CAPTURE_ALERT_EVENT) {
+                CallSignalMapper.screenCaptureAlert(raw)?.let(_screenCaptureAlerts::tryEmit)
+            }
+            if (event == TRANSLATED_SEGMENT_EVENT) {
+                CallSignalMapper.translatedSegment(raw)?.let(_translatedSegments::tryEmit)
+            }
+            if (event == MEDIA_TOGGLED_EVENT) {
+                CallSignalMapper.mediaToggle(raw)?.let(_mediaToggles::tryEmit)
+            }
             CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::tryEmit)
         }
     }
@@ -291,6 +441,19 @@ class CallSignalManager @Inject constructor(
         /** ACK budget for `call:join`; a bit above the iOS 3 s to tolerate the emulator. */
         const val JOIN_ACK_TIMEOUT_MS = 5_000L
 
+        /**
+         * Attente max de la connexion socket avant un initiate/join (cold start
+         * depuis la notification full-screen : restauration d'auth + TLS +
+         * handshake). Parité iOS : `CallManager` attend `isConnected` jusqu'à
+         * 30 s dans son chemin de réponse — l'utilisateur A décroché, on tient
+         * tant que la fenêtre de sonnerie serveur (60 s) le permet plutôt que
+         * de perdre un appel qu'un connect à 12 s aurait sauvé.
+         */
+        const val CONNECT_WAIT_MS = 30_000L
+
+        /** Message du fast-fail quand la socket n'a jamais connecté dans la fenêtre. */
+        const val SOCKET_OFFLINE = "socket not connected"
+
         /** The single inbound frame that also carries incoming-offer identity. */
         const val INITIATED_EVENT = "call:initiated"
 
@@ -300,14 +463,36 @@ class CallSignalManager @Inject constructor(
         /** The gateway's reply to [emitRequestIceServers], carrying fresh TURN/STUN. */
         const val ICE_SERVERS_REFRESHED_EVENT = "call:ice-servers-refreshed"
 
+        /** A participant left the room without ending the call (group calls). */
+        const val PARTICIPANT_LEFT_EVENT = "call:participant-left"
+
+        /** The gateway flagging the REMOTE peer's sustained bad network. */
+        const val QUALITY_ALERT_EVENT = "call:quality-alert"
+
+        /** The remote peer started/stopped a screen capture of the call. */
+        const val SCREEN_CAPTURE_ALERT_EVENT = "call:screen-capture-alert"
+
+        /** A live (optionally translated) caption segment from the remote speaker. */
+        const val TRANSLATED_SEGMENT_EVENT = "call:translated-segment"
+
+        /** The remote peer muted/unmuted the mic or toggled the camera. */
+        const val MEDIA_TOGGLED_EVENT = "call:media-toggled"
+
+        // `call:force-leave` is deliberately ABSENT: the gateway never emits it
+        // (audit appels 2026-07-11 — verified dead; subscribing would be a
+        // silent no-op inviting drift).
         val INBOUND_EVENTS = listOf(
             INITIATED_EVENT,
             SIGNAL_EVENT,
             ICE_SERVERS_REFRESHED_EVENT,
+            PARTICIPANT_LEFT_EVENT,
+            QUALITY_ALERT_EVENT,
+            SCREEN_CAPTURE_ALERT_EVENT,
+            TRANSLATED_SEGMENT_EVENT,
+            MEDIA_TOGGLED_EVENT,
             "call:participant-joined",
             "call:ended",
             "call:missed",
-            "call:media-toggled",
             "call:error",
             "call:already-answered",
         )

@@ -105,6 +105,16 @@ extension CachePolicy {
     /// `maxItemCount: 500` matches `preferences` and covers the practical
     /// ceiling of concurrent open conversations per user.
     public static let drafts = CachePolicy(ttl: .days(30), staleTTL: .days(30), maxItemCount: 500, storageLocation: .grdb)
+    /// Local-only call transcripts — never sent to the Meeshy server (may be
+    /// included in this device's own iCloud/Finder backup). Encrypted at rest
+    /// like every other sensitive store (unlike `.drafts`, low-sensitivity
+    /// typed-but-unsent text — a call transcript is categorically more
+    /// sensitive, on par with or above `.callHistory`, which is also
+    /// encrypted). 90-day TTL: a deliberately shorter default than the
+    /// original 365-day draft this was revised from, given the product's
+    /// privacy-forward positioning — see
+    /// docs/superpowers/specs/2026-07-11-call-transcript-history-design.md.
+    public static let callTranscripts = CachePolicy(ttl: .days(90), staleTTL: .days(90), maxItemCount: 1000, storageLocation: .grdb)
 }
 
 // MARK: - TimeInterval Helpers

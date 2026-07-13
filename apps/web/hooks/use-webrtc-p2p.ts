@@ -77,6 +77,15 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   const offerInFlightRef = useRef<Set<string>>(new Set());
   // TURN credential refresh timer — see DEFAULT_TURN_CREDENTIAL_TTL_SECONDS doc above.
   const turnRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Reconnexion mid-call (parité iOS/Android) : par participant, « a déjà
+  // connecté » et « en stall », pour n'émettre call:reconnecting/reconnected
+  // qu'aux VRAIS edges mid-call — l'ICE pré-connexion est la phase Connecting,
+  // jamais un stall. Le restart lui-même vit dans webrtc-service (grace timer
+  // + restartIce SOTA) ; ici on tient seulement le serveur informé pour qu'il
+  // suspende son cleanup et que le statut/analytics reflètent la reconnexion.
+  const connectedPeersRef = useRef<Set<string>>(new Set());
+  const stalledPeersRef = useRef<Set<string>>(new Set());
+  const reconnectAttemptRef = useRef(0);
 
   /** Emits `call:request-ice-servers`; the response is applied by the
    * `call:ice-servers-refreshed` listener registered below. */
@@ -208,15 +217,44 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             });
             setIceConnectionState(state);
 
-            if (state === 'disconnected') {
-              // A network change (Wi-Fi↔cellular, ICE restart ahead) is
-              // exactly when a stale TURN credential most likely bites — get
-              // ahead of it instead of waiting for the periodic refresh.
-              requestFreshTurnCredentials();
-            } else if (state === 'failed') {
-              setError('ICE connection failed');
-              toast.error('Connection failed. Retrying...');
-              onError?.(new Error('ICE_CONNECTION_FAILED'));
+            if (state === 'connected' || state === 'completed') {
+              connectedPeersRef.current.add(participantId);
+              if (stalledPeersRef.current.delete(participantId) && userId) {
+                // Le restart mené par webrtc-service a abouti — le serveur
+                // repasse l'appel `active`.
+                meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTED, {
+                  callId,
+                  participantId: userId,
+                });
+              }
+            } else if (state === 'disconnected' || state === 'failed') {
+              // Stall MID-CALL seulement : le serveur suspend son cleanup et
+              // marque l'appel `reconnecting` pendant que webrtc-service mène
+              // grace + restartIce. Le schéma exige un participantId non vide ;
+              // le serveur résout le SIEN (anti-usurpation), le userId suffit.
+              if (
+                userId &&
+                connectedPeersRef.current.has(participantId) &&
+                !stalledPeersRef.current.has(participantId)
+              ) {
+                stalledPeersRef.current.add(participantId);
+                reconnectAttemptRef.current = Math.min(reconnectAttemptRef.current + 1, 10);
+                meeshySocketIOService.getSocket()?.emit(CLIENT_EVENTS.CALL_RECONNECTING, {
+                  callId,
+                  participantId: userId,
+                  attempt: reconnectAttemptRef.current,
+                });
+              }
+              if (state === 'disconnected') {
+                // A network change (Wi-Fi↔cellular, ICE restart ahead) is
+                // exactly when a stale TURN credential most likely bites — get
+                // ahead of it instead of waiting for the periodic refresh.
+                requestFreshTurnCredentials();
+              } else {
+                setError('ICE connection failed');
+                toast.error('Connection failed. Retrying...');
+                onError?.(new Error('ICE_CONNECTION_FAILED'));
+              }
             }
           },
 
@@ -641,6 +679,9 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     webrtcServicesRef.current.clear();
     iceCandidateQueueRef.current.clear();
     remoteDescriptionSetRef.current.clear();
+    connectedPeersRef.current.clear();
+    stalledPeersRef.current.clear();
+    reconnectAttemptRef.current = 0;
 
     logger.info('[useWebRTCP2P]', 'Cleanup completed', { callId });
   }, [callId, removePeerConnection]);

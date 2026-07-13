@@ -278,11 +278,17 @@ export class RedisDeliveryQueue {
         const key = queueKey(userId);
 
         // Fast path: no memory-fallback entries, so the Redis slice IS the whole
-        // queue — keep the bounded lrange range-read.
+        // queue. Full-read (0, -1) and sort by enqueuedAt exactly like drain()
+        // BEFORE applying the limit: ENQUEUE_DEDUP_LUA supersedes a mutable event
+        // in place, keeping its original FIFO slot while stamping a NEWER
+        // enqueuedAt, so raw list (slot) order can disagree with chronological
+        // order. A bounded lrange(0, limit-1) would slice in slot order and could
+        // drop the chronologically-earliest entry, reporting a replay order
+        // drain() never produces.
         if (memoryEntries.length === 0) {
-          const end = limit ? limit - 1 : -1;
-          const rawEntries = await redis.lrange(key, 0, end);
-          return parseRawEntries(rawEntries, userId, 'peek');
+          const rawEntries = await redis.lrange(key, 0, -1);
+          const sorted = parseRawEntries(rawEntries, userId, 'peek').sort(byEnqueuedAt);
+          return limit ? sorted.slice(0, limit) : sorted;
         }
 
         // Mixed state: memory-fallback entries queued during a transient Redis
@@ -302,8 +308,14 @@ export class RedisDeliveryQueue {
       }
     }
 
-    const entries = this.memoryQueue.get(userId) ?? [];
-    return limit ? entries.slice(0, limit) : [...entries];
+    // Sort by enqueuedAt before applying the limit, exactly like drain()'s
+    // memory path (and peek()'s Redis fast/mixed paths above): an in-place
+    // supersede (see enqueue()) keeps an entry's original array slot while
+    // stamping a NEWER enqueuedAt, so raw slot order can disagree with
+    // chronological order. Returning slot order here would preview a first
+    // entry — and, under `limit`, a slice — that drain() never replays.
+    const entries = [...(this.memoryQueue.get(userId) ?? [])].sort(byEnqueuedAt);
+    return limit ? entries.slice(0, limit) : entries;
   }
 
   async size(userId: string): Promise<number> {

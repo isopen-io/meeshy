@@ -350,6 +350,28 @@ describe('ZmqMessageHandler', () => {
       expect(handler.getStats().audioCompleted).toBe(1);
     });
 
+    it('emits audioProcessCompleted with an empty array when translatedAudios is absent (transcription-only frame)', async () => {
+      const received: any[] = [];
+      handler.on('audioProcessCompleted', (p) => received.push(p));
+      // Transcription-only frame: the translator emitted no target-language audios,
+      // so translatedAudios is absent from the untyped ZMQ JSON parsed off the socket.
+      const rawEvent = {
+        type: 'audio_process_completed',
+        taskId: 'audio-task-transcription-only',
+        messageId: 'msg-audio-002',
+        attachmentId: 'att-002',
+        transcription: makeTranscription(),
+        voiceModelUserId: 'user-001',
+        voiceModelQuality: 0.9,
+        processingTimeMs: 3500,
+        timestamp: Date.now(),
+      };
+      await handler.handleMessage(makeBuffer(rawEvent));
+      expect(received).toHaveLength(1);
+      expect(received[0].translatedAudios).toEqual([]);
+      expect(handler.getStats().audioCompleted).toBe(1);
+    });
+
     it('sets _audioBinary to null when no binaryFrames object on the event', async () => {
       const received: any[] = [];
       handler.on('audioProcessCompleted', (p) => received.push(p));

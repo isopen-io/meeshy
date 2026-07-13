@@ -175,10 +175,13 @@ final class CallHangupFastPathTests: XCTestCase {
             XCTFail("CallManager must define endCall()")
             return
         }
-        let end = manager.index(endCallRange.lowerBound, offsetBy: 3000, limitedBy: manager.endIndex) ?? manager.endIndex
+        let end = manager.range(
+            of: "// MARK: - System Picture-in-Picture",
+            range: endCallRange.upperBound ..< manager.endIndex
+        )?.lowerBound ?? manager.endIndex
         let body = String(manager[endCallRange.lowerBound ..< end])
         guard let byeIndex = body.range(of: "sendHangupBye()"),
-              let teardownIndex = body.range(of: "endCallInternal(reason: .local)") else {
+              let teardownIndex = body.range(of: "endCallInternal(reason:") else {
             XCTFail("endCall() must send the in-band bye AND perform the local teardown")
             return
         }
@@ -217,6 +220,32 @@ final class CallHangupFastPathTests: XCTestCase {
             body.contains("if transcriptionDataChannel != nil { return true }"),
             "createDataChannel must be idempotent — renegotiation offers (ICE restart, " +
             "video escalation) must not stack a second channel on the same peer connection."
+        )
+    }
+
+    func test_lastError_surfacesAsToast_andClosesTranscriptPanel() throws {
+        // A start failure (permission denied, no on-device recognizer for the
+        // user's language — never falls back to Apple's server-side
+        // recognizer, privacy decision — or an AVAudioEngine failure) used to
+        // leave the transcript panel open and silently empty, with zero user
+        // feedback — user-reported 2026-07-11 "on dirait que la transcription
+        // ne fonctionne pas" (observed on Mac).
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.lastError)") else {
+            XCTFail("CallView must observe transcriptionService.lastError")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 500, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))"),
+            "A fresh transcription error must surface as a local-action error toast " +
+            "(FeedbackToastManager, not NotificationToastManager — this is feedback on a " +
+            "user-initiated tap, not a network-originated event)."
+        )
+        XCTAssertTrue(
+            body.contains("showTranscript = false") && body.contains("transcriptionService.isShowingOverlay = false"),
+            "A failed start must close the transcript panel, not leave it open and empty."
         )
     }
 
@@ -390,6 +419,22 @@ final class CallHangupFastPathTests: XCTestCase {
         let end = view.index(range.lowerBound, offsetBy: 9000, limitedBy: view.endIndex) ?? view.endIndex
         let body = String(view[range.lowerBound ..< end])
         XCTAssertTrue(body.contains("pipView"), "connectedView must still reference pipView")
+    }
+
+    func test_showTranscript_autoRevealsOnFirstPassiveSegment_notOnlyLocalToggle() throws {
+        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.segments.isEmpty)") else {
+            XCTFail("CallView must observe transcriptionService.segments.isEmpty to auto-reveal the panel")
+            return
+        }
+        let end = view.index(range.lowerBound, offsetBy: 400, limitedBy: view.endIndex) ?? view.endIndex
+        let body = String(view[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("showTranscript = true"),
+            "The panel must become visible the first time segments arrive, even if the local " +
+            "captionsCycleButton was never tapped — closes the consent-transparency gap where a " +
+            "device silently accumulates the other participant's words with nothing shown."
+        )
     }
 }
 

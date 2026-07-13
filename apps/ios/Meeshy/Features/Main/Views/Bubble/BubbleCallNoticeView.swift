@@ -32,8 +32,11 @@ struct BubbleCallNoticeView: View, Equatable {
     let accentHex: String
     let isDark: Bool
     var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
+    var onLongPress: (() -> Void)? = nil
 
-    @State private var showDetails = false
+    /// Drives the live-call pulsing dot (SwiftUI repeatForever — no per-cell
+    /// Timer). Pure presentation state, excluded from Equatable by nature.
+    @State private var livePulse = false
 
     static func == (lhs: BubbleCallNoticeView, rhs: BubbleCallNoticeView) -> Bool {
         lhs.notice == rhs.notice && lhs.accentHex == rhs.accentHex && lhs.isDark == rhs.isDark
@@ -64,29 +67,22 @@ struct BubbleCallNoticeView: View, Equatable {
             .highPriorityGesture(
                 LongPressGesture(minimumDuration: 0.35).onEnded { _ in
                     HapticFeedback.medium()
-                    showDetails = true
+                    onLongPress?()
                 }
             )
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
-            .accessibilityHint(Text(String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
+            .accessibilityHint(Text(presentation.isLive
+                ? String(localized: "bubble.call.join.a11y.hint", defaultValue: "Double-tapez pour rejoindre l'appel", bundle: .main)
+                : String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
-                showDetails = true
+                onLongPress?()
             }
             if !isOutgoing { Spacer(minLength: 48) }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
-        .sheet(isPresented: $showDetails) {
-            CallSummaryDetailSheet(
-                summary: summary,
-                isOutgoing: isOutgoing,
-                accentHex: accentHex,
-                timestamp: notice.timestamp,
-                onCallBack: onCallBack
-            )
-        }
     }
 
     private var card: some View {
@@ -98,7 +94,11 @@ struct BubbleCallNoticeView: View, Equatable {
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(ThemeManager.shared.textPrimary)
                         .lineLimit(1)
-                    metricsRow
+                    if let liveSubtitle = presentation.liveSubtitle {
+                        liveRow(subtitle: liveSubtitle)
+                    } else {
+                        metricsRow
+                    }
                 }
             }
             Text(notice.timeString)
@@ -133,6 +133,25 @@ struct BubbleCallNoticeView: View, Equatable {
                 }
                 if let data { metric(icon: "arrow.up.arrow.down", text: data) }
             }
+        }
+    }
+
+    /// Live-call sub-row: pulsing accent dot + "Toucher pour rejoindre".
+    /// Replaces the metrics row while the call is ongoing (no duration, no
+    /// data — those only exist once the call is terminal).
+    private func liveRow(subtitle: String) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
+                .opacity(livePulse ? 0.3 : 1)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: livePulse)
+                .onAppear { livePulse = true }
+                .accessibilityHidden(true)
+            Text(subtitle)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .foregroundColor(tint)
+                .lineLimit(1)
         }
     }
 
@@ -232,13 +251,21 @@ struct BubbleCallNoticeView: View, Equatable {
 /// Shared presentation derivations for a call summary (tint, glyphs, title) — single
 /// source of truth so the compact bubble and its long-press detail sheet can never
 /// drift apart on how they describe the same call.
-private struct CallNoticePresentation {
+///
+/// Internal (not private) for unit-testability — the live/cancelled matrix is
+/// asserted in `BubbleContentMatrixTests` without any new test file.
+struct CallNoticePresentation {
     let summary: CallSummaryMetadata
     let isOutgoing: Bool
     /// Conversation accent (hex) — see `BubbleCallNoticeView.accentHex`.
     let accentHex: String
 
+    /// Le kind se lit AVANT l'outcome : un message vivant porte un outcome
+    /// placeholder ('completed') qui ne doit jamais piloter le rendu.
+    var isLive: Bool { summary.isLive }
+
     var tint: Color {
+        if isLive { return Color(hex: accentHex) }
         switch summary.outcome {
         case .completed: return Color(hex: accentHex)
         case .missed, .rejected: return MeeshyColors.error
@@ -258,6 +285,14 @@ private struct CallNoticePresentation {
 
     var title: String {
         let isVideo = summary.callType == .video
+        if isLive {
+            return isVideo
+                ? String(localized: "bubble.call.video.ongoing", defaultValue: "Appel vidéo en cours", bundle: .main)
+                : String(localized: "bubble.call.audio.ongoing", defaultValue: "Appel audio en cours", bundle: .main)
+        }
+        if summary.isCancelled(viewerIsInitiator: isOutgoing) {
+            return String(localized: "bubble.call.cancelled", defaultValue: "Appel annulé", bundle: .main)
+        }
         switch summary.outcome {
         case .completed:
             let type = isVideo
@@ -281,6 +316,13 @@ private struct CallNoticePresentation {
                 : String(localized: "bubble.call.audio.failed", defaultValue: "Appel audio interrompu", bundle: .main)
         }
     }
+
+    /// Sous-titre affiché à la place des métriques quand l'appel est EN COURS
+    /// (tap = rejoindre). `nil` pour tout état terminal.
+    var liveSubtitle: String? {
+        guard isLive else { return nil }
+        return String(localized: "bubble.call.join.hint", defaultValue: "Toucher pour rejoindre", bundle: .main)
+    }
 }
 
 // MARK: - Detail sheet
@@ -300,6 +342,10 @@ struct CallSummaryDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     private var theme: ThemeManager { ThemeManager.shared }
 
+    @State private var transcript: CallTranscript? = nil
+    @State private var showOriginalText = false
+    @State private var showDeleteConfirmation = false
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -308,6 +354,9 @@ struct CallSummaryDetailSheet: View {
                     callBackButton
                 }
                 details
+                if let transcript {
+                    transcriptSection(transcript)
+                }
             }
             .padding(20)
             // iPad/Mac width cap — mirrors FloatingCallPillView's established
@@ -323,6 +372,91 @@ struct CallSummaryDetailSheet: View {
         .adaptiveSheetGlassBackground()
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
+        .task(id: summary.callId) {
+            transcript = await CallTranscriptStore.shared.transcript(for: summary.callId)
+        }
+    }
+
+    // MARK: - Transcript
+
+    private func transcriptSection(_ transcript: CallTranscript) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(String(localized: "calls.detail.transcript", defaultValue: "Transcription", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                Button {
+                    withAnimation { showOriginalText.toggle() }
+                } label: {
+                    Image(systemName: showOriginalText ? "character.bubble.fill" : "captions.bubble.fill")
+                        .foregroundColor(Color(hex: accentHex))
+                }
+                .accessibilityLabel(showOriginalText
+                    ? String(localized: "call.control.translation.showTranslated", defaultValue: "Afficher la traduction", bundle: .main)
+                    : String(localized: "call.control.translation.showOriginal", defaultValue: "Afficher le texte original", bundle: .main))
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                // id: \.offset, not \.capturedAt (recommended, plan review) — saveMerging's dedup
+                // key deliberately allows two segments to share a capturedAt (different
+                // speaker/text at the same instant), which would collide as a ForEach id.
+                ForEach(Array(transcript.segments.enumerated()), id: \.offset) { _, segment in
+                    transcriptRow(segment, callStartedAt: transcript.callStartedAt)
+                }
+            }
+            .padding(12)
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous), tint: tint.opacity(0.1))
+
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.caption2)
+                Text(String(localized: "call.transcript.disclaimer", defaultValue: "Transcription locale à cet appareil, jamais envoyée au serveur Meeshy — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main))
+                    .font(.caption2)
+            }
+            .foregroundColor(theme.textMuted)
+
+            Button(role: .destructive) {
+                showDeleteConfirmation = true
+            } label: {
+                Text(String(localized: "call.transcript.delete", defaultValue: "Supprimer ce transcript", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+            }
+            .alert(String(localized: "call.transcript.delete.confirm.title", defaultValue: "Supprimer ce transcript ?", bundle: .main), isPresented: $showDeleteConfirmation) {
+                Button(String(localized: "call.transcript.delete", defaultValue: "Supprimer ce transcript", bundle: .main), role: .destructive) {
+                    Task {
+                        await CallTranscriptStore.shared.invalidate(for: transcript.callId)
+                        self.transcript = nil
+                    }
+                }
+                Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            } message: {
+                Text(String(localized: "call.transcript.delete.confirm.message", defaultValue: "Cette action est définitive.", bundle: .main))
+            }
+        }
+    }
+
+    private func transcriptRow(_ segment: CallTranscriptSegment, callStartedAt: Date) -> some View {
+        let elapsed = segment.capturedAt.timeIntervalSince(callStartedAt)
+        let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
+        let speakerColor = segment.isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
+        let displayText = segment.isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(segment.speakerName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(speakerColor)
+                Spacer()
+                Text(elapsedLabel)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundColor(theme.textMuted)
+            }
+            Text(displayText)
+                .font(.callout)
+                .foregroundColor(theme.textPrimary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(segment.speakerName), \(elapsedLabel) : \(displayText)")
     }
 
     // MARK: - Header

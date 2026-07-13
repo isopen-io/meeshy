@@ -304,4 +304,50 @@ describe('CommentList', () => {
     expect(scrollSpy).not.toHaveBeenCalled();
     (Element.prototype as any).scrollIntoView = original;
   });
+
+  it('calls onUnlike when a comment already carries the current user heart reaction', () => {
+    const onUnlikeComment = jest.fn();
+    const onLikeComment = jest.fn();
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[{ ...mockComment, currentUserReactions: ['❤️'] }]}
+        onLikeComment={onLikeComment}
+        onUnlikeComment={onUnlikeComment}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Unlike comment' }));
+    expect(onUnlikeComment).toHaveBeenCalledWith('comment-1');
+    expect(onLikeComment).not.toHaveBeenCalled();
+  });
+
+  it('calls onLike when a comment has no reaction from the current user', () => {
+    const onUnlikeComment = jest.fn();
+    const onLikeComment = jest.fn();
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment]}
+        onLikeComment={onLikeComment}
+        onUnlikeComment={onUnlikeComment}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Like comment' }));
+    expect(onLikeComment).toHaveBeenCalledWith('comment-1');
+    expect(onUnlikeComment).not.toHaveBeenCalled();
+  });
+
+  it('honours an explicit likedCommentIds override even without reaction data', () => {
+    const onUnlikeComment = jest.fn();
+    render(
+      <CommentList
+        postId="post-1"
+        comments={[mockComment]}
+        likedCommentIds={new Set(['comment-1'])}
+        onUnlikeComment={onUnlikeComment}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Unlike comment' }));
+    expect(onUnlikeComment).toHaveBeenCalledWith('comment-1');
+  });
 });

@@ -131,43 +131,11 @@ extension iPadRootView {
                 // Cf. fix sync pill chevauchement 2026-05-27 dans RootView.
                 .environment(\.isStoryViewerPresenting, true)
             }
-            // Mirror RootView's split call presentation: `.fullScreen`
-            // mode → cover; `.pip` mode → overlay pill. Swiping the cover
-            // down minimizes instead of ending the call.
-            .fullScreenCover(isPresented: Binding(
-                get: {
-                    CallState.shouldPresentFullScreenCover(
-                        callState: callManager.callState,
-                        displayMode: callManager.displayMode
-                    )
-                },
-                set: { if !$0 { callManager.displayMode = .pip } }
-            )) {
-                CallView(callManager: callManager)
-            }
-            .overlay(alignment: .top) {
-                FloatingCallPillView(callManager: callManager)
-                    .padding(.top, 8)
-            }
-            .overlay {
-                CallBubbleView(callManager: callManager)
-            }
-            // §7.6 — call-waiting banner (2nd incoming call during an active one).
-            .overlay(alignment: .top) {
-                if callManager.showCallWaitingBanner {
-                    CallWaitingBannerView(
-                        callerName: callManager.pendingIncomingCall?.fromUsername
-                            ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
-                        isVisible: $callManager.showCallWaitingBanner,
-                        onReject: { callManager.rejectPendingCall() },
-                        onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
-                    )
-                    // Audit Vague 27 — mirrors RootView's fix: force a
-                    // remount (fresh onAppear/auto-dismiss timer) whenever
-                    // the pending call is superseded, see RootView.swift.
-                    .id(callManager.pendingIncomingCall?.callId)
-                    .padding(.top, 8)
-                }
-            }
+            // Présentation d'appel (cover + PiP + pastille + bulle + bannière
+            // call-waiting) extraite dans `CallPresentationLayer` (partagé avec
+            // RootView) : découple le churn CallManager de `iPadRootView.body` —
+            // même correctif watchdog 0x8BADF00D. Toute la logique détaillée vit
+            // dans le ViewModifier (cf. RootView.swift).
+            .modifier(CallPresentationLayer())
     }
 }

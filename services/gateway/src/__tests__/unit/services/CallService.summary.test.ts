@@ -32,7 +32,12 @@ const createMockPrisma = () => ({
   // chains on a real Promise (the impl writes best-effort and swallows errors).
   callSession: { findUnique: jest.fn() as MockFn, update: (jest.fn() as MockFn).mockResolvedValue(undefined) },
   participant: { findFirst: jest.fn() as MockFn },
-  message: { create: jest.fn() as MockFn }
+  message: {
+    create: jest.fn() as MockFn,
+    // Upsert lookup — defaults to "no existing message" (create branch).
+    findFirst: (jest.fn() as MockFn).mockResolvedValue(null),
+    update: jest.fn() as MockFn
+  }
 });
 
 const CALL_ID = '6650000000000000000000aa';
@@ -68,7 +73,7 @@ describe('CallService.createCallSummaryMessage', () => {
 
     const result = await sut.createCallSummaryMessage(CALL_ID);
 
-    expect(result).toEqual({ id: 'm1', conversationId: CONVERSATION_ID });
+    expect(result).toEqual({ kind: 'created', message: { id: 'm1', conversationId: CONVERSATION_ID } });
     expect(prisma.message.create).toHaveBeenCalledTimes(1);
     const arg = prisma.message.create.mock.calls[0][0] as any;
     expect(arg.data).toMatchObject({
@@ -189,6 +194,211 @@ describe('CallService.createCallSummaryMessage', () => {
     prisma.message.create.mockRejectedValue(new Error('db down'));
 
     await expect(sut.createCallSummaryMessage(CALL_ID)).rejects.toThrow('db down');
+  });
+});
+
+describe('CallService.createCallSummaryMessage — upsert du message vivant', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const LIVE_MESSAGE = {
+    id: 'm-live',
+    metadata: {
+      kind: 'call-live',
+      callId: CALL_ID,
+      initiatorId: INITIATOR_USER_ID,
+      callType: 'audio',
+      outcome: 'completed',
+      durationSeconds: 0,
+      bytesTotal: null,
+      bytesEstimated: false,
+      networkQuality: null
+    }
+  };
+
+  it('édite in-place le message vivant vers le terminal ({kind:updated})', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession());
+    prisma.message.findFirst.mockResolvedValue(LIVE_MESSAGE);
+    prisma.message.update.mockResolvedValue({ id: 'm-live', conversationId: CONVERSATION_ID });
+
+    const result = await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(result).toEqual({ kind: 'updated', message: { id: 'm-live', conversationId: CONVERSATION_ID } });
+    expect(prisma.message.create).not.toHaveBeenCalled();
+    const arg = prisma.message.update.mock.calls[0][0] as any;
+    expect(arg.where).toEqual({ id: 'm-live' });
+    expect(arg.data.content).toBe('Appel audio · 04:32');
+    expect(arg.data.metadata).toMatchObject({ kind: 'call', outcome: 'completed', callId: CALL_ID });
+  });
+
+  it('cherche le message existant par findFirst(conversationId, clientMessageId)', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession());
+    prisma.message.findFirst.mockResolvedValue(LIVE_MESSAGE);
+    prisma.message.update.mockResolvedValue({ id: 'm-live' });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(prisma.message.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: { conversationId: CONVERSATION_ID, clientMessageId: `call-summary:${CALL_ID}` }
+    }));
+  });
+
+  it('no-op (null) quand le message stocké est déjà terminal — idempotence des 7 chemins', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession());
+    prisma.message.findFirst.mockResolvedValue({
+      id: 'm-final',
+      metadata: { ...LIVE_MESSAGE.metadata, kind: 'call', outcome: 'completed', durationSeconds: 272 }
+    });
+
+    const result = await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(result).toBeNull();
+    expect(prisma.message.create).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('anti-freeze : P2002 au create → re-findFirst → update du live fraîchement commité', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession());
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    // 1er lookup : rien ; le create live commite pendant la course ; 2e lookup : le live.
+    prisma.message.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(LIVE_MESSAGE);
+    prisma.message.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test'
+      })
+    );
+    prisma.message.update.mockResolvedValue({ id: 'm-live', conversationId: CONVERSATION_ID });
+
+    const result = await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(result).toEqual({ kind: 'updated', message: { id: 'm-live', conversationId: CONVERSATION_ID } });
+    expect((prisma.message.update.mock.calls[0][0] as any).data.content).toBe('Appel audio · 04:32');
+  });
+
+  it('P2002 au create puis re-lookup terminal → null (l\'autre terminal a gagné)', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession());
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    prisma.message.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'm-final', metadata: { ...LIVE_MESSAGE.metadata, kind: 'call' } });
+    prisma.message.create.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: 'test'
+      })
+    );
+
+    const result = await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(result).toBeNull();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('GC : convertit un message vivant existant en failed (« Appel … interrompu »)', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(
+      makeSession({ endReason: 'garbageCollected', metadata: { type: 'video' } })
+    );
+    prisma.message.findFirst.mockResolvedValue({
+      id: 'm-live',
+      metadata: { ...LIVE_MESSAGE.metadata, callType: 'video' }
+    });
+    prisma.message.update.mockResolvedValue({ id: 'm-live', conversationId: CONVERSATION_ID });
+
+    const result = await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(result).toEqual({ kind: 'updated', message: { id: 'm-live', conversationId: CONVERSATION_ID } });
+    const arg = prisma.message.update.mock.calls[0][0] as any;
+    expect(arg.data.content).toBe('Appel vidéo interrompu');
+    expect(arg.data.metadata).toMatchObject({ kind: 'call', outcome: 'failed' });
+  });
+
+  it('GC : reste silencieux sans message existant (comportement actuel)', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession({ endReason: 'garbageCollected' }));
+    prisma.message.findFirst.mockResolvedValue(null);
+
+    const result = await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(result).toBeNull();
+    expect(prisma.message.create).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('GC : reste silencieux quand le message stocké est déjà terminal', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession({ endReason: 'garbageCollected' }));
+    prisma.message.findFirst.mockResolvedValue({
+      id: 'm-final',
+      metadata: { ...LIVE_MESSAGE.metadata, kind: 'call', outcome: 'missed' }
+    });
+
+    const result = await sut.createCallSummaryMessage(CALL_ID);
+
+    expect(result).toBeNull();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('émet endedByInitiator quand l\'appel manqué non répondu a été terminé par son initiateur', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession({
+      status: 'missed',
+      endReason: 'missed',
+      duration: 0,
+      answeredAt: null,
+      metadata: { type: 'audio', endedBy: INITIATOR_USER_ID }
+    }));
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    prisma.message.create.mockResolvedValue({ id: 'm1' });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    const arg = prisma.message.create.mock.calls[0][0] as any;
+    expect(arg.data.metadata).toMatchObject({ kind: 'call', outcome: 'missed', endedByInitiator: true });
+  });
+
+  it('omet endedByInitiator quand quelqu\'un d\'autre a terminé l\'appel manqué', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession({
+      status: 'missed',
+      endReason: 'missed',
+      duration: 0,
+      answeredAt: null,
+      metadata: { type: 'audio', endedBy: 'someone-else' }
+    }));
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    prisma.message.create.mockResolvedValue({ id: 'm1' });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    const arg = prisma.message.create.mock.calls[0][0] as any;
+    expect(arg.data.metadata.outcome).toBe('missed');
+    expect('endedByInitiator' in arg.data.metadata).toBe(false);
+  });
+
+  it('omet endedByInitiator une fois l\'appel répondu, même terminé par l\'initiateur', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(makeSession({
+      status: 'missed',
+      endReason: 'missed',
+      duration: 0,
+      answeredAt: new Date('2026-07-11T10:00:00Z'),
+      metadata: { type: 'audio', endedBy: INITIATOR_USER_ID }
+    }));
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    prisma.message.create.mockResolvedValue({ id: 'm1' });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    const arg = prisma.message.create.mock.calls[0][0] as any;
+    expect('endedByInitiator' in arg.data.metadata).toBe(false);
   });
 });
 

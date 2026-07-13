@@ -250,8 +250,13 @@ export class MessageReadStatusService {
       });
 
       // All candidate timestamps (ascending) + per-sender buckets, so each participant's
-      // own messages can be subtracted. JS sort is a defensive net (the DB already returns
-      // index order) so the binary search holds regardless of source ordering.
+      // own messages can be subtracted. `countAbove` is a binary search that assumes
+      // ascending order and runs on BOTH `allTimestamps` AND every `bySender` bucket, so
+      // BOTH must be sorted. The DB already returns index order (`orderBy createdAt asc`),
+      // but sorting both is a defensive net that keeps the result correct regardless of
+      // source ordering — sorting only the total while leaving the per-sender subtrahend
+      // in raw row order would miscount the own-message cut (yielding a bogus, even
+      // negative, unread count) the moment rows ever arrived unordered.
       const allTimestamps = rows.map((r) => r.createdAt.getTime()).sort((a, b) => a - b);
       const bySender = new Map<string, number[]>();
       for (const r of rows) {
@@ -259,6 +264,7 @@ export class MessageReadStatusService {
         if (bucket) bucket.push(r.createdAt.getTime());
         else bySender.set(r.senderId, [r.createdAt.getTime()]);
       }
+      for (const bucket of bySender.values()) bucket.sort((a, b) => a - b);
 
       // countAbove(ts, F) = number of timestamps strictly > F. Upper-bound binary search on
       // an ascending array: first index where ts > F → `length - lo`. Strict `>` mirrors
@@ -277,7 +283,8 @@ export class MessageReadStatusService {
       };
 
       // unread(p) = (all messages after p's floor) − (p's OWN messages after p's floor).
-      // Buckets share the ascending order of `rows`, so they're valid for the same search.
+      // Both `allTimestamps` and each bucket are sorted ascending above, so the same
+      // binary search is valid on either.
       return new Map(
         floors.map((f) => {
           const own = bySender.get(f.id) ?? [];
@@ -1270,7 +1277,12 @@ export class MessageReadStatusService {
               id: { in: evaluatedParticipantIds },
               isActive: true,
             },
-            select: { id: true, displayName: true, avatar: true },
+            select: {
+              id: true,
+              displayName: true,
+              avatar: true,
+              user: { select: { avatar: true } },
+            },
           })
         : [];
 
@@ -1315,7 +1327,7 @@ export class MessageReadStatusService {
         results.push({
           participantId,
           displayName: participant.displayName,
-          avatar: participant.avatar,
+          avatar: resolveParticipantAvatar(participant),
           deliveredAt,
           receivedAt,
           readAt,
@@ -1414,7 +1426,12 @@ export class MessageReadStatusService {
       const participants = statuses.length
         ? await this.prisma.participant.findMany({
             where: { id: { in: statuses.map(s => s.participantId) } },
-            select: { id: true, displayName: true, avatar: true },
+            select: {
+              id: true,
+              displayName: true,
+              avatar: true,
+              user: { select: { avatar: true } },
+            },
           })
         : [];
 
@@ -1429,7 +1446,7 @@ export class MessageReadStatusService {
           return {
             participantId: s.participantId,
             username: participant.displayName || "Unknown",
-            avatar: participant.avatar ?? null,
+            avatar: resolveParticipantAvatar(participant),
             viewedAt: s.viewedAt,
             downloadedAt: s.downloadedAt,
             listenedAt: s.listenedAt,
@@ -1754,7 +1771,7 @@ export class MessageReadStatusService {
       const latestMessage = await this.prisma.message.findFirst({
         where: { conversationId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
-        select: { createdAt: true, senderId: true }
+        select: { id: true, createdAt: true, senderId: true }
       });
 
       if (!latestMessage) {
@@ -1775,14 +1792,54 @@ export class MessageReadStatusService {
 
       // Only count cursors from active participants
       const activeCursors = cursors.filter(c => activeIds.has(c.participantId));
+      const cursorByParticipant = new Map(activeCursors.map(c => [c.participantId, c]));
 
-      const deliveredCount = activeCursors.filter(c =>
-        c.lastDeliveredAt && c.lastDeliveredAt >= latestMessage.createdAt
-      ).length;
+      // Précision absolue : les dates FIGÉES par message (write-once) priment sur la
+      // dérivation curseur — même union que getMessageReadStatus /
+      // getConversationReadStatuses / getMessageStatusDetails. Sans elle, un curseur
+      // supprimé par `cleanupObsoleteCursors` (son lastReadMessageId pointe vers un
+      // message effacé) ferait disparaître un reçu de livraison/lecture figé toujours
+      // valide, et ce résumé — qui alimente le champ `summary` des events
+      // READ_STATUS_UPDATED émis à l'expéditeur — sous-compterait par rapport aux
+      // méthodes mono-message (coche livré/lu qui régresse chez l'expéditeur).
+      const frozenEntries = await this.prisma.messageStatusEntry.findMany({
+        where: { messageId: latestMessage.id, conversationId },
+        select: { participantId: true, deliveredAt: true, receivedAt: true, readAt: true }
+      });
+      const frozenByParticipant = new Map(
+        frozenEntries
+          .filter(e => e.participantId !== latestMessage.senderId && activeIds.has(e.participantId))
+          .map(e => [e.participantId, e])
+      );
 
-      const readCount = activeCursors.filter(c =>
-        c.lastReadAt && c.lastReadAt >= latestMessage.createdAt
-      ).length;
+      // Union des participants ayant un curseur actif ET de ceux ayant un reçu figé
+      // survivant pour CE message (sender exclu, inactifs ignorés) — parité exacte
+      // avec les trois méthodes sœurs.
+      const evaluatedParticipantIds = new Set<string>([
+        ...activeCursors.map(c => c.participantId),
+        ...frozenByParticipant.keys(),
+      ]);
+
+      let deliveredCount = 0;
+      let readCount = 0;
+      for (const participantId of evaluatedParticipantIds) {
+        const cursor = cursorByParticipant.get(participantId);
+        const cursorDelivered =
+          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= latestMessage.createdAt
+            ? cursor.lastDeliveredAt
+            : null;
+        const cursorRead =
+          cursor?.lastReadAt && cursor.lastReadAt >= latestMessage.createdAt
+            ? cursor.lastReadAt
+            : null;
+
+        const frozen = frozenByParticipant.get(participantId);
+        const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
+        const readAt = frozen?.readAt ?? cursorRead;
+
+        if (receivedAt) deliveredCount++;
+        if (readAt) readCount++;
+      }
 
       return { totalMembers, deliveredCount, readCount };
     } catch (error) {

@@ -22,6 +22,16 @@ data class IncomingCallPush(
     val callerName: String? = null,
     val isVideo: Boolean = false,
     val iceServers: List<SocketIceServer> = emptyList(),
+    /**
+     * Titre/corps LOCALISÉS par le serveur dans la langue résolue de
+     * l'utilisateur (Prisme — `notificationString('call.incoming.title/body')`).
+     * Le push d'appel Android est data-only (un bloc `notification` tuerait
+     * `onMessageReceived` en background) : c'est au client de rendre la
+     * notification — avec ces textes quand ils sont là, un fallback
+     * ressources sinon (gateway antérieur au data-only).
+     */
+    val title: String? = null,
+    val body: String? = null,
 ) {
     /**
      * The caller label to show on the ring, blank-skipping like the iOS
@@ -67,6 +77,8 @@ object IncomingCallPushParser {
             callerName = data["callerName"]?.takeIf { it.isNotBlank() },
             isVideo = data["isVideo"].equals("true", ignoreCase = true),
             iceServers = parseIceServers(data["iceServers"]),
+            title = data["title"]?.takeIf { it.isNotBlank() },
+            body = data["body"]?.takeIf { it.isNotBlank() },
         )
     }
 
@@ -74,6 +86,36 @@ object IncomingCallPushParser {
         val body = raw?.takeIf { it.isNotBlank() } ?: return emptyList()
         return runCatching { json.decodeFromString<List<SocketIceServer>>(body) }
             .getOrElse { emptyList() }
+    }
+}
+
+/**
+ * A decoded stop-ring data push — the counterpart of [IncomingCallPush] for the
+ * gateway silent pushes that must SILENCE a ringing device whose socket is down
+ * (backgrounded/killed). Field parity with the gateway `call-push-mirroring.ts`
+ * (`data.type == "call_cancel" | "call_answered_elsewhere"`, plus `callId`) and
+ * behavioural parity with the iOS `AppDelegate` handling of the same pushes.
+ */
+data class CallStopPush(val callId: String, val type: Type) {
+    enum class Type { CANCELLED, ANSWERED_ELSEWHERE }
+}
+
+/**
+ * Pure parser for a stop-ring data push. Total and side-effect-free: a push is a
+ * stop iff its `type` is one of [STOP_TYPES] AND it carries a non-blank `callId`;
+ * every other map is inert (`null`).
+ */
+object CallStopPushParser {
+
+    val STOP_TYPES: Map<String, CallStopPush.Type> = mapOf(
+        "call_cancel" to CallStopPush.Type.CANCELLED,
+        "call_answered_elsewhere" to CallStopPush.Type.ANSWERED_ELSEWHERE,
+    )
+
+    fun parse(data: Map<String, String>): CallStopPush? {
+        val type = STOP_TYPES[data["type"]] ?: return null
+        val callId = data["callId"]?.takeIf { it.isNotBlank() } ?: return null
+        return CallStopPush(callId = callId, type = type)
     }
 }
 

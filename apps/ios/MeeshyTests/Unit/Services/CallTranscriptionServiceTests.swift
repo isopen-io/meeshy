@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -21,8 +22,8 @@ final class CallTranscriptionServiceTests: XCTestCase {
         confidence: Double = 0.9,
         language: String = "en",
         capturedAt: Date = Date()
-    ) -> TranscriptionSegment {
-        TranscriptionSegment(
+    ) -> Meeshy.TranscriptionSegment {
+        Meeshy.TranscriptionSegment(
             id: UUID(),
             text: text,
             speakerId: speakerId,
@@ -72,9 +73,33 @@ final class CallTranscriptionServiceTests: XCTestCase {
         sut.receiveTranslatedSegment(makeSegment(text: "hi", isFinal: true))
         XCTAssertFalse(sut.segments.isEmpty)
 
-        sut.resetForCallEnd()
+        sut.resetForCallEnd(callId: nil, conversationId: "conv-1", callStartedAt: nil, localUserId: "user-1", localSpeakerName: "Moi", remoteSpeakerName: "Bob")
 
         XCTAssertTrue(sut.segments.isEmpty)
+    }
+
+    func test_resetForCallEnd_nilCallId_doesNotPersist_evenWithSegments() async {
+        let socket = MockMessageSocket()
+        let sut = CallTranscriptionService(socket: socket)
+        sut.receiveTranslatedSegment(makeSegment(text: "Hello", speakerId: "remote-user", isFinal: true, capturedAt: Date()))
+        XCTAssertFalse(sut.persistedSegmentsForTesting.isEmpty, "Sanity: segments were captured despite no local callId.")
+
+        sut.resetForCallEnd(callId: nil, conversationId: "conv-1", callStartedAt: nil, localUserId: "user-1", localSpeakerName: "Moi", remoteSpeakerName: "Bob")
+        // Give the (should-never-fire) Task { } a beat, then confirm nothing landed under an empty-string key.
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        let loaded = await CallTranscriptStore.shared.transcript(for: "")
+        XCTAssertNil(loaded, "A nil callId must never produce a persisted transcript, empty-keyed or otherwise.")
+    }
+
+    func test_persistedSegments_retainsBeyondLiveDisplayCap() {
+        let (sut, _) = makeSUT()
+        for i in 0..<60 {
+            sut.receiveTranslatedSegment(
+                makeSegment(text: "segment \(i)", isFinal: true, capturedAt: Date(timeIntervalSince1970: TimeInterval(i)))
+            )
+        }
+        XCTAssertEqual(sut.displayedSegments.count, 50, "Live display stays capped at 50, unchanged.")
+        XCTAssertEqual(sut.persistedSegmentsForTesting.count, 60, "The persistence accumulator must retain all 60, not just the last 50.")
     }
 
     func test_displayedSegments_doesNotTruncateBeyondFive() {
@@ -119,12 +144,40 @@ final class CallTranscriptionServiceTests: XCTestCase {
         // unit-testable — validated by the Task 1 device spike instead).
         sut.applyRecognitionResult(
             text: "Bonjour", speakerId: "user-1", startMs: 0, endMs: 1000,
-            isFinal: true, confidence: 0.9, language: "fr"
+            isFinal: true, confidence: 0.9, language: "fr", capturedAt: Date()
         )
         // isTranscribing is false here (startTranscribing was never called),
         // so applyRecognitionResult's guard drops it — this documents that
         // the guard is load-bearing, not a bug in the test.
         XCTAssertEqual(socket.emitCallTranscriptionSegmentCallCount, 0)
+    }
+
+    func test_applyRecognitionResult_stampsSegmentWithProvidedCapturedAt_notApplicationTime() {
+        // Regression: handleRecognizerCallback's Task.detached hop to
+        // MainActor gives no ordering guarantee between two independently
+        // detached callbacks (unlike the recognizer's own serial queue that
+        // calls handleRecognizerCallback itself). Stamping `Date()` inside
+        // applyRecognitionResult (application time) would let a
+        // later-arriving-but-earlier-applied callback sort ahead of one that
+        // truly arrived first, corrupting the caption order documented on
+        // TranscriptionSegment.capturedAt. capturedAt must therefore be
+        // captured at arrival time in handleRecognizerCallback and threaded
+        // through as a parameter, not re-stamped here.
+        //
+        // isFinal: false (with isShowingOverlay true to clear the display
+        // guard) deliberately avoids the isFinal branch, which calls
+        // rotateRecognitionRequest → reinstallTap → a real
+        // AVAudioEngine.inputNode.installTap — unavailable in the unit test
+        // host (same constraint documented on setTranscribingForTesting).
+        let (sut, _) = makeSUT()
+        sut.setTranscribingForTesting(true)
+        sut.isShowingOverlay = true
+        let arrivalTime = Date(timeIntervalSince1970: 1_000)
+        sut.applyRecognitionResult(
+            text: "Bonjour", speakerId: "user-1", startMs: 0, endMs: 1000,
+            isFinal: false, confidence: 0.9, language: "fr", capturedAt: arrivalTime
+        )
+        XCTAssertEqual(sut.segments.first?.capturedAt, arrivalTime)
     }
 
     // MARK: - Recognizer Error Path
@@ -305,7 +358,7 @@ final class TranscriptionSegmentTests: XCTestCase {
     func test_segment_storesAllProperties() {
         let id = UUID()
         let capturedAt = Date()
-        let segment = TranscriptionSegment(
+        let segment = Meeshy.TranscriptionSegment(
             id: id,
             text: "hello world",
             speakerId: "user123",
@@ -333,7 +386,7 @@ final class TranscriptionSegmentTests: XCTestCase {
     }
 
     func test_segment_translationFieldsDefaultToNil() {
-        let segment = TranscriptionSegment(
+        let segment = Meeshy.TranscriptionSegment(
             id: UUID(),
             text: "test",
             speakerId: "s1",
@@ -352,8 +405,8 @@ final class TranscriptionSegmentTests: XCTestCase {
     func test_segment_equatable() {
         let id = UUID()
         let capturedAt = Date()
-        let a = TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
-        let b = TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
+        let a = Meeshy.TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
+        let b = Meeshy.TranscriptionSegment(id: id, text: "hi", speakerId: "u1", startTime: 0, endTime: 1, isFinal: true, confidence: 1, language: "en", capturedAt: capturedAt)
         XCTAssertEqual(a, b)
     }
 }

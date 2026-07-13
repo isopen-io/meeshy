@@ -1144,6 +1144,36 @@ describe('SocketIOOrchestrator', () => {
       await extraPromise;
     });
 
+    it('clears the evicted message timeout when the queue is full (no timer/map leak)', async () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockConnGetSocket.mockReturnValue(null);
+      let n = 0;
+      mockGenerateClientMessageId.mockImplementation(() => `evict-cid-${n++}`);
+
+      const pendingMessageTimeouts: Map<string, ReturnType<typeof setTimeout>> = (orchestrator as any).pendingMessageTimeouts;
+
+      const promises: Promise<any>[] = [];
+      for (let i = 0; i < 50; i++) {
+        promises.push(orchestrator.sendMessage('conv-1', `msg-${i}`));
+      }
+      expect(pendingMessageTimeouts.size).toBe(50);
+
+      const timersBefore = jest.getTimerCount();
+      const extraPromise = orchestrator.sendMessage('conv-1', 'extra'); // evicts evict-cid-0
+
+      // The evicted message's timer must be cleared and its map entry removed:
+      // net armed-timer count is unchanged (one added for `extra`, one cleared for the evicted message).
+      expect(pendingMessageTimeouts.has('evict-cid-0')).toBe(false);
+      expect(pendingMessageTimeouts.size).toBe(50);
+      expect(jest.getTimerCount()).toBe(timersBefore);
+
+      const oldestResult = await promises[0];
+      expect(oldestResult.success).toBe(false);
+
+      jest.advanceTimersByTime(130000);
+      await extraPromise;
+    });
+
     it('pending message individual timeout resolves with failure', async () => {
       const orchestrator = SocketIOOrchestrator.getInstance();
       mockConnGetSocket.mockReturnValue(null);
@@ -1678,6 +1708,32 @@ describe('SocketIOOrchestrator', () => {
       const [r1, r2] = await Promise.all([promise1, promise2]);
       expect(r1.success).toBe(false);
       expect(r2.success).toBe(false);
+    });
+
+    it('clears all pending message timeouts (no timer/map leak on teardown)', async () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockConnGetSocket.mockReturnValue(null);
+      let n = 0;
+      mockGenerateClientMessageId.mockImplementation(() => `cleanup-cid-${n++}`);
+
+      const promise1 = orchestrator.sendMessage('conv-1', 'msg1');
+      const promise2 = orchestrator.sendMessage('conv-1', 'msg2');
+      const promise3 = orchestrator.sendMessage('conv-1', 'msg3');
+
+      const pendingMessageTimeouts: Map<string, ReturnType<typeof setTimeout>> = (orchestrator as any).pendingMessageTimeouts;
+      expect(pendingMessageTimeouts.size).toBe(3);
+
+      const timersBefore = jest.getTimerCount();
+      orchestrator.cleanup();
+
+      // cleanup() must clear every armed message timer and empty the tracking map.
+      expect(pendingMessageTimeouts.size).toBe(0);
+      expect(jest.getTimerCount()).toBe(timersBefore - 3);
+
+      const [r1, r2, r3] = await Promise.all([promise1, promise2, promise3]);
+      expect(r1.success).toBe(false);
+      expect(r2.success).toBe(false);
+      expect(r3.success).toBe(false);
     });
 
     it('calls cleanup on all services', () => {

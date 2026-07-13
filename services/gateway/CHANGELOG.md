@@ -1,5 +1,121 @@
 # @meeshy/gateway
 
+## 1.11.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le type audio/video voyage enfin dans le payload REST active-call — une visio rejointe reprenait en audio
+  - un refus socket-down est différé et rejoué AVEC sa raison — parité Android DeclinedCallStore
+  - le refus depuis l'écran verrouillé émet reason=rejected — dernier chemin de refus non couvert
+  - captions traduites en direct — consommation de call:translated-segment
+  - GET /reactions/user/:userId resolves userId → participant ids (#1882)
+  - auto-download decision pipeline — network monitor + first policy consumer (#1881)
+  - le refus émet call:end reason=rejected — aligné Android/web
+  - un refus explicite écrit status=rejected — fin de la fausse notification « appel manqué »
+  - les refus portent reason=rejected — le journal de l'appelant ne dit plus « manqué » pour un refus
+  - le bouton Répondre décroche directement — autoAnswer câblé de bout en bout
+  - Refuser depuis la notification (CallStyle) — le correspondant ne sonne plus 60 s dans le vide
+  - canal de sonnerie v2 — le heads-up d'appel entrant SONNE au lieu d'un ding
+  - expiration APNs 60 s sur les pushes d'appel iOS — miroir du TTL FCM
+  - TTL 60 s sur les pushes d'appel Android — fin du ring fantôme post-reconnexion
+  - pushes d'appel Android data-only — la chaîne FCM background revit
+  - watchdog de connexion — l'appel jamais connecté se termine à 45 s
+  - watchdog de la phase de connexion — un appel répondu jamais connecté est borné à 45 s
+  - budget d'attente socket aligné sur iOS (8 s → 30 s)
+  - initiate/join attendent la connexion socket — le décroché à froid ne meurt plus en silence
+  - clampe l'attempt de call:reconnecting à la borne du schéma gateway (10)
+  - émet call:reconnecting/reconnected — le serveur suit enfin les restarts ICE web
+  - watchdog du budget de reconnexion — ReconnectFailed enfin tiré, fenêtre bornée ~30 s
+  - rejoindre l'appel en cours depuis la bulle
+  - bulle d'appel vivante + rendu annulé par-spectateur
+  - résilience réseau mid-call — stalls ICE détectés, restart + renégociation, reconnecting/reconnected émis
+  - message:edited avec callSummary route vers applyCallNoticeUpdate — transition live→terminal sans badge « modifié »
+  - call:check-active à chaque connexion — le ring manqué mid-reconnexion est rejoué
+  - support call-live côté iOS — décodage, transition terminale in-place, anti-régression snapshot
+  - indicateurs mute/caméra du pair — call:media-toggled n'est plus jeté
+  - bulle d'appel vivante + annulé par-spectateur + fallback durci
+  - message d'appel vivant créé dès call:initiate
+  - sort peek() memory-only fallback by enqueuedAt to match drain() (#1877)
+  - avatar + banner upload (media pipeline) (#1878)
+  - les sweeps GC d'initiateCall postent la conversion du message live
+  - drop residual {emoji:0} on optimistic unlike (align with socket sync) (#1876)
+  - émet call:analytics — télémétrie de cycle de vie à la fin d'appel
+  - endedBy stampé sur les deux branches terminales de leaveCall
+  - upsert terminal du message d'appel (anti-freeze + GC failed)
+  - evict signalSessionCache entry when a participant leaves (audit #10 regression) (#1875)
+  - clear pending-message timers on eviction & cleanup (no timer/Map leak) (#1873)
+  - relaie call:screen-capture-detected — l'enregistrement d'écran local alerte le pair
+  - live transcript panel auto-reveals on first segment, not only local toggle
+  - broadcast message:edited système (payload complet + offline)
+  - Transcript section in the call detail sheet — gated, deletable, disclaimed
+  - création du message d'appel vivant (non branchée)
+  - métadonnée call-live + endedByInitiator + conversion GC
+  - parité alertes distantes — quality-alert + screen-capture-alert (solde parité web)
+  - route call-message long-press through the shared decision point
+  - media cache management (per-category sizes + clear) (#1874)
+  - creds TURN frais reçus mid-reconnect ré-arment le restart ICE en vol (audit #9)
+  - écoute des 4 side-channels manquants — participant-left, quality-alert, screen-capture-alert, translated-segment (audit #5, solde listeners)
+
+## 1.10.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - CallTranscriptStore actor — merge-on-save, real CacheResult handling
+  - encrypted callTranscripts store, swept on logout/account-deletion
+  - add CallTranscript/CallTranscriptSegment pure models
+
+## 1.9.9
+
+### Patch Changes
+
+- 6d5cb1e: Deux corrections de robustesse alignant le code sur son contrat documenté.
+
+  **`RedisDeliveryQueue.peek()` — ordre de rejeu (gateway).** Le chemin rapide de
+  `peek()` (aucune entrée en repli mémoire) renvoyait la tranche Redis dans l'ordre
+  brut de la liste (ordre de slot), sans le tri `byEnqueuedAt` qu'appliquent
+  `drain()` et le chemin mixte de `peek()`. Or `ENQUEUE_DEDUP_LUA` remplace un
+  événement mutable **sur place** — il conserve le slot FIFO d'origine tout en
+  estampillant un `enqueuedAt` plus récent — donc l'ordre de slot peut diverger de
+  l'ordre chronologique. L'aperçu remontait alors un ordre de rejeu que le client
+  en reconnexion ne verra jamais (p. ex. une édition avant le message qu'elle cible),
+  violant l'invariant « order by enqueuedAt exactly like drain() » de `peek()`
+  lui-même. Correction : lecture complète `(0, -1)` puis tri par `enqueuedAt` **avant**
+  d'appliquer la limite (un `lrange(0, limit-1)` borné découpe en ordre de slot et
+  peut écarter l'entrée chronologiquement la plus ancienne).
+
+  **`CommonSchemas.pagination` — coercion défensive (shared).** Les transforms
+  `limit`/`offset` appliquaient `|| défaut` à la chaîne brute **avant** `parseInt`,
+  ne rattrapant donc que `undefined`/`''` : `'abc'` produisait `NaN` et `'-5'` passait
+  tel quel, l'un comme l'autre pouvant fuiter dans un `take`/`skip` Prisma. Le repli
+  est désormais appliqué **après** `parseInt`, avec bornage (`limit` 1..100,
+  `offset` ≥ 0), à l'image du `validatePagination` de la gateway. Couvre `pagination`
+  et `messagePagination`. Aucun changement de schéma, d'API ni de migration.
+
+- Updated dependencies [6d5cb1e]
+  - @meeshy/shared@1.8.3
+
+## 1.9.8
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - contrat d'events gelé — literals migrés, events morts dépréciés (audit #4/#6)
+
+## 1.9.7
+
+### Patch Changes
+
+- 49dff55: Reçus de livraison : l'expéditeur n'est plus compté comme destinataire de son propre message sur le chemin WebSocket `message:send`, éliminant un faux ✓✓ (« delivered ») et un compteur `deliveredCount` gonflé.
+
+  `MessagingService.createSuccessResponse` normalise `senderId` vers le `User.id` de l'expéditeur (les clients comparent à leur propre userId), alors que le chemin REST/ZMQ conserve `senderId` = `Participant.id` brut. Les trois filtres d'exclusion de l'expéditeur de `MessageHandler` (`autoDeliverToOnlineRecipients`, `_updateUnreadCounts`, l'enqueue hors-ligne) comparaient `p.id === senderId` — vrai en permanence quand `senderId` est un `User.id`, puisqu'un `Participant.id` ne l'égale jamais. L'expéditeur, toujours en ligne au moment du broadcast, passait donc le filtre : `markMessagesAsReceived` était appelé sur son propre participant, `getLatestMessageSummary` remontait `deliveredCount ≥ 1` et un `read-status:updated` était émis vers l'expéditeur — son UI affichait « delivered » alors qu'aucun destinataire n'avait reçu le message. En groupe, chaque envoi WS gonflait `deliveredCount` de 1 ; une déconnexion juste après l'ACK pouvait aussi ré-enqueuer à l'expéditeur son propre message (bulle dupliquée au reconnect).
+
+  L'exclusion passe désormais par un prédicat unique `_isSender(p, senderId)` qui matche `p.id === senderId` OU `p.userId === senderId`. Les `Participant.id` et `User.id` n'entrent jamais en collision, donc l'expéditeur est correctement exclu sur les deux transports sans jamais écarter un destinataire légitime ; les expéditeurs anonymes (sans `userId`) restent matchés par `p.id`. Comportement du chemin REST/ZMQ inchangé. Aucun changement de schéma, d'API ni de migration.
+
 ## 1.9.6
 
 ### Patch Changes

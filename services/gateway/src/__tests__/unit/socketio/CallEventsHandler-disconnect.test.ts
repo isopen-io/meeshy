@@ -31,6 +31,7 @@ jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCallDc,
     createCallSummaryMessage: mockCreateCallSummaryMessageDc,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     initiateCall: jest.fn<any>(),
     joinCall: jest.fn<any>(),
     endCall: jest.fn<any>(),
@@ -344,6 +345,36 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       expect(handleMissedCallSpy).not.toHaveBeenCalled();
+    });
+
+    it('evicts every remaining socket from the call room when force-cleanup ends the call', async () => {
+      // Room-membership leak: this force-cleanup branch also terminates the
+      // call session and must evict every straggling socket, same as the
+      // happy leaveCall path and call:end/call:leave/call:force-leave.
+      mockLeaveCallDc.mockRejectedValue(new Error('DB error'));
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const staleSocket = { id: 'stale-device', leave: jest.fn() };
+      const roomEmit = jest.fn();
+      let callRoomFetchCount = 0;
+      const io = {
+        to: jest.fn().mockReturnValue({ emit: roomEmit }),
+        in: jest.fn((room: string) => {
+          if (room === ROOMS.call(CALL_ID)) {
+            callRoomFetchCount += 1;
+            return { fetchSockets: jest.fn().mockResolvedValue(callRoomFetchCount <= 2 ? [] : [staleSocket]) };
+          }
+          return { fetchSockets: jest.fn().mockResolvedValue([]) };
+        }),
+      };
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(staleSocket.leave).toHaveBeenCalledWith(ROOMS.call(CALL_ID));
     });
 
     it('does NOT force-end the call when participants remain (remainingParticipants > 0)', async () => {
@@ -749,6 +780,53 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       expect(handleMissedCallSpy).not.toHaveBeenCalled();
+    });
+
+    // -----------------------------------------------------------------------
+    // Room-membership leak: a straggling socket (e.g. a second device/tab)
+    // that never explicitly left the call room must be evicted once the
+    // call terminates via this grace-expiry path — mirrors the identical
+    // eviction already run on call:end/call:leave/call:force-leave.
+    // -----------------------------------------------------------------------
+    it('evicts every remaining socket from the call room when leaveCall itself ends the call', async () => {
+      const leftSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'ended',
+        duration: 42,
+        endReason: 'completed',
+        mode: 'p2p',
+      };
+      mockLeaveCallDc.mockResolvedValue(leftSession);
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const staleSocket = { id: 'stale-device', leave: jest.fn() };
+      const roomEmit = jest.fn();
+      // The call room is checked twice before the terminal eviction: once by
+      // the initial disconnect handler's zombie-guard, once by the grace-
+      // expiry re-check — both must see an empty room (getUserId resolves
+      // every socket id to USER_ID here, so any non-empty result reads as
+      // "user reconnected" and aborts the whole path). Only the 3rd check —
+      // the eviction call itself — should see the straggling socket.
+      let callRoomFetchCount = 0;
+      const io = {
+        to: jest.fn().mockReturnValue({ emit: roomEmit }),
+        in: jest.fn((room: string) => {
+          if (room === ROOMS.call(CALL_ID)) {
+            callRoomFetchCount += 1;
+            return { fetchSockets: jest.fn().mockResolvedValue(callRoomFetchCount <= 2 ? [] : [staleSocket]) };
+          }
+          return { fetchSockets: jest.fn().mockResolvedValue([]) };
+        }),
+      };
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(staleSocket.leave).toHaveBeenCalledWith(ROOMS.call(CALL_ID));
     });
   });
 

@@ -26,6 +26,7 @@ jest.mock('../../../services/CallService', () => ({
     generateIceServers: mockGenerateIceServers4,
     scheduleRingingTimeout: mockScheduleRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage4,
+    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
     clearRingingTimeout: jest.fn<any>(),
     endCall: jest.fn<any>(),
     leaveCall: jest.fn<any>(),
@@ -390,6 +391,78 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
       expect(mockSendToUser).toHaveBeenCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({ callerName: 'alice_user' }),
+        })
+      );
+    });
+
+    it('localise le push VoIP à la langue résolue du callee (Prisme, audit #11)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-en';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockResolvedValue([
+          {
+            id: offlineMemberId,
+            systemLanguage: 'en',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          },
+        ]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: offlineMemberId,
+          payload: expect.objectContaining({
+            title: 'Alice Smith is calling you',
+            body: 'Audio call',
+          }),
+        })
+      );
+    });
+
+    it('retombe sur le français quand la résolution de langue échoue (le push part toujours)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-dbdown';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockRejectedValue(new Error('db down')),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: offlineMemberId,
+          payload: expect.objectContaining({
+            title: 'Alice Smith vous appelle',
+            body: 'Appel audio',
+          }),
         })
       );
     });

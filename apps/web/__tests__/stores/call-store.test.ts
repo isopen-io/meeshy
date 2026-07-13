@@ -140,6 +140,55 @@ describe('CallStore', () => {
     });
   });
 
+  describe('Join request (bulle « Appel en cours » → CallManager)', () => {
+    const joinRequest = {
+      callId: 'call-live-1',
+      conversationId: 'conv-123',
+      callType: 'audio' as const,
+    };
+
+    beforeEach(() => {
+      act(() => {
+        useCallStore.setState({ joinRequest: null });
+      });
+    });
+
+    it('requestJoin pose la demande consommée par CallManager', () => {
+      act(() => {
+        useCallStore.getState().requestJoin(joinRequest);
+      });
+
+      expect(useCallStore.getState().joinRequest).toEqual(joinRequest);
+    });
+
+    it('requestJoin est un no-op quand on est déjà en appel', () => {
+      act(() => {
+        useCallStore.getState().setCurrentCall(mockCallSession);
+        useCallStore.getState().requestJoin(joinRequest);
+      });
+
+      expect(useCallStore.getState().joinRequest).toBeNull();
+    });
+
+    it('clearJoinRequest consomme la demande', () => {
+      act(() => {
+        useCallStore.getState().requestJoin(joinRequest);
+        useCallStore.getState().clearJoinRequest();
+      });
+
+      expect(useCallStore.getState().joinRequest).toBeNull();
+    });
+
+    it('reset purge toute demande en attente', () => {
+      act(() => {
+        useCallStore.getState().requestJoin(joinRequest);
+        useCallStore.getState().reset();
+      });
+
+      expect(useCallStore.getState().joinRequest).toBeNull();
+    });
+  });
+
   describe('Call Management', () => {
     describe('setCurrentCall', () => {
       it('should set current call and mark as in call', () => {
@@ -1028,6 +1077,40 @@ describe('CallStore', () => {
       expect(state.reconnectAttempt).toBe(0);
       expect(state.connectionQuality).toBeNull();
       expect(state.callEndReason).toBeNull();
+    });
+  });
+
+  describe('Pending retry (« Réessayer » after a transient failure)', () => {
+    beforeEach(() => {
+      act(() => { useCallStore.getState().clearCallRetry(); });
+    });
+
+    it('offerCallRetry records the conversation + type', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'video' });
+      });
+      expect(useCallStore.getState().pendingRetry).toEqual({ conversationId: 'conv-1', type: 'video' });
+    });
+
+    it('clearCallRetry drops the offer', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'audio' });
+        useCallStore.getState().clearCallRetry();
+      });
+      expect(useCallStore.getState().pendingRetry).toBeNull();
+    });
+
+    it('reset() PRESERVES a pending retry (the failed call teardown must not erase the offer)', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'video' });
+        useCallStore.getState().reset();
+      });
+      expect(useCallStore.getState().pendingRetry).toEqual({ conversationId: 'conv-1', type: 'video' });
+    });
+
+    it('reset() with no pending retry leaves it null', () => {
+      act(() => { useCallStore.getState().reset(); });
+      expect(useCallStore.getState().pendingRetry).toBeNull();
     });
   });
 });

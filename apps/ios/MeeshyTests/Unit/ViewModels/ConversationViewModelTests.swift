@@ -58,7 +58,9 @@ final class ConversationViewModelTests: XCTestCase {
         isDirect: Bool = false,
         participantUserId: String? = nil,
         anonymousSession: AnonymousSessionContext? = nil,
-        dependencies: ConversationDependencies? = nil
+        dependencies: ConversationDependencies? = nil,
+        activeCallService: ActiveCallServiceProviding? = nil,
+        liveCallJoin: LiveCallJoinContext? = nil
     ) -> ConversationViewModel {
         let currentUser = MeeshyUser(id: testUserId, username: "testuser", displayName: "Test User")
         mockAuthManager.simulateLoggedIn(user: currentUser)
@@ -76,7 +78,9 @@ final class ConversationViewModelTests: XCTestCase {
             reactionService: mockReactionService,
             reportService: mockReportService,
             messageSocket: mockMessageSocket,
-            dependencies: deps
+            dependencies: deps,
+            activeCallService: activeCallService ?? ActiveCallService.shared,
+            liveCallJoin: liveCallJoin ?? .live
         )
         // Activate the VM as the view's `.task` does: `init` is now
         // side-effect-free, so the GRDB observation / initial load / Combine
@@ -2207,6 +2211,137 @@ final class ConversationViewModelTests: XCTestCase {
         }.count
         XCTAssertEqual(count, 1,
             "mergeIntoMessages must suppress the superseded optimistic row — expected 1 bubble, got \(count)")
+    }
+
+    // MARK: - joinOngoingCall (bulle d'appel vivante, 4 branches)
+
+    private final class MockActiveCallService: ActiveCallServiceProviding, @unchecked Sendable {
+        var result: Result<ActiveCallSession?, Error> = .success(nil)
+        private(set) var callCount = 0
+
+        func activeCall(conversationId: String) async throws -> ActiveCallSession? {
+            callCount += 1
+            return try result.get()
+        }
+    }
+
+    @MainActor
+    private final class LiveCallJoinSpy {
+        var currentCallId: String?
+        var isIdle = true
+        var pendingCallId: String?
+        var rejoinResult = true
+        private(set) var broughtUIForwardCount = 0
+        private(set) var rejoinCalls: [(callId: String, conversationId: String, remoteUserId: String, remoteUsername: String, isVideo: Bool)] = []
+
+        var context: LiveCallJoinContext {
+            LiveCallJoinContext(
+                currentCallId: { [weak self] in self?.currentCallId },
+                isIdle: { [weak self] in self?.isIdle ?? true },
+                hasPendingIncomingCall: { [weak self] in self?.pendingCallId == $0 },
+                bringCallUIForward: { [weak self] in self?.broughtUIForwardCount += 1 },
+                rejoinActiveCall: { [weak self] callId, conversationId, remoteUserId, remoteUsername, isVideo in
+                    self?.rejoinCalls.append((callId, conversationId, remoteUserId, remoteUsername, isVideo))
+                    return self?.rejoinResult ?? true
+                }
+            )
+        }
+    }
+
+    private func makeLiveCallSummary(callId: String = "call-live-1", isVideo: Bool = false) -> CallSummaryMetadata {
+        CallSummaryMetadata(
+            callId: callId,
+            initiatorId: "peer-user-1",
+            callType: isVideo ? .video : .audio,
+            outcome: .completed,
+            durationSeconds: 0,
+            bytesTotal: nil,
+            bytesEstimated: false,
+            networkQuality: nil,
+            isLive: true
+        )
+    }
+
+    func test_joinOngoingCall_alreadyOnThisCall_bringsCallUIForward() async {
+        let spy = LiveCallJoinSpy()
+        spy.currentCallId = "call-live-1"
+        spy.isIdle = false
+        let service = MockActiveCallService()
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertEqual(spy.broughtUIForwardCount, 1)
+        XCTAssertTrue(spy.rejoinCalls.isEmpty)
+        XCTAssertEqual(service.callCount, 0, "pas de round-trip serveur quand on est déjà sur l'appel")
+    }
+
+    func test_joinOngoingCall_deviceRingingOnThisCall_neverDoubleJoins() async {
+        let spy = LiveCallJoinSpy()
+        spy.pendingCallId = "call-live-1"
+        let service = MockActiveCallService()
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertTrue(spy.rejoinCalls.isEmpty, "répondre reste le geste de la bannière/CallKit")
+        XCTAssertEqual(spy.broughtUIForwardCount, 0)
+        XCTAssertEqual(service.callCount, 0)
+    }
+
+    func test_joinOngoingCall_serverStillActive_rejoinsWithRemoteParticipant() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(ActiveCallSession(
+            id: "call-live-1",
+            conversationId: testConversationId,
+            mode: "p2p",
+            status: "active",
+            participants: [
+                ActiveCallParticipant(userId: testUserId, user: nil),
+                ActiveCallParticipant(userId: "peer-user-1", user: ActiveCallParticipantUser(id: "peer-user-1", username: "peer", displayName: "Peer")),
+            ]
+        ))
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary(isVideo: true))
+
+        XCTAssertEqual(spy.rejoinCalls.count, 1)
+        XCTAssertEqual(spy.rejoinCalls.first?.callId, "call-live-1")
+        XCTAssertEqual(spy.rejoinCalls.first?.conversationId, testConversationId)
+        XCTAssertEqual(spy.rejoinCalls.first?.remoteUserId, "peer-user-1")
+        XCTAssertEqual(spy.rejoinCalls.first?.remoteUsername, "Peer")
+        XCTAssertEqual(spy.rejoinCalls.first?.isVideo, true)
+    }
+
+    func test_joinOngoingCall_callEndedServerSide_toastsAndNeverRejoins() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(nil)
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+        FeedbackToastManager.shared.dismiss()
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertTrue(spy.rejoinCalls.isEmpty)
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, "L'appel est terminé")
+    }
+
+    func test_joinOngoingCall_staleSessionDifferentCallId_treatedAsEnded() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(ActiveCallSession(
+            id: "another-newer-call",
+            conversationId: testConversationId,
+            mode: "p2p",
+            status: "active",
+            participants: []
+        ))
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertTrue(spy.rejoinCalls.isEmpty, "une bulle périmée ne rejoint jamais un AUTRE appel")
     }
 
     // MARK: - Helpers

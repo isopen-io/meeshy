@@ -5,12 +5,17 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
 import androidx.work.WorkManager
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import dagger.hilt.android.AndroidEntryPoint
 import me.meeshy.app.MainActivity
+import me.meeshy.app.R
+import me.meeshy.sdk.model.call.CallStopPush
 import me.meeshy.sdk.model.call.IncomingCallPush
 import me.meeshy.sdk.model.call.IncomingCallPushRoute
 import me.meeshy.sdk.outbox.OutboxFlushWorker
@@ -25,6 +30,9 @@ import javax.inject.Inject
  *  - a **call** data push ([IncomingCallPushRoute.Ring]) fires a full-screen,
  *    CATEGORY_CALL notification so a backgrounded/killed device rings; duplicates
  *    are suppressed by [IncomingCallRingStore].
+ *  - a **stop-ring** data push ([IncomingCallPushRoute.StopRing] —
+ *    `call_cancel` / `call_answered_elsewhere`) cancels that notification so the
+ *    device stops ringing for a call that ended or was answered on another device.
  *  - any other push shows the rich message notification + triggers an outbox flush.
  */
 @AndroidEntryPoint
@@ -49,9 +57,16 @@ class MeeshyFcmService : FirebaseMessagingService() {
 
         when (val route = ringStore.route(message.data, System.currentTimeMillis(), selfUserId = session.currentUserId)) {
             is IncomingCallPushRoute.Ring -> showIncomingCallNotification(route.push)
+            is IncomingCallPushRoute.StopRing -> cancelIncomingCallNotification(route.push)
             is IncomingCallPushRoute.Suppress -> Timber.d("Suppressed call push: ${route.reason}")
             IncomingCallPushRoute.NotACallPush -> handleMessagePush(message)
         }
+    }
+
+    private fun cancelIncomingCallNotification(push: CallStopPush) {
+        Timber.d("Stop-ring push (${push.type}) for call ${push.callId}")
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.cancel(push.callId.hashCode())
     }
 
     private fun handleMessagePush(message: RemoteMessage) {
@@ -70,11 +85,33 @@ class MeeshyFcmService : FirebaseMessagingService() {
     private fun showIncomingCallNotification(push: IncomingCallPush) {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_CALLS, "Calls", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Incoming voice and video calls"
+            NotificationChannel(
+                CHANNEL_CALLS,
+                getString(R.string.call_channel_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = getString(R.string.call_channel_description)
                 setShowBadge(false)
+                // Sonnerie APPAREIL en usage ring (volume sonnerie, mode
+                // silencieux respecté) : écran allumé/déverrouillé, le ring
+                // arrive en heads-up — sans son de canal il n'émettait qu'un
+                // ding de notification. Écran verrouillé, le full-screen
+                // intent ouvre l'app qui sonne via son CallToneController.
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 1_000, 800, 1_000, 800)
             },
         )
+        // Les canaux sont IMMUABLES après création : les installs existantes
+        // gardaient l'ancien canal muet — on le supprime pour que le nouveau
+        // (id v2) porte la sonnerie partout.
+        manager.deleteNotificationChannel(LEGACY_CHANNEL_CALLS)
 
         val fullScreenIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -90,16 +127,52 @@ class MeeshyFcmService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        // Bouton « Refuser » (CallStyle) : coupe la sonnerie ET prévient le
+        // correspondant — sans lui, refuser n'existait pas et l'appelant
+        // sonnait 60 s dans le vide.
+        val declinePendingIntent = PendingIntent.getBroadcast(
+            this,
+            ("decline:" + push.callId).hashCode(),
+            Intent(this, DeclineCallReceiver::class.java).putExtra(EXTRA_CALL_ID, push.callId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        // Bouton « Répondre » : mêmes extras que le full-screen intent + le flag
+        // auto-answer — l'écran d'appel décroche directement (gated permissions)
+        // au lieu d'exiger un second tap sur Accepter. RequestCode distinct :
+        // un même requestCode écraserait le PendingIntent du tap/full-screen.
+        val answerIntent = Intent(fullScreenIntent).putExtra(EXTRA_AUTO_ANSWER, true)
+        val answerPendingIntent = PendingIntent.getActivity(
+            this,
+            ("answer:" + push.callId).hashCode(),
+            answerIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        // Prisme : le push d'appel est data-only et le serveur a déjà résolu la
+        // langue de l'utilisateur (data.title/body localisés) — les ressources
+        // (locale appareil) ne servent que de fallback pour un gateway antérieur.
+        val fallbackBody = getString(
+            if (push.isVideo) R.string.call_incoming_video else R.string.call_incoming_audio,
+        )
+        val caller = Person.Builder()
+            .setName(push.displayName)
+            .setImportant(true)
+            .build()
         val notification = NotificationCompat.Builder(this, CHANNEL_CALLS)
             .setSmallIcon(android.R.drawable.sym_call_incoming)
-            .setContentTitle(push.displayName)
-            .setContentText(if (push.isVideo) "Appel vidéo entrant" else "Appel entrant")
+            .setContentTitle(push.title ?: push.displayName)
+            .setContentText(push.body ?: fallbackBody)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setFullScreenIntent(pendingIntent, true)
+            // Répondre = décroche directement (auto-answer) ; Refuser =
+            // DeclineCallReceiver. Sur API < 31, CallStyle dégrade en
+            // notification standard avec les deux actions.
+            .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, declinePendingIntent, answerPendingIntent))
             .build()
 
         manager.notify(push.callId.hashCode(), notification)
@@ -140,10 +213,13 @@ class MeeshyFcmService : FirebaseMessagingService() {
 
     companion object {
         const val CHANNEL_MESSAGES = "meeshy_messages"
-        const val CHANNEL_CALLS = "meeshy_calls"
+        /** v2 : les canaux sont immuables — le v1 (muet, sans sonnerie) est supprimé au passage. */
+        const val CHANNEL_CALLS = "meeshy_calls_v2"
+        const val LEGACY_CHANNEL_CALLS = "meeshy_calls"
         const val EXTRA_CALL_ID = "callId"
         const val EXTRA_CONVERSATION_ID = "conversationId"
         const val EXTRA_CALLER_NAME = "callerName"
         const val EXTRA_IS_VIDEO = "isVideo"
+        const val EXTRA_AUTO_ANSWER = "autoAnswer"
     }
 }

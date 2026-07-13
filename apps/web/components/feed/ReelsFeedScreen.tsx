@@ -30,11 +30,10 @@ import { useI18n } from '@/hooks/use-i18n';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Post } from '@meeshy/shared/types/post';
 import { copyToClipboard } from '@/lib/clipboard';
-
-const LIKE_EMOJI = '❤️';
+import { isHeartLikedByMe } from '@/lib/reactions';
 
 function isReelLiked(post: Post): boolean {
-  return (post.currentUserReactions ?? []).includes(LIKE_EMOJI) || (post.isLikedByMe ?? false);
+  return isHeartLikedByMe(post);
 }
 
 /**

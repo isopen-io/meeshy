@@ -137,4 +137,49 @@ class IncomingCallPushRouterTest {
         val afterFree = route(data(callId = "c2"), activeCallId = null)
         assertThat(afterFree).isInstanceOf(IncomingCallPushRoute.Ring::class.java)
     }
+
+    // --- Stop-ring (call_cancel / call_answered_elsewhere) -------------------
+
+    private fun stopRing(route: IncomingCallPushRoute): IncomingCallPushRoute.StopRing =
+        route as IncomingCallPushRoute.StopRing
+
+    @Test
+    fun `a call_cancel push maps to StopRing carrying the call id`() {
+        val route = stopRing(route(data(type = "call_cancel", callId = "c1")))
+
+        assertThat(route.push.callId).isEqualTo("c1")
+        assertThat(route.push.type).isEqualTo(CallStopPush.Type.CANCELLED)
+    }
+
+    @Test
+    fun `a call_answered_elsewhere push maps to StopRing`() {
+        val route = stopRing(route(data(type = "call_answered_elsewhere", callId = "c1")))
+
+        assertThat(route.push.type).isEqualTo(CallStopPush.Type.ANSWERED_ELSEWHERE)
+    }
+
+    @Test
+    fun `a stop push with a blank call id is inert`() {
+        assertThat(route(data(type = "call_cancel", callId = " ")))
+            .isEqualTo(IncomingCallPushRoute.NotACallPush)
+    }
+
+    @Test
+    fun `a stop push stops the ring even while that call is the active one`() {
+        // The full-screen ring counts as "active" on some paths — the stop must
+        // never be gated by the busy/duplicate rules that protect ring pushes.
+        assertThat(route(data(type = "call_cancel", callId = "c1"), activeCallId = "c1"))
+            .isInstanceOf(IncomingCallPushRoute.StopRing::class.java)
+    }
+
+    @Test
+    fun `a stop push records the id so a late ring delivery of the dead call is suppressed`() {
+        // FCM ordering is not guaranteed: the cancel can land BEFORE a throttled
+        // original ring push. Recording the stopped id keeps the corpse silent.
+        val stop = stopRing(route(data(type = "call_cancel", callId = "c1"), nowMillis = 100))
+
+        val lateRing = route(data(type = "call", callId = "c1"), seen = stop.updatedSeen, nowMillis = 200)
+
+        assertThat(suppressReason(lateRing)).isEqualTo(IncomingCallDecision.Reason.DUPLICATE)
+    }
 }

@@ -730,6 +730,48 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertNil(row?.lastMessageId)
     }
 
+    /// Deleting a call-summary message (the socket-confirmed, authoritative
+    /// deletion path) must also sweep the locally persisted call transcript
+    /// — otherwise a transcript for a call the user just deleted the summary
+    /// of stays reachable forever, orphaned from any UI entry point.
+    func test_messageDeleted_withCallSummary_sweepsLocalCallTranscript() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        var callMessage = TestFactories.makeMessage(id: "m-call", conversationId: "c-call-del", content: "")
+        callMessage.callSummary = CallSummaryMetadata(
+            callId: "call-xyz", initiatorId: "sender-1", callType: .audio, outcome: .completed,
+            durationSeconds: 30, bytesTotal: nil, bytesEstimated: false, networkQuality: nil
+        )
+        try? await CacheCoordinator.shared.messages.save([callMessage], for: "c-call-del")
+        let transcript = CallTranscript(
+            callId: "call-xyz", conversationId: "c-call-del",
+            callStartedAt: Date(timeIntervalSince1970: 0), segments: []
+        )
+        await CallTranscriptStore.shared.saveMerging(transcript)
+        await engine.startSocketRelay()
+
+        mockMessageSocket.messageDeleted.send(MessageDeletedEvent(messageId: "m-call", conversationId: "c-call-del"))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let loaded = await CallTranscriptStore.shared.transcript(for: "call-xyz")
+        XCTAssertNil(loaded, "deleting the call-summary message must sweep its local transcript")
+    }
+
+    /// A deleted message with no `callSummary` (the overwhelmingly common
+    /// case — a regular text message) must not crash or otherwise misbehave
+    /// when the sweep runs its `callId` resolution.
+    func test_messageDeleted_withoutCallSummary_doesNotCrash() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let plainMessage = TestFactories.makeMessage(id: "m-plain", conversationId: "c-plain-del", content: "hi")
+        try? await CacheCoordinator.shared.messages.save([plainMessage], for: "c-plain-del")
+        await engine.startSocketRelay()
+
+        mockMessageSocket.messageDeleted.send(MessageDeletedEvent(messageId: "m-plain", conversationId: "c-plain-del"))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let cached = await CacheCoordinator.shared.messages.load(for: "c-plain-del").snapshot() ?? []
+        XCTAssertNotNil(cached.first(where: { $0.id == "m-plain" })?.deletedAt)
+    }
+
     /// An own-echo REST send racing the socket broadcast (or any other
     /// out-of-order `message:new`) must not regress the list row to older
     /// content once a newer message has already been applied — mirrors the

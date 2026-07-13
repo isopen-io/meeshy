@@ -289,6 +289,27 @@ describe('StoryTextObjectTranslationService', () => {
     });
   });
 
+  describe('handleTranslationCompleted — PRIVATE visibility', () => {
+    it('broadcasts to author only — no friend fan-out (draft / author-only story)', async () => {
+      const { service, prisma, io } = makeService({
+        post: { authorId: 'author-1', visibility: 'PRIVATE', visibilityUserIds: [] },
+        friendRequests: [
+          { senderId: 'author-1', receiverId: 'friend-A' },
+          { senderId: 'friend-B', receiverId: 'author-1' },
+        ],
+      });
+
+      await service.handleTranslationCompleted(BASE_PARAMS);
+
+      expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+
+      const toArgs = (io.to as jest.Mock).mock.calls.map(([r]: [string]) => r);
+      expect(toArgs).toEqual([ROOMS.feed('author-1')]);
+      expect(toArgs).not.toContain(ROOMS.feed('friend-A'));
+      expect(toArgs).not.toContain(ROOMS.feed('friend-B'));
+    });
+  });
+
   describe('resolveBroadcastRecipients — friend lookup failure', () => {
     it('falls back to author-only broadcast on friend request DB error', async () => {
       const { service, io } = makeService({

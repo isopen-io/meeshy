@@ -353,10 +353,16 @@ private struct HeaderCallButtonsView: View {
             )
             // Matches expandedHeaderSearchButton's circle exactly (28×28,
             // font 13) — user-requested 2026-07-11: the two header buttons
-            // must read as the same size.
+            // must read as the same size. `.adaptiveGlass` MUST come before
+            // `.meeshyTapTarget()`, not after (bug found 2026-07-11): glass
+            // is a Circle sized to the CURRENT view bounds at that point in
+            // the chain — applying it after meeshyTapTarget's `.frame(minWidth:
+            // 44, minHeight: 44)` drew the visible circle at 44pt instead of
+            // 28pt, even though both buttons declared identical numbers.
+            // expandedHeaderSearchButton already has the correct order.
             .frame(width: 28, height: 28)
-            .meeshyTapTarget()
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
+            .meeshyTapTarget()
     }
 }
 
