@@ -1,5 +1,38 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **per-conversation message ordering** landed (slice `chat-message-ordering`, feature-parity
+> "Message ordering" — the ordering half of the bundled `seq` sort + gap-detection + server-offset roadmap item).
+> Ships the pure `:feature:chat` SSOT `MessageOrdering.order(items, selector) → List<T>` (+ a bare-input overload)
+> that lays a message list out in **stable ascending (oldest→newest) timeline order** — the foundation every
+> downstream chat computation already trusted implicitly (consecutive `MessageGrouping`, day labels, scroll
+> anchoring) but that nothing actually enforced: `toBubbles` rendered messages in whatever order the repository
+> handed back, so an out-of-order socket arrival or a merged older-page could jumble the list. The order is a
+> total, deterministic projection of two keys via `compareBy`: **send time first** (`createdAtMillis`; a message
+> with no parsed timestamp → `Long.MAX_VALUE` = newest, pinned to the bottom, so a freshly-composed local echo
+> lands at the end not hoisted above dated history), **`seq` breaks ties** (ascending; a null seq = an un-acked
+> optimistic send → `Long.MAX_VALUE` so it trails its acked same-instant sibling), and **server order is the final
+> tiebreak** — `sortedWith` is stable, so a fully-tied pair keeps the caller's incoming order rather than being
+> reshuffled (this is exactly what keeps the existing all-null-`createdAt` ViewModel test fixtures unperturbed:
+> all equal → input order preserved). **Wired for real (no dead ends):** `ChatViewModel.toBubbles` now orders the
+> hidden-filtered list *before* grouping/mapping, reusing `isoToEpochMillisOrNull`, so grouping + day labels
+> cluster a provably-ascending list. **+16 tests** (empty→∅; single unchanged; already-ascending kept;
+> reversed-by-time re-sorted; out-of-order arrival placed by timestamp not position; equal-time→ascending seq;
+> equal-time no-seq trails seq'd; full tie preserves input order; no-timestamp sorts after timestamped; two untimed
+> fall back to seq then input order; two fully-tied untimed keep input order; negative pre-epoch orders; near-MAX
+> timestamps don't overflow; idempotent; `order` returns original items not projected inputs; bare-input overload).
+> **Two-mutation RED check:** `?: Long.MAX_VALUE`→`?: Long.MIN_VALUE` on both keys failed exactly the 2 relevant
+> tests (no-timestamp-sorts-after + no-seq-trails-seq'd), confirming behavioural not tautological; reverted green.
+> **Verification:** `:feature:chat:testDebugUnitTest` full suite + `:app:assembleDebug` → **BUILD SUCCESSFUL**
+> (APK produced, no existing chat test regressed by the new `toBubbles` sort). Reviewer **PASS** (diff `apps/android`
+> only — `:feature:chat` [new `MessageOrdering.kt` + test, one-line `ChatViewModel` wiring], `feature-parity.md`,
+> routine docs; no production logic outside; **SDK purity** — pure ordering in `:feature:chat`, the established home
+> for chat reducers/SSOTs alongside `MessageGrouping`; **SSOT** — one ordering owns the timeline every downstream
+> computation reads; **UDF/instant-app** — pure fn, cache-first path unchanged; **colour/UX coherence** — no UI
+> change; **no coverage floor lowered, no test weakened**). **Next slice:** continuity **gap detection** once a
+> `seq` source lands (or add a nullable `seq` to the android `LocalMessage`/DTO first), the app-side relative-time
+> rendering layer (maps `RelativeTimeUnit`/`RelativeTimeLongLabel` → 5 app languages), or resume the media-wiring
+> hints below.
+
 > On 2026-07-13 **relative-time long framing SSOT** landed (slice `time-relative-long-label`, feature-parity §Q —
 > the detail-surface framing, port of iOS `RelativeTimeFormatter.longString`). Companion to the just-landed
 > `RelativeTime.classify` flat ladder: where `classify` is a bare `now/5m/2h/3d/…` ladder for dense lists, the
