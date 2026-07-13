@@ -180,6 +180,29 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
         return response.data
     }
 
+    /// Vérifie si un numéro appartient déjà à un compte et, si une identité est
+    /// fournie, si ce compte est dormant avec un nom qui matche — auquel cas
+    /// `recoverySuggested` est vrai (récupération de compte plutôt que doublon).
+    /// Réutilise le endpoint existant `/auth/phone-transfer/check`.
+    public func checkPhoneOwnership(
+        phone: String,
+        countryCode: String? = nil,
+        firstName: String? = nil,
+        lastName: String? = nil
+    ) async throws -> PhoneOwnershipResponse {
+        struct Body: Encodable {
+            let phoneNumber: String
+            let countryCode: String?
+            let firstName: String?
+            let lastName: String?
+        }
+        let response: APIResponse<PhoneOwnershipResponse> = try await api.post(
+            endpoint: "/auth/phone-transfer/check",
+            body: Body(phoneNumber: phone, countryCode: countryCode, firstName: firstName, lastName: lastName)
+        )
+        return response.data
+    }
+
     // MARK: - Refresh Token
 
     public func refreshToken(_ currentToken: String, sessionToken: String? = nil) async throws -> LoginResponseData {

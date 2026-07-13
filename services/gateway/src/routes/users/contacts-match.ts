@@ -108,7 +108,7 @@ export async function matchContacts(fastify: FastifyInstance) {
                           displayName: { type: 'string', nullable: true },
                           avatar: { type: 'string', nullable: true },
                           isOnline: { type: 'boolean' },
-                          lastActiveAt: { type: 'string', nullable: true }
+                          lastActiveAt: { type: 'string', format: 'date-time', nullable: true }
                         }
                       },
                       matchedBy: { type: 'string', enum: ['phone', 'email'] },

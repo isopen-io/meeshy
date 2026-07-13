@@ -327,6 +327,10 @@ struct StepPhoneView: View {
                     .padding(.leading, 16)
                 }
 
+                if viewModel.phoneBelongsToExistingAccount {
+                    recoveryHintCard
+                }
+
                 Button(action: { viewModel.skipCurrentStep() }) {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.right.circle").font(.subheadline)
@@ -376,6 +380,34 @@ struct StepPhoneView: View {
             Image(systemName: icon).font(.caption).foregroundColor(.secondary).frame(width: 16)
             Text(text).font(.caption).foregroundColor(.secondary)
         }
+    }
+
+    @ViewBuilder
+    private var recoveryHintCard: some View {
+        let recover = viewModel.phoneRecoverySuggested
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: recover ? "person.badge.key.fill" : "info.circle")
+                    .foregroundColor(recover ? MeeshyColors.warning : viewModel.currentStep.accentColor)
+                Text(recover
+                     ? String(localized: "onboarding.step.phone.recovery.title", defaultValue: "On dirait ton ancien compte", bundle: .main)
+                     : String(localized: "onboarding.step.phone.existing.title", defaultValue: "Ce numéro est déjà lié à un compte", bundle: .main))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+            Text(recover
+                 ? String(localized: "onboarding.step.phone.recovery.body", defaultValue: "Ce numéro appartient à un compte inactif dont le nom te ressemble. Depuis l'écran de connexion, choisis « Mot de passe oublié » pour le récupérer plutôt que d'en créer un nouveau.", bundle: .main)
+                 : String(localized: "onboarding.step.phone.existing.body", defaultValue: "Si c'est le tien, récupère-le depuis « Mot de passe oublié » sur l'écran de connexion. Sinon, saisis un autre numéro ou passe cette étape.", bundle: .main))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill((recover ? MeeshyColors.warning : viewModel.currentStep.accentColor).opacity(0.1))
+        )
     }
 
     private var countryPickerSheet: some View {

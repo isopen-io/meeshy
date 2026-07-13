@@ -120,6 +120,9 @@ public final class RegistrationViewModel: ObservableObject {
     @Published public var phoneAvailable: Bool?
     @Published public var phoneNumberValid: Bool?
     @Published public var phoneError: String?
+    /// Renseigné quand le numéro appartient déjà à un compte : porte les
+    /// indices de récupération (compte dormant + identité ressemblante).
+    @Published public var phoneOwnership: PhoneOwnershipResponse?
 
     // MARK: - General State
 
@@ -323,6 +326,9 @@ public final class RegistrationViewModel: ObservableObject {
     private func checkPhoneAvailability() {
         phoneTask?.cancel()
         let fullPhone = selectedCountry.dialCode + phoneNumber.filter { $0.isNumber }
+        let country = selectedCountry.id
+        let first = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let last = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         phoneTask = Task {
             isValidatingPhone = true
@@ -336,18 +342,51 @@ public final class RegistrationViewModel: ObservableObject {
                 phoneAvailable = result.available
                 if result.phoneNumberValid == false {
                     phoneError = "Ce numero semble invalide"
+                    phoneOwnership = nil
                 } else if !result.available {
                     phoneError = "Ce numero est deja utilise!"
+                    // Numéro pris : sonde le compte propriétaire pour proposer une
+                    // récupération si c'est un compte dormant à l'identité proche.
+                    await probePhoneOwnership(fullPhone: fullPhone, country: country, firstName: first, lastName: last)
                 } else {
                     phoneError = nil
+                    phoneOwnership = nil
                 }
             } catch {
                 guard !Task.isCancelled else { return }
                 phoneAvailable = true
                 phoneNumberValid = nil
                 phoneError = "Verification non effectuee"
+                phoneOwnership = nil
             }
         }
+    }
+
+    private func probePhoneOwnership(fullPhone: String, country: String, firstName: String, lastName: String) async {
+        do {
+            let ownership = try await AuthService.shared.checkPhoneOwnership(
+                phone: fullPhone,
+                countryCode: country,
+                firstName: firstName.isEmpty ? nil : firstName,
+                lastName: lastName.isEmpty ? nil : lastName
+            )
+            guard !Task.isCancelled else { return }
+            phoneOwnership = ownership
+        } catch {
+            guard !Task.isCancelled else { return }
+            phoneOwnership = nil
+        }
+    }
+
+    /// Vrai quand le numéro saisi appartient à un compte dormant dont
+    /// l'identité ressemble à celle déclarée — on propose la récupération.
+    public var phoneRecoverySuggested: Bool {
+        phoneOwnership?.recoverySuggested == true
+    }
+
+    /// Vrai dès que le numéro appartient à un compte existant (récupérable ou non).
+    public var phoneBelongsToExistingAccount: Bool {
+        phoneOwnership?.exists == true
     }
 
     // MARK: - Username Suggestion

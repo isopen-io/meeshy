@@ -129,7 +129,7 @@ final class ContactSyncService: ContactSyncProviding, @unchecked Sendable {
                         results.append(DeviceContact(
                             displayName: name.isEmpty ? nil : name,
                             phoneNumbers: contact.phoneNumbers.map { $0.value.stringValue },
-                            emails: contact.emailAddresses.map { String($0.value) }
+                            emails: contact.emailAddresses.map { $0.value as String }
                         ))
                     }
                     continuation.resume(returning: results)

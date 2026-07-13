@@ -174,6 +174,28 @@ public struct AvailabilityResponse: Decodable {
     }
 }
 
+// MARK: - Phone Ownership Check (récupération de compte)
+
+public struct PhoneOwnerMaskedInfo: Decodable, Sendable, Equatable {
+    public let displayName: String?
+    public let username: String?
+    public let email: String?
+}
+
+/// Réponse de `/auth/phone-transfer/check`. Quand `recoverySuggested` est vrai,
+/// le numéro appartient à un compte dormant dont l'identité déclarée matche —
+/// le client oriente alors vers la récupération de compte plutôt que la
+/// création d'un doublon.
+public struct PhoneOwnershipResponse: Decodable, Sendable, Equatable {
+    public let exists: Bool
+    public let maskedInfo: PhoneOwnerMaskedInfo?
+    public let dormant: Bool?
+    public let dormantSince: String?
+    /// "exact" | "similar" | "different" | nil
+    public let nameSimilarity: String?
+    public let recoverySuggested: Bool?
+}
+
 // MARK: - Refresh Token
 
 public struct RefreshTokenRequest: Encodable {
