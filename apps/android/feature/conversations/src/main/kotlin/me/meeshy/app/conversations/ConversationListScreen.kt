@@ -81,11 +81,15 @@ import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.chrome.FloatingGradientFab
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.format.RelativeTimeFormat
+import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import java.time.ZoneId
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -344,6 +348,27 @@ private fun ConversationRow(
     }
 }
 
+/**
+ * The conversation row's trailing timestamp as a compact relative label ("5 min", "2 h", "3 j",
+ * …) — the Android parity of iOS `ThemedConversationRow`'s
+ * `RelativeTimeFormatter.shortString(for: conversation.lastMessageAt)`. Returns null when the
+ * conversation carries no parseable timestamp, so a brand-new row with no activity shows no label
+ * rather than a placeholder. The [rememberRelativeTimeStrings] read stays before the early return
+ * to keep the composable-call graph unconditional.
+ */
+@Composable
+private fun conversationRowRelativeTime(conversation: ApiConversation): String? {
+    val strings = rememberRelativeTimeStrings()
+    val millis = ConversationRowTime.epochMillis(conversation) ?: return null
+    return RelativeTimeFormat.short(
+        epochMillis = millis,
+        referenceMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault(),
+        locale = Locale.getDefault(),
+        strings = strings,
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationRowContent(
@@ -449,8 +474,25 @@ private fun ConversationRowContent(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (conversation.unreadCount > 0) {
-                Badge { Text(conversation.unreadCount.coerceAtMost(99).toString()) }
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            ) {
+                conversationRowRelativeTime(conversation)?.let { relativeTime ->
+                    Text(
+                        text = relativeTime,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (conversation.unreadCount > 0) {
+                            MeeshyTheme.tokens.error
+                        } else {
+                            hexColor(conversation.accentHex())
+                        },
+                        maxLines = 1,
+                    )
+                }
+                if (conversation.unreadCount > 0) {
+                    Badge { Text(conversation.unreadCount.coerceAtMost(99).toString()) }
+                }
             }
             }
         }

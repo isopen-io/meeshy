@@ -1,5 +1,39 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **conversation-row relative timestamp** landed (slice `conversations-row-relative-time`,
+> feature-parity §B/§Q — the highest-value consumer of the just-shipped short relative-time renderer: the
+> conversation list rows previously showed **no timestamp at all**, a visible gap vs iOS
+> `ThemedConversationRow`, which renders `RelativeTimeFormatter.shortString(for: conversation.lastMessageAt)`
+> on the trailing edge above the unread badge). Ships pure `:feature:conversations`
+> `ConversationRowTime.epochMillis(conversation)` — the SSOT that resolves *which* instant a row shows: the
+> **last message's `createdAt`** (the true "last activity"), else the conversation's **`updatedAt`**, else its
+> **`createdAt`**; each candidate parsed through the `isoToEpochMillisOrNull` SSOT so a blank/malformed value
+> transparently falls through to the next rung rather than blanking the row, a legitimate unix-epoch instant
+> (0L) is kept (not mistaken for absent), and `null` (nothing parseable) renders **no label** (a brand-new
+> conversation with no activity is clean, not a placeholder). **Wired for real (no dead ends):** the row's
+> trailing element became a `Column` (timestamp above the unread badge) rendering the discreet relative label
+> ("5 min", "2 h", "3 j") via the reused `:sdk-ui` `RelativeTimeFormat.short` + `rememberRelativeTimeStrings`
+> (the `time_relative_*` resources already shipped for the feed) — **no new strings**. **Colour follows unread
+> state at iOS parity** (`ThemedConversationRow.timestampColor`): error when `unreadCount > 0`, else the
+> conversation's deterministic `accentColor` — accent-coherent, semantic on unread. **+10 tests** on
+> `ConversationRowTime.epochMillis` (last-message-preferred; updatedAt-when-no-lastMessage; updatedAt-when-
+> lastMessage-has-no-createdAt; createdAt-final-fallback; blank-lastMessage→updatedAt; unparseable-lastMessage
+> →updatedAt; unparseable-updatedAt→createdAt; null-when-none; null-when-all-unparseable; unix-epoch-is-valid).
+> **Two-mutation RED check:** swapping the resolution order (updatedAt before lastMessage) failed exactly 2
+> tests; dropping the `createdAt` final fallback failed exactly 2 tests; both reverted green. **Verification:**
+> `:feature:conversations:testDebugUnitTest` full suite green + `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK
+> produced, conversation-list Compose glue compiles, no module regressed). Reviewer **PASS** (diff `apps/android`
+> only — `:feature:conversations` [new `ConversationRowTime.kt` + test, `ConversationListScreen` trailing-column
+> wiring + `@Composable conversationRowRelativeTime` helper], `feature-parity.md`, routine docs; no production
+> logic outside; **SDK purity** — the instant-resolution rule is a pure `:feature:conversations` atom [product
+> orchestration, "which timestamp does a row show"], the pure formatter stays the agnostic `:sdk-ui` building
+> block; **SSOT** — parsing via `isoToEpochMillisOrNull`, thresholds via `RelativeTime.classify`, colour via
+> `accentColor` — nothing re-implemented; **instant-app** — pure fn, no state, list cache path unchanged;
+> **colour/UX coherence** — accent-coherent, semantic error on unread, discreet Prisme framing; **no coverage
+> floor lowered, no test weakened**). **Next slice:** wire the short formatter into the **notification-row**
+> timestamps (same pattern, `:feature:notifications`), the friend-request "requested X ago" line (long form on
+> the contacts surface), or resume the media-wiring / carousel-contact-attachment hints below.
+
 > On 2026-07-13 **relative-time long rendering layer** landed (slice `time-relative-long-format-strings`,
 > feature-parity §Q — the *long/detail-surface* rendering half, companion to the just-landed short renderer;
 > the consumer the `RelativeTimeLongFormat.label` → `RelativeTimeLongLabel` classifier was waiting for so it
@@ -3011,6 +3045,41 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-13 — slice `conversations-row-relative-time` ✅ impl + reviewer PASS → PR + merge
+- **Branch:** `claude/apps/android/conversations-row-relative-time` (off latest `main` `c4e9c2c`).
+- **Housekeeping first (routine rule 0):** no open `claude/apps/android/*` PR — the prior Android slice
+  (`time-relative-long-format-strings`) was already merged as **#1936**; nothing to reconcile. `main` fetched clean.
+- **What:** feature-parity §B/§Q — the conversation list's rows carried **no timestamp**, a visible gap vs iOS
+  `ThemedConversationRow` (trailing `RelativeTimeFormatter.shortString(for: conversation.lastMessageAt)`). This
+  slice adds it by consuming the already-shipped `:sdk-ui` `RelativeTimeFormat.short` — the natural next step
+  after the short renderer landed with only the feed as a consumer.
+- **Added (production):**
+  - `:feature:conversations` `ConversationRowTime.kt` — pure `object ConversationRowTime.epochMillis(conversation):
+    Long?`. Resolution order `lastMessage.createdAt ?: updatedAt ?: createdAt`, each via the `isoToEpochMillisOrNull`
+    SSOT; `null` when none parse. Blank/malformed candidates fall through; unix-epoch (0L) kept as valid.
+  - `ConversationListScreen.kt` — trailing element of the row became a `Column(End, spacedBy xs)`: the discreet
+    relative label (via new `@Composable conversationRowRelativeTime` helper → `RelativeTimeFormat.short` +
+    `rememberRelativeTimeStrings`) above the existing unread `Badge`. Colour = `MeeshyTheme.tokens.error` when
+    `unreadCount > 0` else `hexColor(conversation.accentHex())` (iOS `timestampColor` parity). No new strings
+    (`time_relative_*` already shipped for the feed).
+- **Tests (+10, RED→GREEN):** `ConversationRowTimeTest` — last-message-preferred; updatedAt-when-no-lastMessage;
+  updatedAt-when-lastMessage-has-no-createdAt; createdAt-final-fallback; blank-lastMessage→updatedAt; unparseable-
+  lastMessage→updatedAt; unparseable-updatedAt→createdAt; null-when-none; null-when-all-unparseable; unix-epoch-valid.
+  **Branch sweep:** every rung of the `?:` chain + each fall-through arm + the null terminal + the 0L-not-absent
+  boundary is hit. **Two-mutation RED:** (1) resolution order swapped (updatedAt before lastMessage) → 2 failures;
+  (2) `createdAt` fallback dropped → 2 failures; both reverted, suite green.
+- **Verification:** system Gradle 8.14.3 (`/opt/gradle`; wrapper download 403-blocked in this container).
+  `:feature:conversations:testDebugUnitTest` full suite green + `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK
+  produced; conversation-list Compose glue compiles; no module regressed).
+- **Reviewer verdict: PASS.** Diff is `apps/android` only (3 code/doc files: new `ConversationRowTime.kt` + test,
+  `ConversationListScreen` wiring, plus `feature-parity.md` + routine docs); no web/ios/gateway/shared/translator
+  touched. Behaviour-through-public-API (`ConversationRowTime.epochMillis` + the composable helper), no tautologies,
+  boundary + fall-through + null coverage, two-mutation RED confirms non-tautological. SDK purity — resolution rule
+  is a pure `:feature:conversations` atom (product "which timestamp"), the formatter stays the agnostic `:sdk-ui`
+  block. SSOT — parsing/thresholds/colour all reused, none re-implemented. Instant-app cache path unchanged.
+  Colour/UX coherence — accent-coherent, semantic error on unread, discreet Prisme relative label. No coverage
+  floor lowered, no test weakened, no secrets/`local.properties`.
 
 ### 2026-07-13 — slice `time-relative-long-label` ✅ impl + reviewer PASS → PR + merge
 - **Branch:** `claude/apps/android/time-relative-long-label` (off latest `main` `819fcd9`).
