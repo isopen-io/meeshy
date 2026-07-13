@@ -1,5 +1,42 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **conversation media gallery per-page caption** landed (slice `chat-gallery-page-caption`,
+> feature-parity §C — the just-shipped conversation-wide fullscreen gallery (`chat-conversation-media-gallery`)
+> paged across every image but showed only a bare `n / total` counter, no context. iOS
+> `ConversationMediaGalleryView` keeps a `captionMap: [attachmentId: String]` (message content / attachment
+> caption) and renders the current media's caption as a bottom overlay under the author info. This slice ports
+> the caption half). Ships the pure `:feature:chat` `GalleryPage(url, caption)` and reshapes
+> `ConversationGallery` to carry `pages: List<GalleryPage>` (with derived `imageUrls`/`captions`/`isEmpty` so
+> every existing caller and test keeps its public surface). `ConversationMediaGallery.of` now resolves each
+> page's caption from the **owning message's Prisme-resolved `BubbleContent.text`** — trimmed, `null` when
+> blank — so a media-only message shows no overlay and every image of a multi-image message shares that one
+> caption (exactly iOS's `captionMap` keying every attachment of a message to the message body). **Wired for
+> real (no dead ends):** `MeeshyImageViewer` gained an optional `captions: List<String?> = emptyList()`
+> (opaque strings — the agnostic `:sdk-ui` building block never learns *what* a caption is) and renders the
+> current page's non-blank caption as a bottom-anchored overlay (scrim `Black@0.45`, `navigationBarsPadding`,
+> centred `bodyMedium` white, `maxLines = 4` ellipsised), hidden while the page is pinch-zoomed so it never
+> fights the image; `ChatScreen` passes `gallery.captions`. **+10 tests** on `.captions` (text→caption;
+> blank→null; whitespace-only→null; trimmed; multi-image shares one caption; positional alignment with
+> `imageUrls` across messages incl. a blank middle message→null; deleted message contributes none; length
+> always == `imageUrls`; empty gallery→no captions) + the existing `ChatViewModelTest` equality updated to the
+> new `pages`/`GalleryPage` shape (not weakened — still asserts full gallery incl. `startIndex`). **Mutation
+> check (RED proof):** forcing `caption = null` failed exactly the 5 caption-*presence* tests (text, trimmed,
+> multi-image, positional, deleted), the 5 null-expecting tests stayed green as they should — reverted green,
+> the suite is behavioural. **Verification:** `:feature:chat:testDebugUnitTest` full suite green (520 tests) +
+> `:sdk-ui:compileDebugKotlin` + `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced, viewer glue
+> compiles, no module regressed). Env note: no Android CI + the wrapper's Gradle 8.11.1 distribution download
+> is org-egress-blocked (github releases 403); built with the container's system Gradle 8.14.3 (`/opt/gradle`)
+> online so Maven artifacts resolve — same tasks, same result. Reviewer **PASS** (diff `apps/android` only —
+> `:feature:chat` [`ConversationMediaGallery` model+builder, `ChatScreen` 1 line], `:sdk-ui` [`MeeshyImageViewer`
+> caption overlay], tests, `feature-parity.md`, routine docs; **SDK purity** — the "caption = message text"
+> rule is a pure `:feature:chat` atom, the viewer stays an agnostic opaque-string renderer; **SSOT** — reuses
+> the already-Prisme-resolved `BubbleContent.text`, nothing re-parsed; **instant-app** — pure fn, no state,
+> gallery build path unchanged; **UX coherence** — discreet bottom caption at iOS parity, scrim for legibility,
+> auto-hidden in zoom; **no coverage floor lowered, no test weakened**). **Next slice:** the gallery's author/
+> date header per page (iOS shows sender avatar + name + `sentAt` above the caption — extend `GalleryPage`
+> with `senderName`/`createdAtIso`), save-to-gallery (`MediaStore`), neighbour prefetch ±2 (Coil
+> `ImageLoader.enqueue`), or the still-pending message-bubble **contact** attachment (scope the DTO first).
+
 > On 2026-07-13 **notification-row relative timestamp** landed (slice `notifications-row-relative-time`,
 > feature-parity §M/§Q — the notification row previously rendered its arrival time as the *raw absolute
 > short date-time* (`shortDateTimeLabel(notification.state.createdAt)`, e.g. "7/13/26, 6:56 AM"), a visible
@@ -2224,14 +2261,16 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-13): `chat-conversation-media-gallery`** — fullscreen media gallery now spans the
-whole conversation (port of iOS `ConversationMediaGalleryView`); pure `:feature:chat`
-`ConversationMediaGallery.of` flattens every non-deleted bubble's images and resolves the tapped start
-index, consumed by the reused `:sdk-ui` `MeeshyImageViewer`. See run log 2026-07-13.
+**Just shipped (2026-07-13): `chat-gallery-page-caption`** — per-page caption overlay in the conversation
+media gallery (port of iOS `ConversationMediaGalleryView.captionMap`); pure `:feature:chat` `GalleryPage`
+carries each page's Prisme-resolved message text as its caption, rendered by the now caption-aware
+(opaque-string) `:sdk-ui` `MeeshyImageViewer` as a bottom overlay. See run log 2026-07-13.
 **Recommended next (highest value):**
-- **Media gallery follow-ups** (same §C line): neighbour prefetch ±2 (Coil `ImageLoader.enqueue`),
-  per-page author/caption metadata overlay, and save-to-gallery (`MediaStore`) — each a thin add on top of
-  the shipped `ConversationGallery` (extend the model with `prefetchAround`/item metadata and consume it).
+- **Media gallery author/date header** (same §C line): iOS shows sender avatar + name + `sentAt` above the
+  caption — extend `GalleryPage` with `senderName`/`createdAtIso` (both already on `BubbleContent`) and a
+  per-page header overlay. Pure model add + exempt overlay; a natural continuation of this slice.
+- **Media gallery follow-ups** (same §C line): neighbour prefetch ±2 (Coil `ImageLoader.enqueue`) and
+  save-to-gallery (`MediaStore`) — each a thin add on top of the shipped `ConversationGallery`.
 - **Message bubble contact attachment** (§C, still pending) — share-a-contact card; the wire has no
   dedicated fields yet, so scope the DTO first.
 - **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).

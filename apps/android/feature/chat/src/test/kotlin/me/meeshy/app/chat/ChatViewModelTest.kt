@@ -1732,7 +1732,11 @@ class ChatViewModelTest {
         // starts on the tapped one (m1 contributes 2 images, so m2's first is #2).
         assertThat(h.vm.state.value.imageViewer).isEqualTo(
             ConversationGallery(
-                imageUrls = listOf("https://cdn/1.jpg", "https://cdn/2.jpg", "https://cdn/3.jpg"),
+                pages = listOf(
+                    GalleryPage("https://cdn/1.jpg"),
+                    GalleryPage("https://cdn/2.jpg"),
+                    GalleryPage("https://cdn/3.jpg"),
+                ),
                 startIndex = 2,
             ),
         )

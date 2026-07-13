@@ -480,6 +480,7 @@ fun ChatScreen(
             imageUrls = gallery.imageUrls,
             initialIndex = gallery.startIndex,
             onDismiss = viewModel::dismissImageViewer,
+            captions = gallery.captions,
         )
     }
 
