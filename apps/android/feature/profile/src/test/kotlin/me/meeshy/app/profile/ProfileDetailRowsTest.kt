@@ -20,6 +20,7 @@ class ProfileDetailRowsTest {
         completionPercent = null,
         hasE2EE = false,
         memberSinceEpochMillis = null,
+        lastSeenEpochMillis = null,
         systemLanguage = systemLanguage,
         regionalLanguage = regionalLanguage,
         country = country,

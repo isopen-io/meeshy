@@ -25,6 +25,7 @@
     <string name="profile_image_error_update">Could not update your profile photo. Please try again.</string>
     <string name="profile_e2ee">End-to-end encrypted</string>
     <string name="profile_member_since">Member since %1$s</string>
+    <string name="profile_last_seen">Last seen %1$s</string>
     <string name="profile_completion">Profile %1$d%% complete</string>
     <string name="profile_presence_online">Online</string>
     <string name="profile_presence_away">Away</string>

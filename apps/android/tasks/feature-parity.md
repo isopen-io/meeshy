@@ -2228,3 +2228,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       -tested), the `AbsoluteDate` rung → locale/zone date (year only when it differs). `time_relative_*`
       strings EN/FR/ES/PT + `@Composable rememberRelativeTimeStrings()` glue; **wired into the feed post
       timestamp** (raw absolute date → discreet relative label, Prisme framing; unparsable → absolute fallback)
+- [x] Relative-time *long* rendering layer (`RelativeTimeLongText.long` + `RelativeTimeLongStrings`;
+      port of the iOS `RelativeTimeFormatter.longString` detail form `maintenant / il y a 5 min / hier /
+      il y a 3j / date`) — pure `:sdk-ui/format`, delegates to `RelativeTimeLongFormat.label` (thresholds +
+      calendar-day `Yesterday` boundary not re-implemented) and maps each rung to an **injected** localized
+      template; the `AbsoluteDate` rung reuses the **shared `formatAbsoluteDate`** SSOT the short formatter
+      also calls (extracted this slice so the two can't drift on the date rendering). `time_relative_long_*`
+      strings EN/FR/ES/PT + `@Composable rememberRelativeTimeLongStrings()` glue; **wired into the profile
+      header "last seen" line** (`ProfileHeaderBuilder.lastSeenEpochMillis` — null for an online user so the
+      live dot speaks, else the parsed `lastActiveAt` for AWAY/OFFLINE; rendered as `profile_last_seen`
+      "Vu / Last seen {relative}")

@@ -158,6 +158,43 @@ class ProfileHeaderBuilderTest {
             .isEqualTo(PresenceState.AWAY)
     }
 
+    // ---- last seen -------------------------------------------------------
+
+    @Test
+    fun `last seen is null for an online user (the live dot speaks, not a stale line)`() {
+        val recent = java.time.Instant.ofEpochMilli(now - 60_000L).toString()
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = true, lastActiveAt = recent), now).lastSeenEpochMillis)
+            .isNull()
+    }
+
+    @Test
+    fun `last seen carries the parsed instant for an away user`() {
+        val stale = java.time.Instant.ofEpochMilli(now - 600_000L).toString()
+        val header = ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = stale), now)
+        assertThat(header.presence).isEqualTo(PresenceState.AWAY)
+        assertThat(header.lastSeenEpochMillis).isEqualTo(now - 600_000L)
+    }
+
+    @Test
+    fun `last seen carries the parsed instant for an offline user`() {
+        val old = java.time.Instant.ofEpochMilli(now - 3 * 86_400_000L).toString()
+        val header = ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = old), now)
+        assertThat(header.presence).isEqualTo(PresenceState.OFFLINE)
+        assertThat(header.lastSeenEpochMillis).isEqualTo(now - 3 * 86_400_000L)
+    }
+
+    @Test
+    fun `last seen is null when lastActiveAt is absent`() {
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = null), now).lastSeenEpochMillis)
+            .isNull()
+    }
+
+    @Test
+    fun `last seen is null when lastActiveAt is unparseable`() {
+        assertThat(ProfileHeaderBuilder.build(user(isOnline = false, lastActiveAt = "not-a-date"), now).lastSeenEpochMillis)
+            .isNull()
+    }
+
     // ---- completion ring -------------------------------------------------
 
     @Test

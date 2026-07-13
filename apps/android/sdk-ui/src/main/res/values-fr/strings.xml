@@ -43,4 +43,12 @@
     <string name="time_relative_days">%1$d j</string>
     <string name="time_relative_weeks">%1$d sem</string>
     <string name="time_relative_months">%1$d mois</string>
+    <string name="time_relative_long_now">à l\'instant</string>
+    <string name="time_relative_long_yesterday">hier</string>
+    <string name="time_relative_long_seconds">il y a %1$d s</string>
+    <string name="time_relative_long_minutes">il y a %1$d min</string>
+    <string name="time_relative_long_hours">il y a %1$d h</string>
+    <string name="time_relative_long_days">il y a %1$d j</string>
+    <string name="time_relative_long_weeks">il y a %1$d sem</string>
+    <string name="time_relative_long_months">il y a %1$d mois</string>
 </resources>
