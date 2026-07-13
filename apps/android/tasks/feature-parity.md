@@ -2114,6 +2114,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Push message prefetch + pre-persist into Room for instant cold-launch
 - [ ] `NotificationCoordinator` authority model (socket authoritative; cache only seeds)
 - [ ] Comprehensive notification system (~80 types)
+- [x] Per-type semantic row accent (`notifications-type-accent-color`, 2026-07-13): pure
+      `:core:model` `notificationTypeAccentHex(type)` SSOT — faithful port of iOS
+      `MeeshyNotificationType.accentHex`, mapping all ~80 backend `type` strings (lowercase +
+      legacy uppercase alias) onto the 10 category colours (blue messages · coral reactions ·
+      purple mentions · teal friend-graph/conversation · gold community/achievements · pink
+      calls · green affiliate · red security · cyan translation · indigo system+friend-new,
+      also the unknown-type fallback). Row wiring in `NotificationsScreen` (unread background
+      tint + unread dot + avatar container) swapped from hardcoded `Indigo500` to the per-type
+      accent via `hexColor(...)`, so notifications colour-code by category exactly like the iOS
+      `NotificationRowView`. +14 tests (each colour family, legacy-alias↔lowercase equality,
+      unknown/empty→indigo fallback, cross-category distinctness).
 
 ## N. Search
 - [ ] Global search (messages, conversations, users) with recent searches + query highlighting

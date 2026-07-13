@@ -39,11 +39,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.notificationTypeAccentHex
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.format.shortDateTimeLabel
 import me.meeshy.ui.component.chrome.MeeshyTopBar
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
@@ -118,9 +120,10 @@ private fun NotificationItem(
     onTap: () -> Unit,
 ) {
     val isUnread = !notification.state.isRead
+    val accent = hexColor(notificationTypeAccentHex(notification.type))
     Surface(
         onClick = onTap,
-        color = if (isUnread) MeeshyPalette.Indigo500.copy(alpha = 0.12f) else Color.Transparent,
+        color = if (isUnread) accent.copy(alpha = 0.12f) else Color.Transparent,
     ) {
         Row(
             modifier = Modifier
@@ -131,6 +134,7 @@ private fun NotificationItem(
             MeeshyAvatar(
                 name = notification.actor?.displayName ?: notification.actor?.username ?: "?",
                 modifier = Modifier.size(44.dp),
+                containerColor = accent,
             )
             Spacer(Modifier.width(MeeshySpacing.md))
             Column(modifier = Modifier.weight(1f)) {
@@ -148,7 +152,7 @@ private fun NotificationItem(
                             Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(MeeshyPalette.Indigo500),
+                                .background(accent),
                         )
                     }
                 }
