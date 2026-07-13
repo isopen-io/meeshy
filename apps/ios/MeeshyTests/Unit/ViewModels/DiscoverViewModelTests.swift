@@ -23,9 +23,10 @@ final class DiscoverViewModelTests: XCTestCase {
 
     private func makeSUT(
         friendService: MockFriendService = MockFriendService(),
-        userService: MockUserService = MockUserService()
+        userService: MockUserService = MockUserService(),
+        contactSync: MockContactSyncService = MockContactSyncService()
     ) -> (sut: DiscoverViewModel, friendService: MockFriendService, userService: MockUserService) {
-        let sut = DiscoverViewModel(friendService: friendService, userService: userService)
+        let sut = DiscoverViewModel(friendService: friendService, userService: userService, contactSync: contactSync)
         return (sut, friendService, userService)
     }
 
@@ -141,6 +142,53 @@ final class DiscoverViewModelTests: XCTestCase {
         await sut.sendEmailInvitation()
 
         XCTAssertEqual(friendService.sendEmailInvitationCallCount, 0)
+    }
+
+    // MARK: - importContacts
+
+    private static let stubContactMatches: [ContactMatch] = {
+        let json = """
+        [
+            {"user":{"id":"u9","username":"awa","firstName":"Awa","lastName":"Diallo","displayName":"Awa D.","avatar":null,"isOnline":true,"lastActiveAt":null},"matchedBy":"phone","contactDisplayName":"Awa du bureau"}
+        ]
+        """
+        return JSONStub.decode(json)
+    }()
+
+    func test_importContacts_success_populatesMatches() async {
+        let contactSync = MockContactSyncService()
+        contactSync.findFriendsResult = .success(Self.stubContactMatches)
+        let (sut, _, _) = makeSUT(contactSync: contactSync)
+
+        await sut.importContacts()
+
+        XCTAssertEqual(sut.contactMatches.map(\.id), ["u9"])
+        XCTAssertTrue(sut.hasImportedContacts)
+        XCTAssertFalse(sut.isImportingContacts)
+        XCTAssertEqual(contactSync.findFriendsCallCount, 1)
+    }
+
+    func test_importContacts_accessDenied_leavesMatchesEmpty() async {
+        let contactSync = MockContactSyncService()
+        contactSync.findFriendsResult = .failure(ContactSyncError.accessDenied)
+        let (sut, _, _) = makeSUT(contactSync: contactSync)
+
+        await sut.importContacts()
+
+        XCTAssertTrue(sut.contactMatches.isEmpty)
+        XCTAssertFalse(sut.hasImportedContacts)
+        XCTAssertFalse(sut.isImportingContacts)
+    }
+
+    func test_importContacts_networkError_leavesMatchesEmpty() async {
+        let contactSync = MockContactSyncService()
+        contactSync.findFriendsResult = .failure(NSError(domain: "test", code: 500))
+        let (sut, _, _) = makeSUT(contactSync: contactSync)
+
+        await sut.importContacts()
+
+        XCTAssertTrue(sut.contactMatches.isEmpty)
+        XCTAssertFalse(sut.hasImportedContacts)
     }
 
     // MARK: - smsMessage

@@ -22,6 +22,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
 import { SmsService } from './SmsService';
 import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
+import { compareFullNames, type NameSimilarity } from '../utils/name-similarity';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 // Logger dédié pour PhoneTransferService
@@ -30,6 +31,7 @@ const logger = enhancedLogger.child({ module: 'PhoneTransferService' });
 
 const CODE_EXPIRY_MINUTES = 10;
 const MAX_CODE_ATTEMPTS = 5;
+const DORMANT_ACCOUNT_THRESHOLD_DAYS = 180;
 
 // ============================================================================
 // Types & Interfaces
@@ -108,14 +110,24 @@ export class PhoneTransferService {
   ) {}
 
   /**
-   * Check if phone belongs to another user and return masked info
+   * Check if phone belongs to another user and return masked info.
+   *
+   * Quand une identité (prénom/nom) est fournie, compare avec le titulaire
+   * actuel : un compte dormant (> 180 jours d'inactivité) dont l'identité
+   * matche ou ressemble déclenche `recoverySuggested` — le client oriente
+   * alors vers la récupération de compte plutôt que le transfert de numéro.
    */
   async checkPhoneOwnership(
-    phoneNumber: string
+    phoneNumber: string,
+    identity?: { firstName?: string; lastName?: string }
   ): Promise<{
     exists: boolean;
     ownerId?: string;
     maskedInfo?: { displayName: string; username: string; email: string };
+    dormant?: boolean;
+    dormantSince?: string | null;
+    nameSimilarity?: NameSimilarity | null;
+    recoverySuggested?: boolean;
   }> {
     const owner = await this.prisma.user.findFirst({
       where: {
@@ -127,6 +139,9 @@ export class PhoneTransferService {
         displayName: true,
         username: true,
         email: true,
+        firstName: true,
+        lastName: true,
+        lastActiveAt: true,
         phoneVerifiedAt: true,
       },
     });
@@ -140,6 +155,19 @@ export class PhoneTransferService {
       return { exists: false };
     }
 
+    const dormantThreshold = Date.now() - DORMANT_ACCOUNT_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
+    const dormant = owner.lastActiveAt
+      ? owner.lastActiveAt.getTime() < dormantThreshold
+      : false;
+
+    const nameSimilarity: NameSimilarity | null =
+      identity && (identity.firstName || identity.lastName)
+        ? compareFullNames(
+            { firstName: identity.firstName ?? '', lastName: identity.lastName ?? '' },
+            { firstName: owner.firstName ?? '', lastName: owner.lastName ?? '' }
+          )
+        : null;
+
     return {
       exists: true,
       ownerId: owner.id,
@@ -148,6 +176,11 @@ export class PhoneTransferService {
         username: maskUsername(owner.username),
         email: maskEmail(owner.email),
       },
+      dormant,
+      dormantSince: dormant && owner.lastActiveAt ? owner.lastActiveAt.toISOString() : null,
+      nameSimilarity,
+      recoverySuggested:
+        dormant && (nameSimilarity === 'exact' || nameSimilarity === 'similar'),
     };
   }
 

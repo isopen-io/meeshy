@@ -156,6 +156,111 @@ describe('checkPhoneOwnership', () => {
     expect(result.maskedInfo!.username).not.toBe('janedoe'); // masked
     expect(result.maskedInfo!.email).not.toBe('jane@example.com'); // masked
   });
+
+  it('flags a recently active owner as not dormant', async () => {
+    const svc = new PhoneTransferService(
+      makePrisma(jest.fn().mockResolvedValue(makeOwner({ lastActiveAt: new Date() }))),
+      makeCache(),
+      makeSms()
+    );
+    const result = await svc.checkPhoneOwnership('+15550001234');
+
+    expect(result.dormant).toBe(false);
+    expect(result.dormantSince).toBeNull();
+    expect(result.recoverySuggested).toBe(false);
+  });
+
+  it('flags an owner inactive for over 180 days as dormant', async () => {
+    const oldDate = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000);
+    const svc = new PhoneTransferService(
+      makePrisma(jest.fn().mockResolvedValue(makeOwner({ lastActiveAt: oldDate }))),
+      makeCache(),
+      makeSms()
+    );
+    const result = await svc.checkPhoneOwnership('+15550001234');
+
+    expect(result.dormant).toBe(true);
+    expect(result.dormantSince).toBe(oldDate.toISOString());
+  });
+
+  it('suggests recovery when the account is dormant and names match exactly', async () => {
+    const oldDate = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
+    const svc = new PhoneTransferService(
+      makePrisma(jest.fn().mockResolvedValue(makeOwner({
+        firstName: 'Jane', lastName: 'Doe', lastActiveAt: oldDate,
+      }))),
+      makeCache(),
+      makeSms()
+    );
+    const result = await svc.checkPhoneOwnership('+15550001234', {
+      firstName: 'jane', lastName: 'DOE',
+    });
+
+    expect(result.dormant).toBe(true);
+    expect(result.nameSimilarity).toBe('exact');
+    expect(result.recoverySuggested).toBe(true);
+  });
+
+  it('suggests recovery when the account is dormant and names are similar', async () => {
+    const oldDate = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
+    const svc = new PhoneTransferService(
+      makePrisma(jest.fn().mockResolvedValue(makeOwner({
+        firstName: 'Jane', lastName: 'Doe', lastActiveAt: oldDate,
+      }))),
+      makeCache(),
+      makeSms()
+    );
+    const result = await svc.checkPhoneOwnership('+15550001234', {
+      firstName: 'Jayne', lastName: 'Doe',
+    });
+
+    expect(result.nameSimilarity).toBe('similar');
+    expect(result.recoverySuggested).toBe(true);
+  });
+
+  it('does not suggest recovery for a dormant account when names differ', async () => {
+    const oldDate = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
+    const svc = new PhoneTransferService(
+      makePrisma(jest.fn().mockResolvedValue(makeOwner({
+        firstName: 'Jane', lastName: 'Doe', lastActiveAt: oldDate,
+      }))),
+      makeCache(),
+      makeSms()
+    );
+    const result = await svc.checkPhoneOwnership('+15550001234', {
+      firstName: 'Boris', lastName: 'Tchoua',
+    });
+
+    expect(result.nameSimilarity).toBe('different');
+    expect(result.recoverySuggested).toBe(false);
+  });
+
+  it('does not suggest recovery for matching names on an active account', async () => {
+    const svc = new PhoneTransferService(
+      makePrisma(jest.fn().mockResolvedValue(makeOwner({
+        firstName: 'Jane', lastName: 'Doe', lastActiveAt: new Date(),
+      }))),
+      makeCache(),
+      makeSms()
+    );
+    const result = await svc.checkPhoneOwnership('+15550001234', {
+      firstName: 'Jane', lastName: 'Doe',
+    });
+
+    expect(result.nameSimilarity).toBe('exact');
+    expect(result.recoverySuggested).toBe(false);
+  });
+
+  it('returns nameSimilarity:null when no identity is provided', async () => {
+    const svc = new PhoneTransferService(
+      makePrisma(jest.fn().mockResolvedValue(makeOwner({ lastActiveAt: new Date() }))),
+      makeCache(),
+      makeSms()
+    );
+    const result = await svc.checkPhoneOwnership('+15550001234');
+
+    expect(result.nameSimilarity).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

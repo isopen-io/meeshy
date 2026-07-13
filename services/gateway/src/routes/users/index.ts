@@ -49,6 +49,9 @@ import {
   getBlockedUsers
 } from './blocking';
 
+// Contacts matching route (address book → platform users)
+import { matchContacts } from './contacts-match';
+
 // Presence routes (runtime online status)
 import { getUsersPresence } from './presence';
 
@@ -95,6 +98,9 @@ export async function userRoutes(fastify: FastifyInstance) {
   await blockUser(fastify);
   await unblockUser(fastify);
   await getBlockedUsers(fastify);
+
+  // Contacts matching (address book → platform users)
+  await matchContacts(fastify);
 
   // Presence routes
   await getUsersPresence(fastify);

@@ -1,84 +1,66 @@
-# Story System Redesign — création + visionnage (directive user 2026-07-10)
+# Onboarding singulier + Contact info + Contact sync (branche claude/onboarding-contact-sync-xg9b70)
 
-Branche : `claude/story-system-redesign-r972q7`
+## Contexte
+Loop autonome (directive user 2026-07-13). Objectif : refondre la première exécution de l'app
+(inscription singulière/moderne), compléter le profil avec incitations qualitatives, collecter
+email/numéro (unicité + récupération de compte), et synchroniser les contacts téléphone ↔
+plateforme (iOS, permissions hors main thread).
 
-## Demande (analyse des 3 captures + texte)
+## Phase 0 — Cartographie (FAIT)
+- [x] Flow onboarding iOS actuel (welcome → signup → profil) — wizard 8 étapes, assets profil jetés (fixé)
+- [x] Endpoints existants de vérification numéro/email — check-availability, phone-transfer/check réutilisés
+- [x] Pattern permissions iOS hors main thread — helper nonisolated + closure @Sendable
+- [x] Onboarding web + suggestions — wizard web 5 étapes existe, pas de contact sync backend (créé)
 
-1. **Composer moderne type Instagram, MAIS outils en barre HORIZONTALE en bas**
-   (référence IMG_0944 : rail vertical IG → transposé horizontal bas). Les éléments
-   apparaissent/disparaissent selon le besoin ; le canvas se réduit (carding) et
-   reprend le plein écran selon le besoin (déjà en place via StoryCanvasFraming —
-   à préserver). **Le header ne doit plus être une barre mais des icônes flottantes**
-   en survol du canvas (X à gauche, actions à droite, aucune barre matérielle).
-2. **Reader : rapprocher les FABs d'actions** (IMG_0984 : Envoyer/Vues/Exporter/Son
-   trop espacés). **Le set de boutons + TOUS les compteurs doivent être calculés
-   AVANT affichage** — aucune apparition en second temps (pop-in du bouton
-   commentaires après réconciliation 400 ms = interdit).
-3. **Switch de groupe (IMG_0976)** : l'interstitiel d'identité (« Windie Nh —
-   Hors ligne ») ne doit PAS s'afficher en overlay translucide PAR-DESSUS le slide
-   déjà rendu (chrome + FABs visibles derrière). Il doit être un écran opaque
-   présenté AU MOMENT du changement de groupe, présence déjà résolue, le slide
-   n'apparaissant qu'à la fin de l'interstitiel.
-4. SOTA : « l'utilisateur n'a que ce qu'il faut au bon moment devant ses yeux et
-   à portée de doigts ».
+## Phase 1 — Onboarding première exécution (copy + UX) — FAIT (commit f5c9258fb)
+- [x] Carrousel page 1 : 5 continents, pays cités (France, Sénégal, Brésil, Japon, Australie, Canada) × 5 langues
+- [x] Wizard : funHeader/funSubtitle réécrits (plus beau jour / crème de la crème sur profil)
+- [x] Étapes téléphone/email : incitation unicité + engagements + récupération
+- [x] BONUS fix : photo/bannière/bio du wizard désormais réellement uploadées (ProfileCompletionUploader)
 
-## Constats de cartographie (3 agents, 2026-07-10)
+## Phase 2 — Vérification numéro / récupération de compte (gateway) — FAIT (commit b25745f63)
+- [x] /auth/phone-transfer/check étendu (réutilisé, pas recréé) : dormant + nameSimilarity + recoverySuggested
+- [x] Similarité nom/prénom : Sørensen-Dice, tolère accents/casse/ordre inversé/typos
+- [x] Tests écrits (name-similarity, service, route) — EXÉCUTION EN ATTENTE (bun install en cours)
 
-- Le feed `GET /posts/feed/stories` inclut DÉJÀ tous les compteurs
-  (likeCount/reactionCount/reactionSummary/viewCount/commentCount/isViewedByMe/
-  currentUserReactions) → le calcul avant affichage est faisable sans réseau.
-- La présence auteur (isOnline/lastActiveAt) est ABSENTE du payload stories
-  (`authorSelect` = id/username/displayName/avatar) ; l'intro lit
-  `PresenceManager.presenceMap` (souvent vide pour un non-contact → « Hors ligne »
-  à tort, ou résolu en retard).
-- L'intro est déclenchée par `.adaptiveOnChange(of: currentGroupIndex)` — donc
-  APRÈS le swap du cube, slide déjà présenté derrière (scrim translucide,
-  chrome visible au travers — exactement IMG_0976).
-- Rail d'actions : `ViewThatFits` spacing 20/14 + `StoryActionButton` padding
-  vertical 8 sur des colonnes 56 pt → espacement effectif ~36 pt (IMG_0984).
-- Bouton commentaires gaté `storyCommentCount > 0` avec réconciliation async
-  400 ms → pop-in en cours de lecture.
-- Composer : rail FAB VERTICAL bottom-leading (6×56 pt), header = barre 60 pt
-  `.ultraThinMaterial` avec X + slide strip + undo/redo/visibilité/preview/
-  publier/⋯.
+## Phase 3 — Synchronisation de contacts (iOS + gateway) — FAIT (commits b25745f63, b2a870d82)
+- [x] POST /users/me/contacts/match (E.164, jamais persisté serveur, cap 2000)
+- [x] iOS ContactSyncService : permission hors main actor (pattern MicrophonePermission), fetch sur queue utilitaire
+- [x] SDK : ContactMatchModels + ContactMatchService
+- [x] UI DiscoverTab : bouton câblé (ex-stub) + section « Déjà sur Meeshy »
+- [x] NSContactsUsageDescription : déjà présent dans Info.plist
+- [x] Tests : MockContactSyncService + 3 tests DiscoverViewModel
 
-## Plan (ordre d'exécution)
+## Phase 4 — Vérification & livraison (FAIT)
+- [x] Tests gateway verts : suites ciblées 133/133, répertoire routes/users 232/232
+- [x] tsc --noEmit gateway : exit 0
+- [x] Revue statique iOS (pas de simulateur sur cet env Linux) : signatures des
+      composants réutilisés vérifiées, cast NSString corrigé, sérialisation
+      date-time corrigée côté gateway
+- [x] Commits propres + push (7 commits)
 
-### G — Gateway (TDD bun, testable ici)
-- [x] G1 : présence auteur dans le feed stories — `storyAuthorSelect`
-      (authorSelect + isOnline + lastActiveAt) appliqué au chemin stories
-      (full + tray). Tests RED→GREEN sur la shape de réponse. (`27d3fac`)
-- [x] G2 : types partagés `PostAuthor.isOnline?/lastActiveAt?`. (`27d3fac`)
+## Review
 
-### S — SDK Swift (models)
-- [x] S1 : `APIAuthor.isOnline/lastActiveAt` (decode optionnel rétro-compat) ;
-      `StoryGroup.authorPresence` propagé par toStoryGroups. (`0fb6bfb`)
+### Livré
+1. **Onboarding singulier (iOS)** : carrousel + wizard réécrits — mise en relation
+   mondiale, pays des 5 continents cités, incitation « plus beau jour / crème de
+   la crème » sur le profil, incitation contact (unicité, engagements, récupération).
+2. **Fix fonctionnel** : photo/bannière/bio du wizard étaient jetées à l'inscription
+   → désormais uploadées après création via ProfileCompletionUploader (best-effort).
+3. **Récupération de compte dormant (gateway, réutilise /auth/phone-transfer/check)** :
+   accepte firstName/lastName, renvoie dormant/dormantSince/nameSimilarity/
+   recoverySuggested. Similarité Sørensen-Dice (accents/casse/ordre/typos).
+   iOS : indice de récupération sur numéro pris (SDK checkPhoneOwnership).
+4. **Synchronisation de contacts** : POST /users/me/contacts/match (E.164, jamais
+   persisté serveur, cap 2000) + iOS ContactSyncService (permission Contacts HORS
+   main actor, pattern anti-EXC_BREAKPOINT identique à MicrophonePermission) +
+   section « Déjà sur Meeshy » dans DiscoverTab (ex-stub « bientôt disponible »).
 
-### V — Viewer iOS
-- [x] V1 : rail resserré (spacing 8/6, padding 3, gap 2) + ancrage bas.
-- [x] V2 : `StoryActionRailPlan` figé à l'entrée du slide (5 tests).
-- [x] V3 : interstitiel OPAQUE présenté dans la même transaction que le
-      swap, présence = presenceMap ?? authorPresence, pré-résolution des
-      groupes voisins (groupIntroCache). (`abd0346`)
-
-### K — Composer iOS
-- [x] K1 : barre horizontale bas centrée (48 pt). (`83e7bfe`)
-- [x] K2 : header barre supprimé → icônes flottantes + strip pill
-      conditionnelle. (`83e7bfe`)
-- [x] K3 : poignée de restauration re-centrée. (`83e7bfe`)
-
-### Clôture
-- [x] Mise à jour `tasks/story-sota-state.md` (mission D + it.94)
-- [x] Commits + push sur la branche dédiée.
-- [ ] PR + CI iOS verte (demande user mid-session) ; pulls réguliers de main.
-- [ ] D5 : passe simulateur/device (viewer + composer + switch de groupe).
-
-## Contraintes
-- Invariants story-sota-state §5 : jamais retirer d'effet visuel, SDK purity,
-  timer anti-deadlock, RAW publish.
-- Pas de toolchain Swift ici : gateway testé sous bun ; Swift relu ligne à
-  ligne (types/API existants uniquement, pas de nouvelle API spéculative).
-- Presence palette : offline = pas de dot avatar ; badge story-intro = affichage
-  LABELLISÉ (gris autorisé) — conforme CLAUDE.md.
-
-## Review (à compléter en fin de mission)
+### Points d'attention / suites possibles
+- iOS non compilé (pas de toolchain Swift sur cet env Linux) — revue statique
+  rigoureuse effectuée ; un `./apps/ios/meeshy.sh build` reste recommandé avant merge.
+- Nouvelles clés i18n iOS avec defaultValue français : les traductions
+  de/en/es/pt-BR des nouvelles clés (`onboarding.step.phone.recovery.*`,
+  `contacts.discover.matches.*`, etc.) restent à ajouter au catalogue.
+- Le web pourrait aussi passer firstName/lastName à phone-transfer/check pour
+  bénéficier du hint de récupération (capacité gateway déjà en place).

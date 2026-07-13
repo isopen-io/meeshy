@@ -139,6 +139,39 @@ describe('POST /phone-transfer/check — phone owned by another user', () => {
   });
 });
 
+describe('POST /phone-transfer/check — dormant account with matching identity', () => {
+  it('passes firstName/lastName to the service and exposes only recoverySuggested', async () => {
+    const checkPhoneOwnership = jest.fn<any>().mockResolvedValue({
+      exists: true,
+      maskedInfo: { displayName: 'J*** D***', username: 'j***e', email: 'j***@test.com' },
+      dormant: true,
+      dormantSince: '2025-01-01T00:00:00.000Z',
+      nameSimilarity: 'exact',
+      recoverySuggested: true,
+    });
+    const svc = makePhoneTransferService({ checkPhoneOwnership });
+    const app = await buildApp({ phoneTransferService: svc });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/phone-transfer/check',
+      payload: { phoneNumber: '+33612345678', firstName: 'Jane', lastName: 'Doe' },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data.recoverySuggested).toBe(true);
+    // Confidentialité : l'endpoint public ne divulgue NI la dormance, NI
+    // l'horodatage de dernière activité, NI la similarité de nom.
+    expect(body.data.dormant).toBeUndefined();
+    expect(body.data.dormantSince).toBeUndefined();
+    expect(body.data.nameSimilarity).toBeUndefined();
+    expect(checkPhoneOwnership).toHaveBeenCalledWith('+33612345678', {
+      firstName: 'Jane',
+      lastName: 'Doe',
+    });
+    await app.close();
+  });
+});
+
 describe('POST /phone-transfer/check — invalid phone number', () => {
   it('returns 400 when phone normalization fails', async () => {
     mockNormalizePhone.mockReturnValueOnce({ isValid: false });

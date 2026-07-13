@@ -11,6 +11,7 @@ struct OnboardingFlowView: View {
     var onComplete: (() -> Void)?
 
     @State private var keyboardHeight: CGFloat = 0
+    @State private var didUploadProfileAssets = false
 
     var body: some View {
         ZStack {
@@ -87,11 +88,37 @@ struct OnboardingFlowView: View {
         }
         .adaptiveOnChange(of: authManager.isAuthenticated) { _, authenticated in
             if authenticated {
+                uploadProfileCompletionAssets()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     onComplete?()
                     dismiss()
                 }
             }
+        }
+    }
+
+    // MARK: - Profile Completion Assets
+
+    /// Le wizard collecte photo/bannière/bio AVANT la création du compte, mais
+    /// `POST /auth/register` ne les transporte pas — l'envoi ne peut se faire
+    /// qu'une fois authentifié. Le JPEG est encodé ici (hors réseau) puis
+    /// l'upload continue en tâche détachée : il survit au dismiss de la vue.
+    private func uploadProfileCompletionAssets() {
+        guard !didUploadProfileAssets else { return }
+        didUploadProfileAssets = true
+
+        let profileImageData = viewModel.profileImage?.jpegData(compressionQuality: 0.9)
+        let bannerImageData = viewModel.bannerImage?.jpegData(compressionQuality: 0.9)
+        let bio = viewModel.bio
+        guard profileImageData != nil || bannerImageData != nil
+                || !bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+        Task.detached(priority: .utility) {
+            _ = await ProfileCompletionUploader.shared.uploadPostRegistrationAssets(
+                profileImageData: profileImageData,
+                bannerImageData: bannerImageData,
+                bio: bio
+            )
         }
     }
 

@@ -327,6 +327,10 @@ struct StepPhoneView: View {
                     .padding(.leading, 16)
                 }
 
+                if viewModel.phoneBelongsToExistingAccount {
+                    recoveryHintCard
+                }
+
                 Button(action: { viewModel.skipCurrentStep() }) {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.right.circle").font(.subheadline)
@@ -358,11 +362,12 @@ struct StepPhoneView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "info.circle").foregroundColor(viewModel.currentStep.accentColor)
-                Text(String(localized: "onboarding.step.phone.why", defaultValue: "Pourquoi le telephone?", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.phone.why", defaultValue: "Pourquoi ton numéro?", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
-                tipRow(icon: "key.horizontal", text: String(localized: "onboarding.step.phone.tip.recovery", defaultValue: "Recuperation de compte securisee", bundle: .main))
-                tipRow(icon: "bell.badge", text: String(localized: "onboarding.step.phone.tip.alerts", defaultValue: "Alertes de securite importantes", bundle: .main))
+                tipRow(icon: "key.horizontal", text: String(localized: "onboarding.step.phone.tip.recovery", defaultValue: "Récupération de compte sécurisée", bundle: .main))
+                tipRow(icon: "person.badge.shield.checkmark", text: String(localized: "onboarding.step.phone.tip.unique", defaultValue: "Un seul compte par numéro — tes engagements sont protégés", bundle: .main))
+                tipRow(icon: "person.2.wave.2", text: String(localized: "onboarding.step.phone.tip.friends", defaultValue: "Tes proches qui ont ton numéro te retrouvent", bundle: .main))
                 tipRow(icon: "hand.raised", text: String(localized: "onboarding.step.phone.tip.optional", defaultValue: "Optionnel, tu peux passer", bundle: .main))
             }
         }
@@ -375,6 +380,34 @@ struct StepPhoneView: View {
             Image(systemName: icon).font(.caption).foregroundColor(.secondary).frame(width: 16)
             Text(text).font(.caption).foregroundColor(.secondary)
         }
+    }
+
+    @ViewBuilder
+    private var recoveryHintCard: some View {
+        let recover = viewModel.phoneRecoverySuggested
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: recover ? "person.badge.key.fill" : "info.circle")
+                    .foregroundColor(recover ? MeeshyColors.warning : viewModel.currentStep.accentColor)
+                Text(recover
+                     ? String(localized: "onboarding.step.phone.recovery.title", defaultValue: "On dirait ton ancien compte", bundle: .main)
+                     : String(localized: "onboarding.step.phone.existing.title", defaultValue: "Ce numéro est déjà lié à un compte", bundle: .main))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+            Text(recover
+                 ? String(localized: "onboarding.step.phone.recovery.body", defaultValue: "Ce numéro appartient à un compte inactif dont le nom te ressemble. Depuis l'écran de connexion, choisis « Mot de passe oublié » pour le récupérer plutôt que d'en créer un nouveau.", bundle: .main)
+                 : String(localized: "onboarding.step.phone.existing.body", defaultValue: "Si c'est le tien, récupère-le depuis « Mot de passe oublié » sur l'écran de connexion. Sinon, saisis un autre numéro ou passe cette étape.", bundle: .main))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill((recover ? MeeshyColors.warning : viewModel.currentStep.accentColor).opacity(0.1))
+        )
     }
 
     private var countryPickerSheet: some View {
@@ -977,8 +1010,6 @@ struct StepProfileView: View {
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var photoTarget: PhotoTarget = .profile
-    @State private var profileImage: UIImage?
-    @State private var bannerImage: UIImage?
 
     enum PhotoTarget { case profile, banner }
 
@@ -987,7 +1018,7 @@ struct StepProfileView: View {
             VStack(spacing: 24) {
                 HStack {
                     Image(systemName: "sparkles").foregroundColor(MeeshyColors.warning)
-                    Text(String(localized: "onboarding.step.profile.optional", defaultValue: "Cette etape est optionnelle", bundle: .main)).font(.footnote.weight(.medium)).foregroundColor(.secondary)
+                    Text(String(localized: "onboarding.step.profile.optional", defaultValue: "Optionnelle — mais un profil soigné multiplie tes mises en relation", bundle: .main)).font(.footnote.weight(.medium)).foregroundColor(.secondary)
                 }
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 10).fill(MeeshyColors.warning.opacity(0.1)))
@@ -1024,9 +1055,9 @@ struct StepProfileView: View {
                 if let data = try? await item?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     if photoTarget == .profile {
-                        profileImage = image
+                        viewModel.profileImage = image
                     } else {
-                        bannerImage = image
+                        viewModel.bannerImage = image
                     }
                 }
             }
@@ -1036,7 +1067,7 @@ struct StepProfileView: View {
     private var profilePreviewCard: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .bottomTrailing) {
-                if let banner = bannerImage {
+                if let banner = viewModel.bannerImage {
                     Image(uiImage: banner)
                         .resizable().scaledToFill()
                         .frame(height: 100).clipped()
@@ -1061,7 +1092,7 @@ struct StepProfileView: View {
 
             HStack {
                 ZStack(alignment: .bottomTrailing) {
-                    if let photo = profileImage {
+                    if let photo = viewModel.profileImage {
                         Image(uiImage: photo)
                             .resizable().scaledToFill()
                             .frame(width: 80, height: 80).clipShape(Circle())
