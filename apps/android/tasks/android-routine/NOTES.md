@@ -4,6 +4,9 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-13, `time-relative-long-label`) — split a formatter into a pure framing SSOT + a UI wording layer, and reuse the sibling's thresholds
+iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND localized wording in one enum. Porting it whole would drag `String(localized:)`-style strings into `:core:model`. Instead the pure half is a **framing descriptor**: `RelativeTimeLongLabel` carries the rung + numeric value + intent (`Yesterday`, `AgoHours(n)`, …) but no text, so the Compose/string layer owns the five app languages — same grain as the already-shipped `RelativeTimeUnit`. Two reuse wins that keep it SSOT: (1) the sub-hour rungs reference `RelativeTime.NOW_THRESHOLD_SECONDS`/`MINUTE_SECONDS`/`HOUR_SECONDS`/`WEEK_DAYS`/`MONTH_DAYS`/`ABSOLUTE_DAYS` rather than re-declaring constants; (2) the *interesting* new behaviour — calendar-day boundaries via an injected `ZoneId` (2h across midnight → `Yesterday`; same instant reads differently per zone) — is exactly what makes the tests behavioural rather than a copy of `classify`. `:core:model` already depends on `java.time` (DndWindow/IsoTime/CallRecord) and minSdk 26 means it's native (no desugaring), so `Instant`/`ZoneId`/`ChronoUnit.DAYS.between` are free to use for pure, zone-injectable, deterministic tests.
+
 ## Lesson (2026-07-12, `media-thumbhash-decode`) — ⚙ ENVIRONMENT: the wrapper Gradle can't download; use system Gradle
 - **`./gradlew` (and `./apps/android/meeshy.sh`) fail in a fresh container:** the wrapper wants
   `gradle-8.11.1-bin.zip` from `services.gradle.org`, which **302-redirects to `github.com/gradle/gradle-distributions/releases/…`** — a host the egress policy **403s**. The cached wrapper dir

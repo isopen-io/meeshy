@@ -1,5 +1,33 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **relative-time long framing SSOT** landed (slice `time-relative-long-label`, feature-parity §Q —
+> the detail-surface framing, port of iOS `RelativeTimeFormatter.longString`). Companion to the just-landed
+> `RelativeTime.classify` flat ladder: where `classify` is a bare `now/5m/2h/3d/…` ladder for dense lists, the
+> *long* framing is the `maintenant / il y a 45s / il y a 5 min / hier / il y a 3j / il y a 2sem / il y a 2mois /
+> date` form used on contacts, participants, friend-requests and message detail. New `:core:model/time`
+> `RelativeTimeLongLabel` — a sealed framing rung (`Now` / `AgoSeconds` / `AgoMinutes` / `AgoHours` / `Yesterday`
+> / `AgoDays` / `AgoWeeks` / `AgoMonths` / `AbsoluteDate(epochMillis)`) carrying the numeric value + the *framing
+> intent* but **no localized text** (the `time.long.*` wording stays UI-side, exactly as iOS keeps `il y a %@` /
+> `hier` in the formatter catalog); `RelativeTimeLongFormat.label(epochMillis, referenceMillis, zoneId)`. The
+> sub-hour rungs **reuse `RelativeTime`'s second thresholds** (SSOT — no duplicated constants), then from an hour
+> up the ladder switches to **calendar-day** boundaries rather than 24-hour windows — the key divergence from
+> `classify`: an event at 23:00 seen at 01:00 the next day is `Yesterday`, not `il y a 2h`. Because the boundary
+> is the *user's* midnight, the label needs a `ZoneId`: the very same instant reads `hier` in UTC and `il y a 2h`
+> three hours west (pinned by a two-assertion zone test). Future / clock-skew (negative interval) → `Now`, like
+> `classify`. **+21 tests** (every rung; both sides of every boundary — 29/30s, 59/60s, 59min, 1h-same-day,
+> 23h-same-day-not-yesterday, 2h-across-midnight-IS-yesterday, prev-day, 2/6d, exactly-7d→1week, 29d→4weeks,
+> 30d→1month, 89d→2months, 90d→AbsoluteDate carrying the instant; the cross-zone divergence). **Two-mutation RED
+> check:** `dayDelta <= 0`→`< 0` (steals the same-day hours rung) + `dayDelta == 1`→`== 2` (steals `Yesterday`)
+> failed exactly the 6 calendar-day tests (hours/yesterday/days/zone), reverted green. `:core:model:testDebugUnitTest`
+> 21/21 new; `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced). Reviewer **PASS** (diff `apps/android` only
+> — `:core:model` [`time/RelativeTimeLongLabel.kt` + test], `feature-parity.md`, routine docs; no production logic
+> outside; **SDK purity** — pure framing in `:core:model`, `time.long.*` localized strings + `Locale`-aware
+> absolute date stay UI-side; **SSOT** — second thresholds reused from `RelativeTime`, calendar-day framing owned
+> once here; **UDF/instant-app** — pure fn, no state/UI; **colour/UX coherence** — no UI in this slice; **no
+> coverage floor lowered, no test weakened**). **Next slice:** the app-side Compose/string layer that maps
+> `RelativeTimeUnit` (short) + `RelativeTimeLongLabel` (long) + the `lastSeen` presence framing → the five app
+> languages, or resume the media-wiring hints below.
+
 > On 2026-07-13 **relative-time classification SSOT** landed (slice `time-relative-classify`, feature-parity §Q —
 > "Relative-time classification SSOT"). Ships the pure threshold ladder beneath every conversation-row / feed /
 > notification / presence timestamp — a faithful port of iOS `RelativeTime.classify` (the SSOT the iOS
@@ -2873,6 +2901,41 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-13 — slice `time-relative-long-label` ✅ impl + reviewer PASS → PR + merge
+- **Branch:** `claude/apps/android/time-relative-long-label` (off latest `main` `819fcd9`).
+- **Housekeeping first (routine rule 0):** the prior-iteration Android PR **#1902** (`chat-conversation-media-gallery`,
+  `apps/android`-only) was open, CI green (run `29228329978` success), reviewer re-verified **PASS** — but its base had
+  fallen behind `main` (#1904/`time-relative-classify` merged after) so the rebase re-conflicted on the `PROGRESS.md`
+  run-log head. Rebased #1902 onto `main` `819fcd9` resolving the run-log adjacency by **keeping both** entries (code
+  files auto-merged, byte-identical), force-pushed (`54adc22`); CI re-ran green and #1902 merged to `main` before this
+  slice's PR. No production logic touched by either.
+- **What:** feature-parity §Q — the *long* (detail-surface) relative-time framing, port of iOS
+  `RelativeTimeFormatter.longString` (`maintenant / il y a 45s / il y a 5 min / hier / il y a 3j / il y a 2sem /
+  il y a 2mois / date`), companion to the flat `RelativeTime.classify` ladder that shipped earlier the same day.
+- **Added (production):**
+  - `:core:model` `time/RelativeTimeLongLabel.kt` — `RelativeTimeLongLabel` sealed framing rung
+    (`Now`/`AgoSeconds`/`AgoMinutes`/`AgoHours`/`Yesterday`/`AgoDays`/`AgoWeeks`/`AgoMonths`/`AbsoluteDate(epochMillis)`,
+    value + framing intent, no text); `RelativeTimeLongFormat.label(epochMillis, referenceMillis, zoneId)`. Sub-hour
+    rungs **reuse `RelativeTime`'s second thresholds** (SSOT), then switch to **calendar-day** boundaries (local-date
+    delta via the injected `ZoneId`): `dayDelta <= 0` → `AgoHours`; `== 1` → `Yesterday`; `<7` → `AgoDays`; `<30` →
+    `AgoWeeks`; `<90` → `AgoMonths`; else `AbsoluteDate`. Future/skew (negative interval) → `Now`.
+- **Divergence from `classify` (the point of the slice):** from an hour up the ladder is calendar-day, not 24-hour —
+  23:00→01:00-next-day (2h) reads `Yesterday`; and the boundary is the *user's* midnight, so the same instant reads
+  `hier` in UTC vs `il y a 2h` three hours west (both pinned by tests).
+- **Tests (+21, RED→GREEN):** every rung; both sides of every boundary (29/30s, 59/60s, 59min, 1h-same-day,
+  23h-same-day-still-hours, 2h-across-midnight-IS-yesterday, prev-day, 2/6d, exactly-7d→1week, 29d→4weeks, 30d→1month,
+  89d→2months, 90d→AbsoluteDate carrying the exact instant); the cross-zone divergence (one instant → `Yesterday` in
+  UTC, `AgoHours(2)` at UTC−3). **Two-mutation RED check:** `dayDelta <= 0`→`< 0` + `dayDelta == 1`→`== 2` failed
+  exactly the 6 calendar-day tests (hours/yesterday/days/zone), reverted green.
+- **Verification (local, `LANG=C.utf8`, system Gradle 8.14.3):** `:core:model:testDebugUnitTest` green (21/21 new);
+  `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced, ~74 MB).
+- **Reviewer PASS:** diff `apps/android` only (`:core:model` [`time/RelativeTimeLongLabel.kt` + `RelativeTimeLongLabelTest.kt`],
+  `feature-parity.md`, PROGRESS/NOTES docs); no production logic outside; behaviour-through-public-API, no tautologies
+  (mutation-proven); **SDK purity** — pure framing in `:core:model`, the `time.long.*` wording + `Locale`-aware
+  absolute date stay UI-side exactly as iOS keeps them in the formatter catalog; **SSOT** — second thresholds reused
+  from `RelativeTime`, the calendar-day framing owned once here; **UDF/instant-app** — pure fn, no state/UI;
+  **colour/UX coherence** — no UI in this slice; no coverage floor lowered, no test weakened.
 
 ### 2026-07-13 — slice `time-relative-classify` ✅ impl + reviewer PASS → PR + merge
 - **Branch:** `claude/apps/android/time-relative-classify` (off latest `main` `c93fa81`).
