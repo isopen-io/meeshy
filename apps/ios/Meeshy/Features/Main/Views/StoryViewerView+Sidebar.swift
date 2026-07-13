@@ -518,6 +518,9 @@ struct StoryHeaderView: View {
     let currentGroup: StoryGroup?
     let currentStory: StoryItem?
     let isOwnStory: Bool
+    /// Primitive passée par le parent (règle « Zero Unnecessary Re-render » —
+    /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
+    let hasBackgroundAudio: Bool
 
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
@@ -672,7 +675,7 @@ struct StoryHeaderView: View {
                                     // PRÉSENCE d'un audio de fond sur la story — pas
                                     // son état de lecture (ni mute, ni timing de la
                                     // timeline). Directive user 2026-07-13.
-                                    if storyHasBackgroundAudio {
+                                    if hasBackgroundAudio {
                                         Image(systemName: "music.note")
                                             .font(MeeshyFont.relative(10, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.7))

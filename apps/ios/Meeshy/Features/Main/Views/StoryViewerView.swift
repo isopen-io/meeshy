@@ -1127,6 +1127,7 @@ struct StoryViewerView: View {
             isStoryCommentsEmpty: storyComments.isEmpty,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
+            storyHasBackgroundAudio: storyHasBackgroundAudio,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
             onReplyToStory: onReplyToStory,

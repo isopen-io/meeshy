@@ -636,6 +636,11 @@ struct StoryCardView: View {
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
+    /// Présence d'un audio de fond sur la slide — pilote la note musicale du
+    /// header (`StoryHeaderView`). Primitive calculée par le viewer parent
+    /// (`StoryViewerView.storyHasBackgroundAudio`) et descendue en `let`
+    /// jusqu'à la leaf view, comme `storyHasAudibleSound` juste au-dessus.
+    let storyHasBackgroundAudio: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
     let onReplyToStory: ((ReplyContext) -> Void)?
@@ -1225,6 +1230,7 @@ struct StoryCardView: View {
                     currentGroup: currentGroup,
                     currentStory: currentStory,
                     isOwnStory: isOwnStory,
+                    hasBackgroundAudio: storyHasBackgroundAudio,
                     selectedProfileUser: $selectedProfileUser,
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
