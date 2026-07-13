@@ -566,7 +566,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       ordre de conversation, résout `startIndex` = compteur d'images avant le message tapé + `imageIndex`
       clampé aux bornes du message ; message inconnu/supprimé/sans image → repli sur le début ; consommé
       par `MeeshyImageViewer` (bloc `:sdk-ui` réutilisé, pinch-zoom + compteur `n/total` déjà présents).
-      +14 tests. Reste : contact card, save-to-gallery, prefetch ±2, métadonnées auteur/légende) ;
+      +14 tests. **Légende par page done** (`chat-gallery-page-caption` 2026-07-13 : port de
+      `ConversationMediaGalleryView.captionMap` — chaque page porte le texte de son message
+      (`GalleryPage(url, caption)`, `caption = message.text.trim().ifBlank { null }`, chaque image d'un
+      message multi-image partage l'unique légende du message ; supprimé exclu) ; `ConversationGallery`
+      expose `imageUrls`/`captions` dérivés ; `MeeshyImageViewer` prend un `captions: List<String?>` opaque
+      (bloc agnostique) et rend la légende de la page courante en overlay bas (scrim 0.45, masqué en zoom).
+      +10 tests. Reste : contact card, save-to-gallery, prefetch ±2, en-tête auteur/date par page) ;
       contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS

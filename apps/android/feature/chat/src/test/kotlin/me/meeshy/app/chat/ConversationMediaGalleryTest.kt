@@ -13,9 +13,10 @@ class ConversationMediaGalleryTest {
         id: String,
         images: List<BubbleImage> = emptyList(),
         isDeleted: Boolean = false,
+        text: String = "",
     ) = BubbleContent(
         messageId = id,
-        text = "",
+        text = text,
         isOutgoing = false,
         isTranslated = false,
         originalText = null,
@@ -195,5 +196,112 @@ class ConversationMediaGalleryTest {
 
         assertThat(gallery.startIndex).isEqualTo(0)
         assertThat(gallery.imageUrls).containsExactly("u1", "u2").inOrder()
+    }
+
+    @Test
+    fun a_messages_text_becomes_its_images_page_caption() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), text = "Sunset over the bay")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly("Sunset over the bay")
+    }
+
+    @Test
+    fun a_blank_message_text_produces_no_caption() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), text = "")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly(null as String?)
+    }
+
+    @Test
+    fun a_whitespace_only_message_text_produces_no_caption() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), text = "   \n\t ")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly(null as String?)
+    }
+
+    @Test
+    fun a_caption_is_trimmed_of_surrounding_whitespace() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), text = "  hello  ")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly("hello")
+    }
+
+    @Test
+    fun every_image_of_a_multi_image_message_shares_that_messages_caption() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1"), img("a2", "u2"), img("a3", "u3")), text = "Trip")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly("Trip", "Trip", "Trip").inOrder()
+    }
+
+    @Test
+    fun captions_align_positionally_with_image_urls_across_messages() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1"), img("a2", "u2")), text = "first"),
+                bubble("m2", listOf(img("a3", "u3")), text = ""),
+                bubble("m3", listOf(img("a4", "u4")), text = "third"),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "u2", "u3", "u4").inOrder()
+        assertThat(gallery.captions).containsExactly("first", "first", null, "third").inOrder()
+    }
+
+    @Test
+    fun a_deleted_message_contributes_no_caption() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1")), text = "kept"),
+                bubble("m2", listOf(img("a2", "u2")), isDeleted = true, text = "gone"),
+                bubble("m3", listOf(img("a3", "u3")), text = "also kept"),
+            ),
+            messageId = "m3",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).containsExactly("kept", "also kept").inOrder()
+    }
+
+    @Test
+    fun the_captions_list_is_always_the_same_length_as_the_image_urls() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1"), img("a2", "u2")), text = "a"),
+                bubble("m2", listOf(img("a3", "u3"))),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.captions).hasSize(gallery.imageUrls.size)
+    }
+
+    @Test
+    fun an_empty_gallery_has_no_captions() {
+        val gallery = ConversationMediaGallery.of(emptyList(), messageId = "m1", imageIndex = 0)
+
+        assertThat(gallery.captions).isEmpty()
     }
 }
