@@ -630,6 +630,27 @@ describe('looksLikePhoneNumber', () => {
     expect(looksLikePhoneNumber('+1 (555) 123-4567')).toBe(true);
   });
 
+  it('returns true for NANP local format starting with a parenthesis', () => {
+    expect(looksLikePhoneNumber('(555) 123-4567')).toBe(true);
+  });
+
+  it('returns true for a local number whose leading area code is parenthesised', () => {
+    expect(looksLikePhoneNumber('(020) 7946 0958')).toBe(true);
+  });
+
+  it('returns false for parenthesised text that is not a number', () => {
+    expect(looksLikePhoneNumber('(abc) def-ghij')).toBe(false);
+  });
+
+  it('returns false for a leading parenthesis with too few digits', () => {
+    expect(looksLikePhoneNumber('(12) 34')).toBe(false);
+  });
+
+  it('returns false for a number-like string starting with a separator', () => {
+    expect(looksLikePhoneNumber('-33612345678')).toBe(false);
+    expect(looksLikePhoneNumber(') 555 123456')).toBe(false);
+  });
+
   it('returns false for string with fewer than 6 digits', () => {
     expect(looksLikePhoneNumber('12345')).toBe(false);
   });

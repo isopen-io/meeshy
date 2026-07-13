@@ -1,5 +1,66 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **per-conversation message ordering** landed (slice `chat-message-ordering`, feature-parity
+> "Message ordering" — the ordering half of the bundled `seq` sort + gap-detection + server-offset roadmap item).
+> Ships the pure `:feature:chat` SSOT `MessageOrdering.order(items, selector) → List<T>` (+ a bare-input overload)
+> that lays a message list out in **stable ascending (oldest→newest) timeline order** — the foundation every
+> downstream chat computation already trusted implicitly (consecutive `MessageGrouping`, day labels, scroll
+> anchoring) but that nothing actually enforced: `toBubbles` rendered messages in whatever order the repository
+> handed back, so an out-of-order socket arrival or a merged older-page could jumble the list. The order is a
+> total, deterministic projection of two keys via `compareBy`: **send time first** (`createdAtMillis`; a message
+> with no parsed timestamp → `Long.MAX_VALUE` = newest, pinned to the bottom, so a freshly-composed local echo
+> lands at the end not hoisted above dated history), **`seq` breaks ties** (ascending; a null seq = an un-acked
+> optimistic send → `Long.MAX_VALUE` so it trails its acked same-instant sibling), and **server order is the final
+> tiebreak** — `sortedWith` is stable, so a fully-tied pair keeps the caller's incoming order rather than being
+> reshuffled (this is exactly what keeps the existing all-null-`createdAt` ViewModel test fixtures unperturbed:
+> all equal → input order preserved). **Wired for real (no dead ends):** `ChatViewModel.toBubbles` now orders the
+> hidden-filtered list *before* grouping/mapping, reusing `isoToEpochMillisOrNull`, so grouping + day labels
+> cluster a provably-ascending list. **+16 tests** (empty→∅; single unchanged; already-ascending kept;
+> reversed-by-time re-sorted; out-of-order arrival placed by timestamp not position; equal-time→ascending seq;
+> equal-time no-seq trails seq'd; full tie preserves input order; no-timestamp sorts after timestamped; two untimed
+> fall back to seq then input order; two fully-tied untimed keep input order; negative pre-epoch orders; near-MAX
+> timestamps don't overflow; idempotent; `order` returns original items not projected inputs; bare-input overload).
+> **Two-mutation RED check:** `?: Long.MAX_VALUE`→`?: Long.MIN_VALUE` on both keys failed exactly the 2 relevant
+> tests (no-timestamp-sorts-after + no-seq-trails-seq'd), confirming behavioural not tautological; reverted green.
+> **Verification:** `:feature:chat:testDebugUnitTest` full suite + `:app:assembleDebug` → **BUILD SUCCESSFUL**
+> (APK produced, no existing chat test regressed by the new `toBubbles` sort). Reviewer **PASS** (diff `apps/android`
+> only — `:feature:chat` [new `MessageOrdering.kt` + test, one-line `ChatViewModel` wiring], `feature-parity.md`,
+> routine docs; no production logic outside; **SDK purity** — pure ordering in `:feature:chat`, the established home
+> for chat reducers/SSOTs alongside `MessageGrouping`; **SSOT** — one ordering owns the timeline every downstream
+> computation reads; **UDF/instant-app** — pure fn, cache-first path unchanged; **colour/UX coherence** — no UI
+> change; **no coverage floor lowered, no test weakened**). **Next slice:** continuity **gap detection** once a
+> `seq` source lands (or add a nullable `seq` to the android `LocalMessage`/DTO first), the app-side relative-time
+> rendering layer (maps `RelativeTimeUnit`/`RelativeTimeLongLabel` → 5 app languages), or resume the media-wiring
+> hints below.
+
+> On 2026-07-13 **relative-time long framing SSOT** landed (slice `time-relative-long-label`, feature-parity §Q —
+> the detail-surface framing, port of iOS `RelativeTimeFormatter.longString`). Companion to the just-landed
+> `RelativeTime.classify` flat ladder: where `classify` is a bare `now/5m/2h/3d/…` ladder for dense lists, the
+> *long* framing is the `maintenant / il y a 45s / il y a 5 min / hier / il y a 3j / il y a 2sem / il y a 2mois /
+> date` form used on contacts, participants, friend-requests and message detail. New `:core:model/time`
+> `RelativeTimeLongLabel` — a sealed framing rung (`Now` / `AgoSeconds` / `AgoMinutes` / `AgoHours` / `Yesterday`
+> / `AgoDays` / `AgoWeeks` / `AgoMonths` / `AbsoluteDate(epochMillis)`) carrying the numeric value + the *framing
+> intent* but **no localized text** (the `time.long.*` wording stays UI-side, exactly as iOS keeps `il y a %@` /
+> `hier` in the formatter catalog); `RelativeTimeLongFormat.label(epochMillis, referenceMillis, zoneId)`. The
+> sub-hour rungs **reuse `RelativeTime`'s second thresholds** (SSOT — no duplicated constants), then from an hour
+> up the ladder switches to **calendar-day** boundaries rather than 24-hour windows — the key divergence from
+> `classify`: an event at 23:00 seen at 01:00 the next day is `Yesterday`, not `il y a 2h`. Because the boundary
+> is the *user's* midnight, the label needs a `ZoneId`: the very same instant reads `hier` in UTC and `il y a 2h`
+> three hours west (pinned by a two-assertion zone test). Future / clock-skew (negative interval) → `Now`, like
+> `classify`. **+21 tests** (every rung; both sides of every boundary — 29/30s, 59/60s, 59min, 1h-same-day,
+> 23h-same-day-not-yesterday, 2h-across-midnight-IS-yesterday, prev-day, 2/6d, exactly-7d→1week, 29d→4weeks,
+> 30d→1month, 89d→2months, 90d→AbsoluteDate carrying the instant; the cross-zone divergence). **Two-mutation RED
+> check:** `dayDelta <= 0`→`< 0` (steals the same-day hours rung) + `dayDelta == 1`→`== 2` (steals `Yesterday`)
+> failed exactly the 6 calendar-day tests (hours/yesterday/days/zone), reverted green. `:core:model:testDebugUnitTest`
+> 21/21 new; `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced). Reviewer **PASS** (diff `apps/android` only
+> — `:core:model` [`time/RelativeTimeLongLabel.kt` + test], `feature-parity.md`, routine docs; no production logic
+> outside; **SDK purity** — pure framing in `:core:model`, `time.long.*` localized strings + `Locale`-aware
+> absolute date stay UI-side; **SSOT** — second thresholds reused from `RelativeTime`, calendar-day framing owned
+> once here; **UDF/instant-app** — pure fn, no state/UI; **colour/UX coherence** — no UI in this slice; **no
+> coverage floor lowered, no test weakened**). **Next slice:** the app-side Compose/string layer that maps
+> `RelativeTimeUnit` (short) + `RelativeTimeLongLabel` (long) + the `lastSeen` presence framing → the five app
+> languages, or resume the media-wiring hints below.
+
 > On 2026-07-13 **relative-time classification SSOT** landed (slice `time-relative-classify`, feature-parity §Q —
 > "Relative-time classification SSOT"). Ships the pure threshold ladder beneath every conversation-row / feed /
 > notification / presence timestamp — a faithful port of iOS `RelativeTime.classify` (the SSOT the iOS
@@ -1978,7 +2039,21 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `chat-bubble-audio`** — audio (voice-message) bubble attachment (§C line ~533,
+**Just shipped (2026-07-13): `chat-conversation-media-gallery`** — fullscreen media gallery now spans the
+whole conversation (port of iOS `ConversationMediaGalleryView`); pure `:feature:chat`
+`ConversationMediaGallery.of` flattens every non-deleted bubble's images and resolves the tapped start
+index, consumed by the reused `:sdk-ui` `MeeshyImageViewer`. See run log 2026-07-13.
+**Recommended next (highest value):**
+- **Media gallery follow-ups** (same §C line): neighbour prefetch ±2 (Coil `ImageLoader.enqueue`),
+  per-page author/caption metadata overlay, and save-to-gallery (`MediaStore`) — each a thin add on top of
+  the shipped `ConversationGallery` (extend the model with `prefetchAround`/item metadata and consume it).
+- **Message bubble contact attachment** (§C, still pending) — share-a-contact card; the wire has no
+  dedicated fields yet, so scope the DTO first.
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
+
+---
+
+**Earlier (2026-07-09): `chat-bubble-audio`** — audio (voice-message) bubble attachment (§C line ~533,
 `carousel / audio / location / contact` list — **audio now done**; carousel + contact remain). Port of iOS
 `AudioPlayerView` message-bubble context, surpassing it on the Prisme Linguistique. An `audio/…`-mime
 attachment becomes a pure `BubbleAudio` (`:sdk-ui`) instead of being mis-bucketed as a generic file:
@@ -2860,6 +2935,41 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
+### 2026-07-13 — slice `time-relative-long-label` ✅ impl + reviewer PASS → PR + merge
+- **Branch:** `claude/apps/android/time-relative-long-label` (off latest `main` `819fcd9`).
+- **Housekeeping first (routine rule 0):** the prior-iteration Android PR **#1902** (`chat-conversation-media-gallery`,
+  `apps/android`-only) was open, CI green (run `29228329978` success), reviewer re-verified **PASS** — but its base had
+  fallen behind `main` (#1904/`time-relative-classify` merged after) so the rebase re-conflicted on the `PROGRESS.md`
+  run-log head. Rebased #1902 onto `main` `819fcd9` resolving the run-log adjacency by **keeping both** entries (code
+  files auto-merged, byte-identical), force-pushed (`54adc22`); CI re-ran green and #1902 merged to `main` before this
+  slice's PR. No production logic touched by either.
+- **What:** feature-parity §Q — the *long* (detail-surface) relative-time framing, port of iOS
+  `RelativeTimeFormatter.longString` (`maintenant / il y a 45s / il y a 5 min / hier / il y a 3j / il y a 2sem /
+  il y a 2mois / date`), companion to the flat `RelativeTime.classify` ladder that shipped earlier the same day.
+- **Added (production):**
+  - `:core:model` `time/RelativeTimeLongLabel.kt` — `RelativeTimeLongLabel` sealed framing rung
+    (`Now`/`AgoSeconds`/`AgoMinutes`/`AgoHours`/`Yesterday`/`AgoDays`/`AgoWeeks`/`AgoMonths`/`AbsoluteDate(epochMillis)`,
+    value + framing intent, no text); `RelativeTimeLongFormat.label(epochMillis, referenceMillis, zoneId)`. Sub-hour
+    rungs **reuse `RelativeTime`'s second thresholds** (SSOT), then switch to **calendar-day** boundaries (local-date
+    delta via the injected `ZoneId`): `dayDelta <= 0` → `AgoHours`; `== 1` → `Yesterday`; `<7` → `AgoDays`; `<30` →
+    `AgoWeeks`; `<90` → `AgoMonths`; else `AbsoluteDate`. Future/skew (negative interval) → `Now`.
+- **Divergence from `classify` (the point of the slice):** from an hour up the ladder is calendar-day, not 24-hour —
+  23:00→01:00-next-day (2h) reads `Yesterday`; and the boundary is the *user's* midnight, so the same instant reads
+  `hier` in UTC vs `il y a 2h` three hours west (both pinned by tests).
+- **Tests (+21, RED→GREEN):** every rung; both sides of every boundary (29/30s, 59/60s, 59min, 1h-same-day,
+  23h-same-day-still-hours, 2h-across-midnight-IS-yesterday, prev-day, 2/6d, exactly-7d→1week, 29d→4weeks, 30d→1month,
+  89d→2months, 90d→AbsoluteDate carrying the exact instant); the cross-zone divergence (one instant → `Yesterday` in
+  UTC, `AgoHours(2)` at UTC−3). **Two-mutation RED check:** `dayDelta <= 0`→`< 0` + `dayDelta == 1`→`== 2` failed
+  exactly the 6 calendar-day tests (hours/yesterday/days/zone), reverted green.
+- **Verification (local, `LANG=C.utf8`, system Gradle 8.14.3):** `:core:model:testDebugUnitTest` green (21/21 new);
+  `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced, ~74 MB).
+- **Reviewer PASS:** diff `apps/android` only (`:core:model` [`time/RelativeTimeLongLabel.kt` + `RelativeTimeLongLabelTest.kt`],
+  `feature-parity.md`, PROGRESS/NOTES docs); no production logic outside; behaviour-through-public-API, no tautologies
+  (mutation-proven); **SDK purity** — pure framing in `:core:model`, the `time.long.*` wording + `Locale`-aware
+  absolute date stay UI-side exactly as iOS keeps them in the formatter catalog; **SSOT** — second thresholds reused
+  from `RelativeTime`, the calendar-day framing owned once here; **UDF/instant-app** — pure fn, no state/UI;
+  **colour/UX coherence** — no UI in this slice; no coverage floor lowered, no test weakened.
+
 ### 2026-07-13 — slice `time-relative-classify` ✅ impl + reviewer PASS → PR + merge
 - **Branch:** `claude/apps/android/time-relative-classify` (off latest `main` `c93fa81`).
 - **Housekeeping first (routine rule 0):** two prior-iteration Android PRs were open. Merged **#1900**
@@ -2890,6 +3000,56 @@ After Stories richness is sufficient, advance to the **Calls** area
   `feature-parity.md`, PROGRESS/NOTES docs); no production logic outside; behaviour-through-public-API, no
   tautologies (mutation-proven); SDK purity — pure classifier in `:core:model`, presentation UI-side; SSOT —
   thresholds once as named consts; UDF/instant-app — pure fn, no state/UI; colour/UX coherence — no UI in slice;
+  no coverage floor lowered, no test weakened.
+
+### 2026-07-13 — slice `chat-conversation-media-gallery` ✅ impl + reviewer PASS → PR #1902, rebased on `main` after #1900 merged
+- **Branch:** `claude/apps/android/chat-conversation-media-gallery` (branched off `e0027ae`, then rebased
+  cleanly onto `main` `c93fa81` once #1900 merged — only a `PROGRESS.md` run-log conflict, resolved by
+  keeping both entries; `ChatViewModel` auto-merged, different region than #1900's `toBubbles`).
+- **Housekeeping (routine rule 0):** the previous iteration's PR **#1900** (`chat-message-grouping`) was
+  open, `apps/android`-only (8 files), `mergeable_state: clean`, reviewer re-verified **PASS** — but its
+  **CI run `29219800275` was stuck `queued`** for 30+ min (shared GitHub-Actions runner backlog, not a PR
+  defect). Cannot merge past a non-green check (hard rule), so #1900 is left open to merge the moment CI
+  goes green; #1900 has since merged to `main` (`c93fa81`) and this slice was rebased on top.
+- **What:** feature-parity §C — the fullscreen media gallery, port of iOS `ConversationMediaGalleryView`.
+  Tapping an image no longer opens a viewer scoped to the tapped message; it opens a gallery that spans
+  **every image in the conversation**, in order, starting on the tapped one.
+- **Added (production):**
+  - `:feature:chat` `ConversationMediaGallery.kt` — pure SSOT `of(messages, messageId, imageIndex)` →
+    `ConversationGallery(imageUrls, startIndex)`. Flattens each non-deleted bubble's images in conversation
+    order; `startIndex` = running image count before the tapped message + `imageIndex` clamped into that
+    message's own bounds; unknown/deleted/imageless tapped message → falls back to the start; empty → the
+    inert `EMPTY`.
+- **Changed (production):**
+  - `ChatViewModel`: `openImageViewer` now builds the conversation-wide gallery via the pure SSOT and stores
+    it (`imageViewer: ConversationGallery?`, `null` when there is nothing to show); removed the old
+    single-message `ImageViewerTarget`.
+  - `ChatScreen`: renders `MeeshyImageViewer` (unchanged `:sdk-ui` building block — pinch-zoom + `n/total`
+    counter already there) over `gallery.imageUrls` at `gallery.startIndex`.
+- **Tests (+14, RED→GREEN):** `ConversationMediaGalleryTest` 12 (empty; imageless→empty; single→0; later
+  index within a message; spans-all-messages in order; imageless messages skipped without shifting start;
+  out-of-range index clamps to the message's last image *with a trailing message present* so the per-message
+  clamp is genuinely exercised; negative index clamps to first; unknown id → whole gallery from 0; deleted
+  message contributes no images; tapping a deleted message → start; matched-but-imageless → start).
+  `ChatViewModelTest` +2 (tap builds conversation-wide gallery with correct `startIndex` + dismiss clears;
+  tap on an imageless message opens no gallery). **Two-mutation RED check:** dropping the per-message
+  `coerceIn` clamp + the `isDeleted` skip failed exactly the negative-clamp + 2 deleted tests (the
+  out-of-range test was then strengthened with a trailing message so the clamp isn't masked by the final
+  global clamp).
+- **Verification (local, `LANG=C.utf8`):** `gradle assembleDebug testDebugUnitTest` → `assembleDebug`
+  **SUCCESSFUL**; `:feature:chat` (`ConversationMediaGalleryTest` 12/12, `ChatViewModelTest` 166/166) +
+  `:sdk-ui` green. Full-tree run: only failure is the **known pre-existing `:sdk-core`
+  `PrivacyPreferencesStoreTest` DataStore `StateFlow`-timeout flake** (untouched module; passes on isolated
+  retry — re-run green). **Env note:** the system-Gradle daemon must launch under `LANG=C.utf8` or
+  `:sdk-core:compileDebugUnitTestKotlin` dies with `InvalidPathException` on the em-dash in
+  `ActiveCallRepositoryTest`'s method name (`sun.jnu.encoding` fallback) — `gradle --stop` then re-run with
+  the UTF-8 locale exported.
+- **Reviewer:** **PASS** — diff `apps/android` only; behaviour-through-public-API (`ConversationMediaGallery.of`
+  + VM `openImageViewer`), no tautologies, boundary coverage (empty/single/clamps/unknown/deleted); **SDK
+  purity** — the "which media, starting where" decision is a pure `:feature:chat` atom, the fullscreen viewer
+  stays the generic stateless `:sdk-ui` `MeeshyImageViewer` (opaque url list); **SSOT** — one flatten owns
+  ordering + start resolution; **instant-app/UDF** — pure function + immutable `StateFlow` state, `null` when
+  empty (no blank viewer); **UX coherence** — natural tap-to-open / swipe-across / dismiss-back, no dead end;
   no coverage floor lowered, no test weakened.
 
 ### 2026-07-13 — slice `chat-message-grouping` ✅ impl + reviewer PASS

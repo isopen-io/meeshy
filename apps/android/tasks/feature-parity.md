@@ -178,8 +178,16 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] `cmid`↔serverId reconciliation: optimistic Room row (`sendState`
       SENDING/FAILED) swapped atomically on REST ACK, plus `clientMessageId`
       echo-matching during list sync; FAILED bubbles retry via outbox revive
-- [ ] **Message ordering**: per-conversation `seq` sort key + continuity gap
-      detection + server-time offset (ADR-021)
+- [~] **Message ordering**: per-conversation `seq` sort key + continuity gap
+      detection + server-time offset (ADR-021). **Ordering half shipped**
+      (`chat-message-ordering`): pure `MessageOrdering.order` SSOT — stable
+      ascending timeline by `createdAtMillis` (null → newest/bottom), `seq`
+      tiebreak (null → newest, trails acked siblings), server order preserved on
+      a full tie via stable sort. Wired into `ChatViewModel.toBubbles` so an
+      out-of-order socket arrival / merged page can never render jumbled, and
+      `MessageGrouping`/day-labels now cluster a provably-ascending list. 16 tests.
+      **Still open:** continuity gap detection + server-time offset (need a `seq`
+      source from the sync engine — deferred, no dead-end code shipped for them).
 - [ ] Transport spike: WebSocket vs long-polling on Android (ADR-015) →
       Socket.IO wrappers ×2 exposing sealed-class `SharedFlow`s
 - [ ] Foreground-socket / background-FCM delivery doctrine
@@ -550,7 +558,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       langue préférée traduite sinon transcription originale, `formattedDuration` `m:ss`) rendu en player
       compact (glyphe play/download + durée-ou-taille + ligne de transcription) tappable → URL au host ;
       iOS affiche `orig` par défaut + sélecteur manuel, Android affiche la langue préférée d'emblée) ;
-      carousel / contact pending
+      **galerie média plein écran conversation-wide done** (`chat-conversation-media-gallery` 2026-07-13 :
+      port iOS `ConversationMediaGalleryView` — taper une image n'ouvre plus un visionneur limité au
+      message tapé mais une galerie qui balaie TOUTES les images de la conversation, dans l'ordre, en
+      démarrant sur l'image tapée. Pur `:feature:chat` `ConversationMediaGallery.of(messages, messageId,
+      imageIndex)` → `ConversationGallery(imageUrls, startIndex)` : aplatit chaque bulle non-supprimée en
+      ordre de conversation, résout `startIndex` = compteur d'images avant le message tapé + `imageIndex`
+      clampé aux bornes du message ; message inconnu/supprimé/sans image → repli sur le début ; consommé
+      par `MeeshyImageViewer` (bloc `:sdk-ui` réutilisé, pinch-zoom + compteur `n/total` déjà présents).
+      +14 tests. Reste : contact card, save-to-gallery, prefetch ±2, métadonnées auteur/légende) ;
+      contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
@@ -2198,3 +2215,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       port of iOS `RelativeTime.classify`, the threshold source of truth beneath `RelativeTimeFormatter`)
       — pure `:core:model/time`, locale-agnostic (rendering stays UI-side), `Long` arithmetic so a
       decades-old timestamp reaches the absolute-date rung without 32-bit overflow, future/skew → `Now`
+- [x] Relative-time *long* framing SSOT (`RelativeTimeLongFormat.label` → `RelativeTimeLongLabel`;
+      port of iOS `RelativeTimeFormatter.longString`, the detail-surface `il y a … / hier / date` framing)
+      — pure `:core:model/time`, locale-agnostic (the `time.long.*` wording stays UI-side), reuses the
+      `RelativeTime` second thresholds as SSOT then switches to **calendar-day** boundaries via an injected
+      `ZoneId` (2h across midnight → `Yesterday`; the same instant reads `hier` vs `il y a Nh` per zone),
+      future/skew → `Now`

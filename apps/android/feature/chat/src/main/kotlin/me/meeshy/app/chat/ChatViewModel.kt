@@ -60,11 +60,6 @@ import me.meeshy.ui.component.bubble.MessageDetailExplorer
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import javax.inject.Inject
 
-data class ImageViewerTarget(
-    val messageId: String,
-    val imageIndex: Int,
-)
-
 data class ChatUiState(
     val messages: List<BubbleContent> = emptyList(),
     /** L'appel encore actif serveur-side pour CETTE conversation (probe REST
@@ -89,7 +84,7 @@ data class ChatUiState(
     val ownReactions: Map<String, Set<String>> = emptyMap(),
     val isLoadingOlder: Boolean = false,
     val hasMoreOlder: Boolean = true,
-    val imageViewer: ImageViewerTarget? = null,
+    val imageViewer: ConversationGallery? = null,
     val scrollToMessageId: String? = null,
     val search: ChatSearchState = ChatSearchState(),
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
@@ -674,7 +669,8 @@ class ChatViewModel @Inject constructor(
     }
 
     fun openImageViewer(messageId: String, imageIndex: Int) {
-        _state.update { it.copy(imageViewer = ImageViewerTarget(messageId, imageIndex)) }
+        val gallery = ConversationMediaGallery.of(_state.value.messages, messageId, imageIndex)
+        _state.update { it.copy(imageViewer = gallery.takeUnless(ConversationGallery::isEmpty)) }
     }
 
     /**
@@ -1402,7 +1398,9 @@ private fun List<LocalMessage>.toBubbles(
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
 ): List<BubbleContent> {
-    val visible = filterNot { hidden.isHidden(it.message.id) }
+    val visible = MessageOrdering.order(filterNot { hidden.isHidden(it.message.id) }) { local ->
+        MessageOrderInput(createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt))
+    }
     val groupPositions = MessageGrouping.positions(
         visible.map { local ->
             MessageGroupInput(
