@@ -178,8 +178,16 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] `cmid`↔serverId reconciliation: optimistic Room row (`sendState`
       SENDING/FAILED) swapped atomically on REST ACK, plus `clientMessageId`
       echo-matching during list sync; FAILED bubbles retry via outbox revive
-- [ ] **Message ordering**: per-conversation `seq` sort key + continuity gap
-      detection + server-time offset (ADR-021)
+- [~] **Message ordering**: per-conversation `seq` sort key + continuity gap
+      detection + server-time offset (ADR-021). **Ordering half shipped**
+      (`chat-message-ordering`): pure `MessageOrdering.order` SSOT — stable
+      ascending timeline by `createdAtMillis` (null → newest/bottom), `seq`
+      tiebreak (null → newest, trails acked siblings), server order preserved on
+      a full tie via stable sort. Wired into `ChatViewModel.toBubbles` so an
+      out-of-order socket arrival / merged page can never render jumbled, and
+      `MessageGrouping`/day-labels now cluster a provably-ascending list. 16 tests.
+      **Still open:** continuity gap detection + server-time offset (need a `seq`
+      source from the sync engine — deferred, no dead-end code shipped for them).
 - [ ] Transport spike: WebSocket vs long-polling on Android (ADR-015) →
       Socket.IO wrappers ×2 exposing sealed-class `SharedFlow`s
 - [ ] Foreground-socket / background-FCM delivery doctrine

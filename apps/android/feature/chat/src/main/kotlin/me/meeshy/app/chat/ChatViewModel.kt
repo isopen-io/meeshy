@@ -1398,7 +1398,9 @@ private fun List<LocalMessage>.toBubbles(
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
 ): List<BubbleContent> {
-    val visible = filterNot { hidden.isHidden(it.message.id) }
+    val visible = MessageOrdering.order(filterNot { hidden.isHidden(it.message.id) }) { local ->
+        MessageOrderInput(createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt))
+    }
     val groupPositions = MessageGrouping.positions(
         visible.map { local ->
             MessageGroupInput(
