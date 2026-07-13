@@ -18,6 +18,26 @@ describe('resolveParticipantAvatar', () => {
     expect(resolveParticipantAvatar({ user: { avatar: 'user.jpg' } })).toBe('user.jpg');
   });
 
+  it('falls back to the linked user avatar when the local avatar is an empty string', () => {
+    expect(
+      resolveParticipantAvatar({ avatar: '', user: { avatar: 'user.jpg' } }),
+    ).toBe('user.jpg');
+  });
+
+  it('falls back to the linked user avatar when the local avatar is blank whitespace', () => {
+    expect(
+      resolveParticipantAvatar({ avatar: '   ', user: { avatar: 'user.jpg' } }),
+    ).toBe('user.jpg');
+  });
+
+  it('returns null when the local avatar is empty and no user avatar exists', () => {
+    expect(resolveParticipantAvatar({ avatar: '', user: null })).toBeNull();
+  });
+
+  it('returns null when both the local and user avatars are empty strings', () => {
+    expect(resolveParticipantAvatar({ avatar: '', user: { avatar: '' } })).toBeNull();
+  });
+
   it('returns null when neither avatar is present', () => {
     expect(resolveParticipantAvatar({ avatar: null, user: { avatar: null } })).toBeNull();
   });
