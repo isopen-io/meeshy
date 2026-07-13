@@ -580,6 +580,19 @@ struct StoryHeaderView: View {
 
     @State private var avatarLongPressGlow = false
 
+    /// Label VoiceOver du bouton profil auteur — inclut l'attribution de
+    /// republication (icône + @handle visuels que ce label unique remplace).
+    private func repostAwareProfileLabel(for group: StoryGroup) -> String {
+        guard let story = currentStory, story.repostOfId != nil,
+              let handle = story.repostAuthorUsername ?? story.repostAuthorName else {
+            return String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main)
+        }
+        return String(
+            format: String(localized: "story.viewer.a11y.profileOf.repost", defaultValue: "Profil de %@, republication de @%@", bundle: .main),
+            group.username, handle
+        )
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             if let group = currentGroup {
@@ -700,7 +713,11 @@ struct StoryHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(minHeight: 44)
-                .accessibilityLabel(String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main))
+                // Le bouton porte un SEUL accessibilityLabel qui remplace tout
+                // le contenu de son label closure (icône repost + @handle
+                // inclus) — VoiceOver ne lirait jamais la republication sans
+                // l'inclure explicitement ici (post-revue 2026-07-13).
+                .accessibilityLabel(repostAwareProfileLabel(for: group))
                 .accessibilityHint(String(localized: "story.viewer.a11y.profileOf.hint", defaultValue: "Ouvre le profil de \(group.username)", bundle: .main))
             }
 

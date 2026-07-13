@@ -1555,9 +1555,17 @@ struct PostDetailView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 32)
         } else {
+            // Réutilise `renderedItem` construit pour la garde ci-dessus au
+            // lieu de laisser `StoryReaderRepresentable(feedPost:)` reconvertir
+            // le même `FeedPost` — évite une 2e conversion par évaluation de
+            // body (ce panneau réévalue à chaque frame de scroll via
+            // `storyCanvasVisible`) ET garantit que la garde et le rendu
+            // voient EXACTEMENT le même item (post-revue 2026-07-13 : la
+            // double construction pouvait diverger si la cascade de fallback
+            // changeait d'un côté sans l'autre).
             storyCanvasContainer(
                 StoryReaderRepresentable(
-                    feedPost: post,
+                    story: renderedItem,
                     preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
                     mute: false,
                     isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)

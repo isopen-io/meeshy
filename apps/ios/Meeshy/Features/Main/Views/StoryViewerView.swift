@@ -1341,17 +1341,18 @@ struct StoryViewerView: View {
         )
     }
 
-    /// `true` quand la slide courante POSSÈDE un audio de fond (piste
-    /// `backgroundAudioId` des effects non muette, ou entrée story-level
-    /// `backgroundAudio`) — pilote la note musicale affichée après la date
-    /// dans le header. La note signale la PRÉSENCE de l'audio de fond,
-    /// indépendamment du mute global ou du moment de la timeline où il joue
-    /// (directive user 2026-07-13, précision itération 2).
+    /// `true` quand la slide courante POSSÈDE un audio de fond — pilote la
+    /// note musicale affichée après la date dans le header. La note signale
+    /// la PRÉSENCE de l'audio de fond, indépendamment du mute global ou du
+    /// moment de la timeline où il joue (directive user 2026-07-13, précision
+    /// itération 2). Délègue à `StoryAudioAvailability.hasBackgroundAudioTrack`
+    /// (SDK, single source of truth) plutôt que de réinliner le prédicat.
     var storyHasBackgroundAudio: Bool { // internal for cross-file extension access
         guard let story = currentStory else { return false }
-        if story.backgroundAudio != nil { return true }
-        guard let effects = story.storyEffects else { return false }
-        return effects.backgroundAudioId != nil && (effects.backgroundAudioVolume ?? 1) > 0
+        return StoryAudioAvailability.hasBackgroundAudioTrack(
+            effects: story.storyEffects,
+            backgroundAudio: story.backgroundAudio
+        )
     }
 
     /// Probes each foreground video of the current slide for a real audio track.
@@ -1589,6 +1590,16 @@ private struct StoryGroupIntroOverlay: View {
                                   defaultValue: "Touchez pour passer à la story"))
     }
 
+    /// Fallback UNIQUE (pas de banner / banner en échec ou en chargement) —
+    /// une seule définition consommée par les deux branches de
+    /// `bannerBackground` pour qu'elles ne puissent jamais diverger visuellement.
+    private var avatarColorFallbackGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: avatarColor), .black],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+    }
+
     private var bannerBackground: some View {
         Group {
             if let banner = intro.bannerURL, !banner.isEmpty {
@@ -1601,17 +1612,11 @@ private struct StoryGroupIntroOverlay: View {
                     thumbHash: intro.bannerThumbHash,
                     showsStatusOverlays: false
                 ) {
-                    LinearGradient(
-                        colors: [Color(hex: avatarColor), .black],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
+                    avatarColorFallbackGradient
                 }
                 .scaledToFill()
             } else {
-                LinearGradient(
-                    colors: [Color(hex: avatarColor), .black],
-                    startPoint: .topLeading, endPoint: .bottomTrailing
-                )
+                avatarColorFallbackGradient
             }
         }
     }

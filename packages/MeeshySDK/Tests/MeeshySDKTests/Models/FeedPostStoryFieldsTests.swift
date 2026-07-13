@@ -119,7 +119,12 @@ final class FeedPostStoryFieldsTests: XCTestCase {
         XCTAssertEqual(item.repostAuthorUsername, "jcharles")
     }
 
-    func test_storyItem_fromFeedPost_storyRepostWithOwnEffects_keepsOwnEffectsAndMergesMedia() {
+    /// Politique XOR — alignée sur `toStoryGroups` (StoryModels.swift, la
+    /// cascade API/tray/viewer équivalente) : un post qui apporte SES
+    /// PROPRES médias les affiche exclusivement, il ne les fusionne PAS avec
+    /// ceux de la source. Un merge divergerait silencieusement du chemin
+    /// tray/viewer pour un même repost (post-revue 2026-07-13).
+    func test_storyItem_fromFeedPost_storyRepostWithOwnMedia_ownMediaWinsExclusively() {
         let ownMedia = FeedMedia.image()
         let sourceMedia = FeedMedia.image()
         var ownEffects = StoryEffects()
@@ -132,7 +137,7 @@ final class FeedPostStoryFieldsTests: XCTestCase {
         let item = StoryItem(feedPost: post)
 
         XCTAssertEqual(item.storyEffects?.backgroundAudioId, "own-bg")
-        XCTAssertEqual(item.media.map(\.id), [ownMedia.id, sourceMedia.id])
+        XCTAssertEqual(item.media.map(\.id), [ownMedia.id])
         XCTAssertEqual(item.content, "mon ajout")
     }
 
@@ -148,16 +153,5 @@ final class FeedPostStoryFieldsTests: XCTestCase {
         XCTAssertNil(item.storyEffects)
         XCTAssertTrue(item.media.isEmpty)
         XCTAssertNil(item.repostOfId)
-    }
-
-    func test_storyItem_fromFeedPost_mergeDeduplicatesSharedMediaIds() {
-        let shared = FeedMedia.image()
-        var post = FeedPost(author: "Andre", authorId: "u2", type: "STORY", content: "")
-        post.media = [shared]
-        post.repost = makeStoryRepostSource(media: [shared])
-
-        let item = StoryItem(feedPost: post)
-
-        XCTAssertEqual(item.media.map(\.id), [shared.id])
     }
 }

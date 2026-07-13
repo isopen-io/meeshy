@@ -741,23 +741,26 @@ public extension StoryItem {
     /// le contenu vit sur la source. Sans fallback, la page détail rendait un
     /// canvas VIDE (flou) et l'audio de fond / les audios timeline ne se
     /// résolvaient jamais (le resolver cherche `postMediaId` dans `media`).
-    /// On retombe donc sur la source (même cascade que `toStoryItem` du feed :
-    /// `post.storyEffects ?? repostSource?.storyEffects`) et on fusionne les
-    /// médias de la source pour que TOUTES les pistes (bg audio, audios
-    /// timeline, vidéos) se résolvent (bug 2026-07-13 « la story partagée
-    /// s'affiche en double et ne joue pas l'audio de fond »).
+    /// On retombe donc sur la source, avec la MÊME politique que
+    /// `toStoryGroups` (StoryModels.swift, extension `[APIPost]`) — seule
+    /// cascade équivalente côté API/tray/viewer — pour que les deux ponts
+    /// résolvent un repost identiquement : `storyEffects`/`audioUrl` gardent
+    /// leurs propres valeurs si posées, sinon retombent sur la source ; les
+    /// médias sont XOR (source UNIQUEMENT quand `media` propre est vide,
+    /// jamais fusionnés) — un merge divergeait silencieusement du chemin
+    /// tray/viewer pour un repost qui ajoute ses propres médias (bug
+    /// 2026-07-13 « la story partagée s'affiche en double et ne joue pas
+    /// l'audio de fond », alignement post-revue).
     init(feedPost: FeedPost) {
         let storySource: RepostContent? = {
             guard let repost = feedPost.repost,
                   (repost.type ?? "").uppercased() == "STORY" else { return nil }
             return repost
         }()
-        let ownMediaIds = Set(feedPost.media.map(\.id))
-        let sourceMedia = (storySource?.media ?? []).filter { !ownMediaIds.contains($0.id) }
         self.init(
             id: feedPost.id,
             content: feedPost.content,
-            media: feedPost.media + sourceMedia,
+            media: feedPost.media.isEmpty ? (storySource?.media ?? []) : feedPost.media,
             storyEffects: feedPost.storyEffects ?? storySource?.storyEffects,
             createdAt: feedPost.timestamp,
             expiresAt: nil,
