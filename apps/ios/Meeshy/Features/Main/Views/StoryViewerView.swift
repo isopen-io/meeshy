@@ -113,7 +113,9 @@ struct StoryViewerView: View {
     /// l'interstitiel du switch s'affiche COMPLET (nom, bannière, mood) dès la
     /// première frame — plus d'enrichissement visible en second temps.
     @State var groupIntroCache: [String: StoryViewModel.StoryGroupIntro] = [:]
-    static let groupIntroDuration: TimeInterval = 2.2
+    /// ~1,2 s (directive user 2026-07-13) : l'intro présente l'identité sans
+    /// ralentir l'enchaînement — assez pour lire nom + présence, pas plus.
+    static let groupIntroDuration: TimeInterval = 1.2
     /// True once the visible slide's background media is fully usable (real
     /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
     /// and the centered loading spinner.
@@ -515,8 +517,11 @@ struct StoryViewerView: View {
             slideTimer.markContentReady(slideId: id)
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
-            // U2 — tick haptique léger au passage de slide (parité Instagram).
-            HapticFeedback.light()
+            // Pas de haptic au changement de slide : ce onChange fire pour
+            // TOUTE navigation (auto-advance compris) et doublait le tick du
+            // point de geste — 2 à 3 vibrations par slide qui ralentissaient
+            // la lecture (retour user 2026-07-13). Le tick unique vit dans
+            // le geste manuel (+Canvas touchUp, commit de swipe de groupe).
             // U6 — VoiceOver : annonce du changement de slide (« Story 2 sur
             // 5 ») — sans elle, un utilisateur non-voyant n'a AUCUN signal
             // que le contenu vient de changer sous ses doigts.
@@ -1335,6 +1340,17 @@ struct StoryViewerView: View {
         )
     }
 
+    /// `true` quand la slide courante a un audio de FOND (piste
+    /// `backgroundAudioId` des effects non muette, ou entrée story-level
+    /// `backgroundAudio`) et que le viewer n'est pas coupé — pilote la note
+    /// musicale affichée après la date dans le header (directive 2026-07-13).
+    var storyBackgroundAudioIsPlaying: Bool { // internal for cross-file extension access
+        guard !isGlobalMuted, let story = currentStory else { return false }
+        if story.backgroundAudio != nil { return true }
+        guard let effects = story.storyEffects else { return false }
+        return effects.backgroundAudioId != nil && (effects.backgroundAudioVolume ?? 1) > 0
+    }
+
     /// Probes each foreground video of the current slide for a real audio track.
     /// Until a video is confirmed to carry audio it does NOT count toward
     /// `storyHasAudibleSound`, so the sound button never appears for a clip that
@@ -1467,7 +1483,7 @@ extension StoryViewerView {
     /// Présente l'interstitiel d'identité au passage au groupe d'une AUTRE
     /// personne : placeholder immédiat (username/avatar du groupe, déjà en
     /// main — cache-first), enrichi async (nom complet, bannière, mood) par
-    /// `resolveGroupIntro` PENDANT l'affichage. Dismiss auto à 2,2 s ; le tap
+    /// `resolveGroupIntro` PENDANT l'affichage. Dismiss auto à 1,2 s ; le tap
     /// skippe. Mes propres stories et le mode preview n'ont pas d'interstitiel.
     /// Le gel de lecture passe par `shouldPauseTimer || showGroupIntro`
     /// (timer + canvas + audio gelés en phase, reprise sans saut).
@@ -1573,8 +1589,21 @@ private struct StoryGroupIntroOverlay: View {
     private var bannerBackground: some View {
         Group {
             if let banner = intro.bannerURL, !banner.isEmpty {
-                CachedAsyncImage(url: banner, thumbHash: intro.bannerThumbHash)
-                    .scaledToFill()
+                // `showsStatusOverlays: false` : en échec/chargement de la
+                // bannière, AUCUN spinner ni bouton Retry ne doit saigner au
+                // centre de l'écran sous l'avatar (IMG_1155/1158, directive
+                // user 2026-07-13) — le fallback reste le gradient/thumbHash.
+                CachedAsyncImage(
+                    url: banner,
+                    thumbHash: intro.bannerThumbHash,
+                    showsStatusOverlays: false
+                ) {
+                    LinearGradient(
+                        colors: [Color(hex: avatarColor), .black],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                }
+                .scaledToFill()
             } else {
                 LinearGradient(
                     colors: [Color(hex: avatarColor), .black],

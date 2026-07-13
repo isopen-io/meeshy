@@ -639,9 +639,28 @@ struct StoryHeaderView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(group.username)
-                                .font(MeeshyFont.relative(15, weight: .bold))
-                                .foregroundColor(.white)
+                            HStack(spacing: 5) {
+                                Text(group.username)
+                                    .font(MeeshyFont.relative(15, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+
+                                // Republication : icône repost + "@handle" à la
+                                // SUITE du nom, en graisse normale, SANS « via »
+                                // (l'icône dit déjà la republication — directive
+                                // user 2026-07-13, IMG_1154).
+                                if let story = currentStory, story.repostOfId != nil {
+                                    Image(systemName: "arrow.2.squarepath")
+                                        .font(MeeshyFont.relative(10, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.6))
+                                    if let handle = story.repostAuthorUsername ?? story.repostAuthorName {
+                                        Text("@\(handle)")
+                                            .font(MeeshyFont.relative(12, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.65))
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
 
                             if let story = currentStory {
                                 HStack(spacing: 4) {
@@ -649,15 +668,13 @@ struct StoryHeaderView: View {
                                         .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
 
-                                    if story.repostOfId != nil {
-                                        Image(systemName: "arrow.2.squarepath")
+                                    // Note musicale juste après la date quand un
+                                    // audio de fond joue (directive user 2026-07-13).
+                                    if storyBackgroundAudioIsPlaying {
+                                        Image(systemName: "music.note")
                                             .font(MeeshyFont.relative(10, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.6))
-                                        if let authorName = story.repostAuthorName {
-                                            Text(String(localized: "story.viewer.via", defaultValue: "via @\(authorName)", bundle: .main))
-                                                .font(MeeshyFont.relative(11, weight: .medium))
-                                                .foregroundColor(.white.opacity(0.55))
-                                        }
+                                            .foregroundColor(.white.opacity(0.7))
+                                            .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond en lecture", bundle: .main))
                                     }
 
                                     if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {

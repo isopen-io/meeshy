@@ -243,6 +243,7 @@ extension StoryViewerView {
                         // Swipe left -> next group. Reprend l'auteur suivant à
                         // sa première story non lue (parité avec l'aperçu du
                         // cube), pas systématiquement à la slide 0.
+                        HapticFeedback.light()
                         groupTransition(forward: true) {
                             currentGroupIndex += 1
                             currentStoryIndex = entryIndex(of: groups[currentGroupIndex])
@@ -250,6 +251,7 @@ extension StoryViewerView {
                         }
                     } else if (dx > 60 || predicted > 150) && currentGroupIndex > 0 {
                         // Swipe right -> prev group
+                        HapticFeedback.light()
                         groupTransition(forward: false) {
                             currentGroupIndex -= 1
                             currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
@@ -298,9 +300,13 @@ extension StoryViewerView {
 
     // MARK: - Navigation
 
+    // Pas de haptic ici : `goToNext`/`goToPrevious` sont aussi le chemin de
+    // l'auto-advance (timer `onCompletion`) — vibrer à chaque slide casse la
+    // fluidité de lecture (retour user 2026-07-13 : « 3 retours haptiques par
+    // slide »). Le tick unique par navigation MANUELLE vit au point de geste
+    // (touchUp nav dans +Canvas, commit de swipe de groupe ci-dessus).
     func goToNext() {
         guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
-        HapticFeedback.light()
         guard let group = currentGroup else { return }
 
         if currentStoryIndex < group.stories.count - 1 {
@@ -329,7 +335,6 @@ extension StoryViewerView {
 
     func goToPrevious() {
         guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
-        HapticFeedback.light()
 
         if currentStoryIndex > 0 {
             crossFadeStory {
@@ -518,7 +523,7 @@ extension StoryViewerView {
         || isTransitioning
         || isDismissing
         // Interstitiel d'identité inter-groupes : la lecture (timer + canvas +
-        // audio) attend la fin des 2,2 s (ou le tap skip) — reprise sans saut.
+        // audio) attend la fin des ~1,2 s (ou le tap skip) — reprise sans saut.
         || showGroupIntro
     }
 

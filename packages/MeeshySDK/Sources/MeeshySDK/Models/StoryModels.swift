@@ -1656,6 +1656,11 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public let repostOfId: String?
     public let originalRepostOfId: String?
     public let repostAuthorName: String?
+    /// @handle de l'auteur original d'une republication — affiché à la suite
+    /// du nom de l'auteur (icône repost + "@handle", sans « via »). Optionnel :
+    /// les payloads/rows antérieurs décodent en nil et l'UI retombe sur
+    /// `repostAuthorName`.
+    public let repostAuthorUsername: String?
     public let visibility: String?
     public let audioUrl: String?
     public var isViewed: Bool
@@ -1740,6 +1745,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
                 createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil,
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
+                repostAuthorUsername: String? = nil,
                 visibility: String? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
@@ -1749,6 +1755,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
         self.originalRepostOfId = originalRepostOfId
         self.repostAuthorName = repostAuthorName
+        self.repostAuthorUsername = repostAuthorUsername
         self.visibility = visibility; self.audioUrl = audioUrl
         self.isViewed = isViewed; self.viewedAt = viewedAt; self.updatedAt = updatedAt
         self.translations = translations; self.backgroundAudio = backgroundAudio
@@ -1802,6 +1809,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             id: id, content: content, media: media, storyEffects: effects,
             createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
             originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
+            repostAuthorUsername: repostAuthorUsername,
             visibility: visibility, audioUrl: audioUrl, isViewed: isViewed,
             translations: self.translations,
             backgroundAudio: backgroundAudio,
@@ -1940,6 +1948,7 @@ extension Array where Element == APIPost {
                                  repostOfId: post.repostOf?.id,
                                  originalRepostOfId: post.originalRepostOfId,
                                  repostAuthorName: post.repostOf?.author.name,
+                                 repostAuthorUsername: post.repostOf?.author.username,
                                  visibility: post.visibility,
                                  audioUrl: post.audioUrl ?? repostSource?.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,

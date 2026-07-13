@@ -203,8 +203,14 @@ struct StoryGestureOverlayView: View {
                             holdActive = false
                             HapticFeedback.medium()
                         case .navigatePrevious:
+                            // Tick UNIQUE par navigation manuelle — les
+                            // chemins goToNext/goToPrevious et le onChange
+                            // de slide ne vibrent plus (l'auto-advance passe
+                            // par eux et doit rester silencieux).
+                            HapticFeedback.light()
                             onPrevious()
                         case .navigateNext:
+                            HapticFeedback.light()
                             onNext()
                         case .resumeFromPause:
                             break  // décidé au touchDown, pas au touchUp
@@ -817,10 +823,13 @@ struct StoryCardView: View {
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
             state: canvasPresentation,
             cardedCornerRadius: 22,
-            // Directive user 2026-07-04 : la carte se place DIRECTEMENT sous
-            // la ligne d'expiration — le mou vertical va en bas, plus de vide
-            // entre le header et la story.
-            verticalAlignment: .top,
+            // Portrait : la carte se place DIRECTEMENT sous la ligne
+            // d'expiration (directive 2026-07-04) — le mou vertical va en bas.
+            // Paysage (16:9) : la carte est CENTRÉE dans la région libre
+            // (directive 2026-07-13 « la position des vidéos landscape doit
+            // être au centre ») — collée au header elle laissait tout le vide
+            // en bas de l'écran.
+            verticalAlignment: readerCanvasRatio > 1 ? .center : .top,
             canvasRatio: readerCanvasRatio))
     }
 
@@ -1560,19 +1569,16 @@ struct StoryCardView: View {
         stallIndicatorGraceTask?.cancel()
         stallIndicatorGraceTask = nil
         if progressing {
-            // U2 — reprise perceptible au toucher UNIQUEMENT si le gel avait
-            // été montré (pas de haptic sur les micro-stalls absorbés par la
-            // grâce ci-dessous).
-            if showStallIndicator { HapticFeedback.light() }
             withAnimation(.easeOut(duration: 0.15)) { showStallIndicator = false }
             return
         }
         stallIndicatorGraceTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
+            // Signal VISUEL uniquement : les haptics de stall/reprise
+            // s'empilaient sur celle de navigation et hachaient la lecture
+            // (retour user 2026-07-13) — le spinner suffit.
             withAnimation(.easeIn(duration: 0.2)) { showStallIndicator = true }
-            // U2 — le gel devient perceptible en même temps que le spinner.
-            HapticFeedback.light()
         }
     }
 
