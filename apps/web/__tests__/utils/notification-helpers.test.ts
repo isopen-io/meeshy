@@ -627,10 +627,28 @@ describe('notification-helpers - Structure Groupée V2', () => {
       expect(formatContentPublishedAt(sixMinAgo, t)).toBe('il y a 6 min');
     });
 
+    it('utilise « il y a {count}h » pour aujourd\'hui au-delà d\'une heure', () => {
+      jest.useFakeTimers().setSystemTime(new Date(2026, 5, 15, 14, 0));
+      const threeHoursAgo = new Date(2026, 5, 15, 11, 0);
+      expect(formatContentPublishedAt(threeHoursAgo.toISOString(), t, 'fr')).toBe('il y a 3h');
+      jest.useRealTimers();
+    });
+
     it('utilise « hier {time} » pour la veille', () => {
       const now = new Date();
       const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 14, 30);
       expect(formatContentPublishedAt(yesterday.toISOString(), t, 'fr').startsWith('hier ')).toBe(true);
+    });
+
+    // Le bucket jour est calculé via calendarDayDiff (SSOT DST-safe), pas via un
+    // delta fixe de 24 h : l'avant-veille reste une date absolue même un jour de
+    // transition heure d'été/hiver. La correction DST elle-même est couverte par
+    // packages/shared/__tests__/utils/calendar-date.test.ts.
+    it('utilise une date absolue pour l\'avant-veille (2 jours)', () => {
+      jest.useFakeTimers().setSystemTime(new Date(2026, 5, 15, 14, 0));
+      const twoDaysAgo = new Date(2026, 5, 13, 14, 0);
+      expect(formatContentPublishedAt(twoDaysAgo.toISOString(), t, 'fr')).toMatch(/\d{2}\/\d{2}\/\d{4}/);
+      jest.useRealTimers();
     });
 
     it('utilise une date+heure absolue au-delà', () => {
