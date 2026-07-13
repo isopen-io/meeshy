@@ -25,6 +25,7 @@ data class ProfileHeaderPresentation(
     val completionPercent: Int?,
     val hasE2EE: Boolean,
     val memberSinceEpochMillis: Long?,
+    val lastSeenEpochMillis: Long?,
     val systemLanguage: String?,
     val regionalLanguage: String?,
     val country: String?,
@@ -41,20 +42,24 @@ object ProfileHeaderBuilder {
      * never over- or under-fill the ring; every optional text field degrades a
      * blank string to `null` so the UI shows nothing rather than an empty line.
      */
-    fun build(user: MeeshyUser, nowEpochMillis: Long): ProfileHeaderPresentation =
-        ProfileHeaderPresentation(
+    fun build(user: MeeshyUser, nowEpochMillis: Long): ProfileHeaderPresentation {
+        val presence = UserPresence(isOnline = user.isOnline == true, lastActiveAt = user.lastActiveAt)
+            .state(nowEpochMillis)
+        return ProfileHeaderPresentation(
             displayName = user.effectiveDisplayName,
             handle = user.username.takeIf { it.isNotBlank() }?.let { "@$it" },
             bio = user.bio?.takeIf { it.isNotBlank() },
             avatarUrl = user.avatar?.takeIf { it.isNotBlank() },
-            presence = UserPresence(isOnline = user.isOnline == true, lastActiveAt = user.lastActiveAt)
-                .state(nowEpochMillis),
+            presence = presence,
             completionPercent = user.profileCompletionRate?.coerceIn(0, 100),
             hasE2EE = !user.signalIdentityKeyPublic.isNullOrBlank(),
             memberSinceEpochMillis = isoToEpochMillisOrNull(user.createdAt),
+            lastSeenEpochMillis = isoToEpochMillisOrNull(user.lastActiveAt)
+                .takeIf { presence != PresenceState.ONLINE },
             systemLanguage = user.systemLanguage?.takeIf { it.isNotBlank() },
             regionalLanguage = user.regionalLanguage?.takeIf { it.isNotBlank() },
             country = user.registrationCountry?.takeIf { it.isNotBlank() },
             timezone = user.timezone?.takeIf { it.isNotBlank() },
         )
+    }
 }

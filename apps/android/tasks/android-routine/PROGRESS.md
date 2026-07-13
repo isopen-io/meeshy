@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **relative-time long rendering layer** landed (slice `time-relative-long-format-strings`,
+> feature-parity §Q — the *long/detail-surface* rendering half, companion to the just-landed short renderer;
+> the consumer the `RelativeTimeLongFormat.label` → `RelativeTimeLongLabel` classifier was waiting for so it
+> stops being dead code). Ships pure `:sdk-ui/format` `RelativeTimeLongText.long(epochMillis, referenceMillis,
+> zone, locale, strings)` + the `RelativeTimeLongStrings` template bundle — the view-layer wording atop the
+> pure calendar-day ladder. Faithful to the iOS `RelativeTimeFormatter.longString` detail form (`maintenant /
+> il y a 45s / il y a 5 min / hier / il y a 3j / il y a 2sem / il y a 2mois / date`). **Thresholds are NOT
+> re-implemented:** `long` delegates to `RelativeTimeLongFormat.label` (the SSOT) — the `Yesterday` special
+> case, the zone-aware calendar-day boundaries, and the future/skew→`Now` collapse are all *inherited*; it only
+> maps the returned rung to its localized template. Localized strings are **injected as parameters** (the
+> `CallTimeLabel`/`RelativeTimeStrings` pattern) so the formatter has zero Android dependency and is 100%
+> JVM-testable; a `@Composable rememberRelativeTimeLongStrings()` binds the `time_relative_long_*` resources
+> (EN/FR/ES/PT). **SSOT for the absolute-date rung:** this slice **extracted** the previously-private
+> absolute-date rendering out of `RelativeTimeFormat` into a shared internal `formatAbsoluteDate` that *both*
+> the short and long formatters now call — so an "older than three months" instant can never read differently
+> between the two surfaces (pinned by a cross-formatter equality test). **Wired for real (no dead ends):** the
+> **profile-header "last seen" line** now renders the discreet long relative label ("Vu il y a 5 min", "Vu
+> hier", "Last seen 3 d ago") beneath the handle. The *when-to-show* rule is baked into the pure, tested
+> builder rather than the Composable: `ProfileHeaderBuilder.lastSeenEpochMillis` is **null for an ONLINE user**
+> (the live presence dot speaks — no stale line) and carries the parsed `lastActiveAt` epoch for AWAY/OFFLINE
+> (null too when absent/unparseable). **+18 tests** — 13 on `RelativeTimeLongText` (under-30s→now; future/skew→
+> now; 45s; 5min; same-day 2h; late-evening-seen-next-morning→yesterday-not-hours; 3d; 2wk; 2mo; >3mo same-year
+> →date w/o year; >3mo prior-year→date w/ year; substitution uses the real value [7min vs 11min]; the cross-
+> formatter absolute-date equality) + 5 on `ProfileHeaderBuilder.lastSeenEpochMillis` (online→null; away→epoch;
+> offline→epoch; absent→null; unparseable→null). **Two-mutation RED check:** `Yesterday→now` template failed
+> exactly the yesterday test; dropping the builder's `takeIf { presence != ONLINE }` failed exactly the online→
+> null test; both reverted green. **Verification:** `:sdk-ui` + `:feature:profile` `testDebugUnitTest` full
+> suites green, then `:app:assembleDebug testDebugUnitTest` across every module → **BUILD SUCCESSFUL** (APK
+> produced, profile Compose glue compiles, no module regressed — no flaky `:sdk-core` failures this run).
+> Reviewer **PASS** (diff `apps/android` only — `:sdk-ui` [new `RelativeTimeLongText.kt` +
+> `RelativeTimeLongStringsCompose.kt` + test, extracted `AbsoluteDateFormat.kt`, `RelativeTimeFormat` refactor
+> to reuse it, `time_relative_long_*` strings ×4 locales], `:feature:profile` [`ProfileHeaderPresentation`
+> +`lastSeenEpochMillis` field + builder derivation, `ProfileScreen` last-seen subtitle, `profile_last_seen`
+> strings ×4, fixture +field], `feature-parity.md`, routine docs; no production logic outside; **SDK purity** —
+> pure formatter takes opaque injected strings, stays agnostic → `:sdk-ui` building block; the "when to render
+> last-seen" orchestration stays app-side in the profile builder; **SSOT** — thresholds owned once by
+> `RelativeTimeLongFormat`, absolute-date owned once by `formatAbsoluteDate`, both reused not duplicated;
+> **UDF/instant-app** — pure fn, no state, profile cache path unchanged; **colour/UX coherence** — no colour
+> change, discreet Prisme framing; **no coverage floor lowered, no test weakened**). **Next slice:** wire the
+> *short* formatter into the conversation-row / notification-row timestamps, the friend-request "requested X
+> ago" line (long form on the contacts surface), or resume the media-wiring hints below.
+
 > On 2026-07-13 **relative-time short rendering layer** landed (slice `time-relative-format-strings`,
 > feature-parity §Q — the *rendering half* of the relative-time SSOT, the consumer the two prior pure
 > classifiers (`RelativeTime.classify`, `RelativeTimeLongFormat.label`) were waiting for so they stop being

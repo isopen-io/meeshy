@@ -77,12 +77,16 @@ import me.meeshy.sdk.model.LanguageData
 import androidx.compose.material3.TopAppBarDefaults
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
+import me.meeshy.ui.format.RelativeTimeLongText
+import me.meeshy.ui.format.rememberRelativeTimeLongStrings
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import java.text.DateFormat
+import java.time.ZoneId
 import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -354,6 +358,21 @@ fun ProfileScreen(
                     Text(
                         text = it,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+                header?.lastSeenEpochMillis?.let { lastSeen ->
+                    val longStrings = rememberRelativeTimeLongStrings()
+                    val relative = RelativeTimeLongText.long(
+                        epochMillis = lastSeen,
+                        referenceMillis = System.currentTimeMillis(),
+                        zone = ZoneId.systemDefault(),
+                        locale = Locale.getDefault(),
+                        strings = longStrings,
+                    )
+                    Text(
+                        text = stringResource(R.string.profile_last_seen, relative),
+                        style = MaterialTheme.typography.labelMedium,
                         color = MeeshyTheme.tokens.textSecondary,
                     )
                 }

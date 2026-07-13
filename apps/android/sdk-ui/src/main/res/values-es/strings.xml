@@ -43,4 +43,12 @@
     <string name="time_relative_days">%1$d d</string>
     <string name="time_relative_weeks">%1$d sem</string>
     <string name="time_relative_months">%1$d meses</string>
+    <string name="time_relative_long_now">ahora mismo</string>
+    <string name="time_relative_long_yesterday">ayer</string>
+    <string name="time_relative_long_seconds">hace %1$d s</string>
+    <string name="time_relative_long_minutes">hace %1$d min</string>
+    <string name="time_relative_long_hours">hace %1$d h</string>
+    <string name="time_relative_long_days">hace %1$d d</string>
+    <string name="time_relative_long_weeks">hace %1$d sem</string>
+    <string name="time_relative_long_months">hace %1$d meses</string>
 </resources>
