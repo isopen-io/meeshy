@@ -6,39 +6,35 @@ Loop autonome (directive user 2026-07-13). Objectif : refondre la première exé
 email/numéro (unicité + récupération de compte), et synchroniser les contacts téléphone ↔
 plateforme (iOS, permissions hors main thread).
 
-## Phase 0 — Cartographie (en cours)
-- [ ] Flow onboarding iOS actuel (welcome → signup → profil)
-- [ ] Endpoints existants de vérification numéro/email (à réutiliser, pas recréer)
-- [ ] Pattern permissions iOS hors main thread
-- [ ] Onboarding web + suggestions de personnes existantes
+## Phase 0 — Cartographie (FAIT)
+- [x] Flow onboarding iOS actuel (welcome → signup → profil) — wizard 8 étapes, assets profil jetés (fixé)
+- [x] Endpoints existants de vérification numéro/email — check-availability, phone-transfer/check réutilisés
+- [x] Pattern permissions iOS hors main thread — helper nonisolated + closure @Sendable
+- [x] Onboarding web + suggestions — wizard web 5 étapes existe, pas de contact sync backend (créé)
 
-## Phase 1 — Onboarding première exécution (copy + UX)
-- [ ] Écran d'accueil : positionnement singulier — mise en relation mondiale, 5 continents,
-      pays cités (ex: France, Sénégal, Brésil, Japon, Australie, USA, Maroc…)
-- [ ] Étape complétion profil : nom, prénom, photo de profil, bannière
-      → copy incitant à « être sous son plus beau jour » pour rencontrer la crème de la crème
-- [ ] Étape contact : email + numéro de téléphone
-      → copy expliquant pourquoi (gestion des engagements, récupération de compte)
+## Phase 1 — Onboarding première exécution (copy + UX) — FAIT (commit f5c9258fb)
+- [x] Carrousel page 1 : 5 continents, pays cités (France, Sénégal, Brésil, Japon, Australie, Canada) × 5 langues
+- [x] Wizard : funHeader/funSubtitle réécrits (plus beau jour / crème de la crème sur profil)
+- [x] Étapes téléphone/email : incitation unicité + engagements + récupération
+- [x] BONUS fix : photo/bannière/bio du wizard désormais réellement uploadées (ProfileCompletionUploader)
 
-## Phase 2 — Vérification numéro / récupération de compte (gateway)
-- [ ] Réutiliser les endpoints existants de check d'existence numéro/email
-- [ ] Unicité du numéro : refus si numéro actif ailleurs
-- [ ] Cas numéro identique sur compte inactif depuis longtemps :
-      comparer nom/prénom (match ou similarité) → proposer récupération de compte
-- [ ] Tests gateway (TDD, bun)
+## Phase 2 — Vérification numéro / récupération de compte (gateway) — FAIT (commit b25745f63)
+- [x] /auth/phone-transfer/check étendu (réutilisé, pas recréé) : dormant + nameSimilarity + recoverySuggested
+- [x] Similarité nom/prénom : Sørensen-Dice, tolère accents/casse/ordre inversé/typos
+- [x] Tests écrits (name-similarity, service, route) — EXÉCUTION EN ATTENTE (bun install en cours)
 
-## Phase 3 — Synchronisation de contacts (iOS + gateway)
-- [ ] Endpoint gateway de matching contacts (numéros normalisés → users existants)
-- [ ] iOS : demande d'accès Contacts hors main thread (suivre le pattern des autres permissions)
-- [ ] iOS : lecture CNContactStore, normalisation E.164, envoi au gateway
-- [ ] UI suggestions « déjà sur Meeshy »
-- [ ] NSContactsUsageDescription dans Info.plist
-- [ ] Tests
+## Phase 3 — Synchronisation de contacts (iOS + gateway) — FAIT (commits b25745f63, b2a870d82)
+- [x] POST /users/me/contacts/match (E.164, jamais persisté serveur, cap 2000)
+- [x] iOS ContactSyncService : permission hors main actor (pattern MicrophonePermission), fetch sur queue utilitaire
+- [x] SDK : ContactMatchModels + ContactMatchService
+- [x] UI DiscoverTab : bouton câblé (ex-stub) + section « Déjà sur Meeshy »
+- [x] NSContactsUsageDescription : déjà présent dans Info.plist
+- [x] Tests : MockContactSyncService + 3 tests DiscoverViewModel
 
-## Phase 4 — Vérification & livraison
-- [ ] Tests gateway verts (bun)
-- [ ] Build iOS si possible dans cet environnement (sinon revue statique rigoureuse)
-- [ ] Commits propres + push -u origin claude/onboarding-contact-sync-xg9b70
+## Phase 4 — Vérification & livraison (EN COURS)
+- [ ] Tests gateway verts (bun) — install dépendances en cours
+- [ ] Revue statique iOS (pas de simulateur dans cet env linux)
+- [x] Commits propres + push (3 commits poussés)
 
 ## Review
 (à compléter en fin de tâche)
