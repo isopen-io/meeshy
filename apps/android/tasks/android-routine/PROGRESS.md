@@ -1,5 +1,40 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **relative-time short rendering layer** landed (slice `time-relative-format-strings`,
+> feature-parity §Q — the *rendering half* of the relative-time SSOT, the consumer the two prior pure
+> classifiers (`RelativeTime.classify`, `RelativeTimeLongFormat.label`) were waiting for so they stop being
+> dead code). Ships pure `:sdk-ui/format` `RelativeTimeFormat.short(epochMillis, referenceMillis, zone,
+> locale, strings)` + the `RelativeTimeStrings` template bundle — the view-layer wording atop the pure ladder.
+> The thresholds are **not re-implemented**: `short` delegates to `RelativeTime.classify` (the SSOT) and only
+> maps the returned `RelativeTimeUnit` rung to its localized template, so future/skew→`Now`, the exact rung
+> boundaries and the `Long`-overflow safety are all *inherited*. Localized strings are **injected as
+> parameters** (the established `CallTimeLabel` pattern) — the formatter has zero Android dependency and is
+> 100% JVM-testable; a `@Composable rememberRelativeTimeStrings()` binds the `time_relative_*` resources
+> (EN/FR/ES/PT) at the call site. Faithful to the iOS `RelativeTimeFormatter` compact form (`maintenant /
+> Nmin / Nh / Nj / Nsem`); the three-months-or-older rung falls back to the locale/zone absolute date with
+> the year shown only when it differs from the reference year (matching `CallTimeLabel`). **Wired for real
+> (no dead ends):** the **feed post timestamp** now renders the discreet relative label ("5 min", "2 h",
+> "3 j") in place of the raw absolute `shortDateTimeLabel` — the Prisme "native, discreet" framing — parsing
+> via the tested `isoToEpochMillisOrNull` SSOT and falling back to the absolute short label when the instant
+> is absent/unparsable (a malformed timestamp never blanks or crashes the row). **+13 tests** (under-30s→now;
+> future/skew→now; 30s boundary→seconds rung; 45s substitution; 5min; 59min-still-minutes; 2h; 3d; 2wk; 2mo;
+> substitution uses the real value not a constant [7min vs 11min]; >90d same-year→date w/o year; >90d
+> prior-year→date w/ year). **Two-mutation RED check:** minutes-rung→`hoursAgo` template + `year != ` →
+> `year == ` failed exactly the 5 relevant tests (2 minutes + substitution + 2 absolute-date), reverted green.
+> **Verification:** `:sdk-ui:testDebugUnitTest` + `:feature:feed:testDebugUnitTest` full suites green +
+> `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced, feed Compose glue compiles). Reviewer **PASS**
+> (diff `apps/android` only — `:sdk-ui` [new `RelativeTimeFormat.kt` + `RelativeTimeStringsCompose.kt` + test,
+> `time_relative_*` strings ×4 locales], `:feature:feed` [3 imports + one `@Composable postRelativeTime`
+> helper + one call-site swap], `feature-parity.md`, routine docs; no production logic outside; **SDK purity**
+> — pure formatter takes opaque injected strings, stays agnostic → `:sdk-ui` building block alongside
+> `DateTimeLabels`/`CallTimeLabel`; the "when/where to render relative" orchestration stays app-side in feed;
+> **SSOT** — thresholds owned once by `RelativeTime`, reused not duplicated; **UDF/instant-app** — pure fn,
+> no state, feed cache path unchanged; **colour/UX coherence** — no colour change, discreet Prisme framing;
+> **no coverage floor lowered, no test weakened**). **Next slice:** the *long* rendering layer
+> (`RelativeTimeLongFormat` → localized `il y a … / hier / date` for contacts/participants/friend-requests/
+> message-detail, incl. the `Yesterday` special case + `lastSeen` presence framing), wiring the short
+> formatter into the conversation-row / notification-row timestamps, or resume the media-wiring hints below.
+
 > On 2026-07-13 **per-conversation message ordering** landed (slice `chat-message-ordering`, feature-parity
 > "Message ordering" — the ordering half of the bundled `seq` sort + gap-detection + server-offset roadmap item).
 > Ships the pure `:feature:chat` SSOT `MessageOrdering.order(items, selector) → List<T>` (+ a bare-input overload)

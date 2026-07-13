@@ -2221,3 +2221,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `RelativeTime` second thresholds as SSOT then switches to **calendar-day** boundaries via an injected
       `ZoneId` (2h across midnight → `Yesterday`; the same instant reads `hier` vs `il y a Nh` per zone),
       future/skew → `Now`
+- [x] Relative-time *short* rendering layer (`RelativeTimeFormat.short` + `RelativeTimeStrings`;
+      port of the iOS `RelativeTimeFormatter` compact form `maintenant / Nmin / Nh / Nj / Nsem`)
+      — pure `:sdk-ui/format`, delegates to `RelativeTime.classify` (thresholds not re-implemented) and
+      maps each rung to an **injected** localized template (the `CallTimeLabel` pattern; no Android dep, JVM
+      -tested), the `AbsoluteDate` rung → locale/zone date (year only when it differs). `time_relative_*`
+      strings EN/FR/ES/PT + `@Composable rememberRelativeTimeStrings()` glue; **wired into the feed post
+      timestamp** (raw absolute date → discreet relative label, Prisme framing; unparsable → absolute fallback)
