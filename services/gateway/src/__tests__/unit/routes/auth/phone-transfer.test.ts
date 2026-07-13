@@ -140,7 +140,7 @@ describe('POST /phone-transfer/check — phone owned by another user', () => {
 });
 
 describe('POST /phone-transfer/check — dormant account with matching identity', () => {
-  it('passes firstName/lastName to the service and returns recovery hints', async () => {
+  it('passes firstName/lastName to the service and exposes only recoverySuggested', async () => {
     const checkPhoneOwnership = jest.fn<any>().mockResolvedValue({
       exists: true,
       maskedInfo: { displayName: 'J*** D***', username: 'j***e', email: 'j***@test.com' },
@@ -158,9 +158,12 @@ describe('POST /phone-transfer/check — dormant account with matching identity'
     });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.data.dormant).toBe(true);
-    expect(body.data.nameSimilarity).toBe('exact');
     expect(body.data.recoverySuggested).toBe(true);
+    // Confidentialité : l'endpoint public ne divulgue NI la dormance, NI
+    // l'horodatage de dernière activité, NI la similarité de nom.
+    expect(body.data.dormant).toBeUndefined();
+    expect(body.data.dormantSince).toBeUndefined();
+    expect(body.data.nameSimilarity).toBeUndefined();
     expect(checkPhoneOwnership).toHaveBeenCalledWith('+33612345678', {
       firstName: 'Jane',
       lastName: 'Doe',

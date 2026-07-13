@@ -134,6 +134,9 @@ public final class RegistrationViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var usernameTask: Task<Void, Never>?
     private var emailTask: Task<Void, Never>?
+    /// Dernière signature (numéro + identité) sondée pour la récupération, afin
+    /// de ne pas relancer une requête réseau identique.
+    private var lastOwnershipProbe: String?
     private var phoneTask: Task<Void, Never>?
 
     public let totalSteps = RegistrationStep.allCases.count
@@ -363,6 +366,10 @@ public final class RegistrationViewModel: ObservableObject {
     }
 
     private func probePhoneOwnership(fullPhone: String, country: String, firstName: String, lastName: String) async {
+        // Ne re-sonde pas une signature identique (numéro + identité déjà connue).
+        let signature = "\(fullPhone)|\(firstName)|\(lastName)"
+        guard signature != lastOwnershipProbe else { return }
+
         do {
             let ownership = try await AuthService.shared.checkPhoneOwnership(
                 phone: fullPhone,
@@ -371,6 +378,7 @@ public final class RegistrationViewModel: ObservableObject {
                 lastName: lastName.isEmpty ? nil : lastName
             )
             guard !Task.isCancelled else { return }
+            lastOwnershipProbe = signature
             phoneOwnership = ownership
         } catch {
             guard !Task.isCancelled else { return }

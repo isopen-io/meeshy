@@ -11,6 +11,7 @@ struct OnboardingFlowView: View {
     var onComplete: (() -> Void)?
 
     @State private var keyboardHeight: CGFloat = 0
+    @State private var didUploadProfileAssets = false
 
     var body: some View {
         ZStack {
@@ -103,6 +104,9 @@ struct OnboardingFlowView: View {
     /// qu'une fois authentifié. Le JPEG est encodé ici (hors réseau) puis
     /// l'upload continue en tâche détachée : il survit au dismiss de la vue.
     private func uploadProfileCompletionAssets() {
+        guard !didUploadProfileAssets else { return }
+        didUploadProfileAssets = true
+
         let profileImageData = viewModel.profileImage?.jpegData(compressionQuality: 0.9)
         let bannerImageData = viewModel.bannerImage?.jpegData(compressionQuality: 0.9)
         let bio = viewModel.bio

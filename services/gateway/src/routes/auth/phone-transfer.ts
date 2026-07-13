@@ -59,10 +59,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
                     email: { type: 'string' }
                   }
                 },
-                dormant: { type: 'boolean', description: 'Owner inactive for a long time (dormant account)' },
-                dormantSince: { type: 'string', nullable: true, description: 'ISO date of the owner last activity when dormant' },
-                nameSimilarity: { type: 'string', nullable: true, enum: ['exact', 'similar', 'different', null], description: 'Similarity between declared identity and owner identity' },
-                recoverySuggested: { type: 'boolean', description: 'Dormant account whose identity matches — suggest account recovery' }
+                recoverySuggested: { type: 'boolean', description: 'Dormant account whose declared identity matches — suggest account recovery. Requires the caller to already know the real name, so no account state is disclosed on its own.' }
               }
             }
           }
@@ -98,12 +95,15 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       const identity = firstName || lastName ? { firstName, lastName } : undefined;
       const result = await phoneTransferService.checkPhoneOwnership(normalized.phoneNumber, identity);
 
+      // Volontairement : on n'expose PAS dormant/dormantSince/nameSimilarity.
+      // Cet endpoint est public (rate-limité, non authentifié) ; révéler la
+      // dormance ou l'horodatage exact de dernière activité d'un compte
+      // arbitraire (énumérable par numéro) serait une fuite. Seul le booléen
+      // final recoverySuggested sort — et il exige déjà de connaître le vrai
+      // nom du titulaire, donc ne divulgue aucun état à lui seul.
       return sendSuccess(reply, {
         exists: result.exists,
         maskedInfo: result.maskedInfo,
-        dormant: result.dormant ?? false,
-        dormantSince: result.dormantSince ?? null,
-        nameSimilarity: result.nameSimilarity ?? null,
         recoverySuggested: result.recoverySuggested ?? false
       });
     } catch (error) {

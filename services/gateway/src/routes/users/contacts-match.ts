@@ -16,17 +16,22 @@ import type { AuthenticatedRequest } from './types';
  */
 
 const MAX_CONTACTS_PER_SYNC = 2000;
+const MAX_MATCH_RESULTS = 500;
 
+// Le carnet d'adresses est une donnée appareil non maîtrisée : un contact
+// peut porter beaucoup de numéros/emails et des chaînes longues. On borne
+// GÉNÉREUSEMENT (garde-fou anti-abus) plutôt que serré, sinon un seul contact
+// « atypique » ferait échouer TOUT le batch (400) — cf. tolérance des entrées.
 const contactEntrySchema = z.object({
-  displayName: z.string().max(150).optional(),
-  phoneNumbers: z.array(z.string().max(30)).max(5).optional(),
-  emails: z.array(z.string().max(254)).max(5).optional(),
-}).strict();
+  displayName: z.string().max(300).optional(),
+  phoneNumbers: z.array(z.string().max(64)).max(50).optional(),
+  emails: z.array(z.string().max(320)).max(50).optional(),
+}).strip();
 
 const matchContactsSchema = z.object({
   contacts: z.array(contactEntrySchema).min(1).max(MAX_CONTACTS_PER_SYNC),
   defaultCountry: z.string().length(2).optional(),
-}).strict();
+}).strip();
 
 type ContactEntry = z.infer<typeof contactEntrySchema>;
 
@@ -174,8 +179,14 @@ export async function matchContacts(fastify: FastifyInstance) {
           phoneNumber: true,
           email: true
         },
-        take: 500
+        take: MAX_MATCH_RESULTS
       });
+
+      if (matchedUsers.length === MAX_MATCH_RESULTS) {
+        fastify.log.warn(
+          `[CONTACTS-MATCH] Résultats plafonnés à ${MAX_MATCH_RESULTS} — matchedCount sous-estime le total réel`
+        );
+      }
 
       const matches = matchedUsers.map((user) => {
         const matchedByPhone = user.phoneNumber !== null && phones.has(user.phoneNumber);

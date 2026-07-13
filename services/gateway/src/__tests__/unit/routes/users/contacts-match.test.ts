@@ -126,6 +126,50 @@ describe('POST /users/me/contacts/match — phone match', () => {
   });
 });
 
+describe('POST /users/me/contacts/match — tolerant to messy device contacts', () => {
+  it('does not reject the whole batch when a contact has more than 5 phone numbers', async () => {
+    const prisma = makePrisma([MATCHED_USER]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: {
+        defaultCountry: 'SN',
+        contacts: [
+          {
+            displayName: 'Awa multi-lignes',
+            phoneNumbers: [
+              '77 000 00 01', '77 000 00 02', '77 000 00 03',
+              '77 000 00 04', '77 000 00 05', '77 000 00 06',
+              '77 123 45 67',
+            ],
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.matches).toHaveLength(1);
+    await app.close();
+  });
+
+  it('drops unknown extra fields instead of rejecting the payload', async () => {
+    const prisma = makePrisma([MATCHED_USER]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: {
+        contacts: [
+          { phoneNumbers: ['+221771234567'], note: 'champ client inconnu', starred: true },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.matches).toHaveLength(1);
+    await app.close();
+  });
+});
+
 describe('POST /users/me/contacts/match — email match', () => {
   it('matches a contact by lowercased email', async () => {
     const prisma = makePrisma([MATCHED_USER]);
