@@ -164,4 +164,6 @@ public data class BubbleContent(
     val pinnedAtIso: String? = null,
     val isForwarded: Boolean = false,
     val isStarred: Boolean = false,
+    val isFirstInGroup: Boolean = true,
+    val isLastInGroup: Boolean = true,
 )

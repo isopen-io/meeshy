@@ -426,6 +426,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       time, per-target sent checkmark, only a server-acked source is forwardable (an unsent bubble is refused).
       EN/FR/ES/PT strings.
 - [x] Optimistic send with in-place server-ACK upgrade (no flicker) + `clientMessageId` reconciliation
+- [x] Consecutive-sender message grouping (WhatsApp/iMessage-style runs) — **surpasses iOS**, which
+      hardcodes `isLastInGroup: true` + always shows the avatar. Pure `:feature:chat` `MessageGrouping`
+      SSOT clusters the ascending list into same-author runs (outgoing = one "self" identity; incoming =
+      equal non-null `senderId`; a null incoming sender never groups; a pair breaks across a
+      `DEFAULT_GAP_MILLIS`=5min window compared on the absolute delta; a missing timestamp rides with the
+      previous same-author message) → `MessageGroupPosition(isFirstInGroup, isLastInGroup, isStandalone)`.
+      `ChatViewModel.toBubbles` derives `showSenderName` from `isFirstInGroup` (name shown once per run,
+      no longer on every incoming) and threads first/last onto `BubbleContent`; `MessageBubble` stacks a run
+      tightly (top gap only on first, bottom gap only on last) while distinct messages keep 4dp breathing
+      room (slice `chat-message-grouping`, +15 tests). Header and visual run share one SSOT so they can't drift.
 - [~] Date section headers done — `ChatListItem.DayHeader` interleavé +
       `MessageDayLabel` (port iOS : Aujourd'hui/Hier/Avant-hier, jour de semaine
       ≤6j, date complète + année si différente, label recalculé au rendu pour
