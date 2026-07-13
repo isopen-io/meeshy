@@ -668,13 +668,15 @@ struct StoryHeaderView: View {
                                         .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
 
-                                    // Note musicale juste après la date quand un
-                                    // audio de fond joue (directive user 2026-07-13).
-                                    if storyBackgroundAudioIsPlaying {
+                                    // Note musicale juste après la date : signale la
+                                    // PRÉSENCE d'un audio de fond sur la story — pas
+                                    // son état de lecture (ni mute, ni timing de la
+                                    // timeline). Directive user 2026-07-13.
+                                    if storyHasBackgroundAudio {
                                         Image(systemName: "music.note")
                                             .font(MeeshyFont.relative(10, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.7))
-                                            .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond en lecture", bundle: .main))
+                                            .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
                                     }
 
                                     if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {

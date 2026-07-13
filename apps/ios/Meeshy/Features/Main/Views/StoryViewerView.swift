@@ -1340,12 +1340,14 @@ struct StoryViewerView: View {
         )
     }
 
-    /// `true` quand la slide courante a un audio de FOND (piste
+    /// `true` quand la slide courante POSSÈDE un audio de fond (piste
     /// `backgroundAudioId` des effects non muette, ou entrée story-level
-    /// `backgroundAudio`) et que le viewer n'est pas coupé — pilote la note
-    /// musicale affichée après la date dans le header (directive 2026-07-13).
-    var storyBackgroundAudioIsPlaying: Bool { // internal for cross-file extension access
-        guard !isGlobalMuted, let story = currentStory else { return false }
+    /// `backgroundAudio`) — pilote la note musicale affichée après la date
+    /// dans le header. La note signale la PRÉSENCE de l'audio de fond,
+    /// indépendamment du mute global ou du moment de la timeline où il joue
+    /// (directive user 2026-07-13, précision itération 2).
+    var storyHasBackgroundAudio: Bool { // internal for cross-file extension access
+        guard let story = currentStory else { return false }
         if story.backgroundAudio != nil { return true }
         guard let effects = story.storyEffects else { return false }
         return effects.backgroundAudioId != nil && (effects.backgroundAudioVolume ?? 1) > 0
