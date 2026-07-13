@@ -490,7 +490,7 @@ struct FeedView: View {
 
     // MARK: - Composer Placeholder
     private var composerPlaceholder: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Avatar
             ZStack {
                 Circle()
@@ -521,17 +521,17 @@ struct FeedView: View {
             }) {
                 HStack {
                     Text(String(localized: "Partager quelque chose avec le monde...", defaultValue: "Partager quelque chose avec le monde..."))
-                        .font(.subheadline)
+                        .font(MeeshyFont.relative(15))
                         .foregroundColor(theme.textMuted)
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .fill(theme.inputBackground)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 20)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                                 .stroke(theme.inputBorder, lineWidth: 1)
                         )
                 )
@@ -637,16 +637,16 @@ struct FeedView: View {
             }
             .accessibilityLabel(String(localized: "Ajouter du contenu", defaultValue: "Ajouter du contenu"))
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimaryHex))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                         .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.25), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     // MARK: - Feed Post Card
@@ -721,7 +721,7 @@ struct FeedView: View {
         // Marge latérale volontairement plus serrée que les posts standards
         // (`FeedPostCard` = 16) → la carte Réel est un peu plus large, tout en
         // gardant une séparation nette des bords et des boutons flottants.
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MeeshySpacing.md)
         // Pas de `.equatable()` ici : le conteneur observe le coordinator (non
         // Equatable). Le court-circuit Equatable vit à l'intérieur, sur `ReelFeedCard`.
     }
@@ -862,7 +862,7 @@ struct FeedView: View {
                 },
                 topPadding: CollapsibleHeaderMetrics.expandedHeight
             ) {
-                LazyVStack(spacing: 16) {
+                LazyVStack(spacing: MeeshySpacing.lg) {
                     // Anchor pour le banner "nouveaux posts" → scroll vers
                     // le haut. L'id est attache a un Color.clear de hauteur 0
                     // au sommet du contenu.
@@ -876,14 +876,14 @@ struct FeedView: View {
 
                     // Composer placeholder
                     composerPlaceholder
-                        .padding(.bottom, 8)
+                        .padding(.bottom, MeeshySpacing.sm)
 
                     // Connection status banner (banner manages its own socket observation)
                     ConnectionBanner()
 
                     // Error state
                     if let error = viewModel.error {
-                        VStack(spacing: 12) {
+                        VStack(spacing: MeeshySpacing.md) {
                             Image(systemName: "exclamationmark.triangle")
                                 .font(.largeTitle)
                                 .foregroundStyle(.secondary)
@@ -941,7 +941,7 @@ struct FeedView: View {
                             .padding()
                     }
                 }
-                .padding(.top, 12)
+                .padding(.top, MeeshySpacing.md)
                 .padding(.bottom, 100)
             }
             .overlay(alignment: .top) {
@@ -954,16 +954,16 @@ struct FeedView: View {
                         viewModel.acknowledgeNewPosts()
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 8) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             Image(systemName: "arrow.up")
-                                .font(.caption.weight(.bold))
+                                .font(MeeshyFont.relative(11, weight: .bold))
 
                             Text(newPostsBannerText)
-                                .font(.subheadline.weight(.semibold))
+                                .font(MeeshyFont.relative(14, weight: .semibold))
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.xl)
+                        .padding(.vertical, MeeshySpacing.sm + 2)
                         .background(
                             Capsule()
                                 .fill(
@@ -973,7 +973,7 @@ struct FeedView: View {
                                         endPoint: .trailing
                                     )
                                 )
-                                .shadow(color: MeeshyColors.indigo300.opacity(0.5), radius: 12, y: 4)
+                                .shadow(color: MeeshyColors.indigo300.opacity(0.5), radius: MeeshyRadius.md - 2, y: 4)
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -1162,7 +1162,7 @@ struct FeedView: View {
                         }
                     } label: {
                         Text(String(localized: "Annuler", defaultValue: "Annuler"))
-                            .font(.subheadline.weight(.medium))
+                            .font(MeeshyFont.relative(15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
                     .accessibilityLabel(String(localized: "a11y.feed.compose.cancel", defaultValue: "Annuler", bundle: .main))
@@ -1171,7 +1171,7 @@ struct FeedView: View {
                     Spacer()
 
                     Text(String(localized: "Nouveau post", defaultValue: "Nouveau post"))
-                        .font(.headline.weight(.bold))
+                        .font(MeeshyFont.relative(17, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
 
@@ -1186,7 +1186,7 @@ struct FeedView: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text(String(localized: "Publier", defaultValue: "Publier"))
-                                .font(.subheadline.weight(.bold))
+                                .font(MeeshyFont.relative(15, weight: .bold))
                                 .foregroundColor(composerHasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
@@ -1201,13 +1201,12 @@ struct FeedView: View {
                                 : String(localized: "a11y.feed.compose.publish.disabled", defaultValue: "Indisponible, ajoutez du contenu", bundle: .main))
                     )
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(theme.backgroundSecondary)
 
                 Divider().background(theme.inputBorder)
 
-                // User row
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     MeeshyAvatar(
                         name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
                         context: .feedComposer,
@@ -1215,9 +1214,9 @@ struct FeedView: View {
                     )
                     .accessibilityHidden(true)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xs / 2) {
                         Text(getUserDisplayName(AuthManager.shared.currentUser, fallback: String(localized: "feed.composer.me", defaultValue: "Moi", bundle: .main)))
-                            .font(.subheadline.weight(.semibold))
+                            .font(MeeshyFont.relative(15, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
 
                         Menu {
@@ -1231,11 +1230,11 @@ struct FeedView: View {
                                 Label(String(localized: "Prive", defaultValue: "Priv\u{00E9}"), systemImage: "lock")
                             }
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
-                                    .font(.caption2)
+                                    .font(MeeshyFont.relative(10))
                                 Text(postVisibility == "PUBLIC" ? String(localized: "Public", defaultValue: "Public") : postVisibility == "FRIENDS" ? String(localized: "Amis", defaultValue: "Amis") : String(localized: "Prive", defaultValue: "Priv\u{00E9}"))
-                                    .font(.caption)
+                                    .font(MeeshyFont.relative(11))
                             }
                             .foregroundColor(theme.textMuted)
                         }
@@ -1248,43 +1247,43 @@ struct FeedView: View {
                             composerForcePlainPost.toggle()
                             HapticFeedback.light()
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: composerForcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
-                                    .font(.caption2)
+                                    .font(MeeshyFont.relative(10))
                                 Text(composerForcePlainPost
                                     ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
                                     : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
-                                    .font(.caption)
+                                    .font(MeeshyFont.relative(11))
                             }
                             .foregroundColor(composerForcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
                         }
-                        .padding(.leading, 12)
+                        .padding(.leading, MeeshySpacing.md)
                         .accessibilityHint(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
                     }
 
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.md)
 
                 // Text editor
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
                         Text(String(localized: "Qu'avez-vous en tete ?", defaultValue: "Qu'avez-vous en t\u{00EA}te ?"))
-                            .font(.body)
+                            .font(MeeshyFont.relative(15))
                             .foregroundColor(theme.textMuted)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 12)
+                            .padding(.horizontal, MeeshySpacing.lg)
+                            .padding(.top, MeeshySpacing.md)
                     }
 
                     TextEditor(text: $composerText)
                         .focused($isComposerFocused)
                         .scrollContentBackground(.hidden)
                         .foregroundColor(theme.textPrimary)
-                        .font(.body)
+                        .font(MeeshyFont.relative(15))
                         .frame(minHeight: 120)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.top, MeeshySpacing.xs)
                 }
                 .scaleEffect(composerBounce ? 1.01 : 1.0)
                 .adaptiveOnChange(of: isComposerFocused) { _, newValue in
@@ -1301,8 +1300,8 @@ struct FeedView: View {
                 // Upload progress
                 if isUploading, let progress = uploadProgress {
                     UploadProgressBar(progress: progress, accentColor: MeeshyColors.brandPrimaryHex)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 4)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.bottom, MeeshySpacing.xs)
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
@@ -1313,7 +1312,7 @@ struct FeedView: View {
                 // emoji/fichier/position/audio, 20pt) sont figés — rangée horizontale contrainte
                 // (HStack spacing 16 + Spacer) qui déborderait si les icônes scalaient en XXXL.
                 // Chaque bouton porte déjà son `.accessibilityLabel` → VoiceOver reste complet.
-                HStack(spacing: 16) {
+                HStack(spacing: MeeshySpacing.lg) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 20))
@@ -1357,15 +1356,15 @@ struct FeedView: View {
                         showComposerLanguagePicker = true
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "globe")
-                                .font(.footnote)
+                                .font(MeeshyFont.relative(12))
                             Text(composerLanguageDisplayName)
-                                .font(.footnote.weight(.semibold))
+                                .font(MeeshyFont.relative(12, weight: .semibold))
                         }
                         .foregroundColor(MeeshyColors.indigo500)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.sm + 2)
+                        .padding(.vertical, MeeshySpacing.xs + 2)
                         .background(
                             Capsule()
                                 .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
@@ -1377,16 +1376,16 @@ struct FeedView: View {
                     }
                     .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(theme.backgroundSecondary)
             }
             .background(theme.backgroundPrimary)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxl))
             .overlay(
-                RoundedRectangle(cornerRadius: 24)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                     .stroke(theme.border(tint: MeeshyColors.brandPrimaryHex, intensity: 0.3), lineWidth: 1)
             )
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, 80)
             .shadow(color: MeeshyColors.indigo300.opacity(0.2), radius: 30, y: 20)
         }

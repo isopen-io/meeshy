@@ -6,8 +6,6 @@ import me.meeshy.sdk.model.ChangePasswordRequest
 import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
-import me.meeshy.sdk.model.DeleteAccountRequest
-import me.meeshy.sdk.model.DeleteAccountResponse
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
@@ -124,17 +122,6 @@ class UserRepository @Inject constructor(
 
     suspend fun changePhone(newPhoneNumber: String): NetworkResult<ChangePhoneResponse> =
         apiCall { userApi.changePhone(ChangePhoneRequest(newPhoneNumber)) }
-
-    /**
-     * Initiates permanent account deletion (`DELETE /me/delete-account`). Like
-     * [changePassword] this is inherently *online* — the gateway starts a 90-day grace
-     * period and mails a confirmation link, so it cannot be optimistic or offline-queued.
-     * The caller passes the canonical [me.meeshy.sdk.model.AccountDeletionConfirmation.REQUIRED_PHRASE]
-     * (never a raw buffer) — the gateway validates it against `z.literal('SUPPRIMER MON COMPTE')`.
-     * An already-pending request folds to `httpStatus == 409`; transport failures to `code == "NETWORK"`.
-     */
-    suspend fun deleteAccount(confirmationPhrase: String): NetworkResult<DeleteAccountResponse> =
-        apiCall { userApi.deleteAccount(DeleteAccountRequest(confirmationPhrase)) }
 
     suspend fun verifyPhoneChange(code: String): NetworkResult<VerifyPhoneChangeResponse> =
         apiCall { userApi.verifyPhoneChange(VerifyPhoneChangeRequest(code)) }

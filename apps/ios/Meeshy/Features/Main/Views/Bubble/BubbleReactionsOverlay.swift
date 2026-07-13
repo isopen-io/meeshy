@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 /// Bande de reactions affichee sous la bulle. Stateless cote rendu — les
-/// callbacks ne participent PAS a Equatable.
+/// callbacks ne participent PAS a Equatable (cf. BubbleCallbacks).
 ///
 /// Was: ThemedMessageBubble.reactionsOverlay + helpers
 /// (`addReactionButton`, `overflowPill`, `reactionPill`,

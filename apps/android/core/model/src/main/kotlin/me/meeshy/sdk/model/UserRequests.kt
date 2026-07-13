@@ -74,14 +74,3 @@ data class ChangePasswordRequest(
 data class ChangePasswordResponse(
     val message: String = "",
 )
-
-/** Account-deletion body — port of AccountService.deleteAccount body (AccountService.swift). */
-@Serializable
-data class DeleteAccountRequest(
-    val confirmationPhrase: String,
-)
-
-@Serializable
-data class DeleteAccountResponse(
-    val message: String = "",
-)

@@ -25,41 +25,12 @@ final class StoryComposerViewModel_DrawingEditingTests: XCTestCase {
         XCTAssertEqual(makeSubject().drawingEditingMode, .inactive)
     }
 
-    func test_enterDrawingEditingMode_startsInListMode_nothingActivated() {
-        // « Par défaut rien n'est activé quand on sélectionne l'outil dessin,
-        // c'est la liste des éléments de traits » (user 2026-07-11 v2) : pas
-        // de panneau déplié, pas de plein écran — le band montre la liste.
+    func test_enterDrawingEditingMode_whenNoStrokes_expandsColorPalette() {
         let vm = makeSubject()
         vm.enterDrawingEditingMode()
         XCTAssertTrue(vm.drawingEditingMode.isActive)
         XCTAssertNil(vm.drawingEditingMode.selectedStrokeId)
-        XCTAssertNil(vm.drawingEditingMode.expandedTool)
-        XCTAssertFalse(vm.isDrawingImmersive)
-    }
-
-    // MARK: - Plein écran au pinceau (user 2026-07-11 v2)
-
-    func test_enterImmersiveDrawing_activatesFullscreenMode() {
-        let vm = makeSubject()
-        vm.enterDrawingEditingMode()
-        vm.enterImmersiveDrawing()
-        XCTAssertTrue(vm.isDrawingImmersive)
-        XCTAssertTrue(vm.drawingEditingMode.isActive)
-    }
-
-    func test_enterImmersiveDrawing_withoutPriorEnter_activatesBoth() {
-        let vm = makeSubject()
-        vm.enterImmersiveDrawing()
-        XCTAssertTrue(vm.isDrawingImmersive)
-        XCTAssertTrue(vm.drawingEditingMode.isActive)
-    }
-
-    func test_exitDrawingEditingMode_clearsImmersive() {
-        let vm = makeSubject()
-        vm.enterImmersiveDrawing()
-        vm.exitDrawingEditingMode()
-        XCTAssertFalse(vm.isDrawingImmersive)
-        XCTAssertEqual(vm.drawingEditingMode, .inactive)
+        XCTAssertEqual(vm.drawingEditingMode.expandedTool, .color)
     }
 
     func test_enterDrawingEditingMode_whenStrokesExist_noExpandedPanel() {
@@ -175,31 +146,5 @@ final class StoryComposerViewModel_DrawingEditingTests: XCTestCase {
         vm.drawingStrokes = [stroke(id: "s1")]
         vm.drawingStrokes = []
         XCTAssertNil(vm.currentEffects.drawingStrokes)
-    }
-
-    // MARK: - Viewport zoom (mode dessin immersif, user 2026-07-11)
-    // « Zoomer et dézoomer le canvas si nécessaire… lorsqu'on quitte on
-    // revient au système initial » : le zoom d'inspection posé PENDANT le
-    // dessin ne doit pas fuir hors du mode.
-
-    func test_exitDrawingEditingMode_resetsViewportZoom() {
-        let vm = makeSubject()
-        vm.enterDrawingEditingMode()
-        vm.canvasScale = 2.4
-        vm.canvasOffset = CGSize(width: 80, height: -40)
-        vm.exitDrawingEditingMode()
-        XCTAssertEqual(vm.drawingEditingMode, .inactive)
-        XCTAssertEqual(vm.canvasScale, 1.0)
-        XCTAssertEqual(vm.canvasOffset, .zero)
-    }
-
-    func test_exitDrawingEditingMode_whenNotActive_keepsViewportZoom() {
-        // Un zoom posé HORS dessin (pinch 3 doigts) appartient au viewport
-        // libre — un exit no-op (appelé à chaque changement d'outil) ne doit
-        // pas l'écraser.
-        let vm = makeSubject()
-        vm.canvasScale = 1.8
-        vm.exitDrawingEditingMode()
-        XCTAssertEqual(vm.canvasScale, 1.8)
     }
 }

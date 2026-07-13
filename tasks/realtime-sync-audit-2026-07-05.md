@@ -276,42 +276,6 @@ après suppression du dernier message, no-op sans IO, `onError` sans throw) +
 `MessageHandlerEditDelete.test.ts` (« fans conversation:updated to participant user rooms …
 on edit »). Vérifié : suite gateway complète verte, `tsc --noEmit` OK.
 
-## 10. `getLatestMessageSummary` — chemin curseur-seul → coche livré/lu qui régresse chez l'expéditeur — ✅ Corrigé 2026-07-11
-
-`services/gateway/src/services/MessageReadStatusService.ts` — `getLatestMessageSummary`
-
-Des quatre méthodes de statut de lecture du fichier, trois (`getMessageReadStatus`,
-`getConversationReadStatuses`, `getMessageStatusDetails`) comptent sur l'**UNION** des
-curseurs `ConversationReadCursor` ET des reçus **figés** `MessageStatusEntry`
-(write-once). `getLatestMessageSummary` était resté sur l'ancien chemin **curseur-seul** :
-`deliveredCount`/`readCount` dérivés uniquement de `conversationReadCursor.findMany`, sans
-jamais interroger `messageStatusEntry` — exactement la classe de bug corrigée partout
-ailleurs, oubliée ici.
-
-**Scénario de défaillance** : conversation S→P (P actif). P reçoit auto le dernier
-message M → `markMessagesAsReceived` fige `MessageStatusEntry{M, P, deliveredAt}` et pose
-le curseur de P (`lastReadMessageId` pointant encore vers un ancien message `Mold`). `Mold`
-est supprimé ; `cleanupObsoleteCursors` voit `P.lastReadMessageId → Mold (effacé)` et
-**supprime le curseur de P**. Le reçu figé de M survit. Le chemin temps-réel appelle
-`getLatestMessageSummary` → curseur absent → `deliveredCount = 0`, alors que
-`getMessageStatusDetails(M)` renvoie `1`. Ce résumé alimente le champ `summary` des events
-`READ_STATUS_UPDATED`/`MESSAGE_READ_STATUS_UPDATED` (trois chemins :
-`MessageHandler.autoDeliverToOnlineRecipients`,
-`MeeshySocketIOManager._emitDeliveryForDrainedMessages` (drain/reconnexion), broadcast REST
-`routes/messages.ts`) → la coche de l'expéditeur **régresse** (double-tick → simple-tick, ou
-« lu par 1 » → « lu par 0 ») pour un message pourtant livré/lu, tandis que la feuille de
-détail du même message affiche le bon compte — incohérence visible par l'utilisateur.
-
-**Fix** : miroir exact de `getConversationReadStatuses` — ajout de `id` au select du dernier
-message, requête `messageStatusEntry.findMany({ where: { messageId, conversationId } })`
-filtrée aux participants actifs (sender exclu), comptage sur l'union
-`receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered`,
-`readAt = frozen?.readAt ?? cursorRead`. Le chemin sain (curseur présent, aucun figé) reste
-strictement identique. Tests de régression (4) dans le bloc `describe('getLatestMessageSummary')`
-de `MessageReadStatusService.test.ts` : reçu figé compté quand le curseur est nettoyé
-(livraison + lecture), figé d'un participant inactif ignoré, pas de double-comptage
-curseur+figé. Vérifié : suite `MessageReadStatusService` 162 tests verts + `tsc --noEmit` OK.
-
 ## Priorisation suggérée pour le suivi
 
 | Priorité | Item | Raison |
@@ -322,7 +286,6 @@ curseur+figé. Vérifié : suite `MessageReadStatusService` 162 tests verts + `t
 | ~~P1~~ | ~~#7 anonyme dans salle personnelle nue — unread jamais reçu~~ | ✅ Corrigé 2026-07-07 (gateway, vérifié 52 tests verts + tsc OK) |
 | ~~P1~~ | ~~#8 message:new.senderId en Participant.id sur le chemin WS (auto-message multi-device non réconcilié)~~ | ✅ Corrigé 2026-07-09 (gateway, vérifié 516 suites / 14008 tests verts + tsc OK) |
 | ~~P2~~ | ~~#9 edit/delete du dernier message : aperçu figé sur l'écran liste (conversation:updated jamais fanné)~~ | ✅ Corrigé 2026-07-09 (gateway, helper partagé sur 7 sites, vérifié suite complète + tsc OK) |
-| ~~P1~~ | ~~#10 getLatestMessageSummary curseur-seul : coche livré/lu qui régresse chez l'expéditeur après cleanupObsoleteCursors~~ | ✅ Corrigé 2026-07-11 (gateway, union figé/curseur alignée sur les 3 méthodes sœurs, vérifié 162 tests verts + tsc OK) |
 | P2 | #2 double boucle reconnexion | Peut prolonger une coupure déjà en cours, pas de perte de données mais UX dégradée |
 | P2 | #3 pas de gap detection message/reaction | Silencieux — aucune donnée perdue de façon visible pour l'utilisateur avant refetch, mais viole "eventual consistency garantie" |
 | P3 | #4 reaction reorder | Fenêtre étroite (dépend de #3 pour se manifester), corrigible avec le timestamp déjà présent au payload |

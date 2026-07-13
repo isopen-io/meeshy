@@ -1249,7 +1249,6 @@ struct StoryCardView: View {
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible)
             .animation(.spring(response: 0.32, dampingFraction: 0.78), value: chromeVisible)
-            .environment(\.colorScheme, readerChromeScheme)
 
             // === Layer 7.5: Floating comments overlay (Instagram-style) ===
             // Rendered BEFORE the sidebar / composer / bigReaction blocks so
@@ -1349,7 +1348,6 @@ struct StoryCardView: View {
             .offset(x: chromeVisible ? 0 : 110)
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible)
-            .environment(\.colorScheme, readerChromeScheme)
 
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
             if let emoji = bigReactionEmoji {
@@ -1589,17 +1587,6 @@ struct StoryCardView: View {
         guard let story = currentStory else { return false }
         return renderableSlideCache.slide(for: story, chain: resolvedViewerLanguageChain)
             .effects.hasVisualBackgroundMedia
-    }
-
-    /// Scheme épinglé sur le chrome du reader (header + sidebar) : suit la
-    /// luminance du FOND de la slide affichée, pas le thème de l'app — même
-    /// règle que le composer (`CanvasChromeScheme`, capture user 2026-07-11 :
-    /// icônes glass illisibles selon la couleur de fond).
-    private var readerChromeScheme: ColorScheme {
-        CanvasChromeScheme.scheme(
-            background: currentStory?.storyEffects?.background,
-            hasMediaBackground: currentSlideHasMediaBackground
-        )
     }
 
     private var storyBackground: some View {

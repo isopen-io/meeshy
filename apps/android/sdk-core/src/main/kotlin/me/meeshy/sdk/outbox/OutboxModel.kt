@@ -13,7 +13,6 @@ public enum class OutboxKind {
     UPDATE_CONVERSATION_PREFS,
     UPDATE_PROFILE,
     UPDATE_SETTINGS,
-    UPDATE_PRIVACY_SETTINGS,
     PUBLISH_STORY,
     UPLOAD_MEDIA,
     BLOCK_USER,
@@ -97,7 +96,6 @@ public object OutboxLaneMap {
             OutboxLaneAssignment.Shared(OutboxLanes.CONVERSATION_PREFS)
         OutboxKind.UPDATE_PROFILE -> OutboxLaneAssignment.Shared(OutboxLanes.PROFILE)
         OutboxKind.UPDATE_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
-        OutboxKind.UPDATE_PRIVACY_SETTINGS -> OutboxLaneAssignment.Shared(OutboxLanes.SETTINGS)
         OutboxKind.PUBLISH_STORY -> OutboxLaneAssignment.Shared(OutboxLanes.STORY)
         OutboxKind.UPLOAD_MEDIA -> OutboxLaneAssignment.Shared(OutboxLanes.MEDIA)
 

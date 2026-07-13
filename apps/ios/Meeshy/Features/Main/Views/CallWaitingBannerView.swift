@@ -45,11 +45,6 @@ struct CallWaitingBannerView: View {
                         Text(callerName)
                             .font(.headline)
                             .foregroundStyle(.white)
-                            // A long display name must not wrap the banner to
-                            // 2+ lines and grow it — the row also has to fit
-                            // the "Refuser"/"Répondre" buttons, which need a
-                            // second incoming call actioned fast.
-                            .lineLimit(1)
                         Text(String(localized: "call.waiting.incoming", defaultValue: "Appel entrant...", bundle: .main))
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.8))

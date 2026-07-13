@@ -388,8 +388,8 @@ struct PostDetailView: View {
             storyCanvasSection(post)
         } else if post.hasMedia, !isSharedStory {
             detailMediaSection(post.media)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.sm)
         }
 
         // Repost embed
@@ -404,7 +404,7 @@ struct PostDetailView: View {
         Rectangle()
             .fill(theme.inputBorder.opacity(0.5))
             .frame(height: 1)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
 
         commentsHeader
             .id("commentsSection")
@@ -443,12 +443,12 @@ struct PostDetailView: View {
                 replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
                 replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state }
             )
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, MeeshySpacing.sm)
             )
             .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
             // Anchor for notification-driven navigation: scroll/highlight targets
@@ -811,11 +811,11 @@ struct PostDetailView: View {
     /// inline name tap).
     @ViewBuilder
     private func authorRevealView(_ post: FeedPost) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Button {
                 selectedProfileUser = .from(feedPost: post)
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     MeeshyAvatar(
                         name: post.author,
                         context: .custom(26),
@@ -835,7 +835,7 @@ struct PostDetailView: View {
                             impressionCount: post.impressionCount
                         )
                         if reach.pseudo != nil || reach.views != nil {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 if let pseudo = reach.pseudo {
                                     Text(pseudo)
                                         .font(.caption2)
@@ -848,7 +848,7 @@ struct PostDetailView: View {
                                     if reach.pseudo != nil {
                                         Text("·").font(.caption2).foregroundColor(theme.textMuted)
                                     }
-                                    HStack(spacing: 3) {
+                                    HStack(spacing: MeeshySpacing.xs - 1) {
                                         Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
                                         Text(views).font(.caption2.weight(.medium))
                                         Text("·").font(.caption2)
@@ -943,7 +943,7 @@ struct PostDetailView: View {
         let username = post.authorUsername ?? ""
         let hasUsername = !username.isEmpty
         if hasUsername || isPostAuthor {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs + 1) {
                 if hasUsername {
                     Text("@\(username)")
                         .font(.caption)
@@ -953,7 +953,7 @@ struct PostDetailView: View {
                     if hasUsername {
                         Text("·").font(.caption2).foregroundColor(theme.textMuted)
                     }
-                    HStack(spacing: 3) {
+                    HStack(spacing: MeeshySpacing.xs - 1) {
                         Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
                         Text(PostReachFormatter.compact(post.postOpenCount)).font(.caption2.weight(.medium))
                         Text("·").font(.caption2)
@@ -975,7 +975,7 @@ struct PostDetailView: View {
     private func textZone(_ post: FeedPost) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             // Author header
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 MeeshyAvatar(
                     name: post.author,
                     context: .postAuthor,
@@ -1007,7 +1007,7 @@ struct PostDetailView: View {
                     // ne vit plus dans la barre d'actions du bas.
                     authorReachLine(post)
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(post.timestamp, style: .relative)
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
@@ -1057,8 +1057,8 @@ struct PostDetailView: View {
 
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm + 2)
 
             // Story caption lives inside the canvas overlays → suppress the plain
             // body (caption + secondary translation + embed) for stories to avoid
@@ -1084,7 +1084,7 @@ struct PostDetailView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .onTapGesture {
                 if truncation.isTruncated {
                     withAnimation(.easeInOut(duration: 0.25)) {
@@ -1102,14 +1102,14 @@ struct PostDetailView: View {
                 let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
                 let display = LanguageDisplay.from(code: code)
                 VStack(spacing: 0) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xs + 2) {
                         Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                         Circle().fill(langColor).frame(width: 4, height: 4)
                         Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                     }
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                         if let display {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Text(display.flag).font(.caption)
                                 Text(display.name)
                                     .font(.caption2.weight(.semibold))
@@ -1121,14 +1121,14 @@ struct PostDetailView: View {
                             .foregroundColor(theme.textPrimary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 10)
+                    .padding(.vertical, MeeshySpacing.sm)
+                    .padding(.horizontal, MeeshySpacing.sm + 2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(langColor.opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 6)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.xs + 2)
                 .transition(.opacity.combined(with: .move(edge: .top)))
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(format: String(localized: "a11y.post.secondary_translation", defaultValue: "Traduction en %1$@ : %2$@", bundle: .main), display?.name ?? code, content))
@@ -1137,8 +1137,8 @@ struct PostDetailView: View {
             // Embed vidéo (YouTube) détecté dans le contenu du post.
             if let embeddedVideo {
                 VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.sm)
             }
             } // if !post.isStory
         }
@@ -1159,7 +1159,7 @@ struct PostDetailView: View {
                 HapticFeedback.light()
                 router.push(.postDetail(repost.id))
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     MeeshyAvatar(
                         name: repost.author,
                         context: .postComment,
@@ -1171,7 +1171,7 @@ struct PostDetailView: View {
                         Text(repost.author)
                             .font(.footnote.weight(.semibold))
                             .foregroundColor(theme.accentText(repost.authorColor))
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Text(repost.timestamp, style: .relative)
                                 .font(.caption2)
                                 .foregroundColor(theme.textMuted)
@@ -1186,9 +1186,9 @@ struct PostDetailView: View {
                 }
             }
             .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.top, MeeshySpacing.sm + 2)
+            .padding(.bottom, MeeshySpacing.xs + 2)
             .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
@@ -1207,8 +1207,8 @@ struct PostDetailView: View {
                     .lineLimit(6)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.bottom, MeeshySpacing.xs + 2)
                     .accessibilityLabel(String(format: String(localized: "a11y.post.repost_content", defaultValue: "Contenu repartagé : %@", bundle: .main), repostDisplayContent))
 
                 // Inline secondary translation for repost
@@ -1217,14 +1217,14 @@ struct PostDetailView: View {
                     let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
                     let display = LanguageDisplay.from(code: code)
                     VStack(spacing: 0) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: MeeshySpacing.xs + 2) {
                             Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                             Circle().fill(langColor).frame(width: 3, height: 3)
                             Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                         }
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
                             if let display {
-                                HStack(spacing: 3) {
+                                HStack(spacing: MeeshySpacing.xs - 1) {
                                     Text(display.flag).font(.caption2)
                                     Text(display.name)
                                         .font(.caption2.weight(.semibold))
@@ -1236,14 +1236,14 @@ struct PostDetailView: View {
                                 .foregroundColor(theme.textPrimary.opacity(0.8))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 8)
+                        .padding(.vertical, MeeshySpacing.xs + 2)
+                        .padding(.horizontal, MeeshySpacing.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(langColor.opacity(0.08))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.bottom, MeeshySpacing.xs + 2)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
@@ -1261,13 +1261,13 @@ struct PostDetailView: View {
                         isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
                     )
                 )
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.sm)
             } else if !repost.media.isEmpty {
                 // Standard media attachments
                 detailMediaSection(repost.media)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.bottom, MeeshySpacing.sm)
             }
 
             // Audio URL (legacy story audio)
@@ -1292,14 +1292,14 @@ struct PostDetailView: View {
                     )
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.sm)
             }
 
             // Stats row
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 if repost.likes > 0 {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "heart.fill")
                             .font(.caption2)
                         Text("\(repost.likes)")
@@ -1312,8 +1312,8 @@ struct PostDetailView: View {
                 }
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.sm)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
@@ -1324,8 +1324,8 @@ struct PostDetailView: View {
                         .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Repost Language Support
@@ -1419,7 +1419,7 @@ struct PostDetailView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs + 1) {
                     let heartColor: Color = detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                     Image(systemName: detailIsLiked || detailLikeCount > 0 ? "heart.fill" : "heart")
                         .font(.headline)
@@ -1489,8 +1489,8 @@ struct PostDetailView: View {
                 : String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.sm + 2)
     }
 
     // MARK: - Story Canvas (inline reader)
@@ -1501,14 +1501,14 @@ struct PostDetailView: View {
     @ViewBuilder
     private func storyCanvasSection(_ post: FeedPost) -> some View {
         if post.storyEffects == nil && !post.hasMedia {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xs + 2) {
                 Image(systemName: "sparkles.rectangle.stack")
                 Text(String(localized: "feed.post.detail.story_unavailable", defaultValue: "Story indisponible", bundle: .main))
             }
             .font(.footnote)
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 32)
+            .padding(.vertical, MeeshySpacing.xxxl)
         } else {
             storyCanvasContainer(
                 StoryReaderRepresentable(
@@ -1518,8 +1518,8 @@ struct PostDetailView: View {
                     isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
                 )
             )
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
@@ -1555,7 +1555,7 @@ struct PostDetailView: View {
         let docMedia = mediaList.filter { $0.type == .document }
         let locMedia = mediaList.filter { $0.type == .location }
 
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             // Single media
             if mediaList.count == 1, let media = mediaList.first {
                 detailSingleMedia(media, isPrimaryVideo: media.id == primaryAutoplayVideoId)
@@ -1674,7 +1674,7 @@ struct PostDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
         case .document:
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.md + 2) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color(hex: media.thumbnailColor).opacity(0.2))
@@ -1683,12 +1683,12 @@ struct PostDetailView: View {
                         .font(.title3)
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         if let size = media.fileSize {
                             Text(size).font(.caption).foregroundColor(theme.textMuted)
                         }
@@ -1700,7 +1700,7 @@ struct PostDetailView: View {
                 }
                 Spacer()
             }
-            .padding(14)
+            .padding(MeeshySpacing.md + 2)
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
@@ -1710,7 +1710,7 @@ struct PostDetailView: View {
             .accessibilityLabel(String(format: String(localized: "a11y.post.media.document", defaultValue: "Document : %@", bundle: .main), media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main)))
 
         case .location:
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.md + 2) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(Color(hex: media.thumbnailColor).opacity(0.2))
@@ -1719,7 +1719,7 @@ struct PostDetailView: View {
                         .font(.title2)
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main))
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
@@ -1731,7 +1731,7 @@ struct PostDetailView: View {
                 }
                 Spacer()
             }
-            .padding(14)
+            .padding(MeeshySpacing.md + 2)
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
@@ -1847,7 +1847,7 @@ struct PostDetailView: View {
     // MARK: - Comments Header
 
     private var commentsHeader: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xs + 2) {
             Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
                 .font(.subheadline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
@@ -1858,8 +1858,8 @@ struct PostDetailView: View {
 
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isHeader)
         .accessibilityLabel(String(localized: "a11y.comment.section_header", defaultValue: "Commentaires", bundle: .main))
@@ -1871,7 +1871,7 @@ struct PostDetailView: View {
     private var replyBannerView: AnyView? {
         guard let reply = viewModel.replyingTo else { return nil }
         return AnyView(
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 RoundedRectangle(cornerRadius: 2)
                     .fill(Color(hex: reply.authorColor))
                     .frame(width: 3, height: 36)
@@ -1903,8 +1903,8 @@ struct PostDetailView: View {
                 .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
                 .meeshyTapTarget(44)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(theme.surfaceGradient(tint: accentColor))

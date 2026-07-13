@@ -334,30 +334,6 @@ export function CallManager() {
   );
 
   /**
-   * Handle "answered elsewhere" (multi-device ring-stop)
-   */
-  const handleAnsweredElsewhere = useCallback(
-    (event: { callId: string }) => {
-      // Un autre device de CE user a décroché : le serveur passe l'appel en
-      // `active` (jamais `ended` à cet instant) et émet call:already-answered
-      // vers les user-rooms — sans ce listener, la carte d'appel entrant du
-      // tab sonnait indéfiniment (audit appels 2026-07-11, finding #1).
-      // Scopé au callId qui sonne : ne touche ni le ring d'un autre appel ni
-      // un appel déjà établi sur CE tab.
-      if (!incomingCall || incomingCall.callId !== event.callId) return;
-
-      logger.info('[CallManager]', 'Call answered on another device - dismissing ring - callId: ' + event.callId);
-
-      import('@/utils/ringtone').then(({ stopRingtone }) => {
-        stopRingtone();
-      });
-      clearCallTimeout();
-      setIncomingCall(null);
-    },
-    [incomingCall, clearCallTimeout]
-  );
-
-  /**
    * Handle media toggle (remote participant)
    */
   const handleMediaToggle = useCallback(
@@ -601,7 +577,6 @@ export function CallManager() {
   const handleParticipantJoinedRef = useRef(handleParticipantJoined);
   const handleParticipantLeftRef = useRef(handleParticipantLeft);
   const handleCallEndedRef = useRef(handleCallEnded);
-  const handleAnsweredElsewhereRef = useRef(handleAnsweredElsewhere);
   const handleMediaToggleRef = useRef(handleMediaToggle);
   const handleCallErrorRef = useRef(handleCallError);
 
@@ -611,7 +586,6 @@ export function CallManager() {
     handleParticipantJoinedRef.current = handleParticipantJoined;
     handleParticipantLeftRef.current = handleParticipantLeft;
     handleCallEndedRef.current = handleCallEnded;
-    handleAnsweredElsewhereRef.current = handleAnsweredElsewhere;
     handleMediaToggleRef.current = handleMediaToggle;
     handleCallErrorRef.current = handleCallError;
   });
@@ -643,7 +617,6 @@ export function CallManager() {
         socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
         socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
         socket.off(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
-        socket.off(SERVER_EVENTS.CALL_ALREADY_ANSWERED, attachedListeners[SERVER_EVENTS.CALL_ALREADY_ANSWERED]);
         socket.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
         socket.off(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
       }
@@ -664,7 +637,6 @@ export function CallManager() {
         [SERVER_EVENTS.CALL_PARTICIPANT_JOINED]: (data: unknown) => handleParticipantJoinedRef.current(data),
         [SERVER_EVENTS.CALL_PARTICIPANT_LEFT]: (data: unknown) => handleParticipantLeftRef.current(data),
         [SERVER_EVENTS.CALL_ENDED]: (data: unknown) => handleCallEndedRef.current(data),
-        [SERVER_EVENTS.CALL_ALREADY_ANSWERED]: (data: unknown) => handleAnsweredElsewhereRef.current(data as { callId: string }),
         [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: unknown) => handleMediaToggleRef.current(data),
         [SERVER_EVENTS.CALL_ERROR]: (data: unknown) => handleCallErrorRef.current(data),
       };
@@ -672,14 +644,13 @@ export function CallManager() {
       socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
       socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
       socket.on(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
-      socket.on(SERVER_EVENTS.CALL_ALREADY_ANSWERED, attachedListeners[SERVER_EVENTS.CALL_ALREADY_ANSWERED]);
       socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
       socket.on(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
 
       console.log('✅ [CallManager] All call listeners registered', {
         socketId: socket.id,
         userId: user?.id,
-        listenersCount: 7
+        listenersCount: 6
       });
     };
 

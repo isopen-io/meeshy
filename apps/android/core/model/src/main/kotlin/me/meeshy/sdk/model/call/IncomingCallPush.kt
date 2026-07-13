@@ -78,36 +78,6 @@ object IncomingCallPushParser {
 }
 
 /**
- * A decoded stop-ring data push — the counterpart of [IncomingCallPush] for the
- * gateway silent pushes that must SILENCE a ringing device whose socket is down
- * (backgrounded/killed). Field parity with the gateway `call-push-mirroring.ts`
- * (`data.type == "call_cancel" | "call_answered_elsewhere"`, plus `callId`) and
- * behavioural parity with the iOS `AppDelegate` handling of the same pushes.
- */
-data class CallStopPush(val callId: String, val type: Type) {
-    enum class Type { CANCELLED, ANSWERED_ELSEWHERE }
-}
-
-/**
- * Pure parser for a stop-ring data push. Total and side-effect-free: a push is a
- * stop iff its `type` is one of [STOP_TYPES] AND it carries a non-blank `callId`;
- * every other map is inert (`null`).
- */
-object CallStopPushParser {
-
-    val STOP_TYPES: Map<String, CallStopPush.Type> = mapOf(
-        "call_cancel" to CallStopPush.Type.CANCELLED,
-        "call_answered_elsewhere" to CallStopPush.Type.ANSWERED_ELSEWHERE,
-    )
-
-    fun parse(data: Map<String, String>): CallStopPush? {
-        val type = STOP_TYPES[data["type"]] ?: return null
-        val callId = data["callId"]?.takeIf { it.isNotBlank() } ?: return null
-        return CallStopPush(callId = callId, type = type)
-    }
-}
-
-/**
  * An immutable, time-bounded ring of recently-seen call ids — the pure port of
  * the iOS `VoIPDedupRing` (a delayed / retried VoIP push can arrive twice, and
  * each delivery must be de-duplicated so only the first rings). Bounded by

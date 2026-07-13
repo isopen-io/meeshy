@@ -1098,7 +1098,7 @@ export class MessageHandler {
           // registered users, participant id for anonymous (connectedUsers
           // and ROOMS.user use the same key on the drain side).
           const queueKey = p.userId ?? p.id;
-          if (this._isSender(p, message.senderId) || this.connectedUsers.has(queueKey)) continue;
+          if (p.id === message.senderId || this.connectedUsers.has(queueKey)) continue;
           this.deliveryQueue.enqueue(queueKey, {
             messageId: message.id,
             conversationId: normalizedId,
@@ -1235,23 +1235,6 @@ export class MessageHandler {
   }
 
   /**
-   * Sender-exclusion predicate robust to which identity `senderId` carries.
-   * The WS `message:send` path forwards `MessagingService`'s response object
-   * whose `senderId` is normalised to the sender's `User.id` (clients compare
-   * against their own userId), whereas the REST/ZMQ path keeps `senderId` as
-   * the raw `Participant.id`. Participant ids and user ids never collide, so
-   * matching EITHER excludes the sender on both transports without ever
-   * dropping a legitimate recipient. Anonymous senders (no `userId`) keep the
-   * `Participant.id` representation and are matched by `p.id`.
-   */
-  private _isSender(
-    p: { id: string; userId: string | null },
-    senderId: string | null | undefined
-  ): boolean {
-    return !!senderId && (p.id === senderId || p.userId === senderId);
-  }
-
-  /**
    * Marque un message comme "delivered" pour chaque destinataire en ligne
    * (ayant une socket active), respecte la préférence `showReadReceipts` de
    * chaque destinataire, puis émet UN seul `read-status:updated` consolidé
@@ -1279,7 +1262,7 @@ export class MessageHandler {
 
     const onlineRecipients = participants.filter(
       (p): p is { id: string; userId: string } =>
-        !this._isSender(p, senderId) && !!p.userId && this.connectedUsers.has(p.userId)
+        p.id !== senderId && !!p.userId && this.connectedUsers.has(p.userId)
     );
     handlerLogger.debug('auto-deliver', { conversationId, messageId: message.id, participants: participants.length, onlineRecipients: onlineRecipients.length });
     if (onlineRecipients.length === 0) return;
@@ -1555,7 +1538,7 @@ export class MessageHandler {
         select: { id: true, userId: true, joinedAt: true }
       });
       // Filter out the sender — unread counts are for recipients only
-      const participants = allParticipants.filter((p) => !this._isSender(p, senderId));
+      const participants = allParticipants.filter((p) => p.id !== senderId);
 
       // Batch: 1 cursor query + 1 message fetch instead of 3N sequential queries.
       // Each recipient's count excludes their OWN messages (handled inside the service).

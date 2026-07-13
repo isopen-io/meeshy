@@ -100,7 +100,6 @@ fun SettingsScreen(
     onOpenChangePassword: () -> Unit = {},
     onOpenAutoDownload: () -> Unit = {},
     onOpenPrivacy: () -> Unit = {},
-    onOpenDeleteAccount: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -339,7 +338,7 @@ fun SettingsScreen(
                     SettingsRow(
                         label = stringResource(R.string.settings_delete_account),
                         detail = null,
-                        onClick = onOpenDeleteAccount,
+                        onClick = {},
                         labelColor = MeeshyPalette.Error,
                     )
                 }

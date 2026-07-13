@@ -132,22 +132,4 @@
     <string name="privacy_block_screenshots">Bloquear capturas de ecrã</string>
     <string name="privacy_encryption_coming_soon">Em breve</string>
     <string name="privacy_encryption_disabled">Desativado</string>
-    <!-- Account deletion (§L) -->
-    <string name="delete_account_title">Excluir conta</string>
-    <string name="delete_account_warning_title">Esta ação é irreversível</string>
-    <string name="delete_account_warning_intro">Excluir a sua conta remove permanentemente:</string>
-    <string name="delete_account_warning_conversations">Todas as suas conversas</string>
-    <string name="delete_account_warning_messages">Todas as suas mensagens</string>
-    <string name="delete_account_warning_media">Todas as suas mídias compartilhadas</string>
-    <string name="delete_account_warning_contacts">A sua lista de contatos</string>
-    <string name="delete_account_warning_preferences">As suas preferências e configurações</string>
-    <string name="delete_account_confirm_prompt">Digite %1$s para confirmar</string>
-    <string name="delete_account_confirm_label">Frase de confirmação</string>
-    <string name="delete_account_button">Excluir minha conta definitivamente</string>
-    <string name="delete_account_error_pending">Já existe uma solicitação de exclusão em andamento. Verifique seu e-mail.</string>
-    <string name="delete_account_error_network">Sem conexão. Verifique sua rede e tente novamente.</string>
-    <string name="delete_account_error_generic">Algo deu errado. Tente novamente.</string>
-    <string name="delete_account_email_title">Um e-mail de confirmação foi enviado</string>
-    <string name="delete_account_email_body">Verifique sua caixa de entrada para confirmar a exclusão da sua conta.</string>
-    <string name="delete_account_email_ok">Entendi</string>
 </resources>

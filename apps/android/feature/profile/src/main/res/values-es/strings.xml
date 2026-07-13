@@ -37,25 +37,4 @@
     <string name="profile_activity_title">Actividad</string>
     <string name="profile_activity_average">%1$d / día</string>
     <string name="profile_activity_empty">Sin actividad en los últimos 30 días</string>
-    <string name="profile_report">Denunciar usuario</string>
-    <string name="report_title">Denunciar a @%1$s</string>
-    <string name="report_title_generic">Denunciar</string>
-    <string name="report_close">Cerrar</string>
-    <string name="report_reason_header">Motivo de la denuncia</string>
-    <string name="report_details_header">Detalles (opcional)</string>
-    <string name="report_details_placeholder">Añade algún contexto…</string>
-    <string name="report_submit">Enviar denuncia</string>
-    <string name="report_error">Error al enviar la denuncia. Inténtalo de nuevo.</string>
-    <string name="report_reason_spam">Spam</string>
-    <string name="report_reason_harassment">Acoso</string>
-    <string name="report_reason_inappropriate">Contenido inapropiado</string>
-    <string name="report_reason_impersonation">Suplantación de identidad</string>
-    <string name="report_reason_other">Otro</string>
-    <string name="profile_share_action">Compartir perfil</string>
-    <string name="profile_share_title">Compartir perfil</string>
-    <string name="profile_share_qr_cd">Código QR de %1$s</string>
-    <string name="profile_share_copy">Copiar enlace</string>
-    <string name="profile_share_send">Compartir</string>
-    <string name="profile_share_via">Compartir perfil mediante</string>
-    <string name="profile_share_message">%1$s en Meeshy: %2$s</string>
 </resources>

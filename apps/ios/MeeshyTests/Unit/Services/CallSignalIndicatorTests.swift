@@ -220,32 +220,6 @@ final class CallHangupFastPathTests: XCTestCase {
         )
     }
 
-    func test_lastError_surfacesAsToast_andClosesTranscriptPanel() throws {
-        // A start failure (permission denied, no on-device recognizer for the
-        // user's language — never falls back to Apple's server-side
-        // recognizer, privacy decision — or an AVAudioEngine failure) used to
-        // leave the transcript panel open and silently empty, with zero user
-        // feedback — user-reported 2026-07-11 "on dirait que la transcription
-        // ne fonctionne pas" (observed on Mac).
-        let view = try source("Meeshy/Features/Main/Views/CallView.swift")
-        guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.lastError)") else {
-            XCTFail("CallView must observe transcriptionService.lastError")
-            return
-        }
-        let end = view.index(range.lowerBound, offsetBy: 500, limitedBy: view.endIndex) ?? view.endIndex
-        let body = String(view[range.lowerBound ..< end])
-        XCTAssertTrue(
-            body.contains("FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))"),
-            "A fresh transcription error must surface as a local-action error toast " +
-            "(FeedbackToastManager, not NotificationToastManager — this is feedback on a " +
-            "user-initiated tap, not a network-originated event)."
-        )
-        XCTAssertTrue(
-            body.contains("showTranscript = false") && body.contains("transcriptionService.isShowingOverlay = false"),
-            "A failed start must close the transcript panel, not leave it open and empty."
-        )
-    }
-
     func test_captionsCycleButton_actionIsAdvanceCaptionsMode() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
         guard let range = view.range(of: "private var captionsCycleButton: some View {") else {

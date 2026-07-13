@@ -43,6 +43,23 @@ struct ConversationOverlayState {
     var fullReactionPickerMessage: Message? = nil
     var quickReactionMessageId: String? = nil
 
+    // MARK: - Context overlay (iMessage-style long-press)
+    /// Phase of the new long-press overlay (`MessageContextOverlay`).
+    /// `.closed` = idle, `.opening`/`.open`/`.closing` = transitions and live state.
+    var contextOverlayPhase: OverlayPhase = .closed
+    /// Message currently elevated by the context overlay. Frozen at long-press
+    /// time so subsequent message updates don't shift the visible bubble.
+    var contextOverlayMessage: Message? = nil
+    /// Source frame captured at long-press time. Used by the layout engine
+    /// to compute lift / menu placement; the overlay reads this snapshot
+    /// rather than tracking the live frame (which can shift during scroll).
+    var contextOverlayTargetFrame: CGRect? = nil
+    /// Output of `MessageOverlayLayoutEngine.compute` — pre-computed once
+    /// at opening so the algorithm doesn't re-run on every drag tick.
+    var contextOverlayLayoutOutput: OverlayLayoutOutput? = nil
+    /// Interactive swipe-down dismiss progress (pixels). Resets to 0 when
+    /// the gesture is cancelled or the overlay closes.
+    var contextOverlayDragOffset: CGFloat = 0
     /// Bubble cell frame (window coordinates) of the message whose
     /// add-reaction button opened the quick-reaction bar. Anchors the bar's
     /// placement; `nil` falls back to the legacy bottom-pinned position.
@@ -268,7 +285,7 @@ struct ConversationView: View {
     /// Per-cell screen-frame map populated by `MessageFramePreferenceKey`
     /// publishes from each `BubbleSwipeContainer`. The long-press handler
     /// looks up the target message's frame here at gesture fire time and
-    /// passes it to `MessageOverlayMenu` as the source frame.
+    /// freezes it into `overlayState.contextOverlayTargetFrame`.
     @State var frameTracker = MessageFrameTracker()
 
     // Scroll, Media & Swipe state
@@ -1469,23 +1486,9 @@ struct ConversationView: View {
             // (expandedHeaderTitleAndTags), never the call button's presence.
             HStack {
                 Spacer()
-                headerButtonsCluster
+                headerCallButtons.layoutPriority(1)
+                expandedHeaderSearchButton
             }
-        }
-    }
-
-    /// Call + search buttons, grouped with zero extra spacing between them
-    /// (user-requested 2026-07-11: "les boutons n'ont pas besoin d'être si
-    /// loin l'un de l'autre"). Each button already carries its own ~8pt of
-    /// invisible padding via `.meeshyTapTarget()`'s 44×44 HIG minimum around
-    /// a visually 28×28 glass circle — stacking the HStack's own spacing ON
-    /// TOP of that built-in padding is what pushed them apart. `spacing: 0`
-    /// still leaves that built-in padding as the visible gap (no tap-target
-    /// overlap between the two 44×44 hit areas).
-    private var headerButtonsCluster: some View {
-        HStack(spacing: 0) {
-            headerCallButtons.layoutPriority(1)
-            expandedHeaderSearchButton
         }
     }
 
@@ -1502,7 +1505,8 @@ struct ConversationView: View {
                 .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
 
                 Spacer(minLength: 4)
-                headerButtonsCluster
+                headerCallButtons.layoutPriority(1)
+                expandedHeaderSearchButton
             }
 
             // Tags row: aligned with title, scrolls under the search icon
@@ -1587,10 +1591,12 @@ struct ConversationView: View {
             MessageOverlayMenu(
                 message: msg,
                 contactColor: accentColor,
+                conversationId: viewModel.conversationId,
                 messageBubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,
+                onReply: { triggerReply(for: msg) },
                 onCopy: { UIPasteboard.general.string = msg.content; HapticFeedback.success() },
                 onEdit: {
                     composerState.editingMessageId = msg.id
@@ -1610,13 +1616,32 @@ struct ConversationView: View {
                 textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                 transcription: viewModel.messageTranscriptions[msg.id],
                 translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                onSelectTranslation: { translation in
+                    viewModel.setActiveTranslation(for: msg.id, translation: translation)
+                },
+                onSelectAudioLanguage: { langCode in
+                    viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
+                },
+                onRequestTranslation: { messageId, lang in
+                    MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
+                },
                 onReact: { emoji in
                     viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                },
+                onReport: { type, reason in
+                    Task {
+                        let success = await viewModel.reportMessage(messageId: msg.id, reportType: type, reason: reason)
+                        if success { HapticFeedback.success() }
+                        else { HapticFeedback.error() }
+                    }
                 },
                 onDelete: {
                     // Show the confirmation dialog so the user can pick
                     // between local-only and server-broadcast deletion.
                     overlayState.deleteConfirmMessageId = msg.id
+                },
+                onDeleteAttachment: { attachmentId in
+                    Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
                 },
                 onSaveMedia: {
                     // Composant unifié « Enregistrer » — l'action n'apparaît
@@ -1629,6 +1654,10 @@ struct ConversationView: View {
                         suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                         attachmentId: attachment.id.isEmpty ? nil : attachment.id
                     ))
+                },
+                onShowThread: {
+                    overlayState.replyThreadParentId = msg.id
+                    overlayState.showReplyThread = true
                 },
                 isDirect: isDirect,
                 preferredTranslation: viewModel.preferredTranslation(for: msg.id),

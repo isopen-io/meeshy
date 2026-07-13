@@ -1,6 +1,5 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
-import Combine
 import MeeshySDK
 import MeeshyUI
 import os
@@ -217,22 +216,6 @@ private struct HeaderCallButtonsView: View {
         .task(id: conversationId) {
             await reconcileActiveCall()
         }
-        // Invalidation temps réel : le gateway fanout `call:ended` jusqu'aux
-        // user-rooms de TOUS les membres de la conversation
-        // (resolveCallEndedRooms) — un viewer non-participant le reçoit donc
-        // aussi. Sans ça, la pill « Rejoindre » (posée une seule fois au
-        // .task ci-dessus) resterait pointée sur un appel mort jusqu'au
-        // prochain passage dans la conversation, et un tap déclencherait un
-        // call:join rejeté « This call has already ended ». Match par callId :
-        // un appel qui finit dans une AUTRE conversation ne doit pas effacer
-        // la pill de celle-ci. Hop main obligatoire : le publisher émet
-        // depuis la queue du socket (classe SIGTRAP connue des surfaces
-        // d'appel).
-        .onReceive(MessageSocketManager.shared.callEnded.receive(on: DispatchQueue.main)) { event in
-            if reconciledActiveCall?.id == event.callId {
-                reconciledActiveCall = nil
-            }
-        }
     }
 
     private var returnToCallIndicator: some View {
@@ -353,16 +336,10 @@ private struct HeaderCallButtonsView: View {
             )
             // Matches expandedHeaderSearchButton's circle exactly (28×28,
             // font 13) — user-requested 2026-07-11: the two header buttons
-            // must read as the same size. `.adaptiveGlass` MUST come before
-            // `.meeshyTapTarget()`, not after (bug found 2026-07-11): glass
-            // is a Circle sized to the CURRENT view bounds at that point in
-            // the chain — applying it after meeshyTapTarget's `.frame(minWidth:
-            // 44, minHeight: 44)` drew the visible circle at 44pt instead of
-            // 28pt, even though both buttons declared identical numbers.
-            // expandedHeaderSearchButton already has the correct order.
+            // must read as the same size.
             .frame(width: 28, height: 28)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
             .meeshyTapTarget()
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
     }
 }
 

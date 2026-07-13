@@ -31,7 +31,7 @@ struct NotificationSettingsView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "chevron.left")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
@@ -39,26 +39,29 @@ struct NotificationSettingsView: View {
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
             Text(String(localized: "settings.notifications.title", defaultValue: "Notifications", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
             Color.clear.frame(width: 60, height: 24)
+                .accessibilityHidden(true)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Scroll Content
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 generalSection
                 messagesSection
                 conversationsSection
@@ -67,10 +70,10 @@ struct NotificationSettingsView: View {
                 displaySection
                 dndSection
 
-                Spacer().frame(height: 40)
+                Spacer().frame(height: MeeshySpacing.xxxl + MeeshySpacing.sm)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
@@ -226,7 +229,7 @@ struct NotificationSettingsView: View {
     // MARK: - DnD Days Selector
 
     private var dndDaysSelector: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             ForEach(DndDay.allCases, id: \.self) { day in
                 let isSelected = prefs.notification.dndDays.contains(day)
                 Button {
@@ -307,8 +310,8 @@ struct NotificationSettingsView: View {
         color: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.xs + 2) {
                 Image(systemName: icon)
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: color))
@@ -318,7 +321,7 @@ struct NotificationSettingsView: View {
                     .foregroundColor(Color(hex: color))
                     .tracking(1.2)
             }
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 
@@ -342,7 +345,7 @@ struct NotificationSettingsView: View {
         color: String,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 // Fixed size: decorative glyph constrained inside a fixed 28×28 badge —
                 // a scalable font would overflow the tinted square (doctrine 74i/86i).
@@ -350,7 +353,7 @@ struct NotificationSettingsView: View {
                 .foregroundColor(Color(hex: color))
                 .frame(width: 28, height: 28)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
                         .fill(Color(hex: color).opacity(0.12))
                 )
                 .accessibilityHidden(true)
@@ -363,7 +366,7 @@ struct NotificationSettingsView: View {
 
             trailing()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md + 2)
+        .padding(.vertical, MeeshySpacing.sm + 2)
     }
 }

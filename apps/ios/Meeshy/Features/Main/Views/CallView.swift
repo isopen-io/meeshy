@@ -773,34 +773,6 @@ struct CallView: View {
             }
         }
         .onDisappear { showControls = true }
-        // Surfaces a start failure that `advanceCaptionsMode()` couldn't see at
-        // tap time (the start path is async — permission request + on-device
-        // recognizer/audio-engine checks all happen after the button already
-        // optimistically opened the transcript panel). Without this, a failed
-        // start (e.g. no on-device speech recognizer for the user's language —
-        // never falls back to Apple's server-side recognizer, privacy decision)
-        // left the panel open and empty with zero feedback — user-reported
-        // 2026-07-11: "on dirait que la transcription ne fonctionne pas".
-        .adaptiveOnChange(of: transcriptionService.lastError) { _, newError in
-            guard let newError else { return }
-            FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))
-            showTranscript = false
-            transcriptionService.isShowingOverlay = false
-        }
-    }
-
-    /// User-facing translation of `TranscriptionError` — `errorDescription` on
-    /// the error type itself is an untranslated diagnostic string for logs,
-    /// never meant for display (see its own doc comment).
-    private func transcriptionErrorMessage(for error: TranscriptionError) -> String {
-        switch error {
-        case .permissionDenied:
-            return String(localized: "call.transcription.error.permissionDenied", defaultValue: "Autorisez la reconnaissance vocale dans Réglages pour activer les sous-titres.", bundle: .main)
-        case .recognizerUnavailable, .onDeviceNotSupported:
-            return String(localized: "call.transcription.error.unavailable", defaultValue: "Sous-titres indisponibles pour votre langue sur cet appareil.", bundle: .main)
-        case .recognitionFailed, .audioEngineFailed:
-            return String(localized: "call.transcription.error.failed", defaultValue: "Impossible d'activer les sous-titres. Réessayez.", bundle: .main)
-        }
     }
 
     /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
@@ -1354,10 +1326,7 @@ struct CallView: View {
 
     /// Small circular control pinned to the local self-view frame (flip
     /// camera, filters). Buttons win the hit-test over the frame's tap-to-swap
-    /// and drag gestures, so they stay usable on the 100×140 tile. Uses the
-    /// same adaptiveGlass-backed callControlGlass as every other circular call
-    /// control (task #17) instead of a bespoke flat dark circle — diameter
-    /// stays 28 (unchanged), only the visual TREATMENT changes.
+    /// and drag gestures, so they stay usable on the 100×140 tile.
     private func pipFrameButton(icon: String, label: String, hint: String? = nil, action: @escaping () -> Void) -> some View {
         Button {
             action()
@@ -1366,7 +1335,9 @@ struct CallView: View {
             Image(systemName: icon)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white.opacity(0.95))
-                .callControlGlass(diameter: 28, isActive: false, tint: .white)
+                .frame(width: 28, height: 28)
+                .background(Color.black.opacity(0.45), in: Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
                 // Visual glyph stays a compact 28pt (the 100×140 tile has no
                 // room for a 44pt circle), but the hit target itself must meet
                 // the HIG 44×44 minimum — expand invisibly via contentShape.

@@ -253,55 +253,6 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it('excludes the sender on the WS path where senderId is the User.id and the sender is online', async () => {
-    // WS `message:send` path: MessagingService.createSuccessResponse normalises
-    // `senderId` to the sender's User.id (clients compare against their userId),
-    // whereas the REST/ZMQ path keeps it as the raw Participant.id. The sender is
-    // ALWAYS online at broadcast time (they just sent), so exclusion must key off
-    // identity, not presence — otherwise the sender's own message is auto-marked
-    // `received` and their UI shows a false delivered (✓✓) receipt.
-    const { handler, readStatusService } = makeHandler({
-      onlineUsers: [senderUserId, onlineUserId]
-    });
-
-    await handler.autoDeliverToOnlineRecipients(
-      { id: messageId, senderId: senderUserId } as any,
-      conversationId
-    );
-
-    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledTimes(1);
-    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
-      onlineParticipantId,
-      conversationId,
-      messageId
-    );
-    expect(readStatusService.markMessagesAsReceived).not.toHaveBeenCalledWith(
-      senderParticipantId,
-      conversationId,
-      messageId
-    );
-  });
-
-  it('excludes an anonymous sender on the WS path where senderId stays the Participant.id', async () => {
-    // Anonymous senders have no User.id, so createSuccessResponse falls back to
-    // the Participant.id — the exclusion must still hold on that representation.
-    const { handler, readStatusService } = makeHandler({
-      onlineUsers: [senderUserId, onlineUserId]
-    });
-
-    await handler.autoDeliverToOnlineRecipients(
-      { id: messageId, senderId: senderParticipantId } as any,
-      conversationId
-    );
-
-    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledTimes(1);
-    expect(readStatusService.markMessagesAsReceived).not.toHaveBeenCalledWith(
-      senderParticipantId,
-      conversationId,
-      messageId
-    );
-  });
-
   it('aborts safely when senderId is missing', async () => {
     const { handler, readStatusService, emit } = makeHandler({ onlineUsers: [onlineUserId] });
 

@@ -2,7 +2,6 @@ package me.meeshy.sdk.net.api
 
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.NotificationPreferenceSyncBody
-import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
 import retrofit2.http.Body
 import retrofit2.http.PATCH
 
@@ -17,7 +16,4 @@ import retrofit2.http.PATCH
 interface PreferencesApi {
     @PATCH("me/preferences/notification")
     suspend fun updateNotification(@Body body: NotificationPreferenceSyncBody): ApiResponse<Unit>
-
-    @PATCH("me/preferences/privacy")
-    suspend fun updatePrivacy(@Body body: PrivacyPreferenceSyncBody): ApiResponse<Unit>
 }

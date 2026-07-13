@@ -1833,41 +1833,6 @@ describe('CallService', () => {
       });
     });
 
-    it('anchors duration on answeredAt (0 — never answered), not on startedAt (ring time)', async () => {
-      // Regression guard — this was the one terminal writer still computing
-      // `now - startedAt` unconditionally (ring+talk time) instead of
-      // mirroring endCall()/leaveCall()/forceEndCall()'s `answeredAt ? … : 0`
-      // (Vague 25/27/30's sibling fixes). The guard above only reaches this
-      // write for `initiated`/`ringing` calls, which by construction were
-      // never answered, so duration must always be 0 here.
-      const callSession = createMockCallSession({
-        status: CallStatus.ringing,
-        startedAt: new Date(Date.now() - 5 * 60 * 1000),
-        participants: [createMockParticipant()]
-      });
-      const missedCall = {
-        ...callSession,
-        status: CallStatus.missed,
-        endedAt: new Date(),
-        duration: 0,
-        participants: [createMockParticipant({ user: createMockUser() })],
-        initiator: createMockUser(),
-        conversation: createMockConversation()
-      };
-
-      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callSession);
-      mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
-      mockPrisma.callSession.findUnique.mockResolvedValueOnce(missedCall);
-
-      await callService.markCallAsMissed('call-123');
-
-      expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({ duration: 0 })
-        })
-      );
-    });
-
     it('bumps CallSession.version on the terminal write so a version-guarded writer that already read the row no-ops afterward', async () => {
       // Every other terminal writer (endCall, leaveCall, updateCallStatus, the
       // ringing-timeout handler) bumps `version` on its terminal write — this

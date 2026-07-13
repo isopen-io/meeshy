@@ -19,7 +19,6 @@ import me.meeshy.sdk.net.api.NotificationApi
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.api.ReactionApi
-import me.meeshy.sdk.net.api.ReportApi
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UserApi
@@ -92,7 +91,4 @@ internal object NetworkModule {
 
     @Provides
     fun providesPreferencesApi(api: MeeshyApi): PreferencesApi = api.preferences
-
-    @Provides
-    fun providesReportApi(api: MeeshyApi): ReportApi = api.reports
 }

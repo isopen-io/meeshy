@@ -506,14 +506,6 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         }
 
         guard let result else { return }
-        // Captured HERE, at true callback-arrival time on the recognizer's
-        // serial queue — not inside applyRecognitionResult after the
-        // Task.detached hop below, which gives no ordering guarantee between
-        // two independently detached callbacks. Re-stamping `Date()` at
-        // application time could sort a later-arriving-but-earlier-applied
-        // result ahead of one that truly arrived first (see appendSegment's
-        // capturedAt-based sort and TranscriptionSegment's doc comment).
-        let capturedAt = Date()
         let isFinal = result.isFinal
         let text = result.bestTranscription.formattedString
         let asrSegments = result.bestTranscription.segments
@@ -525,19 +517,16 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         Task.detached(priority: .utility) { [weak self] in
             await self?.applyRecognitionResult(
                 text: text, speakerId: speakerId, startMs: startMs, endMs: endMs,
-                isFinal: isFinal, confidence: confidence, language: language, capturedAt: capturedAt
+                isFinal: isFinal, confidence: confidence, language: language
             )
         }
     }
 
     /// Internal (not `private`) so `CallTranscriptionServiceTests` can drive
     /// it directly, matching the stale-callback-after-teardown guard test.
-    /// `capturedAt` is caller-supplied (arrival time), never re-stamped here
-    /// — see `handleRecognizerCallback`'s comment on why application time is
-    /// the wrong clock for this value.
     func applyRecognitionResult(
         text: String, speakerId: String, startMs: Int, endMs: Int,
-        isFinal: Bool, confidence: Double, language: String, capturedAt: Date
+        isFinal: Bool, confidence: Double, language: String
     ) {
         guard isTranscribing else { return }
         guard isFinal || isShowingOverlay else { return }
@@ -546,7 +535,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             id: UUID(), text: text, speakerId: speakerId,
             startTime: Double(startMs) / 1000, endTime: Double(endMs) / 1000,
             isFinal: isFinal, confidence: confidence, language: language,
-            capturedAt: capturedAt
+            capturedAt: Date()
         )
         appendSegment(segment)
 

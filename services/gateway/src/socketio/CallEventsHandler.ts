@@ -17,9 +17,8 @@ import { NotificationService } from '../services/notifications/NotificationServi
 import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
-import { ROOMS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
-import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
   socketInitiateCallSchema,
@@ -322,13 +321,19 @@ export class CallEventsHandler {
         .filter((uid): uid is string => !!uid && !excluded.has(uid));
       if (targets.length === 0) return;
 
-      // Cross-platform mobile (audit 2026-07-11 #2) — le hardcode
-      // apns/ios laissait un Android backgrounded (socket mort) sonner
-      // dans le vide après un missed/rejected.
       await Promise.all(targets.map((uid) =>
-        this.pushService!.sendToUser(
-          buildCallSilentPush({ userId: uid, type: 'call_cancel', callId })
-        ).catch((error) => {
+        this.pushService!.sendToUser({
+          userId: uid,
+          payload: {
+            title: '',
+            body: '',
+            silent: true,
+            data: { type: 'call_cancel', callId }
+          },
+          types: ['apns'],
+          platforms: ['ios'],
+          bypassDnd: true
+        }).catch((error) => {
           logger.error('call_cancel push failed', { callId, userId: uid, error });
         })
       ));
@@ -593,13 +598,6 @@ export class CallEventsHandler {
             });
           });
         }
-
-        // Room-membership leak fix — mirrors the same fix on call:end/
-        // call:leave/call:force-leave: this only evicted THIS socket via
-        // leaveCall(), leaving every other still-joined socket (e.g. a
-        // second device/tab) a member of the now-dead room until its own
-        // disconnect.
-        await this.evictCallRoomSockets(io, participation.callSessionId);
       }
 
       logger.info('✅ Socket: Auto-left call on disconnect', {
@@ -683,11 +681,6 @@ export class CallEventsHandler {
                 });
               });
             }
-
-            // Room-membership leak fix — same reasoning as the happy path
-            // above: this force-cleanup branch also terminates the call
-            // session and must evict every remaining socket from its room.
-            await this.evictCallRoomSockets(io, participation.callSessionId);
           }
         }
 
@@ -833,29 +826,9 @@ export class CallEventsHandler {
           logger.error('❌ handleMissedCall failed after force-end orphaned call', { callId, err });
         });
       }
-
-      // Room-membership leak fix — mirrors the identical fix on the
-      // call:end/call:leave/call:force-leave happy paths: this recovery path
-      // is reached from every one of their catch blocks, so leaving it out
-      // here left every OTHER socket still joined to the room (not just the
-      // acting user's) stuck as a member of a now-permanently-dead room
-      // until its own unrelated disconnect.
-      await this.evictCallRoomSockets(io, callId);
     } catch (err) {
       logger.error('❌ Failed to force-end orphaned call after call:end failure', { callId, error: err });
     }
-  }
-
-  /**
-   * Evict every socket from a call's room. Sibling of the identical inline
-   * `fetchSockets()` + `leave()` pattern already run on call:end/call:leave/
-   * call:force-leave's happy paths — without it, a still-joined socket (e.g.
-   * a second device/tab) keeps a stale Socket.IO room membership for the
-   * rest of its connection lifetime once the call ends via this path.
-   */
-  private async evictCallRoomSockets(io: SocketIOServer, callId: string): Promise<void> {
-    const socketsInCallRoom = await io.in(ROOMS.call(callId)).fetchSockets();
-    await Promise.all(socketsInCallRoom.map((s) => s.leave(ROOMS.call(callId))));
   }
 
   private async resolveParticipantId(userId: string, conversationId: string): Promise<string | null> {
@@ -1242,7 +1215,7 @@ export class CallEventsHandler {
     // event does). Impact per-event is minimal (flips a socket-local flag, no
     // DB write, no broadcast) but a flooding client should still be bounded
     // like every other handler here, not left as the one exception.
-    socket.on(CLIENT_EVENTS.PRESENCE_APP_STATE, async (data: { foreground?: boolean }) => {
+    socket.on('presence:app-state', async (data: { foreground?: boolean }) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
@@ -1275,7 +1248,7 @@ export class CallEventsHandler {
     // it"; "I open the Mac app → the banner shows"). Scoped to the user's
     // conversations, the ringing window (<60s), calls they did NOT initiate, and only
     // if they haven't already left. The client dedups by callId.
-    socket.on(CLIENT_EVENTS.CALL_CHECK_ACTIVE, async () => {
+    socket.on('call:check-active', async () => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
@@ -1658,8 +1631,7 @@ export class CallEventsHandler {
           ack?.({ success: false, error: 'User not authenticated' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
+            message: 'User not authenticated'
           } as CallError);
           return;
         }
@@ -1690,8 +1662,7 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data?.callId
+            details: validationDetails ? { issues: validationDetails } : undefined
           } as CallError);
           return;
         }
@@ -1708,8 +1679,7 @@ export class CallEventsHandler {
           ack?.({ success: false, error: 'You are not a participant in this conversation' } as unknown as CallJoinAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this conversation',
-            callId: data.callId
+            message: 'You are not a participant in this conversation'
           } as CallError);
           return;
         }
@@ -1896,13 +1866,9 @@ export class CallEventsHandler {
           : errorMessage;
 
         ack?.({ success: false, error: message } as unknown as CallJoinAck);
-        // callId systématique : sans lui, le garde de scoping par appel côté
-        // client (CallError.callId, audit iOS 2026-07-08) ne peut pas
-        // s'appliquer — un CALL_ENDED de rejoin tardif doit nommer SON appel.
         socket.emit(CALL_EVENTS.ERROR, {
           code: errorCode,
-          message,
-          callId: data?.callId
+          message
         } as CallError);
       }
       // Item F follow-up (chaos-2 re-test) — the join deliberately does NOT
@@ -1926,8 +1892,7 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
+            message: 'User not authenticated'
           } as CallError);
           return;
         }
@@ -1949,8 +1914,7 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data?.callId
+            details: validationDetails ? { issues: validationDetails } : undefined
           } as CallError);
           return;
         }
@@ -2092,8 +2056,7 @@ export class CallEventsHandler {
 
         socket.emit(CALL_EVENTS.ERROR, {
           code: errorCode,
-          message,
-          callId: data?.callId
+          message
         } as CallError);
       }
     });
@@ -2102,7 +2065,7 @@ export class CallEventsHandler {
      * call:force-leave - Force cleanup of any active calls in a conversation
      * This is used when "call already active" error occurs to cleanup stale calls
      */
-    socket.on(CLIENT_EVENTS.CALL_FORCE_LEAVE, async (data: { conversationId: string }) => {
+    socket.on('call:force-leave', async (data: { conversationId: string }) => {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
@@ -2451,26 +2414,6 @@ export class CallEventsHandler {
             callId: data.callId,
             targetUserId
           });
-          // Audit 2026-07-11 #3 — le mirror answered-elsewhere doit partir
-          // MÊME quand l'appelant n'a aucun socket à l'instant de l'answer
-          // (churn socket mid-answer) : ce return sautait le bloc push du
-          // chemin relais, et les autres devices du callee sonnaient
-          // jusqu'à leur timeout local alors que l'appel était décroché.
-          // Même prédicat pur que la branche relais ; best-effort.
-          if (this.pushService && shouldMirrorAnsweredElsewhere({
-            signalType: data.signal.type,
-            answererUserId: userId,
-            initiatorId: callSession.initiatorId,
-            alreadyAnswered: !!callSession.answeredAt
-          })) {
-            this.pushService.sendToUser(
-              buildCallSilentPush({ userId, type: 'call_answered_elsewhere', callId: data.callId })
-            ).catch((error) => {
-              logger.error('call_answered_elsewhere push failed (no-socket branch)', {
-                callId: data.callId, userId, error
-              });
-            });
-          }
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
             message: 'Target participant has no active connection',
@@ -2524,15 +2467,19 @@ export class CallEventsHandler {
           // guard. Never for the initiator's own answer, never for a later
           // renegotiation answer. Best-effort: a push failure must never
           // fail the signal relay.
-          if (this.pushService && shouldMirrorAnsweredElsewhere({
-            signalType: data.signal.type,
-            answererUserId: userId,
-            initiatorId: callSession.initiatorId,
-            alreadyAnswered: !isFirstAnswer
-          })) {
-            this.pushService.sendToUser(
-              buildCallSilentPush({ userId, type: 'call_answered_elsewhere', callId: data.callId })
-            ).catch((error) => {
+          if (this.pushService && userId !== callSession.initiatorId && isFirstAnswer) {
+            this.pushService.sendToUser({
+              userId,
+              payload: {
+                title: '',
+                body: '',
+                silent: true,
+                data: { type: 'call_answered_elsewhere', callId: data.callId }
+              },
+              types: ['apns'],
+              platforms: ['ios'],
+              bypassDnd: true
+            }).catch((error) => {
               logger.error('call_answered_elsewhere push failed (signal unaffected)', {
                 callId: data.callId, userId, error
               });
@@ -2571,8 +2518,7 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
+            message: 'User not authenticated'
           } as CallError);
           return;
         }
@@ -2594,8 +2540,7 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data?.callId
+            details: validationDetails ? { issues: validationDetails } : undefined
           } as CallError);
           return;
         }
@@ -2615,8 +2560,7 @@ export class CallEventsHandler {
         if (!audioParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call',
-            callId: data?.callId
+            message: 'You are not a participant in this call'
           } as CallError);
           return;
         }
@@ -2653,7 +2597,7 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling audio', error);
 
-        socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, 'Failed to toggle audio'), callId: data?.callId } as CallError);
+        socket.emit(CALL_EVENTS.ERROR, this.mapMediaToggleError(error, 'Failed to toggle audio'));
       }
     });
 
@@ -2668,8 +2612,7 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
+            message: 'User not authenticated'
           } as CallError);
           return;
         }
@@ -2691,8 +2634,7 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined,
-            callId: data?.callId
+            details: validationDetails ? { issues: validationDetails } : undefined
           } as CallError);
           return;
         }
@@ -2709,8 +2651,7 @@ export class CallEventsHandler {
         if (!videoParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call',
-            callId: data?.callId
+            message: 'You are not a participant in this call'
           } as CallError);
           return;
         }
@@ -2746,7 +2687,7 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling video', error);
 
-        socket.emit(CALL_EVENTS.ERROR, { ...this.mapMediaToggleError(error, 'Failed to toggle video'), callId: data?.callId } as CallError);
+        socket.emit(CALL_EVENTS.ERROR, this.mapMediaToggleError(error, 'Failed to toggle video'));
       }
     });
 
@@ -2760,8 +2701,7 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated',
-            callId: data?.callId
+            message: 'User not authenticated'
           } as CallError);
           ack?.({ success: false });
           return;
@@ -2785,8 +2725,7 @@ export class CallEventsHandler {
           const { error: validationError } = validation;
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: validationError,
-            callId: data?.callId
+            message: validationError
           } as CallError);
           ack?.({ success: false });
           return;
@@ -2829,8 +2768,7 @@ export class CallEventsHandler {
           // force-end a call on an unauthorized caller's behalf.
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this conversation',
-            callId: data?.callId
+            message: 'You are not a participant in this conversation'
           } as CallError);
           ack?.({ success: false });
           return;
@@ -2942,7 +2880,7 @@ export class CallEventsHandler {
           await this.forceEndOrphanedCallAfterOptimisticBroadcast(io, data.callId, endedByUserId, data.reason);
         }
         ack?.({ success: false });
-        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message, callId: data?.callId } as CallError);
+        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
       }
     });
 
@@ -3187,8 +3125,7 @@ export class CallEventsHandler {
         if (!participantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not a participant in this call',
-            callId: data?.callId
+            message: 'You are not a participant in this call'
           } as CallError);
           return;
         }
@@ -3255,8 +3192,7 @@ export class CallEventsHandler {
         if (!socket.rooms.has(ROOMS.call(data.callId))) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'Not in call room',
-            callId: data?.callId
+            message: 'Not in call room'
           } as CallError);
           return;
         }
@@ -3272,8 +3208,7 @@ export class CallEventsHandler {
         if (!iceParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'Not a participant in this call',
-            callId: data?.callId
+            message: 'Not a participant in this call'
           } as CallError);
           return;
         }

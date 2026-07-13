@@ -9,23 +9,13 @@ package me.meeshy.sdk.model.call
  * - [Ring] — surface a full-screen incoming-call notification for [push]; the
  *   caller MUST persist [updatedSeen] as the new live dedup ring so a retried
  *   delivery of the same call is subsequently suppressed.
- * - [StopRing] — silence the ring for [push]'s call (`call_cancel` /
- *   `call_answered_elsewhere` gateway mirror); the caller MUST cancel the
- *   incoming-call notification AND persist [updatedSeen] — FCM ordering is not
- *   guaranteed, so recording the stopped id keeps a late-delivered original
- *   ring push for the dead call silent.
  * - [Suppress] — a call push that must not ring, for the stated [reason]; the
- *   dedup ring is left untouched (only ring/stop outcomes record the id).
+ *   dedup ring is left untouched (only a ring outcome records the id).
  */
 sealed interface IncomingCallPushRoute {
     data object NotACallPush : IncomingCallPushRoute
     data class Ring(
         val push: IncomingCallPush,
-        val updatedSeen: SeenCallRing,
-    ) : IncomingCallPushRoute
-
-    data class StopRing(
-        val push: CallStopPush,
         val updatedSeen: SeenCallRing,
     ) : IncomingCallPushRoute
 
@@ -50,15 +40,6 @@ object IncomingCallPushRouter {
         data: Map<String, String>,
         context: IncomingCallContext,
     ): IncomingCallPushRoute {
-        CallStopPushParser.parse(data)?.let { stop ->
-            // A stop is never gated by the busy/duplicate rules protecting ring
-            // pushes — cancelling an absent notification is a harmless no-op,
-            // while a swallowed stop leaves a device ringing for a dead call.
-            return IncomingCallPushRoute.StopRing(
-                push = stop,
-                updatedSeen = context.seen.insert(stop.callId, context.nowMillis),
-            )
-        }
         val push = IncomingCallPushParser.parse(data) ?: return IncomingCallPushRoute.NotACallPush
         return when (val decision = IncomingCallDecider.decide(push, context)) {
             is IncomingCallDecision.Ring -> IncomingCallPushRoute.Ring(

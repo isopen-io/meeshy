@@ -87,10 +87,8 @@ describe('CallEventsHandler.sendMissedCallCancellationPushForTerminatedCall', ()
           silent: true,
           data: { type: 'call_cancel', callId: CALL_ID },
         }),
-        // Cross-platform mobile depuis l'audit 2026-07-11 #2 : le hardcode
-        // apns/ios laissait un Android backgrounded sonner dans le vide.
-        types: ['apns', 'fcm'],
-        platforms: ['ios', 'android'],
+        types: ['apns'],
+        platforms: ['ios'],
       })
     );
   });

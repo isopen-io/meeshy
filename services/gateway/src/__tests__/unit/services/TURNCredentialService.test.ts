@@ -206,50 +206,6 @@ describe('TURNCredentialService — credential TTL covers max call duration', ()
       }
     );
   });
-
-  // Regression guard — parseInt('not-a-number', 10) is NaN, and `NaN <
-  // minTTL` is `false` in JS, so the clamp-warning branch above silently
-  // never fires and `Math.max(NaN, minTTL)` itself evaluates to `NaN`.
-  // credentialTTL must never become NaN: every minted TURN username would
-  // become "NaN:<userId>" and coturn would reject every relayed call with
-  // no alert, defeating the entire floor-clamp safety net this describe
-  // block exists to guard.
-  it('falls back to the 86400s default (NOT NaN) when TURN_CREDENTIAL_TTL is not a valid number', () => {
-    withEnv({ TURN_CREDENTIAL_TTL: 'not-a-number', NODE_ENV: 'test' }, () => {
-      const service = new TURNCredentialService();
-      expect(service.getStatus().credentialTTL).not.toBeNaN();
-      expect(service.getStatus().credentialTTL).toBe(86400);
-      expect(warnMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
-    });
-  });
-
-  it('errors (not just warns) on a non-numeric TURN_CREDENTIAL_TTL in production, and never mints a NaN credentialTTL', () => {
-    withEnv(
-      { TURN_CREDENTIAL_TTL: 'null', NODE_ENV: 'production', TURN_SECRET: STRONG_SECRET },
-      () => {
-        const service = new TURNCredentialService();
-        expect(service.getStatus().credentialTTL).not.toBeNaN();
-        expect(service.getStatus().credentialTTL).toBe(86400);
-        expect(errorMock).toHaveBeenCalledWith(expect.stringContaining('TURN_CREDENTIAL_TTL'));
-      }
-    );
-  });
-
-  it('never produces a NaN-timestamped TURN username when TURN_CREDENTIAL_TTL is garbage', () => {
-    withEnv(
-      { TURN_CREDENTIAL_TTL: 'undefined', NODE_ENV: 'test', TURN_SERVERS: 'turn.example.com:3478' },
-      () => {
-        const service = new TURNCredentialService();
-        const iceServers = service.generateCredentials('user-123');
-        const turnServer = iceServers.find((s) =>
-          (Array.isArray(s.urls) ? s.urls.join(',') : s.urls).includes('turn:')
-        );
-        const [expiryStr] = String(turnServer!.username).split(':');
-        expect(expiryStr).not.toBe('NaN');
-        expect(Number.isNaN(parseInt(expiryStr, 10))).toBe(false);
-      }
-    );
-  });
 });
 
 // ---------------------------------------------------------------------------

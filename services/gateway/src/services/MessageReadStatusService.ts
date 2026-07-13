@@ -1754,7 +1754,7 @@ export class MessageReadStatusService {
       const latestMessage = await this.prisma.message.findFirst({
         where: { conversationId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, createdAt: true, senderId: true }
+        select: { createdAt: true, senderId: true }
       });
 
       if (!latestMessage) {
@@ -1775,54 +1775,14 @@ export class MessageReadStatusService {
 
       // Only count cursors from active participants
       const activeCursors = cursors.filter(c => activeIds.has(c.participantId));
-      const cursorByParticipant = new Map(activeCursors.map(c => [c.participantId, c]));
 
-      // Précision absolue : les dates FIGÉES par message (write-once) priment sur la
-      // dérivation curseur — même union que getMessageReadStatus /
-      // getConversationReadStatuses / getMessageStatusDetails. Sans elle, un curseur
-      // supprimé par `cleanupObsoleteCursors` (son lastReadMessageId pointe vers un
-      // message effacé) ferait disparaître un reçu de livraison/lecture figé toujours
-      // valide, et ce résumé — qui alimente le champ `summary` des events
-      // READ_STATUS_UPDATED émis à l'expéditeur — sous-compterait par rapport aux
-      // méthodes mono-message (coche livré/lu qui régresse chez l'expéditeur).
-      const frozenEntries = await this.prisma.messageStatusEntry.findMany({
-        where: { messageId: latestMessage.id, conversationId },
-        select: { participantId: true, deliveredAt: true, receivedAt: true, readAt: true }
-      });
-      const frozenByParticipant = new Map(
-        frozenEntries
-          .filter(e => e.participantId !== latestMessage.senderId && activeIds.has(e.participantId))
-          .map(e => [e.participantId, e])
-      );
+      const deliveredCount = activeCursors.filter(c =>
+        c.lastDeliveredAt && c.lastDeliveredAt >= latestMessage.createdAt
+      ).length;
 
-      // Union des participants ayant un curseur actif ET de ceux ayant un reçu figé
-      // survivant pour CE message (sender exclu, inactifs ignorés) — parité exacte
-      // avec les trois méthodes sœurs.
-      const evaluatedParticipantIds = new Set<string>([
-        ...activeCursors.map(c => c.participantId),
-        ...frozenByParticipant.keys(),
-      ]);
-
-      let deliveredCount = 0;
-      let readCount = 0;
-      for (const participantId of evaluatedParticipantIds) {
-        const cursor = cursorByParticipant.get(participantId);
-        const cursorDelivered =
-          cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= latestMessage.createdAt
-            ? cursor.lastDeliveredAt
-            : null;
-        const cursorRead =
-          cursor?.lastReadAt && cursor.lastReadAt >= latestMessage.createdAt
-            ? cursor.lastReadAt
-            : null;
-
-        const frozen = frozenByParticipant.get(participantId);
-        const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
-        const readAt = frozen?.readAt ?? cursorRead;
-
-        if (receivedAt) deliveredCount++;
-        if (readAt) readCount++;
-      }
+      const readCount = activeCursors.filter(c =>
+        c.lastReadAt && c.lastReadAt >= latestMessage.createdAt
+      ).length;
 
       return { totalMembers, deliveredCount, readCount };
     } catch (error) {

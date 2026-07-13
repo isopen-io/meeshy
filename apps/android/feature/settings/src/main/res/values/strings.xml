@@ -132,22 +132,4 @@
     <string name="privacy_block_screenshots">Block screenshots</string>
     <string name="privacy_encryption_coming_soon">Coming soon</string>
     <string name="privacy_encryption_disabled">Disabled</string>
-    <!-- Account deletion (§L) -->
-    <string name="delete_account_title">Delete account</string>
-    <string name="delete_account_warning_title">This cannot be undone</string>
-    <string name="delete_account_warning_intro">Deleting your account permanently removes:</string>
-    <string name="delete_account_warning_conversations">All your conversations</string>
-    <string name="delete_account_warning_messages">All your messages</string>
-    <string name="delete_account_warning_media">All your shared media</string>
-    <string name="delete_account_warning_contacts">Your contact list</string>
-    <string name="delete_account_warning_preferences">Your preferences and settings</string>
-    <string name="delete_account_confirm_prompt">Type %1$s to confirm</string>
-    <string name="delete_account_confirm_label">Confirmation phrase</string>
-    <string name="delete_account_button">Permanently delete my account</string>
-    <string name="delete_account_error_pending">A deletion request is already in progress. Check your inbox.</string>
-    <string name="delete_account_error_network">No connection. Check your network and try again.</string>
-    <string name="delete_account_error_generic">Something went wrong. Please try again.</string>
-    <string name="delete_account_email_title">A confirmation email is on its way</string>
-    <string name="delete_account_email_body">Check your inbox to confirm the deletion of your account.</string>
-    <string name="delete_account_email_ok">Got it</string>
 </resources>

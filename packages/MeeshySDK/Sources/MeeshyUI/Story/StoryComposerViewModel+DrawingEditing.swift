@@ -75,37 +75,20 @@ extension StoryComposerViewModel {
 
     // MARK: Mode transitions
 
-    /// Entre en mode édition de dessin — MODE LISTE par défaut (user
-    /// 2026-07-11 v2) : « par défaut rien n'est activé, c'est la liste des
-    /// éléments de traits ». Aucun panneau déplié, pas de plein écran ; le
-    /// band montre `DrawingStrokeList`. Le plein écran de tracé s'active à
-    /// la sélection d'un pinceau (`enterImmersiveDrawing`). Idempotent si
-    /// déjà actif (préserve la sélection/le panneau).
+    /// Entre en mode édition de dessin flottant. Quand aucun trait n'existe encore,
+    /// la liste verticale par-trait est vide : on déplie d'emblée le panneau couleur
+    /// du pinceau actif pour donner accès aux contrôles de dessin directement (sinon
+    /// la barre paraît vide). Quand des traits existent déjà, on ouvre sans panneau
+    /// pour ne pas masquer la liste. Idempotent si déjà actif (préserve la sélection/le panneau).
     func enterDrawingEditingMode() {
         if drawingEditingMode.isActive { return }
-        drawingEditingMode = .active(strokeId: nil, expandedTool: nil)
+        let initialTool: DrawingEditTool? = drawingStrokes.isEmpty ? .color : nil
+        drawingEditingMode = .active(strokeId: nil, expandedTool: initialTool)
     }
 
-    /// Sélection d'un pinceau → plein écran de tracé : canvas full-bleed
-    /// dessinable jusqu'aux angles, bulles flottantes seules (le band se
-    /// replie côté vue), pinch-zoom 2 doigts actif.
-    func enterImmersiveDrawing() {
-        if !drawingEditingMode.isActive {
-            drawingEditingMode = .active(strokeId: nil, expandedTool: nil)
-        }
-        isDrawingImmersive = true
-    }
-
-    /// Sort du mode édition de dessin. Le zoom d'inspection posé PENDANT le
-    /// dessin (pinch 2 doigts sur la couche de capture) est ramené à l'échelle
-    /// 1 : « lorsqu'on quitte on revient au système initial » (user
-    /// 2026-07-11). Guardé sur `isActive` pour qu'un exit no-op (appelé à
-    /// chaque changement d'outil) n'écrase pas un zoom posé HORS dessin.
+    /// Sort du mode édition de dessin.
     func exitDrawingEditingMode() {
-        guard drawingEditingMode.isActive else { return }
         drawingEditingMode = .inactive
-        isDrawingImmersive = false
-        if isCanvasZoomed { resetCanvasZoom() }
     }
 
     /// Déplie / replie le panneau d'options d'un outil. No-op si pas en édition.

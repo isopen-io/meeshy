@@ -26,13 +26,6 @@ struct StrokeCaptureLayer: UIViewRepresentable {
     var onStrokeInProgress: (StoryDrawingStroke?) -> Void
     var onStrokeCommitted: (StoryDrawingStroke) -> Void
     var onEraseGesture: ([CGPoint]) -> Void
-    /// Pinch 2 doigts pendant le dessin (mode immersif, user 2026-07-11) :
-    /// zoom du viewport + pan par le déplacement du centroïde. `scale` est le
-    /// facteur du geste, `translation` le delta du centroïde en points ÉCRAN
-    /// (le `.offset` viewport SwiftUI s'applique après le `.scaleEffect`, donc
-    /// en points écran — mapping 1:1). La reconnaissance du pinch annule le
-    /// trait en cours (`cancelsTouchesInView`).
-    var onViewportPinch: (CGFloat, CGSize, UIGestureRecognizer.State) -> Void = { _, _, _ in }
 
     // MARK: - Capture event (pure, testable)
 
@@ -142,18 +135,12 @@ struct StrokeCaptureLayer: UIViewRepresentable {
     // MARK: - Capture view (custom touch handling, no PencilKit)
 
     /// `UIView` qui capte les touches single-finger et reconstruit le trait avec notre
-    /// moteur largeur-variable. Le tracé reste MONO-doigt (`activeTouch`) ; un pinch
-    /// 2 doigts (zoom/pan du viewport en mode dessin immersif, user 2026-07-11) est
-    /// reconnu par un `UIPinchGestureRecognizer` dont la reconnaissance ANNULE le
-    /// trait en cours (`cancelsTouchesInView` par défaut → `touchesCancelled`).
+    /// moteur largeur-variable. Aucun `UIGestureRecognizer` n'est ajouté pour ne pas
+    /// entrer en conflit avec le composer (le pan/zoom du canvas est déjà désactivé via
+    /// `allowsHitTesting(!isDrawingActive)` côté parent).
     final class StrokeCaptureView: UIView {
         private var points: [(location: CGPoint, t: TimeInterval, force: CGFloat)] = []
         private var currentStrokeId = UUID().uuidString
-        /// Le doigt qui trace. Tout doigt supplémentaire appartient au geste
-        /// viewport — il n'injecte JAMAIS de points dans le trait.
-        private var activeTouch: UITouch?
-        private var pinchStartCentroid: CGPoint = .zero
-        private var lastPinchTranslation: CGSize = .zero
 
         private var activeTool: StrokeTool = .pen
         private var activeColorHex: String = "FFFFFF"
@@ -162,18 +149,12 @@ struct StrokeCaptureLayer: UIViewRepresentable {
         private var onStrokeInProgress: (StoryDrawingStroke?) -> Void = { _ in }
         private var onStrokeCommitted: (StoryDrawingStroke) -> Void = { _ in }
         private var onEraseGesture: ([CGPoint]) -> Void = { _ in }
-        private var onViewportPinch: (CGFloat, CGSize, UIGestureRecognizer.State) -> Void = { _, _, _ in }
 
         override init(frame: CGRect) {
             super.init(frame: frame)
-            // Multi-touch REQUIS pour recevoir le 2e doigt du pinch viewport ;
-            // le tracé reste mono-doigt via `activeTouch`.
-            isMultipleTouchEnabled = true
+            isMultipleTouchEnabled = false
             backgroundColor = .clear
             isOpaque = false
-            let pinch = UIPinchGestureRecognizer(
-                target: self, action: #selector(handleViewportPinch(_:)))
-            addGestureRecognizer(pinch)
         }
 
         @available(*, unavailable)
@@ -187,44 +168,12 @@ struct StrokeCaptureLayer: UIViewRepresentable {
             onStrokeInProgress = layer.onStrokeInProgress
             onStrokeCommitted = layer.onStrokeCommitted
             onEraseGesture = layer.onEraseGesture
-            onViewportPinch = layer.onViewportPinch
-        }
-
-        // MARK: Viewport pinch (zoom + pan pendant le dessin)
-
-        @objc private func handleViewportPinch(_ gesture: UIPinchGestureRecognizer) {
-            // Centroïde mesuré en espace FENÊTRE (`location(in: nil)`) : cette
-            // vue vit SOUS le `.scaleEffect` viewport — ses propres coordonnées
-            // bougent avec le zoom, la fenêtre non.
-            switch gesture.state {
-            case .began:
-                pinchStartCentroid = gesture.location(in: nil)
-                lastPinchTranslation = .zero
-                onViewportPinch(gesture.scale, .zero, .began)
-            case .changed:
-                let centroid = gesture.location(in: nil)
-                lastPinchTranslation = CGSize(
-                    width: centroid.x - pinchStartCentroid.x,
-                    height: centroid.y - pinchStartCentroid.y)
-                onViewportPinch(gesture.scale, lastPinchTranslation, .changed)
-            case .ended:
-                // Moins de 2 doigts au lift-up : `location(in:)` n'est plus un
-                // centroïde fiable — on committe la dernière translation vue.
-                onViewportPinch(gesture.scale, lastPinchTranslation, .ended)
-            case .cancelled, .failed:
-                onViewportPinch(1.0, .zero, gesture.state)
-            default:
-                break
-            }
         }
 
         // MARK: Touch lifecycle
 
         override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-            // Un doigt supplémentaire pendant un tracé = début de pinch
-            // viewport : il n'ouvre pas de nouveau trait.
-            guard activeTouch == nil, let touch = touches.first else { return }
-            activeTouch = touch
+            guard let touch = touches.first else { return }
             points = []
             currentStrokeId = UUID().uuidString
             append(touch.location(in: self), touch.timestamp, touch.force)
@@ -232,8 +181,8 @@ struct StrokeCaptureLayer: UIViewRepresentable {
         }
 
         override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-            guard let tracked = activeTouch, touches.contains(tracked) else { return }
-            let coalesced = event?.coalescedTouches(for: tracked) ?? [tracked]
+            guard let touch = touches.first else { return }
+            let coalesced = event?.coalescedTouches(for: touch) ?? [touch]
             for c in coalesced {
                 append(c.preciseLocation(in: self), c.timestamp, c.force)
             }
@@ -241,19 +190,17 @@ struct StrokeCaptureLayer: UIViewRepresentable {
         }
 
         override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-            guard let tracked = activeTouch, touches.contains(tracked) else { return }
-            append(tracked.preciseLocation(in: self), tracked.timestamp, tracked.force)
+            if let touch = touches.first {
+                append(touch.preciseLocation(in: self), touch.timestamp, touch.force)
+            }
             commit()
             onStrokeInProgress(nil)
             points = []
-            activeTouch = nil
         }
 
         override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-            guard let tracked = activeTouch, touches.contains(tracked) else { return }
             onStrokeInProgress(nil)
             points = []
-            activeTouch = nil
         }
 
         // MARK: Capture helpers

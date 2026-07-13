@@ -86,10 +86,6 @@ public struct StoryComposerView: View {
     /// le pinch d'élément.
     @State var viewportPinchDelta: CGFloat = 1.0
     @GestureState var viewportDragDelta: CGSize = .zero
-    /// Pan éphémère du viewport pendant le pinch 2 doigts du MODE DESSIN
-    /// (déplacement du centroïde, points écran). Committé dans
-    /// `canvasOffset` à `.ended`, remis à zéro sinon.
-    @State var drawingViewportPanDelta: CGSize = .zero
 
     // MARK: - UI state
 

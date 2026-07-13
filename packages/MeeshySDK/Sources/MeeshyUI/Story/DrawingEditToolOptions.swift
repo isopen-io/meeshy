@@ -76,13 +76,6 @@ struct DrawingEditToolOptions: View {
                 let isSel = viewModel.activeBrushTool == t
                 Button {
                     viewModel.activeBrushTool = t
-                    // Sélectionner un PINCEAU (pas l'édition d'un trait
-                    // existant) bascule en plein écran de tracé (user
-                    // 2026-07-11 v2 : « à la sélection du pinceau on passe
-                    // en mode plein écran »).
-                    if selectedStroke == nil {
-                        viewModel.enterImmersiveDrawing()
-                    }
                     HapticFeedback.light()
                 } label: {
                     Image(systemName: Self.symbol(for: t))

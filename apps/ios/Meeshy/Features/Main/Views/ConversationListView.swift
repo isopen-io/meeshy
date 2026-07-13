@@ -264,7 +264,7 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private var sectionsContent: some View {
-        LazyVStack(spacing: 8) {
+        LazyVStack(spacing: MeeshySpacing.sm) {
             ForEach(conversationViewModel.groupedConversations, id: \.section.id) { group in
                 sectionView(for: group)
             }
@@ -295,8 +295,8 @@ struct ConversationListView: View {
             ) {
                 toggleSection(group.section.id)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
             // Frame globale du header → registre inerte : cible de drop de la
             // chip du morph drag (l'overlay hit-teste le doigt au relâchement).
             .background(
@@ -318,7 +318,7 @@ struct ConversationListView: View {
         // Section Content — always visible when no categories, otherwise animated expand/collapse
         if isSingleUngroupedSection || expandedSections.contains(group.section.id) {
             sectionConversations(group.conversations)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)).combined(with: .offset(y: -8)),
                     removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
@@ -337,7 +337,7 @@ struct ConversationListView: View {
             ? min(UIScreen.main.bounds.width * 0.42, 520)
             : UIScreen.main.bounds.width - 32
         let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
-        LazyVStack(spacing: 6) {
+        LazyVStack(spacing: MeeshySpacing.xs + 2) {
             ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth)
                     .onAppear {
@@ -878,13 +878,13 @@ struct ConversationListView: View {
                     // paths bypass the placeholder even on first paint.
                     if conversationViewModel.loadState == .loading
                         && conversationViewModel.groupedConversations.isEmpty {
-                        LazyVStack(spacing: 8) {
+                        LazyVStack(spacing: MeeshySpacing.sm) {
                             ForEach(0..<6, id: \.self) { index in
                                 SkeletonConversationRow()
                                     .staggeredAppear(index: index, baseDelay: 0.04)
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .transition(.opacity)
                     } else if conversationViewModel.groupedConversations.isEmpty && conversationViewModel.loadFailed {
                         // Cold-start sync failed AND cache is empty: offer a
@@ -902,7 +902,7 @@ struct ConversationListView: View {
                                 Task { await conversationViewModel.forceRefresh() }
                             }
                         )
-                        .padding(.top, 60)
+                        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.xxl)
                         .transition(.opacity)
                     } else if conversationViewModel.groupedConversations.isEmpty {
                         EmptyStateView(
@@ -914,7 +914,7 @@ struct ConversationListView: View {
                                 onNewConversation?()
                             }
                         )
-                        .padding(.top, 60)
+                        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.xxl)
                         .transition(.opacity)
                     } else {
                         sectionsContent
@@ -943,7 +943,7 @@ struct ConversationListView: View {
                             }
                         }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
                 .padding(.bottom, 120)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -956,7 +956,7 @@ struct ConversationListView: View {
                 showGlobalSearch: $showGlobalSearch,
                 userCommunities: userCommunities
             )
-            .padding(.bottom, 8)
+            .padding(.bottom, MeeshySpacing.sm)
             // Hide on scroll down
             .offset(y: isScrollingDown ? 150 : 0)
             .opacity(isScrollingDown ? 0 : 1)
@@ -1146,7 +1146,7 @@ struct ShareLinkPickerSheet: View {
         NavigationStack {
             Group {
                 if conversations.isEmpty {
-                    VStack(spacing: 16) {
+                    VStack(spacing: MeeshySpacing.lg) {
                         Image(systemName: "link.badge.plus")
                             .font(MeeshyFont.relative(48))
                             .foregroundStyle(MeeshyColors.indigo300)
@@ -1160,7 +1160,7 @@ struct ShareLinkPickerSheet: View {
                         Button {
                             onSelect(conversation)
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: MeeshySpacing.md) {
                                 Image(systemName: conversation.type == .group ? "person.3.fill" : "globe")
                                     .font(MeeshyFont.relative(16))
                                     .foregroundColor(MeeshyColors.indigo500)
@@ -1185,7 +1185,7 @@ struct ShareLinkPickerSheet: View {
                                     .foregroundColor(MeeshyColors.indigo400)
                                     .accessibilityHidden(true)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, MeeshySpacing.xs)
                         }
                     }
                     .listStyle(.plain)

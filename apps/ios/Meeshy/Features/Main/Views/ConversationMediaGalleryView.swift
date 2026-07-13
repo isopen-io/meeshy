@@ -278,13 +278,11 @@ struct ConversationMediaGalleryView: View {
                     stopActiveVideoAudio()
                     dismiss()
                 } label: {
-                    // Chrome : glyphe `xmark` figé dans un cercle glass 40pt
-                    // (doctrine 82i) — ne pas scaler. Glass APRÈS le sizing.
-                    Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 40, height: 40)
-                        .adaptiveGlass(in: Circle(), interactive: true)
+                    // Chrome : glyphe `xmark` figé (cadre tap = icône + padding
+                    // par défaut ≈ 60pt, doctrine 82i) — ne pas scaler.
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.white.opacity(0.8))
                         .padding()
                 }
                 .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
@@ -297,7 +295,7 @@ struct ConversationMediaGalleryView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .adaptiveGlass(in: Capsule())
+                        .background(Capsule().fill(.ultraThinMaterial.opacity(0.7)))
                         .contentTransition(.numericText())
                         .animation(.spring(response: 0.3), value: currentIndex)
                 }
@@ -318,7 +316,7 @@ struct ConversationMediaGalleryView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 40, height: 40)
-                        .adaptiveGlass(in: Circle(), interactive: true)
+                        .background(Circle().fill(Color.white.opacity(0.2)))
                         .padding(.trailing, 12)
                         .padding(.top, 8)
                     }
@@ -554,12 +552,7 @@ private struct GalleryVideoPage: View {
                 }
             }
 
-            // Un seul contrôleur : une fois le player attaché à cette URL
-            // (lecture OU pause), play/pause appartient au transport partagé
-            // (`VideoTransportControls`). Gater sur `!isPlayerActive` faisait
-            // réapparaître ce poster 64pt PENDANT la pause, empilé sur le
-            // play/pause 64pt du transport (double contrôleur, bug user).
-            if !isPlayerAttached {
+            if !isPlayerActive {
                 playOrDownloadButton
             }
         }
@@ -611,9 +604,16 @@ private struct GalleryVideoPage: View {
                 break
             }
         } label: {
-            buttonContent
-                .frame(width: 64, height: 64)
-                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(0.85))
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 64, height: 64)
+                Circle()
+                    .fill(Color(hex: accentColor).opacity(0.85))
+                    .frame(width: 56, height: 56)
+                buttonContent
+            }
+            .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
         }
         .disabled({
             if case .downloading = availability { return true }

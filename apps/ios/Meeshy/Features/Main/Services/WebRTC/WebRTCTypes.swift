@@ -1108,15 +1108,6 @@ nonisolated enum QualityThresholds {
     /// Gives the UI time to read final stats before teardown completes.
     static let callEndSettleSeconds: TimeInterval = 1.5
 
-    /// Delay `endCurrentAndAnswerPending()` waits after calling `endCall()`
-    /// before answering the waiting call — gives CallKit's `CXEndCallAction`
-    /// and the audio session teardown time to settle so the pending call's
-    /// answer doesn't race the outgoing call's hangup on the same audio
-    /// session. Distinct from `callEndSettleSeconds` (a UI-facing stats
-    /// readability window on the call that just ended, not a handoff delay
-    /// before starting the next one).
-    static let endAndAnswerPendingHandoffSeconds: TimeInterval = 0.5
-
     /// HTTP timeout for the VoIP push freshness check (GET /calls/:id).
     /// 4 s absorbs worst-case DNS + TLS + gateway response while still
     /// failing fast enough to avoid blocking CallKit for a stale push.
