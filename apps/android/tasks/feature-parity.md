@@ -2125,6 +2125,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       accent via `hexColor(...)`, so notifications colour-code by category exactly like the iOS
       `NotificationRowView`. +14 tests (each colour family, legacy-alias↔lowercase equality,
       unknown/empty→indigo fallback, cross-category distinctness).
+- [x] Row arrival timestamp as a discreet relative label (`notifications-row-relative-time`,
+      2026-07-13): the notification row previously rendered the raw absolute short date-time
+      (`shortDateTimeLabel(state.createdAt)`, e.g. "7/13/26, 6:56 AM"), diverging from iOS
+      `NotificationRowView` which shows `RelativeTimeFormatter.shortString(for: createdAt)`
+      ("5 min", "2 h", "3 j"). Ships pure `:feature:notifications` `NotificationRowTime.epochMillis`
+      (resolves the arrival instant from `state.createdAt` via the `isoToEpochMillisOrNull` SSOT →
+      null on blank/malformed so the row shows no label rather than a garbled string; unix-epoch 0L
+      kept). Row wiring reuses the already-shipped `:sdk-ui` `RelativeTimeFormat.short` +
+      `rememberRelativeTimeStrings` (no new strings). +5 tests (arrival-instant, fractional-seconds
+      parity, blank→null, unparseable→null, unix-epoch preserved).
 
 ## N. Search
 - [ ] Global search (messages, conversations, users) with recent searches + query highlighting

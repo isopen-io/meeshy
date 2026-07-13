@@ -1,5 +1,42 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **notification-row relative timestamp** landed (slice `notifications-row-relative-time`,
+> feature-parity §M/§Q — the notification row previously rendered its arrival time as the *raw absolute
+> short date-time* (`shortDateTimeLabel(notification.state.createdAt)`, e.g. "7/13/26, 6:56 AM"), a visible
+> divergence from iOS `NotificationRowView`, whose trailing `timestampView` shows
+> `RelativeTimeFormatter.shortString(for: notification.createdAt)` — the discreet "5 min" / "2 h" / "3 j"
+> relative label. Ships pure `:feature:notifications` `NotificationRowTime.epochMillis(notification)` — the
+> SSOT that resolves *which* instant the row formats: the notification's **arrival** time
+> (`state.createdAt`, the Android nesting of iOS's top-level `notification.createdAt`), parsed through the
+> `isoToEpochMillisOrNull` SSOT so a blank/malformed value returns `null` (the row then shows **no label**
+> rather than the previous garbled raw string) and a legitimate unix-epoch instant (0L) is kept, not
+> mistaken for "absent". **Wired for real (no dead ends):** the row's trailing timestamp `Text` became a
+> null-guarded `notificationRowRelativeTime(notification)?.let { … }` rendering the discreet relative label
+> via the reused `:sdk-ui` `RelativeTimeFormat.short` + `rememberRelativeTimeStrings` (the `time_relative_*`
+> resources already shipped for the feed/conversation rows) — **no new strings**, the `rememberRelativeTimeStrings`
+> read kept before the early return so the composable-call graph stays unconditional. This is the exact
+> pattern of the just-shipped `conversations-row-relative-time` slice, applied to the notification surface.
+> **+5 tests** on `NotificationRowTime.epochMillis` (arrival-instant from `state.createdAt`; whole- vs
+> fractional-second parse parity; blank→null so the row shows no timestamp; unparseable→null; unix-epoch
+> instant preserved as 0L not treated as absent). **Mutation check (RED proof):** collapsing the resolver to
+> a constant `0L` failed exactly 3 tests (arrival-instant, blank→null, unparseable→null), reverted green —
+> the suite is behavioural, not tautological. **Verification:** `:feature:notifications:testDebugUnitTest`
+> full suite green + full `gradle assembleDebug testDebugUnitTest` across every module → **BUILD SUCCESSFUL**
+> (2m5s, APK produced, notifications Compose glue compiles, no module regressed; the flaky
+> `:sdk-core:compileDebugUnitTestKotlin` em-dash/`sun.jnu.encoding` failure surfaced once on a POSIX daemon
+> and was cleared by the documented UTF-8-daemon recipe — `--stop` + `LANG=C.utf8` +
+> `-Pkotlin.daemon.jvmargs`). Reviewer **PASS** (diff `apps/android` only — `:feature:notifications` [new
+> `NotificationRowTime.kt` + test, `NotificationsScreen` 2 import swaps + `notificationRowRelativeTime`
+> helper + trailing-timestamp null-guard], `feature-parity.md`, routine docs; no production logic outside;
+> **SDK purity** — the "which instant does the row format" rule is a pure `:feature:notifications` atom
+> [product orchestration], the pure formatter stays the agnostic `:sdk-ui` building block; **SSOT** —
+> parsing via `isoToEpochMillisOrNull`, thresholds/wording via `RelativeTimeFormat.short` — nothing
+> re-implemented; **instant-app** — pure fn, no state, list cache path unchanged; **colour/UX coherence** —
+> no colour change, replaces a jarring absolute stamp with the discreet Prisme relative label at iOS parity;
+> **no coverage floor lowered, no test weakened**). **Next slice:** wire the short formatter into the
+> friend-request "requested X ago" line (long form on the contacts surface), port the `context.postCreatedAt`
+> "content published" subtitle via a `NotificationDateFormatter` port, or resume the media-wiring hints below.
+
 > On 2026-07-13 **notification-row per-type accent colour** landed (slice `notifications-type-accent-color`,
 > feature-parity §M — the notification list previously rendered EVERY row in the brand indigo (`Indigo500`
 > hardcoded on the unread background tint, the unread dot, and the avatar), a flat, category-blind surface vs
