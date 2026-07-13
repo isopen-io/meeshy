@@ -2194,3 +2194,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Adaptive iPad/tablet/foldable two-column layout (feed + conversation list/detail, resizable splitter)
 - [ ] Deterministic conversation/post accent colour + name-hash palette + theme-adaptive readability
 - [ ] Scroll-collapsing navigation header; animated brand logo; branded pull-to-refresh
+- [x] Relative-time classification SSOT (`RelativeTime.classify` → `RelativeTimeUnit` ladder;
+      port of iOS `RelativeTime.classify`, the threshold source of truth beneath `RelativeTimeFormatter`)
+      — pure `:core:model/time`, locale-agnostic (rendering stays UI-side), `Long` arithmetic so a
+      decades-old timestamp reaches the absolute-date rung without 32-bit overflow, future/skew → `Now`
