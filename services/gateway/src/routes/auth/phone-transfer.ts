@@ -37,7 +37,9 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
         required: ['phoneNumber'],
         properties: {
           phoneNumber: { type: 'string', description: 'Phone number to check' },
-          countryCode: { type: 'string', description: 'ISO country code (e.g., FR, US)' }
+          countryCode: { type: 'string', description: 'ISO country code (e.g., FR, US)' },
+          firstName: { type: 'string', description: 'Declared first name, compared with the current owner for account recovery' },
+          lastName: { type: 'string', description: 'Declared last name, compared with the current owner for account recovery' }
         }
       },
       response: {
@@ -56,7 +58,11 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
                     username: { type: 'string' },
                     email: { type: 'string' }
                   }
-                }
+                },
+                dormant: { type: 'boolean', description: 'Owner inactive for a long time (dormant account)' },
+                dormantSince: { type: 'string', nullable: true, description: 'ISO date of the owner last activity when dormant' },
+                nameSimilarity: { type: 'string', nullable: true, enum: ['exact', 'similar', 'different', null], description: 'Similarity between declared identity and owner identity' },
+                recoverySuggested: { type: 'boolean', description: 'Dormant account whose identity matches — suggest account recovery' }
               }
             }
           }
@@ -75,7 +81,12 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
     preHandler: [phoneTransferRateLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { phoneNumber, countryCode } = request.body as { phoneNumber: string; countryCode?: string };
+      const { phoneNumber, countryCode, firstName, lastName } = request.body as {
+        phoneNumber: string;
+        countryCode?: string;
+        firstName?: string;
+        lastName?: string;
+      };
 
       const { normalizePhoneWithCountry } = await import('../../utils/normalize');
       const normalized = normalizePhoneWithCountry(phoneNumber, countryCode || 'FR');
@@ -84,11 +95,16 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
         return sendBadRequest(reply, 'Numéro de téléphone invalide');
       }
 
-      const result = await phoneTransferService.checkPhoneOwnership(normalized.phoneNumber);
+      const identity = firstName || lastName ? { firstName, lastName } : undefined;
+      const result = await phoneTransferService.checkPhoneOwnership(normalized.phoneNumber, identity);
 
       return sendSuccess(reply, {
         exists: result.exists,
-        maskedInfo: result.maskedInfo
+        maskedInfo: result.maskedInfo,
+        dormant: result.dormant ?? false,
+        dormantSince: result.dormantSince ?? null,
+        nameSimilarity: result.nameSimilarity ?? null,
+        recoverySuggested: result.recoverySuggested ?? false
       });
     } catch (error) {
       logger.error('Erreur check phone', error as Error);
