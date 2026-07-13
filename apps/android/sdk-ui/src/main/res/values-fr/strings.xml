@@ -36,4 +36,11 @@
     <string name="emoji_category_hearts">Cœurs</string>
     <string name="emoji_category_animals">Animaux</string>
     <string name="emoji_category_objects">Objets</string>
+    <string name="time_relative_now">maintenant</string>
+    <string name="time_relative_seconds">%1$d s</string>
+    <string name="time_relative_minutes">%1$d min</string>
+    <string name="time_relative_hours">%1$d h</string>
+    <string name="time_relative_days">%1$d j</string>
+    <string name="time_relative_weeks">%1$d sem</string>
+    <string name="time_relative_months">%1$d mois</string>
 </resources>

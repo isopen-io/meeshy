@@ -38,6 +38,7 @@ import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
@@ -1694,15 +1695,59 @@ class ChatViewModelTest {
         assertThat(h.vm.state.value.actionMessageId).isNull()
     }
 
+    private fun imageMessage(id: String, vararg urls: String) = synced(
+        ApiMessage(
+            id = id,
+            conversationId = "c1",
+            senderId = "other",
+            content = "",
+            attachments = urls.mapIndexed { index, url ->
+                ApiMessageAttachment(
+                    id = "$id-a$index",
+                    mimeType = "image/jpeg",
+                    fileUrl = url,
+                )
+            },
+        ),
+    )
+
+    private fun imageConversation() = flowOf(
+        CacheResult.Fresh(
+            listOf(
+                imageMessage("m1", "https://cdn/1.jpg", "https://cdn/2.jpg"),
+                imageMessage("m2", "https://cdn/3.jpg"),
+            ),
+            ageMillis = 0,
+        ),
+    )
+
     @Test
-    fun tapping_an_image_opens_the_viewer_and_dismissing_clears_it() = runTest(dispatcher) {
+    fun tapping_an_image_opens_a_conversation_wide_gallery_and_dismissing_clears_it() = runTest(dispatcher) {
+        val h = harness(imageConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.openImageViewer("m2", 0)
+
+        // The gallery spans every image in the conversation (not just m2's), and
+        // starts on the tapped one (m1 contributes 2 images, so m2's first is #2).
+        assertThat(h.vm.state.value.imageViewer).isEqualTo(
+            ConversationGallery(
+                imageUrls = listOf("https://cdn/1.jpg", "https://cdn/2.jpg", "https://cdn/3.jpg"),
+                startIndex = 2,
+            ),
+        )
+
+        h.vm.dismissImageViewer()
+        assertThat(h.vm.state.value.imageViewer).isNull()
+    }
+
+    @Test
+    fun tapping_a_message_with_no_images_opens_no_gallery() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
 
         h.vm.openImageViewer("m2", 1)
-        assertThat(h.vm.state.value.imageViewer).isEqualTo(ImageViewerTarget("m2", 1))
 
-        h.vm.dismissImageViewer()
         assertThat(h.vm.state.value.imageViewer).isNull()
     }
 

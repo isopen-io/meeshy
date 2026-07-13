@@ -59,17 +59,6 @@ final class PresenceManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // After a socket reconnect we may have missed N status flips while we
-        // were disconnected. The gateway re-emits `presence:snapshot` only on
-        // a fresh auth, so trigger a REST refresh defensively — it covers the
-        // case where the transport reconnected without re-auth.
-        MessageSocketManager.shared.didReconnect
-            .receive(on: DispatchQueue.main)
-            .sink { _ in
-                PresenceService.shared.refreshKnownUsers()
-            }
-            .store(in: &cancellables)
-
         // Keep the last-known presence snapshot across brief socket drops
         // (e.g. iOS background → foreground transition). Wiping the map the
         // moment `isConnected` flips to false caused all avatars to lose
@@ -156,9 +145,9 @@ final class PresenceManager: ObservableObject {
             || (elapsed > 1800 && elapsed <= 1860)
     }
 
-    /// Apply a bulk presence snapshot. Used by:
-    /// - the `presence:snapshot` socket event right after auth
-    /// - the REST `/users/presence` refresh on foreground/reconnect
+    /// Apply a bulk presence snapshot received via the `presence:snapshot` socket
+    /// event — sent right after auth, and re-sent on every reconnect since the
+    /// gateway re-authenticates on each new socket connection.
     ///
     /// Each entry replaces the local presence row for that userId so a contact
     /// that was online in our cache but is now offline server-side gets corrected
@@ -171,24 +160,6 @@ final class PresenceManager: ObservableObject {
             }
         )
         presenceMap.merge(updates) { _, newEntry in newEntry }
-    }
-
-    /// Apply a bulk REST presence response (no `username` field — see
-    /// `PresenceRefreshEntry` in `PresenceService`).
-    func ingestRefresh(_ entries: [PresenceRefreshEntry]) {
-        guard !entries.isEmpty else { return }
-        let updates = Dictionary(
-            uniqueKeysWithValues: entries.map { entry in
-                (entry.userId, UserPresence(isOnline: entry.isOnline, lastActiveAt: entry.lastActiveAt))
-            }
-        )
-        presenceMap.merge(updates) { _, newEntry in newEntry }
-    }
-
-    /// The set of userIds we currently track. Used by `PresenceService` to build
-    /// the `?ids=` query for the REST refresh on foreground/reconnect.
-    var knownUserIds: [String] {
-        Array(presenceMap.keys)
     }
 
     deinit {

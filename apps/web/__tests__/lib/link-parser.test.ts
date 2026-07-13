@@ -134,4 +134,50 @@ describe('parseMessageLinks', () => {
       expect(cursor).toBe('a m+aaa11 b https://ex.com/y c'.length);
     });
   });
+
+  describe('chevauchement m+TOKEN à l’intérieur d’une URL (régression F91)', () => {
+    it('une URL contenant m+TOKEN dans son chemin reste une seule part url', () => {
+      const parts = parseMessageLinks('https://ex.com/m+abcde');
+      expect(parts).toEqual([
+        {
+          type: 'url',
+          content: 'https://ex.com/m+abcde',
+          originalUrl: 'https://ex.com/m+abcde',
+          start: 0,
+          end: 22,
+        },
+      ]);
+    });
+
+    it('une URL avec m+TOKEN en query string ne produit pas de chip mshy parasite', () => {
+      const parts = parseMessageLinks('https://ex.com/x?ref=m+promo');
+      expect(parts.filter((p) => p.type === 'mshy-link')).toEqual([]);
+      expect(parts).toHaveLength(1);
+      expect(parts[0]).toMatchObject({ type: 'url', content: 'https://ex.com/x?ref=m+promo' });
+    });
+
+    it('préserve l’invariant de reconstruction sans perte malgré le m+ interne', () => {
+      const message = 'clique https://ex.com/m+abcde maintenant';
+      expect(reconstruct(parseMessageLinks(message))).toBe(message);
+    });
+
+    it('produit des intervalles non chevauchants et croissants avec un m+ interne', () => {
+      const parts = parseMessageLinks('https://ex.com/m+abcde');
+      let cursor = 0;
+      parts.forEach((p) => {
+        expect(p.start).toBe(cursor);
+        expect(p.end).toBe(p.start + p.content.length);
+        cursor = p.end;
+      });
+      expect(cursor).toBe('https://ex.com/m+abcde'.length);
+    });
+
+    it('un m+TOKEN autonome hors URL reste bien un mshy-link', () => {
+      const parts = parseMessageLinks('salut m+abcde et https://ex.com/m+xyzab fin');
+      const nonText = parts.filter((p) => p.type !== 'text');
+      expect(nonText.map((p) => p.type)).toEqual(['mshy-link', 'url']);
+      expect(nonText[0]).toMatchObject({ type: 'mshy-link', token: 'abcde' });
+      expect(nonText[1]).toMatchObject({ type: 'url', content: 'https://ex.com/m+xyzab' });
+    });
+  });
 });

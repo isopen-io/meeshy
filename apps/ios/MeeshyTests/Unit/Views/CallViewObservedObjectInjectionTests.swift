@@ -47,12 +47,27 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
         )
     }
 
-    func test_iPadRootView_injectsOwnCallManagerIntoCallView() throws {
+    // 2026-07-12 — P0 #1 (872f7480b) centralised the whole call-presentation stack
+    // (CallView + FloatingCallPillView + CallBubbleView + call-waiting banner) into
+    // the shared `CallPresentationLayer` ViewModifier, which now OWNS the single
+    // `@ObservedObject callManager`. RootView AND iPadRootView both apply it via
+    // `.modifier(CallPresentationLayer())` and carry NO callManager of their own —
+    // that decoupling is what killed the 0x8BADF00D background watchdog. The
+    // per-parent injection is therefore asserted on `CallPresentationLayer` (defined
+    // in RootView.swift) by the `rootView_*` tests above; the iPad guard verifies
+    // iPadRootView routes through that shared layer and never mounts CallView itself.
+    func test_iPadRootView_routesCallPresentationThroughSharedLayer() throws {
         let source = try source(of: "Views/iPadRootView+Sheets.swift")
         XCTAssertTrue(
-            source.contains("CallView(callManager: callManager)"),
-            "iPadRootView must pass its own `callManager` into CallView instead of " +
-            "letting CallView default to CallManager.shared on every reconstruction."
+            source.contains(".modifier(CallPresentationLayer())"),
+            "iPadRootView must mount call presentation via the shared CallPresentationLayer " +
+            "modifier (which owns the single injected `callManager` and mounts CallView/pill/" +
+            "bubble internally)."
+        )
+        XCTAssertFalse(
+            source.contains("CallView(callManager:"),
+            "iPadRootView+Sheets must NOT mount CallView directly — that gives it its own " +
+            "callManager observation and reintroduces the 0x8BADF00D background watchdog (P0 #1)."
         )
     }
 
@@ -104,17 +119,11 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
         )
     }
 
-    func test_iPadRootView_injectsOwnCallManagerIntoPillAndBubble() throws {
-        let source = try source(of: "Views/iPadRootView+Sheets.swift")
-        XCTAssertTrue(
-            source.contains("FloatingCallPillView(callManager: callManager)"),
-            "iPadRootView must pass its own `callManager` into FloatingCallPillView."
-        )
-        XCTAssertTrue(
-            source.contains("CallBubbleView(callManager: callManager)"),
-            "iPadRootView must pass its own `callManager` into CallBubbleView."
-        )
-    }
+    // iPad pill/bubble injection is covered by
+    // `test_iPadRootView_routesCallPresentationThroughSharedLayer` above: the pill
+    // and bubble are now mounted inside the shared CallPresentationLayer, not by
+    // iPadRootView+Sheets directly (P0 #1). The RootView pill/bubble injection is
+    // still asserted directly by `test_rootView_injectsOwnCallManagerIntoPillAndBubble`.
 
     // 2026-07-10 — `CallParticipantVisual` (the shared avatar/remote-video
     // visual mounted by both FloatingCallPillView and CallBubbleView, which

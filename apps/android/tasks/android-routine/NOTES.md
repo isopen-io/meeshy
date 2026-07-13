@@ -4,6 +4,42 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-13, `time-relative-format-strings`) — a pure formatter reaches localized strings by *injection*, so it stays JVM-testable and reuses the classifier
+The rendering half of a relative-time SSOT does NOT need Robolectric to be tested. `RelativeTimeFormat.short` is a plain `object` in `:sdk-ui/format` that takes a `RelativeTimeStrings` **parameter** (the localized templates) — the same trick `CallTimeLabel` uses with its `yesterday: String` arg — so every rung/boundary/substitution branch is a pure JUnit assertion, and the `@Composable rememberRelativeTimeStrings()` that reads `stringResource(R.string.time_relative_*)` is thin, exempt glue. Two things that keep it honest: (1) it **delegates to `RelativeTime.classify`** rather than re-testing thresholds — the mutation check therefore targets the *mapping* (minutes-rung→hours-template) and the *only real new logic*, the absolute-date `year != reference.year` include-year branch; (2) the `%d` templates are fed through `String.format(locale, template, value)`, so an injected `"%d min"` in the test and the real `"%1$d min"` resource behave identically (positional and non-positional both bind arg 1). When wiring a new shared UI formatter, prefer parameter-injected strings over an Android-coupled signature — it is the difference between a 13-test pure suite and an instrumentation dependency. Also: this makes the two prior pure classifiers (`RelativeTimeUnit`, `RelativeTimeLongLabel`) *live* — a reminder that a pure-core slice should be followed within a slice or two by its rendering consumer, or it accrues as dead code the "no dead ends" rule forbids.
+
+## Lesson (2026-07-13, `chat-message-ordering`) — a stable sort with a *partial* comparator lets you add ordering under existing tests without reshuffling them
+Wiring `MessageOrdering.order` into `ChatViewModel.toBubbles` was safe because the comparator is a **partial order** (`compareBy(createdAtMillis, seq)`) run through the **stable** `sortedWith` — it deliberately does NOT tiebreak on `id`. Every existing ViewModel fixture builds `ApiMessage(id=…, content=…)` with **no `createdAt`**, so all rows collapse to `Long.MAX_VALUE`/`Long.MAX_VALUE` → all equal → stable sort preserves the exact input (repository/server) order. Had I added an `id` tiebreak "for determinism", those all-equal rows would re-sort alphabetically and silently reorder several multi-message harnesses. Rule of thumb when retrofitting a sort beneath a live surface: **tie → preserve input order (stable sort), never invent a total order on a synthetic key**, unless a test proves you need it. The `null → Long.MAX_VALUE` (newest/bottom) convention for both keys also matters: a message with no parsed time is a fresh local echo and belongs at the end, and an un-acked (no-`seq`) message trails its acked same-instant sibling — both fall out of the same elvis default.
+
+## Lesson (2026-07-13, `time-relative-long-label`) — split a formatter into a pure framing SSOT + a UI wording layer, and reuse the sibling's thresholds
+iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND localized wording in one enum. Porting it whole would drag `String(localized:)`-style strings into `:core:model`. Instead the pure half is a **framing descriptor**: `RelativeTimeLongLabel` carries the rung + numeric value + intent (`Yesterday`, `AgoHours(n)`, …) but no text, so the Compose/string layer owns the five app languages — same grain as the already-shipped `RelativeTimeUnit`. Two reuse wins that keep it SSOT: (1) the sub-hour rungs reference `RelativeTime.NOW_THRESHOLD_SECONDS`/`MINUTE_SECONDS`/`HOUR_SECONDS`/`WEEK_DAYS`/`MONTH_DAYS`/`ABSOLUTE_DAYS` rather than re-declaring constants; (2) the *interesting* new behaviour — calendar-day boundaries via an injected `ZoneId` (2h across midnight → `Yesterday`; same instant reads differently per zone) — is exactly what makes the tests behavioural rather than a copy of `classify`. `:core:model` already depends on `java.time` (DndWindow/IsoTime/CallRecord) and minSdk 26 means it's native (no desugaring), so `Instant`/`ZoneId`/`ChronoUnit.DAYS.between` are free to use for pure, zone-injectable, deterministic tests.
+
+## Lesson (2026-07-12, `media-thumbhash-decode`) — ⚙ ENVIRONMENT: the wrapper Gradle can't download; use system Gradle
+- **`./gradlew` (and `./apps/android/meeshy.sh`) fail in a fresh container:** the wrapper wants
+  `gradle-8.11.1-bin.zip` from `services.gradle.org`, which **302-redirects to `github.com/gradle/gradle-distributions/releases/…`** — a host the egress policy **403s**. The cached wrapper dir
+  `/root/.gradle/wrapper/dists/gradle-8.11.1-bin/<hash>/` exists but is **empty** (a prior failed download),
+  so the wrapper re-tries the download and dies. Do NOT retry the 403 or route around it.
+- **Fix — drive the build with the pre-installed system Gradle** (`/opt/gradle/bin/gradle`, currently **8.14.3**),
+  which is already extracted and needs no download:
+  ```bash
+  export LANG=C.utf8 LC_ALL=C.utf8 LC_CTYPE=C.utf8      # + the UTF-8 locale lesson below (em-dash ICE)
+  /opt/gradle/bin/gradle :core:model:testDebugUnitTest --console=plain
+  /opt/gradle/bin/gradle :app:assembleDebug --console=plain
+  ```
+  8.14.3 runs 8.11.1's build fine (only Gradle-9 deprecation warnings). It emits an "incompatible with Gradle
+  9.0" warning — harmless. If a Kotlin **compile worker** ICEs mid-run with an RMI/`TCPTransport` stack, that is
+  the em-dash/`sun.jnu.encoding` issue — `--stop` the daemons and re-export the UTF-8 `LANG` first.
+- **Pre-existing flaky `:sdk-core` DataStore tests** (whole family, in `:sdk-core`): the `dataStore_*` methods of
+  `NotificationPreferencesStoreTest`, `PrivacyPreferencesStoreTest` **and `MediaDownloadPreferencesStoreTest`**
+  intermittently fail with `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for … ms` — a real
+  androidx DataStore `StateFlow.first()` under parallel test load (2026-07-13: one such method timed out at 15s).
+  **The failing COUNT is non-deterministic** — a single full-tree run produced 3 failures, an immediate rerun of the
+  same three classes produced 1, and each fails-then-passes on isolated retry (`--tests '*PrivacyPreferencesStoreTest'`
+  → BUILD SUCCESSFUL). That varying count is itself the signature of timing flakiness, NOT a real breakage. They live
+  in `:sdk-core` (a module a `:feature:chat`/`:sdk-ui`/`:core:model` slice cannot touch) and are **not** a merge
+  blocker for an `apps/android`-only slice — the monorepo CI runs no Android at all, so they never reach the CI gate.
+  Note them, confirm they're green on isolated retry, don't chase them from an unrelated slice. (A tracked follow-up:
+  give these tests a longer/injected timeout or a non-parallel test task so full-tree runs stop going red.)
+
 ## Lesson (2026-07-12, `settings-help-support`) — ⚙ ENVIRONMENT: build under a UTF-8 locale
 - **The fresh container's default locale is `POSIX`/`C` (`LC_CTYPE=POSIX`, `LANG` empty), so the JVM's
   `sun.jnu.encoding` is ASCII and the Kotlin compiler CANNOT write a `.class` file whose name contains a
@@ -27,6 +63,20 @@ Append-only log of gotchas and decisions that save time next run.
   `AboutLinkResolver` but must accept `mailto:` (email/bug/feature compose links) — the ONE behavioural
   difference worth its own tests. Kept it a separate object (not a shared generalised one) because the launchable
   scheme set is a per-surface product decision, not a universal constant.
+
+## Lesson (2026-07-12, `media-thumbhash-encode`) — derive an encoder's transform FROM its decoder, not from memory
+- Porting an inverse (encoder ↔ decoder) pair: **do not copy the forward transform from the reference/memory.**
+  ThumbHash's canonical `rgbaToThumbHash` uses `p=(r+b)/2−g`, `q=r−b`, but only against a decoder that reads the
+  channels back in the reference's specific variable order. THIS repo's decoder is `B=l−⅔p`, `R=(3l−B+q)/2`,
+  `G=R−q`; solving those three for `(l,p,q)` gives `l=(r+g+b)/3`, **`p=(r+g)/2−b`, `q=r−g`** — different `p`/`q`.
+  The naïve copy compiles, round-trips *luminance* fine, and passes an all-grey test, but swaps a colour channel
+  (green decoded as blue). A **colour round-trip test through the actual `decode`** (not a hand-typed expected
+  hash) catches it instantly. Rule: for an inverse pair, the SSOT is the *existing* half — derive the new half
+  algebraically against it and test the round-trip end-to-end.
+- **Don't assert "all AC bytes zero" for a perfectly-constant source image.** Float noise (~1e-16) in the forward
+  DCT makes `scale` tiny-but-positive, so `0.5 + 0.5/scale·ac` amplifies the noise into arbitrary nibbles. It is
+  harmless (decode multiplies back by the ~1e-16 scale → invisible), but the byte-level "zero" claim is testing an
+  artifact the reference doesn't guarantee either. Assert the **header bytes** + a **flat decode**, not raw AC.
 
 ## Lesson (2026-07-12, `settings-legal-documents`)
 - **Static legal/content screens: keep the *structure* pure, the *content* in `values-*`.** Mirroring the

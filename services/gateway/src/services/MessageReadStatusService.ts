@@ -1277,7 +1277,12 @@ export class MessageReadStatusService {
               id: { in: evaluatedParticipantIds },
               isActive: true,
             },
-            select: { id: true, displayName: true, avatar: true },
+            select: {
+              id: true,
+              displayName: true,
+              avatar: true,
+              user: { select: { avatar: true } },
+            },
           })
         : [];
 
@@ -1322,7 +1327,7 @@ export class MessageReadStatusService {
         results.push({
           participantId,
           displayName: participant.displayName,
-          avatar: participant.avatar,
+          avatar: resolveParticipantAvatar(participant),
           deliveredAt,
           receivedAt,
           readAt,
@@ -1421,7 +1426,12 @@ export class MessageReadStatusService {
       const participants = statuses.length
         ? await this.prisma.participant.findMany({
             where: { id: { in: statuses.map(s => s.participantId) } },
-            select: { id: true, displayName: true, avatar: true },
+            select: {
+              id: true,
+              displayName: true,
+              avatar: true,
+              user: { select: { avatar: true } },
+            },
           })
         : [];
 
@@ -1436,7 +1446,7 @@ export class MessageReadStatusService {
           return {
             participantId: s.participantId,
             username: participant.displayName || "Unknown",
-            avatar: participant.avatar ?? null,
+            avatar: resolveParticipantAvatar(participant),
             viewedAt: s.viewedAt,
             downloadedAt: s.downloadedAt,
             listenedAt: s.listenedAt,

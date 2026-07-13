@@ -9,6 +9,32 @@ import MeeshyUI
 @preconcurrency import WebRTC
 import os
 
+// MARK: - Call End Reason Mapping
+
+/// Maps the gateway's raw `call:ended` reason string to the CallKit
+/// `CXCallEndedReason` (drives the Recents UX) and the local `CallEndReason`
+/// (drives analytics + in-app UI). Pure + `nonisolated` so the mapping is unit
+/// tested at behaviour instead of by string-matching the switch source — a
+/// wrong mapping (e.g. `"missed" → .rejected`) previously slipped past the
+/// source-string tests. Handles both camelCase and snake_case gateway variants;
+/// any unknown/`nil` reason is a plain remote hang-up.
+nonisolated enum CallEndReasonMapper {
+    static func map(_ raw: String?) -> (cx: CXCallEndedReason, local: CallEndReason) {
+        switch raw?.lowercased() {
+        case "missed", "no_answer", "unanswered":
+            return (.unanswered, .missed)
+        case "rejected", "declined":
+            return (.declinedElsewhere, .rejected)
+        case "answeredelsewhere", "answered_elsewhere":
+            return (.answeredElsewhere, .remote)
+        case "failed", "connectionlost":
+            return (.failed, .connectionLost)
+        default:
+            return (.remoteEnded, .remote)
+        }
+    }
+}
+
 // MARK: - Call State
 
 enum CallState: Equatable, Sendable {
@@ -2397,37 +2423,22 @@ final class CallManager: ObservableObject {
     }
 
     func handleRemoteEnd(callId: String, rawReason: String? = nil) {
-        guard currentCallId == callId else { return }
-        // Dedup : le serveur peut émettre `call:ended` plusieurs fois
-        // (e.g. CXEndCallAction côté peer + cleanup serveur), et le user
-        // local peut aussi avoir déjà raccroché en local. Si l'état est
-        // déjà `.ended`, on ignore les doublons.
-        if case .ended = callState { return }
+        // Dedup (idempotence testable — cf. CallReliabilityPolicy.shouldProcessRemoteEnd) :
+        // le serveur peut émettre `call:ended` plusieurs fois (CXEndCallAction côté
+        // peer + cleanup serveur, et depuis 2026-07-12 le broadcast REST end/leave),
+        // tous routés vers ce handler via le publisher `callEnded`. On traite le
+        // premier ; un doublon sur un état déjà `.ended`, ou un event d'un AUTRE
+        // call, est ignoré.
+        guard CallReliabilityPolicy.shouldProcessRemoteEnd(
+            currentCallId: currentCallId,
+            incomingCallId: callId,
+            callState: callState
+        ) else { return }
 
         // Audit P1-24 — map the gateway's `reason` string to the right
-        // CXCallEndedReason (drives Recents UX) and CallEndReason (drives
-        // local analytics + UI). Without this, every remote end was reported
-        // as `.remoteEnded`, which Recents displays as "Ended" — wrong for
-        // missed/declined/answered-elsewhere.
-        let cxReason: CXCallEndedReason
-        let localReason: CallEndReason
-        switch rawReason?.lowercased() {
-        case "missed", "no_answer", "unanswered":
-            cxReason = .unanswered
-            localReason = .missed
-        case "rejected", "declined":
-            cxReason = .declinedElsewhere
-            localReason = .rejected
-        case "answeredelsewhere", "answered_elsewhere":
-            cxReason = .answeredElsewhere
-            localReason = .remote
-        case "failed", "connectionlost":
-            cxReason = .failed
-            localReason = .connectionLost
-        default:
-            cxReason = .remoteEnded
-            localReason = .remote
-        }
+        // CXCallEndedReason (Recents UX) + CallEndReason (analytics + in-app UI).
+        // Extracted to the pure, unit-tested CallEndReasonMapper.
+        let (cxReason, localReason) = CallEndReasonMapper.map(rawReason)
 
         if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: cxReason)
@@ -3917,6 +3928,20 @@ final class CallManager: ObservableObject {
                 // safe.
                 if event.code == "TARGET_NOT_FOUND" {
                     Logger.calls.warning("call:error TARGET_NOT_FOUND — transient relay failure, keeping the call")
+                    return
+                }
+                // CALL_ENDED is terminal-state reconciliation, NOT a user error:
+                // the gateway rejected a late emit (join/signal/end) because the
+                // call already ended — a benign race with the normal end fanout
+                // (#12). Route through the canonical remote-end path (dedup on
+                // .ended + correct Recents reason) instead of toasting "already
+                // ended" and calling failCall, which would flag a healthy end as
+                // a failure. Idempotent: handleRemoteEnd no-ops if already ended.
+                if event.code == "CALL_ENDED" {
+                    Logger.calls.info("call:error CALL_ENDED — reconciling to ended (benign terminal race, #12)")
+                    if let endCallId = event.callId ?? self.currentCallId {
+                        self.handleRemoteEnd(callId: endCallId)
+                    }
                     return
                 }
                 FeedbackToastManager.shared.showError(message)

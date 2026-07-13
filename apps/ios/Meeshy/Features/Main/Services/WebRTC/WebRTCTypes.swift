@@ -509,6 +509,24 @@ nonisolated enum CallReliabilityPolicy {
         return true
     }
 
+    /// Idempotence guard for `handleRemoteEnd` (a `call:ended` fanout). The
+    /// gateway can emit `call:ended` more than once for the same call — the
+    /// native hangup/reject path AND (2026-07-12) the REST DELETE end/leave
+    /// broadcast both reach the handler through the single `callEnded`
+    /// publisher. Process the first, drop the rest: a duplicate while already
+    /// `.ended` is a no-op, and an event for a DIFFERENT call must never tear
+    /// down the current one. A `call:ended` during the ring (remote cancel)
+    /// still processes — only a terminal `.ended` state is deduplicated.
+    static func shouldProcessRemoteEnd(
+        currentCallId: String?,
+        incomingCallId: String,
+        callState: CallState
+    ) -> Bool {
+        guard incomingCallId == currentCallId else { return false }
+        if case .ended = callState { return false }
+        return true
+    }
+
     /// Delay before the periodic TURN credential refresh, at 80% of the TTL.
     /// A degenerate TTL (zero, negative, or shorter than the floor) clamps to
     /// `minimumDelay` instead of disarming the refresh — silently skipping it

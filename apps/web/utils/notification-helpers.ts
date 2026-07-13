@@ -12,7 +12,7 @@ import {
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
-import { startOfLocalDayMs, calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
+import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
@@ -268,15 +268,18 @@ export function formatContentPublishedAt(
   if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
 
   const diffHours = Math.floor(diffMinutes / 60);
-  const startOfToday = startOfLocalDayMs(now.getTime());
-  const startOfYesterday = startOfToday - 86400000;
+  // DST-safe : compter les jours calendaires locaux plutôt qu'un delta fixe de
+  // 24 h. Un jour de transition heure d'été/hiver dure 23 h ou 25 h, donc
+  // `startOfToday − 86_400_000` ne retombe pas sur le minuit local d'hier. On
+  // réutilise la SSOT `calendarDayDiff`, déjà employée par groupNotificationsByDate.
+  const dayDiff = calendarDayDiff(date.getTime(), now.getTime());
   const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 
-  if (date.getTime() >= startOfToday) {
+  if (dayDiff === 0) {
     return t('timeAgo.hour').replace('{count}', String(diffHours));
   }
 
-  if (date.getTime() >= startOfYesterday) {
+  if (dayDiff === 1) {
     return t('timeAgo.yesterdayAt').replace('{time}', time);
   }
 

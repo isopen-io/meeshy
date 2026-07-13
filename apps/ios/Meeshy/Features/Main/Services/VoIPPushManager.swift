@@ -125,7 +125,38 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// has marked the device row inactive). The gateway upserts by
     /// (userId, token, type) so a new register call reactivates a deactivated
     /// row server-side.
+    /// #13 — true when the CURRENT token is unchanged and was registered inside
+    /// the cooldown window, so `forceReregister` can skip tearing down + rebuilding
+    /// PKPushRegistry (which nils the token and re-delivers it = churn). Returns
+    /// false when the token was invalidated (`currentToken == nil`) or went stale,
+    /// so a genuine re-registration still proceeds.
+    nonisolated static func shouldSkipForceReregister(
+        lastRecord: VoIPTokenRecord?,
+        currentToken: String?,
+        now: Date,
+        cooldown: TimeInterval
+    ) -> Bool {
+        guard let last = lastRecord, last.token == currentToken else { return false }
+        return now.timeIntervalSince(last.at) < cooldown
+    }
+
     func forceReregister() {
+        // #13 — this used to tear down + rebuild PKPushRegistry UNCONDITIONALLY,
+        // bypassing the cooldown dedup that guards the server POST
+        // (`registerTokenWithBackend`). On repeated logins/foregrounds within the
+        // cooldown that churned PushKit (nil'd the token, re-delivered it) for no
+        // gain — the token + gateway row are already active. Skip when the current
+        // token is unchanged and fresh; a real invalidation (voipToken == nil) or
+        // a stale token still forces a full cycle.
+        if Self.shouldSkipForceReregister(
+            lastRecord: lastRegisteredRecord,
+            currentToken: voipToken,
+            now: Date(),
+            cooldown: Self.voipRegistrationCooldown
+        ) {
+            logger.debug("Skipping VoIP force re-register: token registered recently")
+            return
+        }
         unregister()
         register()
         logger.info("VoIP push force re-registration triggered")

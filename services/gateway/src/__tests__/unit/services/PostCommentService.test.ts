@@ -529,3 +529,64 @@ describe('PostCommentService.addComment — media', () => {
       .rejects.toThrow('MEDIA_NOT_AVAILABLE');
   });
 });
+
+// ---------------------------------------------------------------------------
+// likeComment — max-1-reaction-per-user invariant (REST/socket parity)
+// ---------------------------------------------------------------------------
+
+describe('PostCommentService.likeComment', () => {
+  const wireCounters = () => {
+    (mockPrisma.commentReaction.groupBy as jest.Mock).mockResolvedValue([]);
+    (mockPrisma.postComment.update as jest.Mock).mockResolvedValue({
+      id: 'c-1', postId: 'post-1', authorId: 'author-1', content: 'Hello',
+      likeCount: 1, reactionSummary: {},
+    });
+  };
+
+  it('returns null when the comment does not exist', async () => {
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue(null);
+    const service = new PostCommentService(mockPrisma as PrismaClient, noopTrackingLinks);
+
+    const result = await service.likeComment('missing', 'u-1', '❤️');
+
+    expect(result).toBeNull();
+    expect(mockPrisma.commentReaction.upsert as jest.Mock).not.toHaveBeenCalled();
+  });
+
+  it('purges the user\'s other-emoji reactions so at most 1 reaction survives (parity with socket)', async () => {
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue({ id: 'c-1' });
+    (mockPrisma.commentReaction.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+    (mockPrisma.commentReaction.upsert as jest.Mock).mockResolvedValue({});
+    wireCounters();
+    const service = new PostCommentService(mockPrisma as PrismaClient, noopTrackingLinks);
+
+    await service.likeComment('c-1', 'u-1', '👍');
+
+    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).toHaveBeenCalledWith({
+      where: { commentId: 'c-1', userId: 'u-1', emoji: { not: '👍' } },
+    });
+    expect(mockPrisma.commentReaction.upsert as jest.Mock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { comment_user_reaction_unique: { commentId: 'c-1', userId: 'u-1', emoji: '👍' } },
+        create: { commentId: 'c-1', userId: 'u-1', emoji: '👍' },
+      }),
+    );
+  });
+
+  it('stays idempotent for a repeated same-emoji like (safe REST fallback of the socket)', async () => {
+    (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue({ id: 'c-1' });
+    (mockPrisma.commentReaction.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (mockPrisma.commentReaction.upsert as jest.Mock).mockResolvedValue({});
+    wireCounters();
+    const service = new PostCommentService(mockPrisma as PrismaClient, noopTrackingLinks);
+
+    await service.likeComment('c-1', 'u-1', '❤️');
+
+    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).toHaveBeenCalledWith({
+      where: { commentId: 'c-1', userId: 'u-1', emoji: { not: '❤️' } },
+    });
+    expect(mockPrisma.commentReaction.upsert as jest.Mock).toHaveBeenCalledWith(
+      expect.objectContaining({ update: {} }),
+    );
+  });
+});

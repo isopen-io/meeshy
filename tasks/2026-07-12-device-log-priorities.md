@@ -60,82 +60,179 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
   (chunk presence). Aucun fix client indépendant pour #4 (`httpMaximumConnectionsPerHost` =
   spéculatif, sans effet sous HTTP/2/3). **Aucun code produit — décision volontaire.**
 
-- [ ] **#5 — engagement.flush bloque 15-35 s**
+- [x] **#5 — engagement.flush bloque 15-35 s** — `39c0480fe`
   Evidence : `Step engagement.flush took 35.34s / 21.59s / 15.45s`.
   Hypothèse : le batcher d'engagement/impressions poste en série et attend les retries 429.
   Fichiers : batcher engagement/impression iOS (cf. projet `post_view_impression_counters`).
   Fix piste : cap taille de batch, timeout, flush non-bloquant, respect du backoff 429 (#6). Lié à #6.
+  **Cause prouvée** : `EngagementOutbox.flush` dispatch ≤50 sessions **en série** (1 POST/session
+  sur `/posts/engagement/batch` — le client n'utilise pas le batch !) ; sous 429, chaque session
+  bloque ~30 s → 15-35 s à **bloquer la background-task budget** = risque watchdog 0x8BADF00D (P0).
+  **Fix** : rows durables (SQLite) + retentées par `EngagementRetryScheduler` → flush NON critique.
+  `runBounded(seconds: 8)` (app) borne le step BG ; au-delà, abandon au retry scheduler. Boucle
+  `flush` SDK rendue cancellation-aware (break sur `Task.isCancelled`) pour un bound prompt. TDD ×2.
+  Build iOS vert. **Reste ouvert (perf, pas watchdog) → #6** : le vrai batching (1 POST/N sessions)
+  + backoff 429 réduiront le 35 s réseau lui-même.
 
-- [ ] **#6 — 429 rate-limit sur POST /posts/engagement/batch**
+- [x] **#6 — 429 rate-limit sur POST /posts/engagement/batch** — `57f76b902`
   Evidence : `Retryable status 429 on POST /posts/engagement/batch retry 1/3 after 30.0s` ×3.
   Hypothèse : le client martèle l'endpoint ; le retry fixe (30 s) ignore `Retry-After`.
   Fichiers : batcher engagement iOS + rate-limit gateway de cette route.
   Fix piste : respecter `Retry-After`, backoff exponentiel + jitter, coalescer/réduire la fréquence.
+  **Cause prouvée** : rate-limit gateway `engagement` = **20/min/user** ; le client postait **1 POST
+  PAR session** (`EngagementDispatcher.dispatch` → `record([session])`) dans la boucle série de
+  l'outbox → ≤50 POST/flush → 429. L'endpoint accepte pourtant un **tableau**. (L'hypothèse
+  « ignore Retry-After » est **fausse** : `APIClient.retryDelay` respecte déjà `min(Retry-After,30)`
+  + exponentiel `1<<attempt` ; l'outbox a aussi `pow(2,n)*5`.)
+  **Fix** : `EngagementOutbox.flush` dispatch TOUTES les sessions prêtes en **UN** POST (1 req ≪ 20/min) ;
+  `dispatch([sessions])` filtre le cross-user avant POST. Jitter **non nécessaire** une fois batché
+  (les rows partent en 1 POST → pas de thundering herd). TDD ×5. Build iOS vert. Résout aussi le
+  35 s réseau résiduel de #5.
 
-- [ ] **#7 — « Publishing changes from within view updates is not allowed »**
+- [x] **#7 — « Publishing changes from within view updates is not allowed »** — `1b1e4668b`
   Evidence : warning couplé à `_systemColorScheme changed` → `_theme changed`.
   Hypothèse : `ThemeManager` republie un @Published PENDANT l'évaluation du body (sync
   colorScheme→theme) → comportement indéfini + rendus parasites, sur le chemin de RootView.
   Fichiers : `ThemeManager` (sync systemColorScheme→theme), `MeeshyUI/Theme/`.
   Fix piste : différer la mutation (`Task { @MainActor }` / `DispatchQueue.main.async`) ou
   passer par `adaptiveOnChange(of: colorScheme)` au lieu de calculer dans le body. Testable.
+  **Cause prouvée** : `SystemThemeDetector` (chemin RootView, `MeeshyApp`) appelle
+  `ThemeManager.shared.syncWithSystem` (via `adaptiveOnChange`/`onAppear`), qui mutait
+  `@Published mode` **synchronement** → `objectWillChange` du theme émis DANS la transaction
+  SwiftUI déclenchée par le changement de colorScheme (lui-même observé sur RootView).
+  **Fix** : la mutation de `mode` est différée sur le tour main-actor suivant (`Task { @MainActor }`,
+  re-check preference/mode). Corrige tous les call sites au niveau racine. `ThemeManager` = singleton
+  (`init` privé) → pas de TDD propre sans refactor hors-scope ; vérif absence-warning = **sonde device**
+  (P0). Build iOS vert.
 
-- [ ] **#8 — Presence : 200 ids dans UNE URL géante (5,1 s, fragile)**
+- [x] **#8 — Presence : 200 ids dans UNE URL géante (5,1 s, fragile)** — `ba84a8a4a` (remplace `7ac810344`)
   Evidence : `GET /users/presence?ids=<200 ids> network=5118ms`, `Refreshed presence for 200 ids` en boucle.
   Hypothèse : URL énorme (limite de longueur, fragile) + requête lente.
   Fichiers : `PresenceManager` (fetch presence).
   Fix piste : chunker (ex. 50/req) ou passer en POST body ; borner la fréquence de refresh.
+  **Cause prouvée (round 1, `7ac810344`)** : `PresenceService.performRefresh` joignait ≤200 ObjectIds
+  en UNE query `?ids=` → URL ~5 KB. Fix initial : chunk par 50, fetch concurrent (`withTaskGroup`).
+  **Round 2 — remise en cause de l'architecture (audit croisé, agent dédié sur le gateway)** :
+  `presence:snapshot` (`MeeshySocketIOManager.ts` → `AuthHandler`) se ré-émet déjà à **chaque reconnect
+  socket réel** (le gateway ré-authentifie sur chaque nouvelle connexion — pas de session resumption
+  Socket.IO en jeu). Le pull REST, chunké ou non, duplique donc un mécanisme push qui fonctionne déjà,
+  et même chunké+concurrent il tape **4×** le chemin gateway coûteux
+  (`PresenceVisibilityService.resolveForTargets`, ~5 aller-retours séquentiels) au lieu d'1×.
+  **Fix retenu : push-only.** Suppression complète de `PresenceService.swift` (chunking inclus), du
+  trigger `didReconnect`, et du step `presence.refresh` au resume BG. Route gateway
+  `GET /users/presence` conservée (web s'appuie dessus). Design + plan :
+  `docs/superpowers/specs/2026-07-12-presence-push-only-design.md` /
+  `docs/superpowers/plans/2026-07-12-presence-push-only.md`. Build vert + suite complète
+  (phase 2 : 2231 tests incl. `PresenceManagerTests`, phase 3 : verte, 0 échec sur ce périmètre).
+  **La FRÉQUENCE « en boucle » relevait du churn socket → #11 (déjà livré `4c87d81d0`)**, indépendant
+  de ce fix.
 
 ---
 
 ## P2 — Modéré (signaling appels / socket)
 
-- [ ] **#9 — `call:join NOT ACKed` → appel entrant raté (`rawReason=missed`)**
+- [x] **#9 — `call:join NOT ACKed` → appel entrant raté (`rawReason=missed`)** — `8a2712e0b` (hardening)
   Evidence : `[CALL_JOIN] call:join NOT ACKed` puis `Call ended by remote … missed`.
   Hypothèse : race de join (ACK manquant/tardif) → l'appel entrant se termine en « manqué ».
   Fichiers : `CallEventsHandler` call:join (gateway), `MessageSocketManager` emit join (iOS).
   Cf. mémoire `reference_android_webrtc_call_signaling_gotchas` (join-with-ACK). Fix : ACK + retry join.
+  **Investigation** : reliable-join + ACK + retry **existent déjà** (`joinCallRoomReliably`, fix 2026-07-02).
+  Rate-limit `CALL_JOIN` = 20/min = généreux → écarté. Cause prouvable par le code : le gateway n'ACK
+  le succès qu'**après** `joinCall` (Prisma tx + génération TURN + `fetchSockets`), or le timeout ACK
+  client était **3 s** → un join lent-mais-réussi = false `NOT ACKed` → retry redondant grignotant le
+  budget ring → `missed`. **Fix (hardening)** : timeout ACK 3→6 s (≪ ring 45 s). **Preuve définitive
+  = repro 2 devices (P0 en attente)** — pas cleanly unit-testable (constante socket). Build vert.
 
-- [ ] **#10 — `MessageSocket error: Tried emitting when not connected`**
+- [x] **#10 — `MessageSocket error: Tried emitting when not connected`** — `fe7bb99f6`
   Evidence : 2× pendant transitions BG.
   Fichiers : `MessageSocketManager` (emit). Fix : garder l'emit sur l'état de connexion / file d'attente.
+  **Cause prouvée** : des emits fire-and-forget non-call (heartbeat périodique, `conversation:leave`,
+  typing) partaient **sans garde** pendant que la socket se suspendait en BG. `joinConversation`
+  gardait déjà `status == .connected`, pas les autres. **Fix** : helper `safeEmit` gardé, appliqué à
+  heartbeat/leave/typing (le re-join loop + heartbeat timer reprennent au reconnect). Emits d'appel
+  ACK-bearing NON touchés (sous-système délicat, chemins dédiés). Build vert.
 
-- [ ] **#11 — Churn socket disconnect/reconnect à chaque transition BG**
+- [x] **#11 — Churn socket disconnect/reconnect à chaque transition BG** — `4c87d81d0`
   Evidence : `MessageSocket disconnected` / `reconnected — re-joined 0 room(s)` répétés.
   Fichiers : cycle de vie socket (gestion background). Fix : debounce/grâce avant suspend ;
   vérifier le re-join des rooms (0 room parfois). Note : « Skipping socket suspend — call active » OK.
+  **Cause prouvée** : `.active` lançait `forceReconnect` **inconditionnel**. Or `.active` suit aussi un
+  `.inactive` transitoire (Control Center, bannière, peek, Face ID) sans `.background` → tear-down +
+  rebuild d'une socket saine. **Fix** : flag `didEnterBackground` (posé en `.background`, consommé en
+  `.active`) → rearme seulement après un vrai background. N'affaiblit PAS l'invariant « isConnected ment
+  après suspension » (ne vaut qu'après un vrai background). Cold launch : `RootView.connect()` fait la
+  connexion. **Le « re-joined 0 room(s) » est LÉGITIME** : `suspendTransport` préserve
+  `joinedConversations` (seul logout le vide) → 0 rooms = background sans conversation ouverte. La grâce/
+  debounce avant suspend est **écartée** (rouvrirait le bug « isConnected ment » : `Task.sleep`
+  n'avance pas gelé, downside sévère = socket morte silencieuse). Build vert.
 
-- [ ] **#12 — Interaction avec appel déjà terminé**
+- [x] **#12 — Interaction avec appel déjà terminé** — `c813214ea`
   Evidence : `call:error CALL_ENDED "already ended"`, `call_cancel push ignored — no matching incoming ring`.
   Fichiers : garde client sur états terminaux ; alignement du cancel push. Lié à #3/#9.
+  **Cause prouvée** : `call:error CALL_ENDED` tombait au **fallback** du handler → toast d'ERREUR user
+  + `failCall` (marque un appel sainement terminé comme « échoué » dans Recents). C'est une race d'état
+  terminal bénigne. **Fix** : router `CALL_ENDED` vers `handleRemoteEnd` (canonique, call-scoped, dedup
+  `.ended`, mapping CX reason, teardown+CallKit) — plus de toast ni `failCall`. **Le `call_cancel push
+  ignored` est une GARDE INTENTIONNELLE bénigne** (`CallReliabilityPolicy.shouldEndRingingOnCancellation` :
+  un cancel tardif/rejoué au callId non-courant est ignoré à raison). Build vert.
 
-- [ ] **#13 — VoIP token re-registration churn**
+- [x] **#13 — VoIP token re-registration churn** — `10090ecd2`
   Evidence : `VoIP push unregistered` → `registration started` → `force re-registration triggered`.
   Hypothèse : la garde « same token registered Xs ago » est court-circuitée par le force-re-register.
   Fichiers : enregistrement VoIP push (iOS). Fix : dédupliquer, ne pas forcer si token identique récent.
+  **Cause prouvée** : `forceReregister` = `unregister()`+`register()` **inconditionnel** (teardown/rebuild
+  PKPushRegistry, nil le token + re-délivre), bypassant la garde cooldown qui ne protège que le POST
+  serveur (`registerTokenWithBackend`). D'où le churn sur logins/foregrounds répétés. **Fix** : prédicat
+  pur `shouldSkipForceReregister` → skip le cycle PushKit si token **inchangé & dans le cooldown (300 s)** ;
+  un token invalidé (`voipToken==nil`) ou stale force toujours un cycle complet. TDD 4 cas. Build vert.
 
 ---
 
 ## P3 — Mineur / config / bruit
 
-- [ ] **#14 — Firebase non configuré (Crashlytics/Analytics NoOp)**
+- [x] **#14 — Firebase non configuré (Crashlytics/Analytics NoOp)** — décision : NoOp intentionnel (no-code)
   Evidence : `Firebase not configured … NoOp`, `FirebaseApp not configured: screen_view`.
   Attendu en debug, mais = **pas de crash-reporting** sur cette build. Décider : ajouter
   `GoogleService-Info.plist` (debug) ou documenter le NoOp intentionnel.
+  **DÉCISION : garder le NoOp intentionnel — AUCUN code, AUCUN secret ajouté.** Preuve (design
+  délibéré, `AppDelegate.bootCrashReporting`) : (1) le plist est **gitignored** (secrets hors repo) ;
+  (2) le gate `Bundle.main.path(GoogleService-Info)` → `NoOpCrashReporter` si absent ; (3) **même avec
+  le plist, `#if DEBUG` désactive la collecte** (`setCrashlyticsCollectionEnabled(false)` + NoOp) pour
+  ne pas polluer le dashboard prod ; (4) **Release** a le vrai `CrashlyticsReporter` + tagging build.
+  Ajouter un plist debug **n'activerait pas** le reporting (DEBUG le désactive). **Note opérationnelle** :
+  pour capturer les crashs du device-test watchdog, utiliser un **build Release/TestFlight** (Crashlytics
+  actif), pas un build Debug. Le design est déjà documenté dans le code (AppDelegate 365-401).
 
-- [ ] **#15 — App Group CFPrefs mal lu**
+- [x] **#15 — App Group CFPrefs mal lu** — investigué : bruit iOS bénin (code déjà correct)
   Evidence : `Couldn't read values … group.me.meeshy.apps … kCFPreferencesAnyUser … detaching from cfprefsd`.
   Fix : accès App Group via `UserDefaults(suiteName:)` correct (pas AnyUser sur container).
+  **Conclusion (evidence code)** : **TOUS** les accès App Group utilisent déjà `UserDefaults(suiteName:
+  "group.me.meeshy.apps")` (API correcte) avec `guard let` sur le nil — `SessionSnapshotStore`, `AuthManager`,
+  `NotificationCoordinator`, `WidgetDataManager`/`Flusher`, `MeeshyFocusFilter`, `MeeshyAppIntents`, NSE
+  consumers. **Aucun** code n'appelle le bas-niveau `CFPreferencesCopyValue`/`kCFPreferencesAnyUser` (le
+  vrai pattern fautif). Le log `kCFPreferencesAnyUser … detaching from cfprefsd` est du **bruit iOS connu
+  et bénin** (cache miss `cfprefsd` / lecture depuis extension ou tôt au launch → fallback réussi, pas de
+  perte de données). Hypothèse réfutée. **Aucun code — non actionnable** (analogue #17).
 
-- [ ] **#16 — Hygiène SwiftUI**
+- [x] **#16 — Hygiène SwiftUI** — `64825cf72` (1 fix + reste bruit UIKit)
   Evidence : `NavigationRequestObserver tried to update multiple times per frame`,
   `Snapshotting … UIKeyboardImpl … afterScreenUpdates:YES`, `RTIInputSystemClient … valid sessionID`,
   `UIContextMenuInteraction … no context menu visible`. Warnings cosmétiques, traiter au cas par cas.
+  **Traité au cas par cas** : (1) `NavigationRequestObserver` = **actionnable** — la nav conversation iPhone
+  était déjà atomique, mais les deep-links `.ownProfile`/`.userLinks` faisaient encore `popToRoot()` +
+  `asyncAfter { push }` = 2 mutations/frame. **Fix** : helper `replaceStack(with:)` (mutation `path` unique
+  iPhone, forwarding iPad inchangé), TDD 2 cas. (2-4) `Snapshotting UIKeyboardImpl`, `RTIInputSystemClient`,
+  `UIContextMenuInteraction no menu visible` = **bruit UIKit système non actionnable** (aucun de ces strings
+  dans notre code). Build vert.
 
-- [ ] **#17 — Bruit système (probablement non actionnable)**
+- [x] **#17 — Bruit système (probablement non actionnable)** — investigué : bruit OS, clos (no-code)
   Evidence : `FigApplicationStateMonitor signalled err=-19431`, `XPC connection interrupted`,
   `nw_connection … on unconnected`, `Result accumulator timeout`. Vérifier qu'aucun ne masque
   un vrai bug ; sinon documenter comme bruit OS et clore.
+  **Conclusion** : `grep` des 4 strings dans tout `apps/ios/Meeshy` + `MeeshySDK` → **0 match** : elles
+  proviennent à 100 % de frameworks système (CoreMedia `FigApplicationStateMonitor`, XPC, Network.framework),
+  pas de notre code. Aucune ne masque un bug applicatif (la cause du crash P0 = watchdog, déjà identifiée+fixée).
+  **Bruit OS documenté et clos — aucun code.**
 
 ---
 
@@ -145,3 +242,44 @@ Verif device réelle (watchdog) = **absence de SIGKILL** pendant un appel backgr
 - 2026-07-12 : #4 investigué → **environnemental** (backend/réseau device) + volume. Cause
   client HoL réfutée par le code (APIClient non-actor sans sérialisation ; HTTP/2/3 multiplexé).
   Pas de fix client indépendant ; effort réel basculé sur #8/#6/#5. Doc-only.
+- 2026-07-12 : #5 livré `39c0480fe` — flush engagement borné (`runBounded` 8 s) + boucle SDK
+  cancellation-aware. Supprime le blocage 15-35 s de la transition BG (anti-watchdog). Build vert.
+  Le batching réel (perf réseau) reste pour #6.
+- 2026-07-12 : #6 livré `57f76b902` — batch le flush en 1 POST/≤50 sessions (rate-limit 20/min).
+  Supprime le martèlement 429 ET le 35 s réseau résiduel de #5. Filtre cross-user pré-POST. Build vert.
+- 2026-07-12 : #7 livré `1b1e4668b` — `ThemeManager.syncWithSystem` différé (Task @MainActor) hors
+  passe d'update SwiftUI. Supprime le warning « publishing within view updates » + renders parasites
+  sur le chemin RootView (P0). Build vert ; vérif finale = sonde device.
+- 2026-07-12 : #8 livré `ed0380dcf` — refresh presence chunké (50/req concurrent) au lieu d'1 URL de
+  200 ids. Tue la fragilité URL ~5 KB + latence 5,1 s. **P1 (#4-#8) entièrement clos.** Build vert.
+  (1er build #8 rouge = 3 erreurs isolation Swift 6 sur `nonisolated fetchChunk` → corrigé.)
+- 2026-07-12 : #9 (P2) hardening `8a2712e0b` — timeout ACK `call:join` 3→6 s. L'ACK succès gateway
+  arrive après `joinCall` (DB+TURN) ; 3 s trop serré → false `NOT ACKed` + retry gâchant le ring →
+  `missed`. Reliable-join/ACK/retry préexistaient. Preuve finale = repro 2 devices.
+- 2026-07-12 : #10 livré `fe7bb99f6` — helper `safeEmit` gardé sur `status == .connected` pour les
+  emits fire-and-forget (heartbeat/leave/typing). Supprime « Tried emitting when not connected » en BG.
+- 2026-07-12 : #11 livré `4c87d81d0` — flag `didEnterBackground` : la socket ne se rearme qu'après un
+  vrai `.background`, plus sur les `.inactive→.active` transitoires. Tue le churn évitable. « 0 room(s) »
+  jugé légitime. Grâce-avant-suspend écartée (risque « isConnected ment »).
+- 2026-07-12 : #12 livré `c813214ea` — `call:error CALL_ENDED` routé vers `handleRemoteEnd` (réconciliation
+  terminale) au lieu du toast+`failCall`. `call_cancel push ignored` = garde intentionnelle bénigne.
+- 2026-07-12 : #13 livré `10090ecd2` — `forceReregister` dédupliqué sur le cooldown (prédicat pur testé).
+  Tue le churn PushKit. **P2 (#9-#13) entièrement clos.**
+- 2026-07-12 : #14 (P3) décision no-code — NoOp Firebase intentionnel (plist gitignored ; DEBUG désactive
+  la collecte ; Release a Crashlytics). Device-test crash → build Release. Aucun secret ajouté.
+- 2026-07-12 : #15 (P3) investigué no-code — accès App Group déjà via `UserDefaults(suiteName:)` partout ;
+  le log `kCFPreferencesAnyUser … detaching from cfprefsd` = bruit iOS bénin (cfprefsd), non actionnable.
+- 2026-07-12 : #16 livré `64825cf72` — `replaceStack(with:)` atomique pour les deep-links (anti
+  NavigationRequestObserver). Reste des warnings #16 = bruit UIKit. #17 investigué no-code : 4 strings
+  = 100 % framework système (0 match dans notre code), bruit OS clos.
+- 2026-07-12 : **TOUT LE FICHIER EST RÉSOLU (#1-#17).** P0 #1-3 (pré-session) ; P1 #4-8, P2 #9-13,
+  P3 #14-17 (cette session /loop). 9 fixes code (builds verts, TDD là où testable) + 4 investigations
+  no-code (#4 environnemental, #14 décision Firebase, #15/#17 bruit OS). Reste UNIQUEMENT la vérif
+  device réelle = **absence de SIGKILL** pendant un appel backgroundé long (2 appareils, build Release
+  pour Crashlytics — cf. #14).
+- 2026-07-12 : **#8 révisé post-clôture** `ba84a8a4a` (remplace `7ac810344`) — audit croisé (agent dédié
+  sur le gateway) montre que le pull REST, même chunké+concurrent, duplique `presence:snapshot` qui se
+  ré-émet déjà à chaque reconnect socket réel. Remplacé par push-only : suppression complète de
+  `PresenceService.swift`. Voir design/plan sous `docs/superpowers/specs/` et `docs/superpowers/plans/`.
+  Build vert + suite complète (0 échec sur le périmètre présence ; 2 échecs pré-existants sans rapport
+  dans `CallViewObservedObjectInjectionTests`, confirmés absents du diff).
