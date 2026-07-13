@@ -40,6 +40,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEditability
 import me.meeshy.sdk.model.MessagePinToggle
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
@@ -1400,21 +1401,42 @@ private fun List<LocalMessage>.toBubbles(
     hidden: LocallyHiddenMessages,
     starredIds: Set<String>,
     activeLanguageOverride: Map<String, String>,
-): List<BubbleContent> = filterNot { hidden.isHidden(it.message.id) }.map { local ->
-    BubbleContentBuilder.build(
-        message = local.message,
-        currentUserId = currentUser?.id,
-        preferences = currentUser ?: EmptyContentPreferences,
-        showSenderName = true,
-        isPending = local.sendState == LocalSendState.SENDING,
-        isFailed = local.sendState == LocalSendState.FAILED,
-        ownReactions = ownReactions[local.message.id] ?: emptySet(),
-        recipientCount = recipientCount,
-        showOriginal = local.message.id in showingOriginal,
-        activeLanguageCode = activeLanguageOverride[local.message.id],
-        mediaBaseUrl = mediaBaseUrl,
-    ).copy(isStarred = local.message.id in starredIds)
+): List<BubbleContent> {
+    val visible = filterNot { hidden.isHidden(it.message.id) }
+    val groupPositions = MessageGrouping.positions(
+        visible.map { local ->
+            MessageGroupInput(
+                id = local.message.id,
+                senderId = local.message.senderId,
+                isOutgoing = currentUser?.id != null && local.message.senderId == currentUser.id,
+                createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt),
+            )
+        },
+    )
+    return visible.map { local ->
+        val position = groupPositions[local.message.id] ?: STANDALONE_GROUP_POSITION
+        BubbleContentBuilder.build(
+            message = local.message,
+            currentUserId = currentUser?.id,
+            preferences = currentUser ?: EmptyContentPreferences,
+            showSenderName = position.isFirstInGroup,
+            isPending = local.sendState == LocalSendState.SENDING,
+            isFailed = local.sendState == LocalSendState.FAILED,
+            ownReactions = ownReactions[local.message.id] ?: emptySet(),
+            recipientCount = recipientCount,
+            showOriginal = local.message.id in showingOriginal,
+            activeLanguageCode = activeLanguageOverride[local.message.id],
+            mediaBaseUrl = mediaBaseUrl,
+        ).copy(
+            isStarred = local.message.id in starredIds,
+            isFirstInGroup = position.isFirstInGroup,
+            isLastInGroup = position.isLastInGroup,
+        )
+    }
 }
+
+private val STANDALONE_GROUP_POSITION =
+    MessageGroupPosition(isFirstInGroup = true, isLastInGroup = true)
 
 /**
  * Project the visible bubbles into the opaque searchable model. Deleted bubbles

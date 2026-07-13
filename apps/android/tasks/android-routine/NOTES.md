@@ -19,13 +19,17 @@ Append-only log of gotchas and decisions that save time next run.
   8.14.3 runs 8.11.1's build fine (only Gradle-9 deprecation warnings). It emits an "incompatible with Gradle
   9.0" warning — harmless. If a Kotlin **compile worker** ICEs mid-run with an RMI/`TCPTransport` stack, that is
   the em-dash/`sun.jnu.encoding` issue — `--stop` the daemons and re-export the UTF-8 `LANG` first.
-- **Two pre-existing flaky `:sdk-core` tests:** `NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow`
-  and `PrivacyPreferencesStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction` intermittently fail with
-  `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 5000 ms` (DataStore `StateFlow.first()`
-  under parallel test load). **Both pass on isolated retry** (`--tests '*NotificationPreferencesStoreTest' --tests
-  '*PrivacyPreferencesStoreTest'` → BUILD SUCCESSFUL). They are in `:sdk-core` (a module an additive `:core:model`
-  slice cannot touch) and are **not** a merge blocker for an `apps/android`-only pure-core slice — the monorepo CI
-  runs no Android at all, so these never reach the CI gate. Note them, don't chase them from an unrelated slice.
+- **Pre-existing flaky `:sdk-core` DataStore tests** (whole family, in `:sdk-core`): the `dataStore_*` methods of
+  `NotificationPreferencesStoreTest`, `PrivacyPreferencesStoreTest` **and `MediaDownloadPreferencesStoreTest`**
+  intermittently fail with `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for … ms` — a real
+  androidx DataStore `StateFlow.first()` under parallel test load (2026-07-13: one such method timed out at 15s).
+  **The failing COUNT is non-deterministic** — a single full-tree run produced 3 failures, an immediate rerun of the
+  same three classes produced 1, and each fails-then-passes on isolated retry (`--tests '*PrivacyPreferencesStoreTest'`
+  → BUILD SUCCESSFUL). That varying count is itself the signature of timing flakiness, NOT a real breakage. They live
+  in `:sdk-core` (a module a `:feature:chat`/`:sdk-ui`/`:core:model` slice cannot touch) and are **not** a merge
+  blocker for an `apps/android`-only slice — the monorepo CI runs no Android at all, so they never reach the CI gate.
+  Note them, confirm they're green on isolated retry, don't chase them from an unrelated slice. (A tracked follow-up:
+  give these tests a longer/injected timeout or a non-parallel test task so full-tree runs stop going red.)
 
 ## Lesson (2026-07-12, `settings-help-support`) — ⚙ ENVIRONMENT: build under a UTF-8 locale
 - **The fresh container's default locale is `POSIX`/`C` (`LC_CTYPE=POSIX`, `LANG` empty), so the JVM's

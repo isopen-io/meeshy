@@ -88,7 +88,16 @@ public fun MessageBubble(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+            .padding(
+                start = MeeshySpacing.lg,
+                end = MeeshySpacing.lg,
+                // Consecutive-sender runs stack tightly: only the first message of a
+                // run gets a top gap and only the last a bottom gap, so a run reads
+                // as one visual block while distinct messages keep their 4dp breathing
+                // room (isFirst && isLast).
+                top = if (content.isFirstInGroup) MeeshySpacing.xs else MeeshySpacing.none,
+                bottom = if (content.isLastInGroup) MeeshySpacing.xs else MeeshySpacing.none,
+            ),
         horizontalArrangement = if (content.isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
         val isFreeEmoji =

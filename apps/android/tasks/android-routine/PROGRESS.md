@@ -1,5 +1,43 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **consecutive-sender message grouping** landed (slice `chat-message-grouping`, feature-parity §C —
+> the message-list rendering, a WhatsApp/iMessage-style improvement Android now has that **iOS never actually
+> implemented** — `MessageListViewController` hardcodes `isLastInGroup: true` and `showAvatar: !direct`, so every
+> incoming message re-shows the sender name). Pure `:feature:chat` SSOT `MessageGrouping.positions(messages,
+> gapMillis=DEFAULT_GAP_MILLIS) → Map<id, MessageGroupPosition>` clusters the ascending list into consecutive
+> same-author runs: two adjacent messages group iff **same author** (both outgoing share one "self" identity; both
+> incoming match on equal non-null `senderId`; a null incoming sender never groups; outgoing/incoming never group)
+> **and within the time gap** (absolute delta ≤ `gapMillis`=5min, so an out-of-order pair is judged by proximity;
+> a missing timestamp skips the time test and rides with the previous same-author message). Each `MessageGroupInput`
+> projects `(id, senderId, isOutgoing, createdAtMillis)`; each `MessageGroupPosition(isFirstInGroup, isLastInGroup)`
+> exposes `isStandalone`. **Wired for real (no dead ends):** `ChatViewModel.toBubbles` computes positions over the
+> **filtered** (hidden-message-excluded) list so they align with what's rendered, derives `showSenderName` from
+> `isFirstInGroup` (name shown once per run, replacing the old hardcoded `showSenderName = true` on every incoming),
+> and threads `isFirstInGroup`/`isLastInGroup` onto `BubbleContent` (two new fields, default `true` so every
+> existing call-site/test is untouched). The exempt `MessageBubble` composable consumes them for spacing — a run
+> stacks tightly (top gap only on the first, bottom gap only on the last) while distinct messages keep their 4dp
+> breathing room — so header + visual run share **one** SSOT and can't drift. **+15 tests** (empty→∅; single→
+> standalone; same-sender within gap → [first,¬last]/[¬first,last]; beyond gap → both standalone; exactly-on-gap
+> still groups (`<=`); different incoming senders never group; two outgoing group as self; outgoing→incoming breaks;
+> null incoming sender never groups; missing timestamp rides with previous; middle-of-three is neither first nor
+> last; a sender change splits two runs; custom gap overrides default; out-of-order uses the absolute delta;
+> positions keyed by every id). A **two-mutation RED check** (`<=`→`<` on the gap + `isOutgoing → return false` in
+> `sameAuthor`) failed exactly the 2 relevant tests (exactly-on-threshold + two-outgoing-self), confirming they are
+> behavioural not tautological; reverted, green again. **Verification:** `assembleDebug` → BUILD SUCCESSFUL (APK,
+> all Compose glue incl. `MessageBubble` compiles); `:feature:chat` + `:sdk-ui` `testDebugUnitTest` → **0 failures**
+> (MessageGroupingTest 15/15). Full-tree `testDebugUnitTest` shows only the **3 documented pre-existing flaky
+> `:sdk-core` DataStore `StateFlow`-timeout tests** (MediaDownload/Notification/PrivacyPreferencesStoreTest — a
+> module this `:feature:chat`/`:sdk-ui` slice cannot touch); the count varied 3→1 across runs and each passes on
+> isolated retry (see NOTES). Reviewer **PASS** (diff `apps/android` only — `:feature:chat` [new `MessageGrouping.kt`
+> + test, `ChatViewModel` wiring], `:sdk-ui` [`BubbleContent` +2 fields, `MessageBubble` spacing], `feature-parity.md`,
+> routine docs; no production logic outside; **SDK purity** — pure clustering algorithm in `:feature:chat` (the
+> established home for chat reducers ReplyThreads/PinnedMessages/ForwardTargets), the Compose spacing app-side;
+> **SSOT** — one grouping owns both the header (`showSenderName`) and the visual run (spacing); **UDF/instant-app** —
+> pure function, cache-first path unchanged; **colour/UX coherence** — no colour change, natural tightly-stacked runs;
+> **no coverage floor lowered, no test weakened**). **Next slice:** the app-side wiring of the already-shipped media
+> pure cores (ThumbHash placeholder via Coil, Bitmap re-encode via `ImageCompressionPlan`, voice recorder pill via the
+> waveform cores), the §C carousel/contact bubble attachments, or §B communities carousel + category filter chips.
+
 > On 2026-07-12 **ThumbHash encoder** landed (slice `media-thumbhash-encode`, feature-parity §P —
 > "ThumbHash blur placeholders for all media", line 2144; the generation half of the placeholder pipeline,
 > companion to the decoder that landed earlier the same day). Ships the pure `ThumbHash.encode(width, height,
@@ -2794,6 +2832,40 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-13 — slice `chat-message-grouping` ✅ impl + reviewer PASS
+- **Branch:** `claude/apps/android/chat-message-grouping` (off latest `main` `e0027ae`).
+- **Housekeeping first (routine rule 0):** no open Android PR from a prior iteration (the two open PRs were an
+  unrelated gateway async-safety fix #1897 and a dependabot #1842). Nothing to merge before starting.
+- **What:** feature-parity §C — consecutive-sender message grouping (WhatsApp/iMessage-style runs). A genuine
+  improvement over iOS, whose `MessageListViewController` hardcodes `isLastInGroup: true` + `showAvatar: !direct`
+  (every incoming message re-shows the sender name).
+- **Added (production):**
+  - `:feature:chat` `MessageGrouping.kt` — `MessageGroupInput(id, senderId, isOutgoing, createdAtMillis?)`,
+    `MessageGroupPosition(isFirstInGroup, isLastInGroup)` (+`isStandalone`), `object MessageGrouping`
+    (`DEFAULT_GAP_MILLIS`=5min, `positions(list, gapMillis)`): same-author (self for outgoing / equal non-null
+    `senderId` for incoming, null sender never groups) AND absolute-delta ≤ gap; missing timestamp rides with prev.
+  - `:sdk-ui` `BubbleContent` +`isFirstInGroup`/`isLastInGroup` (default `true`).
+- **Wired:** `ChatViewModel.toBubbles` computes positions over the hidden-filtered list, derives `showSenderName`
+  from `isFirstInGroup` (was hardcoded `true`), threads first/last onto the bubble; `MessageBubble` (exempt Compose)
+  stacks a run tightly — top gap only on first, bottom gap only on last — distinct messages keep 4dp.
+- **Tests (+15, RED→GREEN):** MessageGroupingTest 15 (empty, single-standalone, within/beyond/exactly-on gap,
+  different senders, two-outgoing-self, outgoing→incoming break, null sender, missing-timestamp-rides, middle-of-
+  three, sender-change split, custom gap, out-of-order abs-delta, keyed-by-every-id). Branches swept: both arms of
+  `sameAuthor` (isOutgoing mismatch / self / null sender / equal id), both arms of `withinGap` (null-either → true,
+  `<=` boundary), first/last edges (no prev / no next), middle (neither).
+- **Two-mutation RED proof:** `<=`→`<` on the gap + `if (a.isOutgoing) return false` in `sameAuthor` → exactly 2
+  tests failed (`a_gap_exactly_on_the_threshold_still_groups`, `two_outgoing_messages_group_as_the_same_self_sender`);
+  reverted, green again.
+- **Verification:** `assembleDebug` BUILD SUCCESSFUL (APK; MessageBubble spacing compiles); `:feature:chat` +
+  `:sdk-ui` `testDebugUnitTest` → 0 failures (MessageGroupingTest 15/15). Full-tree run had only the 3 documented
+  pre-existing flaky `:sdk-core` DataStore timeout tests (Media/Notification/PrivacyPreferencesStoreTest) — count
+  varied 3→1 across runs, each green on isolated retry; not in the two modules this slice touches.
+- **Reviewer PASS:** diff `apps/android` only (6 files: `:feature:chat` [MessageGrouping.kt + test + ChatViewModel],
+  `:sdk-ui` [BubbleContent + MessageBubble], feature-parity/PROGRESS/NOTES docs); no production logic outside;
+  SDK purity — pure clustering in `:feature:chat` (home of ReplyThreads/PinnedMessages/ForwardTargets), Compose
+  spacing app-side; SSOT — one grouping owns header + run; UDF/instant-app — pure fn, cache-first path unchanged;
+  colour/UX coherence — no colour change, natural tightly-stacked runs; no coverage floor lowered, no test weakened.
 
 ### 2026-07-12 — slice `settings-about-screen` ✅ impl + reviewer PASS → merged
 - **Branch:** `claude/apps/android/settings-about-screen` (off latest `main` `32df95a`, i.e. after the
