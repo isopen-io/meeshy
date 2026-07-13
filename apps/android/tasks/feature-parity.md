@@ -550,7 +550,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       langue préférée traduite sinon transcription originale, `formattedDuration` `m:ss`) rendu en player
       compact (glyphe play/download + durée-ou-taille + ligne de transcription) tappable → URL au host ;
       iOS affiche `orig` par défaut + sélecteur manuel, Android affiche la langue préférée d'emblée) ;
-      carousel / contact pending
+      **galerie média plein écran conversation-wide done** (`chat-conversation-media-gallery` 2026-07-13 :
+      port iOS `ConversationMediaGalleryView` — taper une image n'ouvre plus un visionneur limité au
+      message tapé mais une galerie qui balaie TOUTES les images de la conversation, dans l'ordre, en
+      démarrant sur l'image tapée. Pur `:feature:chat` `ConversationMediaGallery.of(messages, messageId,
+      imageIndex)` → `ConversationGallery(imageUrls, startIndex)` : aplatit chaque bulle non-supprimée en
+      ordre de conversation, résout `startIndex` = compteur d'images avant le message tapé + `imageIndex`
+      clampé aux bornes du message ; message inconnu/supprimé/sans image → repli sur le début ; consommé
+      par `MeeshyImageViewer` (bloc `:sdk-ui` réutilisé, pinch-zoom + compteur `n/total` déjà présents).
+      +14 tests. Reste : contact card, save-to-gallery, prefetch ±2, métadonnées auteur/légende) ;
+      contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/

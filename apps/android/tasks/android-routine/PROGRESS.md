@@ -1978,7 +1978,21 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-09): `chat-bubble-audio`** — audio (voice-message) bubble attachment (§C line ~533,
+**Just shipped (2026-07-13): `chat-conversation-media-gallery`** — fullscreen media gallery now spans the
+whole conversation (port of iOS `ConversationMediaGalleryView`); pure `:feature:chat`
+`ConversationMediaGallery.of` flattens every non-deleted bubble's images and resolves the tapped start
+index, consumed by the reused `:sdk-ui` `MeeshyImageViewer`. See run log 2026-07-13.
+**Recommended next (highest value):**
+- **Media gallery follow-ups** (same §C line): neighbour prefetch ±2 (Coil `ImageLoader.enqueue`),
+  per-page author/caption metadata overlay, and save-to-gallery (`MediaStore`) — each a thin add on top of
+  the shipped `ConversationGallery` (extend the model with `prefetchAround`/item metadata and consume it).
+- **Message bubble contact attachment** (§C, still pending) — share-a-contact card; the wire has no
+  dedicated fields yet, so scope the DTO first.
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
+
+---
+
+**Earlier (2026-07-09): `chat-bubble-audio`** — audio (voice-message) bubble attachment (§C line ~533,
 `carousel / audio / location / contact` list — **audio now done**; carousel + contact remain). Port of iOS
 `AudioPlayerView` message-bubble context, surpassing it on the Prisme Linguistique. An `audio/…`-mime
 attachment becomes a pure `BubbleAudio` (`:sdk-ui`) instead of being mis-bucketed as a generic file:
@@ -2890,6 +2904,56 @@ After Stories richness is sufficient, advance to the **Calls** area
   `feature-parity.md`, PROGRESS/NOTES docs); no production logic outside; behaviour-through-public-API, no
   tautologies (mutation-proven); SDK purity — pure classifier in `:core:model`, presentation UI-side; SSOT —
   thresholds once as named consts; UDF/instant-app — pure fn, no state/UI; colour/UX coherence — no UI in slice;
+  no coverage floor lowered, no test weakened.
+
+### 2026-07-13 — slice `chat-conversation-media-gallery` ✅ impl + reviewer PASS → PR #1902, rebased on `main` after #1900 merged
+- **Branch:** `claude/apps/android/chat-conversation-media-gallery` (branched off `e0027ae`, then rebased
+  cleanly onto `main` `c93fa81` once #1900 merged — only a `PROGRESS.md` run-log conflict, resolved by
+  keeping both entries; `ChatViewModel` auto-merged, different region than #1900's `toBubbles`).
+- **Housekeeping (routine rule 0):** the previous iteration's PR **#1900** (`chat-message-grouping`) was
+  open, `apps/android`-only (8 files), `mergeable_state: clean`, reviewer re-verified **PASS** — but its
+  **CI run `29219800275` was stuck `queued`** for 30+ min (shared GitHub-Actions runner backlog, not a PR
+  defect). Cannot merge past a non-green check (hard rule), so #1900 is left open to merge the moment CI
+  goes green; #1900 has since merged to `main` (`c93fa81`) and this slice was rebased on top.
+- **What:** feature-parity §C — the fullscreen media gallery, port of iOS `ConversationMediaGalleryView`.
+  Tapping an image no longer opens a viewer scoped to the tapped message; it opens a gallery that spans
+  **every image in the conversation**, in order, starting on the tapped one.
+- **Added (production):**
+  - `:feature:chat` `ConversationMediaGallery.kt` — pure SSOT `of(messages, messageId, imageIndex)` →
+    `ConversationGallery(imageUrls, startIndex)`. Flattens each non-deleted bubble's images in conversation
+    order; `startIndex` = running image count before the tapped message + `imageIndex` clamped into that
+    message's own bounds; unknown/deleted/imageless tapped message → falls back to the start; empty → the
+    inert `EMPTY`.
+- **Changed (production):**
+  - `ChatViewModel`: `openImageViewer` now builds the conversation-wide gallery via the pure SSOT and stores
+    it (`imageViewer: ConversationGallery?`, `null` when there is nothing to show); removed the old
+    single-message `ImageViewerTarget`.
+  - `ChatScreen`: renders `MeeshyImageViewer` (unchanged `:sdk-ui` building block — pinch-zoom + `n/total`
+    counter already there) over `gallery.imageUrls` at `gallery.startIndex`.
+- **Tests (+14, RED→GREEN):** `ConversationMediaGalleryTest` 12 (empty; imageless→empty; single→0; later
+  index within a message; spans-all-messages in order; imageless messages skipped without shifting start;
+  out-of-range index clamps to the message's last image *with a trailing message present* so the per-message
+  clamp is genuinely exercised; negative index clamps to first; unknown id → whole gallery from 0; deleted
+  message contributes no images; tapping a deleted message → start; matched-but-imageless → start).
+  `ChatViewModelTest` +2 (tap builds conversation-wide gallery with correct `startIndex` + dismiss clears;
+  tap on an imageless message opens no gallery). **Two-mutation RED check:** dropping the per-message
+  `coerceIn` clamp + the `isDeleted` skip failed exactly the negative-clamp + 2 deleted tests (the
+  out-of-range test was then strengthened with a trailing message so the clamp isn't masked by the final
+  global clamp).
+- **Verification (local, `LANG=C.utf8`):** `gradle assembleDebug testDebugUnitTest` → `assembleDebug`
+  **SUCCESSFUL**; `:feature:chat` (`ConversationMediaGalleryTest` 12/12, `ChatViewModelTest` 166/166) +
+  `:sdk-ui` green. Full-tree run: only failure is the **known pre-existing `:sdk-core`
+  `PrivacyPreferencesStoreTest` DataStore `StateFlow`-timeout flake** (untouched module; passes on isolated
+  retry — re-run green). **Env note:** the system-Gradle daemon must launch under `LANG=C.utf8` or
+  `:sdk-core:compileDebugUnitTestKotlin` dies with `InvalidPathException` on the em-dash in
+  `ActiveCallRepositoryTest`'s method name (`sun.jnu.encoding` fallback) — `gradle --stop` then re-run with
+  the UTF-8 locale exported.
+- **Reviewer:** **PASS** — diff `apps/android` only; behaviour-through-public-API (`ConversationMediaGallery.of`
+  + VM `openImageViewer`), no tautologies, boundary coverage (empty/single/clamps/unknown/deleted); **SDK
+  purity** — the "which media, starting where" decision is a pure `:feature:chat` atom, the fullscreen viewer
+  stays the generic stateless `:sdk-ui` `MeeshyImageViewer` (opaque url list); **SSOT** — one flatten owns
+  ordering + start resolution; **instant-app/UDF** — pure function + immutable `StateFlow` state, `null` when
+  empty (no blank viewer); **UX coherence** — natural tap-to-open / swipe-across / dismiss-back, no dead end;
   no coverage floor lowered, no test weakened.
 
 ### 2026-07-13 — slice `chat-message-grouping` ✅ impl + reviewer PASS
