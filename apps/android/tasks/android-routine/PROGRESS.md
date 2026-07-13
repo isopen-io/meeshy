@@ -1,5 +1,32 @@
 # Progress — state & what to do next
 
+> On 2026-07-13 **relative-time classification SSOT** landed (slice `time-relative-classify`, feature-parity §Q —
+> "Relative-time classification SSOT"). Ships the pure threshold ladder beneath every conversation-row / feed /
+> notification / presence timestamp — a faithful port of iOS `RelativeTime.classify` (the SSOT the iOS
+> `RelativeTimeFormatter` builds on), with rendering (localized strings, absolute-date formatting) deliberately
+> left UI-side per the grain rule. New `:core:model` package `me.meeshy.sdk.model.time`: `RelativeTimeUnit` — a
+> sealed ladder rung (`Now`/`Seconds`/`Minutes`/`Hours`/`Days`/`Weeks`/`Months`/`AbsoluteDate(epochMillis)`)
+> carrying the numeric value but no text; `RelativeTime.classify(epochMillis, referenceMillis)` — `Now` (<30s) →
+> seconds (<1min) → minutes (<1h) → hours (<1day) → days (<7d) → weeks (<30d) → months (<90d) → absolute date,
+> with the thresholds exposed as named `const` (the single source of truth). **Surpasses** the reference on two
+> edges iOS leaves implicit: (1) a future / clock-skewed timestamp (negative interval) collapses to `Now` instead
+> of emitting a negative count; (2) the whole ladder runs on `Long` arithmetic, so a decades-old timestamp (whose
+> elapsed seconds overflow a 32-bit `Int`) still reaches the absolute-date rung rather than wrapping to a spurious
+> near rung — pinned by a ~30-year and a unix-epoch test. **+24 tests**: every rung, both sides of every
+> threshold boundary (29s→Now vs 30s→Seconds, 59s vs 60s→Minutes, 3599s vs 3600s→Hours, 6d vs 7d→Weeks, 29d vs
+> 30d→Months, 89d vs 90d→AbsoluteDate), integer-floor of trailing units (119s→1min, 13d→1week), and the
+> future/overflow/epoch edges. A **two-mutation RED check** (`< NOW_THRESHOLD`→`< MINUTE_SECONDS` collapsing the
+> seconds rung + `days < WEEK_DAYS`→`days <= WEEK_DAYS` stealing the 7-day boundary) failed exactly the 3 relevant
+> tests (30s + 59s seconds rungs + exactly-7-days→weeks), reverted green. `:core:model:testDebugUnitTest` green
+> (24/24 new); `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced). Reviewer **PASS** (diff `apps/android`
+> only — `:core:model` [new `time/RelativeTime.kt` + test], `feature-parity.md`, routine docs; no production logic
+> outside; **SDK purity** — pure classifier in `:core:model`, localized strings + absolute-date `DateFormatter`
+> stay app/UI-side exactly as iOS keeps them in the view layer; **SSOT** — thresholds live once here as named
+> consts; **UDF/instant-app** — pure function, no state or UI; **colour/UX coherence** — no UI in this slice; **no
+> coverage floor lowered, no test weakened**). **Next slice:** the app-side `RelativeTimeFormatter` Compose/string
+> layer that maps `RelativeTimeUnit` → the five localized app languages + the `Locale`-aware absolute date (the
+> rendering half), the `lastSeen`/`long` framing variants, or resume any of the media wiring hints below.
+
 > On 2026-07-13 **consecutive-sender message grouping** landed (slice `chat-message-grouping`, feature-parity §C —
 > the message-list rendering, a WhatsApp/iMessage-style improvement Android now has that **iOS never actually
 > implemented** — `MessageListViewController` hardcodes `isLastInGroup: true` and `showAvatar: !direct`, so every
@@ -2832,6 +2859,38 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-13 — slice `time-relative-classify` ✅ impl + reviewer PASS → PR + merge
+- **Branch:** `claude/apps/android/time-relative-classify` (off latest `main` `c93fa81`).
+- **Housekeeping first (routine rule 0):** two prior-iteration Android PRs were open. Merged **#1900**
+  (`chat-message-grouping`, `apps/android`-only, `mergeable_state: clean`) → `main` (squash `c93fa81`). **#1902**
+  (`chat-conversation-media-gallery`) then went `dirty` (both touch `ChatViewModel`/`ChatScreen`); rebased it
+  onto the new `main` resolving the only conflict (a `PROGRESS.md` run-log adjacency) by keeping **both** entries,
+  built `:feature:chat`+`:sdk-ui` green — but a concurrent session (`session_01Cx8…`) had already rebased/pushed
+  the same result (`a81fd8c`) and its CI was `in_progress`, so #1902 is left to that session to merge on green
+  (cannot merge past a pending check; hard rule). No production logic touched by either.
+- **What:** feature-parity §Q — the relative-time classification SSOT, port of iOS `RelativeTime.classify` (the
+  threshold source of truth the iOS `RelativeTimeFormatter` builds on). Underpins every conversation-row / feed /
+  notification / presence timestamp.
+- **Added (production):**
+  - `:core:model` new package `me.meeshy.sdk.model.time` — `RelativeTimeUnit` sealed ladder
+    (`Now`/`Seconds`/`Minutes`/`Hours`/`Days`/`Weeks`/`Months`/`AbsoluteDate(epochMillis)`, value but no text);
+    `RelativeTime.classify(epochMillis, referenceMillis)` with thresholds as named `const` (SSOT): `Now`<30s →
+    seconds<1min → minutes<1h → hours<1day → days<7d → weeks<30d → months<90d → absolute date. Rendering
+    (localized strings + `Locale`-aware absolute date) stays UI-side, exactly as iOS keeps it in the view layer.
+- **Surpasses iOS** on two implicit edges: future/skew (negative interval) → `Now` (no negative counts); `Long`
+  arithmetic throughout → a decades-old timestamp reaches the absolute-date rung without 32-bit `Int` overflow.
+- **Tests (+24, RED→GREEN):** every rung; both sides of every boundary (29/30s, 59/60s, 3599/3600s, 6/7d, 29/30d,
+  89/90d); integer-floor of trailing units (119s→1min, 13d→1week); future, far-future, ~30-year (overflow), and
+  unix-epoch edges. **Two-mutation RED check:** `< NOW_THRESHOLD`→`< MINUTE_SECONDS` + `days < WEEK_DAYS`→`days <=
+  WEEK_DAYS` failed exactly the 3 relevant tests (30s + 59s seconds rungs + exactly-7-days→weeks); reverted green.
+- **Verification (local, `LANG=C.utf8`, system Gradle 8.14.3):** `:core:model:testDebugUnitTest` green (24/24 new);
+  `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK produced, 74 MB).
+- **Reviewer PASS:** diff `apps/android` only (`:core:model` [`time/RelativeTime.kt` + `RelativeTimeTest.kt`],
+  `feature-parity.md`, PROGRESS/NOTES docs); no production logic outside; behaviour-through-public-API, no
+  tautologies (mutation-proven); SDK purity — pure classifier in `:core:model`, presentation UI-side; SSOT —
+  thresholds once as named consts; UDF/instant-app — pure fn, no state/UI; colour/UX coherence — no UI in slice;
+  no coverage floor lowered, no test weakened.
 
 ### 2026-07-13 — slice `chat-message-grouping` ✅ impl + reviewer PASS
 - **Branch:** `claude/apps/android/chat-message-grouping` (off latest `main` `e0027ae`).
