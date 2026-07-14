@@ -38,6 +38,33 @@ final class StoryContentDerivedDurationTests: XCTestCase {
         XCTAssertEqual(s.contentDerivedDuration(), 15, accuracy: 0.001)
     }
 
+    /// UNE SEULE source de fond (audio, PAS de vidéo) dont la période exige
+    /// un arrondi non-trivial (2+ cycles) — `test_backgroundAudioOnly_counted`
+    /// ci-dessus ne couvre que le cas où la durée audio == la cible (aucun
+    /// arrondi nécessaire). Le fix multi-période doit rester exact pour le
+    /// cas mono-source dominant (bg audio seul, sans bg vidéo).
+    func test_bgAudioOnly_loopsToTarget() {
+        let bgAudio = StoryAudioPlayerObject(id: "a", isBackground: true, duration: 4, loop: true)
+        let s = slide(audio: [bgAudio])
+        XCTAssertEqual(s.contentDerivedDuration(), 8, accuracy: 0.001,
+                       "Audio de fond seul (4s, sans vidéo) doit boucler jusqu'à un multiple " +
+                       "exact de 4s pour couvrir la cible auto de 6s → 8s (2 cycles).")
+    }
+
+    /// UNE SEULE source de fond (vidéo, PAS d'audio) — symétrique du test
+    /// ci-dessus, garde la couverture explicite du cas mono-source vidéo dans
+    /// CE fichier (déjà couvert indirectement par `SlideDurationLoopTests`,
+    /// mais explicite ici pour documenter les DEUX cas mono-source côte à côte).
+    func test_bgVideoOnly_loopsToTarget() {
+        var bgVideo = StoryMediaObject(id: "v", postMediaId: "v", kind: .video, aspectRatio: 1)
+        bgVideo.isBackground = true
+        bgVideo.duration = 4
+        let s = slide(media: [bgVideo])
+        XCTAssertEqual(s.contentDerivedDuration(), 8, accuracy: 0.001,
+                       "Vidéo de fond seule (4s, sans audio) doit boucler jusqu'à un multiple " +
+                       "exact de 4s pour couvrir la cible auto de 6s → 8s (2 cycles).")
+    }
+
     func test_multipleForegroundMedia_takesLongestWindow() {
         var m1 = StoryMediaObject(id: "m1", postMediaId: "m1", kind: .video, aspectRatio: 1)
         m1.duration = 8
@@ -57,5 +84,46 @@ final class StoryContentDerivedDurationTests: XCTestCase {
     func test_emptySlide_staysStaticDefault() {
         XCTAssertEqual(slide().contentDerivedDuration(), 6, accuracy: 0.001,
                        "Slide vierge conserve la durée statique par défaut (6 s)")
+    }
+
+    // MARK: - Facteur de boucle : bg vidéo ET bg audio avec périodes différentes
+    //
+    // Avant ce fix, `rawMediaDur = bgVideoDur ?? bgAudioDur` ignorait
+    // TOTALEMENT la période du bg audio dès qu'un bg vidéo existait — le
+    // résultat n'était alors garanti multiple QUE de la période vidéo,
+    // laissant l'audio de fond coupé en plein cycle (directive user : « la
+    // répétition audio ou vidéo en background TOMBE TOUJOURS en facteur »).
+
+    func test_bgVideoAndBgAudio_audioPeriodExceedsVideoRounding_usesAudioRounding() {
+        // bg vidéo (6s) couvre exactement la cible auto (6s) SANS boucler
+        // (durée naturelle == cible). bg audio (4s, loop) a besoin de 2 cycles
+        // (8s) pour couvrir cette même cible de 6s. Avant ce fix,
+        // `rawMediaDur = bgVideoDur ?? bgAudioDur` ignorait totalement la
+        // période audio dès que la vidéo existait → résultat = 6 (la vidéo
+        // seule), qui n'est PAS un multiple de 4 → l'audio coupé à 2s dans
+        // son 2e cycle. Avec le fix, le résultat doit être un multiple exact
+        // de 4 (8s).
+        var bgVideo = StoryMediaObject(id: "v", postMediaId: "v", kind: .video, aspectRatio: 1)
+        bgVideo.isBackground = true
+        bgVideo.duration = 6
+        let bgAudio = StoryAudioPlayerObject(id: "a", isBackground: true, duration: 4, loop: true)
+        let s = slide(media: [bgVideo], audio: [bgAudio])
+        let result = s.contentDerivedDuration()
+        XCTAssertEqual(result, 8, accuracy: 0.001,
+                       "Le résultat doit être arrondi au multiple supérieur de la période " +
+                       "du bg audio (4s → 8s), pas seulement de la vidéo (6s, résultat bugué).")
+    }
+
+    func test_bgVideoOnly_unaffectedByMultiPeriodFix() {
+        // Non-régression : `test_backgroundAudioLongerThanBgVideo_usesLongest`
+        // ci-dessus doit rester inchangé (30s) — l'audio ici ne boucle pas
+        // (sa durée == la cible, un seul passage suffit), donc le fix
+        // multi-période ne doit rien changer à ce résultat déjà correct.
+        var bgVideo = StoryMediaObject(id: "v", postMediaId: "v", kind: .video, aspectRatio: 1)
+        bgVideo.isBackground = true
+        bgVideo.duration = 5
+        let bgAudio = StoryAudioPlayerObject(id: "a", isBackground: true, duration: 30, loop: true)
+        let s = slide(media: [bgVideo], audio: [bgAudio])
+        XCTAssertEqual(s.contentDerivedDuration(), 30, accuracy: 0.001)
     }
 }

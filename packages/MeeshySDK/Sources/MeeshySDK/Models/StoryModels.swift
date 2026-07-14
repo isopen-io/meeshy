@@ -1094,7 +1094,6 @@ extension StorySlide {
             .first(where: { $0.isBackground == true })?
             .duration
             .map { Double($0) }
-        let rawMediaDur = bgVideoDur ?? bgAudioDur
 
         // Composante 2 : texte long. >30 mots → 6 s + (mots-30)/6 secondes.
         let totalWords = effects.textObjects.reduce(0) { acc, text in
@@ -1124,12 +1123,24 @@ extension StorySlide {
         let target = max(textDur, Self.defaultStaticDuration, longestData)
 
         // Background media bouclé pour atteindre la cible (ou sa durée naturelle si
-        // plus longue).
-        let bgResult: TimeInterval = {
-            guard let m = rawMediaDur, m > 0 else { return target }
-            if m >= target { return m }               // media ≥ cible → durée exacte
-            return ceil(target / m) * m                // sinon loop jusqu'à ≥ cible
-        }()
+        // plus longue). TOUTES les périodes de boucle de fond présentes sont
+        // considérées (vidéo ET audio si les deux coexistent) — avant ce fix,
+        // `bgVideoDur ?? bgAudioDur` ignorait totalement la période audio dès
+        // qu'un bg vidéo existait, pouvant laisser l'audio de fond coupé en
+        // plein cycle (directive user : « la répétition ... TOMBE TOUJOURS en
+        // facteur »). Pour chaque période, on arrondit la cible au multiple
+        // supérieur puis on prend le MAX à travers les sources, pour que la
+        // source dont la période exige le plus grand arrondi complète son
+        // dernier cycle. Ceci ne garantit pas un alignement simultané parfait
+        // des DEUX périodes quand elles sont incommensurables (nécessiterait
+        // un calcul type PPCM, hors de portée — risquerait de gonfler la
+        // durée du slide de façon déraisonnable) ; le cas dominant réel (une
+        // seule source de fond bouclée) reste, lui, toujours exact.
+        let bgLoopPeriods = [bgVideoDur, bgAudioDur].compactMap { $0 }.filter { $0 > 0.001 }
+        let bgResult: TimeInterval = bgLoopPeriods.reduce(target) { effective, period in
+            let extended = period >= target ? period : (target / period).rounded(.up) * period
+            return max(effective, extended)
+        }
 
         // Le résultat couvre au moins la donnée la plus longue.
         return max(bgResult, longestData)

@@ -505,7 +505,14 @@ extension StoryViewerView {
     /// `isComposerEngaged` which DOES pause — that's the intended trigger,
     /// not the overlay visibility alone (user spec 2026-05-28).
     var shouldPauseTimer: Bool {
-        isPaused
+        // Bannière de notification, Control Center, appel entrant, aperçu
+        // app-switcher : le média (vidéo/audio) est déjà gelé côté canvas via
+        // `willResignActiveNotification` (StoryCanvasUIView+Lifecycle) — sans
+        // ce terme le timer continuait de tourner pendant que l'utilisateur ne
+        // regardait plus l'écran, désynchronisant la progress bar et pouvant
+        // faire avancer/terminer la story sans qu'elle ait été vue.
+        scenePhase != .active
+        || isPaused
         || isLongPressPaused
         || isComposerEngaged
         || hasComposerContent
@@ -612,21 +619,6 @@ extension StoryViewerView {
         // dans StoryViewerView.swift, inaccessible depuis cette extension).
         let renderable = story.toRenderableSlide(preferredLanguages: [])
         computedStoryDuration = renderable.computedTotalDuration()
-    }
-
-    /// For each background loop period, round the base duration up to the
-    /// nearest multiple of that period. Take the maximum across all bg
-    /// sources so the longest-period bg media completes its last cycle.
-    /// Sub-millisecond periods are ignored (avoid div-by-zero / pathological
-    /// results from corrupt metadata).
-    static func roundedUpToBgLoops(baseDuration: Double, bgLoopPeriods: [Double]) -> Double {
-        var effective = baseDuration
-        for period in bgLoopPeriods where period > 0.001 {
-            let cycles = (baseDuration / period).rounded(.up)
-            let extended = cycles * period
-            if extended > effective { effective = extended }
-        }
-        return effective
     }
 
     /// Manual pause — sheets, drag-to-dismiss, composer engaged, etc.

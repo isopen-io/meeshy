@@ -219,7 +219,7 @@ struct StoryViewerView: View {
     /// changement de slide. `nil` = affichage selon les préférences de base uniquement.
     @State var sessionLanguageOverride: String? = nil // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scenePhase) var scenePhase // internal for cross-file extension access (shouldPauseTimer)
 
     // Required by `SharePickerView` presented via `.sheet(item:)` below. The
     // sheet creates a separate presentation hierarchy so EnvironmentObjects
@@ -347,10 +347,14 @@ struct StoryViewerView: View {
 
     /// Slide d'entrée d'un groupe pour la face du cube — même règle que le
     /// prefetch inter-groupes : première non-vue non-expirée, sinon première
-    /// non-expirée.
-    func entryStory(of group: StoryGroup) -> StoryItem? {
-        let now = Date()
-        return group.stories.first(where: { !$0.isViewed && !$0.isExpired(at: now) })
+    /// non-expirée. `nil` = le groupe n'a RIEN à afficher (toutes vues+expirées,
+    /// ou toutes expirées) — sert aussi de prédicat de gating pour
+    /// `neighborCubeGroup`/`presentGroupIntroIfNeeded` (n'afficher un
+    /// placeholder de transition QUE si le groupe cible a effectivement une
+    /// story à montrer). `static` + `now` injectable : aucune dépendance à
+    /// `self`, testable directement sans instancier la View.
+    static func entryStory(of group: StoryGroup, now: Date = Date()) -> StoryItem? {
+        group.stories.first(where: { !$0.isViewed && !$0.isExpired(at: now) })
             ?? group.stories.first(where: { !$0.isExpired(at: now) })
     }
 
@@ -371,7 +375,12 @@ struct StoryViewerView: View {
         guard neighborPreviewDirection != 0, !isPreviewMode else { return nil }
         let idx = currentGroupIndex + neighborPreviewDirection
         guard groups.indices.contains(idx) else { return nil }
-        return groups[idx]
+        let candidate = groups[idx]
+        // N'afficher le placeholder de transition QUE si ce groupe a
+        // effectivement une story à montrer — sinon l'avatar/bannière
+        // flashent pour un auteur dont tout est vu/expiré (directive user).
+        guard Self.entryStory(of: candidate) != nil else { return nil }
+        return candidate
     }
 
     // Depth effect from horizontal movement (slight scale + rotation)
@@ -398,7 +407,7 @@ struct StoryViewerView: View {
             slideProgress: slideProgress,
             dragProgress: dragProgress,
             neighborGroup: neighborCubeGroup,
-            neighborEntryStory: neighborCubeGroup.flatMap { entryStory(of: $0) },
+            neighborEntryStory: neighborCubeGroup.flatMap { Self.entryStory(of: $0) },
             neighborDirection: neighborPreviewDirection,
             isPresented: $isPresented,
             makeStoryCard: { geometry in storyCard(geometry: geometry) }
@@ -1519,7 +1528,11 @@ extension StoryViewerView {
     func presentGroupIntroIfNeeded() {
         guard !isPreviewMode,
               let group = currentGroup,
-              group.id != AuthManager.shared.currentUser?.id else { return }
+              group.id != AuthManager.shared.currentUser?.id,
+              // Groupe sans story affichable (tout vu+expiré) → aucun interstitiel
+              // d'identité à montrer (directive user : gating sur "a effectivement
+              // des stories à afficher").
+              Self.entryStory(of: group) != nil else { return }
         groupIntroTask?.cancel()
         // Identité COMPLÈTE dès la première frame quand le groupe a été
         // pré-résolu (`prefetchNeighborGroupIntros`) ; sinon placeholder
@@ -1650,6 +1663,15 @@ private struct StoryGroupIntroOverlay: View {
                 avatarColorFallbackGradient
             }
         }
+        // Verrou de taille — même piège que `NeighborGroupCubeFace` : une
+        // bannière dont le ratio diffère de l'écran peut proposer une taille
+        // intrinsèque asymétrique et faire dériver le centrage de
+        // `identityContent` au-dessus. `Color.black` (premier enfant du
+        // ZStack parent) ancre déjà normalement ce ZStack au plein écran,
+        // mais ce verrou explicite rend l'invariant local et robuste aux
+        // futurs changements de composition du parent.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
     }
 
     private var identityContent: some View {

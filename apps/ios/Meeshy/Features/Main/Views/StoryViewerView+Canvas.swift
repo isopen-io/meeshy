@@ -1916,6 +1916,14 @@ struct NeighborGroupCubeFace: View {
                     .scaledToFill()
                     .blur(radius: 24)
                     .scaleEffect(1.1)
+                    // `.scaledToFill()` + `.blur()` peut proposer une taille
+                    // intrinsèque plus grande que le viewport, gonflant ce
+                    // ZStack de façon asymétrique selon le ratio du
+                    // ThumbHash — l'avatar/nom centrés dedans dérivent alors
+                    // visuellement du centre réel de la carte (piège déjà
+                    // documenté dans `StoryReaderLoadingOverlay`). Verrouiller
+                    // la taille AVANT le `.clipped()` ci-dessous.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 LinearGradient(
                     colors: [MeeshyColors.indigo950, MeeshyColors.indigo900],
@@ -1937,6 +1945,7 @@ struct NeighborGroupCubeFace: View {
                     .foregroundColor(.white)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .accessibilityHidden(true)
     }

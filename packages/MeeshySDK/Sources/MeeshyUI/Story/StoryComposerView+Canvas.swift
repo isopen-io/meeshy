@@ -344,9 +344,16 @@ extension StoryComposerView {
         // Sans le check `state == .hidden`, le picker pouvait persister visuellement
         // derrière le bandeau pendant les transitions (le band est animé via spring
         // et le if/else était insuffisant pendant le mid-transition).
+        //  - ET aucune sheet système partielle (timeline / sticker / vocal /
+        //    transitions) n'est présentée : ces sheets ne couvrent que ~45–50 %
+        //    de l'écran, si bien que le titre « Start your story » du picker
+        //    dépassait au-dessus du bord de la sheet (fantôme). On masque donc
+        //    le picker tant qu'une sheet est ouverte — il réapparaît à sa
+        //    fermeture si le slide est toujours vierge.
         viewModel.activeTool == nil
             && isComposerEmpty
             && bandStateMachine.state == .hidden
+            && presentedSystemSheetFraction == nil
     }
 
     /// Pastel accent color per tile. Picks a distinct hue so the carousel
