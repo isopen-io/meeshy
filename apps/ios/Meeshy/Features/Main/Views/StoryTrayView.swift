@@ -80,6 +80,16 @@ struct StoryTrayView: View {
                         coordinator.present(StoryViewerRequest(
                             id: uid, singleGroup: true, postId: postId))
                     }
+                },
+                onCreateStory: {
+                    showMyStories = false
+                    // Même pattern anti-course que `onOpen` : un .sheet et un
+                    // .fullScreenCover actifs en même temps depuis le même
+                    // hôte se marchent dessus.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        viewModel.showStoryComposer = true
+                    }
                 }
             )
         }

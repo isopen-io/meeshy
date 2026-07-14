@@ -20,6 +20,9 @@ struct MyStoriesView: View {
     @ObservedObject var statusViewModel: StatusViewModel
     /// Ouverture du viewer, gérée par le tray (possède le coordinator).
     let onOpen: (StoryItem) -> Void
+    /// Création d'une nouvelle story, gérée par le tray (ferme cette sheet
+    /// avant de présenter le composer — évite la course sheet/fullScreenCover).
+    let onCreateStory: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -73,6 +76,14 @@ struct MyStoriesView: View {
             .navigationTitle(String(localized: "story.mine.title", defaultValue: "Mes stories"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        onCreateStory()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                    }
+                    .accessibilityLabel(String(localized: "story.mine.create", defaultValue: "Créer une story"))
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "common.done", defaultValue: "OK")) { dismiss() }
                 }
