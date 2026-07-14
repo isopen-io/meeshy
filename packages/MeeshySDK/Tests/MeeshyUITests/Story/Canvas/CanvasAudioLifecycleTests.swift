@@ -39,13 +39,29 @@ final class CanvasAudioLifecycleTests: XCTestCase {
                       "Entering the reader context must start the audio engine")
     }
 
-    func test_handleWillResignActive_stopsMixer() {
+    func test_handleDidEnterBackground_stopsMixer() {
+        let view = makePlayingCanvas()
+        XCTAssertTrue(view._readerAudioMixerForTesting.isPlaying)
+        NotificationCenter.default.post(
+            name: UIApplication.didEnterBackgroundNotification, object: nil)
+        XCTAssertFalse(view._readerAudioMixerForTesting.isPlaying,
+                       "Truly backgrounding the app must stop the reader audio engine")
+    }
+
+    /// Directive user 2026-07-14 : un simple peek Notification Center /
+    /// Control Center (`willResignActiveNotification`, l'app reste `.inactive`
+    /// sans jamais atteindre `.background`) ne doit JAMAIS couper la lecture —
+    /// exactement comme une vidéo en PIP ou une app de musique qui continue en
+    /// arrière-plan. Avant ce fix, le canvas écoutait `willResignActiveNotification`
+    /// (fire aussi pour ce cas) et stoppait le mixer, qui redémarrait ensuite
+    /// depuis 0 (pas de seek-resume) — bug rapporté par l'utilisateur.
+    func test_willResignActiveNotification_doesNotStopMixer() {
         let view = makePlayingCanvas()
         XCTAssertTrue(view._readerAudioMixerForTesting.isPlaying)
         NotificationCenter.default.post(
             name: UIApplication.willResignActiveNotification, object: nil)
-        XCTAssertFalse(view._readerAudioMixerForTesting.isPlaying,
-                       "Resigning active must stop the reader audio engine")
+        XCTAssertTrue(view._readerAudioMixerForTesting.isPlaying,
+                      "A Notification Center / Control Center peek must not interrupt playback")
     }
 
     func test_willMoveToWindowNil_stopsMixer() {

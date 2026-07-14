@@ -1,14 +1,17 @@
 import XCTest
 @testable import Meeshy
 
-/// Source-analysis guards pour la pause du timer de story sur `.inactive`
-/// (bannière de notification, Control Center, appel entrant, aperçu
-/// app-switcher). `StoryCanvasUIView+Lifecycle.swift` gèle déjà le média
-/// (vidéo/audio) sur `UIApplication.willResignActiveNotification`, mais avant
-/// ce fix rien ne gelait le TIMER (`StoryReaderTimerController`) sur cette
-/// même transition — seul `.background` complet était géré, laissant la
-/// progress bar avancer (et la story potentiellement se terminer) pendant
-/// que l'utilisateur ne regarde plus l'écran.
+/// Source-analysis guards pour `shouldPauseTimer` et le cycle de vie
+/// `.inactive` du lecteur de stories.
+///
+/// Historique : une première version de ce fix ajoutait `scenePhase != .active`
+/// à `shouldPauseTimer` pour geler le timer pendant un pull-down de
+/// Notification Center / Control Center. Revert directive user 2026-07-14 :
+/// la lecture (média + progress bar) ne doit JAMAIS être coupée par un simple
+/// peek `.inactive` — exactement comme une vidéo en PIP ou une app de musique
+/// en arrière-plan. Seul le vrai `.background` (déjà géré séparément, dismiss
+/// complet du viewer) doit couper. Ces tests gardent contre la réintroduction
+/// du terme `scenePhase` dans `shouldPauseTimer`.
 ///
 /// `shouldPauseTimer` (agrégateur unique routé vers `slideTimer.setPaused`)
 /// et `scenePhase` sont couplés à `@State`/`@Environment` sur `StoryViewerView`
@@ -45,29 +48,31 @@ final class StoryViewerScenePhasePauseGuardTests: XCTestCase {
         return String(contentSource[declRange.upperBound..<closeRange.lowerBound])
     }
 
-    // MARK: - .inactive gèle le timer
+    // MARK: - .inactive ne doit JAMAIS geler le timer
 
-    func test_shouldPauseTimer_containsScenePhaseInactiveCheck() throws {
+    /// Régression : `scenePhase != .active` a été retiré de `shouldPauseTimer`
+    /// (directive user 2026-07-14) — un pull-down de Notification Center /
+    /// Control Center ne doit plus couper la lecture. Ne pas réintroduire ce
+    /// terme dans cet agrégat.
+    func test_shouldPauseTimer_doesNotContainScenePhaseCheck() throws {
         let block = try shouldPauseTimerBody()
-        XCTAssertTrue(
+        XCTAssertFalse(
             block.contains("scenePhase != .active"),
-            "shouldPauseTimer doit inclure `scenePhase != .active` — sinon le timer " +
-            "continue de tourner pendant qu'une notification/Control Center masque " +
-            "l'app (média déjà gelé côté canvas via willResignActiveNotification, " +
-            "mais pas le timer)."
+            "shouldPauseTimer ne doit PAS inclure `scenePhase != .active` — un " +
+            "peek Notification Center / Control Center doit laisser le média et " +
+            "la progress bar continuer sans coupure (comme une vidéo en PIP)."
         )
     }
 
-    /// Garde contre une régression qui remplacerait l'agrégat existant au lieu
-    /// de lui ajouter un terme — les pauses UI (sheets, composer engagé,
-    /// overlay commentaires…) doivent continuer de fonctionner.
-    func test_shouldPauseTimer_scenePhaseTermIsAdded_existingTermsPreserved() throws {
+    /// Garde contre une régression qui retirerait un des autres termes de
+    /// l'agrégat — les pauses UI (sheets, composer engagé, overlay
+    /// commentaires…) doivent continuer de fonctionner.
+    func test_shouldPauseTimer_existingTermsPreserved() throws {
         let block = try shouldPauseTimerBody()
         for existingTerm in ["isPaused", "isLongPressPaused", "isComposerEngaged", "showCommentsOverlay", "showGroupIntro"] {
             XCTAssertTrue(
                 block.contains(existingTerm),
-                "shouldPauseTimer a perdu le terme `\(existingTerm)` — l'ajout de " +
-                "scenePhase doit ÉTENDRE l'agrégat, pas le remplacer."
+                "shouldPauseTimer a perdu le terme `\(existingTerm)`."
             )
         }
     }

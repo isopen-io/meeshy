@@ -56,13 +56,25 @@ extension StoryCanvasUIView {
 
     func observeAppLifecycle() {
         let nc = NotificationCenter.default
+        // `didEnterBackgroundNotification` / `willEnterForegroundNotification`
+        // (PAS `willResignActiveNotification` / `didBecomeActiveNotification`)
+        // — ces dernières fireraient aussi pour un simple pull-down de
+        // Notification Center / Control Center (l'app reste `.inactive` sans
+        // jamais atteindre `.background`), ce qui coupait l'audio de fond ET
+        // le faisait recommencer à 0 au retour (aucun seek-resume côté
+        // `ReaderAudioMixer` — directive user 2026-07-14, la lecture doit
+        // continuer sans coupure pendant ce genre de peek, comme une vidéo en
+        // PIP). `didEnterBackgroundNotification` ne fire QUE pour un vrai
+        // passage en arrière-plan (changement d'app, verrouillage) — c'est le
+        // seul cas où couper l'audio pour ne pas le laisser fuiter derrière
+        // une autre app reste justifié (RC4.5).
         nc.addObserver(self,
-                       selector: #selector(handleWillResignActive),
-                       name: UIApplication.willResignActiveNotification,
+                       selector: #selector(handleDidEnterBackground),
+                       name: UIApplication.didEnterBackgroundNotification,
                        object: nil)
         nc.addObserver(self,
-                       selector: #selector(handleDidBecomeActive),
-                       name: UIApplication.didBecomeActiveNotification,
+                       selector: #selector(handleWillEnterForeground),
+                       name: UIApplication.willEnterForegroundNotification,
                        object: nil)
     }
 
@@ -105,20 +117,21 @@ extension StoryCanvasUIView {
                        object: nil)
     }
 
-    @objc func handleWillResignActive() {
+    @objc func handleDidEnterBackground() {
         // Pause transitoire SANS effacer l'intention `isPlaybackActive` —
         // symétrique au `backgroundLayer.handleAppLifecycle`. Le retour
         // foreground ne relancera que les vidéos que le canvas autorisait.
         forEachMediaLayer { $0.handleAppLifecycle(active: false) }
         backgroundLayer.handleAppLifecycle(active: false)
-        // RC4.5 — cut the reader audio engine the moment the app leaves the
-        // foreground so no sound leaks behind a backgrounded app. Releasing
-        // the session lets other apps' audio un-duck.
+        // RC4.5 — cut the reader audio engine the moment the app truly
+        // backgrounds so no sound leaks behind another app. Releasing the
+        // session lets other apps' audio un-duck. Ne fire plus pour un simple
+        // peek Notification Center / Control Center (cf. `observeAppLifecycle`).
         audioMixer.stop()
         releasePlaybackSessionIfNeeded()
     }
 
-    @objc func handleDidBecomeActive() {
+    @objc func handleWillEnterForeground() {
         // `window != nil` est OBLIGATOIRE pour TOUTES les reprises, pas
         // seulement l'audio mixer : un canvas `.play` retenu hors écran
         // (viewer fermé mais instance vivante, canvas sortant de cross-fade)

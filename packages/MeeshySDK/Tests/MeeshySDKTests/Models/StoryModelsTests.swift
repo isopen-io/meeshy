@@ -448,6 +448,8 @@ final class StoryModelsTests: XCTestCase {
         repostOfId: String? = nil,
         originalRepostOfId: String? = nil,
         repostMedia: [APIPostMedia]? = nil,
+        ownMedia: [APIPostMedia]? = nil,
+        ownStoryEffects: StoryEffects? = nil,
         author overrideAuthor: APIAuthor? = nil
     ) -> APIPost {
         let author = overrideAuthor
@@ -465,9 +467,9 @@ final class StoryModelsTests: XCTestCase {
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: author, likeCount: 0, commentCount: 0, repostCount: 0,
             viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,
-            isPinned: false, isEdited: false, media: nil, comments: nil,
+            isPinned: false, isEdited: false, media: ownMedia, comments: nil,
             repostOf: repostOf, originalRepostOfId: originalRepostOfId, isQuote: false,
-            moodEmoji: nil, audioUrl: audioUrl, audioDuration: nil, storyEffects: nil,
+            moodEmoji: nil, audioUrl: audioUrl, audioDuration: nil, storyEffects: ownStoryEffects,
             translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil, isRepostedByMe: nil,
             isViewedByMe: nil, currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
         )
@@ -554,6 +556,38 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(
             story?.media.first?.url, "https://cdn.meeshy/story.mp4",
             "Reposted story must inherit the original's media from repostOf so the full-screen viewer plays it")
+    }
+
+    func test_repostedStory_withOwnEffectsReferencingOriginalMedia_backfillsFromRepostOf() throws {
+        // A repost can have its OWN `media` (a server-side snapshot, sometimes
+        // with broken relative URLs) while its OWN `storyEffects` still
+        // reference the ORIGINAL `postMediaId`s from `repostOf.media` (the
+        // repost copies effects as-is without rewriting media references).
+        // Without backfilling those ids from `repostOf.media`, the reader's
+        // `postMediaId` resolver never finds the background audio → playback
+        // stalls forever on the loading spinner. Regression guard for the
+        // 2026-07-14 report « la story repostée ne se lit pas ».
+        let mediaJSON = """
+        [{"id": "orig-audio", "mimeType": "audio/mp4", "fileUrl": "https://cdn.meeshy/bg.mp3"}]
+        """.data(using: .utf8)!
+        let repostMedia = try JSONDecoder().decode([APIPostMedia].self, from: mediaJSON)
+        let ownMediaJSON = """
+        [{"id": "own-snapshot", "mimeType": "audio/mp4", "fileUrl": "snapshots/own-snapshot.mp3"}]
+        """.data(using: .utf8)!
+        let ownMedia = try JSONDecoder().decode([APIPostMedia].self, from: ownMediaJSON)
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [StoryAudioPlayerObject(postMediaId: "orig-audio", isBackground: true)]
+        let post = makeAPIPost(id: "repost-2", type: "STORY", repostOfId: "orig-2",
+                               repostMedia: repostMedia, ownMedia: ownMedia, ownStoryEffects: effects)
+
+        let story = [post].toStoryGroups().first?.stories.first
+
+        XCTAssertNotNil(
+            story?.media.first(where: { $0.id == "orig-audio" }),
+            "The media pool must be backfilled with repostOf entries the own storyEffects reference by id")
+        XCTAssertNotNil(
+            story?.media.first(where: { $0.id == "own-snapshot" }),
+            "The own media snapshot must still be present alongside the backfilled entries")
     }
 
     func test_StoryItem_publicVisibility_isCurrentStoryIsPublic() {

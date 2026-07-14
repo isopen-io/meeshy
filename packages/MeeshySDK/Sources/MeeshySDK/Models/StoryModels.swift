@@ -2020,7 +2020,22 @@ extension Array where Element == APIPost {
             let repostSource = post.repostOf
             let ownMedia = post.media ?? []
             let hasOwnContent = !ownMedia.isEmpty || post.storyEffects != nil
-            let mediaSource: [APIPostMedia] = hasOwnContent ? ownMedia : (repostSource?.media ?? [])
+            // Un repost peut avoir son propre snapshot `media` (nouveaux ids,
+            // parfois des URLs relatives cassées) alors que son `storyEffects`
+            // OWN référence encore les `postMediaId` ORIGINAUX de `repostOf.media`
+            // (le repost copie les effects tels quels sans réécrire les
+            // références). Le resolver `media.first(where: { $0.id == postMediaId })`
+            // (`toRenderableSlide`, canvas playback) ne trouvait donc jamais
+            // l'audio/vidéo de fond référencé → lecture bloquée indéfiniment sur
+            // le spinner de stall. Fusionner les deux pools (own d'abord, repostOf
+            // en complément dédupliqué par id) garantit que le lookup trouve
+            // toujours sa cible, quel que soit le set que les effects référencent
+            // — sans changer `hasOwnContent`, qui reste la SEULE décision pour
+            // choisir quel `storyEffects` afficher (own vs repostOf, cf. commentaire
+            // ci-dessus). Bug user-reporté 2026-07-14 « la story repostée ne se lit pas ».
+            let ownMediaIds = Set(ownMedia.map(\.id))
+            let repostMedia = (repostSource?.media ?? []).filter { !ownMediaIds.contains($0.id) }
+            let mediaSource: [APIPostMedia] = hasOwnContent ? ownMedia + repostMedia : (repostSource?.media ?? [])
             let media: [FeedMedia] = mediaSource.map { m in
                 // Propage `thumbnailUrl` + `thumbHash` du gateway — sinon le
                 // tray (`StoryTrayView.latestStoryThumbnailURL`) tombe sur

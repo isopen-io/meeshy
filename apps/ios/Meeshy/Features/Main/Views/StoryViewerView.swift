@@ -113,9 +113,11 @@ struct StoryViewerView: View {
     /// l'interstitiel du switch s'affiche COMPLET (nom, bannière, mood) dès la
     /// première frame — plus d'enrichissement visible en second temps.
     @State var groupIntroCache: [String: StoryViewModel.StoryGroupIntro] = [:]
-    /// ~1,2 s (directive user 2026-07-13) : l'intro présente l'identité sans
-    /// ralentir l'enchaînement — assez pour lire nom + présence, pas plus.
-    static let groupIntroDuration: TimeInterval = 1.2
+    /// 2,6 s (directive user 2026-07-14) : l'intro présente l'identité sans
+    /// ralentir l'enchaînement — assez pour lire nom + présence. Vue UNIQUE
+    /// désormais (`NeighborGroupCubeFace` n'affiche plus d'identité pendant le
+    /// drag — cf. son commentaire) : c'est la seule carte de transition.
+    static let groupIntroDuration: TimeInterval = 2.6
     /// True once the visible slide's background media is fully usable (real
     /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
     /// and the centered loading spinner.
@@ -559,7 +561,8 @@ struct StoryViewerView: View {
             transitionEngagement(to: currentStory)
         }
         // Interstitiel d'identité inter-groupes — au-dessus du canvas ET des
-        // contrôles (identité pleine pendant ~1,2 s, tap = skip).
+        // contrôles (identité pleine pendant ~2,6 s, tap droite/double-tap =
+        // skip, tap gauche = retour au groupe précédent).
         .overlay {
             if showGroupIntro, let intro = groupIntroData {
                 StoryGroupIntroOverlay(
@@ -580,7 +583,8 @@ struct StoryViewerView: View {
                     // Re-render" — pas d'@ObservedObject sur le singleton
                     // dans StoryGroupIntroOverlay).
                     isFriend: FriendshipCache.shared.isFriend(intro.userId),
-                    onSkip: { skipGroupIntro() }
+                    onSkip: { skipGroupIntro() },
+                    onBack: { goBackToPreviousGroupFromIntro() }
                 )
                 .transition(.opacity)
                 .zIndex(30)
@@ -1587,6 +1591,26 @@ extension StoryViewerView {
         dismissGroupIntro()
     }
 
+    /// Tap zone gauche sur l'interstitiel d'identité — annule ce switch de
+    /// groupe et revient au groupe précédent (directive user 2026-07-14).
+    /// `currentGroupIndex` a déjà été incrémenté au moment où l'intro
+    /// s'affiche (elle masque visuellement le nouveau groupe pendant
+    /// `groupIntroDuration`), donc "revenir en arrière" ici signifie
+    /// toujours "annule ce switch de groupe" — jamais "story précédente dans
+    /// le nouveau groupe" (contrairement à `goToPrevious()`, sensible à
+    /// `currentStoryIndex`). Sans groupe précédent, dismiss simplement.
+    func goBackToPreviousGroupFromIntro() {
+        groupIntroTask?.cancel()
+        groupIntroTask = nil
+        dismissGroupIntro()
+        guard currentGroupIndex > 0 else { return }
+        groupTransition(forward: false) {
+            currentGroupIndex -= 1
+            currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
+            progress = 0
+        }
+    }
+
     private func dismissGroupIntro() {
         withAnimation(.easeOut(duration: 0.25)) { showGroupIntro = false }
     }
@@ -1607,26 +1631,57 @@ private struct StoryGroupIntroOverlay: View {
     /// est une information réservée aux amis, pas affichée pour un auteur
     /// hors contacts.
     let isFriend: Bool
+    /// Tap zone droite / double-tap n'importe où — passe directement au
+    /// premier slide du nouveau groupe (dismiss immédiat, révèle le slide
+    /// déjà courant).
     let onSkip: () -> Void
+    /// Tap zone gauche — annule ce switch de groupe, retourne au groupe
+    /// précédent (directive user 2026-07-14).
+    let onBack: () -> Void
 
     var body: some View {
-        ZStack {
-            // Base OPAQUE obligatoire (directive 2026-07-10) : pendant que la
-            // bannière charge, CachedAsyncImage peut rendre un placeholder
-            // translucide — sans cette base, le slide et son chrome restaient
-            // visibles SOUS l'interstitiel (IMG_0976). L'intro est un ÉCRAN,
-            // pas un voile.
-            Color.black
-            bannerBackground
-            LinearGradient(
-                colors: [.black.opacity(0.62), .black.opacity(0.28), .black.opacity(0.72)],
-                startPoint: .top, endPoint: .bottom
+        GeometryReader { geo in
+            ZStack {
+                // Base OPAQUE obligatoire (directive 2026-07-10) : pendant que la
+                // bannière charge, CachedAsyncImage peut rendre un placeholder
+                // translucide — sans cette base, le slide et son chrome restaient
+                // visibles SOUS l'interstitiel (IMG_0976). L'intro est un ÉCRAN,
+                // pas un voile.
+                Color.black
+                bannerBackground
+                LinearGradient(
+                    colors: [.black.opacity(0.62), .black.opacity(0.28), .black.opacity(0.72)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                // Centrage EXPLICITE (directive user 2026-07-14, le bloc identité
+                // rendait visiblement sous le centre réel de l'écran) : plutôt que
+                // de compter sur le centrage ambiant du ZStack (dérive documentée
+                // à travers plusieurs `.ignoresSafeArea()` imbriqués), on positionne
+                // `identityContent` au centre EXACT de `geo.size` — robuste quelle
+                // que soit la cause exacte de la dérive ambiante.
+                identityContent
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .contentShape(Rectangle())
+            // Double-tap (n'importe où) prioritaire sur le tap simple — sinon le
+            // simple tirerait toujours en premier et le double-tap ne fire jamais
+            // (pattern standard SwiftUI : `.exclusively(before:)` sur deux
+            // `SpatialTapGesture` de count différent, résolu via l'énum `Either`).
+            .gesture(
+                SpatialTapGesture(count: 2)
+                    .onEnded { _ in onSkip() }
+                    .exclusively(before: SpatialTapGesture(count: 1)
+                        .onEnded { value in
+                            if value.location.x < geo.size.width / 2 {
+                                onBack()
+                            } else {
+                                onSkip()
+                            }
+                        })
             )
-            identityContent
         }
         .ignoresSafeArea()
-        .contentShape(Rectangle())
-        .onTapGesture { onSkip() }
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)

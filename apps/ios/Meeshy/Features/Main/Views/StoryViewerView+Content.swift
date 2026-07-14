@@ -436,7 +436,11 @@ extension StoryViewerView {
     /// la carte réelle remplace la face entrante à transform identité, swap
     /// invisible. Le canvas voisin est chaud (prefetch inter-groupes), la
     /// première frame réelle est instantanée.
-    private func groupTransition(forward: Bool, update: @escaping () -> Void) {
+    // Non-private : appelée depuis `goBackToPreviousGroupFromIntro()`
+    // (StoryViewerView.swift, fichier d'extension frère) pour rejouer
+    // exactement la même animation de cube quand le tap gauche de l'intro
+    // annule le switch de groupe.
+    func groupTransition(forward: Bool, update: @escaping () -> Void) {
         guard !isTransitioning else { return }
         isTransitioning = true
         // Tap-en-bord / auto-advance arrivent ici sans drag : poser la
@@ -505,14 +509,16 @@ extension StoryViewerView {
     /// `isComposerEngaged` which DOES pause — that's the intended trigger,
     /// not the overlay visibility alone (user spec 2026-05-28).
     var shouldPauseTimer: Bool {
-        // Bannière de notification, Control Center, appel entrant, aperçu
-        // app-switcher : le média (vidéo/audio) est déjà gelé côté canvas via
-        // `willResignActiveNotification` (StoryCanvasUIView+Lifecycle) — sans
-        // ce terme le timer continuait de tourner pendant que l'utilisateur ne
-        // regardait plus l'écran, désynchronisant la progress bar et pouvant
-        // faire avancer/terminer la story sans qu'elle ait été vue.
-        scenePhase != .active
-        || isPaused
+        // Un peek Notification Center / Control Center (aperçu app-switcher,
+        // scenePhase devenant transitoirement inactif) n'apparaît DÉLIBÉRÉMENT
+        // PAS dans cet agrégat : la lecture doit continuer sans coupure pendant
+        // ce genre de peek, comme une vidéo en PIP ou une app de musique en
+        // arrière-plan (directive user 2026-07-14, qui annule une tentative
+        // précédente de gate sur la phase de scène — celle-ci coupait l'audio
+        // de fond et le faisait recommencer à 0 au retour). Le vrai
+        // `.background` (dismiss complet du viewer) reste géré séparément via
+        // `.adaptiveOnChange(of: scenePhase)` plus haut dans ce fichier.
+        isPaused
         || isLongPressPaused
         || isComposerEngaged
         || hasComposerContent

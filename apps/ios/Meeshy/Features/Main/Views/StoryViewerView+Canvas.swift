@@ -1836,9 +1836,9 @@ struct StoryViewerContentView: View {
                             radius: 40, y: 15
                         )
 
-                    if let neighbor = neighborGroup, neighborDirection != 0 {
+                    if neighborGroup != nil, neighborDirection != 0 {
                         let incomingX = totalSlideX + (neighborDirection == 1 ? cubeWidth : -cubeWidth)
-                        NeighborGroupCubeFace(group: neighbor, entryStory: neighborEntryStory)
+                        NeighborGroupCubeFace(entryStory: neighborEntryStory)
                             .frame(width: geometry.size.width, height: geometry.size.height)
                             .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
                             .offset(x: incomingX, y: cardOffsetY)
@@ -1884,15 +1884,21 @@ struct StoryViewerContentView: View {
 // MARK: - Neighbor Group Cube Face (Lot 3)
 
 /// Face entrante du cube inter-groupes : aperçu statique LÉGER du groupe
-/// voisin (thumbHash flouté du slide d'entrée + avatar + nom) — jamais une
-/// seconde `StoryCardView` interactive (les états du viewer sont mono-slide,
-/// et rendre deux piles complètes pendant un geste 60-120 Hz coûterait un
-/// frame budget entier). Parité reels : la face entrante est un rendu du
-/// média, le swap vers la vraie carte se fait au commit, masqué par l'arête
-/// à 90°. Le vrai canvas du voisin est déjà chaud (prefetch inter-groupes),
-/// donc la première frame réelle suit instantanément.
+/// voisin (thumbHash flouté du slide d'entrée SEUL, jamais d'identité) —
+/// jamais une seconde `StoryCardView` interactive (les états du viewer sont
+/// mono-slide, et rendre deux piles complètes pendant un geste 60-120 Hz
+/// coûterait un frame budget entier). Parité reels : la face entrante est un
+/// rendu du média, le swap vers la vraie carte se fait au commit, masqué par
+/// l'arête à 90°. Le vrai canvas du voisin est déjà chaud (prefetch
+/// inter-groupes), donc la première frame réelle suit instantanément.
+///
+/// AUCUN bloc identité (avatar/nom) ici — directive user 2026-07-14 : le
+/// double affichage (cet aperçu PUIS `StoryGroupIntroOverlay` juste après le
+/// commit) montrait deux cartes quasi-identiques à la suite. La seule carte
+/// d'identité de la transition inter-groupes est désormais
+/// `StoryGroupIntroOverlay` — cet aperçu reste un simple indice visuel
+/// transitoire pendant que le doigt bouge.
 struct NeighborGroupCubeFace: View {
-    let group: StoryGroup
     let entryStory: StoryItem?
 
     private var backdrop: UIImage? {
@@ -1932,18 +1938,6 @@ struct NeighborGroupCubeFace: View {
                 )
             }
             Color.black.opacity(0.35)
-            VStack(spacing: 12) {
-                MeeshyAvatar(
-                    name: group.username,
-                    context: .storyTray,
-                    accentColor: group.avatarColor,
-                    avatarURL: group.avatarURL,
-                    storyState: group.hasUnviewed ? .unread : .read
-                )
-                Text(group.username)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(.white)
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
