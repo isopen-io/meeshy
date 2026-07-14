@@ -1,5 +1,49 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **conversation media gallery per-page author/date header** landed (slice
+> `chat-gallery-page-header`, feature-parity §C — the just-shipped conversation-wide fullscreen gallery
+> paged across every image with a per-page caption (`chat-gallery-page-caption`) but showed **no author or
+> date**, a visible divergence from iOS `ConversationMediaGalleryView`, whose bottom chrome renders each
+> media's **sender name + `sentAt`** ABOVE the message-content caption. This slice ports that author line).
+> Extends the pure `:feature:chat` `GalleryPage(url, caption)` with `senderName`/`createdAtIso` resolved
+> from the **owning message** (`message.senderName?.trim()?.ifBlank { null }`,
+> `message.createdAtIso?.trim()?.ifBlank { null }` — a blank/absent value yields `null` = no line, never a
+> blank string), and reshapes `ConversationGallery` with derived `senderNames`/`createdAtIsos` positionally
+> aligned with `imageUrls` (so every image of a multi-image message shares its message's author/date, and a
+> deleted message contributes none — exactly the iOS `captionMap` keying). **Wired for real (no dead ends):**
+> `MeeshyImageViewer` gained optional `authors`/`timestamps: List<String?> = emptyList()` (opaque strings —
+> the agnostic `:sdk-ui` block never learns *what* an author/date is); its bottom overlay became a `Column`
+> that renders a discreet header line (`author  ·  timestamp`, `labelLarge` white, 1 line ellipsised)
+> ABOVE the existing caption, sharing one `Black@0.45` scrim + `navigationBarsPadding`, hidden while
+> pinch-zoomed. `ChatScreen` passes `authors = gallery.senderNames` and formats each page's `createdAtIso`
+> into the discreet **relative** label via the reused `RelativeTimeFormat.short` + `rememberRelativeTimeStrings`
+> + `isoToEpochMillisOrNull` (no new strings — same formatter as the conversation/notification rows),
+> `remember`ed per gallery so it never re-formats on recomposition. **+13 tests** on the new derived lists
+> (sender→author; blank→null; whitespace-only→null; trimmed; multi-image shares one author; createdAt→
+> timestamp; blank createdAt→null; trimmed createdAt; positional alignment of BOTH lists with `imageUrls`
+> across messages incl. a null middle message; deleted message contributes neither; both lists always ==
+> `imageUrls` length; empty gallery→neither). **Mutation check (RED proof):** forcing `senderName`/
+> `createdAtIso` to `null` failed **exactly 7** presence tests (author, trimmed author, multi-image author,
+> createdAt, trimmed createdAt, positional, deleted), the 6 null-expecting/length/empty tests stayed green —
+> reverted green, the suite is behavioural not tautological. **Verification:** `:feature:chat` gallery suite
+> green (33 tests) + full `gradle assembleDebug testDebugUnitTest` across every module → APK produced,
+> `:feature:chat`/`:sdk-ui` all green (viewer Column + ChatScreen relative-label glue compile, no module
+> regressed). The one red in the sweep was the **pre-existing flaky** `:sdk-core`
+> `MediaDownloadPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` (a DataStore StateFlow
+> 15s timeout under parallel load) — a module this diff does not touch; it **passes green in isolation**.
+> Env note: built with the container's system Gradle 8.14.3 + the documented UTF-8-daemon recipe
+> (`LANG=C.utf8` + `-Pkotlin.daemon.jvmargs=-Dsun.jnu.encoding=UTF-8`) since the wrapper distribution is
+> egress-blocked. Reviewer **PASS** (diff `apps/android` only — `:feature:chat` [`ConversationMediaGallery`
+> model+builder, `ChatScreen` viewer wiring + relative-label formatting], `:sdk-ui` [`MeeshyImageViewer`
+> header overlay], tests, `feature-parity.md`, routine docs; **SDK purity** — the "author/date = owning
+> message's sender/sentAt" rule is a pure `:feature:chat` atom, the viewer stays an agnostic opaque-string
+> renderer; **SSOT** — reuses `BubbleContent.senderName`/`createdAtIso` + `RelativeTimeFormat`/
+> `isoToEpochMillisOrNull`, nothing re-implemented; **instant-app** — pure fn, no state, gallery build path
+> unchanged; **UX coherence** — discreet bottom author line at iOS parity above the caption, one shared
+> scrim, auto-hidden in zoom; **no coverage floor lowered, no test weakened**). **Next slice:** save-to-gallery
+> (`MediaStore` insert on a viewer action), neighbour prefetch ±2 (Coil `ImageLoader.enqueue`), or the still-
+> pending message-bubble **contact** attachment (scope the DTO first).
+
 > On 2026-07-13 **conversation media gallery per-page caption** landed (slice `chat-gallery-page-caption`,
 > feature-parity §C — the just-shipped conversation-wide fullscreen gallery (`chat-conversation-media-gallery`)
 > paged across every image but showed only a bare `n / total` counter, no context. iOS

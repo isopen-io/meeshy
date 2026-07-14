@@ -4,14 +4,18 @@ import me.meeshy.ui.component.bubble.BubbleContent
 
 /**
  * One page of the fullscreen media gallery: the image [url] plus the optional
- * [caption] to overlay while it is on screen (the owning message's text). Port
- * of iOS `ConversationMediaGalleryView.captionMap`, which surfaces each media's
- * message content as a bottom caption. A media-only message with no text has a
- * null caption (no overlay).
+ * [caption] to overlay while it is on screen (the owning message's text) and the
+ * optional author [senderName] / [createdAtIso] sent-timestamp of that message.
+ * Port of iOS `ConversationMediaGalleryView`, whose bottom chrome surfaces each
+ * media's author (name + `sentAt`) above the message-content caption. A media-only
+ * message with no text has a null caption (no overlay); an author-less / undated
+ * media (own outgoing image, missing timestamp) holds null for those too.
  */
 public data class GalleryPage(
     val url: String,
     val caption: String? = null,
+    val senderName: String? = null,
+    val createdAtIso: String? = null,
 )
 
 /**
@@ -36,6 +40,18 @@ public data class ConversationGallery(
      * no caption holds `null` (the viewer shows no overlay for it).
      */
     val captions: List<String?> get() = pages.map { it.caption }
+
+    /**
+     * The per-page author names, positionally aligned with [imageUrls]; a page
+     * whose owning message has no resolvable sender holds `null` (no author line).
+     */
+    val senderNames: List<String?> get() = pages.map { it.senderName }
+
+    /**
+     * The per-page sent-timestamps (ISO-8601), positionally aligned with
+     * [imageUrls]; a page whose owning message has no timestamp holds `null`.
+     */
+    val createdAtIsos: List<String?> get() = pages.map { it.createdAtIso }
 
     /** True when the conversation carries no showable image — nothing to open. */
     val isEmpty: Boolean get() = pages.isEmpty()
@@ -78,7 +94,18 @@ public object ConversationMediaGallery {
                 matched = true
             }
             val caption = message.text.trim().ifBlank { null }
-            images.forEach { pages.add(GalleryPage(url = it.url, caption = caption)) }
+            val senderName = message.senderName?.trim()?.ifBlank { null }
+            val createdAtIso = message.createdAtIso?.trim()?.ifBlank { null }
+            images.forEach {
+                pages.add(
+                    GalleryPage(
+                        url = it.url,
+                        caption = caption,
+                        senderName = senderName,
+                        createdAtIso = createdAtIso,
+                    ),
+                )
+            }
         }
         if (pages.isEmpty()) return EMPTY
         return ConversationGallery(pages, startIndex.coerceIn(0, pages.lastIndex))

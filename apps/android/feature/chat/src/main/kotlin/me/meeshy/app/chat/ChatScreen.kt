@@ -134,6 +134,8 @@ import me.meeshy.ui.component.bubble.MessageBubble
 import me.meeshy.ui.component.bubble.MessageLanguageExplorer
 import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.format.RelativeTimeFormat
+import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -476,11 +478,30 @@ fun ChatScreen(
 
     val gallery = state.imageViewer
     if (gallery != null) {
+        val relativeStrings = rememberRelativeTimeStrings()
+        val galleryNow = remember(gallery) { System.currentTimeMillis() }
+        val galleryZone = ZoneId.systemDefault()
+        val galleryLocale = Locale.getDefault()
+        val galleryTimestamps = remember(gallery, relativeStrings) {
+            gallery.createdAtIsos.map { iso ->
+                iso?.let { isoToEpochMillisOrNull(it) }?.let { millis ->
+                    RelativeTimeFormat.short(
+                        epochMillis = millis,
+                        referenceMillis = galleryNow,
+                        zone = galleryZone,
+                        locale = galleryLocale,
+                        strings = relativeStrings,
+                    )
+                }
+            }
+        }
         MeeshyImageViewer(
             imageUrls = gallery.imageUrls,
             initialIndex = gallery.startIndex,
             onDismiss = viewModel::dismissImageViewer,
             captions = gallery.captions,
+            authors = gallery.senderNames,
+            timestamps = galleryTimestamps,
         )
     }
 

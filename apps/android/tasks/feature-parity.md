@@ -572,8 +572,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       message multi-image partage l'unique légende du message ; supprimé exclu) ; `ConversationGallery`
       expose `imageUrls`/`captions` dérivés ; `MeeshyImageViewer` prend un `captions: List<String?>` opaque
       (bloc agnostique) et rend la légende de la page courante en overlay bas (scrim 0.45, masqué en zoom).
-      +10 tests. Reste : contact card, save-to-gallery, prefetch ±2, en-tête auteur/date par page) ;
-      contact pending
+      +10 tests. **En-tête auteur/date par page done** (`chat-gallery-page-header` 2026-07-14 : port du
+      chrome bas d'`ConversationMediaGalleryView` qui affiche l'auteur (nom + `sentAt`) au-dessus de la
+      légende — `GalleryPage` porte `senderName`/`createdAtIso` (trim, null si vide) résolus du message
+      propriétaire, chaque image d'un message multi-image partageant l'auteur/date ; supprimé exclu ;
+      `ConversationGallery` expose `senderNames`/`createdAtIsos` dérivés ; `MeeshyImageViewer` gagne
+      `authors`/`timestamps: List<String?>` opaques et rend une ligne d'en-tête « auteur · date » au-dessus
+      de la légende dans le même overlay bas (masqué en zoom) ; `ChatScreen` formate le `createdAtIso` en
+      libellé relatif via `RelativeTimeFormat.short` + `rememberRelativeTimeStrings`. +13 tests. Reste :
+      contact card, save-to-gallery, prefetch ±2) ; contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/

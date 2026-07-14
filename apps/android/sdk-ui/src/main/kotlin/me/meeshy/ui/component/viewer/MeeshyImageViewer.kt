@@ -3,7 +3,9 @@ package me.meeshy.ui.component.viewer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -50,6 +52,8 @@ public fun MeeshyImageViewer(
     initialIndex: Int,
     onDismiss: () -> Unit,
     captions: List<String?> = emptyList(),
+    authors: List<String?> = emptyList(),
+    timestamps: List<String?> = emptyList(),
 ) {
     if (imageUrls.isEmpty()) return
     Dialog(
@@ -104,8 +108,13 @@ public fun MeeshyImageViewer(
             }
 
             val caption = captions.getOrNull(pagerState.currentPage)?.takeIf { it.isNotBlank() }
-            if (caption != null && !currentPageZoomed) {
-                Box(
+            val author = authors.getOrNull(pagerState.currentPage)?.takeIf { it.isNotBlank() }
+            val timestamp = timestamps.getOrNull(pagerState.currentPage)?.takeIf { it.isNotBlank() }
+            val hasHeader = author != null || timestamp != null
+            if ((hasHeader || caption != null) && !currentPageZoomed) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
@@ -113,15 +122,28 @@ public fun MeeshyImageViewer(
                         .navigationBarsPadding()
                         .padding(MeeshySpacing.lg),
                 ) {
-                    Text(
-                        text = caption,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White,
-                        textAlign = TextAlign.Center,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    if (hasHeader) {
+                        Text(
+                            text = listOfNotNull(author, timestamp).joinToString("  ·  "),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (caption != null) {
+                        Text(
+                            text = caption,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
