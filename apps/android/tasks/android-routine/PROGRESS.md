@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **message-effects wire contract + resolver** landed (slice `chat-message-effects-resolver`,
+> feature-parity §Chat "Message visual effects" — Android already had the `MessageEffectFlags` bit constants
+> and the `MessageEffects` data class in `:core:model`, but three gaps remained vs iOS: (1) the flag struct
+> lacked the axis predicates iOS carries (`hasLifecycleEffect`/`hasAppearanceEffect`/`hasPersistentEffect`/
+> `hasAnyEffect` + `contains`), (2) there was **no resolver** porting iOS's `APIMessage.toMessage` effects
+> derivation, and (3) `ApiMessage` **silently dropped** the wire fields `effectFlags`/`isBlurred`/
+> `isViewOnce`/`expiresAt` — effects never reached the model at all). This slice closes all three with a
+> pure, fully-tested core. **Ships (`:core:model`):** `MessageEffectFlags` gains the pure predicates
+> `hasAny(flags)`, `hasLifecycle(flags)`, `hasAppearance(flags)`, `hasPersistent(flags)` (any-bit
+> intersection per axis, mirroring iOS `!intersection(mask).isEmpty`) and `has(flags, effect)` (full
+> containment, mirroring `OptionSet.contains`); `MessageEffects` exposes the matching instance accessors
+> `hasLifecycleEffect`/`hasAppearanceEffect`/`hasPersistentEffect` + `has(effect)`; **`MessageEffectsResolver.
+> resolve(effectFlags, isBlurred, isViewOnce, hasExpiry)`** ports the iOS rule EXACTLY — *a positive
+> `effectFlags` bitfield is authoritative and the lifecycle booleans are ignored entirely; otherwise the
+> lifecycle flags are derived from `isBlurred`/`isViewOnce`/expiry-presence*. The `> 0` guard (not `!= 0` /
+> `>= 0`) matches iOS `if let flags = effectFlags, flags > 0`, so `effectFlags == 0` correctly **falls
+> through** to the boolean derivation. **Wired for real (no dead ends):** `ApiMessage` gains the four wire
+> fields (`effectFlags: Int?`, `isBlurred: Boolean?`, `isViewOnce: Boolean?`, `expiresAt: String?`) and a
+> computed `val effects: MessageEffects` that calls the resolver with `hasExpiry = !expiresAt.isNullOrBlank()`
+> — the wire contract now actually decodes and resolves at the trust boundary (same computed-property pattern
+> as the existing `displayContent`/`isTranslated`), ready for the bubble renderer follow-up. **+20 tests**
+> (bit assignments pinned to the shared TS integers; each axis predicate true-only-when-its-axis-bit-set +
+> cross-axis combination; `has` full-containment; `MessageEffects` accessors mirror the predicates; resolver:
+> positive flags win / positive flags ignore lifecycle booleans / derive blurred / derive view-once / derive
+> ephemeral-from-expiry / combine all three / false+null booleans → no effects / **`effectFlags == 0` falls
+> through to derivation**; `ApiMessage` JSON decode: resolves from `effectFlags` field / derives from
+> boolean+expiry fields / blank `expiresAt` is NOT ephemeral / absent fields → no effects). **Mutation check
+> (RED proof):** flipping the resolver guard `> 0` → `>= 0` failed **exactly 2** boundary tests
+> (`resolve_zeroFlagsFallsThroughToDerivation`, `resolve_combinesAllDerivedLifecycleBits`), the other 18
+> stayed green — reverted green, the suite is behavioural not tautological. **Verification:**
+> `:core:model:testDebugUnitTest --tests MessageEffectsTest` → 20/20 green; full
+> `gradle assembleDebug testDebugUnitTest` across every module → APK produced (74 MB), all modules green
+> except the **pre-existing flaky** `:sdk-core` `PrivacyPreferencesStoreTest.
+> dataStore_setPreferences_isReflectedInTheFlow` (a DataStore StateFlow 15 s timeout under parallel load — a
+> module this diff does not touch; **passes green in isolation**, re-confirmed this run). Env note: built with
+> the container's system Gradle 8.14.3 + the UTF-8-daemon recipe (`LANG=C.utf8` +
+> `-Pkotlin.daemon.jvmargs=-Dsun.jnu.encoding=UTF-8`) since the wrapper distribution is egress-blocked.
+> Reviewer **PASS** (diff `apps/android` only — `:core:model` [`MessageEffects` predicates+resolver, `Message`
+> wire fields], tests, `feature-parity.md`, routine docs; **SDK purity** — pure stateless flag math + a
+> stateless resolver in `:core:model`, no orchestration; **SSOT** — `MessageEffectFlags` bit constants stay
+> the single shared contract with `packages/shared` + iOS, nothing re-declared; the accessors delegate to the
+> object predicates; **instant-app** — pure fns, no state; **UX coherence** — no visual change yet, the model
+> now carries effects for the bubble renderer; **no coverage floor lowered, no test weakened**). **Next
+> slice:** the bubble-side rendering of these effects (persistent glow/pulse/rainbow/sparkle border + one-shot
+> appearance animations gated by a `hasPlayed` flag — heavy Compose, coverage-exempt; port iOS
+> `MessageEffectModifiers`), OR the composer **EffectsPickerView** (bitfield encoding on send), OR the still-
+> pending gallery follow-ups (save-to-gallery `MediaStore` insert). Contact-card attachment stays deferred —
+> iOS `handleContactSelection` only sends contact info as plain text (no wire format), so a renderer would be
+> an orphan.
+
 > On 2026-07-14 **conversation media gallery neighbour prefetch ±2** landed (slice
 > `chat-gallery-neighbor-prefetch`, feature-parity §C — the fullscreen conversation gallery decoded each page
 > only when it scrolled on screen, so every swipe hit a fresh network+decode; iOS's gallery keeps a ±2
