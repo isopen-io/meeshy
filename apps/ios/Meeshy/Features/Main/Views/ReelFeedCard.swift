@@ -294,7 +294,7 @@ struct ReelFeedCard: View, Equatable {
                 metricInline(icon: "chart.bar.fill", count: post.impressionCount,
                              a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
                 metaDot
-                metricInline(icon: "eye.fill", count: post.postOpenCount,
+                metricInline(icon: "eye.fill", count: post.viewCount,
                              a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
             }
         }

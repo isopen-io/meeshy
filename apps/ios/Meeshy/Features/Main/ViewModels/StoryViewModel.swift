@@ -649,6 +649,23 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         )
     }
 
+    /// C3 (unification des remontées, 2026-07-14) : chaque slide de story affiché émet
+    /// UNE impression (non dédupliquée, `source: "story"`) pour CE post-slide — aligne
+    /// `impressionCount` de la story sur le détail/réel (« chaque visionnage fait monter
+    /// les impressions »). Volontairement SÉPARÉ de `markViewed` (vue UNIQUE, coalescée
+    /// via l'outbox durable) car l'impression doit monter à CHAQUE visionnage, pas une
+    /// seule fois. Fire & forget : l'échec réseau est loggé, jamais toasté (bruit de fond).
+    func recordStoryImpression(storyId: String) {
+        Task { [postService] in
+            do {
+                try await postService.recordImpression(postId: storyId, source: "story")
+            } catch {
+                Logger.stories.error(
+                    "recordStoryImpression failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     func markViewed(storyId: String) {
         // Fire & forget : l'état « vu » local est posé optimistiquement (local-first).
         // L'échec réseau ne déclenche PAS de toast (marquer-vu est un effet de bord de

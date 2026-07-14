@@ -717,7 +717,7 @@ struct ReelPageView: View {
                 statInline(icon: "chart.bar.fill", count: reel.impressionCount,
                            a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
                 metaDot
-                statInline(icon: "eye.fill", count: reel.postOpenCount,
+                statInline(icon: "eye.fill", count: reel.viewCount,
                            a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
             }
         }

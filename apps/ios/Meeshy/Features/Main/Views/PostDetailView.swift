@@ -842,7 +842,7 @@ struct PostDetailView: View {
                         let reach = PostReachFormatter.components(
                             username: post.authorUsername,
                             isAuthor: isPostAuthor,
-                            openCount: post.postOpenCount,
+                            viewCount: post.viewCount,
                             impressionCount: post.impressionCount
                         )
                         if reach.pseudo != nil || reach.views != nil {
@@ -878,7 +878,7 @@ struct PostDetailView: View {
                             }
                             .accessibilityElement(children: .ignore)
                             .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
-                            .accessibilityValue("\(post.postOpenCount) · \(post.impressionCount)")
+                            .accessibilityValue("\(post.viewCount) · \(post.impressionCount)")
                         }
                     }
                 }
@@ -966,7 +966,7 @@ struct PostDetailView: View {
                     }
                     HStack(spacing: 3) {
                         Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                        Text(PostReachFormatter.compact(post.postOpenCount)).font(.caption2.weight(.medium))
+                        Text(PostReachFormatter.compact(post.viewCount)).font(.caption2.weight(.medium))
                         Text("·").font(.caption2)
                         Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
                         Text(PostReachFormatter.compact(post.impressionCount)).font(.caption2.weight(.medium))
@@ -974,7 +974,7 @@ struct PostDetailView: View {
                     .foregroundColor(theme.textMuted)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
-                    .accessibilityValue("\(post.postOpenCount) · \(post.impressionCount)")
+                    .accessibilityValue("\(post.viewCount) · \(post.impressionCount)")
                 }
             }
         }

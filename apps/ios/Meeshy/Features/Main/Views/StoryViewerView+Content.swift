@@ -819,6 +819,9 @@ extension StoryViewerView {
     func markCurrentViewed() {
         if let story = currentStory {
             viewModel.markViewed(storyId: story.id)
+            // C3 : ce slide vient d'être affiché → 1 impression (source "story") pour CE
+            // post-slide, en plus de la vue unique. Chaque changement de slide en émet une.
+            viewModel.recordStoryImpression(storyId: story.id)
         }
     }
 

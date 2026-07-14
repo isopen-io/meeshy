@@ -615,12 +615,12 @@ struct FeedPostCard: View {
                             Text(Self.compactCount(post.impressionCount)).font(.caption2.weight(.medium))
                             Text("·").font(.caption2)
                             Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                            Text(Self.compactCount(post.postOpenCount)).font(.caption2.weight(.medium))
+                            Text(Self.compactCount(post.viewCount)).font(.caption2.weight(.medium))
                         }
                         .foregroundColor(theme.textMuted)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
-                        .accessibilityValue("\(post.impressionCount) · \(post.postOpenCount)")
+                        .accessibilityValue("\(post.impressionCount) · \(post.viewCount)")
                     }
                 }
             }

@@ -4,6 +4,11 @@ import Foundation
 /// Pure formatter for the author "reach line" (`@pseudo · 👁 vues · 📊 impressions`),
 /// shared by the inline author block (`authorReachLine`) and the collapsed header
 /// reveal (`authorRevealView`). Stats are author-only.
+///
+/// "Vues" = `Post.viewCount` (UNIQUE viewers, deduped 1×/user) — the SAME metric the
+/// story viewer shows, so Detail / Reel / Story / Feed all report identical numbers for
+/// the same Post (unified 2026-07-14). `postOpenCount` stays server-side for analytics
+/// but is no longer the displayed "views" label.
 enum PostReachFormatter {
     /// Compact count: 1.2k / 3.4M. Mirrors the per-card `compactCount` copies.
     static func compact(_ value: Int) -> String {
@@ -18,10 +23,10 @@ enum PostReachFormatter {
         let impressions: String?  // "3.4k" or nil (author-only)
     }
 
-    static func components(username: String?, isAuthor: Bool, openCount: Int, impressionCount: Int) -> Components {
+    static func components(username: String?, isAuthor: Bool, viewCount: Int, impressionCount: Int) -> Components {
         let pseudo = username.flatMap { $0.isEmpty ? nil : "@\($0)" }
         guard isAuthor else { return Components(pseudo: pseudo, views: nil, impressions: nil) }
-        return Components(pseudo: pseudo, views: compact(openCount), impressions: compact(impressionCount))
+        return Components(pseudo: pseudo, views: compact(viewCount), impressions: compact(impressionCount))
     }
 }
 

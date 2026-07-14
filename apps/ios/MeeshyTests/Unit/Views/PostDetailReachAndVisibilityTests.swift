@@ -15,23 +15,23 @@ final class PostDetailReachAndVisibilityTests: XCTestCase {
 
     // MARK: PostReachFormatter.components
     func test_components_author_hasPseudoAndStats() {
-        let c = PostReachFormatter.components(username: "marie", isAuthor: true, openCount: 1_200, impressionCount: 3_400)
+        let c = PostReachFormatter.components(username: "marie", isAuthor: true, viewCount: 1_200, impressionCount: 3_400)
         XCTAssertEqual(c.pseudo, "@marie")
         XCTAssertEqual(c.views, "1.2k")
         XCTAssertEqual(c.impressions, "3.4k")
     }
 
     func test_components_nonAuthor_hasPseudoNoStats() {
-        let c = PostReachFormatter.components(username: "marie", isAuthor: false, openCount: 1_200, impressionCount: 3_400)
+        let c = PostReachFormatter.components(username: "marie", isAuthor: false, viewCount: 1_200, impressionCount: 3_400)
         XCTAssertEqual(c.pseudo, "@marie")
         XCTAssertNil(c.views)
         XCTAssertNil(c.impressions)
     }
 
     func test_components_noUsername_pseudoNil() {
-        let empty = PostReachFormatter.components(username: "", isAuthor: false, openCount: 0, impressionCount: 0)
+        let empty = PostReachFormatter.components(username: "", isAuthor: false, viewCount: 0, impressionCount: 0)
         XCTAssertNil(empty.pseudo)
-        let nilName = PostReachFormatter.components(username: nil, isAuthor: false, openCount: 0, impressionCount: 0)
+        let nilName = PostReachFormatter.components(username: nil, isAuthor: false, viewCount: 0, impressionCount: 0)
         XCTAssertNil(nilName.pseudo)
     }
 
