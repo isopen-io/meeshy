@@ -91,6 +91,7 @@ data class ApiMessage(
     val effectFlags: Int? = null,
     val isBlurred: Boolean? = null,
     val isViewOnce: Boolean? = null,
+    val viewOnceCount: Int = 0,
     val expiresAt: String? = null,
 ) {
     /**

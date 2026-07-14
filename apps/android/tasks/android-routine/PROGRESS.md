@@ -1,5 +1,48 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **view-once "seen and deleted" burned tombstone** landed (slice `chat-viewonce-burned-tombstone`,
+> feature-parity §Chat "Blurred / view-once messages", closing the burned half of that line). The blur-reveal
+> slice shipped the conceal + tap-to-reveal lifecycle and flagged two pendings: server view-once consume, and
+> the `.burned` tombstone for an exhausted view-once message (iOS `BubbleBurnedView`). This slice ports the
+> tombstone-display half as a **pure** decision + real wiring. iOS decides `.burned` in `BubbleContentBuilder`
+> (`message.isViewOnce && message.viewOnceCount > 0`, checked AFTER `.deleted`, BEFORE `.standard`); Android
+> already merged deletion∘ephemeral into `BubbleRenderKind.resolve`, so this extends that single resolver.
+> **Ships (`:core:model`):** `BubbleRenderKind.Kind.Burned` + `resolve(isDeleted, ephemeral, isViewOnce = false,
+> viewOnceCount = 0)` — precedence **`Deleted > Burned > EphemeralExpired > Standard`**: `isDeleted` wins (server
+> authority, a deleted-and-consumed message keeps its deletion tombstone), else `isViewOnce && viewOnceCount > 0`
+> ⇒ `Burned` (checked BEFORE the ephemeral arm so a consumed view-once shows the persistent "Seen and deleted"
+> tombstone instead of silently collapsing), else `Expired` ⇒ `EphemeralExpired`, else `Standard`; a positive
+> `viewOnceCount` on a **non**-view-once message never burns; `Kind.isBurned` is the single predicate. **+8
+> tests** (consumed→Burned, consumed×2 boundary→Burned, not-yet-consumed count 0→Standard, positive-count-but-
+> not-view-once→Standard guard, deleted+consumed→Deleted precedence, burned-wins-over-expired, burned-independent-
+> of-running-countdown, isBurned truth-table; the existing `isEphemeralExpired` truth-table gains the Burned arm).
+> **Mutation check (RED proof):** removing the `Burned` arm failed **exactly 4** tests (the burned-positive ones:
+> `resolve_viewOnceConsumedOnce_isBurned`, `resolve_viewOnceConsumedMultipleTimes_isBurned`,
+> `resolve_burnedWinsOverEphemeralExpired`, `resolve_burnedIndependentOfRunningCountdown_isBurned`), the other 12
+> stayed green — reverted green, behavioural not tautological. **Wired for real (`:core:model` + `:sdk-ui`, exempt
+> glue):** `ApiMessage` gains `viewOnceCount: Int = 0` (deserialised from the wire, parity with the iOS message's
+> consume count); `BubbleContent` gains `isViewOnce`/`viewOnceCount` populated by `BubbleContentBuilder` from
+> `effects.has(VIEW_ONCE)` + `message.viewOnceCount` (both zeroed when deleted, mirroring the `blurReveal` gate);
+> `rememberBubbleRenderKind` resolves `Burned` immediately (server-authoritative — no clock read, like the deleted
+> path) BEFORE the ephemeral tick; `MessageBubble` renders `BubbleBurnedView` in place of the bubble body when
+> `renderKind.isBurned`. The `BubbleBurnedView` composable ports iOS: a flame glyph (`LocalFireDepartment`,
+> `MeeshyPalette.Warning`) + a muted italic "Seen and deleted" label in a warning-tinted capsule (8 % fill / 15 %
+> stroke), aligned to the sender's side like the deleted tombstone (not centered). Default `isViewOnce = false` /
+> `viewOnceCount = 0` → **zero behaviour change for every existing caller**. Strings `bubble_burned` /
+> `bubble_burned_a11y` in en/fr/es/pt. **Verification:** full `gradle assembleDebug testDebugUnitTest
+> --max-workers=3` → **BUILD SUCCESSFUL in 6m 45s** (943 tasks; APK assembles; every module unit suite green).
+> Built with the container's system Gradle 8.14.3 + UTF-8-daemon recipe (wrapper distribution egress-blocked).
+> Reviewer **PASS** (diff `apps/android` only — `:core:model` [`BubbleRenderKind` + `ApiMessage.viewOnceCount`],
+> `:sdk-ui` [`BubbleContent` fields + builder + presenter + `MessageBubble`/`BubbleBurnedView`], strings, tracking
+> docs; **SDK purity** — the deletion∘burned∘ephemeral precedence is a pure `:core:model` function, the tombstone
+> render is coverage-exempt Compose glue with no singleton reads; **SSOT** — extends the single `BubbleRenderKind`
+> resolver rather than re-deciding in the composable, reuses `MessageEffectFlags.VIEW_ONCE`; **UX/colour
+> coherence** — warning-tinted flame capsule mirrors iOS `BubbleBurnedView`, sender-aligned, no dead end; **no
+> coverage floor lowered, no test weakened** — existing render-kind tests untouched, only extended). **Next slice:**
+> the view-once **server consume** (wire `BlurRevealLifecycle.RevealRequest.requiresConsume` → the gateway
+> view-count endpoint via a repository call, flip `viewOnceCount` optimistically so THIS tombstone fires in
+> real time) OR the composer **EffectsPickerView** duration/effects sheet (still-pending duration picker).
+
 > On 2026-07-14 **blurred / view-once "tap to reveal" lifecycle** landed (slice `chat-blur-reveal-lifecycle`,
 > feature-parity §Chat "Blurred (tap to reveal) + view-once messages with fog effect"). This opens the last
 > untouched lifecycle line: a blurred/view-once message now conceals its body behind a fog + blur and reveals

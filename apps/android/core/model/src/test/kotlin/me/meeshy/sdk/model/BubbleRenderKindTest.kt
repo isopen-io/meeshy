@@ -18,8 +18,17 @@ import org.junit.Test
  */
 class BubbleRenderKindTest {
 
-    private fun resolve(isDeleted: Boolean, ephemeral: EphemeralLifecycle.State) =
-        BubbleRenderKind.resolve(isDeleted = isDeleted, ephemeral = ephemeral)
+    private fun resolve(
+        isDeleted: Boolean,
+        ephemeral: EphemeralLifecycle.State = EphemeralLifecycle.State.None,
+        isViewOnce: Boolean = false,
+        viewOnceCount: Int = 0,
+    ) = BubbleRenderKind.resolve(
+        isDeleted = isDeleted,
+        ephemeral = ephemeral,
+        isViewOnce = isViewOnce,
+        viewOnceCount = viewOnceCount,
+    )
 
     // MARK: - Standard (the message renders its content)
 
@@ -71,12 +80,88 @@ class BubbleRenderKindTest {
             .isEqualTo(BubbleRenderKind.Kind.Deleted)
     }
 
-    // MARK: - Convenience predicate
+    // MARK: - Burned (a consumed view-once message → "Seen and deleted" tombstone)
+
+    @Test
+    fun resolve_viewOnceConsumedOnce_isBurned() {
+        // iOS gate: `message.isViewOnce && message.viewOnceCount > 0`.
+        assertThat(resolve(isDeleted = false, isViewOnce = true, viewOnceCount = 1))
+            .isEqualTo(BubbleRenderKind.Kind.Burned)
+    }
+
+    @Test
+    fun resolve_viewOnceConsumedMultipleTimes_isBurned() {
+        // Boundary above the > 0 threshold — a multi-view-once already opened stays burned.
+        assertThat(resolve(isDeleted = false, isViewOnce = true, viewOnceCount = 2))
+            .isEqualTo(BubbleRenderKind.Kind.Burned)
+    }
+
+    @Test
+    fun resolve_viewOnceNotYetConsumed_isStandard() {
+        // A view-once message nobody has opened yet (count == 0) still shows its content.
+        assertThat(resolve(isDeleted = false, isViewOnce = true, viewOnceCount = 0))
+            .isEqualTo(BubbleRenderKind.Kind.Standard)
+    }
+
+    @Test
+    fun resolve_positiveCountButNotViewOnce_isStandard() {
+        // Guard: a stray positive count on a non-view-once message must NOT burn it.
+        assertThat(resolve(isDeleted = false, isViewOnce = false, viewOnceCount = 3))
+            .isEqualTo(BubbleRenderKind.Kind.Standard)
+    }
+
+    // MARK: - Burned precedence
+
+    @Test
+    fun resolve_deletedAndViewOnceConsumed_staysDeleted() {
+        // Server deletion wins over the burned tombstone (iOS checks `.deleted` first).
+        assertThat(
+            resolve(isDeleted = true, isViewOnce = true, viewOnceCount = 1),
+        ).isEqualTo(BubbleRenderKind.Kind.Deleted)
+    }
+
+    @Test
+    fun resolve_burnedWinsOverEphemeralExpired() {
+        // A consumed view-once message shows the persistent tombstone instead of
+        // collapsing, even once its ephemeral timer has also elapsed.
+        assertThat(
+            resolve(
+                isDeleted = false,
+                ephemeral = EphemeralLifecycle.State.Expired,
+                isViewOnce = true,
+                viewOnceCount = 1,
+            ),
+        ).isEqualTo(BubbleRenderKind.Kind.Burned)
+    }
+
+    @Test
+    fun resolve_burnedIndependentOfRunningCountdown_isBurned() {
+        // The burned decision does not depend on the ephemeral countdown still running.
+        assertThat(
+            resolve(
+                isDeleted = false,
+                ephemeral = EphemeralLifecycle.State.Running(30.0),
+                isViewOnce = true,
+                viewOnceCount = 1,
+            ),
+        ).isEqualTo(BubbleRenderKind.Kind.Burned)
+    }
+
+    // MARK: - Convenience predicates
 
     @Test
     fun isEphemeralExpired_trueOnlyForEphemeralExpiredKind() {
         assertThat(BubbleRenderKind.Kind.EphemeralExpired.isEphemeralExpired).isTrue()
         assertThat(BubbleRenderKind.Kind.Standard.isEphemeralExpired).isFalse()
         assertThat(BubbleRenderKind.Kind.Deleted.isEphemeralExpired).isFalse()
+        assertThat(BubbleRenderKind.Kind.Burned.isEphemeralExpired).isFalse()
+    }
+
+    @Test
+    fun isBurned_trueOnlyForBurnedKind() {
+        assertThat(BubbleRenderKind.Kind.Burned.isBurned).isTrue()
+        assertThat(BubbleRenderKind.Kind.Standard.isBurned).isFalse()
+        assertThat(BubbleRenderKind.Kind.Deleted.isBurned).isFalse()
+        assertThat(BubbleRenderKind.Kind.EphemeralExpired.isBurned).isFalse()
     }
 }
