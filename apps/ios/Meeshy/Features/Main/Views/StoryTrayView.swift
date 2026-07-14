@@ -393,7 +393,7 @@ private struct MyStoryButton: View {
                     moodEmoji: myMoodEmoji,
                     onTap: {
                         if hasMyStory {
-                            onViewMyStory()
+                            onManageStories?()
                         } else {
                             viewModel.showStoryComposer = true
                         }
