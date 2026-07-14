@@ -419,4 +419,92 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "deleteConfirmMessageId (confirmation) — jamais de suppression directe."
         )
     }
+
+    // MARK: - Aperçu du menu natif = la bulle « prise de sa position »
+    //
+    // Feedback device 2026-07-14 : l'aperçu doit PRÉSERVER le format de la
+    // bulle/attachement d'origine, épouser son contenu (pas de « card » bordé)
+    // et se mettre à l'échelle pour tenir à l'écran. Aucun padding de bordure.
+
+    /// L'aperçu rend la bulle « standalone » dans `MessageMenuPreviewContainer`
+    /// (scale-to-fit), la cellule live reste NON-standalone, et le padding qui
+    /// créait l'effet bordure a disparu.
+    func test_messageMenuPreview_usesStandaloneBubble_noBorderPadding() throws {
+        let vcSource = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(
+            vcSource.contains("MessageMenuPreviewContainer") &&
+            vcSource.contains("makeThemedBubble(true)"),
+            "L'aperçu doit rendre la bulle standalone dans MessageMenuPreviewContainer."
+        )
+        XCTAssertTrue(
+            vcSource.contains("makeThemedBubble(false)"),
+            "Le contenu de cellule doit rester une bulle NON-standalone (row alignée)."
+        )
+        guard let range = vcSource.range(of: ".nativeMessageContextMenu(menu: nativeMenu)") else {
+            XCTFail("La cellule doit attacher .nativeMessageContextMenu(menu: nativeMenu).")
+            return
+        }
+        let end = vcSource.index(range.lowerBound, offsetBy: 600, limitedBy: vcSource.endIndex) ?? vcSource.endIndex
+        let block = String(vcSource[range.lowerBound ..< end])
+        XCTAssertFalse(
+            block.contains(".padding(.horizontal, 6)"),
+            "L'aperçu ne doit plus wrapper la bulle dans un padding (effet bordure banni)."
+        )
+    }
+
+    /// La bulle « standalone » supprime les spacers d'alignement de row et hug
+    /// sa largeur (fixedSize horizontal) — le platter système colle à la bulle.
+    func test_bubbleStandalone_dropsRowSpacers_andHugs() throws {
+        let src = try source("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift")
+        XCTAssertTrue(
+            src.contains("if isMe && !standalone { Spacer(minLength: 50) }") &&
+            src.contains("if !isMe && !standalone { Spacer(minLength: 50) }"),
+            "Les spacers d'alignement de row doivent être coupés en mode standalone."
+        )
+        XCTAssertTrue(
+            src.contains(".fixedSize(horizontal: standalone, vertical: false)"),
+            "Standalone doit hugger la largeur (fixedSize horizontal) — wrap conservé via le cap."
+        )
+    }
+
+    // MARK: - Destructif message : suppression média + signalement confirmés
+
+    /// Suppression d'un attachement via « Plus… » : modale de validation
+    /// obligatoire, jamais de suppression directe (feedback device 2026-07-14).
+    func test_deleteMedia_requestsConfirmation_neverDeletesDirectly() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageMoreSheet.swift")
+        XCTAssertTrue(
+            src.contains("showDeleteMediaConfirm = true"),
+            "Le pellet .deleteMedia doit armer la confirmation (showDeleteMediaConfirm)."
+        )
+        XCTAssertTrue(
+            src.contains(".confirmationDialog(") &&
+            src.contains("isPresented: $showDeleteMediaConfirm"),
+            "MessageMoreSheet doit présenter une modale de confirmation de suppression média."
+        )
+        XCTAssertFalse(
+            src.contains("case .deleteMedia: onDeleteMedia?()"),
+            "La suppression directe (case .deleteMedia: onDeleteMedia?()) est bannie."
+        )
+    }
+
+    /// Signalement d'un message : modale de validation avant l'envoi ;
+    /// `onReport` n'est appelé QUE depuis le bouton destructif de la modale.
+    func test_report_requestsConfirmation_beforeSubmit() throws {
+        let src = try source("Meeshy/Features/Main/Components/MessageDetail/MessageReportDetailView.swift")
+        XCTAssertTrue(
+            src.contains("showReportConfirm = true"),
+            "Le bouton d'envoi doit armer la confirmation (showReportConfirm)."
+        )
+        XCTAssertTrue(
+            src.contains(".confirmationDialog(") &&
+            src.contains("isPresented: $showReportConfirm"),
+            "MessageReportDetailView doit présenter une modale de confirmation de signalement."
+        )
+        let calls = src.components(separatedBy: "onReport?(").count - 1
+        XCTAssertEqual(
+            calls, 1,
+            "onReport ne doit être appelé qu'une fois — depuis le bouton destructif de la modale."
+        )
+    }
 }

@@ -114,6 +114,10 @@ struct BubbleStandardLayout: View {
     @ObservedObject var ephemeralController: BubbleEphemeralController
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
+    /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
+    /// `Spacer(minLength: 50)` d'alignement de la row pour que la vue épouse la
+    /// bulle. Défaut `false` — la cellule live garde ses spacers d'alignement.
+    var standalone: Bool = false
 
     // MARK: - Playback tracking
     //
@@ -424,7 +428,7 @@ struct BubbleStandardLayout: View {
     var body: some View {
         let isMe = content.isMe
         HStack(alignment: .bottom, spacing: 0) {
-            if isMe { Spacer(minLength: 50) }
+            if isMe && !standalone { Spacer(minLength: 50) }
 
             VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
                 // Pin indicator
@@ -510,8 +514,13 @@ struct BubbleStandardLayout: View {
             // `.fixedSize(horizontal: true, vertical: false)` on the bar
             // inside `textBubbleContent`).
             .frame(maxWidth: DeviceLayout.bubbleMaxWidth(containerWidth: UIScreen.main.bounds.width, sizeClass: horizontalSizeClass), alignment: isMe ? .trailing : .leading)
+            // Standalone (aperçu) : hug jusqu'au cap. `.fixedSize(horizontal:)`
+            // fait remonter la largeur idéale du contenu (clampée au cap par le
+            // `.frame(maxWidth:)` ci-dessus) → une bulle courte n'occupe plus
+            // toute la largeur du cap, un texte long wrappe toujours au cap.
+            .fixedSize(horizontal: standalone, vertical: false)
 
-            if !isMe { Spacer(minLength: 50) }
+            if !isMe && !standalone { Spacer(minLength: 50) }
         }
         .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)

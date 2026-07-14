@@ -28,6 +28,9 @@ struct MessageMoreSheet: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedItem: MoreItem?
     @State private var gridAppeared = false
+    /// Confirmation avant suppression d'un média — action destructive, JAMAIS
+    /// de suppression directe (feedback device 2026-07-14).
+    @State private var showDeleteMediaConfirm = false
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var isDark: Bool { colorScheme == .dark }
@@ -60,6 +63,19 @@ struct MessageMoreSheet: View {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1)) {
                 gridAppeared = true
             }
+        }
+        .confirmationDialog(
+            String(localized: "message-more.delete_media.confirm.title", defaultValue: "Supprimer ce média ?", bundle: .main),
+            isPresented: $showDeleteMediaConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main), role: .destructive) {
+                onDeleteMedia?()
+                dismiss()
+            }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
+        } message: {
+            Text(String(localized: "message-more.delete_media.confirm.message", defaultValue: "Cette action est irréversible.", bundle: .main))
         }
     }
 
@@ -129,13 +145,17 @@ struct MessageMoreSheet: View {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     selectedItem = (selectedItem == item) ? nil : item
                 }
+            } else if item == .deleteMedia {
+                // Destructif → confirmation obligatoire, la feuille reste ouverte
+                // jusqu'à la validation (jamais de suppression directe).
+                HapticFeedback.medium()
+                showDeleteMediaConfirm = true
             } else {
                 HapticFeedback.medium()
                 switch item {
                 case .reply: onReply?()
                 case .forward: onForward?()
                 case .thread: onThread?()
-                case .deleteMedia: onDeleteMedia?()
                 default: break
                 }
                 dismiss()

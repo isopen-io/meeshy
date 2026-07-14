@@ -288,6 +288,55 @@ extension View {
     }
 }
 
+// MARK: - Aperçu du menu contextuel de message (hug + scale-to-fit)
+
+/// Conteneur d'aperçu du `.contextMenu` NATIF d'un message. Il rend la bulle
+/// « standalone » (déjà dépouillée de ses spacers de row côté `BubbleStandard
+/// Layout` → elle épouse son contenu) et la met à l'échelle UNIQUEMENT si elle
+/// dépasse la hauteur disponible, pour qu'elle tienne dans l'écran SANS jamais
+/// déformer ses proportions. La `.frame` finale (dimensions mises à l'échelle)
+/// informe le layout SwiftUI de la taille visible — le platter système colle
+/// alors à la bulle, sans bordure ni card. Anti-« effet bordure » 2026-07-14.
+struct MessageMenuPreviewContainer<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @State private var naturalSize: CGSize = .zero
+
+    /// Plafond de hauteur de l'aperçu — 62 % de l'écran, comme l'overlay custom
+    /// (`MessageOverlayMenu.maxPreviewHeight`), pour laisser respirer la rangée
+    /// d'emojis + le menu au-dessus/dessous.
+    private var maxHeight: CGFloat { UIScreen.main.bounds.height * 0.62 }
+
+    private var fitScale: CGFloat {
+        guard naturalSize.height > maxHeight, naturalSize.height > 0 else { return 1 }
+        // Plancher 0.5 : au-delà, un média très haut resterait lisible plutôt
+        // que de rétrécir à l'infini (même garde-fou que l'overlay custom).
+        return max(0.5, maxHeight / naturalSize.height)
+    }
+
+    var body: some View {
+        content()
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: MessageMenuPreviewSizeKey.self, value: proxy.size)
+                }
+            )
+            .onPreferenceChange(MessageMenuPreviewSizeKey.self) { naturalSize = $0 }
+            .scaleEffect(fitScale, anchor: .center)
+            .frame(
+                width: naturalSize.width > 0 ? naturalSize.width * fitScale : nil,
+                height: naturalSize.height > 0 ? naturalSize.height * fitScale : nil
+            )
+    }
+}
+
+private struct MessageMenuPreviewSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next != .zero { value = next }
+    }
+}
+
 struct MessageListView: UIViewControllerRepresentable {
     let store: MessageStore
     /// Owner of the live per-message dynamic state (translations,

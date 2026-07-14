@@ -19,6 +19,9 @@ struct MessageReportDetailView: View {
     @State private var selectedReportType: ReportType? = nil
     @State private var reportReason = ""
     @State private var isSubmittingReport = false
+    /// Confirmation avant d'envoyer le signalement — action de modération,
+    /// modale de validation obligatoire (feedback device 2026-07-14).
+    @State private var showReportConfirm = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -53,12 +56,10 @@ struct MessageReportDetailView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
-            if let reportType = selectedReportType {
+            if selectedReportType != nil {
                 Button {
-                    isSubmittingReport = true
                     HapticFeedback.medium()
-                    onReport?(reportType.rawValue, reportReason.isEmpty ? nil : reportReason)
-                    onDismiss?()
+                    showReportConfirm = true
                 } label: {
                     if isSubmittingReport {
                         ProgressView()
@@ -79,6 +80,21 @@ struct MessageReportDetailView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedReportType)
+        .confirmationDialog(
+            String(localized: "message-detail.report.confirm.title", defaultValue: "Signaler ce message ?", bundle: .main),
+            isPresented: $showReportConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "message-detail.tab.report", defaultValue: "Signaler", bundle: .main), role: .destructive) {
+                guard let reportType = selectedReportType else { return }
+                isSubmittingReport = true
+                onReport?(reportType.rawValue, reportReason.isEmpty ? nil : reportReason)
+                onDismiss?()
+            }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
+        } message: {
+            Text(String(localized: "message-detail.report.confirm.message", defaultValue: "Le message sera transmis à la modération.", bundle: .main))
+        }
     }
 
     private func reportTypeRow(_ type: ReportType) -> some View {

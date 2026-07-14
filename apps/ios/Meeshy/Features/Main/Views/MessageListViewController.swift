@@ -576,7 +576,14 @@ final class MessageListViewController: UIViewController {
             // (Equatable re-render gate conservé : le @State restant de la bulle
             // vit sur un CHILD du gate stateless, ses invalidations contournent
             // `==` — topologie du `FeedPostCard().equatable()`.)
-            let messageBubble = EquatableMessageBubble(bubble: ThemedMessageBubble(
+            // Fabrique la MÊME bulle en deux tenues : `standalone: false` pour
+            // le contenu de cellule (alignement isMe/reçu via les spacers de
+            // row) et `standalone: true` pour l'aperçu du `.contextMenu` natif
+            // (bulle qui épouse son contenu → platter système collé à la bulle,
+            // plus de « card » bordé). Une seule liste de paramètres, pas de
+            // duplication de l'init ~40 champs.
+            let makeThemedBubble: (Bool) -> ThemedMessageBubble = { standalone in
+                ThemedMessageBubble(
                         message: message,
                         contactColor: accent,
                         recipientCount: recipients,
@@ -625,9 +632,11 @@ final class MessageListViewController: UIViewController {
                         onSetSecondaryLanguage: setSecondaryLanguage,
                         onOpenProfile: openProfileHandler,
                         voiceConsentMissing: vm?.voiceConsentMissing ?? false,
-                        onTapConsentNotice: { [weak self] in self?.router.push(.settings) }
-                    ))
-                    .equatable()
+                        onTapConsentNotice: { [weak self] in self?.router.push(.settings) },
+                        standalone: standalone
+                )
+            }
+            let messageBubble = EquatableMessageBubble(bubble: makeThemedBubble(false)).equatable()
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
@@ -650,16 +659,20 @@ final class MessageListViewController: UIViewController {
                 // Counter-flip to undo the parent collectionView.transform.
                 .scaleEffect(x: 1, y: -1)
                 // iOS 26+ : `.contextMenu` NATIF + aperçu = la VRAIE bulle
-                // d'origine (réutilisée, remise à l'endroit hors de la
-                // collection view inversée). No-op < iOS 26 → overlay custom.
+                // d'origine, rendue « standalone » (épouse son contenu, pas de
+                // spacers de row) et mise à l'échelle SEULEMENT si trop haute
+                // pour tenir à l'écran (proportions intactes). Le platter système
+                // colle alors à la bulle — plus aucune bordure/card autour, la
+                // bulle est « prise de sa position et affichée comme avant »
+                // (feedback device 2026-07-14). No-op < iOS 26 → overlay custom.
                 .nativeMessageContextMenu(menu: nativeMenu) {
-                    messageBubble
-                        .environmentObject(host)
-                        .environmentObject(stories)
-                        .environmentObject(statuses)
-                        .environmentObject(convList)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
+                    MessageMenuPreviewContainer {
+                        makeThemedBubble(true)
+                            .environmentObject(host)
+                            .environmentObject(stories)
+                            .environmentObject(statuses)
+                            .environmentObject(convList)
+                    }
                 }
             }
             .margins(.all, 0)

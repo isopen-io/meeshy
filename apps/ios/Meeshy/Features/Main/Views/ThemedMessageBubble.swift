@@ -130,6 +130,12 @@ struct ThemedMessageBubble: View {
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
+    /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
+    /// `Spacer` d'alignement de la row pour que la vue épouse la LARGEUR de la
+    /// bulle. Le platter système de l'aperçu coïncide alors avec la bulle elle-
+    /// même — plus de grand « card » pleine largeur (feedback device 2026-07-14).
+    /// Défaut `false` : la cellule live garde son alignement isMe / reçu.
+    var standalone: Bool = false
 
     @State private var localActiveDisplayLangCode: String? = nil
     @State private var localSecondaryLangCode: String? = nil
@@ -296,7 +302,8 @@ struct ThemedMessageBubble: View {
             blurController: blurController,
             ephemeralController: ephemeralController,
             voiceConsentMissing: voiceConsentMissing,
-            onTapConsentNotice: onTapConsentNotice
+            onTapConsentNotice: onTapConsentNotice,
+            standalone: standalone
         )
         .messageEffects(message.effects, hasPlayedAppearance: hasPlayedAppearance)
         .onAppear { hasPlayedAppearance = true }
@@ -399,7 +406,8 @@ extension ThemedMessageBubble: @MainActor Equatable {
         // Equatable gate SEES them: a flag tap changes these and must re-render)
         lhs.activeDisplayLangCode == rhs.activeDisplayLangCode &&
         lhs.secondaryLangCode == rhs.secondaryLangCode &&
-        lhs.voiceConsentMissing == rhs.voiceConsentMissing
+        lhs.voiceConsentMissing == rhs.voiceConsentMissing &&
+        lhs.standalone == rhs.standalone
     }
 }
 
