@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,12 +33,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import coil.imageLoader
+import coil.request.ImageRequest
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -65,6 +69,19 @@ public fun MeeshyImageViewer(
             pageCount = { imageUrls.size },
         )
         var currentPageZoomed by rememberSaveable { mutableStateOf(false) }
+
+        val context = LocalContext.current
+        LaunchedEffect(pagerState.currentPage, imageUrls) {
+            val loader = context.imageLoader
+            ImageViewerPrefetch.neighbors(
+                currentIndex = pagerState.currentPage,
+                total = imageUrls.size,
+            ).forEach { index ->
+                loader.enqueue(
+                    ImageRequest.Builder(context).data(imageUrls[index]).build(),
+                )
+            }
+        }
 
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             HorizontalPager(

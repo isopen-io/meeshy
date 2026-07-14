@@ -1,5 +1,37 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **conversation media gallery neighbour prefetch ±2** landed (slice
+> `chat-gallery-neighbor-prefetch`, feature-parity §C — the fullscreen conversation gallery decoded each page
+> only when it scrolled on screen, so every swipe hit a fresh network+decode; iOS's gallery keeps a ±2
+> look-ahead prefetch. This slice ports it, closing the last of the three gallery follow-up hints: caption ✅,
+> author/date ✅, **prefetch now ✅**). Ships the pure `:sdk-ui` `ImageViewerPrefetch.neighbors(currentIndex,
+> total, radius=2): List<Int>` — the sibling page indices to warm around the one on screen: **nearest-first,
+> forward-biased** (`current+step` before `current-step` at each rung, since a viewer swipes forward more
+> often), each **dropped when out of bounds** (never wrapped past an end), **never the current page**; empty
+> when `total <= 1` or `radius <= 0`, and `currentIndex` coerced into `[0, total-1]` (defensive against a
+> transient out-of-range pager page). The block stays agnostic of *what* it prefetches (bare `Int` indices —
+> SDK purity). **Wired for real (no dead ends):** `MeeshyImageViewer` gained a
+> `LaunchedEffect(pagerState.currentPage, imageUrls)` that maps those indices onto
+> `ImageRequest.Builder(context).data(url).build()` enqueued in the shared `context.imageLoader` (Coil) — the
+> exact pattern the story viewer already uses for `StoryPrefetchPlanner`; self-contained in the viewer (the
+> `ChatScreen` call site already passes `gallery.imageUrls`). **+13 tests** (middle nearest-first
+> forward-before-backward; first/last one-sided; near-start out-of-range dropped; empty/single→[]; radius
+> 0/negative→[]; radius-wider clamps with no dups/no current; negative current→first; current-past-end→last;
+> property sweep current-never-present + all-in-bounds + no-dups; default radius == 2). **Mutation check (RED
+> proof):** swapping the forward/backward emission order failed **exactly 3** ordering tests, the other 10
+> stayed green — reverted green, the suite is behavioural not tautological. **Verification:**
+> `:sdk-ui:testDebugUnitTest` prefetch suite green + full `gradle assembleDebug testDebugUnitTest` across every
+> module → **BUILD SUCCESSFUL** (3m58s, APK produced, viewer `LaunchedEffect`/Coil glue compiles, no module
+> regressed; built with the container's system Gradle 8.14.3 + the UTF-8-daemon recipe since the wrapper
+> distribution is egress-blocked). Reviewer **PASS** (diff `apps/android` only — `:sdk-ui`
+> [`ImageViewerPrefetch` + `MeeshyImageViewer` glue], tests, `feature-parity.md`, routine docs; **SDK purity** —
+> agnostic `Int` index math in `:sdk-ui`, the "warm around current" product wiring is the exempt viewer glue;
+> **SSOT** — reuses the shared Coil `imageLoader`, nothing re-implemented; **instant-app** — prefetch warms
+> neighbours so swipes land on decoded images; **UX coherence** — no visual change, smoother paging; **no
+> coverage floor lowered, no test weakened**). **Next slice:** save-to-gallery (`MediaStore` insert on a viewer
+> action), or the still-pending message-bubble **contact** attachment (scope the DTO first), or §B "Communities
+> carousel + category filter chips".
+
 > On 2026-07-14 **conversation media gallery per-page author/date header** landed (slice
 > `chat-gallery-page-header`, feature-parity §C — the just-shipped conversation-wide fullscreen gallery
 > paged across every image with a per-page caption (`chat-gallery-page-caption`) but showed **no author or
@@ -2305,16 +2337,15 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-13): `chat-gallery-page-caption`** — per-page caption overlay in the conversation
-media gallery (port of iOS `ConversationMediaGalleryView.captionMap`); pure `:feature:chat` `GalleryPage`
-carries each page's Prisme-resolved message text as its caption, rendered by the now caption-aware
-(opaque-string) `:sdk-ui` `MeeshyImageViewer` as a bottom overlay. See run log 2026-07-13.
+**Just shipped (2026-07-14): `chat-gallery-neighbor-prefetch`** — ±2 look-ahead prefetch in the conversation
+media gallery (port of iOS's gallery prefetch); pure `:sdk-ui` `ImageViewerPrefetch.neighbors(...)` returns the
+sibling page indices to warm (nearest-first, forward-biased, bounded, never current), enqueued in the shared
+Coil `imageLoader` by a `MeeshyImageViewer` `LaunchedEffect`. This closes the three gallery follow-up hints
+(caption ✅ author/date ✅ prefetch ✅). See run log 2026-07-14.
 **Recommended next (highest value):**
-- **Media gallery author/date header** (same §C line): iOS shows sender avatar + name + `sentAt` above the
-  caption — extend `GalleryPage` with `senderName`/`createdAtIso` (both already on `BubbleContent`) and a
-  per-page header overlay. Pure model add + exempt overlay; a natural continuation of this slice.
-- **Media gallery follow-ups** (same §C line): neighbour prefetch ±2 (Coil `ImageLoader.enqueue`) and
-  save-to-gallery (`MediaStore`) — each a thin add on top of the shipped `ConversationGallery`.
+- **Save-to-gallery** (same §C line): a viewer action that inserts the current image into `MediaStore`. The
+  pure part is thin (target filename/mime resolver); the `MediaStore`/`ContentResolver` write is exempt glue —
+  push every decision (which filename, which mime) into a pure fn.
 - **Message bubble contact attachment** (§C, still pending) — share-a-contact card; the wire has no
   dedicated fields yet, so scope the DTO first.
 - **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
@@ -3202,6 +3233,47 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-14 — slice `chat-gallery-neighbor-prefetch` ✅ impl + reviewer PASS → PR + merge
+- **Branch:** `claude/apps/android/chat-gallery-neighbor-prefetch` (off latest `main` `18e155f` — last Android
+  slice `chat-gallery-page-header` merged as **#1943**).
+- **Housekeeping first (routine rule 0):** no open `claude/apps/android/*` PR (only Dependabot PRs open);
+  nothing to reconcile. `main` fetched clean.
+- **What:** feature-parity §C — the conversation media gallery (`ConversationMediaGallery` / `MeeshyImageViewer`)
+  decoded each page only on demand, so a swipe hit a fresh network+decode. iOS's gallery keeps a ±2 look-ahead
+  prefetch. This slice ports it — the last of the three shipped gallery follow-up hints (caption ✅, author/date ✅,
+  **prefetch now ✅**; contact card + save-to-gallery remain).
+- **Added (production):**
+  - `:sdk-ui` `ImageViewerPrefetch.kt` — pure `object ImageViewerPrefetch.neighbors(currentIndex, total,
+    radius = DEFAULT_RADIUS=2): List<Int>`. Returns the sibling page indices to warm: nearest-first,
+    **forward-biased** (`current+step` before `current-step` at each radius rung), each dropped when out of
+    bounds (never wrapped past an end), never the current page. Empty when `total <= 1` or `radius <= 0`;
+    `currentIndex` coerced into `[0, total-1]` (defensive against a transient out-of-range pager page).
+    Agnostic of *what* it prefetches (bare `Int` indices) — SDK purity.
+  - `MeeshyImageViewer.kt` — a `LaunchedEffect(pagerState.currentPage, imageUrls)` maps those indices onto
+    `ImageRequest.Builder(context).data(url).build()` enqueued in the shared `context.imageLoader` (Coil) —
+    the exact pattern the story viewer uses for `StoryPrefetchPlanner`. Self-contained in the viewer (the
+    `ChatScreen` call site already passes `gallery.imageUrls`), so the diff is one new file + one file touched.
+- **Tests (+13, RED→GREEN):** `ImageViewerPrefetchTest` — middle nearest-first forward-before-backward;
+  first-page forward-only; last-page backward-only; near-start out-of-range backward dropped (no roll-past-end);
+  empty gallery→[]; single-image→[]; radius 0→[]; negative radius→[]; radius wider than gallery clamps (no dups,
+  no current); negative current coerced to first; current past end coerced to last; property sweep (current
+  never present + every index in-bounds + no dups across all positions); default radius == 2. **Branch sweep:**
+  both `total<=1`/`radius<=0` guards, both `takeIf` bound arms (forward-drop, backward-drop), the coercion both
+  directions. **Mutation RED:** swapping the forward/backward emission order failed **exactly 3** ordering tests
+  (middle, near-start, radius-wider), the other 10 stayed green — reverted green; suite is behavioural.
+- **Verification:** system Gradle 8.14.3 (`/opt/gradle`; wrapper download 403-blocked in this container),
+  `LANG=C.utf8` + `-Pkotlin.daemon.jvmargs=-Dsun.jnu.encoding=UTF-8`. `:sdk-ui:testDebugUnitTest` prefetch suite
+  green (13) + full `gradle assembleDebug testDebugUnitTest` across every module → **BUILD SUCCESSFUL** (3m58s,
+  APK produced, viewer `LaunchedEffect`/Coil glue compiles, no module regressed).
+- **Reviewer verdict: PASS.** Diff is `apps/android` only (3 files: new `ImageViewerPrefetch.kt` + test,
+  `MeeshyImageViewer` glue, plus `feature-parity.md` + routine docs); no web/ios/gateway/shared/translator touched.
+  Behaviour-through-public-API (`neighbors(...)`), no tautologies, empty/single/boundary/off-by-one/coercion all
+  covered, one-mutation RED confirms non-tautological. SDK purity — the index math is a stateless agnostic
+  `:sdk-ui` block (bare `Int`s, no domain type), the "warm around current" product wiring is the exempt viewer
+  glue. SSOT — reuses the shared Coil `imageLoader`, nothing re-implemented. Instant-app — prefetch warms
+  neighbours so swipes land on decoded images. Colour/UX coherence — no visual change, smoother paging. No
+  coverage floor lowered, no test weakened, no secrets/`local.properties`.
 
 ### 2026-07-13 — slice `conversations-row-relative-time` ✅ impl + reviewer PASS → PR + merge
 - **Branch:** `claude/apps/android/conversations-row-relative-time` (off latest `main` `c4e9c2c`).
