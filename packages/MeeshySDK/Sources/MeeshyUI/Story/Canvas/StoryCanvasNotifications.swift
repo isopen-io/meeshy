@@ -12,6 +12,11 @@ public extension Notification.Name {
     static let storyComposerMuteCanvas = Notification.Name("storyComposerMuteCanvas")
     /// Posted by the composer to restore canvas audio after muting.
     static let storyComposerUnmuteCanvas = Notification.Name("storyComposerUnmuteCanvas")
+    /// Posted by the composer's left rail (« Arrière-plan » / « Premier plan »
+    /// chips) when the user picks which layer receives gestures. `object` is
+    /// the `CanvasManipulationLayer.rawValue` (String). Directive user
+    /// 2026-07-14 : la bordure gauche ne parle plus de « Canvas ».
+    static let storyComposerSelectManipulationLayer = Notification.Name("storyComposerSelectManipulationLayer")
     /// Posted by the viewer when the user toggles the story to a paused state
     /// (long-press toggle). The canvas pauses ALL media playback —
     /// background video, foreground videos and audio engine — so the story

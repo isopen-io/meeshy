@@ -371,6 +371,12 @@ public final class StoryCanvasUIView: UIView {
     /// se fait à partir de cette valeur. Voir `CanvasManipulationLayer`.
     public internal(set) var currentManipulationLayer: CanvasManipulationLayer = .canvas
 
+    /// Sélection utilisateur explicite via les chips « Arrière-plan » /
+    /// « Premier plan » (directive user 2026-07-14). `nil` = auto-dérivation
+    /// depuis le contenu. Consommée par `resolveManipulationLayer(for:override:)`
+    /// et posée par `setManipulationLayer(_:)`.
+    public internal(set) var manualManipulationLayerOverride: CanvasManipulationLayer?
+
     /// Notifié lorsque la couche active change (transition `.canvas` ↔
     /// `.background` ↔ `.foreground`). Le composer peut s'abonner pour
     /// mettre à jour l'indicateur visuel (chip row) et / ou bloquer des

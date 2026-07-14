@@ -76,6 +76,10 @@ extension StoryCanvasUIView {
                        selector: #selector(handleComposerUnmute),
                        name: .storyComposerUnmuteCanvas,
                        object: nil)
+        nc.addObserver(self,
+                       selector: #selector(handleSelectManipulationLayer(_:)),
+                       name: .storyComposerSelectManipulationLayer,
+                       object: nil)
         muteRegistryCancellable = StoryReaderAudioMuteRegistry.shared.$muted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] muted in

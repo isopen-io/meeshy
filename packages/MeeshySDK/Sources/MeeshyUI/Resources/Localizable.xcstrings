@@ -17153,7 +17153,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Fond"
+            "value" : "Arrière-plan"
           }
         },
         "pt-BR" : {
@@ -17223,7 +17223,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Premier"
+            "value" : "Premier plan"
           }
         },
         "pt-BR" : {

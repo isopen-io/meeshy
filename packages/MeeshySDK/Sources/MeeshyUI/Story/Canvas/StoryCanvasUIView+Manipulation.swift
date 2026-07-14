@@ -18,10 +18,24 @@ extension StoryCanvasUIView {
     /// effectivement changé — pour les re-emissions « défensives »
     /// (bootstrap, resync SwiftUI), utiliser `emitCurrentManipulationLayer()`.
     func updateManipulationLayer() {
-        let new = Self.resolveManipulationLayer(for: slide.effects)
+        let new = Self.resolveManipulationLayer(for: slide.effects,
+                                                override: manualManipulationLayerOverride)
         guard new != currentManipulationLayer else { return }
         currentManipulationLayer = new
         onManipulationLayerChanged?(new)
+    }
+
+    /// Sélection utilisateur explicite d'une couche manipulable via les chips
+    /// « Arrière-plan » / « Premier plan » de la bordure gauche (directive
+    /// user 2026-07-14). Pose l'override, recalcule la couche courante et
+    /// propage au composer (highlight). L'override reste actif tant qu'il est
+    /// valide pour le contenu ; sinon `updateManipulationLayer()` retombe sur
+    /// l'auto-dérivation.
+    public func setManipulationLayer(_ layer: CanvasManipulationLayer) {
+        manualManipulationLayerOverride = layer
+        let resolved = Self.resolveManipulationLayer(for: slide.effects, override: layer)
+        currentManipulationLayer = resolved
+        onManipulationLayerChanged?(resolved)
     }
 
     /// Résolution pure de la couche manipulable à partir des effets d'une
@@ -29,15 +43,54 @@ extension StoryCanvasUIView {
     /// UIView. Règle : fg media OU text OU sticker → `.foreground`, sinon
     /// bg media → `.background`, sinon `.canvas`.
     public static func resolveManipulationLayer(for effects: StoryEffects) -> CanvasManipulationLayer {
+        if hasForegroundContent(effects) { return .foreground }
+        if hasBackgroundContent(effects) { return .background }
+        return .canvas
+    }
+
+    /// Résolution avec la sélection utilisateur (chips arrière-plan / premier
+    /// plan). L'override prime tant qu'il correspond à du contenu réel, sinon
+    /// on retombe sur l'auto-dérivation — un chip pointant vers une couche
+    /// vide (ex. « Arrière-plan » sans fond) ne doit jamais geler l'édition.
+    public static func resolveManipulationLayer(
+        for effects: StoryEffects,
+        override: CanvasManipulationLayer?
+    ) -> CanvasManipulationLayer {
+        let auto = resolveManipulationLayer(for: effects)
+        switch override {
+        case .background:
+            return hasBackgroundContent(effects) ? .background : auto
+        case .foreground:
+            return hasForegroundContent(effects) ? .foreground : auto
+        case .canvas, .none:
+            return auto
+        }
+    }
+
+    /// Vrai si la slide porte au moins un élément foreground manipulable
+    /// (média non-bg, texte ou sticker).
+    static func hasForegroundContent(_ effects: StoryEffects) -> Bool {
         let medias = effects.mediaObjects ?? []
-        let hasFg = medias.contains(where: { $0.isBackground != true })
+        return medias.contains(where: { $0.isBackground != true })
             || !effects.textObjects.isEmpty
             || !(effects.stickerObjects ?? []).isEmpty
-        if hasFg { return .foreground }
-        let hasBg = medias.contains(where: { $0.isBackground == true })
+    }
+
+    /// Vrai si la slide porte un média d'arrière-plan manipulable.
+    static func hasBackgroundContent(_ effects: StoryEffects) -> Bool {
+        let medias = effects.mediaObjects ?? []
+        return medias.contains(where: { $0.isBackground == true })
             || effects.resolvedBackgroundMedia != nil
-        if hasBg { return .background }
-        return .canvas
+    }
+
+    /// Reçoit la sélection de couche postée par les chips « Arrière-plan » /
+    /// « Premier plan » du composer. Gaté `.edit` : en lecture (`.play`) aucun
+    /// choix de couche manipulable n'a de sens.
+    @objc func handleSelectManipulationLayer(_ note: Notification) {
+        guard mode == .edit else { return }
+        guard let raw = note.object as? String,
+              let layer = CanvasManipulationLayer(rawValue: raw) else { return }
+        setManipulationLayer(layer)
     }
 
     /// Force la propagation de la couche courante (sans recompute) — appelée
