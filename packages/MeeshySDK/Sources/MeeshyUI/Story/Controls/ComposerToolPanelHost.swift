@@ -178,7 +178,12 @@ struct ComposerToolPanelHost: View {
         // tirée par le grabber) prime sur la hauteur intrinsèque par défaut — sinon
         // tirer la poignée ne rétrécissait PAS le menu hors dessin (le contenu gardait
         // sa hauteur fixe). Le contenu scrolle s'il est plus grand que l'espace.
-        if let override = panelHeightOverride { return override }
+        panelHeightOverride ?? Self.defaultPanelHeight(for: tool)
+    }
+
+    /// Hauteur par défaut d'un panneau d'outil avant tout redimensionnement au
+    /// grabber. Pure et testable indépendamment du montage SwiftUI.
+    static func defaultPanelHeight(for tool: StoryToolMode) -> CGFloat {
         switch tool {
         case .media:    return 220
         case .audio:    return 220
@@ -186,7 +191,7 @@ struct ComposerToolPanelHost: View {
         case .text:     return 280
         case .texture:  return 236  // couleurs + rangée « Ouverture » (C1)
         case .filters:  return 180
-        case .timeline: return 0  // presented as sheet, not in band
+        case .timeline: return 320  // scrubber + pistes clips (2026-07-14, band comme les autres outils)
         }
     }
 
@@ -214,8 +219,32 @@ struct ComposerToolPanelHost: View {
             StoryFilterGridView(viewModel: viewModel,
                                 previewImage: viewModel.currentSlideBackgroundImage)
         case .timeline:
-            EmptyView()
+            timelinePanel
         }
+    }
+
+    // MARK: - Timeline Panel
+
+    /// Contenu de la timeline embarqué inline dans le band, comme tous les
+    /// autres outils (2026-07-14 — auparavant présenté en `.sheet()` modal).
+    /// Le chargement du slide courant + la resynchronisation du scrub à
+    /// l'ouverture, et l'arrêt de la lecture + le commit à la fermeture,
+    /// suivent maintenant le cycle de vie du panneau (onAppear/onDisappear)
+    /// plutôt que celui de l'ancienne sheet système.
+    private var timelinePanel: some View {
+        TimelineSheetContent(composer: viewModel)
+            .onAppear {
+                viewModel.loadCurrentSlideIntoTimeline()
+                viewModel.canvasTimelineBridge.scrub(
+                    seconds: Double(viewModel.timelineViewModel.currentTime))
+            }
+            .onDisappear {
+                if viewModel.timelineViewModel.isPlaying {
+                    viewModel.timelineViewModel.togglePlayback()
+                }
+                viewModel.canvasTimelineBridge.end()
+                viewModel.commitTimelineToCurrentSlide()
+            }
     }
 
     // MARK: - Audio Panel
