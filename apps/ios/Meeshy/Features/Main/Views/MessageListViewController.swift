@@ -102,6 +102,10 @@ final class MessageListViewController: UIViewController {
     var onSwipeForward: ((String) -> Void)?
     /// Long press on a bubble — opens the contextual options menu.
     var onLongPress: ((String) -> Void)?
+    /// iOS 26+ : builder du contenu `.contextMenu` NATIF (Liquid Glass) d'une
+    /// bulle, fourni par `ConversationView`. Quand présent (donc iOS 26+), la
+    /// cellule attache le menu natif et DÉSACTIVE le long-press custom.
+    var nativeMessageMenu: ((Message) -> AnyView)?
     /// Add reaction. Carries the message id and the tapped bubble cell's
     /// on-screen frame (window coords; `nil` when the cell is not realized)
     /// so the quick-reaction bar can anchor to the bubble.
@@ -536,15 +540,29 @@ final class MessageListViewController: UIViewController {
                 : stories.storyRingState(forUserId: senderId)
             let viewSenderStoryHandler = self.onViewSenderStory
 
-            // No UIContextMenuInteraction here — the user wants a custom
-            // overlay (light blur backdrop, re-rendered bubble centered,
-            // compact action menu sliding from the bottom). The native
-            // UIMenu can't be styled to match. The long press gesture is
-            // owned by the SwiftUI BubbleSwipeContainer and surfaces via
-            // `onLongPress` to set ConversationView's overlay state.
-            cell.interactions
-                .filter { $0 is UIContextMenuInteraction }
-                .forEach { cell.removeInteraction($0) }
+            // Menu d'appui long — DEUX chemins par version d'OS (miroir des
+            // lignes de conversation) :
+            // - iOS 26+ : menu contextuel NATIF (Liquid Glass) attaché au
+            //   contenu SwiftUI via `.nativeMessageContextMenu`. Le builder
+            //   vient de `ConversationView` (toutes les actions y sont déjà
+            //   résolues) ; on le fige UNE fois en AnyView stable — précédent
+            //   anti-crash EXC_BAD_ACCESS de `ConversationRowItem`.
+            // - < iOS 26 : overlay custom (long-press du BubbleSwipeContainer
+            //   → `onLongPress` → état d'overlay de ConversationView). Le menu
+            //   natif UIMenu ne se style pas comme cet overlay.
+            var nativeMenu: (() -> AnyView)? = nil
+            if #available(iOS 26.0, *), let builder = self.nativeMessageMenu {
+                nativeMenu = { builder(message) }
+            }
+
+            // Chemin overlay custom uniquement : retirer toute
+            // UIContextMenuInteraction que le système aurait posée. Sur le
+            // chemin natif on la GARDE — c'est précisément notre menu.
+            if nativeMenu == nil {
+                cell.interactions
+                    .filter { $0 is UIContextMenuInteraction }
+                    .forEach { cell.removeInteraction($0) }
+            }
 
             // Bulles avec piste temporelle (audio/vidéo) → swipe résistant :
             // le curseur de lecture se manipule sans déclencher Répondre/
@@ -552,24 +570,13 @@ final class MessageListViewController: UIViewController {
             let hasTimebasedMedia = message.attachments.contains {
                 AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
             }
-            cell.contentConfiguration = UIHostingConfiguration {
-                BubbleSwipeContainer(
-                    isMine: isMine,
-                    messageId: messageId,
-                    messageCreatedAt: message.createdAt,
-                    resistance: hasTimebasedMedia ? .resistant : .normal,
-                    onSwipeReply: { swipeReplyHandler?(messageId) },
-                    onSwipeForward: { swipeForwardHandler?(messageId) },
-                    onLongPress: { longPressHandler?(messageId) }
-                ) {
-                    // Equatable re-render gate. The flag-tap @State that made a
-                    // direct `.equatable()` unsafe (observed 2026-05-25, revert
-                    // b9a39c2c) is now lifted into the VM and flows through `==`
-                    // as plain inputs; the bubble's remaining @State (sheets,
-                    // fullscreen) lives on a CHILD of the gate's stateless
-                    // content, so its invalidations bypass `==` entirely. Same
-                    // topology as the Feed's `FeedPostCard().equatable()`.
-                    EquatableMessageBubble(bubble: ThemedMessageBubble(
+            // Bulle construite UNE fois, réutilisée pour le contenu de cellule
+            // ET l'aperçu du `.contextMenu` natif (iOS 26) : l'aperçu élevé
+            // montre alors la VRAIE bulle/attachement d'origine.
+            // (Equatable re-render gate conservé : le @State restant de la bulle
+            // vit sur un CHILD du gate stateless, ses invalidations contournent
+            // `==` — topologie du `FeedPostCard().equatable()`.)
+            let messageBubble = EquatableMessageBubble(bubble: ThemedMessageBubble(
                         message: message,
                         contactColor: accent,
                         recipientCount: recipients,
@@ -621,6 +628,20 @@ final class MessageListViewController: UIViewController {
                         onTapConsentNotice: { [weak self] in self?.router.push(.settings) }
                     ))
                     .equatable()
+            cell.contentConfiguration = UIHostingConfiguration {
+                BubbleSwipeContainer(
+                    isMine: isMine,
+                    messageId: messageId,
+                    messageCreatedAt: message.createdAt,
+                    resistance: hasTimebasedMedia ? .resistant : .normal,
+                    onSwipeReply: { swipeReplyHandler?(messageId) },
+                    onSwipeForward: { swipeForwardHandler?(messageId) },
+                    onLongPress: { longPressHandler?(messageId) },
+                    // iOS 26+ (menu natif présent) : couper le long-press
+                    // custom — le `.contextMenu` natif possède la pression.
+                    enableLongPress: nativeMenu == nil
+                ) {
+                    messageBubble
                 }
                 .environmentObject(host)
                 .environmentObject(stories)
@@ -628,6 +649,18 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(convList)
                 // Counter-flip to undo the parent collectionView.transform.
                 .scaleEffect(x: 1, y: -1)
+                // iOS 26+ : `.contextMenu` NATIF + aperçu = la VRAIE bulle
+                // d'origine (réutilisée, remise à l'endroit hors de la
+                // collection view inversée). No-op < iOS 26 → overlay custom.
+                .nativeMessageContextMenu(menu: nativeMenu) {
+                    messageBubble
+                        .environmentObject(host)
+                        .environmentObject(stories)
+                        .environmentObject(statuses)
+                        .environmentObject(convList)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                }
             }
             .margins(.all, 0)
             cell.backgroundColor = .clear

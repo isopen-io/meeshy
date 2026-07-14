@@ -259,6 +259,11 @@ extension StoryComposerView {
                     resizableBandHeight: $composerBandHeight,
                     bandMinHeight: Self.composerBandMinHeight,
                     bandMaxHeight: Self.composerBandMaxHeight,
+                    // Hauteur RÉELLE rendue de la band déployée (content-driven) —
+                    // réservée par `presentedSheetHeight` pour scaler le canvas
+                    // EXACTEMENT au-dessus (0 quand la band est repliée / FABs seuls,
+                    // état où le canvas reste plein écran).
+                    onBandHeightChange: { measuredBottomBandHeight = $0 },
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
                     onOpenStickerPicker: { showStickerPicker = true }
                 )
@@ -663,6 +668,11 @@ extension StoryComposerView {
                 sideInset: 14,
                 state: canvasIsCarded ? .carded : .free,
                 cardedCornerRadius: 22,
+                // Canvas PAYSAGE (16:9) : court, il laisse du mou vertical dans la
+                // région réduite → `.top` le colle sous le header (« l'horizontal
+                // bouge entièrement vers le haut »). PORTRAIT (9:16) : scale pour
+                // remplir la région → `.center` (le mou est nul, aucune différence).
+                verticalAlignment: canvasRatio > 1 ? .top : .center,
                 canvasRatio: canvasRatio))
             let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: canvasRatio)
             // Rayon compensé par `framing.scale` : la carte est rendue à sa taille
@@ -742,38 +752,68 @@ extension StoryComposerView {
         .ignoresSafeArea()
     }
 
-    /// Vrai dès qu'un panneau (band partagé, mode dessin, ou éditeur texte) est
-    /// présenté : le canvas se carde alors en rectangle arrondi AU-DESSUS de la
-    /// sheet (plus de chevauchement Option A). Truth-table dans `StoryCanvasFraming`.
+    /// Fraction d'écran occupée par une sheet SYSTÈME partielle présentée
+    /// au-dessus du canvas — sticker / vocal / transitions (`.medium` ≈ 0.5),
+    /// timeline (`.fraction(0.45)`). `nil` si aucune. Exclut l'audience picker
+    /// (`.large` par défaut) et les `.fullScreenCover` (éditeurs) : ils couvrent
+    /// l'écran, le canvas derrière n'a pas à rester visible.
+    var presentedSystemSheetFraction: CGFloat? {
+        if viewModel.isTimelineVisible { return 0.45 }
+        if showStickerPicker || showVoiceRecorderSheet || showTransitionSheet { return 0.5 }
+        return nil
+    }
+
+    /// Vrai dès qu'un panneau réduit la zone visible : band d'outils déployée,
+    /// éditeur texte (clavier), OU une sheet système partielle (timeline / sticker /
+    /// vocal / transitions). Le canvas se carde alors et scale pour rester
+    /// ENTIÈREMENT visible AU-DESSUS (plus de bas masqué / débordement). L'état AU
+    /// REPOS (FABs flottants, band `.hidden`) et le dessin immersif restent PLEIN
+    /// écran — les FABs/bulles flottent par-dessus. Cf. `StoryCanvasFraming.isCarded`.
     var canvasIsCarded: Bool {
         let bandPresent = bandStateMachine.state != .hidden
         let drawingActive = viewModel.drawingEditingMode.isActive
         let textActive = viewModel.textEditingMode != .inactive
-        return StoryCanvasFraming.isCarded(
+        if StoryCanvasFraming.isCarded(
             bandPresent: bandPresent,
             drawingActive: drawingActive,
             textActive: textActive
-        )
+        ) {
+            return true
+        }
+        return presentedSystemSheetFraction != nil
     }
 
-    /// Hauteur (en points) de la sheet actuellement présentée, telle que le canvas
-    /// doit la réserver en bas pour ne PAS la chevaucher. Source INTÉRIMAIRE
-    /// (lot B4 remplacera la source par un modèle par-outil) : band/dessin →
-    /// `composerBandHeight` cappé ; éditeur texte → `keyboardHeight + 132` (barre
-    /// bulles). Hors carding → `0` (canvas plein écran).
+    /// Hauteur (en points) de la présentation active, telle que le canvas doit la
+    /// réserver en bas pour scaler ENTIÈREMENT au-dessus d'elle. Max des sources :
+    /// éditeur texte → `keyboardHeight + 132` (barre bulles) ; band déployée →
+    /// `measuredBottomBandHeight` (hauteur RÉELLE mesurée de `ComposerBottomBand`,
+    /// content-driven — `composerBandHeight` reste un plancher tant que la 1re mesure
+    /// n'a pas atterri) ; sheet système → `fraction × écran`. Le cap garantit qu'il
+    /// reste toujours ≥ ~30 % d'écran pour le canvas (jamais écrasé à zéro → sinon le
+    /// solver retombe en plein écran = bas de nouveau masqué). Hors carding → `0`.
     var presentedSheetHeight: CGFloat {
         guard canvasIsCarded else { return 0 }
         let cap = cappedSheetMaxHeight(screenHeight: composerScreenHeight)
+        var height: CGFloat = 0
         if viewModel.textEditingMode != .inactive {
-            return min(cap, keyboardHeight + 132)
+            height = max(height, keyboardHeight + 132)
         }
-        return min(cap, composerBandHeight)
+        if bandStateMachine.state != .hidden {
+            height = max(height, max(composerBandHeight, measuredBottomBandHeight))
+        }
+        if let fraction = presentedSystemSheetFraction {
+            height = max(height, composerScreenHeight * fraction)
+        }
+        return min(cap, height)
     }
 
-    /// Plafond de hauteur de sheet : ~42 % de l'écran, borné à 540 pt — garde le
-    /// canvas cardé toujours visible (jamais écrasé sous la sheet).
+    /// Plafond de hauteur réservée : ~70 % de l'écran. Assez haut pour couvrir
+    /// l'empreinte RÉELLE du clavier (`keyboardHeight + 132` ≈ 0.55–0.58 H) et les
+    /// détents `.medium` (~0.5 H) SANS les tronquer — l'ancien plafond 0.42 H
+    /// laissait le bas du canvas sous le clavier / la sheet. Le reste (~30 %) suffit
+    /// pour que le canvas cardé reste une carte pleinement visible.
     func cappedSheetMaxHeight(screenHeight: CGFloat) -> CGFloat {
-        min(540, screenHeight * 0.42)
+        screenHeight * 0.70
     }
 
     /// Hauteur de la fenêtre active (et non `UIScreen.main.bounds`) — identique au

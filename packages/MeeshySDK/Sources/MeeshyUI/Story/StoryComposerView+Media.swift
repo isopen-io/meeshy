@@ -205,10 +205,6 @@ extension StoryComposerView {
                                 slideId: viewModel.currentSlide.id
                             )
                         }
-                        // Bump version : même rationale que le bloc image
-                        // editor — la vignette vidéo est une mutation
-                        // intra-clé non détectable par SwiftUI.
-                        viewModel.loadedImagesVersion &+= 1
                     }
 
                     // 3. Si l'utilisateur a transcrit la piste audio, on
@@ -230,6 +226,16 @@ extension StoryComposerView {
                         // précédent edit du même element.
                         viewModel.loadedVideoCaptions.removeValue(forKey: item.elementId)
                     }
+
+                    // Bump version INCONDITIONNEL : toute édition vidéo (URL du
+                    // clip, filtre, sous-titres/transcription, ratio) doit se
+                    // refléter sur le canvas même quand aucune nouvelle vignette
+                    // n'est générée. L'ancien bump était gaté sur `if let thumbnail`
+                    // → une transcription/filtre seul restait invisible jusqu'au
+                    // prochain rebuild. `loadedVideoURLs`/`loadedVideoCaptions`/
+                    // `mediaAspectRatios` vivent HORS du JSON du slide, donc SwiftUI
+                    // ne peut pas détecter leur mutation sans ce cookie.
+                    viewModel.loadedImagesVersion &+= 1
 
                     editingElementVideo = nil
                 },

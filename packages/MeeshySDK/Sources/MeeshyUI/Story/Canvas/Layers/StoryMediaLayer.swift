@@ -310,17 +310,33 @@ public final class StoryMediaLayer: CALayer {
     ///  1. `resolver(media.postMediaId)` — preloaded composer-preview asset,
     ///     then the published `StoryItem.media` remote URL.
     ///  2. Fallback `media.mediaURL` — fixtures and the `file://` URL the
-    ///     composer edition embeds directly on the object.
+    ///     composer edition embeds directly on the object. A `file://` here is
+    ///     the AUTHOR's local edition asset: on another viewer's device it points
+    ///     into the author's sandbox and never exists. Honouring it would feed a
+    ///     dead path to the loader (silent blank foreground, or a video player
+    ///     wired to nothing) — the exact "foreground missing on another user's
+    ///     story" symptom. So a file URL is only used when it resolves on THIS
+    ///     device; otherwise the media is treated as unresolved and the reader's
+    ///     content-readiness failsafe takes over.
     @MainActor
     private func resolvedMediaURL(for media: StoryMediaObject,
                                   resolver: (@Sendable (String) -> URL?)?) -> URL? {
         if !media.postMediaId.isEmpty, let resolved = resolver?(media.postMediaId) {
             return resolved
         }
-        if let urlString = media.mediaURL, let url = URL(string: urlString) {
-            return url
+        guard let urlString = media.mediaURL, let url = URL(string: urlString) else {
+            return nil
         }
-        return nil
+        // The file-existence guard applies ONLY in the READER (a resolver is
+        // always provided there). A `file://` that survives a resolver miss is
+        // the AUTHOR's local edition path — dead on another viewer's device — so
+        // we honour it only when it resolves on THIS device. In the COMPOSER /
+        // edit (resolver == nil) the file:// IS the intended local asset (and
+        // fixtures use placeholder paths), so it is used as-is.
+        if resolver != nil, url.isFileURL {
+            return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        }
+        return url
     }
 
     // MARK: - Image path

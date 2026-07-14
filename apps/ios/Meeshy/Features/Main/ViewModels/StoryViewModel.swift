@@ -604,24 +604,29 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Prefetch les URLs (déjà filtrées) d'une story dans les stores disque + mémoire.
     private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async {
         for urlString in urls {
+            // Normalize through the SAME resolver the SDK reader uses
+            // (`StoryReaderRepresentable` / `directURLIfAny`). Cache keys must
+            // match the reader's `url.absoluteString`; a relative URL warmed
+            // under its raw key would be a cache-miss + re-download at play time.
+            let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
             // R7 — type effectif (déclaré corrigé par sniff d'extension) : un
             // mp4 mal classé ne doit plus atterrir dans le store `images`.
             let mediaType = StoryMediaStoreRouter.effectiveKind(
                 declaredType: story.media.first(where: { $0.url == urlString })?.type,
-                urlString: urlString
+                urlString: resolved
             )
 
             if mediaType == .video {
                 // Peupler le store `video` (celui que le canvas relit), pas
                 // `images` — sinon cache-miss + re-download au moment de jouer.
-                _ = try? await CacheCoordinator.shared.video.data(for: urlString)
-                if prerollPlayer, let url = URL(string: urlString) {
+                _ = try? await CacheCoordinator.shared.video.data(for: resolved)
+                if prerollPlayer, let url = MeeshyConfig.resolveMediaURL(urlString) {
                     await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
                 }
             } else if mediaType == .audio {
-                _ = try? await CacheCoordinator.shared.audio.data(for: urlString)
+                _ = try? await CacheCoordinator.shared.audio.data(for: resolved)
             } else {
-                _ = await imageCache.image(for: urlString)
+                _ = await imageCache.image(for: resolved)
             }
         }
     }

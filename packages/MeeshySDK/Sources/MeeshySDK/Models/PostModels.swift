@@ -224,7 +224,17 @@ extension APIPost: Decodable {
         moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
         audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
         audioDuration = try c.decodeIfPresent(Int.self, forKey: .audioDuration)
-        storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        // Resilience: a single malformed `storyEffects` payload (a type mismatch
+        // on a present nested field of another user's story) must NOT fail the
+        // whole `APIPost` decode — the story feed is decoded as a strict array,
+        // so one throwing post would drop the ENTIRE batch ("0 stories loaded").
+        // Degrade this post to no effects (it still renders content/media) and
+        // keep the rest of the list intact.
+        do {
+            storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        } catch {
+            storyEffects = nil
+        }
         translations = try c.decodeIfPresent([String: APIPostTranslationEntry].self, forKey: .translations)
         isLikedByMe = try c.decodeIfPresent(Bool.self, forKey: .isLikedByMe)
         isBookmarkedByMe = try c.decodeIfPresent(Bool.self, forKey: .isBookmarkedByMe)

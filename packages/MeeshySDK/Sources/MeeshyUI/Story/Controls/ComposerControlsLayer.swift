@@ -29,6 +29,11 @@ public struct ComposerControlsLayer: View {
     /// C8 — ouvre le picker de stickers (sheet présentée par StoryComposerView).
     var onOpenStickerPicker: (() -> Void)? = nil
 
+    /// Reporte la hauteur RÉELLE rendue de `ComposerBottomBand` (content-driven) au
+    /// parent, qui la réserve pour scaler le canvas exactement au-dessus. `0` quand
+    /// la band est repliée (FABs seuls / dessin immersif) — le canvas reste plein.
+    var onBandHeightChange: ((CGFloat) -> Void)? = nil
+
     public init(
         viewModel: StoryComposerViewModel,
         bandStateMachine: Binding<BandStateMachine>,
@@ -40,6 +45,7 @@ public struct ComposerControlsLayer: View {
         resizableBandHeight: Binding<CGFloat>,
         bandMinHeight: CGFloat,
         bandMaxHeight: CGFloat,
+        onBandHeightChange: ((CGFloat) -> Void)? = nil,
         onOpenMediaCrop: @escaping (String) -> Void,
         onOpenStickerPicker: (() -> Void)? = nil
     ) {
@@ -53,6 +59,7 @@ public struct ComposerControlsLayer: View {
         self._resizableBandHeight = resizableBandHeight
         self.bandMinHeight = bandMinHeight
         self.bandMaxHeight = bandMaxHeight
+        self.onBandHeightChange = onBandHeightChange
         self.onOpenMediaCrop = onOpenMediaCrop
         self.onOpenStickerPicker = onOpenStickerPicker
     }
@@ -255,11 +262,27 @@ public struct ComposerControlsLayer: View {
                             }
                         }
                 )
+                // Hauteur RÉELLE rendue de la band (content-driven) → réservée par
+                // le parent pour scaler le canvas exactement au-dessus.
+                .background(
+                    GeometryReader { p in
+                        Color.clear
+                            .onAppear { onBandHeightChange?(p.size.height) }
+                            .adaptiveOnChange(of: p.size.height) { _, h in
+                                onBandHeightChange?(h)
+                            }
+                    }
+                )
             }
         }
         .ignoresSafeArea(edges: .bottom)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: bandStateMachine.state)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: areFabsVisible)
+        // Band repliée (FABs seuls / dessin immersif) → réserve 0 : le canvas
+        // redevient plein écran, les FABs flottent par-dessus.
+        .adaptiveOnChange(of: effectiveBandState == .hidden) { _, hidden in
+            if hidden { onBandHeightChange?(0) }
+        }
         .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
             // Slide switch invalidates any open formatPanel (id from previous slide).
             bandStateMachine.reset()

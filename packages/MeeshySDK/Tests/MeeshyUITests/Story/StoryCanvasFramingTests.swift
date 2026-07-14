@@ -181,6 +181,29 @@ final class StoryCanvasFramingTests: XCTestCase {
                        "compat : les call sites existants (composer) gardent le centrage")
     }
 
+    func test_resolve_landscapeTopAlignment_flushesUnderHeader() {
+        // A landscape 16:9 canvas is width-constrained → short, leaving vertical
+        // slack in the reduced region (sheet/keyboard up). `.top` must flush it
+        // under the header (« canvas horizontal bouge entièrement vers le haut »),
+        // not centre it with a gap above.
+        let viewport = CGSize(width: 402, height: 874)
+        let headerInset: CGFloat = 100
+        func cardTop(_ alignment: StoryCanvasFraming.VerticalAlignment) -> CGFloat {
+            let input = StoryCanvasFraming.Input(
+                viewport: viewport, headerInset: headerInset, bottomInset: 300,
+                state: .carded, cardedCornerRadius: 22,
+                verticalAlignment: alignment,
+                canvasRatio: CanvasGeometry.landscapeRatio)
+            let r = StoryCanvasFraming.resolve(input)
+            let scaledH = CanvasGeometry.aspectFitSize(in: viewport, ratio: CanvasGeometry.landscapeRatio).height * r.scale
+            return viewport.height / 2 + r.offset.height - scaledH / 2
+        }
+        XCTAssertEqual(cardTop(.top), headerInset, accuracy: 0.5,
+                       "landscape card must flush under the header with .top")
+        XCTAssertGreaterThan(cardTop(.center), headerInset + 10,
+                             "sanity: .center leaves a gap above the short landscape card")
+    }
+
     // MARK: - Canvas paysage (fond 16:9 impose la forme horizontale)
 
     func test_resolve_landscapeRatio_cardIsSixteenNine() {

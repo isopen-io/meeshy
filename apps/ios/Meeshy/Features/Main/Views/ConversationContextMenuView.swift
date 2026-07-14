@@ -363,7 +363,12 @@ struct ConversationContextMenuView: View {
 /// Liquid Glass iOS 26 compris) surlignent la ligne pressée ; `.plain` ne
 /// donnait aucun feedback. `Color.primary` suit automatiquement dark/light,
 /// comme le highlight natif.
-private struct MenuRowHighlightButtonStyle: ButtonStyle {
+///
+/// Type **interne partagé** (2026-07-14) : le menu d'appui long des MESSAGES
+/// (`MessageActionsMenu`) l'applique aussi pour aligner sa liste d'actions sur
+/// le design système par version d'iOS — même parité UIMenu / Liquid Glass que
+/// le menu des lignes de conversation. Un seul style, deux consommateurs.
+struct MenuRowHighlightButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(configuration.isPressed ? Color.primary.opacity(0.08) : Color.clear)

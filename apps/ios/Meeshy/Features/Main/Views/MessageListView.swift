@@ -51,6 +51,11 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// reactions, copy, delete, …). The container fires the haptic so each
     /// caller doesn't have to.
     let onLongPress: () -> Void
+    /// `false` (iOS 26+) désactive le `LongPressGesture` custom : le cell
+    /// attache alors un `.contextMenu` NATIF (Liquid Glass) qui possède la
+    /// pression. `true` (< iOS 26) garde le long-press → overlay custom.
+    /// Les deux ne coexistent jamais (double déclenchement).
+    var enableLongPress: Bool = true
     @ViewBuilder let content: () -> Content
 
     @State private var offset: CGFloat = 0
@@ -125,13 +130,12 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // le LongPressGesture s'annule et laisse le pan parent
                 // s'approprier le geste sans aucune contention. Le
                 // scroll est ainsi prioritaire sur le long press.
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
-                        .onEnded { _ in
-                            HapticFeedback.medium()
-                            onLongPress()
-                        }
-                )
+                //
+                // iOS 26+ : `enableLongPress == false` — le cell attache
+                // un `.contextMenu` NATIF (Liquid Glass) qui possède la
+                // pression ; ce geste custom est retiré pour éviter le
+                // double déclenchement (overlay custom + menu natif).
+                .modifier(ConditionalBubbleLongPress(enabled: enableLongPress, action: onLongPress))
         }
     }
 
@@ -239,6 +243,51 @@ struct BubbleSwipeContainer<Content: View>: View {
 }
 
 
+/// Applique le `LongPressGesture` custom de la bulle UNIQUEMENT quand
+/// `enabled` (< iOS 26). Sur iOS 26+ le cell attache un `.contextMenu` natif
+/// à la place — ce geste doit alors disparaître pour éviter le double
+/// déclenchement. Un modifier conditionnel (plutôt qu'un `.simultaneousGesture`
+/// masqué) garantit que le recognizer n'est même pas installé.
+private struct ConditionalBubbleLongPress: ViewModifier {
+    let enabled: Bool
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
+                    .onEnded { _ in
+                        HapticFeedback.medium()
+                        action()
+                    }
+            )
+        } else {
+            content
+        }
+    }
+}
+
+/// Attache un `.contextMenu` NATIF (Liquid Glass iOS 26) au contenu SwiftUI
+/// d'une cellule de message quand un builder est fourni ET que l'OS rend le
+/// menu système. `menu` est résolu UNE fois par configuration de cellule
+/// (précédent `ConversationRowItem.nativeContextMenu` : AnyView stable, jamais
+/// un `@ViewBuilder` générique — sinon EXC_BAD_ACCESS iOS 26). `preview` rend
+/// la VRAIE bulle d'origine à l'endroit (la collection view étant inversée, le
+/// snapshot par défaut ne l'affichait pas correctement) — feedback 2026-07-14.
+extension View {
+    @ViewBuilder
+    func nativeMessageContextMenu<Preview: View>(
+        menu: (() -> AnyView)?,
+        @ViewBuilder preview: @escaping () -> Preview
+    ) -> some View {
+        if #available(iOS 26.0, *), let menu {
+            self.contextMenu { menu() } preview: { preview() }
+        } else {
+            self
+        }
+    }
+}
+
 struct MessageListView: UIViewControllerRepresentable {
     let store: MessageStore
     /// Owner of the live per-message dynamic state (translations,
@@ -288,6 +337,11 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Long-press on a bubble — opens the contextual options menu for that
     /// message (reply, forward, react, copy, delete, …).
     var onLongPress: ((String) -> Void)?
+    /// iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) d'une bulle,
+    /// construit par `ConversationView` (là où toutes les actions sont déjà
+    /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le
+    /// long-press custom → overlay reste alors le chemin).
+    var nativeMessageMenu: ((Message) -> AnyView)? = nil
     /// Long-press on a call-summary notice → request the shared call-detail
     /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
     var onCallDetailRequest: ((String) -> Void)?
@@ -355,6 +409,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
+        vc.nativeMessageMenu = nativeMessageMenu
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -408,6 +463,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
+        vc.nativeMessageMenu = nativeMessageMenu
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment

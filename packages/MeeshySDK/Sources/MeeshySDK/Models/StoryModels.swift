@@ -524,13 +524,37 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     }
 }
 
+/// Tolerant language-code matching for the Prisme Linguistique reader chain.
+/// `preferredContentLanguages` preserves the original casing of the in-app
+/// system/regional/custom codes, while translation keys are ISO 639-1 — so an
+/// exact match can miss ("en-US" preferred vs "en" key, "FR" vs "fr"), leaving
+/// another user's story text in the AUTHOR's language. These helpers collapse
+/// casing + region qualifiers to a base code for a per-language fallback that
+/// still honours the chain's priority order.
+enum StoryPrismeMatch {
+    /// Base language code (lowercased ISO 639-1) for tolerant comparison. Falls
+    /// back to a lowercased region-stripped split when the normalizer rejects an
+    /// unknown code, so casing/region is still collapsed.
+    static func base(_ code: String) -> String {
+        if let normalized = MeeshyUser.normalizeLanguageCode(code) { return normalized }
+        return code.split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first.map { $0.lowercased() } ?? code.lowercased()
+    }
+}
+
 extension StoryTextObject {
     /// Resolves the displayable text via the Prisme Linguistique chain.
-    /// Falls back to original `text` when no translation matches.
+    /// Falls back to original `text` when no translation matches. Each preferred
+    /// language tries an exact key, then a normalized (case/region-insensitive)
+    /// match BEFORE moving to the next — so chain priority is preserved.
     public func resolvedText(preferredLanguages: [String]) -> String {
         guard let translations, !preferredLanguages.isEmpty else { return text }
         for lang in preferredLanguages {
             if let t = translations[lang] { return t }
+            let target = StoryPrismeMatch.base(lang)
+            if let t = translations.first(where: { StoryPrismeMatch.base($0.key) == target })?.value {
+                return t
+            }
         }
         return text
     }
@@ -838,6 +862,10 @@ extension StoryAudioPlayerObject {
               !preferredLanguages.isEmpty else { return postMediaId }
         for lang in preferredLanguages {
             if let v = variants.first(where: { $0.language == lang }) { return v.postMediaId }
+            let target = StoryPrismeMatch.base(lang)
+            if let v = variants.first(where: { StoryPrismeMatch.base($0.language) == target }) {
+                return v.postMediaId
+            }
         }
         return postMediaId
     }
@@ -1214,6 +1242,35 @@ public enum StoryCanvasAspect: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// Consumes exactly one element from an unkeyed container without inspecting
+/// it — used to advance the cursor past a malformed element during lossy decode.
+private struct _StorySkippedElement: Decodable {
+    init(from decoder: Decoder) throws {}
+}
+
+extension KeyedDecodingContainer {
+    /// Decodes `[T]` element-by-element, skipping any element that fails to
+    /// decode instead of throwing the whole array. A single malformed story
+    /// object in another user's payload is dropped rather than blanking the
+    /// entire story. Returns `nil` when the key is absent or not an array
+    /// (parity with `decodeIfPresent`), `[]` when present but empty/all-invalid.
+    func decodeLossyArrayIfPresent<T: Decodable>(_ type: [T].Type, forKey key: Key) -> [T]? {
+        guard contains(key),
+              var unkeyed = try? nestedUnkeyedContainer(forKey: key) else { return nil }
+        var result: [T] = []
+        while !unkeyed.isAtEnd {
+            if let element = try? unkeyed.decode(T.self) {
+                result.append(element)
+            } else {
+                // A failed `decode(T.self)` leaves the JSONDecoder cursor in
+                // place; decoding a throwaway element advances past the bad one.
+                _ = try? unkeyed.decode(_StorySkippedElement.self)
+            }
+        }
+        return result
+    }
+}
+
 public struct StoryEffects: Codable, Sendable {
     public var background: String?
     public var textStyle: String?
@@ -1384,9 +1441,12 @@ public struct StoryEffects: Codable, Sendable {
         voiceTranscriptions = try c.decodeIfPresent([StoryVoiceTranscription].self, forKey: .voiceTranscriptions)
         opening = try c.decodeIfPresent(StoryTransitionEffect.self, forKey: .opening)
         closing = try c.decodeIfPresent(StoryTransitionEffect.self, forKey: .closing)
-        textObjects = try c.decodeIfPresent([StoryTextObject].self, forKey: .textObjects) ?? []
-        mediaObjects = try c.decodeIfPresent([StoryMediaObject].self, forKey: .mediaObjects)
-        audioPlayerObjects = try c.decodeIfPresent([StoryAudioPlayerObject].self, forKey: .audioPlayerObjects)
+        // Lossy per-element decode: one malformed object (another user's story)
+        // is skipped rather than dropping the whole collection (or, via the
+        // APIPost do/catch above, the whole story's effects).
+        textObjects = c.decodeLossyArrayIfPresent([StoryTextObject].self, forKey: .textObjects) ?? []
+        mediaObjects = c.decodeLossyArrayIfPresent([StoryMediaObject].self, forKey: .mediaObjects)
+        audioPlayerObjects = c.decodeLossyArrayIfPresent([StoryAudioPlayerObject].self, forKey: .audioPlayerObjects)
         backgroundAudioVariants = try c.decodeIfPresent([StoryAudioVariant].self, forKey: .backgroundAudioVariants)
         thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         backgroundTransform = try c.decodeIfPresent(StoryBackgroundTransform.self, forKey: .backgroundTransform)
@@ -1747,6 +1807,10 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         guard let translations, !translations.isEmpty else { return content }
         for lang in preferredLanguages {
             if let hit = translations.first(where: { $0.language == lang })?.content {
+                return hit
+            }
+            let target = StoryPrismeMatch.base(lang)
+            if let hit = translations.first(where: { StoryPrismeMatch.base($0.language) == target })?.content {
                 return hit
             }
         }
@@ -2150,17 +2214,16 @@ extension StoryItem {
     /// Resolves `content` via the Prisme Linguistique chain when available.
     /// Used by `StoryReaderRepresentable` to feed the canvas.
     ///
-    /// `slide.mediaURL` est un champ LEGACY pour les stories antérieures à
-    /// `effects.mediaObjects` (où l'asset bg était directement dans
-    /// `StoryItem.media[0]`). Quand `effects.mediaObjects` existe — i.e. la
-    /// story moderne où chaque asset porte sa position / scale / isBackground
-    /// — il faut LAISSER `slide.mediaURL = nil` ; sinon `StoryRenderer
-    /// .renderBackground` tombe dans son chemin legacy
-    /// `if let urlString = slide.mediaURL` qui passe `slide.id` (= post id)
-    /// comme `postMediaId` au `StoryBackgroundLayer`. Le resolver ne sait
-    /// pas mapper un post id à une URL CDN (il indexe sur PostMedia.id),
-    /// donc le BG layer reste vide et le loader infini masque tout — y
-    /// compris le foreground correctement stampé par `StoryMediaLayer`.
+    /// `slide.mediaURL` porte l'URL du fond IMAGE/VIDÉO statique consommée par le
+    /// chemin BG legacy de `StoryRenderer.renderBackground` (routée via
+    /// `directURLIfAny`). Il vaut :
+    /// - `media[0].url` pour une story purement legacy (aucun `mediaObject`) ;
+    /// - l'URL de la `media` NON référencée par un objet quand des `mediaObject`
+    ///   existent (le backdrop statique d'une story moderne) — voir le détail plus
+    ///   bas. Il reste `nil` si tous les `media` sont référencés (foreground-only)
+    ///   ou si le fond est un `StoryMediaObject isBackground:true` (traité en amont
+    ///   par `renderBackground`), de sorte qu'on ne fournit jamais un post id au
+    ///   resolver keyé sur `FeedMedia.id`.
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
         // R10 — chaîne complète (et plus seulement `.first`) : un viewer
         // fr→es voit la traduction es si la fr manque, au lieu de l'original.
@@ -2211,20 +2274,36 @@ extension StoryItem {
             effects.audioPlayerObjects = audios
         }
 
-        // `slide.mediaURL` ne survit QUE pour les stories purement legacy (aucun
-        // `effects.mediaObjects`). Dès qu'un `StoryMediaObject` existe on laisse
-        // `mediaURL = nil` (cf. docstring ci-dessus) : `StoryRenderer
-        // .renderBackground` route le BG via `mediaObjects`, et un `mediaURL`
-        // non-nil ferait deux dégâts — (1) il passe `slide.id` (= post id) au
-        // resolver keyé sur `FeedMedia.id`, donc le BG ne résout jamais ;
-        // (2) il pré-empte le repli `effects.background` / `.solidColor(.black)`,
-        // rendant NOIRES les stories modernes foreground-only (sans objet
-        // isBackground). KNOWN DEFERRED : le cas « photo bg statique (media[0])
-        // + foreground mediaObject » perd donc son fond. Le fix propre = router
-        // l'URL via `directURLIfAny` dans `renderBackground` (chemin BG legacy
-        // commun) PUIS vérifier sur device — non tenté ici car il touche le
-        // chemin partagé et exige une validation reader réelle.
-        let legacyMediaURL: String? = effects.mediaObjects?.isEmpty == false ? nil : self.media.first?.url
+        // `slide.mediaURL` porte le fond IMAGE/VIDÉO statique (chemin BG legacy
+        // de `StoryRenderer.renderBackground`, routé via `directURLIfAny`).
+        //
+        // - Story purement legacy (aucun `mediaObject`) : le fond vit directement
+        //   dans `media[0]` → on le garde.
+        // - Story moderne (au moins un `mediaObject`) : un fond photo statique est
+        //   une entrée `media` qui n'est référencée par AUCUN objet (foreground,
+        //   background, audio ou variante TTS). Si une telle entrée existe, c'est
+        //   le backdrop → on route son URL (sinon `renderBackground` retombe sur
+        //   `.solidColor(.black)` = fond NOIR sur la story d'un autre). Quand
+        //   chaque `media` est référencée (story foreground-only), il n'y a pas de
+        //   backdrop statique → `nil`, et le fond vient de `effects.background`.
+        //
+        // Un fond porté par un `StoryMediaObject isBackground:true` référence sa
+        // `media`, donc il n'est jamais choisi ici : `renderBackground` le traite
+        // en amont (branche isBackground), et `mediaURL` reste `nil` — pas de
+        // double routage ni de post id fourni au resolver keyé sur `FeedMedia.id`.
+        let legacyMediaURL: String?
+        if let mediaObjects = effects.mediaObjects, !mediaObjects.isEmpty {
+            var referencedIds = Set(mediaObjects.map(\.postMediaId))
+            for audio in effects.audioPlayerObjects ?? [] {
+                referencedIds.insert(audio.postMediaId)
+                for variant in audio.backgroundAudioVariants ?? [] {
+                    referencedIds.insert(variant.postMediaId)
+                }
+            }
+            legacyMediaURL = self.media.first(where: { !referencedIds.contains($0.id) })?.url
+        } else {
+            legacyMediaURL = self.media.first?.url
+        }
         return StorySlide(
             id: self.id,
             mediaURL: legacyMediaURL,

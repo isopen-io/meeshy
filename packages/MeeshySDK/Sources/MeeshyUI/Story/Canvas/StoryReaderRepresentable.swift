@@ -147,8 +147,13 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             if let local = videoURLs[postId] ?? audioURLs[postId] ?? imageURLs[postId] {
                 return local
             }
+            // Normalize through the SSRF-guarded resolver (relative → absolute,
+            // file:// verbatim) — same path the rest of the app uses. Without it
+            // a relative `StoryItem.media.url` (getAttachmentPath / forward /
+            // repost) fed a scheme-less string to the cache, which silently
+            // rejects it → foreground/background of another user's story blank.
             return mediaList.first { $0.id == postId }
-                     .flatMap { $0.url.flatMap(URL.init(string:)) }
+                     .flatMap { $0.url.flatMap(MeeshyConfig.resolveMediaURL) }
         }
 
         // Résolveur audio par `audio.id` : les clips composer non publiés ont un

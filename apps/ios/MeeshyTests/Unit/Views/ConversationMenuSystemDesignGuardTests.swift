@@ -240,4 +240,183 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "(confirmation système) — jamais de suppression directe."
         )
     }
+
+    /// iOS 26+ : le builder natif doit exposer « Rechercher » et « Appeler »
+    /// (décision 2026-07-14) — l'aperçu natif étant statique, ces actions
+    /// vivent dans le menu, câblées sur les MÊMES chemins que les boutons de
+    /// l'aperçu du fallback custom : Rechercher arme `pendingOpenSearch` puis
+    /// ouvre la conversation, Appeler passe par `CallManager.shared.startCall`.
+    func test_nativeContextMenuBuilder_offersSearchAndCall() throws {
+        let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
+
+        guard let builderRange = overlaysSource.range(of: "func conversationContextMenu(for") else {
+            XCTFail("Le builder natif conversationContextMenu(for:) doit exister.")
+            return
+        }
+        let blockEnd = overlaysSource.range(
+            of: "// MARK: - Custom Context Menu Overlay",
+            range: builderRange.lowerBound ..< overlaysSource.endIndex
+        )?.lowerBound ?? overlaysSource.endIndex
+        let builderBlock = String(overlaysSource[builderRange.lowerBound ..< blockEnd])
+
+        XCTAssertTrue(
+            builderBlock.contains("context.search") && builderBlock.contains("magnifyingglass"),
+            "Le builder natif doit offrir « Rechercher » (icône magnifyingglass)."
+        )
+        XCTAssertTrue(
+            builderBlock.contains("router.pendingOpenSearch = true"),
+            "« Rechercher » doit armer router.pendingOpenSearch — même chemin que " +
+            "le bouton onSearch de l'aperçu custom (SSOT)."
+        )
+        XCTAssertTrue(
+            builderBlock.contains("context.call") && builderBlock.contains("phone.fill"),
+            "Le builder natif doit offrir « Appeler » (icône phone.fill, DM)."
+        )
+        XCTAssertTrue(
+            builderBlock.contains("CallManager.shared.startCall("),
+            "« Appeler » doit passer par CallManager.shared.startCall — même chemin " +
+            "que le bouton onCall de l'aperçu custom (SSOT)."
+        )
+    }
+
+    // MARK: - Menu d'appui long des MESSAGES (design système par version)
+    //
+    // Décision produit 2026-07-14 (« hybride ») : le menu d'appui long des
+    // messages adopte le design système par version d'iOS pour sa LISTE
+    // d'actions (`MessageActionsMenu` : même `adaptiveGlass` + highlight au
+    // press que le menu des conversations), tout en CONSERVANT la barre de
+    // réactions emoji rapides et l'aperçu de bulle (`MessageOverlayMenu`).
+
+    /// La liste d'actions du menu message rend le design système : conteneur
+    /// `adaptiveGlass` (Liquid Glass iOS 26 / fallback material), rows avec
+    /// highlight au press (`MenuRowHighlightButtonStyle`, partagé avec le menu
+    /// conversation) et métriques Dynamic Type — jamais `.buttonStyle(.plain)`.
+    func test_messageActionsMenu_rendersSystemDesign_likeConversationMenu() throws {
+        let menuSource = try source("Meeshy/Features/Main/Components/MessageActionsMenu.swift")
+
+        XCTAssertTrue(
+            menuSource.contains(".adaptiveGlass(in: RoundedRectangle"),
+            "MessageActionsMenu doit appliquer .adaptiveGlass sur son conteneur " +
+            "(Liquid Glass iOS 26 réel + fallback), comme le menu conversation."
+        )
+        XCTAssertTrue(
+            menuSource.contains("MenuRowHighlightButtonStyle"),
+            "Les rows du menu message doivent surligner la ligne pressée (parité " +
+            "menus système) via le style partagé MenuRowHighlightButtonStyle."
+        )
+        XCTAssertFalse(
+            menuSource.contains(".buttonStyle(.plain)"),
+            "MessageActionsMenu ne doit plus utiliser .buttonStyle(.plain) " +
+            "(aucun highlight au press) — régression du design système."
+        )
+        XCTAssertTrue(
+            menuSource.contains("@ScaledMetric(relativeTo: .body) private var rowMinHeight"),
+            "La hauteur de row du menu message doit scaler avec Dynamic Type " +
+            "(@ScaledMetric), comme les menus système et le menu conversation."
+        )
+    }
+
+    /// Le chrome « natif-lean » de l'overlay message est CONSERVÉ (décision
+    /// hybride) : barre de réactions emoji rapides (`EmojiReactionPicker`) +
+    /// aperçu de bulle réel (`ThemedMessageBubble`) + liste d'actions restylée
+    /// (`MessageActionsMenu`). Le passage au design système ne doit pas
+    /// dépouiller ces surfaces.
+    func test_messageOverlay_keepsEmojiBarAndBubblePreview_hybridDecision() throws {
+        let overlaySource = try source("Meeshy/Features/Main/Components/MessageOverlayMenu.swift")
+
+        XCTAssertTrue(
+            overlaySource.contains("EmojiReactionPicker"),
+            "MessageOverlayMenu doit garder la barre de réactions emoji rapides " +
+            "(EmojiReactionPicker) — décision hybride 2026-07-14."
+        )
+        XCTAssertTrue(
+            overlaySource.contains("ThemedMessageBubble"),
+            "MessageOverlayMenu doit garder l'aperçu de bulle réel (ThemedMessageBubble)."
+        )
+        XCTAssertTrue(
+            overlaySource.contains("MessageActionsMenu("),
+            "MessageOverlayMenu doit composer la liste d'actions restylée MessageActionsMenu."
+        )
+    }
+
+    // MARK: - Menu message NATIF (iOS 26 Liquid Glass) + fallback overlay
+    //
+    // Pivot 2026-07-14 : sur iOS 26 la bulle attache un `.contextMenu` NATIF
+    // (Liquid Glass, comme les lignes de conversation) avec aperçu de la bulle
+    // d'origine ; < iOS 26 garde l'overlay custom (`MessageOverlayMenu`). Deux
+    // chemins par version d'OS, exactement comme `ConversationRowItem`.
+
+    /// iOS 26+ : `.contextMenu` natif + aperçu, long-press custom coupé ;
+    /// < iOS 26 : overlay custom conservé (ConditionalBubbleLongPress).
+    func test_messageRow_prefersNativeMenu_oniOS26_withCustomFallback() throws {
+        let listSource = try source("Meeshy/Features/Main/Views/MessageListView.swift")
+        XCTAssertTrue(
+            listSource.contains("if #available(iOS 26.0, *), let menu"),
+            "Le .contextMenu natif des bulles doit être gaté #available(iOS 26.0, *)."
+        )
+        XCTAssertTrue(
+            listSource.contains(".contextMenu { menu() } preview: { preview() }"),
+            "Le chemin iOS 26 doit attacher le .contextMenu NATIF AVEC preview " +
+            "(la vraie bulle d'origine)."
+        )
+        XCTAssertTrue(
+            listSource.contains("ConditionalBubbleLongPress"),
+            "Le long-press custom de la bulle doit être conditionnel (coupé quand " +
+            "le menu natif est actif, gardé < iOS 26)."
+        )
+
+        let vcSource = try source("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(
+            vcSource.contains(".nativeMessageContextMenu(menu: nativeMenu)"),
+            "La cellule doit attacher le menu natif via .nativeMessageContextMenu(menu:)."
+        )
+        XCTAssertTrue(
+            vcSource.contains("enableLongPress: nativeMenu == nil"),
+            "La cellule doit couper le long-press custom quand le menu natif est actif."
+        )
+    }
+
+    /// Le builder du menu natif (ConversationView) : rangée d'emojis en
+    /// `.controlGroupStyle(.compactMenu)` (4 plus utilisés — plafond 1 ligne),
+    /// actions via `MessageActionResolver` (SSOT avec l'overlay), et Supprimer
+    /// qui ARME la confirmation — jamais de suppression directe.
+    func test_buildNativeMessageMenu_compactRow_resolver_confirmedDelete() throws {
+        let vSource = try source("Meeshy/Features/Main/Views/ConversationView.swift")
+
+        guard let range = vSource.range(of: "func buildNativeMessageMenu(for msg: Message)") else {
+            XCTFail("ConversationView doit exposer buildNativeMessageMenu(for:).")
+            return
+        }
+        let end = vSource.index(range.lowerBound, offsetBy: 4000, limitedBy: vSource.endIndex) ?? vSource.endIndex
+        let block = String(vSource[range.lowerBound ..< end])
+        XCTAssertTrue(
+            block.contains(".controlGroupStyle(.compactMenu)"),
+            "La rangée d'emojis rapides doit utiliser .controlGroupStyle(.compactMenu) " +
+            "(rangée horizontale système — sans ce style le ControlGroup empile)."
+        )
+        XCTAssertTrue(
+            block.contains("EmojiUsageTracker.topEmojis(count: 4"),
+            "La rangée rapide doit afficher 4 emojis (plafond : au-delà, " +
+            ".compactMenu passe à la ligne)."
+        )
+        XCTAssertTrue(
+            block.contains("MessageActionResolver.primaryActions(ctx)"),
+            "Les actions du menu natif doivent venir de MessageActionResolver (SSOT overlay)."
+        )
+
+        guard let btnRange = vSource.range(of: "func nativeMenuButton(") else {
+            XCTFail("ConversationView doit exposer nativeMenuButton(_:msg:).")
+            return
+        }
+        // Fenêtre large : `nativeMenuButton` est un switch de 10 cas (~6 k
+        // caractères) ; `.delete` est le DERNIER — la borne doit l'atteindre.
+        let btnEnd = vSource.index(btnRange.lowerBound, offsetBy: 6500, limitedBy: vSource.endIndex) ?? vSource.endIndex
+        let btnBlock = String(vSource[btnRange.lowerBound ..< btnEnd])
+        XCTAssertTrue(
+            btnBlock.contains("Button(role: .destructive)") &&
+            btnBlock.contains("overlayState.deleteConfirmMessageId = msg.id"),
+            "La suppression du menu natif doit être destructive ET armer " +
+            "deleteConfirmMessageId (confirmation) — jamais de suppression directe."
+        )
+    }
 }

@@ -1113,6 +1113,11 @@ struct ConversationView: View {
                         overlayState.showOverlayMenu = true
                     }
                 },
+                // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des
+                // bulles — mêmes actions que l'overlay custom (SSOT). `nil`
+                // renvoyé pour les messages système / résumés d'appel (pas de
+                // menu). Le builder est appelé une fois par config de cellule.
+                nativeMessageMenu: { msg in buildNativeMessageMenu(for: msg) },
                 onCallDetailRequest: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.callDetailMessage = msg
@@ -1668,6 +1673,178 @@ struct ConversationView: View {
                 }
             )
             .transition(.opacity).zIndex(999)
+        }
+    }
+
+    // MARK: - Menu message NATIF (iOS 26 Liquid Glass)
+
+    /// Contenu du `.contextMenu` natif d'une bulle (iOS 26+, cf. MessageListView
+    /// / MessageListViewController). Palette d'emojis rapides (`ControlGroup`,
+    /// choix produit 2026-07-14) + actions primaires via `MessageActionResolver`
+    /// — EXACTEMENT les mêmes callbacks que `overlayMenuContent` (SSOT). Menu
+    /// vide pour les messages système / résumés d'appel (parité overlay :
+    /// aucun menu). Reply/Forward restent dans « Plus… » (feuille détail) et
+    /// via le swipe latéral, inchangés.
+    private func buildNativeMessageMenu(for msg: Message) -> AnyView {
+        guard msg.callSummary == nil, msg.messageSource != .system else {
+            return AnyView(EmptyView())
+        }
+        let hasText = !msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let ctx = MessageMenuContext(
+            isMine: msg.isMe,
+            canEdit: msg.isMe || isCurrentUserAdminOrMod,
+            canDelete: msg.isMe || isCurrentUserAdminOrMod,
+            hasText: hasText,
+            hasMedia: !msg.attachments.isEmpty,
+            hasTimebasedMedia: msg.attachments.contains {
+                AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
+            },
+            isPinned: msg.pinnedAt != nil,
+            isStarred: viewModel.isStarred(messageId: msg.id),
+            isEdited: msg.isEdited,
+            hasEditRevisions: true,
+            saveableAttachmentCount: msg.attachments.filter { $0.type != .location }.count
+        )
+        let actions = MessageActionResolver.primaryActions(ctx)
+        // 4 emojis les plus utilisés (fallback sur les défauts) — rangée rapide
+        // du menu natif. PLAFOND à 4 : au-delà, `.compactMenu` passe à la ligne
+        // (la rangée doit rester sur UNE seule ligne — feedback device 2026-07-14).
+        let recentEmojis = EmojiUsageTracker.topEmojis(count: 4, defaults: Self.nativeQuickReactionEmojis)
+        return AnyView(
+            Group {
+                // Réactions rapides = rangée horizontale d'emojis (4 plus
+                // utilisés) via `ControlGroup` + `.controlGroupStyle(.compactMenu)`
+                // — rendu système en rangée medium (pattern Messages/Photos, cf.
+                // RecentMediaStrip). SANS ce style, le ControlGroup empile les
+                // emojis (3 + 3 vertical, feedback device 2026-07-14). iOS 16.4+ ;
+                // le menu natif n'existe que sur iOS 26 → toujours disponible.
+                if #available(iOS 16.4, *) {
+                    ControlGroup {
+                        ForEach(recentEmojis, id: \.self) { emoji in
+                            Button {
+                                viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                            } label: {
+                                Text(emoji)
+                            }
+                        }
+                    }
+                    .controlGroupStyle(.compactMenu)
+                } else {
+                    ForEach(recentEmojis, id: \.self) { emoji in
+                        Button {
+                            viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                        } label: {
+                            Text(emoji)
+                        }
+                    }
+                }
+
+                // « Plus d'emojis » → picker complet (sous la rangée rapide).
+                Button {
+                    overlayState.fullReactionPickerMessage = msg
+                } label: {
+                    Label(
+                        String(localized: "action.more_emojis", defaultValue: "Plus d'emojis", bundle: .main),
+                        systemImage: "plus"
+                    )
+                }
+
+                Divider()
+
+                ForEach(actions, id: \.self) { action in
+                    if action == .delete { Divider() }
+                    nativeMenuButton(action, msg: msg)
+                }
+            }
+        )
+    }
+
+    /// Emojis de la palette rapide du menu natif (sous-ensemble des défauts de
+    /// l'overlay — un menu système ne doit pas porter les 20).
+    private static let nativeQuickReactionEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥"]
+
+    /// Un item du menu natif pour une `PrimaryAction` — mêmes actions que
+    /// l'overlay (`overlayMenuContent`). `.delete` porte `role: .destructive`
+    /// (rendu rouge système) et arme la confirmation, jamais de delete direct.
+    @ViewBuilder
+    private func nativeMenuButton(_ action: PrimaryAction, msg: Message) -> some View {
+        switch action {
+        case .edit:
+            Button {
+                composerState.editingMessageId = msg.id
+                composerState.editingOriginalContent = msg.content
+                composerText.text = msg.content
+            } label: {
+                Label(String(localized: "action.edit", defaultValue: "Éditer", bundle: .main), systemImage: "pencil")
+            }
+        case .translate:
+            Button {
+                overlayState.moreSheetInitialItem = .language
+                overlayState.detailSheetMessage = msg
+            } label: {
+                Label(String(localized: "action.translate", defaultValue: "Traduire", bundle: .main), systemImage: "globe")
+            }
+        case .copy:
+            Button {
+                UIPasteboard.general.string = msg.content
+                HapticFeedback.success()
+            } label: {
+                Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
+            }
+        case .saveMedia:
+            Button {
+                guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
+                HapticFeedback.light()
+                mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                    kind: attachment.kind,
+                    remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
+                    suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                    attachmentId: attachment.id.isEmpty ? nil : attachment.id
+                ))
+            } label: {
+                Label(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main), systemImage: "arrow.down.to.line")
+            }
+        case .pin:
+            Button {
+                Task { await viewModel.togglePin(messageId: msg.id) }
+                HapticFeedback.medium()
+            } label: {
+                Label(String(localized: "action.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin.fill")
+            }
+        case .unpin:
+            Button {
+                Task { await viewModel.togglePin(messageId: msg.id) }
+                HapticFeedback.medium()
+            } label: {
+                Label(String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main), systemImage: "pin.slash.fill")
+            }
+        case .star:
+            Button {
+                _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
+                HapticFeedback.success()
+            } label: {
+                Label(String(localized: "action.star", defaultValue: "Favori", bundle: .main), systemImage: "star.fill")
+            }
+        case .unstar:
+            Button {
+                _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
+                HapticFeedback.success()
+            } label: {
+                Label(String(localized: "action.unstar", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash.fill")
+            }
+        case .more:
+            Button {
+                overlayState.moreSheetInitialItem = nil
+                overlayState.detailSheetMessage = msg
+            } label: {
+                Label(String(localized: "action.more", defaultValue: "Plus…", bundle: .main), systemImage: "ellipsis")
+            }
+        case .delete:
+            Button(role: .destructive) {
+                overlayState.deleteConfirmMessageId = msg.id
+            } label: {
+                Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+            }
         }
     }
 }

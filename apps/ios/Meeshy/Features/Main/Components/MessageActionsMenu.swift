@@ -32,11 +32,16 @@ struct MessageActionsMenu: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .frame(width: 240)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), tint: accent.opacity(0.14))
-        .shadow(color: accent.opacity(0.18), radius: 12, x: 0, y: 4)
-        .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 8)
+        // Design système par version d'iOS : Liquid Glass natif iOS 26
+        // (`.regular` pur, sans teinte ni ombre manuelle) / fallback material
+        // avant — MÊME rendu que le menu des lignes de conversation
+        // (`ConversationContextMenuView`, validé par les guards). L'ancienne
+        // teinte à l'accent + double ombre faisaient un chrome maison qui
+        // divergeait du menu système ; la séparation avec le fond vient
+        // désormais du voile de l'overlay, comme pour le menu conversation.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityElement(children: .contain)
     }
 
@@ -66,7 +71,9 @@ struct MessageActionsMenu: View {
             .frame(minHeight: rowMinHeight)
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // Parité menus système : highlight de la ligne pressée (UIMenu /
+        // Liquid Glass iOS 26). Style interne partagé avec le menu conversation.
+        .buttonStyle(MenuRowHighlightButtonStyle())
         .accessibilityLabel(label(action))
         .accessibilityAddTraits(.isButton)
     }
@@ -82,7 +89,8 @@ struct MessageActionsMenu: View {
     static func estimatedSize(actionCount: Int) -> CGSize {
         let count = max(1, actionCount)
         let scaledRow = UIFontMetrics.default.scaledValue(for: rowHeight)
-        return CGSize(width: menuWidth, height: CGFloat(count) * scaledRow + 16)
+        // +20 : padding vertical (6+6) + marge des séparateurs/divider delete.
+        return CGSize(width: menuWidth, height: CGFloat(count) * scaledRow + 20)
     }
 
     private func symbol(_ a: PrimaryAction) -> String {

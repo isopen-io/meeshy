@@ -75,26 +75,47 @@ struct StoryItemRenderableSlideTests {
 
     // MARK: - legacy mediaURL routing (F1 revert: any mediaObject nulls mediaURL)
 
-    @Test func toRenderableSlide_staticBgWithForeground_currentlyDropsBg_deferred() {
-        // KNOWN DEFERRED limitation (adversarial-review F1): a static bg photo
-        // published as StoryItem.media[0] (NOT an isBackground StoryMediaObject)
-        // alongside a foreground mediaObject currently LOSES its background —
-        // `mediaURL` is nulled the moment ANY mediaObject exists. The WS5.4
-        // attempt to preserve it was reverted because the only consumer,
-        // `StoryRenderer.renderBackground`, discards the URL and feeds `slide.id`
-        // (a post id) to a resolver keyed on `FeedMedia.id`, so the bg never
-        // resolved AND a non-nil mediaURL pre-empted the solid-color fallback —
-        // turning modern foreground-only stories BLACK. The proper fix routes the
-        // URL via `directURLIfAny` in renderBackground + on-device verification.
+    @Test func toRenderableSlide_staticBgWithForeground_routesUnreferencedMediaAsBackground() {
+        // A static bg photo published as StoryItem.media[0] (NOT an isBackground
+        // StoryMediaObject) alongside a foreground mediaObject: the bg asset is
+        // the media entry NOT referenced by any object → it must survive as the
+        // slide's legacy `mediaURL` so `StoryRenderer.renderBackground` routes it
+        // via `directURLIfAny` instead of falling through to `.solidColor(.black)`
+        // (black background bug on other users' stories). The foreground object
+        // keeps resolving via `StoryMediaLayer`.
         let foreground = StoryMediaObject(id: "fg", postMediaId: "fg-media",
                                           kind: .image, aspectRatio: 1.5,
                                           isBackground: false)
         var effects = StoryEffects()
         effects.mediaObjects = [foreground]
+        let fg = FeedMedia(id: "fg-media", type: .image,
+                           url: "https://cdn.example.com/fg.jpg",
+                           thumbnailColor: "000000")
         let bg = FeedMedia(id: "bg-media", type: .image,
                            url: "https://cdn.example.com/bg.jpg",
                            thumbnailColor: "000000")
-        let item = StoryItem(id: "story-1", content: nil, media: [bg],
+        let item = StoryItem(id: "story-1", content: nil, media: [fg, bg],
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+        #expect(slide.mediaURL == "https://cdn.example.com/bg.jpg")
+    }
+
+    @Test func toRenderableSlide_foregroundOnlyReferencedMedia_keepsMediaURLNil() {
+        // Pure foreground story: the only media entry IS referenced by the
+        // foreground object → there is no static backdrop, so `mediaURL` must
+        // stay nil and the background comes from `effects.background` /
+        // `.solidColor`. Guards against mistaking a foreground asset for a bg.
+        let foreground = StoryMediaObject(id: "fg", postMediaId: "fg-media",
+                                          kind: .image, aspectRatio: 1.5,
+                                          isBackground: false)
+        var effects = StoryEffects()
+        effects.mediaObjects = [foreground]
+        let fg = FeedMedia(id: "fg-media", type: .image,
+                           url: "https://cdn.example.com/fg.jpg",
+                           thumbnailColor: "000000")
+        let item = StoryItem(id: "story-1", content: nil, media: [fg],
                              storyEffects: effects, createdAt: Date(),
                              expiresAt: nil, isViewed: false)
 

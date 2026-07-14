@@ -953,10 +953,19 @@ extension StoryBackgroundLayer {
     /// aux strings parsables en URL avec un scheme connu.
     nonisolated static func directURLIfAny(from candidate: String) -> URL? {
         guard !candidate.isEmpty else { return nil }
-        guard candidate.hasPrefix("file://")
-                || candidate.hasPrefix("http://")
-                || candidate.hasPrefix("https://") else { return nil }
-        return URL(string: candidate)
+        // Local composer asset — returned verbatim, never network-normalized.
+        if candidate.hasPrefix("file://") { return URL(string: candidate) }
+        // Absolute http(s) OR a server-relative media path (getAttachmentPath /
+        // forward / repost emit `/api/v1/attachments/...`). Normalize both via
+        // the SSRF-guarded resolver so a relative background URL still loads
+        // instead of dropping to the solid-color fallback (black background on
+        // another user's story).
+        if candidate.hasPrefix("http://")
+            || candidate.hasPrefix("https://")
+            || candidate.hasPrefix("/") {
+            return MeeshyConfig.resolveMediaURL(candidate)
+        }
+        return nil
     }
 }
 

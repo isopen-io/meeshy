@@ -54,6 +54,41 @@ extension ConversationListView {
             )
         }
 
+        // Rechercher dans la conversation — MÊME chemin que le bouton
+        // « Rechercher » de l'aperçu du fallback custom (`onSearch`, SSOT) :
+        // arme `pendingOpenSearch` puis ouvre la conversation, qui consomme le
+        // flag et présente la recherche. Sur iOS 26+ l'aperçu natif est statique
+        // (non cliquable) — l'action vit donc dans le menu (décision 2026-07-14).
+        Button {
+            HapticFeedback.light()
+            router.pendingOpenSearch = true
+            onSelect(conversation)
+        } label: {
+            Label(
+                String(localized: "context.search", defaultValue: "Rechercher", bundle: .main),
+                systemImage: "magnifyingglass"
+            )
+        }
+
+        // Appeler — DM uniquement (participant résolu). MÊME chemin que le
+        // bouton « Appeler » de l'aperçu custom (`onCall` → CallManager, audio).
+        if conversation.type == .direct, let calleeId = conversation.participantUserId {
+            Button {
+                HapticFeedback.medium()
+                CallManager.shared.startCall(
+                    conversationId: conversation.id,
+                    userId: calleeId,
+                    displayName: conversation.name,
+                    isVideo: false
+                )
+            } label: {
+                Label(
+                    String(localized: "context.call", defaultValue: "Appeler", bundle: .main),
+                    systemImage: "phone.fill"
+                )
+            }
+        }
+
         Divider()
 
         // Marquer lu / non lu

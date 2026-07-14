@@ -102,6 +102,15 @@ public struct StoryComposerView: View {
     /// reste PLEIN — ce drawer flotte par-dessus, il ne rétrécit plus le canvas.
     @State var composerBandHeight: CGFloat = 280
 
+    /// Hauteur RÉELLE rendue du panneau bas (`ComposerControlsLayer` : band d'outils
+    /// OU picker d'état vide). `composerBandHeight` ne pilote QUE le drag (dessin) et
+    /// ne reflète PAS la hauteur du contenu — le panneau se dimensionne à son contenu
+    /// (grabber + panel + padding), souvent > `composerBandHeight`. On mesure donc la
+    /// frame réelle et on la réserve, sinon le canvas scale trop grand et son bas
+    /// déborde derrière/au-delà du panneau (« le canvas sort du viewport »). 0 tant
+    /// que rien n'est mesuré / le panneau n'est pas rendu (dessin immersif).
+    @State var measuredBottomBandHeight: CGFloat = 0
+
     @State var showDiscardAlert = false
     @State var showRestoreDraftAlert = false
     /// U4 inc.2 — données de la carte de reprise (cover rendu async depuis

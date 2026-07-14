@@ -222,6 +222,39 @@ final class StoryMediaLayer_ForegroundResolverTests: XCTestCase {
                        "Lowering isPlaybackActive must pause the foreground video")
     }
 
+    /// P2 — another user's story: the resolver misses (payload `media[]` lacks
+    /// the referenced `postMediaId`, or a repost / orphan object) and the object
+    /// still carries the AUTHOR's local `file://` edition path. That path never
+    /// exists on the viewer's device, so the foreground video must build NO
+    /// player instead of wiring an AVPlayer to a dead file.
+    func test_configure_resolverMisses_deadAuthorFileURL_videoBuildsNoPlayer() {
+        let deadAuthorPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("author-sandbox-\(UUID().uuidString)/clip.mp4")
+        let media = StoryMediaObject(id: "v-dead", postMediaId: "post-vid",
+                                     mediaURL: deadAuthorPath.absoluteString,
+                                     kind: .video, aspectRatio: 1.0)
+        let layer = StoryMediaLayer()
+        layer.configure(with: media, geometry: makeGeometry(),
+                        mode: .play, resolver: { _ in nil })
+        XCTAssertNil(layer.avPlayer,
+                     "A dead author file:// must not build a player when the resolver misses")
+    }
+
+    /// P2 (image) — same scenario for a foreground image: the dead author
+    /// `file://` must not populate contents (no wasted decode of a missing file).
+    func test_configure_resolverMisses_deadAuthorFileURL_imageStaysUnpopulated() {
+        let deadAuthorPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("author-sandbox-\(UUID().uuidString)/photo.jpg")
+        let media = StoryMediaObject(id: "i-dead", postMediaId: "post-img",
+                                     mediaURL: deadAuthorPath.absoluteString,
+                                     kind: .image, aspectRatio: 1.0)
+        let layer = StoryMediaLayer()
+        layer.configure(with: media, geometry: makeGeometry(),
+                        mode: .play, resolver: { _ in nil })
+        XCTAssertNil(layer.contents,
+                     "A dead author file:// must not populate contents when the resolver misses")
+    }
+
     /// Composer (`.edit`) — the foreground video loops for the live preview,
     /// like the background. `actionAtItemEnd == .none` marks the loop path.
     func test_configure_foregroundVideoEditMode_loops() {

@@ -9,42 +9,20 @@ import MeeshySDK
 // MARK: - StoryComposerView + SyncRestore
 
 extension StoryComposerView {
-    /// Décale le canvas vers le haut juste assez pour que le texte édité reste
-    /// au-dessus de (clavier + barre d'outils). Basé sur la position normalisée
-    /// `y` du modèle — pas de pont de coordonnées UIKit↔SwiftUI.
+    /// Évitement clavier du canvas en édition texte.
     ///
-    /// Le décalage est CLAMPÉ pour ne jamais pousser le HAUT du canvas
-    /// au-dessus de la safe area — sinon, pour un texte positionné bas sur un
-    /// canvas grand, tout le haut de la story disparaît de l'écran (rapporté
-    /// par l'utilisateur avec capture, 2026-07-11 : « on ne peut voir toutes
-    /// la story »). Le canvas reste STATIQUE au-delà de cette limite plutôt
-    /// que de continuer à glisser hors champ ; le texte édité peut alors
-    /// rester partiellement sous le clavier dans ce cas extrême, ce qui est
-    /// un moindre mal que de perdre le haut de la story.
+    /// Depuis le cardage clavier (2026-07-14), quand l'éditeur texte est actif le
+    /// canvas est TOUJOURS cardé et `presentedSheetHeight = keyboardHeight + 132` :
+    /// le solver `StoryCanvasFraming` scale le canvas pour qu'il tienne ENTIÈREMENT
+    /// dans la région AU-DESSUS du clavier (directive user « tout présenter /
+    /// entièrement visible »). Toute la story — pas seulement le texte édité —
+    /// reste donc visible. La translation `canvasEditShift` (ancienne stratégie
+    /// « garder grand + remonter le texte édité ») ferait alors une DOUBLE
+    /// compensation qui rognerait le haut du canvas ; on la met à 0. Le call site
+    /// est conservé (déclenché aux changements clavier / sélection de texte) pour
+    /// rester un point d'accroche si une stratégie hybride redevenait nécessaire.
     func recomputeCanvasShift() {
-        guard keyboardHeight > 0,
-              let id = viewModel.textEditingMode.activeTextId,
-              let textObj = viewModel.currentEffects.textObjects.first(where: { $0.id == id }),
-              canvasNaturalFrame.height > 0 else {
-            canvasEditShift = 0
-            return
-        }
-        let toolbarHeight: CGFloat = 132   // barre bulles + marge (ajuster au visuel)
-        let margin: CGFloat = 24
-        // Use the active window's height (NOT UIScreen.main.bounds.height),
-        // so split-screen / Stage Manager / iPad multitasking report the
-        // window the composer actually lives in instead of the full display.
-        let window = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .first?.windows.first(where: { $0.isKeyWindow })
-        let screenHeight = window?.bounds.height ?? UIScreen.main.bounds.height
-        let safeAreaTop = window?.safeAreaInsets.top ?? 0
-        let textCenterY = canvasNaturalFrame.minY
-            + CGFloat(textObj.y) * canvasNaturalFrame.height
-        let visibleBottom = screenHeight - keyboardHeight - toolbarHeight - margin
-        let desiredShift = max(0, textCenterY - visibleBottom)
-        let maxShiftBeforeTopClips = max(0, canvasNaturalFrame.minY - safeAreaTop)
-        canvasEditShift = min(desiredShift, maxShiftBeforeTopClips)
+        canvasEditShift = 0
     }
 
     func syncCurrentSlideEffects() {
