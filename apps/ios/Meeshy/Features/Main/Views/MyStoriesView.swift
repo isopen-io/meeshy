@@ -216,10 +216,11 @@ private struct MyStoryRow: View {
 
     @ViewBuilder
     private var thumbnail: some View {
+        let width = StoryThumbnailSizing.width(forAspectRatio: story.media.first?.aspectRatio)
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         Group {
             if let urlString = thumbnailURLString, !urlString.isEmpty {
-                CachedAsyncImage(url: urlString, targetSize: CGSize(width: 44, height: 64)) {
+                CachedAsyncImage(url: urlString, targetSize: CGSize(width: width, height: 64)) {
                     shape.fill(accentColor.opacity(0.25))
                 }
             } else {
@@ -227,7 +228,7 @@ private struct MyStoryRow: View {
                     .overlay(Image(systemName: "photo").foregroundColor(accentColor))
             }
         }
-        .frame(width: 44, height: 64)
+        .frame(width: width, height: 64)
         .clipShape(shape)
         .overlay(shape.stroke(accentColor.opacity(0.3), lineWidth: 1))
     }
