@@ -55,6 +55,23 @@ extension StoryComposerViewModel {
         CGFloat(currentEffects.canvasAspect.ratio)
     }
 
+    /// Vrai si un média d'arrière-plan REMPLIT tout le canvas (aspectFill : mode
+    /// `nil`/auto ou `"fill"`). Faux sans média visuel de fond, ou en mode
+    /// `"fit"` (letterbox) : dans ces cas le fond ne couvre pas le canvas et on
+    /// matérialise ses contours (directive user 2026-07-14).
+    var backgroundFillsCanvas: Bool {
+        Self.backgroundFillsCanvas(for: currentEffects)
+    }
+
+    /// Résolution pure (testable) : un fond visuel remplit le canvas sauf en
+    /// mode `"fit"`. Le double-tap du fond cycle `nil` (auto = aspectFill) →
+    /// `"fit"` (aspectFit) → `"fill"` (aspectFill) — seul `"fit"` laisse des
+    /// bandes vides. Le fit-mode du fond vit sur `backgroundTransform`.
+    static func backgroundFillsCanvas(for effects: StoryEffects) -> Bool {
+        guard effects.resolvedBackgroundMedia != nil else { return false }
+        return effects.backgroundTransform?.videoFitMode != "fit"
+    }
+
     /// Ratio de canvas à PERSISTER (`nil` = portrait 9:16 par défaut) dérivé du
     /// fond d'un slide : « l'import du fond impose le cadre et forme du Canvas ».
     /// Un fond **image OU vidéo paysage** impose un canvas 16:9 — étendu aux

@@ -704,6 +704,16 @@ extension StoryComposerView {
                         .frame(width: 24, height: 44)
                         .padding(.leading, 8)
                 }
+                // Contours du canvas : matérialisés en pointillé dès que le
+                // fond ne remplit PAS tout le canvas (mode « fit », ou aucun
+                // média de fond) — directive user 2026-07-14. Le rayon épouse
+                // celui de `canvasCore` (compensé par `framing.scale`) pour
+                // coller exactement au bord de la carte.
+                .overlay {
+                    canvasOutlineOverlay(
+                        cornerRadius: framing.scale > 0 ? framing.cornerRadius / framing.scale : 0
+                    )
+                }
                 // Mesure la frame globale du canvas 9:16 PRÉSENTÉE (post-scale) —
                 // `canvasNaturalFrame` pilote l'évitement clavier `canvasEditShift`
                 // qui projette `textObj.y * canvasNaturalFrame.height`. Attaché
@@ -773,6 +783,23 @@ extension StoryComposerView {
             .compactMap { $0 as? UIWindowScene }
             .first?.windows.first(where: { $0.isKeyWindow })?.bounds.height
             ?? UIScreen.main.bounds.height
+    }
+
+    /// Liseré pointillé du bord du canvas, visible uniquement quand le fond ne
+    /// couvre pas toute la surface (letterbox « fit », ou aucun média de fond)
+    /// et hors mode dessin plein écran. Blanc translucide + ombre douce pour
+    /// rester lisible sur fond clair comme sombre, sans jamais capturer les
+    /// gestes (`allowsHitTesting(false)`).
+    @ViewBuilder
+    func canvasOutlineOverlay(cornerRadius: CGFloat) -> some View {
+        if !viewModel.backgroundFillsCanvas && !viewModel.drawingEditingMode.isActive {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.7),
+                              style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
+                .shadow(color: .black.opacity(0.3), radius: 1)
+                .allowsHitTesting(false)
+                .transition(.opacity)
+        }
     }
 
     @ViewBuilder
