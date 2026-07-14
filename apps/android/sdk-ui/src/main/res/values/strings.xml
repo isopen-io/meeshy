@@ -30,6 +30,8 @@
     <string name="bubble_blur_tap_to_reveal">Tap to reveal</string>
     <string name="bubble_blur_view_once">View once</string>
     <string name="bubble_blur_reveal_action">Reveal hidden message</string>
+    <string name="bubble_burned">Seen and deleted</string>
+    <string name="bubble_burned_a11y">Message seen and deleted</string>
     <string name="bubble_hidden_images">%1$d more images</string>
     <string name="emoji_picker_title">Reactions</string>
     <string name="emoji_picker_expand">More emojis</string>

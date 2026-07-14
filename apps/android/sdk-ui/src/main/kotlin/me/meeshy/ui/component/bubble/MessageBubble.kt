@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.PlayArrow
@@ -93,13 +94,16 @@ public fun MessageBubble(
     effects: MessageEffects? = null,
     hasPlayedAppearance: Boolean = false,
 ) {
-    // Combine the server deletion flag with the ephemeral self-destruct countdown.
-    // A deleted message keeps its "Message deleted" tombstone (visible → the inner
-    // `isDeleted` branch renders it); an ephemeral message whose timer elapses
-    // collapses the whole bubble (iOS `EmptyView`) with a fade + burn-away scale.
+    // Combine the server deletion flag, the view-once consume count and the ephemeral
+    // self-destruct countdown. A deleted message keeps its "Message deleted" tombstone
+    // (visible → the inner `isDeleted` branch renders it); a consumed view-once message
+    // shows the "Seen and deleted" burned tombstone; an ephemeral message whose timer
+    // elapses collapses the whole bubble (iOS `EmptyView`) with a fade + burn-away scale.
     val renderKind = rememberBubbleRenderKind(
         isDeleted = content.isDeleted,
         expiresAtIso = content.expiresAtIso,
+        isViewOnce = content.isViewOnce,
+        viewOnceCount = content.viewOnceCount,
     )
     AnimatedVisibility(
         visible = !renderKind.isEphemeralExpired,
@@ -107,6 +111,12 @@ public fun MessageBubble(
         enter = EnterTransition.None,
         exit = fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically(),
     ) {
+    if (renderKind.isBurned) {
+        // A consumed view-once message shows the persistent "Seen and deleted"
+        // tombstone (iOS `BubbleBurnedView`) in place of its content, aligned to
+        // the sender side like the deleted tombstone.
+        BubbleBurnedView(isOutgoing = content.isOutgoing)
+    } else {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -358,6 +368,49 @@ public fun MessageBubble(
         }
         }
     }
+    }
+    }
+}
+
+/**
+ * "Seen and deleted" tombstone for a consumed view-once message — Android render of the
+ * iOS `BubbleBurnedView`. A flame glyph plus a muted italic label sit in a warning-tinted
+ * capsule, aligned to the sender's side (like the deleted tombstone) rather than centered.
+ */
+@Composable
+private fun BubbleBurnedView(isOutgoing: Boolean, modifier: Modifier = Modifier) {
+    val label = stringResource(R.string.bubble_burned)
+    val a11y = stringResource(R.string.bubble_burned_a11y)
+    val capsule = RoundedCornerShape(MeeshyRadius.pill)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            modifier = Modifier
+                .clip(capsule)
+                .background(MeeshyPalette.Warning.copy(alpha = 0.08f))
+                .border(0.5.dp, MeeshyPalette.Warning.copy(alpha = 0.15f), capsule)
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
+                .semantics(mergeDescendants = true) { contentDescription = a11y },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.LocalFireDepartment,
+                contentDescription = null,
+                tint = MeeshyPalette.Warning,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                fontStyle = FontStyle.Italic,
+                color = MeeshyTheme.tokens.textMuted,
+            )
+        }
     }
 }
 

@@ -181,6 +181,11 @@ public object BubbleContentBuilder {
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
             blurReveal = if (isDeleted) null else buildBlurReveal(message.effects),
+            // View-once burned tombstone inputs — mirror iOS gating burned on
+            // `message.isViewOnce && message.viewOnceCount > 0`. A deleted tombstone
+            // takes precedence (its own path), so zero these out when deleted.
+            isViewOnce = !isDeleted && message.effects.has(MessageEffectFlags.VIEW_ONCE),
+            viewOnceCount = if (isDeleted) 0 else message.viewOnceCount,
         )
     }
 

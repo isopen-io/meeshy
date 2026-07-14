@@ -169,6 +169,14 @@ public data class BubbleContent(
     val isFirstInGroup: Boolean = true,
     val isLastInGroup: Boolean = true,
     val blurReveal: BubbleBlurRevealSpec? = null,
+    /** True when this message is a view-once ("open once, then burn") message. */
+    val isViewOnce: Boolean = false,
+    /**
+     * How many times the view-once message has been consumed on the server. Once
+     * this is > 0 on a [isViewOnce] message the bubble renders the "Seen and
+     * deleted" burned tombstone (see [me.meeshy.sdk.model.BubbleRenderKind]).
+     */
+    val viewOnceCount: Int = 0,
 )
 
 /**

@@ -697,8 +697,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (glue exempte) voile le corps de bulle derrière un scrim quasi-opaque indigo950 (masque même <API 31 où
       `Modifier.blur` est no-op) + blur réel API 31+, rejoue la timeline au tap, affiche un hint distinct
       « Toucher pour révéler » (flou) vs « Vue unique » (flamme, via `RevealRequest.requiresConsume`). Strings
-      en/fr/es/pt. **Pending:** le consume view-once serveur (endpoint `requiresConsume` non câblé) + le
-      tombstone `.burned` pour un view-once épuisé (iOS `BubbleBurnedView`).
+      en/fr/es/pt. **burned tombstone done** (`chat-viewonce-burned-tombstone` 2026-07-14 : la logique pure
+      `BubbleRenderKind.resolve` gagne l'arm `Kind.Burned` gardé sur `isViewOnce && viewOnceCount > 0` (parité
+      iOS `BubbleContentBuilder` `.burned` = `message.isViewOnce && message.viewOnceCount > 0`), précédence
+      `Deleted > Burned > EphemeralExpired > Standard` — un view-once épuisé montre le tombstone persistant au
+      lieu de collapser, mais `Deleted` (autorité serveur) gagne toujours ; un `viewOnceCount > 0` sur un
+      message non-view-once ne brûle JAMAIS. +8 tests, preuve RED par mutation (retirer l'arm `Burned` casse
+      exactement les 4 tests burned, les autres verts). Câblé pour de vrai : `ApiMessage` gagne `viewOnceCount:
+      Int = 0` (wire), `BubbleContent` gagne `isViewOnce`/`viewOnceCount` peuplés par `BubbleContentBuilder`
+      (zéro quand supprimé), `rememberBubbleRenderKind` résout `Burned` immédiatement (autorité serveur, sans
+      lire l'horloge) avant le tick ephemeral, `MessageBubble` rend `BubbleBurnedView` (glue exempte : flamme
+      `MeeshyPalette.Warning` + « Vu et effacé » italique muté dans une capsule warning 8 %, alignée côté
+      expéditeur) au lieu du corps. Strings `bubble_burned`/`bubble_burned_a11y` en/fr/es/pt. **Pending:** le
+      consume view-once serveur (endpoint `requiresConsume` → gateway view-count, non câblé) qui déclenchera
+      ce tombstone en temps réel.
 - [◐] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
       — picker sheet + cross-platform bitfield encoding. **Wire contract + resolver done**
       (`chat-message-effects-resolver` 2026-07-14 : la source de vérité `MessageEffectFlags`
