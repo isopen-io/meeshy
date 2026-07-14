@@ -1691,6 +1691,12 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// `nil` for anonymous reads or legacy payloads.
     public var viewCount: Int?
 
+    /// Count of impressions — one per slide display, NOT deduped (mirrors
+    /// `Post.impressionCount`). Author-only, paired with `viewCount` so the story
+    /// viewer reports the SAME 2 metrics as Detail/Reel (unified 2026-07-14).
+    /// `nil` for anonymous reads or legacy payloads/caches.
+    public var impressionCount: Int?
+
     /// Count of reposts that pointed back to this story (Partager label).
     /// `nil` when not yet enriched.
     public var repostCount: Int?
@@ -1749,7 +1755,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 visibility: String? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
-                shareCount: Int? = nil, viewCount: Int? = nil, repostCount: Int? = nil,
+                shareCount: Int? = nil, viewCount: Int? = nil, impressionCount: Int? = nil, repostCount: Int? = nil,
                 currentUserReactions: [String]? = nil) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
@@ -1760,7 +1766,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.isViewed = isViewed; self.viewedAt = viewedAt; self.updatedAt = updatedAt
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
-        self.shareCount = shareCount; self.viewCount = viewCount; self.repostCount = repostCount
+        self.shareCount = shareCount; self.viewCount = viewCount; self.impressionCount = impressionCount; self.repostCount = repostCount
         self.currentUserReactions = currentUserReactions
     }
 
@@ -1967,6 +1973,7 @@ extension Array where Element == APIPost {
                                  reactionCount: totalReactions, commentCount: post.commentCount ?? 0,
                                  shareCount: post.shareCount,
                                  viewCount: post.viewCount,
+                                 impressionCount: post.impressionCount,
                                  repostCount: post.repostCount,
                                  currentUserReactions: post.currentUserReactions)
             if var existing = grouped[authorId] {

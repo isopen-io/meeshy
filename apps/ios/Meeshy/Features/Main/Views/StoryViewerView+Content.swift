@@ -968,7 +968,12 @@ struct StoryViewersSheet: View {
                     )
                 } else {
                     List {
-                        Section(header: Text(String(localized: "story.viewer.viewsCount", defaultValue: "\(viewers.count) Vues", bundle: .main))
+                        // C4 + C1 : en-tête = viewCount AUTORITATIF (dénormalisé, la même
+                        // valeur que le bouton « Vues » ; élimine le « bouton dit 3 / sheet
+                        // dit 2 » où la sheet montrait la longueur de /interactions) + les
+                        // impressions (author-only), pour la parité avec le détail/réel.
+                        // Nouvelle clé de localisation (pas de traduction existante à casser).
+                        Section(header: Text(String(localized: "story.viewer.viewsAndImpressions", defaultValue: "\(story.viewCount ?? viewers.count) Vues · \(story.impressionCount ?? 0) impressions", bundle: .main))
                             .font(.headline)
                             .foregroundColor(.primary)
                             .textCase(nil)
