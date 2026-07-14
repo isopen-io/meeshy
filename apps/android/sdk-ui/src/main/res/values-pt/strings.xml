@@ -26,6 +26,7 @@
     <string name="bubble_file_size_kb">%1$s KB</string>
     <string name="bubble_file_size_mb">%1$s MB</string>
     <string name="image_viewer_close">Fechar</string>
+    <string name="image_viewer_save">Guardar na galeria</string>
     <string name="bubble_hidden_images">mais %1$d imagens</string>
     <string name="emoji_picker_title">Reações</string>
     <string name="emoji_picker_expand">Mais emojis</string>

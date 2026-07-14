@@ -15,6 +15,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +44,7 @@ import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.imageLoader
 import coil.request.ImageRequest
+import kotlinx.coroutines.launch
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -58,6 +61,7 @@ public fun MeeshyImageViewer(
     captions: List<String?> = emptyList(),
     authors: List<String?> = emptyList(),
     timestamps: List<String?> = emptyList(),
+    onImageSaved: ((Result<Unit>) -> Unit)? = null,
 ) {
     if (imageUrls.isEmpty()) return
     Dialog(
@@ -69,8 +73,10 @@ public fun MeeshyImageViewer(
             pageCount = { imageUrls.size },
         )
         var currentPageZoomed by rememberSaveable { mutableStateOf(false) }
+        var saving by remember { mutableStateOf(false) }
 
         val context = LocalContext.current
+        val scope = rememberCoroutineScope()
         LaunchedEffect(pagerState.currentPage, imageUrls) {
             val loader = context.imageLoader
             ImageViewerPrefetch.neighbors(
@@ -110,6 +116,32 @@ public fun MeeshyImageViewer(
                     contentDescription = stringResource(R.string.image_viewer_close),
                     tint = Color.White,
                 )
+            }
+
+            if (onImageSaved != null && GalleryImageSaver.isSupported) {
+                IconButton(
+                    onClick = {
+                        if (!saving) {
+                            saving = true
+                            scope.launch {
+                                val result = GalleryImageSaver.save(context, imageUrls[pagerState.currentPage])
+                                saving = false
+                                onImageSaved(result)
+                            }
+                        }
+                    },
+                    enabled = !saving,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(MeeshySpacing.sm),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.FileDownload,
+                        contentDescription = stringResource(R.string.image_viewer_save),
+                        tint = Color.White,
+                    )
+                }
             }
 
             if (imageUrls.size > 1) {

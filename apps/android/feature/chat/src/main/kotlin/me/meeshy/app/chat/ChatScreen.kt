@@ -1,5 +1,6 @@
 package me.meeshy.app.chat
 
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
@@ -97,6 +98,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -495,6 +497,9 @@ fun ChatScreen(
                 }
             }
         }
+        val galleryContext = LocalContext.current
+        val savedMessage = stringResource(R.string.image_saved_to_gallery)
+        val saveFailedMessage = stringResource(R.string.image_save_failed)
         MeeshyImageViewer(
             imageUrls = gallery.imageUrls,
             initialIndex = gallery.startIndex,
@@ -502,6 +507,10 @@ fun ChatScreen(
             captions = gallery.captions,
             authors = gallery.senderNames,
             timestamps = galleryTimestamps,
+            onImageSaved = { result ->
+                val message = if (result.isSuccess) savedMessage else saveFailedMessage
+                Toast.makeText(galleryContext, message, Toast.LENGTH_SHORT).show()
+            },
         )
     }
 

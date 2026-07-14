@@ -1,19 +1,45 @@
 # Progress — state & what to do next
 
-> ⚠ **CI watch (2026-07-14, PR #1950 `chat-ephemeral-countdown`):** the slice is code-complete and locally
-> green (full `gradle assembleDebug testDebugUnitTest` PASS, reviewer PASS, diff `apps/android` only), but the
-> monorepo CI job **"Test Python (translator)"** is failing at its "Run tests with coverage (80% minimum)"
-> step. This is **unrelated to the slice** — the diff touches zero Python. Evidence it broke repo-wide, not by
-> this change: `main` HEAD (`663f9fb2`) passed that exact translator step at **12:47 UTC today** (~8.5 min), yet
-> two PR runs at 14:30 and 14:41 UTC **failed** it after only ~6 min — i.e. the translator suite regressed
-> repo-wide sometime after 12:47 (most likely a Python transitive-dependency drift, since deps install fresh
-> each run, or a flaky/coverage-sensitive test). Fixing it requires touching `services/translator` (Python),
-> which is **outside the apps/android-only merge gate**, so it cannot be fixed from within this slice. Per the
-> hard rule "never merge past red CI", the PR is **left open** pending either (a) a green retry (if the failure
-> is flaky) or (b) a repo-wide translator fix landing on `main` from an out-of-scope change. Retries attempted:
-> 2 empty-commit re-triggers (a 3rd in flight at time of writing). If it stays red, the slice is ⚠ **blocked on
-> external CI** — do NOT force-merge; escalate. Logs were un-downloadable (integration 404), so the exact
-> failing test could not be captured from here.
+> On 2026-07-14 **PR #1950 `chat-ephemeral-countdown` MERGED** (squash `fc94118`): the prior CI-watch note is
+> resolved — the translator CI flake cleared, run #7283 went green, and the PR squash-merged to `main`. This run
+> opened with rule #0 (merge the open iteration PR first), so `main` now carries the ephemeral countdown badge.
+>
+> On 2026-07-14 **save-to-gallery** landed (slice `chat-gallery-save-to-gallery`, feature-parity §C "Message
+> bubble / gallery — save to gallery"). This closes the last gallery follow-up hint (caption ✅ author/date ✅
+> prefetch ✅ save ✅; only the contact card remains on that §C line). iOS keeps the platform save-capability rule
+> pure in `MediaSaveDestination` (the photo library accepts only images/videos) and the imperative write in
+> `PhotoLibraryManager`; this slice mirrors that split. **Ships (`:core:model`):** `GallerySaveTarget`
+> (displayName/mimeType/relativePath) + **`GallerySaveTargetResolver.resolve(url, mimeHint?)`** — a pure
+> derivation of everything a MediaStore insert needs: strips query+fragment then takes the last path segment;
+> maps a known extension to its MIME (jpg/jpeg/png/gif/webp/heic/heif/bmp → image, mp4/mov/webm/mkv/3gp → video);
+> a **known MIME hint wins over the extension**, a parameterised hint is normalised (`; charset` dropped, folded),
+> an unknown/blank hint is ignored; an unknown extension keeps the name but defaults the MIME to `image/jpeg`;
+> the display name is sanitised (illegal filename chars → `_`) and, when the URL carries no real extension,
+> the MIME's canonical extension is appended; a blank/all-underscore name falls back to `meeshy-image.<ext>`;
+> images land under `Pictures/Meeshy`, videos under `Movies/Meeshy`. **+25 tests.** **Mutation check (RED
+> proof):** forcing `relativePath = IMAGE_DIR` (dropping the video-album branch) failed **exactly 4** tests
+> (the video-album ones), the other 19 stayed green — reverted green, behavioural not tautological. **Wired for
+> real (`:sdk-ui`, exempt glue):** `GalleryImageSaver.save(context, url, mimeHint?)` — a dumb executor of the
+> resolver decision: scoped-storage MediaStore insert (`RELATIVE_PATH` + `IS_PENDING`, **no runtime permission**,
+> Android 10+), streams the URL bytes into the pending item, flips `IS_PENDING=0`, and **deletes the item on any
+> failure**; **cancellation-safe** — it rethrows `CancellationException` instead of swallowing it into a
+> `Result.failure`, so a mid-save dismissal never fires a spurious toast. `MeeshyImageViewer` gains an opt-in
+> `onImageSaved: ((Result<Unit>) -> Unit)?` param → a Save button (Material `FileDownload`, white, TopEnd,
+> opposite Close; hidden below Android 10 via `GalleryImageSaver.isSupported`; disabled while a save is in
+> flight); default `null` → no button → **zero behaviour change for every existing caller**. `ChatScreen` passes
+> the callback and shows a success/failure `Toast`. Strings `image_viewer_save` (sdk-ui) +
+> `image_saved_to_gallery`/`image_save_failed` (feature:chat) in en/fr/es/pt. **Verification:** full `gradle
+> assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (943 tasks; APK assembles; every module unit suite
+> green). Built with the container's system Gradle 8.14.3 + UTF-8-daemon recipe (wrapper distribution
+> egress-blocked). Reviewer **PASS** (diff `apps/android` only — `:core:model` [resolver + target], `:sdk-ui`
+> [saver + viewer button], `:feature:chat` [ChatScreen toast wiring], strings, tracking docs; **SDK purity** —
+> the "which name / MIME / album" decision is a pure `:core:model` function, the MediaStore write is a
+> singleton-free, cascade-free generic executor in `:sdk-ui` [parallels iOS `PhotoLibraryManager` in the SDK],
+> the toast orchestration is app-side; **SSOT** — reuses the pure resolver end-to-end, no re-declared maps;
+> **UX/colour coherence** — the Save glyph is white on the black immersive viewer, placed opposite Close, a
+> natural one-tap gesture, hidden where unsupported; **no coverage floor lowered, no test weakened**). **Next
+> slice:** the §C **contact-card bubble attachment** (share a contact — the wire has no dedicated fields yet, so
+> scope the DTO first) OR §B "Communities carousel + category filter chips" (feature-parity ~line 309, still `[ ]`).
 
 > On 2026-07-14 **ephemeral (self-destruct) countdown badge** landed (slice `chat-ephemeral-countdown`,
 > feature-parity §Chat "Ephemeral (self-destruct) messages … countdown badges"). The send-path encoder
@@ -2589,15 +2615,14 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-14): `chat-gallery-neighbor-prefetch`** — ±2 look-ahead prefetch in the conversation
-media gallery (port of iOS's gallery prefetch); pure `:sdk-ui` `ImageViewerPrefetch.neighbors(...)` returns the
-sibling page indices to warm (nearest-first, forward-biased, bounded, never current), enqueued in the shared
-Coil `imageLoader` by a `MeeshyImageViewer` `LaunchedEffect`. This closes the three gallery follow-up hints
-(caption ✅ author/date ✅ prefetch ✅). See run log 2026-07-14.
+**Just shipped (2026-07-14): `chat-gallery-save-to-gallery`** — save-to-gallery from the image viewer. Pure
+`:core:model` `GallerySaveTargetResolver.resolve(url, mimeHint?)` derives the MediaStore target (sanitised
+display name + real extension, resolved MIME, `Pictures/Meeshy` image / `Movies/Meeshy` video); exempt `:sdk-ui`
+`GalleryImageSaver.save` does the scoped-storage insert (Android 10+, no permission, cancellation-safe, deletes
+on failure); `MeeshyImageViewer` gains an opt-in Save button; `ChatScreen` shows a Toast. +25 tests
+(mutation-proof: forcing `IMAGE_DIR` breaks exactly the 4 video tests). This closes the last gallery follow-up
+hint (caption ✅ author/date ✅ prefetch ✅ save ✅). See run log 2026-07-14.
 **Recommended next (highest value):**
-- **Save-to-gallery** (same §C line): a viewer action that inserts the current image into `MediaStore`. The
-  pure part is thin (target filename/mime resolver); the `MediaStore`/`ContentResolver` write is exempt glue —
-  push every decision (which filename, which mime) into a pure fn.
 - **Message bubble contact attachment** (§C, still pending) — share-a-contact card; the wire has no
   dedicated fields yet, so scope the DTO first.
 - **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
@@ -3485,6 +3510,40 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-14 — slice `chat-gallery-save-to-gallery` ✅ impl + reviewer PASS → PR + merge
+- **Opened with rule #0:** the prior iteration's PR **#1950 `chat-ephemeral-countdown`** was still open; its CI
+  had gone green (run #7283, the earlier translator flake cleared) and it was `mergeable_state: clean`, so it was
+  **squash-merged to `main`** (`fc94118`) before starting this slice. `main` synced.
+- **Branch:** `claude/apps/android/chat-gallery-save-to-gallery` (off latest `main` `fc94118`).
+- **What:** save-to-gallery from the conversation image viewer — the last §C gallery follow-up hint (caption ✅
+  author/date ✅ prefetch ✅ save ✅; only the contact card remains). Android port of iOS's pure/imperative split
+  (`MediaSaveDestination` rule vs `PhotoLibraryManager` write).
+- **Pure core (`:core:model`):** `GallerySaveTarget` + `GallerySaveTargetResolver.resolve(url, mimeHint?)` —
+  strip query+fragment → last path segment; extension→MIME map (image jpg/jpeg/png/gif/webp/heic/heif/bmp, video
+  mp4/mov/webm/mkv/3gp); known hint > extension; parameterised hint normalised; unknown/blank hint ignored;
+  unknown extension keeps the name + defaults MIME `image/jpeg`; illegal chars sanitised to `_`; missing
+  extension → append the MIME's canonical ext; blank/all-underscore → `meeshy-image.<ext>`; images →
+  `Pictures/Meeshy`, videos → `Movies/Meeshy`.
+- **Tests:** **+25** behavioural (`GallerySaveTargetResolverTest`) — happy path per family, query/fragment strip,
+  case-insensitive ext, canonical-ext append, hint precedence + normalisation + ignore, unknown-ext keep,
+  sanitisation, degenerate-URL defaults, multi-dot name. **Mutation RED proof:** forcing
+  `relativePath = IMAGE_DIR` (dropping the video-album branch) failed **exactly 4** tests (the video-album ones),
+  the other 19 stayed green — reverted, behavioural not tautological.
+- **Wiring (`:sdk-ui`, exempt glue):** `GalleryImageSaver.save(context, url, mimeHint?)` — scoped-storage
+  MediaStore insert (`RELATIVE_PATH` + `IS_PENDING`, Android 10+, no permission), streams URL bytes, flips
+  `IS_PENDING=0`, deletes the item on any failure, **rethrows `CancellationException`** (cancellation-safe, no
+  spurious toast on mid-save dismissal). `MeeshyImageViewer` gains opt-in `onImageSaved: ((Result<Unit>) -> Unit)?`
+  → white `FileDownload` Save button at TopEnd opposite Close, hidden below Android 10, disabled while saving;
+  default `null` → no button → zero change for existing callers. `ChatScreen` shows a success/failure `Toast`.
+  Strings `image_viewer_save` + `image_saved_to_gallery`/`image_save_failed` in en/fr/es/pt.
+- **Verification:** `LANG=C.utf8 gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (943 tasks; APK
+  assembles; every module unit suite green). System Gradle 8.14.3 + UTF-8-daemon recipe (wrapper egress-blocked).
+- **Reviewer:** **PASS** — diff `apps/android` only; SDK purity (pure decision in `:core:model`, singleton-free
+  cascade-free executor in `:sdk-ui` mirroring iOS `PhotoLibraryManager`, toast orchestration app-side); SSOT
+  (one resolver end-to-end); UX/colour coherence (white glyph on black immersive viewer, opposite Close, one-tap,
+  hidden where unsupported); no coverage floor lowered, no test weakened.
+- **Next:** §C contact-card bubble attachment (scope the DTO first) OR §B communities carousel + filter chips.
 
 ### 2026-07-14 — slice `chat-gallery-neighbor-prefetch` ✅ impl + reviewer PASS → PR + merge
 - **Branch:** `claude/apps/android/chat-gallery-neighbor-prefetch` (off latest `main` `18e155f` — last Android
