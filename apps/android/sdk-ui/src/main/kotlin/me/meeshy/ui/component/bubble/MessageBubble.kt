@@ -60,6 +60,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -84,6 +85,8 @@ public fun MessageBubble(
     mentionDisplayNames: Map<String, String>? = null,
     highlightTerm: String? = null,
     trackedLinks: Map<String, String>? = null,
+    effects: MessageEffects? = null,
+    hasPlayedAppearance: Boolean = false,
 ) {
     Row(
         modifier = modifier
@@ -115,6 +118,11 @@ public fun MessageBubble(
         Column(
             modifier = Modifier
                 .widthIn(max = 300.dp)
+                .messageEffects(
+                    effects = effects ?: MessageEffects(),
+                    hasPlayedAppearance = hasPlayedAppearance,
+                    shape = RoundedCornerShape(MeeshyRadius.xl),
+                )
                 .clip(RoundedCornerShape(MeeshyRadius.xl))
                 .background(bubbleBackground)
                 .let { base ->

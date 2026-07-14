@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **message-effects render-plan + persistent treatment layer** landed (slice
+> `chat-message-effects-render-plan`, feature-parity §Chat "Message visual effects" — the consume/render side.
+> The resolver decodes a received message's wire fields into a `MessageEffects`; the encoder ships the composer
+> selection; nothing yet expressed **which** effects a bubble should actually render, and how the one-shot vs
+> continuous distinction works. iOS's `View.messageEffects(_:hasPlayedAppearance:)` gates each appearance effect
+> with `&& !hasPlayedAppearance` (one-shot) and applies the persistent treatments unconditionally. This slice
+> ports that orchestration as a **pure** function and wires a real Compose consumer. **Ships (`:core:model`):**
+> `MessageEffectRenderPlanner.plan(effects, hasPlayedAppearance): MessageEffectRenderPlan` — appearance effects
+> (shake/zoom/explode/waoo/confetti/fireworks) only appear in `plan.appearance` while `hasPlayedAppearance ==
+> false` (iOS gate); persistent effects (glow/pulse/rainbow/sparkle) always appear in `plan.persistent` (never
+> gated); `plan.glowIntensity = effects.glowIntensity ?: 0.5` (iOS default); lifecycle bits (ephemeral/blurred/
+> view-once) are behaviours, not render effects, so the plan never lists them. `AppearanceEffect`/`PersistentEffect`
+> enums are adossés to the existing `APPEARANCE_MASK`/`PERSISTENT_MASK` (SSOT — no bit re-declaration). `isEmpty`
+> = both sets empty. **+14 planner tests** (no-effects→empty; lifecycle-only→empty; each of the 6 appearance bits
+> maps to its enum; each of the 4 persistent bits; all-appearance→6; all-persistent→4; played suppresses one-shot;
+> persistent survives the played gate; glow default 0.5 vs provided 0.9; mixed not-played→both; mixed played→only
+> persistent). **Mutation check (RED proof):** replacing the `hasPlayedAppearance` gate with `false` failed
+> **exactly 2** tests (`plan_appearanceAlreadyPlayed_suppressesAppearanceEffect`,
+> `plan_mixedAlreadyPlayed_keepsOnlyPersistent`), the other 12 stayed green — reverted green, behavioural not
+> tautological. **Wired for real (`:sdk-ui`):** `Modifier.messageEffects(effects, hasPlayedAppearance, shape)` —
+> a public building block that builds the plan and applies the PERSISTENT treatments via
+> `rememberInfiniteTransition`: glow = indigo `Modifier.shadow` breathing radius 4↔12.dp + alpha
+> `intensity*0.3`↔`intensity` (iOS `GlowEffect`); pulse = `graphicsLayer` scale 1.0↔1.02 (iOS `PulseEffect`);
+> rainbow = `Modifier.border` sweep-gradient ring (iOS `RainbowEffect`). `MessageBubble` gains optional
+> `effects: MessageEffects? = null` + `hasPlayedAppearance: Boolean = false` params (default → `MessageEffects()`
+> → `plan.persistent.isEmpty()` → the modifier returns `this`, so **zero behaviour change for every existing
+> caller**), applied to the bubble container so the glow/border wrap the rounded bubble shape. **Verification:**
+> `:core:model` + `:sdk-ui` `testDebugUnitTest` green; `:sdk-ui:assembleDebug` + `:app:assembleDebug` → APK
+> produced (74 MB). One unrelated flake in `:sdk-core` `MediaDownloadPreferencesStoreTest` (DataStore `StateFlow`
+> 15s timeout — a known env flake, see NOTES 2026-07-12 locale/flake) failed in the aggregate run and **passed on
+> isolated re-run**; my slice touches neither `:sdk-core` nor that store. Built with the system Gradle 8.14.3 +
+> UTF-8-daemon recipe (wrapper distribution egress-blocked). Reviewer **PASS** (diff `apps/android` only —
+> `:core:model` [planner + enums + plan], `:sdk-ui` [`Modifier.messageEffects` + `MessageBubble` params], tests,
+> `feature-parity.md`, routine docs; **SDK purity** — the "which effect renders / one-shot vs continuous / glow
+> default" decision is a pure stateless function in `:core:model`; the modifier is thin coverage-exempt Compose
+> glue reading the plan, no singleton reads; **SSOT** — reuses `APPEARANCE_MASK`/`PERSISTENT_MASK` + `MessageEffects`,
+> nothing re-declared; **UX/colour coherence** — glow uses the indigo accent (`MeeshyPalette.Indigo500`), not a
+> hardcoded random; **no coverage floor lowered, no test weakened**). **Next slice:** the one-shot **appearance
+> rendering** layer (transforms shake=offset / zoom·explode·waoo=scale via a one-shot `Animatable` keyed to
+> message identity, gated by `plan.appearance` + a ViewModel-tracked `hasPlayedAppearance`; confetti/fireworks
+> particle overlays + sparkle `Canvas` — the plan already enumerates them) OR the Compose **EffectsPickerView**
+> sheet (renders the three chip sections + ephemeral row, passes the built `MessageEffects` to `sendOptimistic`)
+> OR wiring `effects` from the received message into `BubbleContent`/`MessageBubble` at the ConversationScreen
+> (needs the message model to first carry the effect wire fields end-to-end).
+
 > On 2026-07-14 **message-effects send-path encoding** landed (slice `chat-message-effects-send-encoding`,
 > feature-parity §Chat "Message visual effects" — the send-side wire counterpart to the resolver (decode) and
 > the editor (edit). The resolver decodes a *received* message's effects; the editor edits the composer

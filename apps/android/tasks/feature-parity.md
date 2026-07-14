@@ -672,9 +672,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       de vrai : `SendMessageRequest` gagne les 6 champs wire ; `MessageRepository.sendOptimistic`
       accepte `effects` et encode dans la requête outbox + la bulle optimiste ; `retrySend` préserve
       les effets depuis la bulle cachée. +19 tests encoder (round-trip encode↔resolve inclus,
-      mutation-checked) + 4 tests repo. Reste : la Compose picker sheet (glue exempte) qui passe
-      `effects` à `sendOptimistic` + le rendu visuel des effets dans la bulle (Compose animations,
-      coverage-exempt).
+      mutation-checked) + 4 tests repo. **Render-plan + persistent treatment layer done**
+      (`chat-message-effects-render-plan` 2026-07-14 : `MessageEffectRenderPlanner.plan(effects,
+      hasPlayedAppearance): MessageEffectRenderPlan` porte l'orchestration render de l'iOS
+      `View.messageEffects(_:hasPlayedAppearance:)` — les effets appearance (shake/zoom/explode/
+      waoo/confetti/fireworks) sont one-shot et n'apparaissent dans le plan que si
+      `hasPlayedAppearance == false` (iOS gate `&& !hasPlayedAppearance`) ; les effets persistants
+      (glow/pulse/rainbow/sparkle) sont continus et jamais gatés ; `glowIntensity` résout
+      `effects.glowIntensity ?? 0.5` (iOS) ; les bits lifecycle ne sont pas des effets render → jamais
+      dans le plan. Enums `AppearanceEffect`/`PersistentEffect` adossés aux masques `APPEARANCE_MASK`/
+      `PERSISTENT_MASK`. +14 tests planner (mutation-checked : retirer le gate hasPlayed casse
+      exactement les 2 tests one-shot). Câblé pour de vrai : `:sdk-ui` `Modifier.messageEffects(effects,
+      hasPlayedAppearance, shape)` applique les traitements PERSISTANTS (glow = shadow indigo qui
+      respire radius 4↔12 + alpha `intensity*0.3`↔`intensity` ; pulse = scale 1.0↔1.02 ;
+      rainbow = bordure sweep-gradient) via `rememberInfiniteTransition` ; `MessageBubble` gagne
+      les params optionnels `effects`/`hasPlayedAppearance` (défaut `null`/`false` → zéro changement
+      pour les appelants existants). Reste : le rendu des one-shot appearance (transforms + overlays
+      particules confetti/fireworks + sparkle canvas — le plan les énumère déjà, la couche se branche
+      sans toucher le planner), la Compose picker sheet, et le peuplement de `effects` depuis le
+      message côté ConversationScreen (le modèle message doit d'abord porter les champs effect).
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
