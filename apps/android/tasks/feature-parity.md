@@ -579,8 +579,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ConversationGallery` expose `senderNames`/`createdAtIsos` dérivés ; `MeeshyImageViewer` gagne
       `authors`/`timestamps: List<String?>` opaques et rend une ligne d'en-tête « auteur · date » au-dessus
       de la légende dans le même overlay bas (masqué en zoom) ; `ChatScreen` formate le `createdAtIso` en
-      libellé relatif via `RelativeTimeFormat.short` + `rememberRelativeTimeStrings`. +13 tests. Reste :
-      contact card, save-to-gallery, prefetch ±2) ; contact pending
+      libellé relatif via `RelativeTimeFormat.short` + `rememberRelativeTimeStrings`. +13 tests.
+      **Prefetch ±2 done** (`chat-gallery-neighbor-prefetch` 2026-07-14 : port du look-ahead ±2 de la galerie
+      iOS — pur `:sdk-ui` `ImageViewerPrefetch.neighbors(currentIndex, total, radius=2)` retourne les index
+      voisins à préchauffer, nearest-first biaisé avant (le prochain avant le précédent à chaque pas), jamais
+      hors bornes ni enroulé, jamais l'index courant, vide si <2 pages ou radius ≤ 0, index courant coercé
+      dans les bornes ; `MeeshyImageViewer` gagne un `LaunchedEffect(currentPage, imageUrls)` qui mappe ces
+      index sur des `ImageRequest` enfilés dans le `context.imageLoader` Coil partagé — même motif que le
+      `StoryPrefetchPlanner` du viewer story. +13 tests. Reste : contact card, save-to-gallery) ; contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
