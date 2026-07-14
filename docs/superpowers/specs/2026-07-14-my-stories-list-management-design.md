@@ -149,6 +149,19 @@ d'entrée qui transmettent un `postId` sans jamais avoir eu de résolution
 d'index (notifications, deep links `storyDetail:`, bookmarks) — même défaut
 latent, même fix.
 
+**Limite connue, explicitement hors périmètre** : `StoryViewerView.swift:423`
+gate l'application de `initialStoryIndex` avec `if initialStoryIndex > 0`,
+donc un index résolu à `0` (la story la plus ancienne du groupe) tombe dans
+la branche `startAtFirstUnviewed` si ce flag est actif, au lieu d'honorer
+l'index 0 explicitement demandé. Vérifié : **aucun appelant actuel** ne
+combine `postId` avec `startAtFirstUnviewed: true` (`MyStoriesView` ne passe
+pas ce flag), donc ce comportement latent n'est pas déclenché par ce
+changement. Ne pas corriger ce gate dans `StoryViewerView` ici — hors
+périmètre, risque de régression sur le chemin `startAtFirstUnviewed`
+existant pour un bénéfice nul sur cette feature. `StoryIndexResolverTests`
+doit néanmoins couvrir explicitement le cas `postId` résolvant à l'index 0,
+pour documenter la frontière au niveau du helper pur.
+
 ## 3. Créer une story depuis la liste
 
 **Fichiers** : `MyStoriesView.swift`, `StoryTrayView.swift`.
@@ -199,13 +212,41 @@ Nouvel état local :
 
 Toolbar trailing, à côté du bouton "OK" existant : bascule "Sélectionner" /
 "Annuler" (le second réinitialise `selectedIDs` et repasse `isSelecting` à
-`false`).
+`false`). Ce bouton porte un `.accessibilityLabel` explicite qui change avec
+l'état (`String(localized: "story.mine.select", defaultValue: "Sélectionner")`
+/ `String(localized: "story.mine.select.cancel", defaultValue: "Annuler la sélection")`)
+— règle `apps/ios/CLAUDE.md` : tout élément interactif a un label.
+
+**Staleté de `selectedIDs`** : `selectedIDs` n'est jamais purgé contre la
+liste réellement affichée. Si une suppression temps réel arrive par socket
+(autre appareil) ou qu'une story expire pendant que l'utilisateur est en
+sélection, `stories` se réduit mais un id sélectionné peut rester orphelin
+dans `selectedIDs` — `deleteStory` ne crashe pas (lookup frais à chaque
+appel), mais l'appel réseau pour un id déjà disparu échoue et gonfle
+silencieusement le compteur d'échecs du toast final sans explication pour
+l'utilisateur. Fix : ne jamais lire `selectedIDs` brut ; toujours passer par
+une propriété calculée qui l'intersecte avec les stories actuellement
+affichées, recalculée à chaque render (pas besoin d'`onChange`/`Equatable`) :
+
+```swift
+private var selectedStoryIDs: Set<String> {
+    selectedIDs.intersection(Set(stories.map(\.id)))
+}
+```
+
+Cette propriété calculée remplace `selectedIDs` partout où l'UI ou la
+suppression groupée en a besoin (visibilité/compteur de la barre d'action,
+boucle de `bulkDelete()`, état coché des lignes) — `selectedIDs` lui-même
+reste la source de vérité brute (ce que l'utilisateur a coché), mais rien ne
+la lit sans filtrer par la liste vivante.
 
 `MyStoryRow` reçoit deux nouveaux paramètres : `isSelecting: Bool`,
 `isSelected: Bool`. En mode sélection, un cercle cochable indigo (style
 cohérent avec le design system Meeshy — pas le checkmark bleu système)
-s'affiche en tête de ligne, rempli si `isSelected`. Le `.onTapGesture` de la
-ligne bascule vers :
+s'affiche en tête de ligne, rempli si `isSelected`, avec
+`.accessibilityLabel(isSelected ? "Sélectionné" : "Non sélectionné")` et
+`.accessibilityAddTraits(.isButton)`. Le `.onTapGesture` de la ligne bascule
+vers :
 
 ```swift
 .onTapGesture {
@@ -223,17 +264,19 @@ mode sélection (ou sont explicitement désactivés via un `if !isSelecting`
 autour du modifier — à trancher dans le plan selon ce qui reste le plus
 lisible).
 
-Barre d'action, visible seulement quand `isSelecting && !selectedIDs.isEmpty` :
+Barre d'action, visible seulement quand `isSelecting && !selectedStoryIDs.isEmpty` :
 ```swift
 .safeAreaInset(edge: .bottom) {
-    if isSelecting && !selectedIDs.isEmpty {
+    if isSelecting && !selectedStoryIDs.isEmpty {
         Button(role: .destructive) {
             bulkDeleteCandidate = true   // ouvre une alert de confirmation
         } label: {
             Text(String(localized: "story.mine.delete.selected",
-                        defaultValue: "Supprimer (\(selectedIDs.count))"))
+                        defaultValue: "Supprimer (\(selectedStoryIDs.count))"))
         }
         .buttonStyle(...)  // cohérent avec le style destructif existant du fichier
+        .accessibilityHint(String(localized: "story.mine.delete.selected.hint",
+                                   defaultValue: "Supprime définitivement les stories cochées"))
     }
 }
 ```
@@ -248,9 +291,10 @@ total, ou décompte des échecs partiels) plutôt qu'un toast par item.
 
 ```swift
 private func bulkDelete() {
+    let ids = selectedStoryIDs   // snapshot filtré, pas de course avec un id orphelin
     Task {
         var failures = 0
-        for id in selectedIDs {
+        for id in ids {
             let ok = await viewModel.deleteStory(storyId: id)
             if !ok { failures += 1 }
         }
@@ -317,14 +361,21 @@ de la liste ; seule la largeur varie, dans la plage 36-64pt (portrait extrême
 ## Tests
 
 - `StoryIndexResolverTests` (nouveau, pur, sans mock réseau) : `postId`
-  présent au milieu du groupe → bon index ; `postId` absent → fallback ;
-  `postId` nil → fallback ; groupe à une seule story.
+  présent au milieu du groupe → bon index ; `postId` **résolvant à l'index
+  0** (première story du groupe) → doit retourner `0` explicitement, pas le
+  fallback — documente la frontière avec le gate `initialStoryIndex > 0` de
+  `StoryViewerView` (cf. section 2, limite connue) ; `postId` absent →
+  fallback ; `postId` nil → fallback ; groupe à une seule story.
 - Tests sur `MyStoryRow.thumbnailWidth(forAspectRatio:)` : portrait 9:16,
   carré 1:1, paysage extrême (>2.0, doit clamper à 64), `nil` (fallback
   9:16).
 - Test comportemental (`MeeshyTests`) : tap sur l'avatar "Ma story" quand une
   story existe déclenche `onManageStories`, pas `onViewMyStory` (mock des
   deux closures, assert call counts).
+- `selectedStoryIDs` (nouveau, pur si extrait en helper testable, ou test
+  comportemental sinon) : un id présent dans `selectedIDs` mais absent de
+  `stories` (story supprimée en temps réel pendant la sélection) doit être
+  exclu du compteur affiché et de la boucle `bulkDelete()`.
 - Suppression groupée : pas de nouveau test réseau nécessaire —
   `StoryViewModel.deleteStory` est déjà couvert ; le test à ajouter porte sur
   la boucle de `MyStoriesView` (via un test de ViewModel/mock si la boucle est
@@ -346,3 +397,11 @@ de la liste ; seule la largeur varie, dans la plage 36-64pt (portrait extrême
   `MyStoriesView.stories` (ordre inverse, plus récent d'abord) — les deux
   ordres sont différents et ne doivent pas être confondus lors de
   l'implémentation.
+- Revue indépendante effectuée le 2026-07-14 (post-commit `e046a4090`,
+  fixes reader background/group-switch/repost sur les mêmes fichiers
+  voisins) : aucune référence fichier/ligne de cette spec n'a été invalidée.
+  Trois lacunes relevées ont été corrigées ci-dessus : gate `initialStoryIndex
+  > 0` de `StoryViewerView` (documenté comme hors périmètre + testé au niveau
+  du resolver), staleté de `selectedIDs` (fix `selectedStoryIDs` calculé),
+  labels d'accessibilité manquants sur le toggle de sélection et les cercles
+  cochables (ajoutés section 4).
