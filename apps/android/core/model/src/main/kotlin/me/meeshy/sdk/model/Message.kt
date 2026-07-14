@@ -129,4 +129,10 @@ data class SendMessageRequest(
     val attachmentIds: List<String>? = null,
     val forwardedFromId: String? = null,
     val forwardedFromConversationId: String? = null,
+    val effectFlags: Int? = null,
+    val isBlurred: Boolean? = null,
+    val isViewOnce: Boolean? = null,
+    val ephemeralDuration: Int? = null,
+    val expiresAt: String? = null,
+    val maxViewOnceCount: Int? = null,
 )

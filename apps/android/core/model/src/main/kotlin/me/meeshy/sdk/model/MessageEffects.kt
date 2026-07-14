@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model
 
+import java.time.Instant
 import kotlinx.serialization.Serializable
 
 /**
@@ -108,5 +109,52 @@ object MessageEffectsResolver {
         if (isViewOnce == true) flags = flags or MessageEffectFlags.VIEW_ONCE
         if (hasExpiry) flags = flags or MessageEffectFlags.EPHEMERAL
         return MessageEffects(flags = flags)
+    }
+}
+
+/** The outgoing wire projection of a composer's [MessageEffects] selection. */
+data class MessageEffectsWire(
+    val effectFlags: Int? = null,
+    val isBlurred: Boolean? = null,
+    val isViewOnce: Boolean? = null,
+    val ephemeralDuration: Int? = null,
+    val expiresAt: String? = null,
+    val maxViewOnceCount: Int? = null,
+)
+
+/**
+ * Encodes a composer's [MessageEffects] selection into the outgoing wire fields — the
+ * send-path counterpart to [MessageEffectsResolver] (which decodes a *received* message)
+ * and [MessageEffectsEditor] (which edits the selection). A direct port of the iOS
+ * `ConversationViewModel` send resolution:
+ *
+ * - No effects selected ⇒ every wire field is `null` (iOS `effectFlags: nil`).
+ * - Any effect ⇒ the full bitfield ships as [MessageEffectsWire.effectFlags] (iOS
+ *   `pendingEffects.flags.rawValue`); the lifecycle bits also project to the legacy
+ *   `isBlurred` / `isViewOnce` booleans (set to `true` only — never `false`, mirroring
+ *   iOS `? true : nil`) for backends that read the per-behaviour fields.
+ * - `EPHEMERAL` + a chosen duration ⇒ the raw seconds ship as
+ *   [MessageEffectsWire.ephemeralDuration] and a concrete
+ *   `expiresAt = now + duration` timestamp (iOS `EphemeralDuration.expiresAt`); the flag
+ *   is authoritative, so a stale duration param with the chip toggled off is ignored.
+ * - `VIEW_ONCE` ⇒ [MessageEffects.maxViewOnceCount] ships when present.
+ *
+ * The single [MessageEffects] value is the source of truth — every wire field is derived
+ * from it, never from scattered composer toggles (a deliberate improvement over iOS).
+ */
+object MessageEffectsEncoder {
+    fun encode(effects: MessageEffects, now: Instant): MessageEffectsWire {
+        if (!effects.hasAnyEffect) return MessageEffectsWire()
+        val ephemeralSeconds =
+            if (effects.has(MessageEffectFlags.EPHEMERAL)) effects.ephemeralDuration else null
+        return MessageEffectsWire(
+            effectFlags = (effects.flags and 0xFFFFFFFFL).toInt(),
+            isBlurred = if (effects.has(MessageEffectFlags.BLURRED)) true else null,
+            isViewOnce = if (effects.has(MessageEffectFlags.VIEW_ONCE)) true else null,
+            ephemeralDuration = ephemeralSeconds,
+            expiresAt = ephemeralSeconds?.let { now.plusSeconds(it.toLong()).toString() },
+            maxViewOnceCount =
+                if (effects.has(MessageEffectFlags.VIEW_ONCE)) effects.maxViewOnceCount else null,
+        )
     }
 }

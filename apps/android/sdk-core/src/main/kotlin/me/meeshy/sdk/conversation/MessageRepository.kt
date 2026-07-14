@@ -15,6 +15,8 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageEffectsEncoder
 import me.meeshy.sdk.model.AttachmentAudioTranslationMerge
 import me.meeshy.sdk.model.AttachmentTranscriptionMerge
 import me.meeshy.sdk.model.MessageTranslationMerge
@@ -104,9 +106,11 @@ class MessageRepository @Inject constructor(
         replyToId: String? = null,
         forwardedFromId: String? = null,
         forwardedFromConversationId: String? = null,
+        effects: MessageEffects = MessageEffects(),
     ): String {
         val cmid = OutboxIds.cmid()
         val now = clock.nowMillis()
+        val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
         val optimistic = ApiMessage(
             id = cmid,
             conversationId = conversationId,
@@ -124,6 +128,10 @@ class MessageRepository @Inject constructor(
             clientMessageId = cmid,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
+            effectFlags = wire.effectFlags,
+            isBlurred = wire.isBlurred,
+            isViewOnce = wire.isViewOnce,
+            expiresAt = wire.expiresAt,
         )
         val request = SendMessageRequest(
             content = content,
@@ -132,6 +140,12 @@ class MessageRepository @Inject constructor(
             clientMessageId = cmid,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
+            effectFlags = wire.effectFlags,
+            isBlurred = wire.isBlurred,
+            isViewOnce = wire.isViewOnce,
+            ephemeralDuration = wire.ephemeralDuration,
+            expiresAt = wire.expiresAt,
+            maxViewOnceCount = wire.maxViewOnceCount,
         )
         database.withTransaction {
             messageDao.upsertAll(listOf(optimistic.toLocalEntity(now, LocalSendState.SENDING)))
@@ -200,6 +214,10 @@ class MessageRepository @Inject constructor(
                         clientMessageId = cmid,
                         forwardedFromId = message.forwardedFromId,
                         forwardedFromConversationId = message.forwardedFromConversationId,
+                        effectFlags = message.effectFlags,
+                        isBlurred = message.isBlurred,
+                        isViewOnce = message.isViewOnce,
+                        expiresAt = message.expiresAt,
                     ),
                 ),
                 cmid = cmid,

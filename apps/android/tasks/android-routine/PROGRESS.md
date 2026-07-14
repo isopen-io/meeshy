@@ -1,5 +1,54 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **message-effects send-path encoding** landed (slice `chat-message-effects-send-encoding`,
+> feature-parity §Chat "Message visual effects" — the send-side wire counterpart to the resolver (decode) and
+> the editor (edit). The resolver decodes a *received* message's effects; the editor edits the composer
+> selection; nothing yet expressed how that selection reaches the *outgoing wire*. iOS's `ConversationViewModel`
+> resolves `pendingEffects` into `effectFlags` + the legacy lifecycle fields + `expiresAt` on the send request.
+> This slice ports that as a pure function and wires it into the real send path. **Ships (`:core:model`):**
+> the `MessageEffectsWire` data class (the 6 outgoing fields) and **`MessageEffectsEncoder.encode(effects, now):
+> MessageEffectsWire`** — a direct port: *no effects ⇒ every wire field `null`* (iOS `effectFlags: nil`);
+> *any effect ⇒ the full bitfield ships as `effectFlags`* (`(flags and 0xFFFFFFFFL).toInt()` = iOS
+> `pendingEffects.flags.rawValue`), the lifecycle bits also project to `isBlurred`/`isViewOnce` **set to `true`
+> only, never `false`** (iOS `? true : nil`); *`EPHEMERAL` + a chosen duration ⇒* the raw seconds ship as
+> `ephemeralDuration` and a concrete **`expiresAt = now + duration`** ISO timestamp (iOS
+> `EphemeralDuration.expiresAt = Date().addingTimeInterval(rawValue)`), the **flag is authoritative** so a stale
+> `ephemeralDuration` param with the chip toggled back off is ignored; *`VIEW_ONCE` ⇒* `maxViewOnceCount` ships
+> when present. The single `MessageEffects` value is the SSOT — every wire field derives from it, never from
+> scattered composer toggles (a deliberate improvement over iOS's split state). `now` is injected (mirrors iOS
+> `Date()`) so the encoder stays pure/testable. **Wired for real (no dead ends):** `SendMessageRequest` gains the
+> 6 wire fields; `MessageRepository.sendOptimistic` gains an `effects: MessageEffects = MessageEffects()` param,
+> encodes it via `MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))`, and populates **both** the
+> outbox `SendMessageRequest` **and** the optimistic `ApiMessage`'s effect fields (so the optimistic bubble
+> resolves the same effects the resolver would — closing the loop with the prior slice); `retrySend` re-reads
+> `effectFlags`/`isBlurred`/`isViewOnce`/`expiresAt` from the cached bubble so a retry never drops the effects.
+> The Compose picker sheet that passes `effects` to `sendOptimistic` is the thin coverage-exempt follow-up.
+> **+19 encoder tests** (empty→all-null; effectFlags carries raw bitfield / union / highest-bit SPARKLE narrowing;
+> blurred→isBlurred-true-only, view-once→isViewOnce-true-only, appearance-only→lifecycle-booleans-null; ephemeral
+> +duration→seconds+expiresAt, expiresAt==now+seconds via `isoToEpochMillisOrNull`, ephemeral-flag-without-duration
+> →no-expiry, duration-without-flag→ignored, all-lifecycle-bits→every-field, **round-trip encode→resolve reproduces
+> the original flags**) **+ 4 repo tests** (no-effects→clean request; effects→outbox request carries
+> flags/view-once/duration/`expiresAt`/count; optimistic bubble surfaces the effects; retry preserves them).
+> **Mutation check (RED proof):** dropping the `EPHEMERAL` guard on the ephemeral-seconds derivation failed
+> **exactly 1** test (`encode_durationWithoutEphemeralFlag_isIgnored`), the other 14 stayed green — reverted
+> green, the suite is behavioural not tautological. **Verification:** `:core:model:testDebugUnitTest --tests
+> MessageEffectsEncoderTest` → green; `:core:model` + `:sdk-core` `testDebugUnitTest` → green;
+> full `gradle assembleDebug` → APK produced (74 MB). Env note: built with the container's system Gradle 8.14.3 +
+> the UTF-8-daemon recipe (`LANG=C.utf8` + `-Pkotlin.daemon.jvmargs=-Dsun.jnu.encoding=UTF-8`) since the wrapper
+> distribution is egress-blocked. Reviewer **PASS** (diff `apps/android` only — `:core:model`
+> [`MessageEffectsEncoder`+`MessageEffectsWire`, `SendMessageRequest` fields], `:sdk-core` [`MessageRepository`
+> wiring], tests, `feature-parity.md`, routine docs; **SDK purity** — pure stateless encoder in `:core:model`,
+> the "when to encode" orchestration is a thin repository seam, no singleton reads; **SSOT** — reuses
+> `MessageEffectFlags` bit constants + `MessageEffects` + `EphemeralDuration.seconds` + `IsoTime`, nothing
+> re-declared; the encode↔resolve round-trip test pins them as inverses; **instant-app** — the optimistic bubble
+> carries the effects immediately; **UX coherence** — no visual change yet, the composer selection now reaches
+> the wire for the picker follow-up; **no coverage floor lowered, no test weakened**). **Next slice:** the Compose
+> **EffectsPickerView** sheet (renders the three chip sections bound to `MessageEffectsEditor.toggle` + the
+> ephemeral duration row, and on send passes the built `MessageEffects` to `sendOptimistic` — heavy Compose,
+> coverage-exempt) OR the bubble-side rendering of received effects (persistent glow/pulse/rainbow/sparkle border
+> + one-shot appearance animations gated by a `hasPlayed` flag, port iOS `MessageEffectModifiers`), OR the
+> still-pending gallery save-to-gallery (`MediaStore` insert).
+
 > On 2026-07-14 **message-effects composer editor + ephemeral-duration enum** landed (slice
 > `chat-message-effects-editor`, feature-parity §Chat "Message visual effects" — the send-side
 > counterpart to the `chat-message-effects-resolver` that landed the same day. The resolver decodes
