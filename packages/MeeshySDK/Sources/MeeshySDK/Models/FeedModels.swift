@@ -65,6 +65,13 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     /// translator pipeline has not produced TTS variants yet.
     public var translatedAudios: [MessageTranslatedAudio]
 
+    /// Ratio largeur/hauteur dérivé de `width`/`height`. `nil` si l'un des
+    /// deux est absent ou si `height` est 0 (évite une division par zéro).
+    public var aspectRatio: Double? {
+        guard let width, let height, height > 0 else { return nil }
+        return Double(width) / Double(height)
+    }
+
     public init(id: String = UUID().uuidString, type: FeedMediaType, url: String? = nil,
                 thumbnailUrl: String? = nil, thumbHash: String? = nil,
                 thumbnailColor: String = "4ECDC4",
