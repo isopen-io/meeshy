@@ -225,6 +225,8 @@ extension StoryCanvasUIView {
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
+            lastBgSnapX = nil
+            lastBgSnapY = nil
 
             // Bring-to-front au touch : couvre tap simple ET début de drag.
             // Skip pour le background media (toujours derrière les fg) — le
@@ -248,22 +250,31 @@ extension StoryCanvasUIView {
             let dxNorm = Double(translation.x / bounds.width)
             let dyNorm = Double(translation.y / renderHeightForDesign)
 
-            // Unification BG/FG (2026-05-29) : pour le bg, on ne snap pas
-            // (le bg media n'a pas de "position" sémantique sur les rails
-            // 0.18/0.25/0.5/0.75/0.82 — il est centré et se zoom/pan dans
-            // ses propres bounds). updatePosition mute mediaObjects[bg].x/y
-            // qui est lu par le converter bgTransform de rebuildLayers et
-            // appliqué via applyContentTransform sur le contentLayer du bg.
+            // Unification BG/FG (2026-05-29) : updatePosition mute
+            // mediaObjects[bg].x/y qui est lu par le converter bgTransform de
+            // rebuildLayers et appliqué via applyContentTransform sur le
+            // contentLayer du bg.
             //
             // Sensibilité réduite (× 0.5) pour le pan BG : le geste s'applique
             // au repositionnement d'une image qui couvre déjà tout le canvas,
             // donc un déplacement 1:1 du doigt à la position normalisée est
             // trop sensible pour ajuster finement le cadrage (user feedback
             // 2026-05-29 : « avec une faible sensibilité »).
+            //
+            // Snap de CADRAGE (directive user 2026-07-14) : contrairement au
+            // foreground (rails 0.18/0.25/0.5/0.75/0.82), le bg s'accroche au
+            // centre (0.5) et aux bords (0.0/1.0) — « centrer ou coller la
+            // bordure que l'utilisateur approche ». Guides + haptic à l'entrée.
             if id == backgroundMediaObjectId {
                 let rawX = clamp(dragStartSlideX + dxNorm * 0.5)
                 let rawY = clamp(dragStartSlideY + dyNorm * 0.5)
-                slide = updatePosition(slideId: id, x: rawX, y: rawY)
+                let (snappedX, didSnapX) = snapBackground(rawX)
+                let (snappedY, didSnapY) = snapBackground(rawY)
+                noteBackgroundSnap(x: didSnapX ? snappedX : nil,
+                                   y: didSnapY ? snappedY : nil)
+                updateSnapGuides(x: didSnapX ? snappedX : nil,
+                                 y: didSnapY ? snappedY : nil)
+                slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
                 onItemModified?(slide)
                 return
             }
@@ -278,6 +289,8 @@ extension StoryCanvasUIView {
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
             manipulatedItemId = nil
+            lastBgSnapX = nil
+            lastBgSnapY = nil
             hideSnapGuides()
             slideContentRevision &+= 1
             rebuildLayers()
@@ -291,6 +304,29 @@ extension StoryCanvasUIView {
             return (target, true)
         }
         return (value, false)
+    }
+
+    /// Snap du CADRAGE d'arrière-plan : ramène la position normalisée vers le
+    /// centre (0.5) ou un bord (0.0 / 1.0) quand l'utilisateur s'en approche.
+    /// Pure et `nonisolated` pour être testable sans monter de vue.
+    nonisolated func snapBackground(_ value: Double) -> (snapped: Double, didSnap: Bool) {
+        for target in Self.backgroundSnapTargets where abs(value - target) < Self.backgroundSnapTolerance {
+            return (target, true)
+        }
+        return (value, false)
+    }
+
+    /// Émet un tap haptique léger UNIQUEMENT à l'entrée dans une nouvelle zone
+    /// de snap (transition), pour matérialiser l'accroche magnétique sans
+    /// vibrer en continu tant que le doigt reste dans la zone.
+    func noteBackgroundSnap(x: Double?, y: Double?) {
+        if x != lastBgSnapX || y != lastBgSnapY {
+            if (x != nil && x != lastBgSnapX) || (y != nil && y != lastBgSnapY) {
+                HapticFeedback.light()
+            }
+        }
+        lastBgSnapX = x
+        lastBgSnapY = y
     }
 
     func updateSnapGuides(x: Double?, y: Double?) {

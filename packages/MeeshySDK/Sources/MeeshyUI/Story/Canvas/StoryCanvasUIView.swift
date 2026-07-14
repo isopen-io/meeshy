@@ -709,6 +709,17 @@ public final class StoryCanvasUIView: UIView {
     nonisolated static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
     nonisolated static let snapTolerance: Double = 0.02
 
+    /// Cibles de snap du CADRAGE d'arrière-plan (directive user 2026-07-14 :
+    /// « effet snap pour cadrer le contenu en centrant ou en collant bordure »).
+    /// `0.5` = centré, `0.0`/`1.0` = collé au bord. Tolérance plus large que le
+    /// foreground : le pan bg est ralenti (× 0.5), le snap doit rester perceptible.
+    nonisolated static let backgroundSnapTargets: [Double] = [0.0, 0.5, 1.0]
+    nonisolated static let backgroundSnapTolerance: Double = 0.035
+
     var snapGuideLayers: [CAShapeLayer] = []
+    /// Dernières cibles de snap bg engagées (x/y) — pour n'émettre le haptic
+    /// qu'à l'ENTRÉE dans une zone de snap, pas à chaque tick de drag.
+    var lastBgSnapX: Double?
+    var lastBgSnapY: Double?
 
 }
