@@ -642,8 +642,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       edit-history endpoint surfaced on Android).
 - [ ] Ephemeral (self-destruct) messages with duration picker + countdown badges
 - [ ] Blurred ("tap to reveal") + view-once messages with fog effect
-- [ ] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
-      — picker sheet + cross-platform bitfield encoding
+- [◐] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
+      — picker sheet + cross-platform bitfield encoding. **Wire contract + resolver done**
+      (`chat-message-effects-resolver` 2026-07-14 : la source de vérité `MessageEffectFlags`
+      (bits 0-19, partagée avec `packages/shared/types/message-effect-flags.ts` + iOS
+      `MessageEffects.swift`) gagne les prédicats d'axe purs `hasAny`/`hasLifecycle`/`hasAppearance`/
+      `hasPersistent`/`has(flags, effect)` (port de `hasLifecycleEffect`… iOS) ; `MessageEffects`
+      expose les accesseurs miroirs ; `MessageEffectsResolver.resolve(effectFlags, isBlurred,
+      isViewOnce, hasExpiry)` porte EXACTEMENT la règle iOS `APIMessage.toMessage` (effectFlags > 0
+      autoritatif sinon dérivation lifecycle depuis les booléens/expiry) ; `ApiMessage` décode enfin
+      les champs wire `effectFlags`/`isBlurred`/`isViewOnce`/`expiresAt` (auparavant silencieusement
+      droppés) et expose `effects: MessageEffects` calculé. +20 tests. Reste : picker sheet composer
+      + rendu visuel des effets dans la bulle (Compose animations, coverage-exempt).
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera

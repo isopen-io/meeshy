@@ -2044,3 +2044,17 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   A real "retranslate" affordance must call `requestOnDemandTranslation` unconditionally — reuse the merge/no-op
   path (`MessageRepository.requestTranslation` re-hits the API every call; identical result → inert merge).
   No `force` flag on the repo was needed.
+
+## chat-message-effects-resolver (2026-07-14)
+- **A bootstrapped model ≠ a wired feature.** `MessageEffects.kt` + `MessageEffectFlags` already existed in
+  `:core:model`, which looked "done" — but `ApiMessage` had NO `effectFlags`/`isBlurred`/`isViewOnce`/
+  `expiresAt` fields, so the wire contract was silently dropped at decode and effects never reached the model.
+  Lesson: when a model exists but the feature is unchecked, grep the DTO decode path for the wire fields
+  before assuming the plumbing is there — a `data class` in `:core:model` proves nothing about the boundary.
+- **Port the guard verbatim, not "morally".** iOS uses `if let flags = effectFlags, flags > 0` (UInt32, so
+  `>0` ≡ `!=0`). On Android `effectFlags` is a signed `Int`; `> 0` is the faithful port and makes
+  `effectFlags == 0` fall through to the legacy boolean derivation. Using `!= 0` or `>= 0` would diverge on
+  the zero-flags boundary — the mutation test (`>0`→`>=0`) proved exactly that.
+- **Computed properties are serialization-invisible.** `val effects get() = …` inside a `@Serializable data
+  class` (custom getter, not a constructor param) is ignored by kotlinx.serialization — same trick as the
+  existing `displayContent`/`isTranslated`. Safe way to expose a resolved view over decoded wire fields.

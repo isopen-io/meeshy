@@ -88,6 +88,10 @@ data class ApiMessage(
     val pinnedBy: String? = null,
     val forwardedFromId: String? = null,
     val forwardedFromConversationId: String? = null,
+    val effectFlags: Int? = null,
+    val isBlurred: Boolean? = null,
+    val isViewOnce: Boolean? = null,
+    val expiresAt: String? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,
@@ -99,6 +103,20 @@ data class ApiMessage(
     /** True when the displayed content is a translation rather than the original. */
     fun isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
         LanguageResolver.preferredTranslation(translations, prefs) != null
+
+    /**
+     * The resolved visual/lifecycle effects for this message. A positive
+     * [effectFlags] bitfield is authoritative; otherwise lifecycle flags are
+     * derived from the legacy `isBlurred` / `isViewOnce` / expiry fields — the
+     * exact rule iOS `APIMessage.toMessage` applies.
+     */
+    val effects: MessageEffects
+        get() = MessageEffectsResolver.resolve(
+            effectFlags = effectFlags,
+            isBlurred = isBlurred,
+            isViewOnce = isViewOnce,
+            hasExpiry = !expiresAt.isNullOrBlank(),
+        )
 }
 
 @Serializable
