@@ -1,5 +1,53 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **message-effects composer editor + ephemeral-duration enum** landed (slice
+> `chat-message-effects-editor`, feature-parity §Chat "Message visual effects" — the send-side
+> counterpart to the `chat-message-effects-resolver` that landed the same day. The resolver decodes
+> the effects a *received* message carries; nothing yet expresses how the *composer* edits an effect
+> selection before sending. iOS's `EffectsPickerView` toggles chips, picks a self-destruct duration,
+> clears all, and counts the active effects. This slice ports that interaction logic as pure functions
+> so the eventual Compose picker is thin exempt glue). **Ships (`:core:model`):** the `EphemeralDuration`
+> enum (`THIRTY_SECONDS`=30 … `TWENTY_FOUR_HOURS`=86400 s — the raw `seconds` are the shared wire
+> contract carried by `MessageEffects.ephemeralDuration`, pinned by tests; **UI labels deliberately left
+> to string resources**, not hard-coded into the pure model as iOS does) with `fromSeconds(Int?):
+> EphemeralDuration?` mirroring iOS `EphemeralDuration(rawValue:)` (unknown/legacy/null → `null`); and
+> **`MessageEffectsEditor`** with four pure transitions over the immutable `MessageEffects`: `toggle(effects,
+> flag)` — flip a chip's bit (set when absent via `or`, clear when present via `and inv()`), **every other
+> bit and every parameter untouched** (mirrors iOS `if isSelected { flags.remove } else { flags.insert }`);
+> `withEphemeralDuration(effects, duration)` — writes only the `ephemeralDuration` seconds param and leaves
+> the flags bitfield alone (the duration row only shows once `EPHEMERAL` is already toggled on, so the flag
+> is `toggle`'s responsibility, exactly as the iOS picker splits them); `cleared()` — returns the empty
+> `MessageEffects()` (= iOS `effects = .none`); `activeCount(effects)` — `flags.countOneBits()` popcount
+> (= iOS `flags.rawValue.nonzeroBitCount`) for the "%d effet(s) actif(s)" summary. **+19 tests**
+> (EphemeralDuration: seconds pinned to the wire contract / entries ordered shortest→longest /
+> `fromSeconds` match, first+last boundary, unknown→null, zero→null, null→null; toggle: set-when-absent /
+> clear-when-present / other-bits-untouched clearing + setting / params preserved / round-trip returns to
+> original flags; activeCount: 0 empty / 1 single / 3 across axes; cleared: resets flags AND params;
+> withEphemeralDuration: records seconds / leaves flags unchanged / replaces previous duration). **Mutation
+> check (RED proof):** swapping toggle's set/clear branches failed **exactly 5** toggle tests
+> (`toggle_setsFlagWhenAbsent`, `toggle_clearsFlagWhenPresent`, `toggle_leavesOtherBitsUntouchedWhenClearing`,
+> `…WhenSetting`, `toggle_preservesParameters`), the other 14 stayed green — reverted green, the suite is
+> behavioural not tautological. **Verification:** `:core:model:testDebugUnitTest --tests
+> MessageEffectsEditorTest` → 19/19 green; full `gradle assembleDebug testDebugUnitTest` across every module
+> → APK produced (74 MB), all modules green except the **pre-existing flaky** `:sdk-core`
+> `MediaDownloadPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` (a DataStore StateFlow
+> 15 s timeout under parallel load — a module this diff does not touch; **re-confirmed green in isolation**
+> this run). Env note: built with the container's system Gradle 8.14.3 + the UTF-8-daemon recipe
+> (`LANG=C.utf8` + `-Pkotlin.daemon.jvmargs=-Dsun.jnu.encoding=UTF-8`) since the wrapper distribution is
+> egress-blocked. Reviewer **PASS** (diff `apps/android` only — `:core:model` [`MessageEffectsEditor` +
+> `EphemeralDuration`], tests, `feature-parity.md`, routine docs; **SDK purity** — pure stateless bit-math
+> transitions on the model, no orchestration, no singleton reads; **SSOT** — reuses `MessageEffectFlags`
+> bit constants + `MessageEffects.has`, the `EphemeralDuration.seconds` are the single shared wire integers,
+> nothing re-declared; **instant-app** — pure fns, no state; **UX coherence** — no visual change yet, the
+> model now carries the composer edit ops for the picker follow-up; **no coverage floor lowered, no test
+> weakened**). **Next slice:** the Compose **EffectsPickerView** sheet (renders the three chip sections
+> behaviour/entry/permanent bound to `MessageEffectsEditor.toggle` + the ephemeral duration row —
+> heavy Compose, coverage-exempt) OR the `effectFlags` encoding on the send path (composer state →
+> `MessageRepository.send`/socket payload — needs the send API to carry the bitfield first) OR the bubble-
+> side rendering of received effects (persistent glow/pulse/rainbow/sparkle border + one-shot appearance
+> animations, port iOS `MessageEffectModifiers`), OR save-to-gallery (`MediaStore` insert).
+
+
 > On 2026-07-14 **message-effects wire contract + resolver** landed (slice `chat-message-effects-resolver`,
 > feature-parity §Chat "Message visual effects" — Android already had the `MessageEffectFlags` bit constants
 > and the `MessageEffects` data class in `:core:model`, but three gaps remained vs iOS: (1) the flag struct

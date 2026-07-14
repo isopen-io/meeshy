@@ -652,8 +652,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       isViewOnce, hasExpiry)` porte EXACTEMENT la règle iOS `APIMessage.toMessage` (effectFlags > 0
       autoritatif sinon dérivation lifecycle depuis les booléens/expiry) ; `ApiMessage` décode enfin
       les champs wire `effectFlags`/`isBlurred`/`isViewOnce`/`expiresAt` (auparavant silencieusement
-      droppés) et expose `effects: MessageEffects` calculé. +20 tests. Reste : picker sheet composer
-      + rendu visuel des effets dans la bulle (Compose animations, coverage-exempt).
+      droppés) et expose `effects: MessageEffects` calculé. +20 tests. **Send-side editor done**
+      (`chat-message-effects-editor` 2026-07-14 : `MessageEffectsEditor` porte la logique
+      d'interaction pure de l'iOS `EffectsPickerView` — `toggle(effects, flag)` (insert/remove
+      d'un bit chip, autres bits + params intacts), `withEphemeralDuration(effects, duration)`
+      (écrit le paramètre seconds, laisse le flag à `toggle`), `cleared()` (= iOS `.none`),
+      `activeCount` (popcount = `nonzeroBitCount`) ; l'enum wire `EphemeralDuration`
+      (30/60/300/3600/86400 s, `fromSeconds` = `EphemeralDuration(rawValue:)`, labels UI laissés
+      aux string resources) porte `CoreModels.swift`. +19 tests, mutation-checked. Reste : la
+      Compose picker sheet + l'encodage `effectFlags` sur le chemin d'envoi (repository/socket) +
+      le rendu visuel des effets dans la bulle (Compose animations, coverage-exempt).
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
