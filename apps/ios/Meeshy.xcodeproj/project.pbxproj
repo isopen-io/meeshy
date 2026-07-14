@@ -407,6 +407,7 @@
 		95E3820F796C751BA8197F24 /* ConnectionStatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBB1C4FE83A6839017FA891F /* ConnectionStatusViewModel.swift */; };
 		95FFA9FE6C79720C0B3E0E55 /* GlobalEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 648054D70EA2348B94997860 /* GlobalEnvironment.swift */; };
 		96DD406AAEAE26EFB8214093 /* ConversationAudioCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 424E5C31EE1E800408098C2C /* ConversationAudioCoordinatorTests.swift */; };
+		9743ACE3735F0C1A4838B7B3 /* MyStoriesBulkDeleteGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ECB3D90D00A574FDDC4138E /* MyStoriesBulkDeleteGuardTests.swift */; };
 		97472BC32447433D4105420C /* ConversationAudioCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FB2F67D4526B0F1AF3B3468 /* ConversationAudioCoordinator.swift */; };
 		978AE2541624C5CCA84FB950 /* BlockedViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69AC0463A77E232994BF17C8 /* BlockedViewModel.swift */; };
 		97BB41146D28A68DBF2D6F1F /* AddParticipantSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 272F5AD3FB01148178C24972 /* AddParticipantSheet.swift */; };
@@ -1096,6 +1097,7 @@
 		7E0FFF9C752CE95E58A3223B /* OutboxDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutboxDispatcher.swift; sourceTree = "<group>"; };
 		7E896535ACC04675488DD5E7 /* DeepLinkRouterTrackedDestinationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouterTrackedDestinationTests.swift; sourceTree = "<group>"; };
 		7EA84AB5847E170B0EEB9948 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
+		7ECB3D90D00A574FDDC4138E /* MyStoriesBulkDeleteGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyStoriesBulkDeleteGuardTests.swift; sourceTree = "<group>"; };
 		7FBDF960D29007B609363E73 /* StoryActiveBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryActiveBridgeTests.swift; sourceTree = "<group>"; };
 		7FE3CAEDEC212A17D4829E66 /* DraftStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DraftStoreTests.swift; sourceTree = "<group>"; };
 		8012F097B238A3CC916C0033 /* EffectsPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsPickerView.swift; sourceTree = "<group>"; };
@@ -1575,6 +1577,7 @@
 				D7035951959FA78D2BDBA836 /* GuestConversationContainerTests.swift */,
 				5415F2EAA24DE3F68DD44281 /* HeaderCallButtonsViewTests.swift */,
 				303C8A844B0F98A92CE2CE52 /* IncomingCallViewTests.swift */,
+				7ECB3D90D00A574FDDC4138E /* MyStoriesBulkDeleteGuardTests.swift */,
 				981B3621A42468D759597E2A /* MyStoriesCreateStoryGuardTests.swift */,
 				A6088E04C440652CC1D61E16 /* PostDetailReachAndVisibilityTests.swift */,
 				3C175C5037FE8EE353B0088E /* ReelFeedAutoplayCoordinatorTests.swift */,
@@ -3386,6 +3389,7 @@
 				E37997858C858C94474EDFE1 /* MockVoIPTokenStore.swift in Sources */,
 				CA65371E6ACF66D10F75C0C4 /* MockVoiceProfileService.swift in Sources */,
 				2D3EA8B611BE6960FDCE3491 /* MultiAttachmentSendPlannerTests.swift in Sources */,
+				9743ACE3735F0C1A4838B7B3 /* MyStoriesBulkDeleteGuardTests.swift in Sources */,
 				A42706D0E3967045B5F09779 /* MyStoriesCreateStoryGuardTests.swift in Sources */,
 				8BD6ACA62860D4578E9FE0C5 /* NavigationStateRestorationTests.swift in Sources */,
 				A1A3A9A8FB61CBB184DA4F04 /* NewConversationViewModelTests.swift in Sources */,

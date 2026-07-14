@@ -33,6 +33,11 @@ struct MyStoriesView: View {
     @State private var isReposting = false
     @StateObject private var exportViewModel = StoryExportShareViewModel()
 
+    /// Mode sélection multiple (suppression groupée). Directive user 2026-07-14.
+    @State private var isSelecting = false
+    @State private var selectedIDs: Set<String> = []
+    @State private var isBulkDeleteConfirming = false
+
     private var isDark: Bool { colorScheme == .dark }
     private var accentColor: Color {
         Color(hex: DynamicColorGenerator.colorForName(AuthManager.shared.currentUser?.username ?? ""))
@@ -42,6 +47,13 @@ struct MyStoriesView: View {
     private var stories: [StoryItem] {
         (viewModel.storyGroupForUser(userId: userId)?.stories ?? [])
             .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// `selectedIDs` filtré contre les stories réellement affichées — une
+    /// story supprimée en temps réel (autre appareil) pendant la sélection
+    /// disparaît de ce set sans jamais être relue brute.
+    private var selectedStoryIDs: Set<String> {
+        StorySelectionResolver.liveSelection(selectedIDs: selectedIDs, liveIDs: stories.map(\.id))
     }
 
     var body: some View {
@@ -57,17 +69,29 @@ struct MyStoriesView: View {
                 } else {
                     List {
                         ForEach(stories) { story in
-                            MyStoryRow(story: story, accentColor: accentColor, isDark: isDark)
-                                .contentShape(Rectangle())
-                                .onTapGesture { onOpen(story) }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            MyStoryRow(
+                                story: story,
+                                accentColor: accentColor,
+                                isDark: isDark,
+                                isSelecting: isSelecting,
+                                isSelected: selectedStoryIDs.contains(story.id)
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture { handleRowTap(story) }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                if !isSelecting {
                                     Button(role: .destructive) { deleteCandidate = story } label: {
                                         Label(String(localized: "common.delete", defaultValue: "Supprimer"),
                                               systemImage: "trash")
                                     }
                                 }
-                                .contextMenu { actionMenu(for: story) }
-                                .listRowBackground(Color.clear)
+                            }
+                            .contextMenu {
+                                if !isSelecting {
+                                    actionMenu(for: story)
+                                }
+                            }
+                            .listRowBackground(Color.clear)
                         }
                     }
                     .listStyle(.plain)
@@ -84,8 +108,28 @@ struct MyStoriesView: View {
                     }
                     .accessibilityLabel(String(localized: "story.mine.create", defaultValue: "Créer une story"))
                 }
+                if !stories.isEmpty {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            isSelecting.toggle()
+                            if !isSelecting { selectedIDs.removeAll() }
+                        } label: {
+                            Text(isSelecting
+                                 ? String(localized: "common.cancel", defaultValue: "Annuler")
+                                 : String(localized: "story.mine.select", defaultValue: "Sélectionner"))
+                        }
+                        .accessibilityLabel(isSelecting
+                            ? String(localized: "story.mine.select.cancel", defaultValue: "Annuler la sélection")
+                            : String(localized: "story.mine.select", defaultValue: "Sélectionner"))
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "common.done", defaultValue: "OK")) { dismiss() }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if isSelecting && !selectedStoryIDs.isEmpty {
+                    bulkDeleteBar
                 }
             }
         }
@@ -115,6 +159,53 @@ struct MyStoriesView: View {
             Text(String(localized: "story.mine.delete.message",
                         defaultValue: "Cette action est définitive. La story ne sera plus visible par personne."))
         }
+        .alert(
+            String(localized: "story.mine.delete.selected.title", defaultValue: "Supprimer les stories sélectionnées ?"),
+            isPresented: $isBulkDeleteConfirming
+        ) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler"), role: .cancel) {}
+            Button(String(localized: "common.delete", defaultValue: "Supprimer"), role: .destructive) {
+                bulkDelete()
+            }
+        } message: {
+            Text(String(localized: "story.mine.delete.selected.message",
+                        defaultValue: "Cette action est définitive. Ces stories ne seront plus visibles par personne."))
+        }
+    }
+
+    // MARK: - Row tap
+
+    private func handleRowTap(_ story: StoryItem) {
+        if isSelecting {
+            if selectedIDs.contains(story.id) {
+                selectedIDs.remove(story.id)
+            } else {
+                selectedIDs.insert(story.id)
+            }
+        } else {
+            onOpen(story)
+        }
+    }
+
+    // MARK: - Bulk delete bar
+
+    private var bulkDeleteBar: some View {
+        Button {
+            isBulkDeleteConfirming = true
+        } label: {
+            Text(String(localized: "story.mine.delete.selected",
+                        defaultValue: "Supprimer (\(selectedStoryIDs.count))"))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(Capsule().fill(MeeshyColors.error))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .accessibilityHint(String(localized: "story.mine.delete.selected.hint",
+                                   defaultValue: "Supprime définitivement les stories cochées"))
     }
 
     // MARK: Menu
@@ -167,6 +258,29 @@ struct MyStoriesView: View {
         }
     }
 
+    private func bulkDelete() {
+        let ids = selectedStoryIDs
+        Task {
+            var failures = 0
+            for id in ids {
+                let ok = await viewModel.deleteStory(storyId: id)
+                if !ok { failures += 1 }
+            }
+            await MainActor.run {
+                selectedIDs.removeAll()
+                isSelecting = false
+                if failures == 0 {
+                    FeedbackToastManager.shared.showSuccess(
+                        String(localized: "story.mine.delete.selected.success", defaultValue: "Stories supprimées"))
+                } else {
+                    FeedbackToastManager.shared.showError(
+                        String(localized: "story.mine.delete.selected.error",
+                               defaultValue: "\(failures) suppression(s) ont échoué"))
+                }
+            }
+        }
+    }
+
     private func repost(_ story: StoryItem) {
         guard !isReposting else { return }
         isReposting = true
@@ -197,6 +311,8 @@ private struct MyStoryRow: View {
     let story: StoryItem
     let accentColor: Color
     let isDark: Bool
+    var isSelecting: Bool = false
+    var isSelected: Bool = false
 
     /// URL brute (résolue en interne par `CachedAsyncImage` via `MeeshyConfig`).
     private var thumbnailURLString: String? {
@@ -205,6 +321,9 @@ private struct MyStoryRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            if isSelecting {
+                selectionCircle
+            }
             thumbnail
             VStack(alignment: .leading, spacing: 4) {
                 Text(story.timeAgo)
@@ -217,12 +336,32 @@ private struct MyStoryRow: View {
                 }
             }
             Spacer()
-            Image(systemName: "ellipsis")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.secondary)
-                .padding(8)
+            if !isSelecting {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .padding(8)
+            }
         }
         .padding(.vertical, 4)
+    }
+
+    private var selectionCircle: some View {
+        Circle()
+            .strokeBorder(accentColor, lineWidth: isSelected ? 0 : 1.5)
+            .background(Circle().fill(isSelected ? accentColor : Color.clear))
+            .overlay {
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(width: 22, height: 22)
+            .accessibilityLabel(isSelected
+                ? String(localized: "story.mine.selected", defaultValue: "Sélectionné")
+                : String(localized: "story.mine.notSelected", defaultValue: "Non sélectionné"))
+            .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder
