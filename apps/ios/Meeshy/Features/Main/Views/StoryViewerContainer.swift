@@ -41,13 +41,18 @@ struct StoryViewerContainer: View {
             Color.black.ignoresSafeArea()
 
             if let resolvedIndex = viewModel.groupIndex(forUserId: uid) {
+                let resolvedStoryIndex = StoryIndexResolver.index(
+                    forPostId: postId,
+                    in: viewModel.storyGroups[resolvedIndex],
+                    fallback: initialStoryIndex
+                )
                 if singleGroup {
                     StoryViewerView(
                         viewModel: viewModel,
                         groups: [viewModel.storyGroups[resolvedIndex]],
                         currentGroupIndex: 0,
                         isPresented: $isPresented,
-                        initialStoryIndex: initialStoryIndex,
+                        initialStoryIndex: resolvedStoryIndex,
                         startAtFirstUnviewed: startAtFirstUnviewed,
                         initialAction: initialAction
                     )
@@ -59,7 +64,7 @@ struct StoryViewerContainer: View {
                         currentGroupIndex: resolvedIndex,
                         isPresented: $isPresented,
                         onReplyToStory: onReplyToStory,
-                        initialStoryIndex: initialStoryIndex,
+                        initialStoryIndex: resolvedStoryIndex,
                         startAtFirstUnviewed: startAtFirstUnviewed,
                         initialAction: initialAction
                     )
