@@ -118,37 +118,37 @@ struct BandStateMachineTests {
         #expect(sm.state == .hidden)
     }
 
-    // MARK: - Timeline routes to a sheet, never to a band panel (C5)
-    // ComposerToolPanelHost renders .timeline as EmptyView with panelHeight 0 —
-    // reaching .toolPanel(.timeline) shows a titled band with no content. The
-    // machine refuses the transition; callers open the timeline SHEET instead.
+    // MARK: - Timeline is a normal band tool (2026-07-14)
+    // Presented inline via ComposerControlsLayer.resolveEffectiveBandState's
+    // override, exactly like drawing mode. The state machine itself no
+    // longer special-cases it — see ComposerControlsLayerEffectiveBandStateTests.
 
-    @Test("tapFAB(.timeline) keeps the band hidden — timeline presents as a sheet")
-    func tapFABTimelineKeepsBandHidden() {
+    @Test("tapFAB(.timeline) from .hidden opens .toolPanel(.timeline)")
+    func tapFABTimelineOpensToolPanel() {
         var sm = BandStateMachine()
         sm.tapFAB(.timeline)
-        #expect(sm.state == .hidden)
+        #expect(sm.state == .toolPanel(.timeline))
     }
 
-    @Test("swipeUpOnFAB(.timeline) keeps the band hidden")
-    func swipeUpOnFABTimelineKeepsBandHidden() {
+    @Test("swipeUpOnFAB(.timeline) opens .toolPanel(.timeline)")
+    func swipeUpOnFABTimelineOpensToolPanel() {
         var sm = BandStateMachine()
         sm.swipeUpOnFAB(.timeline)
-        #expect(sm.state == .hidden)
+        #expect(sm.state == .toolPanel(.timeline))
     }
 
-    @Test("tapTile(.timeline) keeps the band hidden")
-    func tapTileTimelineKeepsBandHidden() {
+    @Test("tapTile(.timeline) opens .toolPanel(.timeline)")
+    func tapTileTimelineOpensToolPanel() {
         var sm = BandStateMachine()
         sm.tapTile(.timeline)
-        #expect(sm.state == .hidden)
+        #expect(sm.state == .toolPanel(.timeline))
     }
 
-    @Test("tapFAB(.timeline) while another panel is open leaves that panel untouched")
-    func tapFABTimelinePreservesOpenPanel() {
+    @Test("tapFAB(.timeline) while another panel is open swaps to it, like any other tool")
+    func tapFABTimelineSwapsOpenPanel() {
         var sm = BandStateMachine()
         sm.tapFAB(.media)
         sm.tapFAB(.timeline)
-        #expect(sm.state == .toolPanel(.media))
+        #expect(sm.state == .toolPanel(.timeline))
     }
 }
