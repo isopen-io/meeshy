@@ -62,7 +62,12 @@ final class ContactsListViewModelTests: XCTestCase {
     /// new contact arrives with full FriendRequestUser details (name,
     /// avatar, presence) that the cache alone can't provide.
     func test_friendshipCacheAddition_triggersBackgroundRefetch() async {
-        let (_, friendService) = makeSUT()
+        // `sut` is bound (not `_`) on purpose: the ViewModel owns the Combine
+        // subscription to `FriendshipCache.$version`. Discarding it releases the
+        // ViewModel immediately, tearing down the subscription before the cache
+        // mutation propagates — so the refetch never fires. `withExtendedLifetime`
+        // below keeps it alive across the awaits without an "unused" warning.
+        let (sut, friendService) = makeSUT()
         let newFriend = FriendRequestFixture.make(
             id: "req-new",
             senderId: "eve",
@@ -82,11 +87,13 @@ final class ContactsListViewModelTests: XCTestCase {
         for _ in 0..<5 { await Task.yield() }
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertGreaterThanOrEqual(
-            friendService.receivedRequestsCallCount,
-            1,
-            "Cache addition must trigger a SWR refetch to hydrate the user record"
-        )
+        withExtendedLifetime(sut) {
+            XCTAssertGreaterThanOrEqual(
+                friendService.receivedRequestsCallCount,
+                1,
+                "Cache addition must trigger a SWR refetch to hydrate the user record"
+            )
+        }
     }
 
     // MARK: - Fresh cache + lag detection
