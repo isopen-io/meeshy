@@ -21,6 +21,18 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(MeeshyNotificationType.legacyPostLike.rawValue, "POST_LIKE")
     }
 
+    /// Guideline 5 (MIIT) — CallEventsHandler.ts always sends `data.type: "call"`
+    /// for the incoming-call push (both the 'voip' and China-region 'apns'
+    /// routing share this payload). Distinct raw value from `.incomingCall`
+    /// ("incoming_call") because VoIPPushManager already depends on the exact
+    /// literal "call" to validate PushKit payloads — the string can't be
+    /// unified without breaking that unrelated, functioning path.
+    func test_MeeshyNotificationType_rawValueCall_isRecognized() {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "call"), .incomingCallAlert)
+        XCTAssertEqual(MeeshyNotificationType.incomingCallAlert.rawValue, "call")
+        XCTAssertNotEqual(MeeshyNotificationType.incomingCallAlert, .incomingCall)
+    }
+
     func testNotificationTypeSystemIcon() {
         XCTAssertEqual(MeeshyNotificationType.newMessage.systemIcon, "bubble.left.fill")
         XCTAssertEqual(MeeshyNotificationType.friendRequest.systemIcon, "person.badge.plus")

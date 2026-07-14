@@ -82,12 +82,28 @@ final class VoIPPushManager: NSObject, ObservableObject {
         }
     }
 
+    /// Guideline 5 (MIIT) — CallKit must be inactive in China. Apple's PushKit
+    /// contract forces `reportNewIncomingCall` (CallKit) on EVERY VoIP push
+    /// received, with no way to opt out per-push — the only way to guarantee
+    /// CallKit never activates in the background/killed-app state is to never
+    /// register for the VoIP push type at all on China-region devices. The
+    /// gateway compensates by routing incoming-call pushes to those users via
+    /// a standard 'apns' alert instead (see CallEventsHandler.ts).
+    nonisolated static func shouldRegisterVoIPPush(isiOSAppOnMac: Bool, regionIdentifier: String?) -> Bool {
+        !isiOSAppOnMac && regionIdentifier != "CN"
+    }
+
     func register() {
         // P0-1 — VoIP push is iOS-only: Apple does not deliver PushKit pushes to
         // iOS-app-on-Mac ("Designed for iPad"), and PKPushRegistry on Mac causes
         // silent failures + unexpected CallKit errors. Gate the full registration.
-        guard !ProcessInfo.processInfo.isiOSAppOnMac else {
-            logger.info("VoIP push registration skipped (iOS-app-on-Mac)")
+        // Also skipped entirely for China-region devices (Guideline 5 / MIIT —
+        // see shouldRegisterVoIPPush above).
+        guard Self.shouldRegisterVoIPPush(
+            isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac,
+            regionIdentifier: Locale.current.region?.identifier
+        ) else {
+            logger.info("VoIP push registration skipped (iOS-app-on-Mac or China region)")
             return
         }
         guard voipRegistry == nil else { return }

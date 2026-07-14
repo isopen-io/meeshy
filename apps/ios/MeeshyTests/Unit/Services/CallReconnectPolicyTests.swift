@@ -321,19 +321,39 @@ final class StuckMutedFallbackPolicyTests: XCTestCase {
 final class PlatformCallKitPolicyTests: XCTestCase {
     func test_platformUsesCallKit_physicalDevice_returnsTrue() {
         XCTAssertTrue(CallReliabilityPolicy.platformUsesCallKit(
-            isiOSAppOnMac: false, isSimulator: false
+            isiOSAppOnMac: false, isSimulator: false, isChinaRegion: false
         ))
     }
 
     func test_platformUsesCallKit_iosAppOnMac_returnsFalse() {
         XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
-            isiOSAppOnMac: true, isSimulator: false
+            isiOSAppOnMac: true, isSimulator: false, isChinaRegion: false
         ))
     }
 
     func test_platformUsesCallKit_simulator_returnsFalse() {
         XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
-            isiOSAppOnMac: false, isSimulator: true
+            isiOSAppOnMac: false, isSimulator: true, isChinaRegion: false
+        ))
+    }
+
+    // Guideline 5 (MIIT) — CallKit must be inactive in China even on a
+    // physical, non-simulator device.
+    func test_platformUsesCallKit_chinaRegion_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: false, isSimulator: false, isChinaRegion: true
+        ))
+    }
+
+    func test_platformUsesCallKit_chinaRegionButAlsoSimulator_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: false, isSimulator: true, isChinaRegion: true
+        ))
+    }
+
+    func test_platformUsesCallKit_nonChinaRegion_returnsTrue() {
+        XCTAssertTrue(CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: false, isSimulator: false, isChinaRegion: false
         ))
     }
 }

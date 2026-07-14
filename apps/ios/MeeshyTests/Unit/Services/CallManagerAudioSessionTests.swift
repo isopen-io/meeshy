@@ -1610,6 +1610,34 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "believe it has system backing it never actually got")
     }
 
+    /// Guideline 5 (MIIT) — documented, accepted degradation: extending
+    /// `platformSupportsCallKit` to gate on China region (Apple disallows
+    /// CallKit there) means this promotion is now PERMANENTLY a no-op for
+    /// China-region devices too — a call ringing in-app that backgrounds
+    /// before being answered can be silently suspended by iOS with no
+    /// lock-screen card, falling back to the existing 60s server-side
+    /// ringing timeout (missed call) rather than a crash or total silence.
+    /// This is inherent to Apple forbidding CallKit while contractually
+    /// requiring it as the only reliable background-wake mechanism — not a
+    /// regression to fix. Locks the gate wiring so a future refactor can't
+    /// silently drop the China check without failing this test.
+    func test_promoteRingingCallToCallKitIfNeeded_neverPromotesInChina_evenWhileRinging() throws {
+        let source = try callManagerSource()
+        guard let staticRange = source.range(of: "nonisolated static let platformSupportsCallKit: Bool = {") else {
+            XCTFail("platformSupportsCallKit static computation not found in CallManager.swift"); return
+        }
+        let afterStatic = String(source[staticRange.upperBound...])
+        guard let staticEnd = afterStatic.range(of: "}()")?.lowerBound else {
+            XCTFail("Could not find platformSupportsCallKit closure boundary"); return
+        }
+        let staticBody = String(afterStatic[..<staticEnd])
+        XCTAssertTrue(
+            staticBody.contains("isChinaRegion: Locale.current.region?.identifier == \"CN\""),
+            "platformSupportsCallKit must gate on the China region so promoteRingingCallToCallKitIfNeeded " +
+            "(gated by this same flag) never activates CallKit in China, even for a call still ringing " +
+            "in-app — Apple's Guideline 5 (MIIT) rejection requires CallKit inactive there unconditionally")
+    }
+
     func test_foregroundObserver_emitsToggleVideoTrue_whenVideoStillEnabled() throws {
         let source = try callManagerSource()
         guard let fgRange = source.range(of: "willEnterForegroundNotification") else {

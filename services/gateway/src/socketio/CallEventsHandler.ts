@@ -261,6 +261,29 @@ export class CallEventsHandler {
     return out;
   }
 
+  /**
+   * Guideline 5 (MIIT) CallKit-in-China compliance — deviceCountry resolved
+   * per callee for an incoming-call push. A single findMany; any error
+   * returns an empty Map so the caller conservatively falls back to the
+   * (CallKit-eligible) 'voip' push type rather than silently dropping it.
+   */
+  private async resolveDeviceCountries(userIds: string[]): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    if (userIds.length === 0) return out;
+    try {
+      const users = await this.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, deviceCountry: true },
+      });
+      for (const u of users) {
+        out.set(u.id, u.deviceCountry);
+      }
+    } catch (error) {
+      logger.error('Device country resolution failed — falling back to voip push', { error });
+    }
+    return out;
+  }
+
   /** Release the periodic cleanup interval. Call when shutting down the handler. */
   destroy(): void {
     if (this.bufferCleanupInterval !== null) {
@@ -1782,12 +1805,23 @@ export class CallEventsHandler {
           // en dur. La résolution ne bloque jamais le push (fallback 'fr').
           const offlineLangs = await this.resolveNotificationLangs(offlineUserIds);
 
+          // Guideline 5 (MIIT) — Apple requires CallKit to be inactive in
+          // China, and PushKit contractually forces reportNewIncomingCall on
+          // every 'voip' push. iOS skips VoIP-push registration entirely for
+          // China-region devices (VoIPPushManager.shouldRegisterVoIPPush), so
+          // route those callees' incoming-call push through the standard
+          // 'apns' alert type instead — same title/body/data payload, no
+          // CallKit involved. Unknown/null deviceCountry conservatively keeps
+          // the existing 'voip' behavior.
+          const offlineCountries = await this.resolveDeviceCountries(offlineUserIds);
+
           for (const offlineUserId of offlineUserIds) {
             // Per-user TURN credentials so the answerer's RTCPeerConnection has
             // TURN at construction time (VoIPPushManager.didReceiveIncomingPush
             // configures WebRTC immediately, before any socket reconnect).
             // Serialized as JSON string because APNs `data` is Record<string,string>.
             const memberIceServers = this.callService.generateIceServers(offlineUserId);
+            const isChinaDevice = offlineCountries.get(offlineUserId) === 'CN';
             this.pushService.sendToUser({
               userId: offlineUserId,
               payload: {
@@ -1812,7 +1846,7 @@ export class CallEventsHandler {
                   iceServers: JSON.stringify(memberIceServers),
                 },
               },
-              types: ['voip'],
+              types: isChinaDevice ? ['apns'] : ['voip'],
               bypassDnd: true,
             }).catch(err => {
               logger.error('Failed to send VoIP push', { userId: offlineUserId, error: err });

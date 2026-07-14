@@ -996,6 +996,15 @@ struct RootView: View {
         // source data is partial, matching `StoryExpiredContent`'s
         // resilient rendering contract).
         let storyContext: StoryNotificationContext
+        // Guideline 5 (MIIT) — China-region incoming-call push (.incomingCallAlert).
+        // Only ever populated from `init(from: NotificationPayload)`: a live,
+        // just-tapped push. `APINotification`/`SocketNotificationEvent` are
+        // history/socket entries where the call, if any, is already resolved.
+        let callId: String?
+        let callerUserId: String?
+        let callerName: String?
+        let isVideoCall: Bool
+        let iceServersJSON: String?
 
         init(from notification: APINotification) {
             type = notification.notificationType
@@ -1008,6 +1017,11 @@ struct RootView: View {
             senderId = notification.senderId
             senderUsername = notification.senderName
             storyContext = StoryNotificationContext.from(notification)
+            callId = nil
+            callerUserId = nil
+            callerName = nil
+            isVideoCall = false
+            iceServersJSON = nil
         }
 
         init(from event: SocketNotificationEvent) {
@@ -1021,6 +1035,11 @@ struct RootView: View {
             senderId = event.senderId
             senderUsername = event.senderUsername
             storyContext = NotificationNavContext.makeStoryContext(from: event)
+            callId = nil
+            callerUserId = nil
+            callerName = nil
+            isVideoCall = false
+            iceServersJSON = nil
         }
 
         init(from payload: NotificationPayload) {
@@ -1034,6 +1053,11 @@ struct RootView: View {
             senderId = payload.senderId
             senderUsername = payload.senderUsername
             storyContext = NotificationNavContext.makeStoryContext(from: payload)
+            callId = payload.callId
+            callerUserId = payload.callerUserId
+            callerName = payload.callerName
+            isVideoCall = payload.isVideoCall
+            iceServersJSON = payload.iceServersJSON
         }
 
         // MARK: - Story context fabrication
@@ -1206,6 +1230,31 @@ struct RootView: View {
             if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
             }
+
+        // Guideline 5 (MIIT) — China-region incoming-call push. This is the
+        // ONLY affordance a backgrounded/killed-app China user has to engage
+        // an incoming call (no CallKit, no PushKit VoIP registration — see
+        // VoIPPushManager.shouldRegisterVoIPPush). A plain conversation
+        // deep-link would neither negotiate WebRTC nor show an answer UI, so
+        // this drives the same call-answer flow the socket-delivered
+        // foreground path already uses.
+        case .incomingCallAlert:
+            guard let callId = ctx.callId, !callId.isEmpty else {
+                // Malformed/legacy payload without a callId — fall back to
+                // the conversation so the tap is never a dead end.
+                if let conversationId = ctx.conversationId, !conversationId.isEmpty {
+                    navigateToConversationById(conversationId)
+                }
+                return
+            }
+            CallManager.shared.handleIncomingCallNotification(
+                callId: callId,
+                fromUserId: ctx.callerUserId ?? "",
+                fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",
+                isVideo: ctx.isVideoCall,
+                iceServers: VoIPPushManager.parseIceServers(ctx.iceServersJSON),
+                conversationId: ctx.conversationId
+            )
 
         case .postLike, .legacyPostLike, .postRepost, .friendNewPost:
             if let postId = ctx.postId, !postId.isEmpty {

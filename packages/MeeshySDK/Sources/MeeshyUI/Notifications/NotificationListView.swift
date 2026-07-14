@@ -108,7 +108,7 @@ enum NotificationCategory: String, CaseIterable {
         case .calls:
             return [
                 .missedCall, .callDeclined, .legacyCallMissed,
-                .incomingCall, .callEnded, .legacyCallIncoming
+                .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming
             ]
         case .translations:
             return [

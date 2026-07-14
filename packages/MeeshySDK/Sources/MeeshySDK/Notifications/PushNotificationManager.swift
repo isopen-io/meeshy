@@ -326,6 +326,16 @@ public struct NotificationPayload {
     public let parentCommentId: String?
     public let title: String?
     public let body: String?
+    /// Guideline 5 (MIIT) — China-region incoming-call push (routed via the
+    /// standard 'apns' alert type, not PushKit VoIP, so it arrives as a
+    /// regular tappable notification). Non-nil only for `type == "call"`.
+    public let callId: String?
+    public let callerUserId: String?
+    public let callerName: String?
+    public let isVideoCall: Bool
+    /// JSON-encoded ICE servers, same shape `VoIPPushManager.parseIceServers`
+    /// already decodes for the PushKit path — decode with that same helper.
+    public let iceServersJSON: String?
 
     public init(userInfo: [AnyHashable: Any]) {
         self.type = userInfo["type"] as? String
@@ -354,5 +364,19 @@ public struct NotificationPayload {
             self.title = nil
             self.body = nil
         }
+
+        self.callId = userInfo["callId"] as? String
+        self.callerUserId = userInfo["callerUserId"] as? String
+        self.callerName = userInfo["callerName"] as? String
+        // Backend sends `isVideo` as a string ("true"/"false") because APNs
+        // custom payload keys must be JSON-serializable primitives.
+        if let b = userInfo["isVideo"] as? Bool {
+            self.isVideoCall = b
+        } else if let s = userInfo["isVideo"] as? String {
+            self.isVideoCall = s.lowercased() == "true"
+        } else {
+            self.isVideoCall = false
+        }
+        self.iceServersJSON = userInfo["iceServers"] as? String
     }
 }

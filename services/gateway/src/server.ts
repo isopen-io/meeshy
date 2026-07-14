@@ -31,6 +31,7 @@ import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
+import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
 import { CORS_METHODS } from './config/cors-methods';
 import { conditionalGetOnSend } from './utils/etag';
@@ -616,6 +617,13 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // routes already carry `request.user`; public routes simply no-op.
     this.server.addHook('preHandler', createDeviceLocaleMiddleware(this.prisma));
     logger.info('✅ deviceLocale hook registered (X-Device-Locale → User.deviceLocale)');
+
+    // Guideline 5 (MIIT) CallKit-in-China compliance — continuous device
+    // country signal (registrationCountry is only captured once at signup).
+    // CallEventsHandler reads User.deviceCountry to route incoming-call
+    // pushes away from the PushKit/CallKit 'voip' token type in China.
+    this.server.addHook('preHandler', createDeviceCountryMiddleware(this.prisma));
+    logger.info('✅ deviceCountry hook registered (X-Meeshy-Country → User.deviceCountry)');
 
     // Wave 1 Task 3.4 — expose MutationLogService on fastify so routes
     // can wrap their writes in `recordOrReturn(...)` for idempotency.

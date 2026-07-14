@@ -497,5 +497,162 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
       expect(mockSendToUser).not.toHaveBeenCalled();
       expect(mockInitiateCall).toHaveBeenCalled();
     });
+
+    // Guideline 5 (MIIT) — CallKit must be inactive in China. iOS never
+    // registers PushKit VoIP for China-region devices, so the gateway must
+    // route those callees' incoming-call push through 'apns' instead of
+    // 'voip' — same payload, no CallKit involved.
+    it('routes the offline push via types: [\'apns\'] when the callee\'s deviceCountry is CN', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-cn';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockResolvedValue([
+          {
+            id: offlineMemberId,
+            systemLanguage: 'fr',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+            deviceCountry: 'CN',
+          },
+        ]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: offlineMemberId, types: ['apns'] })
+      );
+    });
+
+    it('routes the offline push via types: [\'voip\'] when the callee\'s deviceCountry is not CN (unchanged behavior)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-fr';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockResolvedValue([
+          {
+            id: offlineMemberId,
+            systemLanguage: 'fr',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+            deviceCountry: 'FR',
+          },
+        ]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: offlineMemberId, types: ['voip'] })
+      );
+    });
+
+    it('routes the offline push via types: [\'voip\'] when deviceCountry is null (conservative default)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-nocountry';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockResolvedValue([
+          {
+            id: offlineMemberId,
+            systemLanguage: 'fr',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+            deviceCountry: null,
+          },
+        ]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: offlineMemberId, types: ['voip'] })
+      );
+    });
+
+    it('preserves the exact same payload (title/body/callId/data) regardless of the routing type', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-offline-payload-check';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).user = {
+        findMany: jest.fn<any>().mockResolvedValue([
+          {
+            id: offlineMemberId,
+            systemLanguage: 'en',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+            deviceCountry: 'CN',
+          },
+        ]),
+      };
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          types: ['apns'],
+          bypassDnd: true,
+          payload: expect.objectContaining({
+            title: 'Alice Smith is calling you',
+            body: 'Audio call',
+            callId: CALL_ID,
+            data: expect.objectContaining({
+              type: 'call',
+              callId: CALL_ID,
+              conversationId: CONV_ID,
+            }),
+          }),
+        })
+      );
+    });
   });
 });

@@ -572,17 +572,22 @@ nonisolated enum CallReliabilityPolicy {
     }
 
     /// Whether the platform's CallKit stack can actually drive a call.
-    /// Two environments must run calls entirely in-app instead:
+    /// Three cases must run calls entirely in-app instead:
     /// - iOS-app-on-Mac: `reportNewIncomingCall` fails (error 3) and
     ///   `provider:didActivate:` never fires — CallKit half-succeeds then
     ///   leaves a stuck "call in progress".
     /// - Simulator: `provider:didActivate:` never fires either, and
     ///   callservicesd autonomously sends `CXEndCallAction` ~3s after an
     ///   outgoing start, killing the call while still `.ringing`.
-    /// Both take the `[AUDIO_FALLBACK]` self-activation path in
+    /// - China region (Guideline 5 / MIIT): Apple requires CallKit inactive
+    ///   in China. VoIPPushManager never registers for PushKit VoIP there
+    ///   (the OS-enforced source of forced CallKit activation), so this gate
+    ///   only needs to cover the foreground socket-delivered path — see
+    ///   VoIPPushManager.shouldRegisterVoIPPush for the background half.
+    /// All three take the `[AUDIO_FALLBACK]` self-activation path in
     /// `transitionToConnected`.
-    static func platformUsesCallKit(isiOSAppOnMac: Bool, isSimulator: Bool) -> Bool {
-        !isiOSAppOnMac && !isSimulator
+    static func platformUsesCallKit(isiOSAppOnMac: Bool, isSimulator: Bool, isChinaRegion: Bool) -> Bool {
+        !isiOSAppOnMac && !isSimulator && !isChinaRegion
     }
 
     /// Whether the call UI must render the video layout. True as soon as ANY

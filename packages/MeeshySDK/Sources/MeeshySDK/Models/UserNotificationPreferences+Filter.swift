@@ -53,7 +53,7 @@ public struct FocusFilterSnapshot: Sendable, Equatable {
         case .postComment, .legacyPostComment, .postRepost, .commentReply, .legacyStoryReply:
             return allowSocial
 
-        case .missedCall, .legacyCallMissed, .incomingCall, .callEnded, .callDeclined, .legacyCallIncoming:
+        case .missedCall, .legacyCallMissed, .incomingCall, .incomingCallAlert, .callEnded, .callDeclined, .legacyCallIncoming:
             return allowCalls
 
         default:
@@ -96,7 +96,7 @@ public extension UserNotificationPreferences {
             return replyEnabled
         case .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             return newMessageEnabled
-        case .missedCall, .legacyCallMissed, .incomingCall, .callEnded, .callDeclined, .legacyCallIncoming:
+        case .missedCall, .legacyCallMissed, .incomingCall, .incomingCallAlert, .callEnded, .callDeclined, .legacyCallIncoming:
             return missedCallEnabled
         case .userMentioned, .mention, .legacyMention:
             return mentionEnabled

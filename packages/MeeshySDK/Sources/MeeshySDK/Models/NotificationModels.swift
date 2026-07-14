@@ -116,6 +116,18 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case incomingCall = "incoming_call"
     case callEnded = "call_ended"
     case callDeclined = "call_declined"
+    /// Guideline 5 (MIIT) — China-region incoming-call push. Distinct raw
+    /// value from `.incomingCall` because CallEventsHandler.ts always sends
+    /// `data.type: "call"` for the incoming-call push (both the 'voip' and
+    /// 'apns' routing share this payload) — VoIPPushManager already depends
+    /// on this exact literal (`payloadType == "call"`) to validate PushKit
+    /// payloads, so the string can't be renamed to "incoming_call" without
+    /// breaking that unrelated, functioning path. Routes identically to
+    /// `.incomingCall` for icon/preference-filtering purposes, but drives
+    /// the full call-answer flow (not just a conversation deep-link) in
+    /// `RootView.navigateFromNotification` since it is the ONLY affordance
+    /// a backgrounded/killed-app China user has to engage the call.
+    case incomingCallAlert = "call"
 
     // Translation events
     case translationCompleted = "translation_completed"
@@ -184,7 +196,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
         case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
         case .missedCall, .callDeclined, .legacyCallMissed: return "phone.arrow.down.left"
-        case .incomingCall, .callEnded, .legacyCallIncoming: return "phone.fill"
+        case .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming: return "phone.fill"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike: return "hand.thumbsup.fill"
         case .commentReaction: return "heart.fill"
         case .postComment, .commentReply, .legacyPostComment, .legacyStoryReply: return "text.bubble.fill"
@@ -226,7 +238,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "4ECDC4"
         case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft, .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
             return "F8B500"
-        case .missedCall, .callDeclined, .incomingCall, .callEnded, .legacyCallMissed, .legacyCallIncoming:
+        case .missedCall, .callDeclined, .incomingCall, .incomingCallAlert, .callEnded, .legacyCallMissed, .legacyCallIncoming:
             return "E91E63"
         case .legacyAffiliateSignup:
             return "2ECC71"
@@ -579,7 +591,7 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
             return "Role modifie pour \(actorName)"
         case .missedCall, .callDeclined, .legacyCallMissed:
             return "Appel manque de \(actorName)"
-        case .incomingCall, .callEnded, .legacyCallIncoming:
+        case .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming:
             return "Appel de \(actorName)"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
             if let content, !content.isEmpty {

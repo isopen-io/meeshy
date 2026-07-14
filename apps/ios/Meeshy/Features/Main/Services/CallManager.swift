@@ -301,7 +301,8 @@ final class CallManager: ObservableObject {
         #endif
         return CallReliabilityPolicy.platformUsesCallKit(
             isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac,
-            isSimulator: isSimulator
+            isSimulator: isSimulator,
+            isChinaRegion: Locale.current.region?.identifier == "CN"
         )
     }()
 
@@ -2859,6 +2860,16 @@ final class CallManager: ObservableObject {
     /// skipped CallKit for being foreground/macOS at arrival time. macOS
     /// never gets a system call UI (`reportNewIncomingCall` fails there),
     /// so it's excluded here too.
+    ///
+    /// Guideline 5 (MIIT) — `Self.platformSupportsCallKit` is also `false`
+    /// for China-region devices, so this promotion is permanently a no-op
+    /// there too: an incoming call ringing in-app that backgrounds before
+    /// being answered can be silently suspended by iOS with no lock-screen
+    /// card, and falls back to the existing 60s server-side ringing timeout
+    /// (missed call) — an accepted, documented degradation inherent to
+    /// Apple disallowing CallKit while contractually requiring it as the
+    /// only reliable background wake mechanism. See
+    /// `test_promoteRingingCallToCallKitIfNeeded_neverPromotesInChina_evenWhileRinging`.
     @MainActor
     private func promoteRingingCallToCallKitIfNeeded() {
         guard case .ringing(isOutgoing: false) = callState else { return }

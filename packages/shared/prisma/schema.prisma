@@ -118,6 +118,14 @@ model User {
   /// (2 lettres lowercase) par le middleware gateway X-Device-Locale.
   /// Null = pas encore propagee (comportement legacy preserve).
   deviceLocale              String?
+  /// Pays appareil (Locale.current.region iOS) propage sur CHAQUE requete via
+  /// X-Meeshy-Country, persiste par le middleware gateway deviceCountry.
+  /// Signal continu (contrairement a registrationCountry, capture une seule
+  /// fois a l'inscription) utilise pour la conformite Guideline 5 (MIIT) :
+  /// router le push d'appel entrant hors du type PushKit/CallKit ('voip')
+  /// pour les appareils en Chine. Stocke ISO 3166-1 alpha-2 uppercase (ex. "CN").
+  /// Null = pas encore propage.
+  deviceCountry             String?
 
   /// Rôle global de l'utilisateur (enum typé fort)
   role          UserRole  @default(USER)

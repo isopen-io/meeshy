@@ -135,6 +135,50 @@ final class PushNotificationManagerTests: XCTestCase {
         XCTAssertEqual(sut.pendingNotificationPayload?.type, "new_message")
     }
 
+    /// Guideline 5 (MIIT) — China-region incoming-call push routed via the
+    /// standard 'apns' alert type. RootView.navigateFromNotification needs
+    /// these fields to drive CallManager.handleIncomingCallNotification
+    /// instead of a plain conversation deep-link.
+    @MainActor
+    func test_handleNotification_callType_setsPendingPayloadWithCallFields() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "call",
+            "conversationId": "conv-42",
+            "callId": "call-1",
+            "callerUserId": "user-9",
+            "callerName": "Alice",
+            "isVideo": "true",
+            "iceServers": "[{\"urls\":\"turn:t:3478\",\"username\":\"u\",\"credential\":\"c\"}]"
+        ])
+
+        XCTAssertEqual(sut.pendingNotificationPayload?.type, "call")
+        XCTAssertEqual(sut.pendingNotificationPayload?.callId, "call-1")
+        XCTAssertEqual(sut.pendingNotificationPayload?.callerUserId, "user-9")
+        XCTAssertEqual(sut.pendingNotificationPayload?.callerName, "Alice")
+        XCTAssertEqual(sut.pendingNotificationPayload?.isVideoCall, true)
+        XCTAssertNotNil(sut.pendingNotificationPayload?.iceServersJSON)
+    }
+
+    /// `isVideo` arrives from APNs as a string ("true"/"false") because custom
+    /// payload keys must be JSON-serializable primitives — must not silently
+    /// default to false for a real video call.
+    @MainActor
+    func test_handleNotification_callType_missingIsVideo_defaultsToFalse() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "call",
+            "callId": "call-2"
+        ])
+
+        XCTAssertEqual(sut.pendingNotificationPayload?.isVideoCall, false)
+        XCTAssertNil(sut.pendingNotificationPayload?.iceServersJSON)
+    }
+
     /// A tapped social comment push must carry the comment ids so the app can
     /// open the entity AND scroll to the exact comment / reply.
     @MainActor

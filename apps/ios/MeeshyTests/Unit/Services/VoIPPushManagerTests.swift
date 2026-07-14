@@ -440,4 +440,37 @@ final class VoIPPushManagerTests: XCTestCase {
             cooldown: 300)
         XCTAssertFalse(skip, "past the cooldown, force a fresh cycle (reactivation net)")
     }
+
+    // MARK: - Guideline 5 (MIIT) — shouldRegisterVoIPPush (China CallKit compliance)
+
+    func test_shouldRegisterVoIPPush_iPhoneNonChina_returnsTrue() {
+        XCTAssertTrue(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: false, regionIdentifier: "FR")
+        )
+    }
+
+    func test_shouldRegisterVoIPPush_iPhoneChina_returnsFalse() {
+        XCTAssertFalse(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: false, regionIdentifier: "CN"),
+            "PushKit VoIP must never be registered for China-region devices — Apple forces " +
+            "reportNewIncomingCall (CallKit) on every VoIP push with no per-push opt-out."
+        )
+    }
+
+    func test_shouldRegisterVoIPPush_iosAppOnMac_returnsFalse_regardlessOfRegion() {
+        XCTAssertFalse(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: true, regionIdentifier: "FR")
+        )
+        XCTAssertFalse(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: true, regionIdentifier: "CN")
+        )
+    }
+
+    func test_shouldRegisterVoIPPush_nilRegion_returnsTrue() {
+        // Conservative default: an indeterminate region (simulator, region
+        // unavailable) must not silently disable VoIP push outside China.
+        XCTAssertTrue(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: false, regionIdentifier: nil)
+        )
+    }
 }
