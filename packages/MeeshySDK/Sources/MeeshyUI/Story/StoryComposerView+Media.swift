@@ -68,30 +68,6 @@ extension StoryComposerView {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $viewModel.isTimelineVisible,
-               onDismiss: {
-                   // Ordre : couper le transport engine (audio) AVANT de
-                   // rendre le canvas à l'édition, puis committer les édits.
-                   if viewModel.timelineViewModel.isPlaying {
-                       viewModel.timelineViewModel.togglePlayback()
-                   }
-                   viewModel.canvasTimelineBridge.end()
-                   viewModel.commitTimelineToCurrentSlide()
-               }) {
-            TimelineSheetContent(composer: viewModel)
-                .presentationDetents([.fraction(0.45), .large])
-                .presentationDragIndicator(.visible)
-                .modifier(StoryTimelinePresentationStyle())
-        }
-        .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, isVisible in
-            if isVisible {
-                viewModel.loadCurrentSlideIntoTimeline()
-                // Preview vivante : le canvas derrière la sheet rend la slide
-                // au playhead timeline dès l'ouverture (sémantique .play).
-                viewModel.canvasTimelineBridge.scrub(
-                    seconds: Double(viewModel.timelineViewModel.currentTime))
-            }
-        }
         .sheet(isPresented: $showTransitionSheet) {
             NavigationStack {
                 transitionPicker

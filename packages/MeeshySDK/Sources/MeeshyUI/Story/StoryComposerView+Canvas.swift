@@ -760,12 +760,13 @@ extension StoryComposerView {
     }
 
     /// Fraction d'écran occupée par une sheet SYSTÈME partielle présentée
-    /// au-dessus du canvas — sticker / vocal / transitions (`.medium` ≈ 0.5),
-    /// timeline (`.fraction(0.45)`). `nil` si aucune. Exclut l'audience picker
-    /// (`.large` par défaut) et les `.fullScreenCover` (éditeurs) : ils couvrent
-    /// l'écran, le canvas derrière n'a pas à rester visible.
+    /// au-dessus du canvas — sticker / vocal / transitions (`.medium` ≈ 0.5).
+    /// La timeline n'est plus une sheet système (2026-07-14, présentée inline
+    /// dans le band comme les autres outils — cf. `canvasIsCarded`'s
+    /// `timelineActive`). Exclut l'audience picker (`.large` par défaut) et
+    /// les `.fullScreenCover` (éditeurs) : ils couvrent l'écran, le canvas
+    /// derrière n'a pas à rester visible.
     var presentedSystemSheetFraction: CGFloat? {
-        if viewModel.isTimelineVisible { return 0.45 }
         if showStickerPicker || showVoiceRecorderSheet || showTransitionSheet { return 0.5 }
         return nil
     }
@@ -783,7 +784,8 @@ extension StoryComposerView {
         if StoryCanvasFraming.isCarded(
             bandPresent: bandPresent,
             drawingActive: drawingActive,
-            textActive: textActive
+            textActive: textActive,
+            timelineActive: viewModel.isTimelineVisible
         ) {
             return true
         }

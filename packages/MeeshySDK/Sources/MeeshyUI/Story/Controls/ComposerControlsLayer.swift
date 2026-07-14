@@ -69,20 +69,43 @@ public struct ComposerControlsLayer: View {
     /// se cacher entièrement sur chaque outil, comme le dessin (2026-06-02).
     private var isBandResizable: Bool { effectiveBandState.allowsCollapsibleDrawer }
 
-    /// État effectif du band — dessin en DEUX temps (user 2026-07-11 v2) :
-    /// l'outil dessin s'ouvre en mode LISTE (band forcé sur `drawingPanel`
-    /// = liste des traits, comme la spec 2026-06-01) ; la sélection d'un
-    /// pinceau bascule en PLEIN ÉCRAN (`isDrawingImmersive`) — le band
-    /// disparaît alors entièrement, bulles flottantes seules.
+    /// État effectif du band — dessin en DEUX temps (user 2026-07-11 v2) et
+    /// timeline embarquée (user 2026-07-14) : voir `resolveEffectiveBandState`
+    /// pour la logique pure et testable.
     private var effectiveBandState: BandState {
-        if viewModel.drawingEditingMode.isActive, !viewModel.isDrawingImmersive,
-           bandStateMachine.state == .hidden {
+        Self.resolveEffectiveBandState(
+            machineState: bandStateMachine.state,
+            drawingActive: viewModel.drawingEditingMode.isActive,
+            drawingImmersive: viewModel.isDrawingImmersive,
+            timelineVisible: viewModel.isTimelineVisible
+        )
+    }
+
+    /// Résolution pure de l'état effectif du band à partir de la machine brute
+    /// et des overrides ViewModel (dessin, timeline). Extrait en `static` pour
+    /// être testable sans monter la View — même pattern que
+    /// `StoryCanvasUIView.resolveManipulationLayer`.
+    ///
+    /// Mode dessin LISTE (band forcé sur `drawingPanel`) tant que non
+    /// immersif ; `isDrawingImmersive` masque le band entièrement, priorité
+    /// absolue. Timeline (2026-07-14) : force `.toolPanel(.timeline)`
+    /// uniquement quand la machine est `.hidden` — si un autre outil est déjà
+    /// ouvert (l'utilisateur a tapé une autre tuile), on ne réécrase pas ce
+    /// choix (cf. `onTapTile`, qui remet `isTimelineVisible = false` dans ce cas).
+    static func resolveEffectiveBandState(
+        machineState: BandState,
+        drawingActive: Bool,
+        drawingImmersive: Bool,
+        timelineVisible: Bool
+    ) -> BandState {
+        if drawingActive, !drawingImmersive, machineState == .hidden {
             return .toolPanel(.drawing)
         }
-        if viewModel.isDrawingImmersive {
-            return .hidden
+        if drawingImmersive { return .hidden }
+        if timelineVisible, machineState == .hidden {
+            return .toolPanel(.timeline)
         }
-        return bandStateMachine.state
+        return machineState
     }
 
     /// C-DIR2 (d) : FABs et header partagent la MÊME règle (ComposerChromePolicy)
@@ -185,11 +208,18 @@ public struct ComposerControlsLayer: View {
                         if tool == .timeline {
                             viewModel.isTimelineVisible = true
                         } else {
+                            viewModel.isTimelineVisible = false
                             bandStateMachine.tapTile(tool)
                             viewModel.selectTool(tool)
                         }
                     },
-                    onBackFromToolPanel: { bandStateMachine.backFromToolPanel() },
+                    onBackFromToolPanel: {
+                        if viewModel.isTimelineVisible {
+                            viewModel.isTimelineVisible = false
+                        } else {
+                            bandStateMachine.backFromToolPanel()
+                        }
+                    },
                     onCloseFormatPanel: {
                         bandStateMachine.closeFormatPanel()
                         viewModel.selectedElementId = nil
@@ -232,13 +262,16 @@ public struct ComposerControlsLayer: View {
                     onResizeDismiss: {
                         // C-DIR2 (b), directive user 2026-07-04 : tirer le
                         // grabber sous le min ne replie PLUS le band en poignée
-                        // — il FERME le panneau et rend les FABs (« quand un
-                        // sheet est replié entièrement, enlever le sheet plutôt
-                        // et faire apparaître les FABs »). En dessin, fermer le
-                        // band = quitter le mode (sinon effectiveBandState le
-                        // re-forcerait aussitôt).
+                        // — il FERME le panneau et rend les FABs. En dessin,
+                        // fermer le band = quitter le mode ; en timeline,
+                        // fermer le band = quitter la timeline (sinon
+                        // effectiveBandState le re-forcerait aussitôt dans les
+                        // deux cas).
                         if viewModel.drawingEditingMode.isActive {
                             viewModel.activeTool = nil
+                        }
+                        if viewModel.isTimelineVisible {
+                            viewModel.isTimelineVisible = false
                         }
                         bandStateMachine.swipeDownOnBand()
                         areFabsVisible = true
