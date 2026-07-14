@@ -939,8 +939,18 @@ struct StoryViewerItem: Identifiable {
 
 struct StoryViewersSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
     let story: StoryItem
     let accentColor: Color
+    /// Mood resolution (local-first). Passed explicitly rather than via
+    /// `@EnvironmentObject` so it survives the sheet boundary.
+    @ObservedObject var statusViewModel: StatusViewModel
+    /// Opens the tapped viewer's profile. Owned by the presenter
+    /// (`StoryViewerView` holds the `Router`) so the sheet never reaches a
+    /// `Router` `@EnvironmentObject` across its boundary.
+    let onOpenProfile: (StoryViewerItem) -> Void
+
+    private var isDark: Bool { colorScheme == .dark }
 
     @State private var viewers: [StoryViewerItem] = []
     @State private var isLoading = true
@@ -955,7 +965,7 @@ struct StoryViewersSheet: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                ThemeManager.shared.mode.isDark ? Color.black.ignoresSafeArea() : Color(UIColor.systemGroupedBackground).ignoresSafeArea()
+                isDark ? Color.black.ignoresSafeArea() : Color(UIColor.systemGroupedBackground).ignoresSafeArea()
 
                 if isLoading {
                     ProgressView("Chargement des vues...")
@@ -1017,10 +1027,16 @@ struct StoryViewersSheet: View {
 
     private func viewerRow(_ viewer: StoryViewerItem) -> some View {
         HStack(spacing: 12) {
+            // Local-first mood (StatusViewModel) + presence (PresenceManager
+            // live store). `onViewProfile` + row tap open the viewer's profile.
             MeeshyAvatar(
                 name: viewer.displayName,
-                context: .storyViewer,
-                avatarURL: viewer.avatarUrl
+                context: .storyViewerRow,
+                avatarURL: viewer.avatarUrl,
+                moodEmoji: statusViewModel.statusForUser(userId: viewer.id)?.moodEmoji,
+                presenceState: PresenceManager.shared.resolvedState(userId: viewer.id, isOnline: nil),
+                onViewProfile: { onOpenProfile(viewer) },
+                onMoodTap: statusViewModel.moodTapHandler(for: viewer.id)
             )
 
             VStack(alignment: .leading, spacing: 4) {
@@ -1063,8 +1079,10 @@ struct StoryViewersSheet: View {
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture { onOpenProfile(viewer) }
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-        .listRowBackground(ThemeManager.shared.mode.isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
+        .listRowBackground(isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
     }
 
     private func loadViewers() async {

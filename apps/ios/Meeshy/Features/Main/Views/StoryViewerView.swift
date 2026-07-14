@@ -202,6 +202,11 @@ struct StoryViewerView: View {
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
     @State private var selectedProfileUser: ProfileSheetUser?
+    // Deferred profile open from the viewers sheet: set when a viewer row is
+    // tapped, consumed in the viewers sheet's `onDismiss` so the profile sheet
+    // presents cleanly after the viewers sheet closes (avoids stacking two
+    // sheets and reaching the Router across the sheet boundary).
+    @State private var pendingViewerProfile: ProfileSheetUser?
     @State var emojiToInject = "" // internal for cross-file extension access
     @State var composerFocusTrigger = false // internal for cross-file extension access
     @State var composerLanguage: String = DefaultComposerLanguage.resolve() // internal for cross-file extension access
@@ -608,9 +613,23 @@ struct StoryViewerView: View {
         .adaptiveOnChange(of: currentStory?.id) { _, _ in
             if sessionLanguageOverride != nil { sessionLanguageOverride = nil }
         }
-        .sheet(isPresented: $showViewersSheet, onDismiss: { resumeTimer() }) {
+        .sheet(isPresented: $showViewersSheet, onDismiss: {
+            resumeTimer()
+            if let pending = pendingViewerProfile {
+                pendingViewerProfile = nil
+                selectedProfileUser = pending
+            }
+        }) {
             if let story = currentStory {
-                StoryViewersSheet(story: story, accentColor: Color(hex: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex))
+                StoryViewersSheet(
+                    story: story,
+                    accentColor: Color(hex: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex),
+                    statusViewModel: statusViewModel,
+                    onOpenProfile: { viewer in
+                        pendingViewerProfile = ProfileSheetUser(username: viewer.username)
+                        showViewersSheet = false
+                    }
+                )
             }
         }
         .sheet(isPresented: $showExportShareSheet, onDismiss: {

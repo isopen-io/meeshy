@@ -223,6 +223,24 @@ struct ForwardPickerSheet: View {
     // MARK: - Actions
 
     private func loadConversations() async {
+        // Cache-first: surface the locally-cached conversations instantly (same
+        // store/key as the conversation list) so the forward picker never shows
+        // a spinner when data is already known, then revalidate in background.
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list")
+        switch cached {
+        case .fresh(let data, _):
+            conversations = data
+            isLoading = false
+        case .stale(let data, _):
+            conversations = data
+            isLoading = false
+            await refreshConversations()
+        case .expired, .empty:
+            await refreshConversations()
+        }
+    }
+
+    private func refreshConversations() async {
         do {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await APIClient.shared.offsetPaginatedRequest(
                 endpoint: "/conversations",
@@ -231,7 +249,11 @@ struct ForwardPickerSheet: View {
             )
             if response.success {
                 let userId = AuthManager.shared.currentUser?.id ?? ""
-                conversations = response.data.map { $0.toConversation(currentUserId: userId) }
+                let payload = response.data
+                // Decode off the main actor so opening the picker never hitches.
+                conversations = await Task.detached(priority: .userInitiated) {
+                    payload.map { $0.toConversation(currentUserId: userId) }
+                }.value
             }
         } catch {
             errorMessage = error.localizedDescription

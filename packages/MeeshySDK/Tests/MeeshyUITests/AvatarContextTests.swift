@@ -179,6 +179,28 @@ final class AvatarContextTests: XCTestCase {
         XCTAssertFalse(AvatarContext.storyViewer.showsOnlineDot)
     }
 
+    // MARK: - storyViewerRow (who-viewed list: mood + presence, no ring)
+
+    func test_storyViewerRow_size_returns44() {
+        XCTAssertEqual(AvatarContext.storyViewerRow.size, 44)
+    }
+
+    func test_storyViewerRow_hidesStoryRing() {
+        XCTAssertFalse(AvatarContext.storyViewerRow.showsStoryRing)
+    }
+
+    func test_storyViewerRow_showsMoodBadge() {
+        XCTAssertTrue(AvatarContext.storyViewerRow.showsMoodBadge)
+    }
+
+    func test_storyViewerRow_showsOnlineDot() {
+        XCTAssertTrue(AvatarContext.storyViewerRow.showsOnlineDot)
+    }
+
+    func test_storyViewerRow_isTappable() {
+        XCTAssertTrue(AvatarContext.storyViewerRow.isTappable)
+    }
+
     // MARK: - isTappable
 
     func test_isTappable_falseForPostReaction() {

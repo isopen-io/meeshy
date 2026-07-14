@@ -10,6 +10,40 @@ public protocol AudienceUserSearching: Sendable {
 
 extension UserService: AudienceUserSearching {}
 
+/// Narrow cache seam so the picker can seed itself instantly from the
+/// locally-cached contacts (friends) before any network search — same store
+/// and key as the contacts list. Injectable to keep the VM unit-testable.
+public protocol AudienceContactsProviding: Sendable {
+    func cachedContacts() async -> [UserSearchResult]
+}
+
+/// Default: reads the shared friends GRDB cache (the same store/key the
+/// contacts list uses) and maps `FriendRequestUser` to the picker's
+/// `UserSearchResult`. Read-only, never hits the network.
+struct FriendsCacheAudienceContacts: AudienceContactsProviding {
+    func cachedContacts() async -> [UserSearchResult] {
+        let cached = await CacheCoordinator.shared.friends.load(
+            for: FriendshipCache.PersistenceKeys.friendsList
+        )
+        let friends: [FriendRequestUser]
+        switch cached {
+        case .fresh(let data, _), .stale(let data, _):
+            friends = data
+        case .expired, .empty:
+            friends = []
+        }
+        return friends.map {
+            UserSearchResult(
+                id: $0.id,
+                username: $0.username,
+                displayName: $0.name,
+                avatar: $0.avatar,
+                isOnline: $0.isOnline
+            )
+        }
+    }
+}
+
 @MainActor
 final class AudienceUserPickerViewModel: ObservableObject {
     @Published var query: String = ""
@@ -19,27 +53,57 @@ final class AudienceUserPickerViewModel: ObservableObject {
     @Published var isSearching: Bool = false
 
     private let userService: AudienceUserSearching
+    private let contactsProvider: AudienceContactsProviding
     private let currentUserId: String?
+    private var cachedContacts: [UserSearchResult] = []
 
     init(initialSelection: [String],
          currentUserId: String?,
-         userService: AudienceUserSearching = UserService.shared) {
+         userService: AudienceUserSearching = UserService.shared,
+         contactsProvider: AudienceContactsProviding = FriendsCacheAudienceContacts()) {
         self.selectedIds = initialSelection
         self.currentUserId = currentUserId
         self.userService = userService
+        self.contactsProvider = contactsProvider
+    }
+
+    /// Seed the list from the local contacts cache so the picker is never
+    /// empty on open (cache-first). Called from the view's `.task`. Skips
+    /// clobbering visible results if the user has already typed.
+    func loadInitialContacts() async {
+        let contacts = await contactsProvider.cachedContacts()
+        cachedContacts = contacts.filter { $0.id != currentUserId }
+        if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            results = cachedContacts
+        }
     }
 
     func performSearch() async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { results = []; return }
+        // Empty query → show the full cached contacts list instantly.
+        guard !trimmed.isEmpty else { results = cachedContacts; return }
+
+        // Instant local filter over cached contacts, then complete with the
+        // deduplicated network result once it lands.
+        let local = cachedContacts.filter {
+            ($0.displayName ?? $0.username).localizedCaseInsensitiveContains(trimmed)
+                || $0.username.localizedCaseInsensitiveContains(trimmed)
+        }
+        results = local
         isSearching = true
         defer { isSearching = false }
         do {
             let found = try await userService.searchUsers(query: trimmed, limit: 20, offset: 0)
-            results = found.filter { $0.id != currentUserId }
+            let localIds = Set(local.map(\.id))
+            results = local + found.filter { $0.id != currentUserId && !localIds.contains($0.id) }
         } catch {
-            results = []
+            // Network failed — keep the instant local results.
         }
+    }
+
+    /// Restore the full cached contacts list (used when clearing the query).
+    func resetToContacts() {
+        results = cachedContacts
     }
 
     func isSelected(_ id: String) -> Bool { selectedIds.contains(id) }
@@ -101,6 +165,9 @@ public struct AudienceUserPickerView: View {
         // Translucent + partial-height sheet so the story composer header stays
         // visible above it. Version gating lives in Compatibility/.
         .modifier(AudiencePickerPresentationStyle())
+        // Cache-first: seed the list with the locally-cached contacts the
+        // instant the picker opens, so it's never empty before the user types.
+        .task { await vm.loadInitialContacts() }
     }
 
     private var header: some View {
@@ -132,7 +199,7 @@ public struct AudienceUserPickerView: View {
             if vm.isSearching {
                 ProgressView().scaleEffect(0.8)
             } else if !vm.query.isEmpty {
-                Button { vm.query = ""; vm.results = [] } label: {
+                Button { vm.query = ""; vm.resetToContacts() } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                 }
             }

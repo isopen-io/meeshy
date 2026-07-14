@@ -8,6 +8,7 @@ public enum AvatarContext: Sendable {
     case storyTray              // 88pt (doubled 2026-05-27 — story trail = primary CTA)
     case storyTrayCompact       // 44pt (pinned mini-trail revealed in the collapsed header)
     case storyViewer            // 44pt
+    case storyViewerRow         // 44pt — a user row in the "who viewed" list (mood + presence, no redundant story ring)
 
     // Feed
     case feedComposer           // 36pt
@@ -43,7 +44,7 @@ public enum AvatarContext: Sendable {
     public var size: CGFloat {
         switch self {
         case .storyTray: return 88  // doubled 2026-05-27 (user request — trail = primary CTA)
-        case .storyTrayCompact, .storyViewer, .conversationHeaderCollapsed,
+        case .storyTrayCompact, .storyViewer, .storyViewerRow, .conversationHeaderCollapsed,
              .conversationHeaderExpanded, .postAuthor, .userListItem, .notification:
             return 44
         case .conversationList: return 52
@@ -60,7 +61,7 @@ public enum AvatarContext: Sendable {
 
     public var showsStoryRing: Bool {
         switch self {
-        case .storyViewer, .postComment, .postReaction, .typingIndicator, .profileEdit:
+        case .storyViewer, .storyViewerRow, .postComment, .postReaction, .typingIndicator, .profileEdit:
             return false
         default: return true
         }
@@ -132,7 +133,7 @@ public enum AvatarContext: Sendable {
         switch self {
         case .postReaction, .typingIndicator, .recentParticipant: return 0
         case .postComment: return 2
-        case .messageBubble, .storyViewer, .feedComposer, .userListItem, .notification,
+        case .messageBubble, .storyViewer, .storyViewerRow, .feedComposer, .userListItem, .notification,
              .conversationHeaderStacked: return 4
         case .profileBanner: return 12
         default: return 8
