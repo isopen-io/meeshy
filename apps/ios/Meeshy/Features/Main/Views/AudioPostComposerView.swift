@@ -45,15 +45,15 @@ struct AudioPostComposerView: View {
                         contentPanel
                         Color.clear.frame(height: 100)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.lg)
                 }
 
                 VStack {
                     Spacer()
                     actionBar
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 16)
+                        .padding(.horizontal, MeeshySpacing.xl)
+                        .padding(.bottom, MeeshySpacing.lg)
                         .background(
                             LinearGradient(
                                 colors: [Color.clear, backgroundBaseColor.opacity(0.7), backgroundBaseColor],
@@ -151,7 +151,7 @@ struct AudioPostComposerView: View {
                 .scaleEffect(1.6)
         } else if phase == .preview {
             Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 56))
+                .font(MeeshyFont.relative(56))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
@@ -160,7 +160,7 @@ struct AudioPostComposerView: View {
                 )
         } else {
             Image(systemName: "mic.fill")
-                .font(.system(size: 48))
+                .font(MeeshyFont.relative(48))
                 .foregroundStyle(MeeshyColors.brandGradient)
         }
     }

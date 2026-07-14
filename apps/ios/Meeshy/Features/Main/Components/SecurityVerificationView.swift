@@ -13,21 +13,21 @@ struct SecurityVerificationView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: MeeshySpacing.xxl) {
                     Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 64))
+                        .font(MeeshyFont.relative(64))
                         .foregroundColor(MeeshyColors.indigo400)
-                        .padding(.top, 40)
+                        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
 
                     Text(String(localized: "security.verify.title", defaultValue: "End-to-End Encryption", bundle: .main))
-                        .font(.title2.bold())
+                        .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
                     Text(String(localized: "security.verify.description", defaultValue: "Messages with \(conversationName) are end-to-end encrypted.", bundle: .main))
-                        .font(.subheadline)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
+                        .padding(.horizontal, MeeshySpacing.xxxl)
 
                     if let safetyNumber {
                         verifiedSection(safetyNumber: safetyNumber)
@@ -35,7 +35,7 @@ struct SecurityVerificationView: View {
                         pendingSection
                     }
                 }
-                .padding(.bottom, 40)
+                .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.sm)
             }
             .background(theme.backgroundPrimary.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
@@ -67,52 +67,52 @@ struct SecurityVerificationView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 200, height: 200)
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(Color.white)
-                .cornerRadius(16)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .shadow(color: theme.textPrimary.opacity(0.1), radius: 10)
         }
 
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main))
-                .font(.caption.weight(.medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .textCase(.uppercase)
 
             Text(formatSafetyNumber(safetyNumber))
-                .font(.body.weight(.semibold).monospaced())
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .monospaced))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
         }
 
         Text(String(localized: "security.verify.howto", defaultValue: "To verify, compare this number with the one shown on \(conversationName)'s device, or scan their QR code.", bundle: .main))
-            .font(.caption)
+            .font(MeeshyFont.relative(MeeshyFont.captionSize))
             .foregroundColor(theme.textMuted)
             .multilineTextAlignment(.center)
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
+            .padding(.horizontal, MeeshySpacing.xxl)
+            .padding(.top, MeeshySpacing.lg)
     }
 
     // MARK: - Pending (no real Signal keys yet)
 
     private var pendingSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "hourglass.circle")
-                .font(.system(size: 40))
+                .font(MeeshyFont.relative(40))
                 .foregroundColor(theme.textMuted)
 
             Text(String(localized: "security.verify.unavailable.title", defaultValue: "Verification Unavailable", bundle: .main))
-                .font(.headline)
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                 .foregroundColor(theme.textSecondary)
 
             Text(String(localized: "security.verify.unavailable.description", defaultValue: "Safety number verification will be available once both participants have exchanged their encryption keys.", bundle: .main))
-                .font(.caption)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
         }
-        .padding(.top, 16)
+        .padding(.top, MeeshySpacing.lg)
     }
 
     private func formatSafetyNumber(_ number: String) -> String {

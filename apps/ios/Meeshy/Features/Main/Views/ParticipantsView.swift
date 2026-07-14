@@ -72,7 +72,7 @@ struct ParticipantsView: View {
                         memberList
                         leaveGroupButton
                     }
-                    .padding(.bottom, 40)
+                    .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.sm)
                 }
             }
             .navigationTitle(String(localized: "participants.title", defaultValue: "Membres", bundle: .main))
@@ -232,12 +232,12 @@ struct ParticipantsView: View {
     @ViewBuilder
     private var memberList: some View {
         if isLoading {
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 ForEach(0..<4, id: \.self) { _ in
                     skeletonRow
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
         } else if participants.isEmpty {
             emptyState
         } else {

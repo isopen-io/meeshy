@@ -62,12 +62,12 @@ struct ProfileView: View {
                 VStack {
                     Spacer()
                     Text(errorMessage)
-                        .font(.footnote.weight(.medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.sm + 2)
                         .background(Capsule().fill(MeeshyColors.error.opacity(0.9)))
-                        .padding(.bottom, 24)
+                        .padding(.bottom, MeeshySpacing.xxl)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .task {
