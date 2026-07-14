@@ -586,7 +586,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       hors bornes ni enroulé, jamais l'index courant, vide si <2 pages ou radius ≤ 0, index courant coercé
       dans les bornes ; `MeeshyImageViewer` gagne un `LaunchedEffect(currentPage, imageUrls)` qui mappe ces
       index sur des `ImageRequest` enfilés dans le `context.imageLoader` Coil partagé — même motif que le
-      `StoryPrefetchPlanner` du viewer story. +13 tests. Reste : contact card, save-to-gallery) ; contact pending
+      `StoryPrefetchPlanner` du viewer story. +13 tests.
+      **Save-to-gallery done** (`chat-gallery-save-to-gallery` 2026-07-14 : pendant Android du pur iOS
+      `MediaSaveDestination` — `:core:model` `GallerySaveTargetResolver.resolve(url, mimeHint?)` dérive le
+      `GallerySaveTarget` (displayName sanitisé + vraie extension, MIME résolu, album `Pictures/Meeshy` image /
+      `Movies/Meeshy` vidéo) : strip query+fragment, extension→MIME (jpg/png/gif/webp/heic/…/mp4/mov/…), hint
+      connu prioritaire sur l'extension, hint paramétré normalisé (`;charset` retiré), extension inconnue → nom
+      gardé + MIME défaut `image/jpeg`, noms illégaux assainis, nom par défaut `meeshy-image.<ext>` si vide.
+      +25 tests (mutation-proof : forcer `IMAGE_DIR` casse exactement les 4 tests vidéo). Écriture MediaStore
+      exempte `:sdk-ui` `GalleryImageSaver.save` (scoped-storage Q+, `IS_PENDING`, aucune permission ; annule
+      proprement l'insert sur échec ; cancellation-safe — rethrow `CancellationException`) ; `MeeshyImageViewer`
+      gagne un bouton Save (icône FileDownload, TopEnd, opt-in via `onImageSaved`, masqué < Android 10) ;
+      `ChatScreen` affiche un Toast succès/échec. Reste : contact card) ; contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
