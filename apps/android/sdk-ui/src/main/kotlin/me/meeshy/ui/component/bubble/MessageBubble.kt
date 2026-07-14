@@ -134,6 +134,7 @@ public fun MessageBubble(
             content.isOutgoing -> outgoingColor
             else -> MeeshyTheme.tokens.backgroundTertiary
         }
+        BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
         Column(
             modifier = Modifier
                 .widthIn(max = 300.dp)
@@ -355,7 +356,31 @@ public fun MessageBubble(
                 }
             }
         }
+        }
     }
+    }
+}
+
+/**
+ * Conceals its [content] behind the "tap to reveal" fog + blur when [spec] is non-null;
+ * otherwise renders the bubble body unchanged (zero cost for a normal message). The
+ * boundary clips the conceal to the bubble's rounded shape so the fog never bleeds past
+ * the corners.
+ */
+@Composable
+private fun BubbleBlurRevealBoundary(
+    messageId: String,
+    spec: BubbleBlurRevealSpec?,
+    content: @Composable () -> Unit,
+) {
+    if (spec == null) {
+        content()
+    } else {
+        BubbleBlurReveal(
+            messageId = messageId,
+            spec = spec,
+            shape = RoundedCornerShape(MeeshyRadius.xl),
+        ) { content() }
     }
 }
 

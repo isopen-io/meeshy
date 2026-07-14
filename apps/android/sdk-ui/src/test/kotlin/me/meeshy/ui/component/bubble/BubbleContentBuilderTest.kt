@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.ApiPostReplyTarget
 import me.meeshy.sdk.model.ApiTextTranslation
+import me.meeshy.sdk.model.MessageEffectFlags
 import org.junit.Test
 
 private data class Prefs(
@@ -31,6 +32,10 @@ private fun message(
     pinnedAt: String? = null,
     forwardedFromId: String? = null,
     forwardedFromConversationId: String? = null,
+    effectFlags: Int? = null,
+    isBlurred: Boolean? = null,
+    isViewOnce: Boolean? = null,
+    expiresAt: String? = null,
 ) = ApiMessage(
     id = id,
     conversationId = "c1",
@@ -47,6 +52,10 @@ private fun message(
     pinnedAt = pinnedAt,
     forwardedFromId = forwardedFromId,
     forwardedFromConversationId = forwardedFromConversationId,
+    effectFlags = effectFlags,
+    isBlurred = isBlurred,
+    isViewOnce = isViewOnce,
+    expiresAt = expiresAt,
 )
 
 class BubbleContentBuilderTest {
@@ -1780,6 +1789,86 @@ class BubbleContentBuilderTest {
         assertThat(audio.url).isNull()
         assertThat(audio.sizeBytes).isEqualTo(8000)
         assertThat(content.files).isEmpty()
+    }
+
+    // MARK: - blurReveal (tap-to-reveal conceal spec)
+
+    @Test
+    fun `a plain message has no blurReveal spec`() {
+        val content = BubbleContentBuilder.build(message(), currentUserId = "me", preferences = french)
+
+        assertThat(content.blurReveal).isNull()
+    }
+
+    @Test
+    fun `a blurred message carries a blurReveal spec that is not view-once`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.BLURRED.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNotNull()
+        assertThat(content.blurReveal?.isViewOnce).isFalse()
+    }
+
+    @Test
+    fun `a view-once message carries a view-once blurReveal spec`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNotNull()
+        assertThat(content.blurReveal?.isViewOnce).isTrue()
+    }
+
+    @Test
+    fun `blurReveal derives from the legacy isBlurred boolean when no bitfield`() {
+        val content = BubbleContentBuilder.build(
+            message(isBlurred = true),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNotNull()
+        assertThat(content.blurReveal?.isViewOnce).isFalse()
+    }
+
+    @Test
+    fun `blurReveal defaults to the shared visibility window`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.BLURRED.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal?.visibilitySeconds)
+            .isEqualTo(me.meeshy.sdk.model.BlurRevealLifecycle.defaultRevealDurationSeconds)
+    }
+
+    @Test
+    fun `an ephemeral-only message is not concealed`() {
+        // EPHEMERAL is a lifecycle effect but drives the countdown badge, not a blur.
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.EPHEMERAL.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNull()
+    }
+
+    @Test
+    fun `a deleted blurred message drops its blurReveal spec`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt(), deletedAt = "2026-07-14T10:00:00Z"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.blurReveal).isNull()
     }
 
 }
