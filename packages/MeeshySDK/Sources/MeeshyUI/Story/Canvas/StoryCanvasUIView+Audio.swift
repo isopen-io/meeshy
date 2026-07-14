@@ -160,13 +160,19 @@ extension StoryCanvasUIView {
     /// `postMediaId` → `URL`. We bridge the two here, dropping any clip whose
     /// `postMediaId` does not resolve.
     func reconfigureAudioForPlayback() {
-        guard mode == .play else { return }
+        // Éditeur sonore : le composer (`playsAudioInEditMode`) fait aussi jouer
+        // les clips audio en `.edit`. Le prefetcher hors-écran (`.edit` sans le
+        // flag) reste silencieux.
+        guard mode == .play || (mode == .edit && playsAudioInEditMode) else { return }
         guard lastAudioConfigRevision != slideContentRevision else { return }
         lastAudioConfigRevision = slideContentRevision
 
         let effects = slide.effects
         let languages = readerContext.preferredLanguages
         let resolver = readerContext.postMediaURLResolver
+        // Résolveur d'URL locale par `audio.id` (composer/preview) — prioritaire
+        // sur le resolver par `postMediaId` (vide pour un clip non publié).
+        let localAudioResolver = readerContext.localAudioURLResolver
 
         let foreground = effects.resolvedForegroundAudioPlayers
         let background = effects.resolvedBackgroundAudio
@@ -195,6 +201,12 @@ extension StoryCanvasUIView {
             guard let self else { return }
             var fgURLs: [String: URL] = [:]
             for audio in foreground {
+                // Priorité : URL locale (file://) résolue par `audio.id`. Déjà
+                // sur disque → pas de pré-cache réseau.
+                if let localURL = localAudioResolver?(audio.id) {
+                    fgURLs[audio.id] = localURL
+                    continue
+                }
                 let mediaId = audio.resolvedPostMediaId(preferredLanguages: languages)
                 guard let remoteURL = resolver?(mediaId) else {
                     os.Logger.storyAudio.error(
@@ -228,33 +240,42 @@ extension StoryCanvasUIView {
 
             // Background clip (at most one per slide).
             if let background {
-                let mediaId = background.resolvedPostMediaId(preferredLanguages: languages)
-                if let remoteURL = resolver?(mediaId) {
-                    if let localURL = await Self.cachedAudioFileURL(remote: remoteURL) {
-                        guard self.slide.id == slideId else { return }
-                        os.Logger.storyAudio.debug(
-                            "BG audio cached audioId=\(background.id, privacy: .public) localFile=\(localURL.lastPathComponent, privacy: .public)"
-                        )
-                        do {
-                            try self.audioMixer.configureBackground(
-                                audio: background,
-                                url: localURL,
-                                looping: background.loop ?? true
-                            )
-                        } catch {
+                let bgLocalURL: URL?
+                if let local = localAudioResolver?(background.id) {
+                    // URL locale (composer/preview) — déjà file://.
+                    bgLocalURL = local
+                } else {
+                    let mediaId = background.resolvedPostMediaId(preferredLanguages: languages)
+                    if let remoteURL = resolver?(mediaId) {
+                        bgLocalURL = await Self.cachedAudioFileURL(remote: remoteURL)
+                        if bgLocalURL == nil {
                             os.Logger.storyAudio.error(
-                                "ReaderAudioMixer.configureBackground failed audioId=\(background.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                                "BG audio cache failed audioId=\(background.id, privacy: .public) remote=\(remoteURL.absoluteString, privacy: .public)"
                             )
                         }
                     } else {
+                        bgLocalURL = nil
                         os.Logger.storyAudio.error(
-                            "BG audio cache failed audioId=\(background.id, privacy: .public) remote=\(remoteURL.absoluteString, privacy: .public)"
+                            "BG audio URL not resolved audioId=\(background.id, privacy: .public) postMediaId=\(mediaId, privacy: .public)"
                         )
                     }
-                } else {
-                    os.Logger.storyAudio.error(
-                        "BG audio URL not resolved audioId=\(background.id, privacy: .public) postMediaId=\(mediaId, privacy: .public)"
+                }
+                if let localURL = bgLocalURL {
+                    guard self.slide.id == slideId else { return }
+                    os.Logger.storyAudio.debug(
+                        "BG audio cached audioId=\(background.id, privacy: .public) localFile=\(localURL.lastPathComponent, privacy: .public)"
                     )
+                    do {
+                        try self.audioMixer.configureBackground(
+                            audio: background,
+                            url: localURL,
+                            looping: background.loop ?? true
+                        )
+                    } catch {
+                        os.Logger.storyAudio.error(
+                            "ReaderAudioMixer.configureBackground failed audioId=\(background.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                        )
+                    }
                 }
             }
 
@@ -276,9 +297,32 @@ extension StoryCanvasUIView {
             // `reconfigureAudioForPlayback()` in `setMode(.play)` /
             // `setReaderContext` / `slide.didSet` hit the mixer when
             // `entries.count == 0`. Re-run it now that buffers are loaded.
-            if self.mode == .play, self.slide.id == slideId {
-                self.startAudioPlayback()
+            if self.slide.id == slideId {
+                if self.mode == .play {
+                    self.startAudioPlayback()
+                } else if self.mode == .edit, self.playsAudioInEditMode, !self.isTimelinePreviewActive {
+                    self.startEditAudioPlayback()
+                }
             }
+        }
+    }
+
+    /// Démarre la lecture du mixer sur le canvas d'ÉDITION (composer preview
+    /// sonore). Plus léger que `startAudioPlayback()` (chemin `.play`) : pas de
+    /// gates content-ready ni de session refcomptée — la session `.playback`
+    /// est déjà posée par `applyEditPlayback` (éditeur sonore). Respecte le mute
+    /// composer et la preview timeline (qui possède alors l'audio via l'engine).
+    func startEditAudioPlayback() {
+        guard mode == .edit, playsAudioInEditMode, !isTimelinePreviewActive else { return }
+        guard !MediaSessionCoordinator.shared.isCallActive else { return }
+        guard !isAudioMuted else { return }
+        PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
+        let origin = captureSlideTimelineOrigin()
+        do {
+            _ = try audioMixer.play(originHost: origin, slideKey: currentSlideKey)
+        } catch {
+            os.Logger(subsystem: "me.meeshy.app", category: "media")
+                .error("edit ReaderAudioMixer.play failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

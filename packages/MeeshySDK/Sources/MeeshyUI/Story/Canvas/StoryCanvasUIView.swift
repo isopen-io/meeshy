@@ -115,6 +115,24 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
+    /// Jumeau de `playsVideoInEditMode` pour l'AUDIO : opt-in du composer pour
+    /// jouer les clips audio/voix (via `ReaderAudioMixer`) sur le canvas
+    /// d'édition — sans lui, seul le son des vidéos jouait en édition et les
+    /// clips audio de fond restaient muets (directive user 2026-07-14). Posé à
+    /// `true` uniquement par `StoryComposerCanvasView` ; le prefetcher hors-écran
+    /// reste silencieux. Sans effet en `.play`.
+    public var playsAudioInEditMode: Bool = false {
+        didSet {
+            guard oldValue != playsAudioInEditMode else { return }
+            if playsAudioInEditMode {
+                lastAudioConfigRevision = nil
+                reconfigureAudioForPlayback()
+            } else {
+                audioMixer.stop()
+            }
+        }
+    }
+
     // MARK: - Reader context (Task 5)
 
     var readerContext: StoryReaderContext = .empty

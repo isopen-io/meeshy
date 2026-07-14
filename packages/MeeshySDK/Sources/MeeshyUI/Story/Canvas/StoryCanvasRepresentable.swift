@@ -72,6 +72,12 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// décider si un rebuild canvas est nécessaire (les dicts UIImage ne sont
     /// pas Equatable).
     public var loadedImagesVersion: UInt64 = 0
+    /// URLs locales (file://) des clips audio importés, keyées par `audio.id`
+    /// (miroir de `viewModel.loadedAudioURLs`). Wiré vers
+    /// `readerContext.localAudioURLResolver` pour que le mixer joue le son en
+    /// preview d'édition (directive user 2026-07-14). `postMediaId` étant vide
+    /// pour un clip non publié, le resolver par `postMediaId` échouait.
+    public var loadedAudioURLs: [String: URL] = [:]
     /// Corner radius applied to the embedded `StoryCanvasUIView`'s backing layer
     /// so the rounded « card » actually clips the CALayer story content. A
     /// SwiftUI `.clipShape` on this representable cannot round the embedded
@@ -100,6 +106,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 isDrawingOverlayActive: Bool = false,
                 loadedImages: [String: UIImage] = [:],
                 loadedImagesVersion: UInt64 = 0,
+                loadedAudioURLs: [String: URL] = [:],
                 canvasCornerRadius: CGFloat = 0,
                 timelineBridge: StoryCanvasTimelineBridge? = nil) {
         self._slide = slide
@@ -118,12 +125,23 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.isDrawingOverlayActive = isDrawingOverlayActive
         self.loadedImages = loadedImages
         self.loadedImagesVersion = loadedImagesVersion
+        self.loadedAudioURLs = loadedAudioURLs
         self.canvasCornerRadius = canvasCornerRadius
         self.timelineBridge = timelineBridge
     }
 
     public final class Coordinator {
         var lastLoadedImagesVersion: UInt64?
+        var lastLoadedAudioURLs: [String: URL]?
+    }
+
+    /// Construit le `StoryReaderContext` d'édition : pont image (bitmaps édités
+    /// keyés `media.id`) + resolver audio local (URLs keyées `audio.id`).
+    private func makeComposerContext() -> StoryReaderContext {
+        let audioURLs = loadedAudioURLs
+        let audioResolver: @Sendable (String) -> URL? = { audioURLs[$0] }
+        let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
+        return StoryReaderContext(imageCache: reader, localAudioURLResolver: audioResolver)
     }
 
     public func makeCoordinator() -> Coordinator { Coordinator() }
@@ -155,9 +173,12 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // `StoryRenderer.render(...)` initial (déclenché par le slide.didSet
         // du init StoryCanvasUIView) puisse déjà résoudre les bitmaps
         // foreground via `loadedImages[media.id]`.
-        let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
-        view.setReaderContext(StoryReaderContext(imageCache: reader))
+        view.setReaderContext(makeComposerContext())
+        // Après le context (le resolver audio doit être en place) : opt-in audio
+        // d'édition → le mixer joue les clips/voix comme les vidéos.
+        view.playsAudioInEditMode = true
         context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
+        context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
         timelineBridge?.canvas = view
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
@@ -197,11 +218,17 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // composer ; le reader passe par `setReaderContext` direct qui ne
         // bump plus (sinon ça gèle la progress bar et le canvas reader, cf.
         // régression 2026-05-27).
-        if context.coordinator.lastLoadedImagesVersion != loadedImagesVersion {
+        // Reconstruit le context quand les bitmaps édités OU les URLs audio
+        // locales changent. L'audio doit être à jour AVANT le slice de sync du
+        // `slide` plus bas : le `slide.didSet` déclenche `applyEditPlayback` →
+        // `reconfigureAudioForPlayback`, qui lit alors le resolver à jour.
+        let imageChanged = context.coordinator.lastLoadedImagesVersion != loadedImagesVersion
+        let audioChanged = context.coordinator.lastLoadedAudioURLs != loadedAudioURLs
+        if imageChanged || audioChanged {
             context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
-            let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
-            uiView.setReaderContext(StoryReaderContext(imageCache: reader))
-            uiView.invalidateImageCache()
+            context.coordinator.lastLoadedAudioURLs = loadedAudioURLs
+            uiView.setReaderContext(makeComposerContext())
+            if imageChanged { uiView.invalidateImageCache() }
         }
 
         // Re-emit la couche courante après chaque body eval (deferred via

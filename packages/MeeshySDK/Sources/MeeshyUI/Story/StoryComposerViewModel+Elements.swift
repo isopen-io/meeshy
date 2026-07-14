@@ -329,6 +329,13 @@ extension StoryComposerViewModel {
         guard var medias = effects.mediaObjects,
               let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
         medias[mediaIdx].duration = Double(duration)
+        // Fige la durée NATIVE de l'asset à la première pose (= import). Sert de
+        // borne au rognage (on ne peut pas étendre un clip au-delà du média
+        // source). Les changements de fenêtre ultérieurs (timeline editor) ne
+        // l'écrasent pas.
+        if medias[mediaIdx].intrinsicDuration == nil {
+            medias[mediaIdx].intrinsicDuration = Double(duration)
+        }
         effects.mediaObjects = medias
         slides[targetIndex].effects = effects
     }

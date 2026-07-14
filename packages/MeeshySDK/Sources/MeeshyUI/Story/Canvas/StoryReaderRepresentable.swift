@@ -151,6 +151,12 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                      .flatMap { $0.url.flatMap(URL.init(string:)) }
         }
 
+        // Résolveur audio par `audio.id` : les clips composer non publiés ont un
+        // `postMediaId` vide, donc le `resolver` (par postMediaId) ne les trouve
+        // pas — le son restait muet même en preview plein écran. `preloadedAudioURLs`
+        // est keyé par `audio.id`, correspondance directe avec le mixer.
+        let localAudioResolver: @Sendable (String) -> URL? = { audioURLs[$0] }
+
         // The background-image branch of `StoryBackgroundLayer.configure`
         // only consults the resolver when `imageCache` is non-nil. Supply a
         // file-backed cache reader so preloaded images reach the resolver path;
@@ -172,7 +178,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             mute: mute,
             onCompletion: completion,
             postMediaURLResolver: resolver,
-            imageCache: imageCache
+            imageCache: imageCache,
+            localAudioURLResolver: localAudioResolver
         ))
         return view
     }

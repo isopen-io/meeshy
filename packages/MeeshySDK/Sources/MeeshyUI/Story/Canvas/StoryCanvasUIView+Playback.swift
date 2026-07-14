@@ -136,23 +136,31 @@ extension StoryCanvasUIView {
     func applyEditPlayback() {
         // Preview timeline active → l'engine possède audio ET transport ;
         // les boucles vidéo libres de l'édition reprennent à la sortie.
-        guard mode == .edit, playsVideoInEditMode, !isTimelinePreviewActive else { return }
+        guard mode == .edit, (playsVideoInEditMode || playsAudioInEditMode),
+              !isTimelinePreviewActive else { return }
         // Éditeur sonore (choix produit) : pose la session `.playback` pour que
-        // l'audio des vidéos qui bouclent soit audible même silent-switch ON.
-        // Idempotent / call-aware via la source unique.
+        // l'audio des vidéos qui bouclent ET des clips audio soit audible même
+        // silent-switch ON. Idempotent / call-aware via la source unique.
         if AVAudioSession.sharedInstance().category != .playback {
             MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
         }
-        // Fond : `isPlaybackActive` joue le player (qui boucle déjà via son
-        // `AVPlayerLooper`). Audio inclus (choix produit : éditeur sonore).
-        backgroundLayer.isPlaybackActive = true
-        // Foreground : marque chaque layer pour qu'elle (re)joue — y compris
-        // après un swap d'URL async (cache local résolu) — et démarre le
-        // player déjà attaché. Le loop est armé par `attachPlayer` (loop en
-        // `.edit`).
-        forEachMediaLayer { layer in
-            layer.playsInEditMode = true
-            layer.avPlayer?.play()
+        if playsVideoInEditMode {
+            // Fond : `isPlaybackActive` joue le player (qui boucle déjà via son
+            // `AVPlayerLooper`). Audio inclus (choix produit : éditeur sonore).
+            backgroundLayer.isPlaybackActive = true
+            // Foreground : marque chaque layer pour qu'elle (re)joue — y compris
+            // après un swap d'URL async (cache local résolu) — et démarre le
+            // player déjà attaché. Le loop est armé par `attachPlayer` (loop en
+            // `.edit`).
+            forEachMediaLayer { layer in
+                layer.playsInEditMode = true
+                layer.avPlayer?.play()
+            }
+        }
+        if playsAudioInEditMode {
+            // Clips audio / voix : configure + joue le mixer (gate revision →
+            // no-op si le contenu audio n'a pas changé depuis le dernier pass).
+            reconfigureAudioForPlayback()
         }
     }
 

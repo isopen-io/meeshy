@@ -941,6 +941,7 @@ extension StoryComposerView {
             // un rebuild qu'aux mutations utiles.
             loadedImages: viewModel.loadedImages,
             loadedImagesVersion: viewModel.loadedImagesVersion,
+            loadedAudioURLs: viewModel.loadedAudioURLs,
             canvasCornerRadius: cornerRadius,
             timelineBridge: viewModel.canvasTimelineBridge
         )

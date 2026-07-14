@@ -395,10 +395,15 @@ extension StoryComposerView {
             await MainActor.run {
                 if let obj = viewModel.addAudioObject() {
                     viewModel.loadedAudioURLs[obj.id] = url
-                    // Update waveform samples
+                    // Waveform + durée native de l'audio dans le MÊME slice : sans
+                    // `duration`, la donnée audio n'était pas comptée par
+                    // `contentDerivedDuration()` (la timeline ignorait la voix).
                     var effects = viewModel.currentEffects
                     if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == obj.id }) {
                         effects.audioPlayerObjects?[idx].waveformSamples = samples
+                        if let dur = mediaDuration {
+                            effects.audioPlayerObjects?[idx].duration = dur
+                        }
                         viewModel.currentEffects = effects
                     }
                     if let dur = mediaDuration {
@@ -429,13 +434,25 @@ extension StoryComposerView {
             } catch {
                 samples = []  // waveform cosmétique : barres plates si l'analyse échoue
             }
+            let asset = AVURLAsset(url: url)
+            var mediaDuration: Float?
+            if let cmDur = try? await asset.load(.duration) {
+                let secs = CMTimeGetSeconds(cmDur)
+                if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
+            }
             await MainActor.run {
                 if let obj = viewModel.addAudioObject() {
                     viewModel.loadedAudioURLs[obj.id] = url
                     var effects = viewModel.currentEffects
                     if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == obj.id }) {
                         effects.audioPlayerObjects?[idx].waveformSamples = samples
+                        if let dur = mediaDuration {
+                            effects.audioPlayerObjects?[idx].duration = dur
+                        }
                         viewModel.currentEffects = effects
+                    }
+                    if let dur = mediaDuration {
+                        viewModel.autoExtendDuration(forElementEnd: dur)
                     }
                 }
             }
