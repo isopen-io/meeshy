@@ -126,16 +126,40 @@ struct TextEditToolOptions: View {
             Image(systemName: "textformat.size.smaller")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
-            Slider(value: $textObject.fontSize, in: 14...160, step: 1)
-                .tint(MeeshyColors.brandPrimary)
+            Slider(
+                value: Binding(
+                    get: { Self.displayedSize(for: textObject) },
+                    set: { Self.applyingSliderValue($0, to: &textObject) }
+                ),
+                in: 14...160, step: 1
+            )
+            .tint(MeeshyColors.brandPrimary)
             Image(systemName: "textformat.size.larger")
                 .font(.system(size: 16))
                 .foregroundStyle(.secondary)
-            Text("\(Int(textObject.fontSize))")
+            Text("\(Int(Self.displayedSize(for: textObject)))")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .frame(width: 34)
         }
+    }
+
+    /// The value the size slider displays: the object's effective rendered
+    /// size (`fontSize × scale`, cf. `StoryTextLayer.configure`). The canvas
+    /// pinch gesture live-mutates `scale` on every `.changed` tick
+    /// (`StoryCanvasUIView+Gestures.handlePinch` → `onItemModified` →
+    /// `viewModel.currentSlide`), so reading the product here makes the
+    /// slider track a pinch live with no extra plumbing.
+    nonisolated static func displayedSize(for text: StoryTextObject) -> Double {
+        text.fontSize * text.scale
+    }
+
+    /// Applies a slider drag: writes the new value into `fontSize` and
+    /// resets `scale` to 1 so a leftover pinch scale never compounds with a
+    /// later manual resize.
+    nonisolated static func applyingSliderValue(_ value: Double, to text: inout StoryTextObject) {
+        text.fontSize = value
+        text.scale = 1
     }
 
     // MARK: - Align
