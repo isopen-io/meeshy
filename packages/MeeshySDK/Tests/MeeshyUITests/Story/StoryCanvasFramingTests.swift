@@ -125,15 +125,21 @@ final class StoryCanvasFramingTests: XCTestCase {
     }
 
     func test_isCarded_truthTable() {
-        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false))
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false))
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: false))
+        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false, timelineActive: false))
         // Mode dessin IMMERSIF (user 2026-07-11) : le dessin seul ne carde
         // PLUS — canvas plein écran, dessinable jusqu'aux angles, bulles
         // flottantes sans sheet. (Remplace la spec 2026-06-02 « identique
         // pour tous les outils, dessin inclus ».)
-        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: true, textActive: false))
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: true))
-        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true))
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: true, textActive: false, timelineActive: false))
+        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: true, timelineActive: false))
+        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true, timelineActive: false))
+        // Timeline (2026-07-14) : la timeline force le cadrage exactement
+        // comme l'édition de texte — le panneau timeline est présenté via
+        // l'override de ComposerControlsLayer pendant que
+        // `bandStateMachine.state` reste `.hidden`, donc `bandPresent` seul
+        // ne peut pas le voir.
+        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: true))
     }
 
     // MARK: - readerPresentation (reader expand-on-hide truth-table)

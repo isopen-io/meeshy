@@ -62,8 +62,14 @@ public nonisolated enum StoryCanvasFraming {
     /// sheet). Remplace la spec 2026-06-02 « identique pour tous les outils,
     /// dessin inclus ». Le paramètre est conservé pour documenter la table de
     /// vérité (testée par `StoryCanvasFramingTests.test_isCarded_truthTable`).
-    public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool) -> Bool {
-        bandPresent || textActive
+    ///
+    /// Timeline (2026-07-14) : forcée via `ComposerControlsLayer`'s override
+    /// pendant que `bandStateMachine.state` lui-même reste `.hidden` (le band
+    /// panel est présenté sans passer par le state machine) — `timelineActive`
+    /// capture donc ce cas séparément, comme `drawingActive`/`textActive`.
+    /// Default `false` keeps pre-existing call sites source-compatible.
+    public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool, timelineActive: Bool = false) -> Bool {
+        bandPresent || textActive || timelineActive
     }
 
     /// Présentation du canvas **reader** selon la visibilité du chrome.
