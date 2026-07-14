@@ -43,6 +43,9 @@ struct StoryTrayView: View {
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var storyPreviewAssets: StoryPreviewAssets?
+    /// Sheet « Mes stories envoyées » (gestion : ouvrir, vues, partager,
+    /// republier, supprimer). Directive user 2026-07-14.
+    @State private var showMyStories = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -60,6 +63,26 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: 120)
+        .sheet(isPresented: $showMyStories) {
+            MyStoriesView(
+                viewModel: viewModel,
+                userId: AuthManager.shared.currentUser?.id ?? "",
+                statusViewModel: statusViewModel,
+                onOpen: { story in
+                    showMyStories = false
+                    let coordinator = storyViewerCoordinator
+                    let uid = AuthManager.shared.currentUser?.id ?? ""
+                    let postId = story.id
+                    // Laisse la sheet se fermer avant le fullScreenCover root
+                    // (le coordinator présente au niveau RootView).
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        coordinator.present(StoryViewerRequest(
+                            id: uid, singleGroup: true, postId: postId))
+                    }
+                }
+            )
+        }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -183,7 +206,8 @@ struct StoryTrayView: View {
                     singleGroup: true
                 ))
             },
-            onAddStatus: onAddStatus
+            onAddStatus: onAddStatus,
+            onManageStories: { showMyStories = true }
         )
         // U1 inc.2 — « ma story » zoome aussi (id vide jamais matché → fallback).
         .zoomTransitionSource(id: AuthManager.shared.currentUser?.id ?? "", in: zoomNamespace)
@@ -338,6 +362,7 @@ private struct MyStoryButton: View {
     let viewModel: StoryViewModel
     let onViewMyStory: () -> Void
     var onAddStatus: (() -> Void)?
+    var onManageStories: (() -> Void)?
 
     // Lecture directe sans @ObservedObject — leaf view rendue dans le tray,
     // évite que chaque changement de thème force un re-render du bouton.
@@ -383,6 +408,10 @@ private struct MyStoryButton: View {
                         if hasMyStory {
                             items.append(AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
                                 onViewMyStory()
+                                HapticFeedback.medium()
+                            })
+                            items.append(AvatarContextMenuItem(label: "Gérer mes stories", icon: "rectangle.stack.fill") {
+                                onManageStories?()
                                 HapticFeedback.medium()
                             })
                         }

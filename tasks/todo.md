@@ -2,6 +2,22 @@
 
 Demande utilisateur : 5 améliorations autonomes, commits réguliers.
 
+## État final
+- #1 ✅ livré `6149fce54` (chips Arrière-plan/Premier plan tappables)
+- #2 ✅ livré `0376ac970` (contours canvas visibles)
+- #3 ✅ livré `0376ac970` (durée auto) + `f14362d30` (durée audio à l'import)
+- #4 ✅ livré `f14362d30` (preview joue le son bg + preview plein écran)
+- #5 🔄 build app en cours (vue Mes stories + menu d'actions)
+
+### Différé (raffinement, non bloquant)
+- #3(b) rognage BORNÉ par intrinsicDuration : `intrinsicDuration` est désormais
+  peuplé à l'import, mais `trimClipEnd(mediaDurationLimit:)` ne le consomme pas
+  encore côté UI timeline. Le rognage FONCTIONNE (poignées existantes), il n'est
+  juste pas encore borné à la durée native. À câbler : passer `intrinsicDuration`
+  via TimelineProject → trimClipEnd dans Quick/ProTimelineView.
+
+## Détail initial
+
 ## #1 — Sidebar « Arrière-plan / Premier plan » + canvas auto  [EN COURS]
 Le rail gauche (`CanvasLayerIndicator`) affiche 3 chips non-tappables (Canvas/Fond/Premier).
 Objectif : 2 chips **tappables** « Arrière-plan » / « Premier plan » ; plus de « Canvas ».
