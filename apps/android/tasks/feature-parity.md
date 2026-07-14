@@ -665,9 +665,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       depuis `ApiMessage.expiresAt`, suppress-si-supprimé comme `pinnedAtIso`), et le
       composable `EphemeralCountdownBadge` (`:sdk-ui`) tick chaque seconde et rend une
       capsule flamme + timer monospace en `MeeshyPalette.Error` (parité `BubbleEphemeralBadge`)
-      dans la meta-row de la bulle, masquée quand None/Expired. **Pending :** le duration
-      picker (partie de l'`EffectsPickerView` non encore construite) + le passage burned quand
-      Expired.
+      dans la meta-row de la bulle, masquée quand None/Expired. **burned/expired transition done**
+      (`chat-ephemeral-burned-transition` 2026-07-14 : la logique pure `BubbleRenderKind.resolve(
+      isDeleted, ephemeral)` (`:core:model`) porte le dispatch `content.kind` de iOS
+      `ThemedMessageBubble.body` — `isDeleted` ⇒ `Deleted` en premier (autorité serveur, un
+      message supprimé-et-périmé garde son tombstone), sinon `State.Expired` ⇒ `EphemeralExpired`
+      (la bulle collapse, iOS rend `EmptyView`), sinon `Standard` ; `Kind.isEphemeralExpired`
+      = le seul arm qui masque. +8 tests, preuve RED par mutation (retirer l'arm `EphemeralExpired`
+      casse exactement `resolve_liveMessageExpired_isEphemeralExpired`, les 7 autres verts). Câblé
+      pour de vrai : `MessageBubble` (`:sdk-ui`) calcule le `Kind` via le glue horloge
+      `rememberBubbleRenderKind` (même parsing SSOT `isoToEpochMillisOrNull` + `EphemeralLifecycle`
+      que le badge, en lock-step), et enveloppe la bulle dans un `AnimatedVisibility` qui la fait
+      disparaître avec un fade + `scaleOut(0.8)` + `shrinkVertically` quand le timer expire
+      (parité burn-away iOS `opacity 0` + `scaleEffect 0.8`) ; défaut → jamais expiré → zéro
+      changement pour tout appelant existant. **Pending :** le duration picker (partie de
+      l'`EffectsPickerView` non encore construite).
 - [ ] Blurred ("tap to reveal") + view-once messages with fog effect
 - [◐] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
       — picker sheet + cross-platform bitfield encoding. **Wire contract + resolver done**

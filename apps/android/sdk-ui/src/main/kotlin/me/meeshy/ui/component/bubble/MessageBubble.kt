@@ -1,5 +1,10 @@
 package me.meeshy.ui.component.bubble
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -88,8 +93,22 @@ public fun MessageBubble(
     effects: MessageEffects? = null,
     hasPlayedAppearance: Boolean = false,
 ) {
+    // Combine the server deletion flag with the ephemeral self-destruct countdown.
+    // A deleted message keeps its "Message deleted" tombstone (visible → the inner
+    // `isDeleted` branch renders it); an ephemeral message whose timer elapses
+    // collapses the whole bubble (iOS `EmptyView`) with a fade + burn-away scale.
+    val renderKind = rememberBubbleRenderKind(
+        isDeleted = content.isDeleted,
+        expiresAtIso = content.expiresAtIso,
+    )
+    AnimatedVisibility(
+        visible = !renderKind.isEphemeralExpired,
+        modifier = modifier,
+        enter = EnterTransition.None,
+        exit = fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically(),
+    ) {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .padding(
                 start = MeeshySpacing.lg,
@@ -336,6 +355,7 @@ public fun MessageBubble(
                 }
             }
         }
+    }
     }
 }
 
