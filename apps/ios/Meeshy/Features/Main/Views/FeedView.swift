@@ -854,7 +854,9 @@ struct FeedView: View {
             // liste de conversations — UX coherente cross-screen.
             MeeshyRefreshableScroll(
                 onRefresh: {
-                    await viewModel.refresh()
+                    async let feedRefresh: Void = viewModel.refresh()
+                    async let storyRefresh: Void = storyViewModel.loadStories(forceNetwork: true)
+                    _ = await (feedRefresh, storyRefresh)
                 },
                 coordinateSpaceName: "feedScroll",
                 onScrollOffsetChange: { offset in
