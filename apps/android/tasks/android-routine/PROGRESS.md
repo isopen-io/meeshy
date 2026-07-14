@@ -1,5 +1,20 @@
 # Progress — state & what to do next
 
+> ⚠ **CI watch (2026-07-14, PR #1950 `chat-ephemeral-countdown`):** the slice is code-complete and locally
+> green (full `gradle assembleDebug testDebugUnitTest` PASS, reviewer PASS, diff `apps/android` only), but the
+> monorepo CI job **"Test Python (translator)"** is failing at its "Run tests with coverage (80% minimum)"
+> step. This is **unrelated to the slice** — the diff touches zero Python. Evidence it broke repo-wide, not by
+> this change: `main` HEAD (`663f9fb2`) passed that exact translator step at **12:47 UTC today** (~8.5 min), yet
+> two PR runs at 14:30 and 14:41 UTC **failed** it after only ~6 min — i.e. the translator suite regressed
+> repo-wide sometime after 12:47 (most likely a Python transitive-dependency drift, since deps install fresh
+> each run, or a flaky/coverage-sensitive test). Fixing it requires touching `services/translator` (Python),
+> which is **outside the apps/android-only merge gate**, so it cannot be fixed from within this slice. Per the
+> hard rule "never merge past red CI", the PR is **left open** pending either (a) a green retry (if the failure
+> is flaky) or (b) a repo-wide translator fix landing on `main` from an out-of-scope change. Retries attempted:
+> 2 empty-commit re-triggers (a 3rd in flight at time of writing). If it stays red, the slice is ⚠ **blocked on
+> external CI** — do NOT force-merge; escalate. Logs were un-downloadable (integration 404), so the exact
+> failing test could not be captured from here.
+
 > On 2026-07-14 **ephemeral (self-destruct) countdown badge** landed (slice `chat-ephemeral-countdown`,
 > feature-parity §Chat "Ephemeral (self-destruct) messages … countdown badges"). The send-path encoder
 > (slice `chat-message-effects-send-encoding`) already ships a concrete `expiresAt = now + duration` on the
