@@ -680,7 +680,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (parité burn-away iOS `opacity 0` + `scaleEffect 0.8`) ; défaut → jamais expiré → zéro
       changement pour tout appelant existant. **Pending :** le duration picker (partie de
       l'`EffectsPickerView` non encore construite).
-- [ ] Blurred ("tap to reveal") + view-once messages with fog effect
+- [◐] Blurred ("tap to reveal") + view-once messages with fog effect
+      — **conceal + reveal lifecycle done** (`chat-blur-reveal-lifecycle` 2026-07-14 : la logique pure
+      `BlurRevealLifecycle` (`:core:model`) porte EXACTEMENT iOS `BubbleBlurRevealLifecycle`
+      (`BubbleBlurRevealLifecycle.swift`) — les durées de phase `FogIn(0.4)`/`BlurApply(0.4)`/`FogOut(0.5)`,
+      `defaultRevealDurationSeconds = 5.0`, et `RevealRequest.requiresConsume == isViewOnce`. **Mieux que
+      l'iOS** : la séquence reveal→fog-in→re-blur→fog-out, enterrée dans un `Task` imperatif côté iOS
+      (`scheduleReveal()`, intestable), devient la fonction pure `revealTimeline(visibilitySeconds)` — une
+      liste de keyframes `Step(atMillis, isRevealed, fogOpacity, animationDurationMillis)` avec le timing
+      exact d'iOS (les chevauchements `- 0.05` / `+ 0.05`), fenêtre négative clampée à 0. +14 tests,
+      preuve RED par mutation (retirer le clamp `maxOf(0.0, …)` casse exactement `negativeVisibility_clampsToZero`
+      + `offsets_areMonotonicNonDecreasing`, les 12 autres verts). Câblé pour de vrai : `BubbleContent` gagne
+      `blurReveal: BubbleBlurRevealSpec?` peuplé par `BubbleContentBuilder.buildBlurReveal(effects)` quand
+      `effects.has(BLURRED) || effects.has(VIEW_ONCE)` et non-supprimé (parité gate iOS
+      `effects.isBlurred || effects.isViewOnce`) ; +7 tests builder. Le composable `:sdk-ui` `BubbleBlurReveal`
+      (glue exempte) voile le corps de bulle derrière un scrim quasi-opaque indigo950 (masque même <API 31 où
+      `Modifier.blur` est no-op) + blur réel API 31+, rejoue la timeline au tap, affiche un hint distinct
+      « Toucher pour révéler » (flou) vs « Vue unique » (flamme, via `RevealRequest.requiresConsume`). Strings
+      en/fr/es/pt. **Pending:** le consume view-once serveur (endpoint `requiresConsume` non câblé) + le
+      tombstone `.burned` pour un view-once épuisé (iOS `BubbleBurnedView`).
 - [◐] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
       — picker sheet + cross-platform bitfield encoding. **Wire contract + resolver done**
       (`chat-message-effects-resolver` 2026-07-14 : la source de vérité `MessageEffectFlags`

@@ -5,7 +5,10 @@ import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiPostReplyTarget
+import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.DeliveryTier
 
 public object BubbleContentBuilder {
@@ -177,6 +180,26 @@ public object BubbleContentBuilder {
             expiresAtIso = if (isDeleted) null else message.expiresAt?.trim()?.ifBlank { null },
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
+            blurReveal = if (isDeleted) null else buildBlurReveal(message.effects),
+        )
+    }
+
+    /**
+     * Derives the "tap to reveal" conceal spec from a message's resolved
+     * [MessageEffects] — parity with iOS gating `BubbleBlurRevealController` on
+     * `effects.isBlurred || effects.isViewOnce`. Returns null (no conceal) when
+     * neither lifecycle bit is set; a deleted tombstone never conceals. The
+     * visibility window uses the message's `blurRevealDuration` param when present,
+     * falling back to the shared default (iOS `effects.blurRevealDuration ??`).
+     */
+    private fun buildBlurReveal(effects: MessageEffects): BubbleBlurRevealSpec? {
+        val isBlurred = effects.has(MessageEffectFlags.BLURRED)
+        val isViewOnce = effects.has(MessageEffectFlags.VIEW_ONCE)
+        if (!isBlurred && !isViewOnce) return null
+        return BubbleBlurRevealSpec(
+            isViewOnce = isViewOnce,
+            visibilitySeconds = effects.blurRevealDuration
+                ?: BlurRevealLifecycle.defaultRevealDurationSeconds,
         )
     }
 
