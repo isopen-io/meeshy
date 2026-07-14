@@ -659,9 +659,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (écrit le paramètre seconds, laisse le flag à `toggle`), `cleared()` (= iOS `.none`),
       `activeCount` (popcount = `nonzeroBitCount`) ; l'enum wire `EphemeralDuration`
       (30/60/300/3600/86400 s, `fromSeconds` = `EphemeralDuration(rawValue:)`, labels UI laissés
-      aux string resources) porte `CoreModels.swift`. +19 tests, mutation-checked. Reste : la
-      Compose picker sheet + l'encodage `effectFlags` sur le chemin d'envoi (repository/socket) +
-      le rendu visuel des effets dans la bulle (Compose animations, coverage-exempt).
+      aux string resources) porte `CoreModels.swift`. +19 tests, mutation-checked. **Send-path
+      encoding done** (`chat-message-effects-send-encoding` 2026-07-14 : `MessageEffectsEncoder.
+      encode(effects, now): MessageEffectsWire` porte la résolution send de l'iOS
+      `ConversationViewModel` — pas d'effet ⇒ tous les champs wire `null` (iOS `effectFlags: nil`) ;
+      un effet ⇒ le bitfield complet part en `effectFlags` (= `flags.rawValue`), les bits lifecycle
+      se projettent en booléens legacy `isBlurred`/`isViewOnce` (à `true` seul, jamais `false`,
+      = iOS `? true : nil`), `EPHEMERAL` + durée ⇒ `ephemeralDuration` seconds + `expiresAt = now +
+      durée` ISO (= iOS `EphemeralDuration.expiresAt`, flag autoritatif donc une durée périmée sans
+      le chip est ignorée), `VIEW_ONCE` ⇒ `maxViewOnceCount`. La seule valeur `MessageEffects` est
+      la SSOT (chaque champ dérivé d'elle, pas de toggles éparpillés — mieux que l'iOS). Câblé pour
+      de vrai : `SendMessageRequest` gagne les 6 champs wire ; `MessageRepository.sendOptimistic`
+      accepte `effects` et encode dans la requête outbox + la bulle optimiste ; `retrySend` préserve
+      les effets depuis la bulle cachée. +19 tests encoder (round-trip encode↔resolve inclus,
+      mutation-checked) + 4 tests repo. Reste : la Compose picker sheet (glue exempte) qui passe
+      `effects` à `sendOptimistic` + le rendu visuel des effets dans la bulle (Compose animations,
+      coverage-exempt).
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
