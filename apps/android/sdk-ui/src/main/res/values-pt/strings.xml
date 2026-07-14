@@ -27,6 +27,9 @@
     <string name="bubble_file_size_mb">%1$s MB</string>
     <string name="image_viewer_close">Fechar</string>
     <string name="image_viewer_save">Guardar na galeria</string>
+    <string name="bubble_blur_tap_to_reveal">Toque para revelar</string>
+    <string name="bubble_blur_view_once">Ver uma vez</string>
+    <string name="bubble_blur_reveal_action">Revelar mensagem oculta</string>
     <string name="bubble_hidden_images">mais %1$d imagens</string>
     <string name="emoji_picker_title">Reações</string>
     <string name="emoji_picker_expand">Mais emojis</string>

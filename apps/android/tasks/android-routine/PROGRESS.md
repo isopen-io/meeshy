@@ -1,5 +1,45 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **blurred / view-once "tap to reveal" lifecycle** landed (slice `chat-blur-reveal-lifecycle`,
+> feature-parity §Chat "Blurred (tap to reveal) + view-once messages with fog effect"). This opens the last
+> untouched lifecycle line: a blurred/view-once message now conceals its body behind a fog + blur and reveals
+> on tap. iOS `BubbleBlurRevealLifecycle` splits the phase durations + `RevealRequest` from an imperative
+> `BubbleBlurRevealController.scheduleReveal()` `Task`; this ports the pure half and — **better than iOS** —
+> turns the whole animation into a testable timeline. **Ships (`:core:model`):** `BlurRevealLifecycle` —
+> `Phase{FogIn 0.4, BlurApply 0.4, FogOut 0.5}`, `defaultRevealDurationSeconds = 5.0`,
+> `RevealRequest(messageId, isViewOnce).requiresConsume`, and `revealTimeline(visibilitySeconds): List<Step>`
+> where each `Step(atMillis, isRevealed, fogOpacity, animationDurationMillis)` is a keyframe with iOS's exact
+> offsets (reveal @0, fog-in @visibility, re-blur @+fogIn−0.05, fog-out @+blurApply+0.05); a non-positive
+> window clamps to 0 so a zero-dwell reveal still runs the fog immediately. **+14 tests.** **Mutation check
+> (RED proof):** removing the `maxOf(0.0, …)` clamp failed **exactly 2** tests
+> (`revealTimeline_negativeVisibility_clampsToZero`, `revealTimeline_offsets_areMonotonicNonDecreasing`), the
+> other 12 stayed green — reverted green, behavioural not tautological. **Wired for real (`:sdk-ui`, exempt
+> glue):** `BubbleContent` gains `blurReveal: BubbleBlurRevealSpec?` (isViewOnce + visibility window) populated
+> by `BubbleContentBuilder.buildBlurReveal(effects)` when `effects.has(BLURRED) || effects.has(VIEW_ONCE)` and
+> the message is not deleted (parity with iOS gating on `effects.isBlurred || effects.isViewOnce`; a deleted
+> tombstone never conceals) — **+7 builder tests** (no-effect → null, blurred bit, view-once bit, legacy
+> `isBlurred` boolean, default window, ephemeral-only excluded, deleted drops the spec). The `BubbleBlurReveal`
+> composable veils the bubble body behind a near-opaque indigo950 scrim (hides the content even below API 31,
+> where `Modifier.blur` is a no-op) plus a real blur on API 31+, replays the pure timeline on tap, and shows a
+> distinct hint — "Tap to reveal" (blur) vs "View once" (flame, driven by `RevealRequest.requiresConsume`);
+> `MessageBubble` wraps its body in a `BubbleBlurRevealBoundary` that clips the conceal to the bubble's rounded
+> shape. Default `blurReveal = null` → **zero behaviour change for every existing caller**. Strings
+> `bubble_blur_tap_to_reveal` / `bubble_blur_view_once` / `bubble_blur_reveal_action` in en/fr/es/pt.
+> **Verification:** `:core:model` + `:sdk-ui` targeted suites green; full `gradle assembleDebug
+> testDebugUnitTest` under the UTF-8-daemon recipe — the first full run hit the **pre-existing** POSIX-locale
+> ICE in `:sdk-core` (em-dash class name; fixed by `--stop` + `LANG=C.utf8` + `-Pkotlin.daemon.jvmargs`), then
+> a flaky `:sdk-core` DataStore 15s-timeout under 8-way parallel test load (`PrivacyPreferencesStore*` real
+> file I/O — **untouched by this diff**, green in isolation and under `--max-workers=3`). Reviewer **PASS**
+> (diff `apps/android` only — `:core:model` [`BlurRevealLifecycle`], `:sdk-ui` [`BubbleBlurReveal` +
+> `BubbleContent.blurReveal` + builder + `MessageBubble` boundary], strings, tracking docs; **SDK purity** —
+> the phase/timeline logic is a pure `:core:model` object, the fog/blur/tap is coverage-exempt Compose glue
+> with no singleton reads; **SSOT** — the timeline is the single source for the reveal sequence, the conceal
+> gate reuses the resolved `MessageEffects`; **UX/colour coherence** — indigo950 brand veil, a natural
+> tap-to-reveal gesture, the conceal clipped to the bubble's own rounded shape, no dead end; **no coverage
+> floor lowered, no test weakened**). **Next slice:** the view-once **server-consume + `.burned` tombstone**
+> (wire `requiresConsume` to the gateway view-count endpoint and flip an exhausted view-once message to the
+> burned bubble path, port iOS `BubbleBurnedView`) OR the composer **EffectsPickerView** duration/effects sheet.
+
 > On 2026-07-14 **ephemeral burned/expired transition** landed (slice `chat-ephemeral-burned-transition`,
 > feature-parity §Chat "Ephemeral (self-destruct) messages … burned/expired"). The countdown badge slice
 > (`chat-ephemeral-countdown`) surfaces the remaining time via `EphemeralCountdownBadge`, but when the timer

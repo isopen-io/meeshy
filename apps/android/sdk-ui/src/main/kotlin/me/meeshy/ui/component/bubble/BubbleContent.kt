@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
+import me.meeshy.sdk.model.BlurRevealLifecycle
 
 @Immutable
 sealed class DeliveryStatus {
@@ -167,4 +168,18 @@ public data class BubbleContent(
     val isStarred: Boolean = false,
     val isFirstInGroup: Boolean = true,
     val isLastInGroup: Boolean = true,
+    val blurReveal: BubbleBlurRevealSpec? = null,
+)
+
+/**
+ * Conceal spec for a blurred / view-once ("tap to reveal") message — port of the
+ * inputs iOS `BubbleBlurRevealController` receives. A non-null value means the bubble
+ * body is hidden behind a fog + blur until the viewer taps it. [isViewOnce] drives the
+ * "view once" affordance (and, later, the server view-count consume);
+ * [visibilitySeconds] is how long the content stays revealed before it re-conceals.
+ */
+@Immutable
+public data class BubbleBlurRevealSpec(
+    val isViewOnce: Boolean,
+    val visibilitySeconds: Double = BlurRevealLifecycle.defaultRevealDurationSeconds,
 )
