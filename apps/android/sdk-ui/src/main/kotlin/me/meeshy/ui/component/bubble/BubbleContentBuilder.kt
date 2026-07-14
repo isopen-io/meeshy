@@ -174,6 +174,7 @@ public object BubbleContentBuilder {
             } else {
                 0
             },
+            expiresAtIso = if (isDeleted) null else message.expiresAt?.trim()?.ifBlank { null },
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
         )

@@ -14,6 +14,8 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.MeeshyApi
@@ -134,6 +136,9 @@ class MessageRepositoryTest {
 
     private suspend fun cachedApiMessage(id: String): ApiMessage =
         MeeshyApi.json.decodeFromString<ApiMessage>(db.messageDao().find(id)!!.payload)
+
+    private suspend fun sentRequest(lane: String): SendMessageRequest =
+        MeeshyApi.json.decodeFromString<SendMessageRequest>(outbox.deliverable(lane).last().payload)
 
     @Test
     fun `requestTranslation stores the returned translation and reports success`() = runTest {
@@ -311,6 +316,70 @@ class MessageRepositoryTest {
         assertThat(row.id).isEqualTo(cmid)
         assertThat(row.sendState).isEqualTo(LocalSendState.SENDING.name)
         assertThat(outbox.deliverable("message:c1").map { it.cmid }).containsExactly(cmid)
+    }
+
+    @Test
+    fun `sendOptimistic with no effects carries a clean SendMessageRequest`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val request = sentRequest("message:c1")
+        assertThat(request.clientMessageId).isEqualTo(cmid)
+        assertThat(request.effectFlags).isNull()
+        assertThat(request.isBlurred).isNull()
+        assertThat(request.isViewOnce).isNull()
+        assertThat(request.ephemeralDuration).isNull()
+        assertThat(request.expiresAt).isNull()
+    }
+
+    @Test
+    fun `sendOptimistic encodes the chosen effects onto the outbox request`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")), clock = MutableClock(0L))
+        val effects = MessageEffects(
+            flags = MessageEffectFlags.GLOW or MessageEffectFlags.VIEW_ONCE or MessageEffectFlags.EPHEMERAL,
+            ephemeralDuration = 300,
+            maxViewOnceCount = 2,
+        )
+
+        repo.sendOptimistic("c1", "secret", "fr", sender, effects = effects)
+
+        val request = sentRequest("message:c1")
+        assertThat(request.effectFlags)
+            .isEqualTo((MessageEffectFlags.GLOW or MessageEffectFlags.VIEW_ONCE or MessageEffectFlags.EPHEMERAL).toInt())
+        assertThat(request.isViewOnce).isTrue()
+        assertThat(request.ephemeralDuration).isEqualTo(300)
+        assertThat(request.expiresAt).isEqualTo("1970-01-01T00:05:00Z")
+        assertThat(request.maxViewOnceCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `sendOptimistic surfaces the effects on the optimistic bubble`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            "c1", "peekaboo", "fr", sender,
+            effects = MessageEffects(flags = MessageEffectFlags.BLURRED),
+        )
+
+        assertThat(cachedApiMessage(cmid).effects.has(MessageEffectFlags.BLURRED)).isTrue()
+    }
+
+    @Test
+    fun `retrySend preserves the effects from the cached bubble`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")), clock = MutableClock(0L))
+        val cmid = repo.sendOptimistic(
+            "c1", "secret", "fr", sender,
+            effects = MessageEffects(flags = MessageEffectFlags.VIEW_ONCE),
+        )
+        outbox.markSucceeded(cmid)
+        repo.markSendFailed(cmid)
+
+        repo.retrySend(cmid)
+
+        val request = sentRequest("message:c1")
+        assertThat(request.isViewOnce).isTrue()
+        assertThat(request.effectFlags).isEqualTo(MessageEffectFlags.VIEW_ONCE.toInt())
     }
 
     @Test

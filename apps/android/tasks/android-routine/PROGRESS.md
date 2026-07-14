@@ -1,5 +1,185 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **PR #1950 `chat-ephemeral-countdown` MERGED** (squash `fc94118`): the prior CI-watch note is
+> resolved — the translator CI flake cleared, run #7283 went green, and the PR squash-merged to `main`. This run
+> opened with rule #0 (merge the open iteration PR first), so `main` now carries the ephemeral countdown badge.
+>
+> On 2026-07-14 **save-to-gallery** landed (slice `chat-gallery-save-to-gallery`, feature-parity §C "Message
+> bubble / gallery — save to gallery"). This closes the last gallery follow-up hint (caption ✅ author/date ✅
+> prefetch ✅ save ✅; only the contact card remains on that §C line). iOS keeps the platform save-capability rule
+> pure in `MediaSaveDestination` (the photo library accepts only images/videos) and the imperative write in
+> `PhotoLibraryManager`; this slice mirrors that split. **Ships (`:core:model`):** `GallerySaveTarget`
+> (displayName/mimeType/relativePath) + **`GallerySaveTargetResolver.resolve(url, mimeHint?)`** — a pure
+> derivation of everything a MediaStore insert needs: strips query+fragment then takes the last path segment;
+> maps a known extension to its MIME (jpg/jpeg/png/gif/webp/heic/heif/bmp → image, mp4/mov/webm/mkv/3gp → video);
+> a **known MIME hint wins over the extension**, a parameterised hint is normalised (`; charset` dropped, folded),
+> an unknown/blank hint is ignored; an unknown extension keeps the name but defaults the MIME to `image/jpeg`;
+> the display name is sanitised (illegal filename chars → `_`) and, when the URL carries no real extension,
+> the MIME's canonical extension is appended; a blank/all-underscore name falls back to `meeshy-image.<ext>`;
+> images land under `Pictures/Meeshy`, videos under `Movies/Meeshy`. **+25 tests.** **Mutation check (RED
+> proof):** forcing `relativePath = IMAGE_DIR` (dropping the video-album branch) failed **exactly 4** tests
+> (the video-album ones), the other 19 stayed green — reverted green, behavioural not tautological. **Wired for
+> real (`:sdk-ui`, exempt glue):** `GalleryImageSaver.save(context, url, mimeHint?)` — a dumb executor of the
+> resolver decision: scoped-storage MediaStore insert (`RELATIVE_PATH` + `IS_PENDING`, **no runtime permission**,
+> Android 10+), streams the URL bytes into the pending item, flips `IS_PENDING=0`, and **deletes the item on any
+> failure**; **cancellation-safe** — it rethrows `CancellationException` instead of swallowing it into a
+> `Result.failure`, so a mid-save dismissal never fires a spurious toast. `MeeshyImageViewer` gains an opt-in
+> `onImageSaved: ((Result<Unit>) -> Unit)?` param → a Save button (Material `FileDownload`, white, TopEnd,
+> opposite Close; hidden below Android 10 via `GalleryImageSaver.isSupported`; disabled while a save is in
+> flight); default `null` → no button → **zero behaviour change for every existing caller**. `ChatScreen` passes
+> the callback and shows a success/failure `Toast`. Strings `image_viewer_save` (sdk-ui) +
+> `image_saved_to_gallery`/`image_save_failed` (feature:chat) in en/fr/es/pt. **Verification:** full `gradle
+> assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (943 tasks; APK assembles; every module unit suite
+> green). Built with the container's system Gradle 8.14.3 + UTF-8-daemon recipe (wrapper distribution
+> egress-blocked). Reviewer **PASS** (diff `apps/android` only — `:core:model` [resolver + target], `:sdk-ui`
+> [saver + viewer button], `:feature:chat` [ChatScreen toast wiring], strings, tracking docs; **SDK purity** —
+> the "which name / MIME / album" decision is a pure `:core:model` function, the MediaStore write is a
+> singleton-free, cascade-free generic executor in `:sdk-ui` [parallels iOS `PhotoLibraryManager` in the SDK],
+> the toast orchestration is app-side; **SSOT** — reuses the pure resolver end-to-end, no re-declared maps;
+> **UX/colour coherence** — the Save glyph is white on the black immersive viewer, placed opposite Close, a
+> natural one-tap gesture, hidden where unsupported; **no coverage floor lowered, no test weakened**). **Next
+> slice:** the §C **contact-card bubble attachment** (share a contact — the wire has no dedicated fields yet, so
+> scope the DTO first) OR §B "Communities carousel + category filter chips" (feature-parity ~line 309, still `[ ]`).
+
+> On 2026-07-14 **ephemeral (self-destruct) countdown badge** landed (slice `chat-ephemeral-countdown`,
+> feature-parity §Chat "Ephemeral (self-destruct) messages … countdown badges"). The send-path encoder
+> (slice `chat-message-effects-send-encoding`) already ships a concrete `expiresAt = now + duration` on the
+> outgoing wire; nothing yet consumed it on the *receive* side to show the recipient how long a message has
+> before it burns. iOS's `BubbleEphemeralLifecycle` derives the countdown state and formats the label; a
+> `BubbleEphemeralController` ticks a `Timer.publish`; `BubbleEphemeralBadge` renders a flame+timer capsule.
+> This slice ports the **pure** derivation/formatting and wires a real Compose consumer. **Ships (`:core:model`):**
+> `EphemeralLifecycle.evaluate(expiresAt: Instant?, now: Instant): State` — `State.None` when there's no
+> deadline, `State.Expired` once `remaining <= 0` (boundary INCLUSIVE — a deadline exactly at `now` is
+> expired, mirroring iOS `remaining <= 0 ? .expired`), else `State.Running(remainingSeconds)` with the
+> fractional seconds (iOS `TimeInterval`, so 1.5s survives as 1.5). `EphemeralLifecycle.format(remaining:
+> Double): String` — the compact `7s` / `45s` / `1m 05s` / `2h 03m` shape: sub-10s shows the raw integer
+> seconds (`.toInt()` truncates toward zero, negative clamps to `0s`), the minute band `%dm %02ds`, the hour
+> band `%dh %02dm` (seconds dropped once hours appear). All maths are pure/off-clock; only the tick reads the
+> wall clock. **+20 tests** (evaluate: no-expiry→None, future→Running(remaining), sub-second fractional
+> remaining preserved, deadline==now→Expired, past→Expired; format: 0→"0s", 7→"7s", 9.9→"9s" truncated,
+> −42→"0s" clamped, 10/45/59→seconds band, 60→"1m 00s", 65→"1m 05s", 125→"2m 05s", 3599→"59m 59s", 3600→"1h
+> 00m", 7380→"2h 03m", 3661→"1h 01m" seconds-dropped; evaluate→format round-trip). **Mutation check (RED
+> proof):** flipping the boundary `remaining <= 0.0` → `remaining < 0.0` failed **exactly 1** test
+> (`evaluate_deadlineExactlyNow_isExpired`), the other 19 stayed green — reverted green, behavioural not
+> tautological. **Wired for real (no dead ends, `:sdk-ui`):** `BubbleContent` gains `expiresAtIso: String? =
+> null` (default → badge renders nothing → zero behaviour change for every existing caller); `BubbleContentBuilder`
+> populates it from `ApiMessage.expiresAt` with the same deleted-tombstone suppress rule as `pinnedAtIso`
+> (`if (isDeleted) null else message.expiresAt?.trim()?.ifBlank { null }`); the `EphemeralCountdownBadge`
+> composable parses the ISO via the shared `isoToEpochMillisOrNull` (SSOT), ticks each second via
+> `produceState` + `delay(1_000)` (stops the loop on Expired), and renders a flame (`Icons.Filled.LocalFireDepartment`)
+> + monospaced timer in `MeeshyPalette.Error` inside a pill with an error-tinted fill + hairline stroke —
+> parity with iOS `BubbleEphemeralBadge` — placed in the bubble meta-row's left badge group next to
+> starred/translated/edited; it returns early (renders nothing) for None/Expired. **Verification:** full
+> `gradle assembleDebug testDebugUnitTest` → BUILD SUCCESSFUL (943 tasks, APK assembles, every module's unit
+> suite green). Built with the container's system Gradle 8.14.3 + the UTF-8-daemon recipe (wrapper
+> distribution egress-blocked). Reviewer **PASS** (diff `apps/android` only — `:core:model`
+> [`EphemeralLifecycle`], `:sdk-ui` [`EphemeralCountdownBadge` + `BubbleContent.expiresAtIso` +
+> `BubbleContentBuilder` + `MessageBubble` meta-row], tests, `feature-parity.md`, routine docs; **SDK purity**
+> — the countdown derivation/formatting is a pure stateless object in `:core:model`, the badge is thin
+> coverage-exempt Compose glue reading the wall clock, no singleton reads; **SSOT** — reuses
+> `isoToEpochMillisOrNull` for ISO parsing, nothing re-declared; **UX/colour coherence** — the flame+timer uses
+> the semantic `Error` colour (a self-destruct warning), monospaced timer, capsule matching the reaction-chip
+> radius; **instant-app** — the badge appears immediately from the cached `expiresAt`; **no coverage floor
+> lowered, no test weakened**). **Next slice:** the **burned/expired transition** (when `EphemeralLifecycle`
+> reaches `Expired`, the bubble should flip to the deleted/burned tombstone path — a pure `BubbleContentKind`
+> decision + wiring) OR the Compose **EffectsPickerView** sheet (the still-pending duration picker that lets
+> the composer choose the ephemeral duration, passing the built `MessageEffects` to `sendOptimistic`) OR the
+> **blurred / view-once** lifecycle (tap-to-reveal fog + one-shot reveal, port iOS `BubbleBlurRevealController`).
+
+> On 2026-07-14 **message-effects render-plan + persistent treatment layer** landed (slice
+> `chat-message-effects-render-plan`, feature-parity §Chat "Message visual effects" — the consume/render side.
+> The resolver decodes a received message's wire fields into a `MessageEffects`; the encoder ships the composer
+> selection; nothing yet expressed **which** effects a bubble should actually render, and how the one-shot vs
+> continuous distinction works. iOS's `View.messageEffects(_:hasPlayedAppearance:)` gates each appearance effect
+> with `&& !hasPlayedAppearance` (one-shot) and applies the persistent treatments unconditionally. This slice
+> ports that orchestration as a **pure** function and wires a real Compose consumer. **Ships (`:core:model`):**
+> `MessageEffectRenderPlanner.plan(effects, hasPlayedAppearance): MessageEffectRenderPlan` — appearance effects
+> (shake/zoom/explode/waoo/confetti/fireworks) only appear in `plan.appearance` while `hasPlayedAppearance ==
+> false` (iOS gate); persistent effects (glow/pulse/rainbow/sparkle) always appear in `plan.persistent` (never
+> gated); `plan.glowIntensity = effects.glowIntensity ?: 0.5` (iOS default); lifecycle bits (ephemeral/blurred/
+> view-once) are behaviours, not render effects, so the plan never lists them. `AppearanceEffect`/`PersistentEffect`
+> enums are adossés to the existing `APPEARANCE_MASK`/`PERSISTENT_MASK` (SSOT — no bit re-declaration). `isEmpty`
+> = both sets empty. **+14 planner tests** (no-effects→empty; lifecycle-only→empty; each of the 6 appearance bits
+> maps to its enum; each of the 4 persistent bits; all-appearance→6; all-persistent→4; played suppresses one-shot;
+> persistent survives the played gate; glow default 0.5 vs provided 0.9; mixed not-played→both; mixed played→only
+> persistent). **Mutation check (RED proof):** replacing the `hasPlayedAppearance` gate with `false` failed
+> **exactly 2** tests (`plan_appearanceAlreadyPlayed_suppressesAppearanceEffect`,
+> `plan_mixedAlreadyPlayed_keepsOnlyPersistent`), the other 12 stayed green — reverted green, behavioural not
+> tautological. **Wired for real (`:sdk-ui`):** `Modifier.messageEffects(effects, hasPlayedAppearance, shape)` —
+> a public building block that builds the plan and applies the PERSISTENT treatments via
+> `rememberInfiniteTransition`: glow = indigo `Modifier.shadow` breathing radius 4↔12.dp + alpha
+> `intensity*0.3`↔`intensity` (iOS `GlowEffect`); pulse = `graphicsLayer` scale 1.0↔1.02 (iOS `PulseEffect`);
+> rainbow = `Modifier.border` sweep-gradient ring (iOS `RainbowEffect`). `MessageBubble` gains optional
+> `effects: MessageEffects? = null` + `hasPlayedAppearance: Boolean = false` params (default → `MessageEffects()`
+> → `plan.persistent.isEmpty()` → the modifier returns `this`, so **zero behaviour change for every existing
+> caller**), applied to the bubble container so the glow/border wrap the rounded bubble shape. **Verification:**
+> `:core:model` + `:sdk-ui` `testDebugUnitTest` green; `:sdk-ui:assembleDebug` + `:app:assembleDebug` → APK
+> produced (74 MB). One unrelated flake in `:sdk-core` `MediaDownloadPreferencesStoreTest` (DataStore `StateFlow`
+> 15s timeout — a known env flake, see NOTES 2026-07-12 locale/flake) failed in the aggregate run and **passed on
+> isolated re-run**; my slice touches neither `:sdk-core` nor that store. Built with the system Gradle 8.14.3 +
+> UTF-8-daemon recipe (wrapper distribution egress-blocked). Reviewer **PASS** (diff `apps/android` only —
+> `:core:model` [planner + enums + plan], `:sdk-ui` [`Modifier.messageEffects` + `MessageBubble` params], tests,
+> `feature-parity.md`, routine docs; **SDK purity** — the "which effect renders / one-shot vs continuous / glow
+> default" decision is a pure stateless function in `:core:model`; the modifier is thin coverage-exempt Compose
+> glue reading the plan, no singleton reads; **SSOT** — reuses `APPEARANCE_MASK`/`PERSISTENT_MASK` + `MessageEffects`,
+> nothing re-declared; **UX/colour coherence** — glow uses the indigo accent (`MeeshyPalette.Indigo500`), not a
+> hardcoded random; **no coverage floor lowered, no test weakened**). **Next slice:** the one-shot **appearance
+> rendering** layer (transforms shake=offset / zoom·explode·waoo=scale via a one-shot `Animatable` keyed to
+> message identity, gated by `plan.appearance` + a ViewModel-tracked `hasPlayedAppearance`; confetti/fireworks
+> particle overlays + sparkle `Canvas` — the plan already enumerates them) OR the Compose **EffectsPickerView**
+> sheet (renders the three chip sections + ephemeral row, passes the built `MessageEffects` to `sendOptimistic`)
+> OR wiring `effects` from the received message into `BubbleContent`/`MessageBubble` at the ConversationScreen
+> (needs the message model to first carry the effect wire fields end-to-end).
+
+> On 2026-07-14 **message-effects send-path encoding** landed (slice `chat-message-effects-send-encoding`,
+> feature-parity §Chat "Message visual effects" — the send-side wire counterpart to the resolver (decode) and
+> the editor (edit). The resolver decodes a *received* message's effects; the editor edits the composer
+> selection; nothing yet expressed how that selection reaches the *outgoing wire*. iOS's `ConversationViewModel`
+> resolves `pendingEffects` into `effectFlags` + the legacy lifecycle fields + `expiresAt` on the send request.
+> This slice ports that as a pure function and wires it into the real send path. **Ships (`:core:model`):**
+> the `MessageEffectsWire` data class (the 6 outgoing fields) and **`MessageEffectsEncoder.encode(effects, now):
+> MessageEffectsWire`** — a direct port: *no effects ⇒ every wire field `null`* (iOS `effectFlags: nil`);
+> *any effect ⇒ the full bitfield ships as `effectFlags`* (`(flags and 0xFFFFFFFFL).toInt()` = iOS
+> `pendingEffects.flags.rawValue`), the lifecycle bits also project to `isBlurred`/`isViewOnce` **set to `true`
+> only, never `false`** (iOS `? true : nil`); *`EPHEMERAL` + a chosen duration ⇒* the raw seconds ship as
+> `ephemeralDuration` and a concrete **`expiresAt = now + duration`** ISO timestamp (iOS
+> `EphemeralDuration.expiresAt = Date().addingTimeInterval(rawValue)`), the **flag is authoritative** so a stale
+> `ephemeralDuration` param with the chip toggled back off is ignored; *`VIEW_ONCE` ⇒* `maxViewOnceCount` ships
+> when present. The single `MessageEffects` value is the SSOT — every wire field derives from it, never from
+> scattered composer toggles (a deliberate improvement over iOS's split state). `now` is injected (mirrors iOS
+> `Date()`) so the encoder stays pure/testable. **Wired for real (no dead ends):** `SendMessageRequest` gains the
+> 6 wire fields; `MessageRepository.sendOptimistic` gains an `effects: MessageEffects = MessageEffects()` param,
+> encodes it via `MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))`, and populates **both** the
+> outbox `SendMessageRequest` **and** the optimistic `ApiMessage`'s effect fields (so the optimistic bubble
+> resolves the same effects the resolver would — closing the loop with the prior slice); `retrySend` re-reads
+> `effectFlags`/`isBlurred`/`isViewOnce`/`expiresAt` from the cached bubble so a retry never drops the effects.
+> The Compose picker sheet that passes `effects` to `sendOptimistic` is the thin coverage-exempt follow-up.
+> **+19 encoder tests** (empty→all-null; effectFlags carries raw bitfield / union / highest-bit SPARKLE narrowing;
+> blurred→isBlurred-true-only, view-once→isViewOnce-true-only, appearance-only→lifecycle-booleans-null; ephemeral
+> +duration→seconds+expiresAt, expiresAt==now+seconds via `isoToEpochMillisOrNull`, ephemeral-flag-without-duration
+> →no-expiry, duration-without-flag→ignored, all-lifecycle-bits→every-field, **round-trip encode→resolve reproduces
+> the original flags**) **+ 4 repo tests** (no-effects→clean request; effects→outbox request carries
+> flags/view-once/duration/`expiresAt`/count; optimistic bubble surfaces the effects; retry preserves them).
+> **Mutation check (RED proof):** dropping the `EPHEMERAL` guard on the ephemeral-seconds derivation failed
+> **exactly 1** test (`encode_durationWithoutEphemeralFlag_isIgnored`), the other 14 stayed green — reverted
+> green, the suite is behavioural not tautological. **Verification:** `:core:model:testDebugUnitTest --tests
+> MessageEffectsEncoderTest` → green; `:core:model` + `:sdk-core` `testDebugUnitTest` → green;
+> full `gradle assembleDebug` → APK produced (74 MB). Env note: built with the container's system Gradle 8.14.3 +
+> the UTF-8-daemon recipe (`LANG=C.utf8` + `-Pkotlin.daemon.jvmargs=-Dsun.jnu.encoding=UTF-8`) since the wrapper
+> distribution is egress-blocked. Reviewer **PASS** (diff `apps/android` only — `:core:model`
+> [`MessageEffectsEncoder`+`MessageEffectsWire`, `SendMessageRequest` fields], `:sdk-core` [`MessageRepository`
+> wiring], tests, `feature-parity.md`, routine docs; **SDK purity** — pure stateless encoder in `:core:model`,
+> the "when to encode" orchestration is a thin repository seam, no singleton reads; **SSOT** — reuses
+> `MessageEffectFlags` bit constants + `MessageEffects` + `EphemeralDuration.seconds` + `IsoTime`, nothing
+> re-declared; the encode↔resolve round-trip test pins them as inverses; **instant-app** — the optimistic bubble
+> carries the effects immediately; **UX coherence** — no visual change yet, the composer selection now reaches
+> the wire for the picker follow-up; **no coverage floor lowered, no test weakened**). **Next slice:** the Compose
+> **EffectsPickerView** sheet (renders the three chip sections bound to `MessageEffectsEditor.toggle` + the
+> ephemeral duration row, and on send passes the built `MessageEffects` to `sendOptimistic` — heavy Compose,
+> coverage-exempt) OR the bubble-side rendering of received effects (persistent glow/pulse/rainbow/sparkle border
+> + one-shot appearance animations gated by a `hasPlayed` flag, port iOS `MessageEffectModifiers`), OR the
+> still-pending gallery save-to-gallery (`MediaStore` insert).
+
 > On 2026-07-14 **message-effects composer editor + ephemeral-duration enum** landed (slice
 > `chat-message-effects-editor`, feature-parity §Chat "Message visual effects" — the send-side
 > counterpart to the `chat-message-effects-resolver` that landed the same day. The resolver decodes
@@ -2435,15 +2615,14 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-14): `chat-gallery-neighbor-prefetch`** — ±2 look-ahead prefetch in the conversation
-media gallery (port of iOS's gallery prefetch); pure `:sdk-ui` `ImageViewerPrefetch.neighbors(...)` returns the
-sibling page indices to warm (nearest-first, forward-biased, bounded, never current), enqueued in the shared
-Coil `imageLoader` by a `MeeshyImageViewer` `LaunchedEffect`. This closes the three gallery follow-up hints
-(caption ✅ author/date ✅ prefetch ✅). See run log 2026-07-14.
+**Just shipped (2026-07-14): `chat-gallery-save-to-gallery`** — save-to-gallery from the image viewer. Pure
+`:core:model` `GallerySaveTargetResolver.resolve(url, mimeHint?)` derives the MediaStore target (sanitised
+display name + real extension, resolved MIME, `Pictures/Meeshy` image / `Movies/Meeshy` video); exempt `:sdk-ui`
+`GalleryImageSaver.save` does the scoped-storage insert (Android 10+, no permission, cancellation-safe, deletes
+on failure); `MeeshyImageViewer` gains an opt-in Save button; `ChatScreen` shows a Toast. +25 tests
+(mutation-proof: forcing `IMAGE_DIR` breaks exactly the 4 video tests). This closes the last gallery follow-up
+hint (caption ✅ author/date ✅ prefetch ✅ save ✅). See run log 2026-07-14.
 **Recommended next (highest value):**
-- **Save-to-gallery** (same §C line): a viewer action that inserts the current image into `MediaStore`. The
-  pure part is thin (target filename/mime resolver); the `MediaStore`/`ContentResolver` write is exempt glue —
-  push every decision (which filename, which mime) into a pure fn.
 - **Message bubble contact attachment** (§C, still pending) — share-a-contact card; the wire has no
   dedicated fields yet, so scope the DTO first.
 - **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
@@ -3331,6 +3510,40 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-14 — slice `chat-gallery-save-to-gallery` ✅ impl + reviewer PASS → PR + merge
+- **Opened with rule #0:** the prior iteration's PR **#1950 `chat-ephemeral-countdown`** was still open; its CI
+  had gone green (run #7283, the earlier translator flake cleared) and it was `mergeable_state: clean`, so it was
+  **squash-merged to `main`** (`fc94118`) before starting this slice. `main` synced.
+- **Branch:** `claude/apps/android/chat-gallery-save-to-gallery` (off latest `main` `fc94118`).
+- **What:** save-to-gallery from the conversation image viewer — the last §C gallery follow-up hint (caption ✅
+  author/date ✅ prefetch ✅ save ✅; only the contact card remains). Android port of iOS's pure/imperative split
+  (`MediaSaveDestination` rule vs `PhotoLibraryManager` write).
+- **Pure core (`:core:model`):** `GallerySaveTarget` + `GallerySaveTargetResolver.resolve(url, mimeHint?)` —
+  strip query+fragment → last path segment; extension→MIME map (image jpg/jpeg/png/gif/webp/heic/heif/bmp, video
+  mp4/mov/webm/mkv/3gp); known hint > extension; parameterised hint normalised; unknown/blank hint ignored;
+  unknown extension keeps the name + defaults MIME `image/jpeg`; illegal chars sanitised to `_`; missing
+  extension → append the MIME's canonical ext; blank/all-underscore → `meeshy-image.<ext>`; images →
+  `Pictures/Meeshy`, videos → `Movies/Meeshy`.
+- **Tests:** **+25** behavioural (`GallerySaveTargetResolverTest`) — happy path per family, query/fragment strip,
+  case-insensitive ext, canonical-ext append, hint precedence + normalisation + ignore, unknown-ext keep,
+  sanitisation, degenerate-URL defaults, multi-dot name. **Mutation RED proof:** forcing
+  `relativePath = IMAGE_DIR` (dropping the video-album branch) failed **exactly 4** tests (the video-album ones),
+  the other 19 stayed green — reverted, behavioural not tautological.
+- **Wiring (`:sdk-ui`, exempt glue):** `GalleryImageSaver.save(context, url, mimeHint?)` — scoped-storage
+  MediaStore insert (`RELATIVE_PATH` + `IS_PENDING`, Android 10+, no permission), streams URL bytes, flips
+  `IS_PENDING=0`, deletes the item on any failure, **rethrows `CancellationException`** (cancellation-safe, no
+  spurious toast on mid-save dismissal). `MeeshyImageViewer` gains opt-in `onImageSaved: ((Result<Unit>) -> Unit)?`
+  → white `FileDownload` Save button at TopEnd opposite Close, hidden below Android 10, disabled while saving;
+  default `null` → no button → zero change for existing callers. `ChatScreen` shows a success/failure `Toast`.
+  Strings `image_viewer_save` + `image_saved_to_gallery`/`image_save_failed` in en/fr/es/pt.
+- **Verification:** `LANG=C.utf8 gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (943 tasks; APK
+  assembles; every module unit suite green). System Gradle 8.14.3 + UTF-8-daemon recipe (wrapper egress-blocked).
+- **Reviewer:** **PASS** — diff `apps/android` only; SDK purity (pure decision in `:core:model`, singleton-free
+  cascade-free executor in `:sdk-ui` mirroring iOS `PhotoLibraryManager`, toast orchestration app-side); SSOT
+  (one resolver end-to-end); UX/colour coherence (white glyph on black immersive viewer, opposite Close, one-tap,
+  hidden where unsupported); no coverage floor lowered, no test weakened.
+- **Next:** §C contact-card bubble attachment (scope the DTO first) OR §B communities carousel + filter chips.
 
 ### 2026-07-14 — slice `chat-gallery-neighbor-prefetch` ✅ impl + reviewer PASS → PR + merge
 - **Branch:** `claude/apps/android/chat-gallery-neighbor-prefetch` (off latest `main` `18e155f` — last Android

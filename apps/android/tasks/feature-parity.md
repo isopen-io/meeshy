@@ -586,7 +586,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       hors bornes ni enroulé, jamais l'index courant, vide si <2 pages ou radius ≤ 0, index courant coercé
       dans les bornes ; `MeeshyImageViewer` gagne un `LaunchedEffect(currentPage, imageUrls)` qui mappe ces
       index sur des `ImageRequest` enfilés dans le `context.imageLoader` Coil partagé — même motif que le
-      `StoryPrefetchPlanner` du viewer story. +13 tests. Reste : contact card, save-to-gallery) ; contact pending
+      `StoryPrefetchPlanner` du viewer story. +13 tests.
+      **Save-to-gallery done** (`chat-gallery-save-to-gallery` 2026-07-14 : pendant Android du pur iOS
+      `MediaSaveDestination` — `:core:model` `GallerySaveTargetResolver.resolve(url, mimeHint?)` dérive le
+      `GallerySaveTarget` (displayName sanitisé + vraie extension, MIME résolu, album `Pictures/Meeshy` image /
+      `Movies/Meeshy` vidéo) : strip query+fragment, extension→MIME (jpg/png/gif/webp/heic/…/mp4/mov/…), hint
+      connu prioritaire sur l'extension, hint paramétré normalisé (`;charset` retiré), extension inconnue → nom
+      gardé + MIME défaut `image/jpeg`, noms illégaux assainis, nom par défaut `meeshy-image.<ext>` si vide.
+      +25 tests (mutation-proof : forcer `IMAGE_DIR` casse exactement les 4 tests vidéo). Écriture MediaStore
+      exempte `:sdk-ui` `GalleryImageSaver.save` (scoped-storage Q+, `IS_PENDING`, aucune permission ; annule
+      proprement l'insert sur échec ; cancellation-safe — rethrow `CancellationException`) ; `MeeshyImageViewer`
+      gagne un bouton Save (icône FileDownload, TopEnd, opt-in via `onImageSaved`, masqué < Android 10) ;
+      `ChatScreen` affiche un Toast succès/échec. Reste : contact card) ; contact pending
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
@@ -640,7 +651,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       italic "Transféré/Forwarded" chip with the same accent-coherent forward glyph as the forward
       action (`Icons.AutoMirrored.Filled.Send`). **Pending:** edit-history viewer (needs the gateway
       edit-history endpoint surfaced on Android).
-- [ ] Ephemeral (self-destruct) messages with duration picker + countdown badges
+- [◐] Ephemeral (self-destruct) messages with duration picker + countdown badges
+      — **countdown badge done** (`chat-ephemeral-countdown` 2026-07-14 : la logique pure
+      `EphemeralLifecycle` (`:core:model`) porte EXACTEMENT `BubbleEphemeralLifecycle`
+      (`BubbleEphemeralLifecycle.swift`) — `evaluate(expiresAt, now)` → `State.None`
+      (pas d'expiry) / `State.Expired` (`remaining <= 0`, borne incluse) / `State.Running(
+      remainingSeconds)` (fractionnel, miroir de `TimeInterval`) ; `format(remaining)` rend
+      le shape compact `7s` / `45s` / `1m 05s` / `2h 03m` (sub-10s = secondes brutes,
+      troncature vers zéro, négatif clampé à `0s` ; bande minute `Xm YYs` ; bande heure
+      `Xh YYm`, secondes droppées). +20 tests, preuve RED par mutation (`<= 0.0` → `< 0.0`
+      casse exactement `evaluate_deadlineExactlyNow_isExpired`). Câblé pour de vrai :
+      `BubbleContent` gagne `expiresAtIso: String?` (peuplé par `BubbleContentBuilder`
+      depuis `ApiMessage.expiresAt`, suppress-si-supprimé comme `pinnedAtIso`), et le
+      composable `EphemeralCountdownBadge` (`:sdk-ui`) tick chaque seconde et rend une
+      capsule flamme + timer monospace en `MeeshyPalette.Error` (parité `BubbleEphemeralBadge`)
+      dans la meta-row de la bulle, masquée quand None/Expired. **Pending :** le duration
+      picker (partie de l'`EffectsPickerView` non encore construite) + le passage burned quand
+      Expired.
 - [ ] Blurred ("tap to reveal") + view-once messages with fog effect
 - [◐] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
       — picker sheet + cross-platform bitfield encoding. **Wire contract + resolver done**
@@ -659,9 +686,38 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (écrit le paramètre seconds, laisse le flag à `toggle`), `cleared()` (= iOS `.none`),
       `activeCount` (popcount = `nonzeroBitCount`) ; l'enum wire `EphemeralDuration`
       (30/60/300/3600/86400 s, `fromSeconds` = `EphemeralDuration(rawValue:)`, labels UI laissés
-      aux string resources) porte `CoreModels.swift`. +19 tests, mutation-checked. Reste : la
-      Compose picker sheet + l'encodage `effectFlags` sur le chemin d'envoi (repository/socket) +
-      le rendu visuel des effets dans la bulle (Compose animations, coverage-exempt).
+      aux string resources) porte `CoreModels.swift`. +19 tests, mutation-checked. **Send-path
+      encoding done** (`chat-message-effects-send-encoding` 2026-07-14 : `MessageEffectsEncoder.
+      encode(effects, now): MessageEffectsWire` porte la résolution send de l'iOS
+      `ConversationViewModel` — pas d'effet ⇒ tous les champs wire `null` (iOS `effectFlags: nil`) ;
+      un effet ⇒ le bitfield complet part en `effectFlags` (= `flags.rawValue`), les bits lifecycle
+      se projettent en booléens legacy `isBlurred`/`isViewOnce` (à `true` seul, jamais `false`,
+      = iOS `? true : nil`), `EPHEMERAL` + durée ⇒ `ephemeralDuration` seconds + `expiresAt = now +
+      durée` ISO (= iOS `EphemeralDuration.expiresAt`, flag autoritatif donc une durée périmée sans
+      le chip est ignorée), `VIEW_ONCE` ⇒ `maxViewOnceCount`. La seule valeur `MessageEffects` est
+      la SSOT (chaque champ dérivé d'elle, pas de toggles éparpillés — mieux que l'iOS). Câblé pour
+      de vrai : `SendMessageRequest` gagne les 6 champs wire ; `MessageRepository.sendOptimistic`
+      accepte `effects` et encode dans la requête outbox + la bulle optimiste ; `retrySend` préserve
+      les effets depuis la bulle cachée. +19 tests encoder (round-trip encode↔resolve inclus,
+      mutation-checked) + 4 tests repo. **Render-plan + persistent treatment layer done**
+      (`chat-message-effects-render-plan` 2026-07-14 : `MessageEffectRenderPlanner.plan(effects,
+      hasPlayedAppearance): MessageEffectRenderPlan` porte l'orchestration render de l'iOS
+      `View.messageEffects(_:hasPlayedAppearance:)` — les effets appearance (shake/zoom/explode/
+      waoo/confetti/fireworks) sont one-shot et n'apparaissent dans le plan que si
+      `hasPlayedAppearance == false` (iOS gate `&& !hasPlayedAppearance`) ; les effets persistants
+      (glow/pulse/rainbow/sparkle) sont continus et jamais gatés ; `glowIntensity` résout
+      `effects.glowIntensity ?? 0.5` (iOS) ; les bits lifecycle ne sont pas des effets render → jamais
+      dans le plan. Enums `AppearanceEffect`/`PersistentEffect` adossés aux masques `APPEARANCE_MASK`/
+      `PERSISTENT_MASK`. +14 tests planner (mutation-checked : retirer le gate hasPlayed casse
+      exactement les 2 tests one-shot). Câblé pour de vrai : `:sdk-ui` `Modifier.messageEffects(effects,
+      hasPlayedAppearance, shape)` applique les traitements PERSISTANTS (glow = shadow indigo qui
+      respire radius 4↔12 + alpha `intensity*0.3`↔`intensity` ; pulse = scale 1.0↔1.02 ;
+      rainbow = bordure sweep-gradient) via `rememberInfiniteTransition` ; `MessageBubble` gagne
+      les params optionnels `effects`/`hasPlayedAppearance` (défaut `null`/`false` → zéro changement
+      pour les appelants existants). Reste : le rendu des one-shot appearance (transforms + overlays
+      particules confetti/fireworks + sparkle canvas — le plan les énumère déjà, la couche se branche
+      sans toucher le planner), la Compose picker sheet, et le peuplement de `effects` depuis le
+      message côté ConversationScreen (le modèle message doit d'abord porter les champs effect).
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera

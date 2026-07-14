@@ -79,4 +79,6 @@
         <item quantity="one">%1$d réponse</item>
         <item quantity="other">%1$d réponses</item>
     </plurals>
+    <string name="image_saved_to_gallery">Enregistré dans la galerie</string>
+    <string name="image_save_failed">Échec de l’enregistrement</string>
 </resources>

@@ -79,4 +79,6 @@
         <item quantity="one">%1$d reply</item>
         <item quantity="other">%1$d replies</item>
     </plurals>
+    <string name="image_saved_to_gallery">Saved to gallery</string>
+    <string name="image_save_failed">Couldn’t save to gallery</string>
 </resources>
