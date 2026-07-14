@@ -14,17 +14,19 @@ class ConversationMediaGalleryTest {
         images: List<BubbleImage> = emptyList(),
         isDeleted: Boolean = false,
         text: String = "",
+        senderName: String? = null,
+        createdAtIso: String? = null,
     ) = BubbleContent(
         messageId = id,
         text = text,
         isOutgoing = false,
         isTranslated = false,
         originalText = null,
-        senderName = null,
+        senderName = senderName,
         showSenderName = false,
         isEdited = false,
         isDeleted = isDeleted,
-        createdAtIso = null,
+        createdAtIso = createdAtIso,
         images = images,
     )
 
@@ -303,5 +305,191 @@ class ConversationMediaGalleryTest {
         val gallery = ConversationMediaGallery.of(emptyList(), messageId = "m1", imageIndex = 0)
 
         assertThat(gallery.captions).isEmpty()
+    }
+
+    @Test
+    fun a_messages_sender_becomes_its_images_page_author() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), senderName = "Alice")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.senderNames).containsExactly("Alice")
+    }
+
+    @Test
+    fun a_blank_sender_name_produces_no_author() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), senderName = "")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.senderNames).containsExactly(null as String?)
+    }
+
+    @Test
+    fun a_whitespace_only_sender_name_produces_no_author() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), senderName = "  \t ")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.senderNames).containsExactly(null as String?)
+    }
+
+    @Test
+    fun an_author_name_is_trimmed_of_surrounding_whitespace() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), senderName = "  Bob  ")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.senderNames).containsExactly("Bob")
+    }
+
+    @Test
+    fun every_image_of_a_multi_image_message_shares_that_messages_author() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble(
+                    "m1",
+                    listOf(img("a1", "u1"), img("a2", "u2"), img("a3", "u3")),
+                    senderName = "Carol",
+                ),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.senderNames).containsExactly("Carol", "Carol", "Carol").inOrder()
+    }
+
+    @Test
+    fun a_messages_created_at_becomes_its_images_page_timestamp() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1")), createdAtIso = "2026-07-14T10:00:00Z"),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.createdAtIsos).containsExactly("2026-07-14T10:00:00Z")
+    }
+
+    @Test
+    fun a_blank_created_at_produces_no_timestamp() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")), createdAtIso = "")),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.createdAtIsos).containsExactly(null as String?)
+    }
+
+    @Test
+    fun a_created_at_is_trimmed_of_surrounding_whitespace() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1")), createdAtIso = "  2026-07-14T10:00:00Z  "),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.createdAtIsos).containsExactly("2026-07-14T10:00:00Z")
+    }
+
+    @Test
+    fun author_and_timestamp_align_positionally_with_image_urls_across_messages() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble(
+                    "m1",
+                    listOf(img("a1", "u1"), img("a2", "u2")),
+                    senderName = "Alice",
+                    createdAtIso = "2026-07-14T09:00:00Z",
+                ),
+                bubble("m2", listOf(img("a3", "u3"))),
+                bubble(
+                    "m3",
+                    listOf(img("a4", "u4")),
+                    senderName = "Bob",
+                    createdAtIso = "2026-07-14T11:00:00Z",
+                ),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "u2", "u3", "u4").inOrder()
+        assertThat(gallery.senderNames).containsExactly("Alice", "Alice", null, "Bob").inOrder()
+        assertThat(gallery.createdAtIsos)
+            .containsExactly(
+                "2026-07-14T09:00:00Z",
+                "2026-07-14T09:00:00Z",
+                null,
+                "2026-07-14T11:00:00Z",
+            )
+            .inOrder()
+    }
+
+    @Test
+    fun a_deleted_message_contributes_no_author_or_timestamp() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble(
+                    "m1",
+                    listOf(img("a1", "u1")),
+                    senderName = "Alice",
+                    createdAtIso = "2026-07-14T09:00:00Z",
+                ),
+                bubble(
+                    "m2",
+                    listOf(img("a2", "u2")),
+                    isDeleted = true,
+                    senderName = "Ghost",
+                    createdAtIso = "2026-07-14T10:00:00Z",
+                ),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.senderNames).containsExactly("Alice")
+        assertThat(gallery.createdAtIsos).containsExactly("2026-07-14T09:00:00Z")
+    }
+
+    @Test
+    fun the_author_and_timestamp_lists_are_always_as_long_as_the_image_urls() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble(
+                    "m1",
+                    listOf(img("a1", "u1"), img("a2", "u2")),
+                    senderName = "Alice",
+                    createdAtIso = "2026-07-14T09:00:00Z",
+                ),
+                bubble("m2", listOf(img("a3", "u3"))),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.senderNames).hasSize(gallery.imageUrls.size)
+        assertThat(gallery.createdAtIsos).hasSize(gallery.imageUrls.size)
+    }
+
+    @Test
+    fun an_empty_gallery_has_no_author_or_timestamp() {
+        val gallery = ConversationMediaGallery.of(emptyList(), messageId = "m1", imageIndex = 0)
+
+        assertThat(gallery.senderNames).isEmpty()
+        assertThat(gallery.createdAtIsos).isEmpty()
     }
 }
