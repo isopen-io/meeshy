@@ -1,5 +1,41 @@
 # Progress — state & what to do next
 
+> On 2026-07-14 **ephemeral burned/expired transition** landed (slice `chat-ephemeral-burned-transition`,
+> feature-parity §Chat "Ephemeral (self-destruct) messages … burned/expired"). The countdown badge slice
+> (`chat-ephemeral-countdown`) surfaces the remaining time via `EphemeralCountdownBadge`, but when the timer
+> reached `Expired` the Android bubble kept showing its content — a real parity gap: iOS
+> `ThemedMessageBubble.body` dispatches `content.kind` and renders `EmptyView` (the bubble disappears with
+> `opacity 0` + `scaleEffect 0.8`) once `isEphemeralExpired`, checked AFTER `.deleted`. This slice ports that
+> dispatch as a **pure** decision and wires the real Compose collapse. **Ships (`:core:model`):**
+> `BubbleRenderKind.resolve(isDeleted, ephemeral): Kind` — `isDeleted` ⇒ `Kind.Deleted` FIRST (server authority
+> wins; a deleted-and-expired message keeps its "Message deleted" tombstone, mirroring iOS checking `.deleted`
+> before the ephemeral arm), else `EphemeralLifecycle.State.Expired` ⇒ `Kind.EphemeralExpired` (the bubble
+> collapses), else `Running`/`None` ⇒ `Kind.Standard`; `Kind.isEphemeralExpired` is the single hide predicate.
+> **+8 tests** (live+no-expiry→Standard, live+running→Standard, live+fractional-running→Standard,
+> live+expired→EphemeralExpired, deleted+none→Deleted, deleted+running→Deleted, deleted+expired→Deleted
+> [precedence guard], isEphemeralExpired truth-table). **Mutation check (RED proof):** removing the
+> `EphemeralExpired` arm failed **exactly 1** test (`resolve_liveMessageExpired_isEphemeralExpired`), the other
+> 7 stayed green — reverted green, behavioural not tautological. **Wired for real (`:sdk-ui`, exempt glue):**
+> `rememberBubbleRenderKind(isDeleted, expiresAtIso)` ticks `EphemeralLifecycle.evaluate` each second (same SSOT
+> `isoToEpochMillisOrNull` parse + `EphemeralLifecycle` as `EphemeralCountdownBadge`, in lock-step; a deleted
+> message resolves without ever reading the clock); `MessageBubble` wraps the whole bubble in an
+> `AnimatedVisibility(visible = !renderKind.isEphemeralExpired, exit = fadeOut() + scaleOut(0.8f) +
+> shrinkVertically())` — parity with iOS's burn-away — and the caller `modifier` moves to the wrapper. Default
+> `expiresAtIso = null` → never expired → **zero behaviour change for every existing caller**; a deleted
+> message stays visible and renders its existing tombstone (only the un-deleted-expired case collapses).
+> **Verification:** full `gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL in 5m 24s** (APK
+> assembles; every module unit suite green). Built with the container's system Gradle 8.14.3 + UTF-8-daemon
+> recipe (wrapper distribution egress-blocked). Reviewer **PASS** (diff `apps/android` only — `:core:model`
+> [`BubbleRenderKind`], `:sdk-ui` [`rememberBubbleRenderKind` + `MessageBubble` wrap], tests, tracking docs;
+> **SDK purity** — the deletion∘ephemeral precedence decision is a pure `:core:model` function, the clock tick +
+> collapse animation are coverage-exempt Compose glue, no singleton reads; **SSOT** — reuses
+> `EphemeralLifecycle` + `isoToEpochMillisOrNull`, nothing re-declared; **UX/colour coherence** — the burn-away
+> fade+scale mirrors iOS, a self-destruct message vanishes naturally; **no coverage floor lowered, no test
+> weakened**). **Next slice:** the composer **EffectsPickerView** sheet (the still-pending duration picker that
+> lets the composer choose the ephemeral duration + visual effects, passing the built `MessageEffects` to
+> `sendOptimistic`) OR the **blurred / view-once** lifecycle (tap-to-reveal fog + one-shot reveal, port iOS
+> `BubbleBlurRevealController` + the `.burned` view-once tombstone `BubbleBurnedView`).
+
 > On 2026-07-14 **PR #1950 `chat-ephemeral-countdown` MERGED** (squash `fc94118`): the prior CI-watch note is
 > resolved — the translator CI flake cleared, run #7283 went green, and the PR squash-merged to `main`. This run
 > opened with rule #0 (merge the open iteration PR first), so `main` now carries the ephemeral countdown badge.
