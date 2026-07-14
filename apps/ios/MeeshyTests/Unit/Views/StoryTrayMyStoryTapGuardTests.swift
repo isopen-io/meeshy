@@ -46,4 +46,30 @@ final class StoryTrayMyStoryTapGuardTests: XCTestCase {
             "onViewMyStory() ne doit plus être appelé directement au tap simple — réservé au menu contextuel « Voir ma story »."
         )
     }
+
+    /// Régression trouvée en revue de code : `PinnedStoryTrailBand` (le band
+    /// épinglé qui remplace la grande trail une fois le header scrollé) avait
+    /// sa propre logique de tap sur l'anneau « ma story », toujours câblée
+    /// sur la lecture directe (`presentStory`) — incohérent avec la directive
+    /// appliquée à `MyStoryButton` selon la position de scroll.
+    func test_pinnedStoryTrailBand_ownGroupRing_opensListNotDirectPlayback() throws {
+        let trayViewSource = try source("Meeshy/Features/Main/Views/StoryTrayView.swift")
+
+        guard let ownGroupRange = trayViewSource.range(of: "if let ownGroup {") else {
+            XCTFail("PinnedStoryTrailBand.band doit garder un bloc `if let ownGroup { ... }`")
+            return
+        }
+        let end = trayViewSource.index(ownGroupRange.lowerBound, offsetBy: 300, limitedBy: trayViewSource.endIndex)
+            ?? trayViewSource.endIndex
+        let ownGroupBlock = String(trayViewSource[ownGroupRange.lowerBound ..< end])
+
+        XCTAssertTrue(
+            ownGroupBlock.contains("onViewStory: { showMyStories = true }"),
+            "Le tap sur l'anneau « ma story » du band épinglé doit ouvrir la liste (showMyStories = true), pas presentStory(). Bloc lu: \(ownGroupBlock)"
+        )
+        XCTAssertFalse(
+            ownGroupBlock.contains("onViewStory: { presentStory(userId: ownGroup.id) }"),
+            "presentStory() ne doit plus être appelé directement pour son propre groupe dans le band épinglé."
+        )
+    }
 }

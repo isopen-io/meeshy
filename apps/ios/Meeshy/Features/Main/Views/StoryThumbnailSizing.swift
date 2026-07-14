@@ -2,7 +2,7 @@ import CoreGraphics
 
 /// Pure sizing helper for `MyStoryRow` thumbnails. Derives width from the
 /// story's real content aspect ratio (width / height, cf.
-/// `StoryMediaObject.aspectRatio`) instead of forcing every thumbnail into a
+/// `FeedMedia.aspectRatio`) instead of forcing every thumbnail into a
 /// fixed 9:16 frame, while keeping row height constant so the list's
 /// vertical rhythm never varies.
 enum StoryThumbnailSizing {

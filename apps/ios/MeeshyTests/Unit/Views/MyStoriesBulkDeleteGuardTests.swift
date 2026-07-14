@@ -35,7 +35,7 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
             XCTFail("MyStoriesView doit définir bulkDelete()")
             return
         }
-        let end = viewSource.index(funcRange.lowerBound, offsetBy: 500, limitedBy: viewSource.endIndex)
+        let end = viewSource.index(funcRange.lowerBound, offsetBy: 700, limitedBy: viewSource.endIndex)
             ?? viewSource.endIndex
         let block = String(viewSource[funcRange.lowerBound ..< end])
 
@@ -43,14 +43,32 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
             block.contains("await viewModel.deleteStory(storyId: id)"),
             "bulkDelete() doit réutiliser StoryViewModel.deleteStory(storyId:) en boucle, pas introduire une nouvelle méthode réseau. Bloc lu: \(block)"
         )
+        XCTAssertTrue(
+            block.contains("selectedIDs.subtract(ids)"),
+            "bulkDelete() doit retirer uniquement les ids traités (selectedIDs.subtract(ids)), pas selectedIDs.removeAll() — sinon une story sélectionnée pendant les appels réseau en cours est effacée en silence. Bloc lu: \(block)"
+        )
     }
 
-    func test_myStoryRow_selectionCircle_hasAccessibilityLabel() throws {
+    /// L'état de sélection est transmis à VoiceOver via la trait de la ligne
+    /// (même pattern que `NewConversationView`) — le glyphe de sélection
+    /// reste décoratif, jamais porteur de son propre label.
+    func test_myStoryRow_selection_conveyedViaRowTrait_notGlyphLabel() throws {
         let viewSource = try source("Meeshy/Features/Main/Views/MyStoriesView.swift")
 
         XCTAssertTrue(
-            viewSource.contains(".accessibilityLabel(isSelected"),
-            "Le cercle de sélection doit porter un accessibilityLabel qui change avec isSelected."
+            viewSource.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"),
+            "MyStoryRow doit porter .accessibilityAddTraits(isSelected ? .isSelected : []) sur la ligne."
+        )
+        guard let circleRange = viewSource.range(of: "private var selectionCircle: some View {") else {
+            XCTFail("MyStoryRow doit définir selectionCircle")
+            return
+        }
+        let end = viewSource.index(circleRange.lowerBound, offsetBy: 320, limitedBy: viewSource.endIndex)
+            ?? viewSource.endIndex
+        let circleBlock = String(viewSource[circleRange.lowerBound ..< end])
+        XCTAssertTrue(
+            circleBlock.contains(".accessibilityHidden(true)"),
+            "Le glyphe de sélection doit être décoratif (.accessibilityHidden(true)) — l'état est porté par la ligne. Bloc lu: \(circleBlock)"
         )
     }
 }

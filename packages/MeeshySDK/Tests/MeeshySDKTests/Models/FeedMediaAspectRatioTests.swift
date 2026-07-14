@@ -32,4 +32,9 @@ struct FeedMediaAspectRatioTests {
     func zeroHeight() {
         #expect(media(width: 1080, height: 0).aspectRatio == nil)
     }
+
+    @Test("zero width returns nil, not a false 0.0 ratio")
+    func zeroWidth() {
+        #expect(media(width: 0, height: 1920).aspectRatio == nil)
+    }
 }

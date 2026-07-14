@@ -622,6 +622,10 @@ struct PinnedStoryTrailBand: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
+    /// Directive user 2026-07-14 : le tap sur son propre anneau ouvre
+    /// toujours la liste de gestion, même depuis le band épinglé replié —
+    /// même comportement que `MyStoryButton` dans la grande trail.
+    @State private var showMyStories = false
 
     // Layout-derived: the full trail (120pt + 8 top pad) sits under the 64pt
     // expanded header and is fully hidden behind the 44pt collapsed header after
@@ -685,6 +689,33 @@ struct PinnedStoryTrailBand: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                 }
+                .sheet(isPresented: $showMyStories) {
+                    MyStoriesView(
+                        viewModel: viewModel,
+                        userId: currentUserId,
+                        statusViewModel: statusViewModel,
+                        onOpen: { story in
+                            showMyStories = false
+                            let coordinator = storyViewerCoordinator
+                            let uid = currentUserId
+                            let postId = story.id
+                            // Laisse la sheet se fermer avant le fullScreenCover
+                            // root (le coordinator présente au niveau RootView).
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(350))
+                                coordinator.present(StoryViewerRequest(
+                                    id: uid, singleGroup: true, postId: postId))
+                            }
+                        },
+                        onCreateStory: {
+                            showMyStories = false
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(350))
+                                viewModel.showStoryComposer = true
+                            }
+                        }
+                    )
+                }
         }
     }
 
@@ -704,7 +735,7 @@ struct PinnedStoryTrailBand: View {
                     StoryRingCell(
                         group: ownGroup,
                         context: .storyTrayCompact,
-                        onViewStory: { presentStory(userId: ownGroup.id) },
+                        onViewStory: { showMyStories = true },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) }
                     )
                     .zoomTransitionSource(id: ownGroup.id, in: zoomNamespace)

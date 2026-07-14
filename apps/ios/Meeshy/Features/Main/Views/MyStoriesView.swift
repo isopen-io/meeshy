@@ -33,7 +33,6 @@ struct MyStoriesView: View {
     @State private var isReposting = false
     @StateObject private var exportViewModel = StoryExportShareViewModel()
 
-    /// Mode sélection multiple (suppression groupée). Directive user 2026-07-14.
     @State private var isSelecting = false
     @State private var selectedIDs: Set<String> = []
     @State private var isBulkDeleteConfirming = false
@@ -176,14 +175,14 @@ struct MyStoriesView: View {
     // MARK: - Row tap
 
     private func handleRowTap(_ story: StoryItem) {
-        if isSelecting {
-            if selectedIDs.contains(story.id) {
-                selectedIDs.remove(story.id)
-            } else {
-                selectedIDs.insert(story.id)
-            }
-        } else {
+        guard isSelecting else {
             onOpen(story)
+            return
+        }
+        if selectedIDs.contains(story.id) {
+            selectedIDs.remove(story.id)
+        } else {
+            selectedIDs.insert(story.id)
         }
     }
 
@@ -204,6 +203,8 @@ struct MyStoriesView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(.ultraThinMaterial)
+        .accessibilityLabel(String(localized: "story.mine.delete.selected",
+                                    defaultValue: "Supprimer (\(selectedStoryIDs.count))"))
         .accessibilityHint(String(localized: "story.mine.delete.selected.hint",
                                    defaultValue: "Supprime définitivement les stories cochées"))
     }
@@ -267,8 +268,11 @@ struct MyStoriesView: View {
                 if !ok { failures += 1 }
             }
             await MainActor.run {
-                selectedIDs.removeAll()
-                isSelecting = false
+                // Retire uniquement les ids traités : si l'utilisateur a
+                // sélectionné une nouvelle story pendant les appels réseau,
+                // cette sélection survit au lieu d'être effacée en silence.
+                selectedIDs.subtract(ids)
+                if selectedIDs.isEmpty { isSelecting = false }
                 if failures == 0 {
                     FeedbackToastManager.shared.showSuccess(
                         String(localized: "story.mine.delete.selected.success", defaultValue: "Stories supprimées"))
@@ -311,8 +315,16 @@ private struct MyStoryRow: View {
     let story: StoryItem
     let accentColor: Color
     let isDark: Bool
-    var isSelecting: Bool = false
-    var isSelected: Bool = false
+    let isSelecting: Bool
+    let isSelected: Bool
+
+    init(story: StoryItem, accentColor: Color, isDark: Bool, isSelecting: Bool = false, isSelected: Bool = false) {
+        self.story = story
+        self.accentColor = accentColor
+        self.isDark = isDark
+        self.isSelecting = isSelecting
+        self.isSelected = isSelected
+    }
 
     /// URL brute (résolue en interne par `CachedAsyncImage` via `MeeshyConfig`).
     private var thumbnailURLString: String? {
@@ -344,24 +356,18 @@ private struct MyStoryRow: View {
             }
         }
         .padding(.vertical, 4)
+        // Coche/décoche transmise à VoiceOver via la trait de la ligne — le
+        // glyphe de sélection reste décoratif (même pattern que
+        // NewConversationView.userRow, cf. son commentaire "Selection state
+        // is conveyed to VoiceOver by the row's `.isSelected` trait").
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var selectionCircle: some View {
-        Circle()
-            .strokeBorder(accentColor, lineWidth: isSelected ? 0 : 1.5)
-            .background(Circle().fill(isSelected ? accentColor : Color.clear))
-            .overlay {
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
-                }
-            }
-            .frame(width: 22, height: 22)
-            .accessibilityLabel(isSelected
-                ? String(localized: "story.mine.selected", defaultValue: "Sélectionné")
-                : String(localized: "story.mine.notSelected", defaultValue: "Non sélectionné"))
-            .accessibilityAddTraits(.isButton)
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 22))
+            .foregroundColor(isSelected ? accentColor : Color.secondary.opacity(0.4))
+            .accessibilityHidden(true)
     }
 
     @ViewBuilder

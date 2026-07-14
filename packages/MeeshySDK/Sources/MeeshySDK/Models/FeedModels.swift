@@ -66,9 +66,10 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     public var translatedAudios: [MessageTranslatedAudio]
 
     /// Ratio largeur/hauteur dérivé de `width`/`height`. `nil` si l'un des
-    /// deux est absent ou si `height` est 0 (évite une division par zéro).
+    /// deux est absent ou si l'un des deux vaut 0 (évite une division par
+    /// zéro et un faux ratio 0.0 pour une largeur nulle/corrompue).
     public var aspectRatio: Double? {
-        guard let width, let height, height > 0 else { return nil }
+        guard let width, let height, width > 0, height > 0 else { return nil }
         return Double(width) / Double(height)
     }
 
