@@ -293,7 +293,13 @@ public fun MessageBubble(
                     .fillMaxWidth()
                     .padding(top = MeeshySpacing.xs),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                ) {
+                    if (!content.isDeleted) {
+                        EphemeralCountdownBadge(expiresAtIso = content.expiresAtIso)
+                    }
                     if (content.isStarred && !content.isDeleted) {
                         Icon(
                             imageVector = Icons.Filled.Bookmark,

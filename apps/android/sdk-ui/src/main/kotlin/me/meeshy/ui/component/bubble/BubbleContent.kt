@@ -161,6 +161,7 @@ public data class BubbleContent(
     val locations: List<BubbleLocation> = emptyList(),
     val audios: List<BubbleAudio> = emptyList(),
     val emojiOnlyCount: Int = 0,
+    val expiresAtIso: String? = null,
     val pinnedAtIso: String? = null,
     val isForwarded: Boolean = false,
     val isStarred: Boolean = false,

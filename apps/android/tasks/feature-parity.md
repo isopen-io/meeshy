@@ -640,7 +640,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       italic "Transféré/Forwarded" chip with the same accent-coherent forward glyph as the forward
       action (`Icons.AutoMirrored.Filled.Send`). **Pending:** edit-history viewer (needs the gateway
       edit-history endpoint surfaced on Android).
-- [ ] Ephemeral (self-destruct) messages with duration picker + countdown badges
+- [◐] Ephemeral (self-destruct) messages with duration picker + countdown badges
+      — **countdown badge done** (`chat-ephemeral-countdown` 2026-07-14 : la logique pure
+      `EphemeralLifecycle` (`:core:model`) porte EXACTEMENT `BubbleEphemeralLifecycle`
+      (`BubbleEphemeralLifecycle.swift`) — `evaluate(expiresAt, now)` → `State.None`
+      (pas d'expiry) / `State.Expired` (`remaining <= 0`, borne incluse) / `State.Running(
+      remainingSeconds)` (fractionnel, miroir de `TimeInterval`) ; `format(remaining)` rend
+      le shape compact `7s` / `45s` / `1m 05s` / `2h 03m` (sub-10s = secondes brutes,
+      troncature vers zéro, négatif clampé à `0s` ; bande minute `Xm YYs` ; bande heure
+      `Xh YYm`, secondes droppées). +20 tests, preuve RED par mutation (`<= 0.0` → `< 0.0`
+      casse exactement `evaluate_deadlineExactlyNow_isExpired`). Câblé pour de vrai :
+      `BubbleContent` gagne `expiresAtIso: String?` (peuplé par `BubbleContentBuilder`
+      depuis `ApiMessage.expiresAt`, suppress-si-supprimé comme `pinnedAtIso`), et le
+      composable `EphemeralCountdownBadge` (`:sdk-ui`) tick chaque seconde et rend une
+      capsule flamme + timer monospace en `MeeshyPalette.Error` (parité `BubbleEphemeralBadge`)
+      dans la meta-row de la bulle, masquée quand None/Expired. **Pending :** le duration
+      picker (partie de l'`EffectsPickerView` non encore construite) + le passage burned quand
+      Expired.
 - [ ] Blurred ("tap to reveal") + view-once messages with fog effect
 - [◐] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
       — picker sheet + cross-platform bitfield encoding. **Wire contract + resolver done**

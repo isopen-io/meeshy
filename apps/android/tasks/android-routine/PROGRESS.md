@@ -1,5 +1,65 @@
 # Progress — state & what to do next
 
+> ⚠ **CI watch (2026-07-14, PR #1950 `chat-ephemeral-countdown`):** the slice is code-complete and locally
+> green (full `gradle assembleDebug testDebugUnitTest` PASS, reviewer PASS, diff `apps/android` only), but the
+> monorepo CI job **"Test Python (translator)"** is failing at its "Run tests with coverage (80% minimum)"
+> step. This is **unrelated to the slice** — the diff touches zero Python. Evidence it broke repo-wide, not by
+> this change: `main` HEAD (`663f9fb2`) passed that exact translator step at **12:47 UTC today** (~8.5 min), yet
+> two PR runs at 14:30 and 14:41 UTC **failed** it after only ~6 min — i.e. the translator suite regressed
+> repo-wide sometime after 12:47 (most likely a Python transitive-dependency drift, since deps install fresh
+> each run, or a flaky/coverage-sensitive test). Fixing it requires touching `services/translator` (Python),
+> which is **outside the apps/android-only merge gate**, so it cannot be fixed from within this slice. Per the
+> hard rule "never merge past red CI", the PR is **left open** pending either (a) a green retry (if the failure
+> is flaky) or (b) a repo-wide translator fix landing on `main` from an out-of-scope change. Retries attempted:
+> 2 empty-commit re-triggers (a 3rd in flight at time of writing). If it stays red, the slice is ⚠ **blocked on
+> external CI** — do NOT force-merge; escalate. Logs were un-downloadable (integration 404), so the exact
+> failing test could not be captured from here.
+
+> On 2026-07-14 **ephemeral (self-destruct) countdown badge** landed (slice `chat-ephemeral-countdown`,
+> feature-parity §Chat "Ephemeral (self-destruct) messages … countdown badges"). The send-path encoder
+> (slice `chat-message-effects-send-encoding`) already ships a concrete `expiresAt = now + duration` on the
+> outgoing wire; nothing yet consumed it on the *receive* side to show the recipient how long a message has
+> before it burns. iOS's `BubbleEphemeralLifecycle` derives the countdown state and formats the label; a
+> `BubbleEphemeralController` ticks a `Timer.publish`; `BubbleEphemeralBadge` renders a flame+timer capsule.
+> This slice ports the **pure** derivation/formatting and wires a real Compose consumer. **Ships (`:core:model`):**
+> `EphemeralLifecycle.evaluate(expiresAt: Instant?, now: Instant): State` — `State.None` when there's no
+> deadline, `State.Expired` once `remaining <= 0` (boundary INCLUSIVE — a deadline exactly at `now` is
+> expired, mirroring iOS `remaining <= 0 ? .expired`), else `State.Running(remainingSeconds)` with the
+> fractional seconds (iOS `TimeInterval`, so 1.5s survives as 1.5). `EphemeralLifecycle.format(remaining:
+> Double): String` — the compact `7s` / `45s` / `1m 05s` / `2h 03m` shape: sub-10s shows the raw integer
+> seconds (`.toInt()` truncates toward zero, negative clamps to `0s`), the minute band `%dm %02ds`, the hour
+> band `%dh %02dm` (seconds dropped once hours appear). All maths are pure/off-clock; only the tick reads the
+> wall clock. **+20 tests** (evaluate: no-expiry→None, future→Running(remaining), sub-second fractional
+> remaining preserved, deadline==now→Expired, past→Expired; format: 0→"0s", 7→"7s", 9.9→"9s" truncated,
+> −42→"0s" clamped, 10/45/59→seconds band, 60→"1m 00s", 65→"1m 05s", 125→"2m 05s", 3599→"59m 59s", 3600→"1h
+> 00m", 7380→"2h 03m", 3661→"1h 01m" seconds-dropped; evaluate→format round-trip). **Mutation check (RED
+> proof):** flipping the boundary `remaining <= 0.0` → `remaining < 0.0` failed **exactly 1** test
+> (`evaluate_deadlineExactlyNow_isExpired`), the other 19 stayed green — reverted green, behavioural not
+> tautological. **Wired for real (no dead ends, `:sdk-ui`):** `BubbleContent` gains `expiresAtIso: String? =
+> null` (default → badge renders nothing → zero behaviour change for every existing caller); `BubbleContentBuilder`
+> populates it from `ApiMessage.expiresAt` with the same deleted-tombstone suppress rule as `pinnedAtIso`
+> (`if (isDeleted) null else message.expiresAt?.trim()?.ifBlank { null }`); the `EphemeralCountdownBadge`
+> composable parses the ISO via the shared `isoToEpochMillisOrNull` (SSOT), ticks each second via
+> `produceState` + `delay(1_000)` (stops the loop on Expired), and renders a flame (`Icons.Filled.LocalFireDepartment`)
+> + monospaced timer in `MeeshyPalette.Error` inside a pill with an error-tinted fill + hairline stroke —
+> parity with iOS `BubbleEphemeralBadge` — placed in the bubble meta-row's left badge group next to
+> starred/translated/edited; it returns early (renders nothing) for None/Expired. **Verification:** full
+> `gradle assembleDebug testDebugUnitTest` → BUILD SUCCESSFUL (943 tasks, APK assembles, every module's unit
+> suite green). Built with the container's system Gradle 8.14.3 + the UTF-8-daemon recipe (wrapper
+> distribution egress-blocked). Reviewer **PASS** (diff `apps/android` only — `:core:model`
+> [`EphemeralLifecycle`], `:sdk-ui` [`EphemeralCountdownBadge` + `BubbleContent.expiresAtIso` +
+> `BubbleContentBuilder` + `MessageBubble` meta-row], tests, `feature-parity.md`, routine docs; **SDK purity**
+> — the countdown derivation/formatting is a pure stateless object in `:core:model`, the badge is thin
+> coverage-exempt Compose glue reading the wall clock, no singleton reads; **SSOT** — reuses
+> `isoToEpochMillisOrNull` for ISO parsing, nothing re-declared; **UX/colour coherence** — the flame+timer uses
+> the semantic `Error` colour (a self-destruct warning), monospaced timer, capsule matching the reaction-chip
+> radius; **instant-app** — the badge appears immediately from the cached `expiresAt`; **no coverage floor
+> lowered, no test weakened**). **Next slice:** the **burned/expired transition** (when `EphemeralLifecycle`
+> reaches `Expired`, the bubble should flip to the deleted/burned tombstone path — a pure `BubbleContentKind`
+> decision + wiring) OR the Compose **EffectsPickerView** sheet (the still-pending duration picker that lets
+> the composer choose the ephemeral duration, passing the built `MessageEffects` to `sendOptimistic`) OR the
+> **blurred / view-once** lifecycle (tap-to-reveal fog + one-shot reveal, port iOS `BubbleBlurRevealController`).
+
 > On 2026-07-14 **message-effects render-plan + persistent treatment layer** landed (slice
 > `chat-message-effects-render-plan`, feature-parity §Chat "Message visual effects" — the consume/render side.
 > The resolver decodes a received message's wire fields into a `MessageEffects`; the encoder ships the composer
