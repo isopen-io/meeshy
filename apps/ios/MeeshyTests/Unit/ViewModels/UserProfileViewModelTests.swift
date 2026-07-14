@@ -12,16 +12,16 @@ final class UserProfileViewModelTests: XCTestCase {
 
     // MARK: - Lifecycle
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         mockAuthManager = MockAuthManager()
         mockBlockService = MockBlockService()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         mockAuthManager = nil
         mockBlockService = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory

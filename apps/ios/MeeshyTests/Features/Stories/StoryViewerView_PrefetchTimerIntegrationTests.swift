@@ -78,7 +78,7 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
         let group = makeGroup(stories: stories)
         var presented = true
         let binding = Binding(get: { presented }, set: { presented = $0 })
-        var view = StoryViewerView(
+        let view = StoryViewerView(
             viewModel: StoryViewModel(),
             groups: [group],
             currentGroupIndex: 0,

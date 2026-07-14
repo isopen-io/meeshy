@@ -17,11 +17,11 @@ final class MediaLifecycleBridgeTests: XCTestCase {
         return engine
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ConversationAudioCoordinator.testResetShared()
         PlaybackCoordinator.shared.testStopAllProbe = nil
         MediaSessionCoordinator.shared.testProbe = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func test_prepareForBackground_whileCoordinatorPlaying_doesNotCallStopAll() async {

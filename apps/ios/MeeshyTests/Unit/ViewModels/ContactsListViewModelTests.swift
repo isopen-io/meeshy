@@ -62,7 +62,7 @@ final class ContactsListViewModelTests: XCTestCase {
     /// new contact arrives with full FriendRequestUser details (name,
     /// avatar, presence) that the cache alone can't provide.
     func test_friendshipCacheAddition_triggersBackgroundRefetch() async {
-        let (sut, friendService) = makeSUT()
+        let (_, friendService) = makeSUT()
         let newFriend = FriendRequestFixture.make(
             id: "req-new",
             senderId: "eve",

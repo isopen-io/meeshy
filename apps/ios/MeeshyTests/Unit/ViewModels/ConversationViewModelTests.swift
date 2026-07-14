@@ -37,7 +37,7 @@ final class ConversationViewModelTests: XCTestCase {
         MessageSocketManager.shared.isConnected = true
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         // Reset singleton so other test classes don't inherit a forced
         // connected state. The default for a fresh app session is false.
         MessageSocketManager.shared.isConnected = false
@@ -47,7 +47,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockReactionService = nil
         mockReportService = nil
         mockMessageSocket = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory
@@ -292,8 +292,9 @@ final class ConversationViewModelTests: XCTestCase {
         let sut = makeSUT()
         // markAsRead routes through ConversationSyncEngine + the offline outbox;
         // the .conversationMarkedRead notification is its observable contract.
+        let expectedId = testConversationId
         let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
-            (notification.object as? String) == self.testConversationId
+            (notification.object as? String) == expectedId
         }
 
         await sut.loadMessages()
@@ -1375,8 +1376,9 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_markAsRead_postsNotification() {
         let sut = makeSUT()
+        let expectedId = testConversationId
         let expectation = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
-            (notification.object as? String) == self.testConversationId
+            (notification.object as? String) == expectedId
         }
 
         sut.markAsRead()
@@ -1584,7 +1586,7 @@ final class ConversationViewModelTests: XCTestCase {
         sut.setActiveTranslation(for: "msg-1", translation: translation)
 
         let override = sut.activeTranslationOverrides["msg-1"]
-        XCTAssertNotNil(override)
+        XCTAssertTrue(sut.activeTranslationOverrides.keys.contains("msg-1"))
         XCTAssertEqual(override??.translatedContent, "Hello")
     }
 
@@ -1594,7 +1596,7 @@ final class ConversationViewModelTests: XCTestCase {
         sut.setActiveTranslation(for: "msg-1", translation: nil)
 
         let override = sut.activeTranslationOverrides["msg-1"]
-        XCTAssertNotNil(override)
+        XCTAssertTrue(sut.activeTranslationOverrides.keys.contains("msg-1"))
         XCTAssertNil(override as? MessageTranslation)
     }
 

@@ -2,6 +2,7 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
+@available(*, deprecated, message: "Exercises the deprecated OptimisticAttachmentAdopter on purpose for branch coverage")
 @MainActor
 final class OptimisticAttachmentAdopterTests: XCTestCase {
 

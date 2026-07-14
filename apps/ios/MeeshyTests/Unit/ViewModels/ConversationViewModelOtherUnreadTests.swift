@@ -41,7 +41,7 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
         MessageSocketManager.shared.isConnected = true
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         MessageSocketManager.shared.isConnected = false
         mockAuthManager = nil
         mockMessageService = nil
@@ -50,7 +50,7 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
         mockReportService = nil
         mockMessageSocket = nil
         mockSyncEngine = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func makeSUT(currentConversationUnread: Int = 0) -> ConversationViewModel {

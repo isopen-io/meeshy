@@ -235,7 +235,7 @@ final class DiscoverViewModelTests: XCTestCase {
         XCTAssertEqual(sut.searchResults.map(\.id), ["n1"])
         XCTAssertEqual(userService.searchUsersCallCount, 1)
 
-        let cacheValue = await CacheCoordinator.shared.userSearch.load(for: "discover:suggestions").value
+        let cacheValue = await CacheCoordinator.shared.userSearch.load(for: "discover:suggestions").snapshot()
         XCTAssertEqual(cacheValue?.map(\.id), ["n1"])
     }
 

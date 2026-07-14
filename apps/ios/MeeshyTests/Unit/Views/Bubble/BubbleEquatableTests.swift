@@ -299,14 +299,14 @@ final class BubbleAttachmentsEqualityTests: XCTestCase {
 @MainActor
 final class ReactionAnimationGateTests: XCTestCase {
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         ReactionAnimationGate.resetForTesting()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ReactionAnimationGate.resetForTesting()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// LE cas du bug : une reaction existante, jamais marquee, ne doit pas

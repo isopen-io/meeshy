@@ -171,7 +171,7 @@ final class RequestsViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         let cached = await CacheCoordinator.shared.friends.load(for: FriendshipCache.PersistenceKeys.friendsList)
-        let ids = (cached.value ?? []).map(\.id)
+        let ids = (cached.snapshot() ?? []).map(\.id)
         XCTAssertTrue(
             ids.contains("eve"),
             "Accepted sender must be merged into the friends_list GRDB cache so it survives an app relaunch"
@@ -399,7 +399,7 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.receivedRequests.map(\.id), ["r1"])
         XCTAssertEqual(mock.receivedRequestsCallCount, 1)
 
-        let cacheValue = await CacheCoordinator.shared.friendRequests.load(for: "requests:received").value
+        let cacheValue = await CacheCoordinator.shared.friendRequests.load(for: "requests:received").snapshot()
         XCTAssertEqual(cacheValue?.map(\.id), ["r1"])
     }
 

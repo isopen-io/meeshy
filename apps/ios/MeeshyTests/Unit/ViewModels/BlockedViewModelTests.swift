@@ -162,7 +162,7 @@ final class BlockedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.blockedUsers.map(\.id), ["n1"])
         XCTAssertEqual(mock.listBlockedUsersCallCount, 1)
 
-        let cacheValue = await CacheCoordinator.shared.blockedUsers.load(for: "blocked:list").value
+        let cacheValue = await CacheCoordinator.shared.blockedUsers.load(for: "blocked:list").snapshot()
         XCTAssertEqual(cacheValue?.map(\.id), ["n1"], "Network result must be persisted")
     }
 }

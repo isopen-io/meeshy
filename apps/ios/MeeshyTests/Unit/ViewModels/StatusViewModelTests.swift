@@ -29,13 +29,13 @@ final class StatusViewModelTests: XCTestCase {
         )
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         cancellables = nil
         sut = nil
         mockStatusService = nil
         mockSocket = nil
         mockAuthManager = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory Helpers

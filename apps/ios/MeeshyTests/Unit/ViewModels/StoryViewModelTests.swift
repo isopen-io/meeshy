@@ -38,14 +38,14 @@ final class StoryViewModelTests: XCTestCase {
         )
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         cancellables = nil
         sut = nil
         mockStoryService = nil
         mockPostService = nil
         mockSocket = nil
         mockAPI = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory Helpers

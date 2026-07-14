@@ -314,10 +314,10 @@ final class WebRTCServiceTests: XCTestCase {
 
         // webRTCClient(_:didChangeConnectionState:) is nonisolated and applies
         // the new state on a hopped @MainActor Task — yield until it drains.
-        var observed = await sut.connectionState
+        var observed = sut.connectionState
         for _ in 0..<100 where observed != .connected {
             await Task.yield()
-            observed = await sut.connectionState
+            observed = sut.connectionState
         }
         XCTAssertEqual(observed, .connected)
     }

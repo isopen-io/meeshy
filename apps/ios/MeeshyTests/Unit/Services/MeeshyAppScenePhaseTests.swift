@@ -6,10 +6,10 @@ import MeeshySDK
 @MainActor
 final class MeeshyAppScenePhaseTests: XCTestCase {
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ConversationAudioCoordinator.testResetShared()
         MediaSessionCoordinator.shared.testProbe = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func test_background_whileCoordinatorPlaying_doesNotDeactivateSession() async {

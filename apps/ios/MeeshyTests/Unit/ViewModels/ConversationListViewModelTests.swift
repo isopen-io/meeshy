@@ -2259,7 +2259,7 @@ final class ConversationListViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 200_000_000)
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
-        let cachedItems = cached.value ?? []
+        let cachedItems = cached.snapshot() ?? []
         XCTAssertTrue(cachedItems.contains(where: { $0.id == "persisted" }),
                       "loadMore must persist the merged list to the cache")
     }
@@ -2698,9 +2698,11 @@ private func makeConversationUpdatedEvent(
     let data = try! JSONSerialization.data(withJSONObject: json)
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .custom { decoder in
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let container = try decoder.singleValueContainer()
         let str = try container.decode(String.self)
-        if let date = isoFormatter.date(from: str) { return date }
+        if let date = parser.date(from: str) { return date }
         throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date")
     }
     return try! decoder.decode(ConversationUpdatedEvent.self, from: data)
