@@ -858,7 +858,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `MessageOverlayPreviewHero` Popup lifts a scaled copy of the tapped bubble above the action sheet, positioned by
       the law. Mutation-proven (swap the leading/trailing anchor branches → exactly 3 red; caught + fixed a symmetric
       full-size anchor blind spot in the first test draft — the anchor is only testable on a *scaled* preview).
-- [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
+- [~] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×) —
+      **interactive audio preview done** (slice `chat-overlay-media-transport`, 2026-07-15, +32 tests). Pure
+      `:feature:chat` `OverlayMediaTransport` — an immutable transport state machine faithfully porting iOS
+      `OverlayAudioPlayer` (the `@StateObject` behind `PreviewAudioPlayer` / `PreviewVideoPlayer` in
+      `MessageOverlayMenu.swift`): `toggle` (play→pause / different-url→reload-from-zero keeping rate / same-paused→resume),
+      `ready`/`failed`, `stop`, `seek(fraction)` (clamped `0…1`, inert until a duration is known), `skip(±5s)` (clamped
+      `0…duration`), `setRate` + a **`cycleRate`** grid walk (`0.5→0.75→1.0→1.25→1.5→2.0→wrap`, iOS's `[0.5…2.0]`),
+      `tick(current,duration)` (records duration + clamps the reported position into `[0,duration]` — surpasses iOS,
+      whose observer can momentarily overshoot the scrubber), and `onEnded` (rewind+stop). Derived read surface:
+      `percentInt`, `hasDuration`, `timeLabel(totalDurationSeconds)` (`current / total`, each `m:ss`, prefers the
+      observed duration then falls back to the attachment's declared length; `NaN`/negative → `0:00`). **Surpasses
+      iOS** on testability (the whole transport is one pure JVM-covered value type vs iOS's scattered `@Published`
+      fields), on scrubber robustness (position clamp), and on UX (a single-tap speed **chip** replaces iOS's context
+      menu). Mutation-proven (wrap fallback `RATES.first()` → `RATES.last()` → exactly the 2 wrap tests red; the other
+      30 stayed green — behavioural). Wired for real into `ChatScreen`'s `MessageActionsSheet` (exempt glue): a new
+      `OverlayMediaPreview` composable mirrors the transport onto a real `android.media.MediaPlayer` (play/pause circle,
+      accent scrubber `Slider`, `Replay5`/`Forward5` ±5s buttons, tap-to-cycle speed chip, monospace time+percent) and
+      renders above the action grid for any message carrying a playable audio attachment. **Follow-up:** real video
+      interactive preview — `BubbleContent` does not yet carry a playable video attachment, so there is nothing to drive
+      there yet (audio/voice-note is the dominant overlay case and is now interactive).
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
 - [~] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating) —
       **logic + pill UI done** (slice `chat-voice-recording-pill`, 2026-07-15, +29 tests). Pure

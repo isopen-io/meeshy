@@ -1,5 +1,53 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **the in-overlay interactive audio preview transport** landed (slice `chat-overlay-media-transport`,
+> feature-parity §Chat "In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)"). iOS drives
+> the overlay's `PreviewAudioPlayer` / `PreviewVideoPlayer` (`MessageOverlayMenu.swift`) from a private
+> `OverlayAudioPlayer` `ObservableObject` whose transport surface is scattered across `@Published` fields plus the
+> imperative `toggle` / `seek(to:)` / `skip(seconds:)` / `setRate` / periodic-observer / end-observer callbacks. Android
+> had **no interactive media preview in the overlay at all** — the long-press action sheet lifted a scaled bubble copy
+> (last slice) but offered no play/scrub/skip/speed controls. **Ships (`:feature:chat`, new `OverlayMediaTransport.kt`):**
+> a pure, immutable transport state machine gathering that whole surface into one JVM-testable value type — state
+> (`currentUrl`, `isPlaying`, `isLoading`, `progress`, `currentSeconds`, `durationSeconds`, `playbackRate`) and the
+> transitions `toggle(url)` (playing→pause / different-url→reload-from-zero keeping the chosen rate / same-paused→resume,
+> iOS's `if isPlaying { pause }` priority faithfully preserved), `ready`/`failed`, `stop` (full reset, keeps rate),
+> `seek(fraction)` (clamped `0…1`, **inert until a real duration is known**), `skip(seconds)` (clamped `0…duration`,
+> inert until known), `setRate` + **`cycleRate`** (grid walk `0.5→0.75→1.0→1.25→1.5→2.0→wrap`, off-grid-tolerant),
+> `tick(current,duration)` (records the observed duration and **clamps the reported position into `[0,duration]`** so a
+> jittery frame never overshoots the scrubber — iOS does not clamp), and `onEnded` (rewind+stop). Derived read surface:
+> `percentInt`, `hasDuration`, `timeLabel(totalDurationSeconds)` (`current / total`, each `m:ss`, prefers the observed
+> duration then falls back to the attachment's declared length; `NaN`/negative → `0:00`). **+32 tests** (idle seed;
+> toggle load/ready/failed/pause/resume/reload-keeps-rate; stop-keeps-rate; seek fraction + below/above clamps + inert-
+> before-duration; skip forward/back + both clamps + inert-before-duration; setRate; cycleRate full walk + slowest-step
+> + off-grid + at/above-fastest-wrap; tick duration/position/progress + non-positive-duration-inert + NaN-inert +
+> position-overshoot-clamp; onEnded rewind; percentInt truncation; timeLabel known/fallback/null; immutability sweep).
+> **Mutation check (RED proof):** flipping the wrap fallback `RATES.first()` → `RATES.last()` failed **exactly 2** tests
+> (the full-walk + the at-or-above-fastest-wrap), the other 30 stayed green — behavioural, not tautological. (An earlier
+> candidate mutation — the `> current` vs `>= current + 0.001f` epsilon guard — proved behaviourally equivalent because
+> the grid steps are ≥0.25 ≫ 0.001, so it was discarded for the discriminating wrap mutation.) **Wired real
+> (`:feature:chat` `ChatScreen.MessageActionsSheet`, exempt glue):** a new `OverlayMediaPreview` composable mirrors the
+> pure transport onto a real `android.media.MediaPlayer` — a `reconcile→commit` `apply()` diffs each transition to
+> load/start/pause/seek/rate the player, a 100 ms poll loop `tick`s from the live playhead, and `onPrepared` /
+> `onCompletion` / `onError` map to `ready` / `onEnded` / `failed`. The preview (play/pause accent circle, accent
+> scrubber `Slider` bound to `seek`, `Replay5`/`Forward5` ±5 s buttons, tap-to-cycle speed **chip**, monospace time +
+> percent) renders above the action grid for any long-pressed message carrying a playable audio attachment
+> (`bubble.audios.firstOrNull { it.isPlayable }`). **Surpasses iOS** on testability (one pure JVM-covered value type vs
+> scattered `@Published`), scrubber robustness (position clamp), and UX (single-tap speed chip replaces iOS's context
+> menu). **Pending follow-up** (documented in feature-parity): real **video** interactive preview — `BubbleContent` has
+> no playable-video attachment yet, so there is nothing to drive there; audio/voice-note is the dominant overlay case
+> and is now interactive. **Verification:** `:app:assembleDebug :feature:chat:testDebugUnitTest --max-workers=3` under
+> the UTF-8 daemon recipe → **BUILD SUCCESSFUL in 3m 18s**, APK assembles + 32/32 new suite green (full-module chat
+> suite green). The full `testDebugUnitTest` showed the **known, documented `:sdk-core` DataStore flake**
+> (`PrivacyPreferencesStoreTest`, a module this slice never touches) — green in isolation, exactly as NOTES records.
+> Reviewer **PASS** (diff `apps/android/feature/chat` only — new `OverlayMediaTransport` + `OverlayMediaPreview` +
+> `ChatScreen` wiring + 5 `chat_media_*` strings ×4 locales + tracking docs; **SDK purity** — the transport is a chat
+> product rule beside `VoiceRecordingSession`/`MessageOverlayDragLaw`, takes bare `String`/`Double`/`Float`, no UI/media
+> types; **SSOT** — one `OverlayMediaTransport`, consumed by the real preview; **UX/colour coherence** — accent-tinted
+> controls, natural tap-to-play / drag-to-scrub / tap-to-cycle-speed, the action sheet owns dismissal so no dead end;
+> **no coverage floor lowered, no test weakened**). **Next slice:** move down §Chat — the **universal composer**
+> (attachments / location / camera entry points) or the **OpenGraph link-preview cards + in-app browser**, or feed the
+> voice-recording pill with real `MediaRecorder` amplitude capture (the deferred follow-up from `chat-voice-recording-pill`).
+
 > On 2026-07-15 **the voice-recording pill logic + UI** landed (slice `chat-voice-recording-pill`,
 > feature-parity §Chat "Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration
 > gating)"). iOS drives the composer's voice pill from recording state scattered across

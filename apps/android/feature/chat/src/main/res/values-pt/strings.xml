@@ -113,4 +113,9 @@
     </plurals>
     <string name="image_saved_to_gallery">Guardado na galeria</string>
     <string name="image_save_failed">Falha ao guardar na galeria</string>
+    <string name="chat_media_play">Reproduzir</string>
+    <string name="chat_media_pause">Pausar</string>
+    <string name="chat_media_skip_back">Recuar 5 segundos</string>
+    <string name="chat_media_skip_forward">Avançar 5 segundos</string>
+    <string name="chat_media_playback_speed">Velocidade de reprodução</string>
 </resources>
