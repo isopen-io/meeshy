@@ -787,9 +787,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       depuis `content.effects` (le param `effects` reste un override preview/test) — un message reçu portant
       un bit glow/pulse/rainbow **rend enfin** son traitement, ce qui n'arrivait jamais avant (le call-site
       `ChatScreen` ne passait aucun `effects`). +4 tests builder (plain → aucun effet, glow → glow, view-once →
-      aucun effet visuel, supprimé+glow → aucun effet). Reste : le rendu des one-shot appearance (transforms +
-      overlays particules confetti/fireworks + sparkle canvas — le plan les énumère déjà, la couche se branche
-      sans toucher le planner).
+      aucun effet visuel, supprimé+glow → aucun effet). **One-shot appearance particles done**
+      (`chat-appearance-particle-field` 2026-07-15 : les SSOT purs `ConfettiFieldGenerator`/
+      `FireworksFieldGenerator.generate(count, width, height, seed): ParticleField` (`:core:model`) portent
+      la géométrie des overlays iOS `ConfettiOverlay`/`FireworksOverlay` — confetti = 30 rectangles qui pleuvent
+      de `y=-10` à `y=height+20` avec dérive ±30, fireworks = 20 étincelles en burst radial depuis le centre,
+      angle `i·360/count`, distance 40..80. **Mieux que l'iOS** : *seedé* — l'iOS re-tire `CGFloat.random` à
+      chaque `onAppear` (le confetti saute entre apparitions), le seed rend le burst reproductible et testable.
+      `Particle.xAt/yAt(progress)` interpole start→end (clamp 0..1) ; `AppearanceParticleFields.forEffect`
+      mappe l'effet→field (transforms shake/zoom/explode/waoo → `null`). +28 tests, preuve RED par mutation
+      (swap cos/sin dans fireworks casse exactement `fireworksBurstFliesEastSouthWestNorthForFourSparks`, les
+      26 autres verts). Câblé pour de vrai : `Modifier.messageEffects` gagne un layer `appearanceParticles`
+      (glue Compose exempte : anime un progress one-shot `0→1`, peint le field via `drawWithContent`, fade en
+      queue) gaté par `plan.appearance` (donc par `hasPlayedAppearance`) ; `MessageBubble` passe un
+      `appearanceSeed = messageId.hashCode()` stable. Reste : le rendu des one-shot appearance *transforms*
+      (shake/zoom/explode/waoo animent la bulle elle-même) + le sparkle canvas — le plan les énumère déjà.
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera

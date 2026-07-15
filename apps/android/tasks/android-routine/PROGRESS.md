@@ -1,5 +1,53 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **one-shot appearance particles** landed (slice `chat-appearance-particle-field`,
+> feature-parity §Chat "Message visual effects", closing the confetti/fireworks half of the last-unbuilt
+> effects layer: the render plan already enumerated `plan.appearance` (shake/zoom/explode/waoo/confetti/
+> fireworks) but **nothing rendered any of them** — the `Modifier.messageEffects` only drove the persistent
+> glow/pulse/rainbow treatments. This slice builds the pure particle geometry beneath the two iOS *overlay*
+> effects and wires them to fire for real. **Ships (`:core:model`, new file `AppearanceParticleField.kt`):**
+> `Particle` (start/end px + `colorIndex`/`size`/`rotationDegrees`, with `xAt(progress)`/`yAt(progress)` linear
+> interpolation clamped to `0..1`); `ParticleField(particles, paletteSize)`; `ConfettiFieldGenerator.generate(
+> count=30, width, height, seed)` — ports iOS `ConfettiOverlay.spawnConfetti` (rain from `y=-10` to
+> `y=height+FALL_MARGIN`, horizontal drift ±30, 7-colour palette); `FireworksFieldGenerator.generate(count=20,
+> width, height, seed)` — ports iOS `FireworksOverlay.spawnFireworks` (radial burst from centre, `angleᵢ=i·360/
+> count`, distance 40..80, 5-colour palette, screen-coords east/south/west/north); `AppearanceParticleFields.
+> forEffect(effect, …)` maps confetti/fireworks → field and the transform-only effects (shake/zoom/explode/waoo)
+> → `null`, with a derived `particleEffects` set (SSOT — derived from `forEffect` so they can't drift).
+> **Surpasses iOS** by being *seeded*: iOS re-rolls `CGFloat.random` on every `onAppear`, so the same message's
+> confetti/fireworks jump around between appearances (scroll off → on); seeding on a stable per-message value
+> makes the burst reproducible across recompositions AND unit-testable. Degenerate cases pinned: non-positive
+> `count` → empty field; negative dims → clamped to zero. **+28 tests** (Particle interp 4 — start/end/midpoint/
+> clamp; Confetti 11 — non-positive count, default-30, single, rain-envelope, start-within-width + drift-bound,
+> colorIndex+size bounds, zero-width pins left, negative-dim clamp, determinism, seed-differs; Fireworks 10 —
+> non-positive count, default-20, centre-start, even angles, E/S/W/N burst, distance-in-radius, uniform size,
+> zero-size origin, determinism, seed-differs; resolution 3 — confetti→field, fireworks→field, transforms→null;
+> particleEffects set 1). **Mutation check (RED proof):** swapping `cos`/`sin` in the fireworks endpoint failed
+> **exactly 1** test (`fireworksBurstFliesEastSouthWestNorthForFourSparks`), the other 26 stayed green — reverted
+> green, behavioural not tautological. **Wired for real (`:sdk-ui`, exempt glue):** `Modifier.messageEffects`
+> splits into a `persistentEffects` layer (unchanged glow/pulse/rainbow, its own early-return) + a new
+> `appearanceParticles` layer — resolves the particle effects from `plan.appearance` (already gated by
+> `hasPlayedAppearance`, so a played burst never replays), animates a one-shot `progress: 0f→1f`
+> (`Animatable` + `tween(1500, LinearOutSlowInEasing)`), and paints the field over the bubble via
+> `drawWithContent` (confetti = rotated rounded-rects, fireworks = round sparks; fade-out over the last fifth).
+> `MessageBubble` passes `appearanceSeed = content.messageId.hashCode().toLong()` (stable → reproducible burst).
+> A message carrying a confetti/fireworks bit **finally bursts** on appear; a bubble with no effects does zero
+> animation work (both layers early-return). **Verification:** `:core:model:testDebugUnitTest` (28/28 green,
+> mutation-proven) + `:sdk-ui:assembleDebug` green + full `assembleDebug testDebugUnitTest --max-workers=3`
+> (APK assembles; every module green except the documented `:sdk-core` DataStore disk-contention flake —
+> `PrivacyPreferencesStoreTest`/`InterfaceLanguageStoreTest` timeouts under parallel load — **re-run green in
+> isolation**, unrelated to this `:core:model`+`:sdk-ui` diff). Built with the container's system Gradle 8.14.3
+> + UTF-8-daemon recipe. Reviewer **PASS** (diff `apps/android` only — `:core:model` [new `AppearanceParticleField`],
+> `:sdk-ui` [`MessageEffectModifiers` particle layer + `MessageBubble` seed], tracking docs; **SDK purity** — the
+> spawn geometry + effect→field mapping is pure `:core:model`, the overlay is coverage-exempt Compose glue with no
+> singleton reads; **SSOT** — `particleEffects` derived from `forEffect`, the persistent layer reuses the single
+> `MessageEffectRenderPlanner.plan`; **UX/colour coherence** — fireworks palette is indigo-leaning/accent-coherent,
+> confetti mirrors iOS, no dead end; **no coverage floor lowered, no test weakened** — the persistent-treatment
+> tests + `messageEffects` callers are untouched, only extended). **Next slice:** the one-shot appearance
+> **transforms** (shake offset / zoom-in / explode scale+opacity / waoo scale+glow — iOS `ShakeEffect`/`ZoomEffect`/
+> `ExplodeEffect`/`WaooEffect`, a pure transform-spec resolver + exempt `graphicsLayer` glue) OR the **sparkle
+> canvas** (the last persistent treatment still unbuilt — iOS `SparkleEffect`'s 8-point time-driven twinkle).
+
 > On 2026-07-15 **received-message effect rendering** landed (slice `chat-bubble-effects-render`,
 > feature-parity §Chat "Message visual effects", closing the last-named gap of the effects stack: the
 > visual-treatment layer `Modifier.messageEffects` was fully built but **never fired on a real message** —
@@ -2810,7 +2858,24 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-14): `chat-gallery-save-to-gallery`** — save-to-gallery from the image viewer. Pure
+**Just shipped (2026-07-15): `chat-appearance-particle-field`** — the confetti/fireworks one-shot appearance
+overlays. Pure `:core:model` `ConfettiFieldGenerator`/`FireworksFieldGenerator.generate(count,width,height,seed):
+ParticleField` (seeded, deterministic — surpasses iOS's per-appearance re-roll) + `Particle.xAt/yAt(progress)` +
+`AppearanceParticleFields.forEffect` (confetti/fireworks→field, transforms→null); exempt `:sdk-ui`
+`Modifier.messageEffects` gains an `appearanceParticles` layer that animates a one-shot progress and paints the
+field via `drawWithContent`; `MessageBubble` seeds it on `messageId.hashCode()`. +28 tests (mutation-proof: swap
+cos/sin breaks exactly the E/S/W/N burst test). Closes the confetti/fireworks half of the effects stack.
+**Recommended next (highest value):**
+- **Appearance transforms** (shake/zoom/explode/waoo) — the sibling half of the one-shot appearance effects; a
+  pure transform-spec resolver (offset/scale/opacity/glow params iOS `MessageEffectModifiers.swift` hardcodes) +
+  exempt `graphicsLayer` glue. Closes the appearance line entirely.
+- **Sparkle canvas** — the last persistent treatment still unbuilt (iOS `SparkleEffect`: 8-point time-driven
+  twinkle over the bubble). A pure twinkle-position function (time+index → x/y/size/opacity) + exempt `Canvas`.
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
+
+---
+
+**Earlier (2026-07-14): `chat-gallery-save-to-gallery`** — save-to-gallery from the image viewer. Pure
 `:core:model` `GallerySaveTargetResolver.resolve(url, mimeHint?)` derives the MediaStore target (sanitised
 display name + real extension, resolved MIME, `Pictures/Meeshy` image / `Movies/Meeshy` video); exempt `:sdk-ui`
 `GalleryImageSaver.save` does the scoped-storage insert (Android 10+, no permission, cancellation-safe, deletes
@@ -3705,6 +3770,40 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-15 — slice `chat-appearance-particle-field` ✅ impl + reviewer PASS → PR + merge
+- **Opened with rule #0:** no open `claude/apps/android/*` PR to reconcile (only Dependabot + one iOS PR open);
+  `main` fetched clean, last Android slice `chat-bubble-effects-render` merged as **#1956**.
+- **Branch:** `claude/apps/android/chat-appearance-particle-field` (off latest `main` `eacfc6c`).
+- **What:** the confetti/fireworks one-shot appearance overlays — the render plan already enumerated
+  `plan.appearance` but nothing rendered it; only the persistent glow/pulse/rainbow treatments fired. Android port
+  of iOS `ConfettiOverlay`/`FireworksOverlay` (`MessageEffectModifiers.swift`), made deterministic/seeded.
+- **Pure core (`:core:model`, `AppearanceParticleField.kt`):** `Particle` (start/end + colorIndex/size/rotation,
+  `xAt/yAt(progress)` clamped lerp); `ParticleField`; `ConfettiFieldGenerator.generate` (rain `y=-10`→`height+20`,
+  drift ±30, 7 colours); `FireworksFieldGenerator.generate` (radial burst, `angleᵢ=i·360/count`, distance 40..80,
+  5 colours); `AppearanceParticleFields.forEffect` (confetti/fireworks→field, shake/zoom/explode/waoo→null) +
+  derived `particleEffects` set. **Surpasses iOS** by seeding on a stable per-message value → reproducible burst
+  (iOS re-rolls `random` each `onAppear`) + unit-testable. Degenerate: count≤0→empty, negative dims→clamped 0.
+- **Tests:** **+28** behavioural (`AppearanceParticleFieldTest`) — interp start/end/midpoint/clamp; confetti
+  envelope/bounds/determinism; fireworks centre/angles/E-S-W-N/radius/determinism; effect→field resolution.
+  **Mutation RED proof:** swapping `cos`/`sin` in the fireworks endpoint failed **exactly 1** test
+  (`fireworksBurstFliesEastSouthWestNorthForFourSparks`), the other 26 stayed green — reverted, behavioural.
+- **Wiring (`:sdk-ui`, exempt glue):** `Modifier.messageEffects` splits into `persistentEffects` (unchanged) +
+  `appearanceParticles` — resolves confetti/fireworks from `plan.appearance` (gated by `hasPlayedAppearance`),
+  animates one-shot `progress 0→1` (`Animatable` + `tween(1500)`), paints via `drawWithContent` (confetti =
+  rotated rounded-rects, fireworks = round sparks, fade over last fifth). `MessageBubble` seeds on
+  `messageId.hashCode()`. Both layers early-return when their effects are absent → zero work for plain bubbles.
+- **Verification:** `:core:model:testDebugUnitTest` 28/28 green (mutation-proven) + `:sdk-ui:assembleDebug` green +
+  full `gradle assembleDebug testDebugUnitTest --max-workers=3` → APK assembles, every module green **except** the
+  documented `:sdk-core` DataStore disk-contention flake (`PrivacyPreferencesStoreTest`/`InterfaceLanguageStoreTest`
+  timeouts under 8-JVM parallel load) — **re-ran green in isolation** (`--rerun-tasks`, BUILD SUCCESSFUL),
+  untouched by this `:core:model`+`:sdk-ui` diff. System Gradle 8.14.3 + UTF-8-daemon recipe.
+- **Reviewer:** **PASS** — diff `apps/android` only; SDK purity (pure spawn geometry + effect→field mapping in
+  `:core:model`, overlay is coverage-exempt Compose glue, no singleton reads); SSOT (`particleEffects` derived from
+  `forEffect`, persistent layer reuses the single `plan`); UX/colour coherence (indigo-leaning fireworks palette,
+  iOS-parity confetti, no dead end); no coverage floor lowered, no test weakened.
+- **Next:** appearance **transforms** (shake/zoom/explode/waoo) OR the **sparkle canvas** (last persistent
+  treatment).
 
 ### 2026-07-14 — slice `chat-gallery-save-to-gallery` ✅ impl + reviewer PASS → PR + merge
 - **Opened with rule #0:** the prior iteration's PR **#1950 `chat-ephemeral-countdown`** was still open; its CI
