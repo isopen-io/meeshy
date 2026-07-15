@@ -267,7 +267,7 @@ struct AudioCarouselView: View {
             )
         } else {
             Text("\(currentIndex + 1) / \(items.count)")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize + 1, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
