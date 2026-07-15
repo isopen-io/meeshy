@@ -136,4 +136,73 @@ class MessageEffectRenderPlannerTest {
         assertThat(result.persistent).containsExactly(PersistentEffect.GLOW)
         assertThat(result.isEmpty).isFalse()
     }
+
+    // MARK: - renderEffects (the effects a bubble carries into Modifier.messageEffects)
+
+    private fun renderEffects(flags: Long, isDeleted: Boolean = false, glowIntensity: Double? = null) =
+        MessageEffectRenderPlanner.renderEffects(
+            MessageEffects(flags = flags, glowIntensity = glowIntensity),
+            isDeleted = isDeleted,
+        )
+
+    @Test
+    fun renderEffects_noEffects_hasNoFlags() {
+        assertThat(renderEffects(0L).hasAnyEffect).isFalse()
+    }
+
+    @Test
+    fun renderEffects_persistentEffect_isPreserved() {
+        val result = renderEffects(MessageEffectFlags.GLOW or MessageEffectFlags.PULSE)
+        assertThat(result.has(MessageEffectFlags.GLOW)).isTrue()
+        assertThat(result.has(MessageEffectFlags.PULSE)).isTrue()
+    }
+
+    @Test
+    fun renderEffects_appearanceEffect_isPreserved() {
+        // One-shot appearance bits stay on the bubble's effects — the played-gate is
+        // resolved later, at render time, by the planner.
+        assertThat(renderEffects(MessageEffectFlags.CONFETTI).has(MessageEffectFlags.CONFETTI)).isTrue()
+    }
+
+    @Test
+    fun renderEffects_stripsLifecycleBits() {
+        // ephemeral / blurred / view-once drive the countdown, concealment and burned
+        // tombstone layers — never the visual-treatment modifier — so they are cleared.
+        val result = renderEffects(MessageEffectFlags.LIFECYCLE_MASK)
+        assertThat(result.has(MessageEffectFlags.EPHEMERAL)).isFalse()
+        assertThat(result.has(MessageEffectFlags.BLURRED)).isFalse()
+        assertThat(result.has(MessageEffectFlags.VIEW_ONCE)).isFalse()
+        assertThat(result.hasAnyEffect).isFalse()
+    }
+
+    @Test
+    fun renderEffects_glowPlusViewOnce_keepsGlowDropsLifecycle() {
+        val result = renderEffects(MessageEffectFlags.GLOW or MessageEffectFlags.VIEW_ONCE)
+        assertThat(result.has(MessageEffectFlags.GLOW)).isTrue()
+        assertThat(result.has(MessageEffectFlags.VIEW_ONCE)).isFalse()
+    }
+
+    @Test
+    fun renderEffects_preservesParametersLikeGlowIntensity() {
+        val result = renderEffects(MessageEffectFlags.GLOW, glowIntensity = 0.9)
+        assertThat(result.glowIntensity).isEqualTo(0.9)
+    }
+
+    @Test
+    fun renderEffects_deletedMessage_dropsEveryEffect() {
+        // A deleted tombstone never glows / pulses — its effects are erased regardless
+        // of what the message originally carried.
+        val result = renderEffects(
+            MessageEffectFlags.GLOW or MessageEffectFlags.CONFETTI,
+            isDeleted = true,
+            glowIntensity = 0.9,
+        )
+        assertThat(result.hasAnyEffect).isFalse()
+        assertThat(result.glowIntensity).isNull()
+    }
+
+    @Test
+    fun renderEffects_deletedWithNoEffects_isEmpty() {
+        assertThat(renderEffects(0L, isDeleted = true).hasAnyEffect).isFalse()
+    }
 }

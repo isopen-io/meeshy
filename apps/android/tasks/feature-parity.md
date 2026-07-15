@@ -773,10 +773,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `send()` stampe `pendingEffects` sur `sendOptimistic(effects=…)` (déjà plumbé jusqu'au wire outbox) puis
       désarme le composer ; `ChatComposer` gagne un bouton `AutoAwesome` accent-teinté quand des effets sont
       armés, ouvrant la `EffectsPickerSheet` (glue exempte : chips capsule accent, FlowRow, strings en/fr/es/pt).
-      +7 tests ViewModel (toggle/duration/clear/open-dismiss/send-stamp+reset/plain-send). Reste : le rendu des
-      one-shot appearance (transforms + overlays particules confetti/fireworks + sparkle canvas — le plan les
-      énumère déjà, la couche se branche sans toucher le planner), et le peuplement de `effects` depuis le
-      message reçu côté ConversationScreen (déjà décodé par `ApiMessage.effects`, reste à propager au bubble).
+      +7 tests ViewModel (toggle/duration/clear/open-dismiss/send-stamp+reset/plain-send). **Received-message
+      render effects done** (`chat-bubble-effects-render` 2026-07-15 : le SSOT pur
+      `MessageEffectRenderPlanner.renderEffects(effects, isDeleted): MessageEffects` — les effets visuels
+      (appearance + persistants) qu'une bulle porte dans `Modifier.messageEffects`, bits lifecycle strippés
+      (ephemeral/blurred/view-once pilotent le countdown / la concealment / le tombstone burned, jamais le
+      modifier de traitement visuel), tout effacé sur un tombstone supprimé (jamais de glow sur « Message
+      supprimé ») ; les paramètres — `glowIntensity`… — sont préservés. +8 tests planner, preuve RED par
+      mutation (ne plus stripper les bits lifecycle casse exactement `renderEffects_stripsLifecycleBits` +
+      `renderEffects_glowPlusViewOnce_keepsGlowDropsLifecycle`, les 6 autres verts). Câblé pour de vrai :
+      `BubbleContent` gagne `effects: MessageEffects` peuplé par `BubbleContentBuilder` (défaut vide → zéro
+      changement pour les appelants existants) ; `MessageBubble` alimente enfin `Modifier.messageEffects`
+      depuis `content.effects` (le param `effects` reste un override preview/test) — un message reçu portant
+      un bit glow/pulse/rainbow **rend enfin** son traitement, ce qui n'arrivait jamais avant (le call-site
+      `ChatScreen` ne passait aucun `effects`). +4 tests builder (plain → aucun effet, glow → glow, view-once →
+      aucun effet visuel, supprimé+glow → aucun effet). Reste : le rendu des one-shot appearance (transforms +
+      overlays particules confetti/fireworks + sparkle canvas — le plan les énumère déjà, la couche se branche
+      sans toucher le planner).
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera

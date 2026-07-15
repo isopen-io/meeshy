@@ -2,6 +2,7 @@ package me.meeshy.ui.component.bubble
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.BlurRevealLifecycle
+import me.meeshy.sdk.model.MessageEffects
 
 @Immutable
 sealed class DeliveryStatus {
@@ -169,6 +170,13 @@ public data class BubbleContent(
     val isFirstInGroup: Boolean = true,
     val isLastInGroup: Boolean = true,
     val blurReveal: BubbleBlurRevealSpec? = null,
+    /**
+     * The visual-treatment effects (glow / pulse / rainbow / one-shot appearance) this
+     * bubble renders via `Modifier.messageEffects`. Lifecycle bits are stripped and the
+     * value is empty for a deleted tombstone (see
+     * [me.meeshy.sdk.model.MessageEffectRenderPlanner.renderEffects]).
+     */
+    val effects: MessageEffects = MessageEffects(),
     /** True when this message is a view-once ("open once, then burn") message. */
     val isViewOnce: Boolean = false,
     /**
