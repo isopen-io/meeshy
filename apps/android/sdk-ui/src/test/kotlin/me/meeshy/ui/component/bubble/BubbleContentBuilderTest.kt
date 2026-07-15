@@ -1871,4 +1871,46 @@ class BubbleContentBuilderTest {
         assertThat(content.blurReveal).isNull()
     }
 
+    @Test
+    fun `a plain message carries no render effects`() {
+        val content = BubbleContentBuilder.build(message(), currentUserId = "me", preferences = french)
+
+        assertThat(content.effects.hasAnyEffect).isFalse()
+    }
+
+    @Test
+    fun `a glow message carries the glow render effect`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.GLOW.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.effects.has(MessageEffectFlags.GLOW)).isTrue()
+    }
+
+    @Test
+    fun `a view-once message carries no visual render effect`() {
+        // The lifecycle bit drives concealment, not the visual-treatment modifier.
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.VIEW_ONCE.toInt()),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.effects.has(MessageEffectFlags.VIEW_ONCE)).isFalse()
+        assertThat(content.effects.hasAnyEffect).isFalse()
+    }
+
+    @Test
+    fun `a deleted glow message carries no render effects`() {
+        val content = BubbleContentBuilder.build(
+            message(effectFlags = MessageEffectFlags.GLOW.toInt(), deletedAt = "2026-07-14T10:00:00Z"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.effects.hasAnyEffect).isFalse()
+    }
+
 }

@@ -1,5 +1,41 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **received-message effect rendering** landed (slice `chat-bubble-effects-render`,
+> feature-parity §Chat "Message visual effects", closing the last-named gap of the effects stack: the
+> visual-treatment layer `Modifier.messageEffects` was fully built but **never fired on a real message** —
+> the `MessageBubble(effects=…)` param was optional and the `ChatScreen` call-site passed nothing, so every
+> received glow/pulse/rainbow message rendered flat. This slice resolves the effects at build time and threads
+> them through. **Ships (`:core:model`):** `MessageEffectRenderPlanner.renderEffects(effects, isDeleted):
+> MessageEffects` — the pure build-time counterpart to `plan()` (which resolves the runtime `hasPlayedAppearance`
+> gate). It returns the visual-treatment effects a bubble carries into the modifier: the appearance + persistent
+> bits kept, the **lifecycle bits (ephemeral / blurred / view-once) stripped** (`flags and LIFECYCLE_MASK.inv()`
+> — those drive the countdown badge, the tap-to-reveal concealment and the burned tombstone, never the visual
+> modifier), and **everything erased when deleted** (`isDeleted → MessageEffects()` — a "Message deleted"
+> tombstone must never glow). Parameters (`glowIntensity`, …) are preserved on the copy; an all-visual bitfield
+> short-circuits to the same instance (no needless copy). **+8 planner tests** (no-effects, persistent kept,
+> appearance kept, lifecycle stripped, glow+view-once → glow-only, params preserved, deleted drops everything
+> incl. glowIntensity, deleted-empty). **Mutation check (RED proof):** replacing `flags and LIFECYCLE_MASK.inv()`
+> with `flags` (never strip) failed **exactly 2** tests (`renderEffects_stripsLifecycleBits`,
+> `renderEffects_glowPlusViewOnce_keepsGlowDropsLifecycle`), the other 6 stayed green — reverted green,
+> behavioural not tautological. **Wired for real (`:sdk-ui`, exempt glue):** `BubbleContent` gains
+> `effects: MessageEffects = MessageEffects()` populated by `BubbleContentBuilder` via `renderEffects(message.effects,
+> isDeleted)`; `MessageBubble` now drives `Modifier.messageEffects` from `content.effects` (`effects ?: content.effects`
+> — the standalone `effects` param stays an optional preview/test override). A received message carrying a
+> glow/pulse/rainbow bit **finally renders** its persistent treatment; **+4 builder tests** (plain → no effect,
+> glow → glow bit, view-once → no visual effect, deleted+glow → no effect). Default empty `effects` → **zero
+> behaviour change for every existing caller** (existing `BubbleContentBuilderTest`/`MessageBubble` suites
+> untouched). **Verification:** full `gradle assembleDebug testDebugUnitTest --max-workers=3` under the UTF-8-daemon
+> recipe → every module unit suite green + APK assembles. Reviewer **PASS** (diff `apps/android` only — `:core:model`
+> [`MessageEffectRenderPlanner.renderEffects`], `:sdk-ui` [`BubbleContent.effects` + builder wiring + `MessageBubble`
+> modifier source], tracking docs; **SDK purity** — the strip∘delete decision is a pure `:core:model` function, the
+> modifier is coverage-exempt Compose glue with no singleton reads; **SSOT** — reuses the single `LIFECYCLE_MASK`
+> and feeds the existing `MessageEffectRenderPlanner.plan`/`Modifier.messageEffects`, re-decides nothing in the
+> composable; **UX/colour coherence** — the accent-coherent glow/pulse/rainbow treatments already ship, this only
+> makes them fire on incoming messages; **no coverage floor lowered, no test weakened**). **Next slice:** the
+> **one-shot appearance rendering** (confetti/fireworks particle overlays + shake/zoom/explode transforms the
+> `MessageEffectRenderPlanner.plan` already enumerates in `plan.appearance`, played-gate driven by
+> `hasPlayedAppearance`) — the sparkle canvas is the sibling persistent treatment still unbuilt.
+
 > On 2026-07-15 **composer effects picker (sheet + real send wiring)** landed (slice `chat-composer-effects-picker`,
 > feature-parity §Chat "Message visual effects … picker sheet", closing the last un-built half of the effects
 > stack — the whole pure effects pipeline (`MessageEffectsResolver`/`Editor`/`Encoder`/`RenderPlanner`) already

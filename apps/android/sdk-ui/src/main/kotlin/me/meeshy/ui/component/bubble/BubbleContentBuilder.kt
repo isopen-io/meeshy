@@ -8,6 +8,7 @@ import me.meeshy.sdk.model.ApiPostReplyTarget
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
 import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffectRenderPlanner
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.DeliveryTier
 
@@ -181,6 +182,11 @@ public object BubbleContentBuilder {
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
             blurReveal = if (isDeleted) null else buildBlurReveal(message.effects),
+            // Visual-treatment effects (glow / pulse / rainbow / one-shot appearance)
+            // fed to `Modifier.messageEffects` — lifecycle bits stripped, empty when
+            // deleted (a tombstone never glows). The played-appearance gate is resolved
+            // later at render time by `MessageEffectRenderPlanner.plan`.
+            effects = MessageEffectRenderPlanner.renderEffects(message.effects, isDeleted),
             // View-once burned tombstone inputs — mirror iOS gating burned on
             // `message.isViewOnce && message.viewOnceCount > 0`. A deleted tombstone
             // takes precedence (its own path), so zero these out when deleted.

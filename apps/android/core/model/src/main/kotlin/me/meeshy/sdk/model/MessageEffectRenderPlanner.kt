@@ -61,4 +61,20 @@ object MessageEffectRenderPlanner {
             glowIntensity = glowIntensity,
         )
     }
+
+    /**
+     * The visual-treatment effects a bubble should carry into `Modifier.messageEffects`
+     * — the appearance + persistent effects, with the lifecycle bits (ephemeral /
+     * blurred / view-once) stripped (those drive the countdown badge, the tap-to-reveal
+     * concealment and the burned tombstone, never the visual-treatment modifier), and
+     * everything erased when the message is a deleted tombstone (a tombstone never glows
+     * or pulses). This is the build-time counterpart to [plan], which resolves the
+     * runtime `hasPlayedAppearance` gate.
+     */
+    fun renderEffects(effects: MessageEffects, isDeleted: Boolean): MessageEffects {
+        if (isDeleted) return MessageEffects()
+        val visualFlags = effects.flags and MessageEffectFlags.LIFECYCLE_MASK.inv()
+        if (visualFlags == effects.flags) return effects
+        return effects.copy(flags = visualFlags)
+    }
 }

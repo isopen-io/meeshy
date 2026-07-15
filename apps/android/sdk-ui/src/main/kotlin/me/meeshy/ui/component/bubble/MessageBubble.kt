@@ -149,7 +149,10 @@ public fun MessageBubble(
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .messageEffects(
-                    effects = effects ?: MessageEffects(),
+                    // Drive the visual-treatment modifier from the resolved bubble
+                    // content by default (so received messages actually glow / pulse);
+                    // the `effects` param stays an optional override for previews/tests.
+                    effects = effects ?: content.effects,
                     hasPlayedAppearance = hasPlayedAppearance,
                     shape = RoundedCornerShape(MeeshyRadius.xl),
                 )
