@@ -14,6 +14,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import me.meeshy.sdk.model.AppearanceEffect
 import me.meeshy.sdk.model.AppearanceParticleFields
+import me.meeshy.sdk.model.AppearanceTransforms
 import me.meeshy.sdk.model.MessageEffectRenderPlan
 import me.meeshy.sdk.model.MessageEffectRenderPlanner
 import me.meeshy.sdk.model.MessageEffects
@@ -39,14 +41,17 @@ import me.meeshy.ui.theme.MeeshyPalette
  * `View.messageEffects(_:hasPlayedAppearance:)` (`MessageEffectModifiers.swift`):
  *
  * - **Persistent** (glow / pulse / rainbow) — continuous treatments that render every frame.
+ * - **One-shot appearance transforms** (shake / zoom / explode / waoo) — a transform that pops the
+ *   bubble itself (offset / scale / fade / glow) once on appear, gated off once `hasPlayedAppearance`
+ *   is set.
  * - **One-shot appearance particles** (confetti / fireworks) — a burst that plays once when the
  *   bubble appears and is gated off once `hasPlayedAppearance` is set (the plan drops appearance
  *   effects once played).
  *
- * The one-shot *transform* appearance effects (shake / zoom / explode / waoo animate the bubble
- * itself, carry no particles) are a tracked follow-up; the planner already enumerates them.
- * All the "which effect renders" decisions live in the pure model (SDK purity); this modifier
- * is thin, coverage-exempt glue.
+ * All the "which effect renders / what it looks like at progress p" decisions live in the pure
+ * model ([AppearanceTransforms], [AppearanceParticleFields]) for SDK purity; this modifier is thin,
+ * coverage-exempt glue that only drives a `0f → 1f` progress and applies the resolved values in the
+ * layer / draw phase (no per-frame recomposition).
  */
 @Composable
 public fun Modifier.messageEffects(
@@ -59,8 +64,59 @@ public fun Modifier.messageEffects(
         MessageEffectRenderPlanner.plan(effects, hasPlayedAppearance)
     }
     return this
+        .appearanceTransforms(plan, appearanceSeed)
         .persistentEffects(plan, shape)
         .appearanceParticles(plan, appearanceSeed)
+}
+
+/**
+ * The one-shot shake / zoom / explode / waoo transform (iOS `ShakeEffect`/`ZoomEffect`/
+ * `ExplodeEffect`/`WaooEffect`). The per-progress geometry is the pure [AppearanceTransforms];
+ * this only animates a `0f → 1f` progress and applies the resolved offset / scale / fade in the
+ * layer phase (via `graphicsLayer`) and the waoo glow in the draw phase (via `drawBehind`) so the
+ * bubble subtree never recomposes per frame.
+ */
+@Composable
+private fun Modifier.appearanceTransforms(
+    plan: MessageEffectRenderPlan,
+    seed: Long,
+): Modifier {
+    val transformEffects = remember(plan) {
+        plan.appearance.filterTo(LinkedHashSet()) { it in AppearanceTransforms.transformEffects }
+    }
+    if (transformEffects.isEmpty()) return this
+
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(seed, transformEffects) {
+        progress.snapTo(0f)
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = TRANSFORM_DURATION_MS, easing = LinearOutSlowInEasing),
+        )
+    }
+
+    return this
+        .drawBehind {
+            val spec = AppearanceTransforms.resolve(transformEffects, progress.value)
+            if (spec.glowAlpha <= 0f) return@drawBehind
+            val radius = size.maxDimension / 2f + GLOW_SPREAD_PX
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(WaooGlowColor.copy(alpha = spec.glowAlpha), Color.Transparent),
+                    center = center,
+                    radius = radius,
+                ),
+                radius = radius,
+                center = center,
+            )
+        }
+        .graphicsLayer {
+            val spec = AppearanceTransforms.resolve(transformEffects, progress.value)
+            translationX = spec.translationX
+            scaleX = spec.scale
+            scaleY = spec.scale
+            alpha = spec.alpha
+        }
 }
 
 /** The continuous glow / pulse / rainbow treatments (iOS `GlowEffect`/`PulseEffect`/`RainbowEffect`). */
@@ -166,6 +222,15 @@ private fun Modifier.appearanceParticles(plan: MessageEffectRenderPlan, seed: Lo
         }
     }
 }
+
+/** One-shot appearance-transform run length in ms — covers the longest effect (waoo ≈ 0.7s). */
+private const val TRANSFORM_DURATION_MS: Int = 700
+
+/** How far the waoo glow halo spreads past the bubble edge, in px. */
+private const val GLOW_SPREAD_PX: Float = 24f
+
+/** The waoo glow hue — parity with iOS `WaooEffect`'s `.yellow` shadow. */
+private val WaooGlowColor: Color = Color(0xFFEAB308)
 
 /** Confetti hues — parity with iOS `ConfettiOverlay`'s `[.red, .blue, .green, .yellow, .purple, .orange, .pink]`. */
 private val ConfettiPalette: List<Color> = listOf(
