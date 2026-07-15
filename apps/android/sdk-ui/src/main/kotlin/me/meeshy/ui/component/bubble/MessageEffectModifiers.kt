@@ -1,5 +1,7 @@
 package me.meeshy.ui.component.bubble
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -8,45 +10,62 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import me.meeshy.sdk.model.AppearanceEffect
+import me.meeshy.sdk.model.AppearanceParticleFields
+import me.meeshy.sdk.model.MessageEffectRenderPlan
 import me.meeshy.sdk.model.MessageEffectRenderPlanner
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.PersistentEffect
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
- * Applies the **persistent** message-effect treatments (glow / pulse / rainbow) to a
- * bubble — the Compose consumer of the pure [MessageEffectRenderPlanner]. A port of the
- * continuous-treatment half of iOS `View.messageEffects(_:hasPlayedAppearance:)`
- * (`MessageEffectModifiers.swift`):
+ * Applies the message-effect treatments to a bubble — the Compose consumer of the pure
+ * [MessageEffectRenderPlanner]. Two layers, each a port of iOS
+ * `View.messageEffects(_:hasPlayedAppearance:)` (`MessageEffectModifiers.swift`):
  *
- * - **Glow** — an indigo shadow whose radius and colour breathe (iOS `GlowEffect`, radius
- *   4↔12, opacity `intensity*0.3`↔`intensity`, resolved from the plan's [MessageEffectRenderPlanner]).
- * - **Pulse** — a subtle 1.0↔1.02 scale (iOS `PulseEffect`).
- * - **Rainbow** — a sweep-gradient border ring (iOS `RainbowEffect`).
+ * - **Persistent** (glow / pulse / rainbow) — continuous treatments that render every frame.
+ * - **One-shot appearance particles** (confetti / fireworks) — a burst that plays once when the
+ *   bubble appears and is gated off once `hasPlayedAppearance` is set (the plan drops appearance
+ *   effects once played).
  *
- * The one-shot appearance effects (shake / zoom / explode / waoo / confetti / fireworks)
- * and the sparkle canvas are a tracked follow-up; the plan already enumerates them so that
- * layer plugs in without touching the planner. All the "which effect renders" decisions
- * live in the pure planner (SDK purity); this modifier is thin, coverage-exempt glue.
+ * The one-shot *transform* appearance effects (shake / zoom / explode / waoo animate the bubble
+ * itself, carry no particles) are a tracked follow-up; the planner already enumerates them.
+ * All the "which effect renders" decisions live in the pure model (SDK purity); this modifier
+ * is thin, coverage-exempt glue.
  */
 @Composable
 public fun Modifier.messageEffects(
     effects: MessageEffects,
     hasPlayedAppearance: Boolean = false,
     shape: Shape = RoundedCornerShape(16.dp),
+    appearanceSeed: Long = 0L,
 ): Modifier {
     val plan = remember(effects, hasPlayedAppearance) {
         MessageEffectRenderPlanner.plan(effects, hasPlayedAppearance)
     }
+    return this
+        .persistentEffects(plan, shape)
+        .appearanceParticles(plan, appearanceSeed)
+}
+
+/** The continuous glow / pulse / rainbow treatments (iOS `GlowEffect`/`PulseEffect`/`RainbowEffect`). */
+@Composable
+private fun Modifier.persistentEffects(plan: MessageEffectRenderPlan, shape: Shape): Modifier {
     if (plan.persistent.isEmpty()) return this
 
     val transition = rememberInfiniteTransition(label = "message-effects")
@@ -90,6 +109,87 @@ public fun Modifier.messageEffects(
         result = result.border(width = 2.dp, brush = RainbowBorderBrush, shape = shape)
     }
     return result
+}
+
+/**
+ * The one-shot confetti / fireworks particle burst (iOS `ConfettiOverlay`/`FireworksOverlay`).
+ * The particle geometry is the pure [AppearanceParticleFields]; this only animates a `0f → 1f`
+ * progress and paints the field over the bubble content, fading it out at the tail.
+ */
+@Composable
+private fun Modifier.appearanceParticles(plan: MessageEffectRenderPlan, seed: Long): Modifier {
+    val particleEffects = remember(plan) {
+        plan.appearance.filter { it in AppearanceParticleFields.particleEffects }
+    }
+    if (particleEffects.isEmpty()) return this
+
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(seed, particleEffects) {
+        progress.snapTo(0f)
+        progress.animateTo(1f, tween(durationMillis = 1500, easing = LinearOutSlowInEasing))
+    }
+
+    return this.drawWithContent {
+        drawContent()
+        val p = progress.value
+        // Fade the whole burst out over the last fifth of its travel.
+        val fade = if (p > 0.8f) (1f - (p - 0.8f) / 0.2f).coerceIn(0f, 1f) else 1f
+        if (fade <= 0f) return@drawWithContent
+        particleEffects.forEach { effect ->
+            val field = AppearanceParticleFields.forEffect(
+                effect = effect,
+                width = size.width,
+                height = size.height,
+                seed = seed + effect.ordinal,
+            ) ?: return@forEach
+            val palette = paletteFor(effect)
+            field.particles.forEach { particle ->
+                val color = palette[particle.colorIndex % palette.size].copy(alpha = fade)
+                val x = particle.xAt(p)
+                val y = particle.yAt(p)
+                when (effect) {
+                    AppearanceEffect.CONFETTI -> {
+                        val w = particle.size
+                        val h = particle.size * 0.6f
+                        rotate(degrees = particle.rotationDegrees, pivot = Offset(x, y)) {
+                            drawRoundRect(
+                                color = color,
+                                topLeft = Offset(x - w / 2f, y - h / 2f),
+                                size = Size(w, h),
+                                cornerRadius = CornerRadius(1f, 1f),
+                            )
+                        }
+                    }
+                    else -> drawCircle(color = color, radius = particle.size / 2f, center = Offset(x, y))
+                }
+            }
+        }
+    }
+}
+
+/** Confetti hues — parity with iOS `ConfettiOverlay`'s `[.red, .blue, .green, .yellow, .purple, .orange, .pink]`. */
+private val ConfettiPalette: List<Color> = listOf(
+    Color(0xFFEF4444), // red
+    Color(0xFF3B82F6), // blue
+    Color(0xFF22C55E), // green
+    Color(0xFFEAB308), // yellow
+    Color(0xFF8B5CF6), // purple
+    Color(0xFFF97316), // orange
+    Color(0xFFEC4899), // pink
+)
+
+/** Fireworks hues — parity with iOS `FireworksOverlay` (indigo-leaning, accent-coherent). */
+private val FireworksPalette: List<Color> = listOf(
+    MeeshyPalette.Indigo500,
+    MeeshyPalette.Indigo400,
+    Color(0xFFEAB308), // yellow
+    Color(0xFFF97316), // orange
+    MeeshyPalette.White,
+)
+
+private fun paletteFor(effect: AppearanceEffect): List<Color> = when (effect) {
+    AppearanceEffect.FIREWORKS -> FireworksPalette
+    else -> ConfettiPalette
 }
 
 /** Rainbow ring colours — parity with iOS `RainbowEffect`'s angular gradient. */

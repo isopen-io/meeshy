@@ -155,6 +155,10 @@ public fun MessageBubble(
                     effects = effects ?: content.effects,
                     hasPlayedAppearance = hasPlayedAppearance,
                     shape = RoundedCornerShape(MeeshyRadius.xl),
+                    // Seed the one-shot appearance burst on a stable per-message value so a
+                    // confetti/fireworks message renders the same reproducible burst across
+                    // recompositions (a scroll off/on never re-rolls it — surpasses iOS).
+                    appearanceSeed = content.messageId.hashCode().toLong(),
                 )
                 .clip(RoundedCornerShape(MeeshyRadius.xl))
                 .background(bubbleBackground)
