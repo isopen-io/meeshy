@@ -828,7 +828,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       via `rememberInfiniteTransition` sur une période `20π` s — longueur à cycle entier pour une boucle
       sans couture — et peint les 8 sparks blancs via `drawWithContent` en phase draw, zéro recomposition
       par frame) gaté par `PersistentEffect.SPARKLE in plan.persistent`. Les 10 effets rendent désormais.
-- [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
+- [◐] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
+      — **quick reactions done** (EmojiQuickStrip in the long-press sheet) + **action grid done** (slice
+      `chat-overlay-action-menu`, 2026-07-15, +22 tests): pure `:feature:chat` `MessageActionMenu` SSOT
+      (port of iOS `MessageActionResolver.primaryActions` + `MessageMenuContext`) composes the ordered,
+      context-filtered `List<MessageAction>` (reply/forward/show-original|translation/explore/copy/pin|unpin/
+      star|unstar/edit/delete-for-everyone/delete-for-me) from a UI-free `MessageActionContext` with a
+      derived `isActionable = !isDeleted && !isPending && !isFailed`. Surpasses iOS by folding the two-tier
+      primary/"More…" split into one flat contextual list. `MessageActionsSheet` is now a dumb `when`
+      renderer over `actions(ctx)` — the scattered inline `if` blocks + inline `isActionable` are gone.
+      Mutation-proven (swap show-original/show-translation → exactly 3 red). **Pending:** the floating
+      **preview bubble** overlay presentation + the **drag-to-detail** gesture law (iOS `MessageOverlayDragLaw`).
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
 - [ ] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating)

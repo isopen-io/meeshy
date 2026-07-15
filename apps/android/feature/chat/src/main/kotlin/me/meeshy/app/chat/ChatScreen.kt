@@ -1646,15 +1646,24 @@ private fun MessageActionsSheet(
     onDismiss: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
-    val isActionable = !bubble.isDeleted &&
-        !bubble.isPending &&
-        bubble.deliveryStatus != DeliveryStatus.Failed
+    val ctx = MessageActionContext(
+        isDeleted = bubble.isDeleted,
+        isPending = bubble.isPending,
+        isFailed = bubble.deliveryStatus == DeliveryStatus.Failed,
+        isOutgoing = bubble.isOutgoing,
+        isTranslated = bubble.isTranslated,
+        isShowingOriginal = bubble.isShowingOriginal,
+        isStarred = bubble.isStarred,
+        canEdit = canEdit,
+        canDeleteForEveryone = canDeleteForEveryone,
+        pinAction = pinAction,
+    )
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) {
         Column(modifier = Modifier.padding(bottom = MeeshySpacing.xl)) {
-            if (isActionable) {
+            if (ctx.isActionable) {
                 EmojiQuickStrip(
                     emojis = quickReactions,
                     ownReactions = ownReactions,
@@ -1669,85 +1678,81 @@ private fun MessageActionsSheet(
                 HorizontalDivider(color = MeeshyTheme.tokens.backgroundTertiary)
             }
 
-            if (isActionable) {
-                SheetAction(
-                    icon = Icons.AutoMirrored.Filled.Reply,
-                    label = stringResource(R.string.chat_action_reply),
-                    onClick = onReply,
-                )
-                SheetAction(
-                    icon = Icons.AutoMirrored.Filled.Send,
-                    label = stringResource(R.string.chat_action_forward),
-                    onClick = onForward,
-                )
-            }
-            if (bubble.isTranslated) {
-                SheetAction(
-                    icon = Icons.Filled.Translate,
-                    label = stringResource(
-                        if (bubble.isShowingOriginal) R.string.chat_action_show_translation
-                        else R.string.chat_action_show_original,
-                    ),
-                    onClick = onToggleOriginal,
-                )
-                SheetAction(
-                    icon = Icons.Filled.Language,
-                    label = stringResource(R.string.chat_action_explore_languages),
-                    onClick = onExploreLanguages,
-                )
-            }
-            if (!bubble.isDeleted) {
-                SheetAction(
-                    icon = Icons.Filled.ContentCopy,
-                    label = stringResource(R.string.chat_action_copy),
-                    onClick = {
-                        clipboard.setText(AnnotatedString(bubble.text))
-                        onDismiss()
-                    },
-                )
-            }
-            if (pinAction != PinAction.Unavailable) {
-                SheetAction(
-                    icon = Icons.Filled.PushPin,
-                    label = stringResource(
-                        if (pinAction == PinAction.Unpin) R.string.chat_action_unpin
-                        else R.string.chat_action_pin,
-                    ),
-                    onClick = onPin,
-                )
-            }
-            if (isActionable) {
-                SheetAction(
-                    icon = if (bubble.isStarred) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
-                    label = stringResource(
-                        if (bubble.isStarred) R.string.chat_action_unstar
-                        else R.string.chat_action_star,
-                    ),
-                    onClick = onStar,
-                )
-            }
-            if (bubble.isOutgoing && isActionable && canEdit) {
-                SheetAction(
-                    icon = Icons.Filled.Edit,
-                    label = stringResource(R.string.chat_action_edit),
-                    onClick = onEdit,
-                )
-            }
-            if (bubble.isOutgoing && isActionable && canDeleteForEveryone) {
-                SheetAction(
-                    icon = Icons.Filled.Delete,
-                    label = stringResource(R.string.chat_action_delete_for_everyone),
-                    tint = MeeshyPalette.Error,
-                    onClick = onDeleteForEveryone,
-                )
-            }
-            if (isActionable) {
-                SheetAction(
-                    icon = Icons.Filled.Delete,
-                    label = stringResource(R.string.chat_action_delete_for_me),
-                    tint = MeeshyPalette.Error,
-                    onClick = onDeleteForMe,
-                )
+            // The action grid is composed by the pure [MessageActionMenu] SSOT; this
+            // block is a dumb renderer mapping each resolved action to its row.
+            MessageActionMenu.actions(ctx).forEach { action ->
+                when (action) {
+                    MessageAction.Reply -> SheetAction(
+                        icon = Icons.AutoMirrored.Filled.Reply,
+                        label = stringResource(R.string.chat_action_reply),
+                        onClick = onReply,
+                    )
+                    MessageAction.Forward -> SheetAction(
+                        icon = Icons.AutoMirrored.Filled.Send,
+                        label = stringResource(R.string.chat_action_forward),
+                        onClick = onForward,
+                    )
+                    MessageAction.ShowOriginal -> SheetAction(
+                        icon = Icons.Filled.Translate,
+                        label = stringResource(R.string.chat_action_show_original),
+                        onClick = onToggleOriginal,
+                    )
+                    MessageAction.ShowTranslation -> SheetAction(
+                        icon = Icons.Filled.Translate,
+                        label = stringResource(R.string.chat_action_show_translation),
+                        onClick = onToggleOriginal,
+                    )
+                    MessageAction.ExploreLanguages -> SheetAction(
+                        icon = Icons.Filled.Language,
+                        label = stringResource(R.string.chat_action_explore_languages),
+                        onClick = onExploreLanguages,
+                    )
+                    MessageAction.Copy -> SheetAction(
+                        icon = Icons.Filled.ContentCopy,
+                        label = stringResource(R.string.chat_action_copy),
+                        onClick = {
+                            clipboard.setText(AnnotatedString(bubble.text))
+                            onDismiss()
+                        },
+                    )
+                    MessageAction.Pin -> SheetAction(
+                        icon = Icons.Filled.PushPin,
+                        label = stringResource(R.string.chat_action_pin),
+                        onClick = onPin,
+                    )
+                    MessageAction.Unpin -> SheetAction(
+                        icon = Icons.Filled.PushPin,
+                        label = stringResource(R.string.chat_action_unpin),
+                        onClick = onPin,
+                    )
+                    MessageAction.Star -> SheetAction(
+                        icon = Icons.Filled.BookmarkBorder,
+                        label = stringResource(R.string.chat_action_star),
+                        onClick = onStar,
+                    )
+                    MessageAction.Unstar -> SheetAction(
+                        icon = Icons.Filled.Bookmark,
+                        label = stringResource(R.string.chat_action_unstar),
+                        onClick = onStar,
+                    )
+                    MessageAction.Edit -> SheetAction(
+                        icon = Icons.Filled.Edit,
+                        label = stringResource(R.string.chat_action_edit),
+                        onClick = onEdit,
+                    )
+                    MessageAction.DeleteForEveryone -> SheetAction(
+                        icon = Icons.Filled.Delete,
+                        label = stringResource(R.string.chat_action_delete_for_everyone),
+                        tint = MeeshyPalette.Error,
+                        onClick = onDeleteForEveryone,
+                    )
+                    MessageAction.DeleteForMe -> SheetAction(
+                        icon = Icons.Filled.Delete,
+                        label = stringResource(R.string.chat_action_delete_for_me),
+                        tint = MeeshyPalette.Error,
+                        onClick = onDeleteForMe,
+                    )
+                }
             }
         }
     }

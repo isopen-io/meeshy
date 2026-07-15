@@ -1,5 +1,46 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **the long-press overlay action grid SSOT** landed (slice `chat-overlay-action-menu`,
+> feature-parity §Chat "Long-press overlay menu" — the **action grid** part). Before this slice the
+> long-press `MessageActionsSheet` composed its action list inline: ~10 scattered `if` blocks inside the
+> `@Composable` decided which rows appeared and in what order (reply/forward/translate/copy/pin/star/edit/
+> delete), plus an inline `isActionable` derivation. That visibility+ordering logic was untestable on the
+> JVM (buried in Compose glue) and drift-prone. **Ships (`:feature:chat`, new `MessageActionMenu.kt`):**
+> a pure port of iOS `MessageActionResolver.primaryActions` + `MessageMenuContext` — `MessageAction`
+> (the 13 rows), `MessageActionContext` (immutable, UI-free: isDeleted/isPending/isFailed/isOutgoing/
+> isTranslated/isShowingOriginal/isStarred/canEdit/canDeleteForEveryone/pinAction) with a derived
+> `isActionable = !isDeleted && !isPending && !isFailed`, and `MessageActionMenu.actions(ctx): List<MessageAction>`
+> — the single source of truth for "which action, in what order". **Surpasses iOS** by folding iOS's
+> two-tier primary/"More…" split into one flat contextual list (reply/forward live directly in the grid,
+> no second sheet to drill into) and by making the whole composition a covered pure function vs iOS's
+> half-in-Composable logic. Branch sweep pins every arm: actionable gate (reply/forward/star/edit/delete),
+> `!isDeleted` copy survives on a failed/pending send, translate rows only when translated (show-original
+> vs show-translation flip on `isShowingOriginal`), pin toggle drops entirely on `PinAction.Unavailable`,
+> star↔unstar flip, edit needs outgoing+actionable+canEdit, delete-for-everyone needs the can-flag while
+> delete-for-me stays, deleted tombstone → empty list. **+22 tests** (4 isActionable derivation, full
+> composition + stable-order, translation/pin/star branches, inert pending/failed/deleted states, edit/
+> delete gating). **Mutation check (RED proof):** swapping the show-original/show-translation targets
+> failed **exactly 3** tests (the two translation-branch tests + the stable-order test that pins
+> `ShowOriginal`), the other 18 stayed green — behavioural, not tautological. **Wired for real
+> (`:feature:chat`, exempt glue):** `MessageActionsSheet` now builds a `MessageActionContext` from the
+> bubble + already-resolved `canEdit`/`canDeleteForEveryone`/`pinAction` and renders
+> `MessageActionMenu.actions(ctx).forEach { … }` via an exhaustive `when` mapping each action to its row
+> (icons/labels/tints/callbacks unchanged; Copy keeps its clipboard side-effect; delete rows keep the
+> Error tint). The scattered `if` blocks and the inline `isActionable` are gone — the emoji quick-strip
+> gate reads `ctx.isActionable` too, one SSOT. Behaviour is byte-identical (same rows, same order); only
+> the composition moved from Compose glue to a tested pure function. **Verification:** full
+> `assembleDebug testDebugUnitTest --max-workers=3` under system Gradle 8.11.1 (wrapper dist download is
+> 403-blocked by the agent proxy; `/opt/gradle` is the 8.11.1 fallback) → APK assembles + every module
+> unit suite green. Reviewer **PASS** (diff `apps/android` only — `:feature:chat` new `MessageActionMenu`
+> + `ChatScreen` sheet renderer + tracking docs; **SDK purity** — the resolver is a chat product rule in
+> `:feature:chat` alongside `MessageGrouping`/`PinnedMessages`/`ReactionBreakdown`, takes a focused
+> context not the `:sdk-ui` `BubbleContent`; **SSOT** — one `actions()` composition; **UX/colour
+> coherence** — identical rows/order/tints, no dead end; **no coverage floor lowered, no test weakened**).
+> **Next slice:** the remaining §Chat "Long-press overlay menu" parts — the **drag-to-detail gesture law**
+> (port iOS `MessageOverlayDragLaw`: swipe-up-strong → expand, swipe-down → dismiss, with velocity-aware
+> thresholds + damped display offset) once there is a two-stage (compact→expanded) surface to drag
+> between so it is not a dead end, and the **floating preview bubble** overlay presentation.
+
 > On 2026-07-15 **the sparkle canvas** landed (slice `chat-sparkle-canvas`, feature-parity §Chat
 > "Message visual effects" — **the effects stack is now COMPLETE**: all ten treatments (shake / zoom /
 > explode / waoo / confetti / fireworks / glow / pulse / rainbow / sparkle) render on a real bubble).
