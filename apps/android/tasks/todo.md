@@ -4,7 +4,22 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Chat) — slice `chat-composer-effects-picker` ✅
+## This loop (Phase: Chat) — slice `chat-overlay-preview-bubble` ✅
+**Floating preview-bubble overlay layout law — pure SSOT + real lifted hero.** Completes the §Chat "Long-press
+overlay menu" line (all four parts now done: quick-reactions + action-grid + drag-to-detail + preview bubble). Ships
+`:feature:chat` `MessageOverlayLayout.compute(...)` — a faithful port of the iOS `MessageOverlayMenu` "native-lean"
+`nl*` geometry: stacks `[emoji bar]·gap·[preview hero]·gap·[action menu]` into a `MessageOverlayCluster` (scale +
+preview rect + emoji/menu anchor points), with a two-stage scale cascade (height cap at 320px/floor 0.55 → fit
+squeeze/floor 0.4, band floored at 160), a trailing/leading unclamped hero anchor, a safe-area cluster-top clamp,
+and independent emoji/menu X clamps. +17 tests, mutation-checked (swap anchor branches → exactly 3 red; the check
+caught a symmetric-at-scale-1.0 anchor blind spot in the first draft → fixed by testing on a scaled preview). Wired
+for real in `ChatScreen` (exempt glue): each row's window frame captured via `onGloballyPositioned` into a plain
+`bubbleFrames` map; on long-press a new `MessageOverlayPreviewHero` Popup lifts a scaled copy of the tapped
+`MessageBubble` above the action sheet, positioned by the law (frame-miss skips gracefully). Full `assembleDebug
+testDebugUnitTest` green (UTF-8-daemon recipe), APK produced, diff = `apps/android/feature/chat` only. Reviewer PASS.
+Next: universal composer / voice-recording pill (waveform core already exists), or the in-overlay audio/video preview.
+
+## Prior loop (Phase: Chat) — slice `chat-composer-effects-picker` ✅
 **Composer effects picker — pure presentation SSOT + real send wiring.** The whole pure effects pipeline
 (`MessageEffectsResolver`/`Editor`/`Encoder`/`RenderPlanner`) and the effects-ready `sendOptimistic` already
 existed, but nothing armed or sent effects — the composer had no picker. Ships `:core:model`

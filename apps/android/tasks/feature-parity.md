@@ -828,8 +828,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       via `rememberInfiniteTransition` sur une période `20π` s — longueur à cycle entier pour une boucle
       sans couture — et peint les 8 sparks blancs via `drawWithContent` en phase draw, zéro recomposition
       par frame) gaté par `PersistentEffect.SPARKLE in plan.persistent`. Les 10 effets rendent désormais.
-- [◐] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
-      — **quick reactions done** (EmojiQuickStrip in the long-press sheet) + **action grid done** (slice
+- [x] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
+      — **overlay menu now COMPLETE** (all four parts landed). **quick reactions done** (EmojiQuickStrip in the long-press sheet) + **action grid done** (slice
       `chat-overlay-action-menu`, 2026-07-15, +22 tests): pure `:feature:chat` `MessageActionMenu` SSOT
       (port of iOS `MessageActionResolver.primaryActions` + `MessageMenuContext`) composes the ordered,
       context-filtered `List<MessageAction>` (reply/forward/show-original|translation/explore/copy/pin|unpin/
@@ -848,7 +848,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       sheet into the language explorer (`onExploreLanguages`, which clears `actionMessageId` → a clean compact→expanded
       transition, no stacking), swipe-down-strong dismisses, else the lifted content springs back; the pill widens and
       takes the accent colour once `isArmed` crosses. Mutation-proven (flip the up-velocity direction guard → exactly 3
-      red). **Pending:** the floating **preview bubble** overlay presentation (elevated bubble hero above the menu).
+      red). **preview bubble done** (slice `chat-overlay-preview-bubble`, 2026-07-15, +17 tests): pure `:feature:chat`
+      `MessageOverlayLayout` SSOT (faithful port of the iOS `MessageOverlayMenu` "native-lean" geometry) —
+      `compute(bubble, screen, safe insets, menu size, isOutgoing)` stacks `[emoji bar]·gap·[preview hero]·gap·[menu]`
+      into one `MessageOverlayCluster`: the uniform preview scale (full → height-capped at 320 with a 0.55 floor →
+      squeezed-to-fit with a 0.4 floor), the trailing/leading hero anchor (unclamped so it tracks its source bubble),
+      the safe-area vertical clamp, and the independent emoji/menu X clamps. Wired for real into `ChatScreen` (exempt
+      glue): each message row's window frame is captured via `onGloballyPositioned`, and on long-press a
+      `MessageOverlayPreviewHero` Popup lifts a scaled copy of the tapped bubble above the action sheet, positioned by
+      the law. Mutation-proven (swap the leading/trailing anchor branches → exactly 3 red; caught + fixed a symmetric
+      full-size anchor blind spot in the first test draft — the anchor is only testable on a *scaled* preview).
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
 - [ ] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating)
