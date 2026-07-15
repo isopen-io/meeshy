@@ -14,6 +14,7 @@ import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupServ
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
+import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -1441,6 +1442,7 @@ export class PostService {
 
       try {
         const originalMedia = (original.media ?? []) as Array<{
+          id: string;
           fileUrl: string;
           mimeType: string;
           thumbnailUrl?: string | null;
@@ -1507,6 +1509,44 @@ export class PostService {
           include: postInclude,
         });
 
+        // The media just duplicated above got fresh `PostMedia` ids — but
+        // `snapshotStoryEffects` was copied verbatim and still references the
+        // SOURCE's media ids. Left as-is, a repost of a repost would carry
+        // forward ids from however many hops back the chain started, and the
+        // reader's plain `postMediaId` lookup (scoped to the post's own
+        // `media[]`) would never find them — the exact "contenu non affiché"
+        // bug. Rewrite them here so every repost is self-contained regardless
+        // of chain depth.
+        let finalRepost = repost;
+        if (snapshotStoryEffects !== undefined) {
+          const repostMedia = repost.media ?? [];
+          const idMap: Record<string, string> = {};
+          originalMedia.forEach((om, idx) => {
+            const newMedia = repostMedia[idx];
+            if (newMedia) {
+              idMap[om.id] = newMedia.id;
+            }
+          });
+
+          const remapped = remapStoryEffectsMediaIds(snapshotStoryEffects, idMap);
+          if (remapped.changed) {
+            try {
+              await this.prisma.post.update({
+                where: { id: repost.id },
+                data: { storyEffects: remapped.effects },
+              });
+              // Cast: `remapped.effects` is `Prisma.InputJsonValue` (write-side
+              // JSON type); `repost.storyEffects` is Prisma's read-side JSON
+              // output type. They're structurally the same data, but Prisma
+              // generates them as separate, not-mutually-assignable aliases —
+              // this cast bridges that without widening to `any`.
+              finalRepost = { ...repost, storyEffects: remapped.effects as typeof repost.storyEffects };
+            } catch (err) {
+              log.warn('repostPost: failed to correct storyEffects media ids', { repostId: repost.id, err });
+            }
+          }
+        }
+
         await this.prisma.post.update({
           where: { id: postId },
           data: { repostCount: { increment: 1 } },
@@ -1522,7 +1562,7 @@ export class PostService {
           await this.orphanCleanup.untrackBatch(orphanRowIds);
         }
 
-        return repost;
+        return finalRepost;
       } catch (err) {
         // Inline (best-effort) compensation. Same as before — fast-path
         // cleanup. The outbox rows stay registered, so the worker provides

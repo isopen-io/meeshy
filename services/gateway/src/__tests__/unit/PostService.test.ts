@@ -986,6 +986,236 @@ describe('PostService', () => {
       const createCall = prisma.post.create.mock.calls[0][0];
       expect(createCall.data.expiresAt).toBeUndefined();
     });
+
+    it('remaps storyEffects.mediaObjects postMediaId to the newly duplicated media (repost of an original)', async () => {
+      const original = makePost({
+        id: 'story-3',
+        type: PostType.STORY,
+        visibility: 'PUBLIC',
+        media: [
+          { id: 'orig-media-1', fileUrl: '/api/v1/attachments/file/s1.jpg', mimeType: 'image/jpeg', filePath: 'p/s1.jpg', fileName: 's1.jpg', originalName: 's1.jpg', fileSize: 1000, order: 0 },
+        ],
+        storyEffects: {
+          mediaObjects: [{ id: 'el-1', postMediaId: 'orig-media-1', isBackground: true, x: 0, y: 0 }],
+        },
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+
+      jest.spyOn(mediaService, 'duplicateMedia').mockResolvedValueOnce({
+        fileUrl: '/api/v1/attachments/file/new-s1.jpg', filePath: 'snap/new-s1.jpg', fileName: 'new-s1.jpg', fileSize: 1000, mimeType: 'image/jpeg',
+      });
+
+      prisma.post.create.mockResolvedValue(
+        makePost({
+          id: 'repost-level1',
+          media: [{ id: 'new-media-1', order: 0, fileUrl: '/api/v1/attachments/file/new-s1.jpg' }],
+          storyEffects: { mediaObjects: [{ id: 'el-1', postMediaId: 'orig-media-1', isBackground: true, x: 0, y: 0 }] },
+        })
+      );
+      prisma.post.update.mockResolvedValue(original);
+
+      const result = await service.repostPost('story-3', 'user-reposter', { targetType: PostType.STORY });
+
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'repost-level1' },
+        data: { storyEffects: { mediaObjects: [{ id: 'el-1', postMediaId: 'new-media-1', isBackground: true, x: 0, y: 0 }] } },
+      });
+      expect(result?.storyEffects).toEqual({
+        mediaObjects: [{ id: 'el-1', postMediaId: 'new-media-1', isBackground: true, x: 0, y: 0 }],
+      });
+    });
+
+    it('remaps storyEffects to its OWN new media when reposting an already-reposted story (2-hop chain) — regression for the reported bug', async () => {
+      // `levelOneRepost` represents a LEVEL-1 repost that is already
+      // self-consistent (its storyEffects.mediaObjects[].postMediaId matches
+      // its own media[].id) — exactly what repostPost now produces after this
+      // fix. Reposting it must NOT leak the level-1 media id forward: the
+      // level-2 repost must reference its own freshly duplicated media.
+      const levelOneRepost = makePost({
+        id: 'repost-level1',
+        type: PostType.STORY,
+        visibility: 'PUBLIC',
+        repostOfId: 'story-root',
+        originalRepostOfId: 'story-root',
+        media: [
+          { id: 'level1-media-1', fileUrl: '/api/v1/attachments/file/level1.jpg', mimeType: 'image/jpeg', filePath: 'p/level1.jpg', fileName: 'level1.jpg', originalName: 'level1.jpg', fileSize: 1000, order: 0 },
+        ],
+        storyEffects: {
+          mediaObjects: [{ id: 'el-1', postMediaId: 'level1-media-1', isBackground: true, x: 0, y: 0 }],
+        },
+      });
+      prisma.post.findFirst.mockResolvedValue(levelOneRepost);
+
+      jest.spyOn(mediaService, 'duplicateMedia').mockResolvedValueOnce({
+        fileUrl: '/api/v1/attachments/file/level2.jpg', filePath: 'snap/level2.jpg', fileName: 'level2.jpg', fileSize: 1000, mimeType: 'image/jpeg',
+      });
+
+      prisma.post.create.mockResolvedValue(
+        makePost({
+          id: 'repost-level2',
+          media: [{ id: 'level2-media-1', order: 0, fileUrl: '/api/v1/attachments/file/level2.jpg' }],
+          storyEffects: { mediaObjects: [{ id: 'el-1', postMediaId: 'level1-media-1', isBackground: true, x: 0, y: 0 }] },
+        })
+      );
+      prisma.post.update.mockResolvedValue(levelOneRepost);
+
+      const result = await service.repostPost('repost-level1', 'user-reposter-2', { targetType: PostType.STORY });
+
+      expect(prisma.post.update).toHaveBeenCalledWith({
+        where: { id: 'repost-level2' },
+        data: { storyEffects: { mediaObjects: [{ id: 'el-1', postMediaId: 'level2-media-1', isBackground: true, x: 0, y: 0 }] } },
+      });
+      expect(result?.storyEffects).toEqual({
+        mediaObjects: [{ id: 'el-1', postMediaId: 'level2-media-1', isBackground: true, x: 0, y: 0 }],
+      });
+      const storyEffectsJson = JSON.stringify(result?.storyEffects);
+      expect(storyEffectsJson).not.toContain('level1-media-1');
+    });
+
+    it('generalizes beyond 2 hops: a 3rd repost also remaps to its own new media, never leaking earlier-level ids', async () => {
+      const levelTwoRepost = makePost({
+        id: 'repost-level2',
+        type: PostType.STORY,
+        visibility: 'PUBLIC',
+        repostOfId: 'repost-level1',
+        originalRepostOfId: 'story-root',
+        media: [
+          { id: 'level2-media-1', fileUrl: '/api/v1/attachments/file/level2.jpg', mimeType: 'image/jpeg', filePath: 'p/level2.jpg', fileName: 'level2.jpg', originalName: 'level2.jpg', fileSize: 1000, order: 0 },
+        ],
+        storyEffects: {
+          mediaObjects: [{ id: 'el-1', postMediaId: 'level2-media-1', isBackground: true, x: 0, y: 0 }],
+        },
+      });
+      prisma.post.findFirst.mockResolvedValue(levelTwoRepost);
+
+      jest.spyOn(mediaService, 'duplicateMedia').mockResolvedValueOnce({
+        fileUrl: '/api/v1/attachments/file/level3.jpg', filePath: 'snap/level3.jpg', fileName: 'level3.jpg', fileSize: 1000, mimeType: 'image/jpeg',
+      });
+
+      prisma.post.create.mockResolvedValue(
+        makePost({
+          id: 'repost-level3',
+          media: [{ id: 'level3-media-1', order: 0, fileUrl: '/api/v1/attachments/file/level3.jpg' }],
+          storyEffects: { mediaObjects: [{ id: 'el-1', postMediaId: 'level2-media-1', isBackground: true, x: 0, y: 0 }] },
+        })
+      );
+      prisma.post.update.mockResolvedValue(levelTwoRepost);
+
+      const result = await service.repostPost('repost-level2', 'user-reposter-3', { targetType: PostType.STORY });
+
+      expect(result?.storyEffects).toEqual({
+        mediaObjects: [{ id: 'el-1', postMediaId: 'level3-media-1', isBackground: true, x: 0, y: 0 }],
+      });
+      const storyEffectsJson = JSON.stringify(result?.storyEffects);
+      expect(storyEffectsJson).not.toContain('level1-media-1');
+      expect(storyEffectsJson).not.toContain('level2-media-1');
+    });
+
+    it('remaps storyEffects.audioPlayerObjects postMediaId alongside mediaObjects', async () => {
+      const original = makePost({
+        id: 'story-audio-1',
+        type: PostType.STORY,
+        visibility: 'PUBLIC',
+        media: [
+          { id: 'orig-video-1', fileUrl: '/api/v1/attachments/file/v1.mp4', mimeType: 'video/mp4', filePath: 'p/v1.mp4', fileName: 'v1.mp4', originalName: 'v1.mp4', fileSize: 2000, order: 0 },
+          { id: 'orig-audio-1', fileUrl: '/api/v1/attachments/file/a1.mp3', mimeType: 'audio/mpeg', filePath: 'p/a1.mp3', fileName: 'a1.mp3', originalName: 'a1.mp3', fileSize: 500, order: 1 },
+        ],
+        storyEffects: {
+          mediaObjects: [{ id: 'el-1', postMediaId: 'orig-video-1', isBackground: true }],
+          audioPlayerObjects: [{ id: 'el-2', postMediaId: 'orig-audio-1', volume: 0.8 }],
+        },
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+
+      jest.spyOn(mediaService, 'duplicateMedia')
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-v1.mp4', filePath: 'snap/new-v1.mp4', fileName: 'new-v1.mp4', fileSize: 2000, mimeType: 'video/mp4' })
+        .mockResolvedValueOnce({ fileUrl: '/api/v1/attachments/file/new-a1.mp3', filePath: 'snap/new-a1.mp3', fileName: 'new-a1.mp3', fileSize: 500, mimeType: 'audio/mpeg' });
+
+      prisma.post.create.mockResolvedValue(
+        makePost({
+          id: 'repost-audio',
+          media: [
+            { id: 'new-video-1', order: 0, fileUrl: '/api/v1/attachments/file/new-v1.mp4' },
+            { id: 'new-audio-1', order: 1, fileUrl: '/api/v1/attachments/file/new-a1.mp3' },
+          ],
+          storyEffects: {
+            mediaObjects: [{ id: 'el-1', postMediaId: 'orig-video-1', isBackground: true }],
+            audioPlayerObjects: [{ id: 'el-2', postMediaId: 'orig-audio-1', volume: 0.8 }],
+          },
+        })
+      );
+      prisma.post.update.mockResolvedValue(original);
+
+      const result = await service.repostPost('story-audio-1', 'user-reposter', { targetType: PostType.STORY });
+
+      expect(result?.storyEffects).toEqual({
+        mediaObjects: [{ id: 'el-1', postMediaId: 'new-video-1', isBackground: true }],
+        audioPlayerObjects: [{ id: 'el-2', postMediaId: 'new-audio-1', volume: 0.8 }],
+      });
+    });
+
+    it('logs and keeps the original storyEffects when the post-create correction write fails, without failing the repost', async () => {
+      const original = makePost({
+        id: 'story-4',
+        type: PostType.STORY,
+        visibility: 'PUBLIC',
+        media: [
+          { id: 'orig-media-1', fileUrl: '/api/v1/attachments/file/s1.jpg', mimeType: 'image/jpeg', filePath: 'p/s1.jpg', fileName: 's1.jpg', originalName: 's1.jpg', fileSize: 1000, order: 0 },
+        ],
+        storyEffects: {
+          mediaObjects: [{ id: 'el-1', postMediaId: 'orig-media-1', isBackground: true }],
+        },
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+
+      jest.spyOn(mediaService, 'duplicateMedia').mockResolvedValueOnce({
+        fileUrl: '/api/v1/attachments/file/new-s1.jpg', filePath: 'snap/new-s1.jpg', fileName: 'new-s1.jpg', fileSize: 1000, mimeType: 'image/jpeg',
+      });
+
+      const createdRepost = makePost({
+        id: 'repost-fail-correction',
+        media: [{ id: 'new-media-1', order: 0, fileUrl: '/api/v1/attachments/file/new-s1.jpg' }],
+        storyEffects: { mediaObjects: [{ id: 'el-1', postMediaId: 'orig-media-1', isBackground: true }] },
+      });
+      prisma.post.create.mockResolvedValue(createdRepost);
+
+      // First update() call is the storyEffects correction (rejects); second
+      // is the original post's repostCount increment (resolves normally).
+      prisma.post.update
+        .mockRejectedValueOnce(new Error('write conflict'))
+        .mockResolvedValueOnce(original);
+
+      const result = await service.repostPost('story-4', 'user-reposter', { targetType: PostType.STORY });
+
+      expect(result).toBeDefined();
+      expect(result?.id).toBe('repost-fail-correction');
+      expect(prisma.post.update).toHaveBeenCalledTimes(2);
+      expect(prisma.post.update).toHaveBeenNthCalledWith(2,
+        expect.objectContaining({ where: { id: 'story-4' }, data: { repostCount: { increment: 1 } } })
+      );
+      expect(result?.storyEffects).toEqual({
+        mediaObjects: [{ id: 'el-1', postMediaId: 'orig-media-1', isBackground: true }],
+      });
+    });
+
+    it('does not issue a correction update when storyEffects has no media references to remap', async () => {
+      const original = makePost({
+        id: 'story-text-only',
+        type: PostType.STORY,
+        visibility: 'PUBLIC',
+        storyEffects: { textObjects: [{ id: 'el-1', text: 'hello' }] },
+      });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'repost-text-only', storyEffects: { textObjects: [{ id: 'el-1', text: 'hello' }] } }));
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('story-text-only', 'user-reposter', { targetType: PostType.STORY });
+
+      expect(prisma.post.update).toHaveBeenCalledTimes(1);
+      expect(prisma.post.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'story-text-only' }, data: { repostCount: { increment: 1 } } })
+      );
+    });
   });
 
   // -----------------------------------------------------------------------
