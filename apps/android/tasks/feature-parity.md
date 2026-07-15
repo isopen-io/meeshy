@@ -860,7 +860,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       full-size anchor blind spot in the first test draft — the anchor is only testable on a *scaled* preview).
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
-- [ ] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating)
+- [~] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating) —
+      **logic + pill UI done** (slice `chat-voice-recording-pill`, 2026-07-15, +29 tests). Pure
+      `:feature:chat` `VoiceRecordingSession` SSOT: `Idle`/`Recording` phases, `start`/`tick`/`meter`/
+      `cancel`/`stop` transitions, `canSend` min-duration gate (`>= 0.5s`, iOS `minimumSendableDuration`
+      parity), `formattedElapsed` (`m:ss`, iOS `formatDuration`), `recordingDotOpacity(reduceMotion)`
+      blink (iOS `dotOpacity`), and a `VoiceRecordingStop(session, outcome)` result
+      (`Completed(duration, levels)` / `TooShort` / `Inactive`). Composes the existing `:core:model`
+      waveform blocks (`AudioLevelNormalizer` + `WaveformLevelWindow`) — no bespoke buffer. Wired real
+      (`ChatComposer`, exempt glue): blank-composer `Mic` button starts, a 100 ms `LaunchedEffect` ticks
+      the timer, the `VoiceRecordingPill` (X cancel / animated waveform / blinking dot + timer / stop /
+      send, stop+send gated by `canSend`) replaces the input row while recording. **Pending follow-up:**
+      real `MediaRecorder`/`AudioRecord` capture feeding `meter()`, and the voice-attachment send pipeline
+      (VM + upload) — the pill drives the *session* today, not yet the audio bytes.
 - [ ] Attachment ladder (emoji, file, location, camera, photo library, voice)
 - [ ] Large-paste detection → clipboard-content attachment
 - [ ] In-app camera: photo capture + video recording (flash, front/back toggle)

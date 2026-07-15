@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Vibration
@@ -142,6 +143,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import me.meeshy.sdk.model.call.ActiveCallSession
 import java.time.ZoneId
 import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
@@ -2221,33 +2223,61 @@ private fun ChatComposer(
                     }
                 }
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (!isEditing) {
-                    IconButton(onClick = onOpenEffects) {
-                        Icon(
-                            imageVector = Icons.Filled.AutoAwesome,
-                            contentDescription = stringResource(R.string.chat_effects_open),
-                            tint = if (hasEffects) accentColor else MeeshyTheme.tokens.textSecondary,
-                        )
-                    }
+            var recording by remember { mutableStateOf(VoiceRecordingSession.idle()) }
+            LaunchedEffect(recording.isRecording) {
+                while (recording.isRecording) {
+                    delay(100)
+                    recording = recording.tick(0.1)
                 }
-                OutlinedTextField(
-                    value = draft,
-                    onValueChange = onDraftChange,
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
-                    maxLines = 4,
+            }
+            if (recording.isRecording) {
+                VoiceRecordingPill(
+                    session = recording,
+                    accentColor = accentColor,
+                    onCancel = { recording = recording.cancel() },
+                    onStop = { recording = recording.stop().session },
+                    onSend = { recording = recording.stop().session },
+                    modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
                 )
-                IconButton(onClick = onSend, enabled = canSend) {
-                    Icon(
-                        imageVector = if (isEditing) Icons.Filled.Check else Icons.AutoMirrored.Filled.Send,
-                        contentDescription = stringResource(R.string.chat_send),
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (!isEditing) {
+                        IconButton(onClick = onOpenEffects) {
+                            Icon(
+                                imageVector = Icons.Filled.AutoAwesome,
+                                contentDescription = stringResource(R.string.chat_effects_open),
+                                tint = if (hasEffects) accentColor else MeeshyTheme.tokens.textSecondary,
+                            )
+                        }
+                    }
+                    OutlinedTextField(
+                        value = draft,
+                        onValueChange = onDraftChange,
+                        modifier = Modifier.weight(1f),
+                        placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
+                        maxLines = 4,
                     )
+                    if (!isEditing && draft.isBlank()) {
+                        IconButton(onClick = { recording = recording.start() }) {
+                            Icon(
+                                imageVector = Icons.Filled.Mic,
+                                contentDescription = stringResource(R.string.chat_record_voice),
+                                tint = MeeshyTheme.tokens.textSecondary,
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onSend, enabled = canSend) {
+                            Icon(
+                                imageVector = if (isEditing) Icons.Filled.Check else Icons.AutoMirrored.Filled.Send,
+                                contentDescription = stringResource(R.string.chat_send),
+                            )
+                        }
+                    }
                 }
             }
         }

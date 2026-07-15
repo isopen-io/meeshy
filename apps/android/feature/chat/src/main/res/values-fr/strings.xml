@@ -7,6 +7,7 @@
     <string name="chat_call_rejoin">Rejoindre</string>
     <string name="chat_message_placeholder">Message</string>
     <string name="chat_send">Envoyer</string>
+    <string name="chat_record_voice">Enregistrer un message vocal</string>
     <string name="chat_effects_open">Effets du message</string>
     <string name="chat_effects_title">Effets du message</string>
     <string name="chat_effects_done">OK</string>

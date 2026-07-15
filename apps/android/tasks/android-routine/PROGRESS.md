@@ -1,5 +1,52 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **the voice-recording pill logic + UI** landed (slice `chat-voice-recording-pill`,
+> feature-parity §Chat "Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration
+> gating)"). iOS drives the composer's voice pill from recording state scattered across
+> `UniversalComposerBar+Recording.swift` — `minimumSendableDuration = 0.5`, `canSend`, `formatDuration`, the
+> 1 s blinking `dotOpacity`, and the `cancel`/`stopRecordingToAttachment`/`sendRecording` endings — all as
+> imperative `@State` mutations on the view. Android had **no voice affordance in the composer at all** (the
+> row was text + effects + send only). **Ships (`:feature:chat`, new `VoiceRecordingSession.kt`):** a pure,
+> immutable state machine that gathers that whole surface into one JVM-testable value type —
+> `VoiceRecordingPhase` (`Idle`/`Recording`), the transitions `start` (idempotent while recording — never
+> clobbers an in-progress take), `tick(delta)` (inert when idle or delta ≤ 0, so a stray zero/negative frame
+> can't rewind the clock), `meter(powerDb)` (normalises via the shared `:core:model` `AudioLevelNormalizer`
+> and pushes into a `WaveformLevelWindow` — no bespoke buffer), `cancel`, and `stop(): VoiceRecordingStop`
+> returning `(idle session, outcome)` where outcome is `Completed(durationSeconds, levels)` /
+> `TooShort` / `Inactive`. Derived read surface: `canSend` (`isRecording && elapsed >= 0.5`, inclusive floor,
+> iOS parity), `formattedElapsed` (`m:ss`, truncating fractional seconds — iOS `formatDuration`), and
+> `recordingDotOpacity(reduceMotion)` (fractional-second `< 0.5 → 1f else 0.3f`; reduce-motion pins to `1f`).
+> **+29 tests** (lifecycle: idle/start/idempotent-start-preserves-elapsed/cancel-discards/cancel-idempotent;
+> timer: accumulates, inert-when-idle, non-positive-delta-inert; gating: below/at-boundary/above 0.5;
+> stop outcomes: TooShort below, Completed at-and-above the boundary carrying duration+levels, Inactive when
+> idle; metering: loud→top, floor→silence, inert-when-idle, capacity-cap, zero-capacity-empty; formatting:
+> pad+truncate, minute rollover, multi-minute; dot blink: first-half-opaque, second-half-dim, resets each
+> whole second, reduce-motion pinned; immutability: transitions never mutate the source, fresh idle seeds a
+> flat capacity-sized strip). **Mutation check (RED proof):** flipping `canSend`'s `>=` → `>` failed
+> **exactly 1** test (`can send exactly at the minimum sendable duration boundary`), the other 28 stayed
+> green — behavioural, not tautological. (The genuine RED was the compile failure: the class did not exist
+> when the test file was written.) **Wired real (`:feature:chat` `ChatComposer`, exempt glue):** a blank-
+> composer `Mic` button (shown only when `!isEditing && draft.isBlank()`) calls `session.start()`; a 100 ms
+> `LaunchedEffect(recording.isRecording)` loop `tick`s the timer; while recording, the new
+> `VoiceRecordingPill` (X cancel · animated waveform strip · blinking dot + monospace timer · stop · send —
+> stop and send both dim + disable below `canSend`) replaces the input row; cancel/stop/send resolve the
+> matching transition and drop back to the text composer. **Surpasses iOS** on testability (the whole
+> recording surface is one pure JVM-covered value type vs iOS's scattered view `@State`) and on defined inert
+> cases (tick/meter/stop while idle, non-positive deltas). **Pending follow-up** (documented in feature-
+> parity): real `MediaRecorder`/`AudioRecord` capture feeding `meter()`, and the voice-attachment send
+> pipeline (VM + upload) — today the pill drives the *session*, not yet the audio bytes; the waveform is a
+> synthetic "live" animation until metering lands. **Verification:** `:app:assembleDebug
+> :feature:chat:testDebugUnitTest --max-workers=3` under the UTF-8 daemon recipe → **BUILD SUCCESSFUL**, APK
+> assembles + 29/29 chat suite green. Reviewer **PASS** (diff `apps/android/feature/chat` only — new
+> `VoiceRecordingSession` + `VoiceRecordingPill` + `ChatComposer` wiring + 4 `chat_record_voice` strings +
+> tracking docs; **SDK purity** — the session is a chat product rule beside `MessageOverlayDragLaw`, takes
+> bare `Float`/`Double`, and *reuses* the `:core:model` waveform atoms rather than duplicating them; **SSOT**
+> — one `VoiceRecordingSession`, consumed by the real pill; **UX/colour coherence** — accent-tinted pill,
+> error-tinted cancel, natural tap-mic-to-record, stop/send return to the coherent text composer, no dead
+> end; **no coverage floor lowered, no test weakened**). **Next slice:** feed the pill with real capture
+> (`MediaRecorder` amplitude → `meter()`) **or** the in-overlay interactive audio/video preview
+> (play/pause, scrub, ±5 s, 0.5–2.0×), both under §Chat.
+
 > On 2026-07-15 **the floating preview-bubble overlay layout law** landed (slice `chat-overlay-preview-bubble`,
 > feature-parity §Chat "Long-press overlay menu" — the **preview bubble** part, the last of the four; the overlay
 > menu line is now **COMPLETE** [x], joining quick-reactions + action-grid + drag-to-detail shipped earlier the same
