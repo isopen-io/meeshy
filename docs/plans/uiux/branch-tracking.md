@@ -1553,3 +1553,26 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Base de départ 107i : `main` HEAD**. **Différé 107i+** : `ReelsPlayerView` (7), `StoryTrayView` (9), `FeedPostCard+Media` (13), `StoryViewerView+Canvas` (13), `ConversationAnimatedBackground` (12), `OnboardingAnimations` (17), `ConversationView+MessageRow` (16) ; `ConversationView+Composer` (22, prudent), `StoryViewerView+Content` (31, ⚠️ i18n #1174).
 
 | 106i | claude/upbeat-euler-6r2un5 (iOS Dynamic Type + VoiceOver `AudioEffectsPanel` : 9/9 `.font(.system(size:))` → `MeeshyFont.relative` (weight + `.rounded`/`.monospacedDigit()` préservés, aucun figé) ; VoiceOver = `.isHeader` titre + `.accessibilityHidden` ×3 glyphes + `.isSelected` conditionnel chip d'effet actif & bouton son actif ; sliders déjà labellisés ; palette tokenisée + Glass adopté 0 swap, i18n 0 clé neuve ; 1 fichier sweep pur, 0 logique/0 test neuf, parité 55i/74i/86i/93i/104i/105i ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
+---
+
+> **POINTEUR iOS AUTORITAIRE (mis à jour 141i, 2026-07-15)** — piste iOS (suffixe `i`).
+> - **Peloton en vol : 140i** (`ThemedBackButton` chevron, PR #1966 ouverte). 20 PR ouvertes au run 141i
+>   (majorité dependabot + 1 modernization #1961 + #1966) ; **aucune ne touche `MyStoriesView`**.
+> - **141i (terminée, branche `claude/laughing-thompson-65518x`, base `main` HEAD `5195bad`)** : Dynamic Type
+>   + VoiceOver de **`MyStoriesView`** (feuille « Mes stories » : liste des stories envoyées, sélection
+>   multiple, suppression groupée, menu contextuel). Surface **fraîche** (jamais balayée). **6/6
+>   `.font(.system(size:))` → `MeeshyFont.relative`** (weight préservé, **aucun gel** — aucun cadre de
+>   dimension fixe). **VoiceOver** : 3 métriques (vues/réactions/commentaires) auparavant annoncées en
+>   nombres nus → **labels combinés** `story.mine.metric.{views,reactions,comments}.a11y` (3 clés neuves
+>   `.a11y`, inline) via `.accessibilityElement(children: .ignore)` + `.accessibilityLabel` ; glyphe
+>   `ellipsis` décoratif → `.accessibilityHidden(true)` (actions via `.contextMenu`). Cercle de sélection
+>   déjà masqué (trait `.isSelected` de la ligne) → inchangé. Palette tokenisée (0 swap). 1 fichier, 0
+>   logique / 0 test neuf. Gate = CI `iOS Tests`.
+> - **NE PAS re-flagger** `MyStoriesView` (Dynamic Type + VoiceOver soldés 141i).
+> - **Base de départ 142i : `main` HEAD** (resync ; supprimer la branche mergée). **Différé 142i+** :
+>   `StoryViewerView+Content` (31, ⚠️ i18n #1174), `OnboardingAnimations` (16), `FeedView+Attachments`
+>   (traîne), `ConversationView+Composer` (13, prudent), `ConversationAnimatedBackground` (12) ; traîne à
+>   ≤2 `.system` restante (VoiceProfileWizardView, InviteFriendsSheet, IncomingCallView, ConversationDashboardView…).
+
+| 141i | claude/laughing-thompson-65518x (iOS Dynamic Type + VoiceOver `MyStoriesView` : 6/6 `.font(.system(size:))` → `MeeshyFont.relative` (aucun gel, pas de cadre fixe) ; VoiceOver = 3 métriques labellisées (`story.mine.metric.{views,reactions,comments}.a11y`, 3 clés neuves `.a11y`) + `ellipsis` `.accessibilityHidden` ; cercle sélection déjà masqué (trait `.isSelected`) ; palette tokenisée 0 swap ; 1 fichier, 0 logique/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
