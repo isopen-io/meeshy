@@ -1,6 +1,7 @@
 package me.meeshy.ui.component.bubble
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -33,6 +34,7 @@ import me.meeshy.sdk.model.MessageEffectRenderPlan
 import me.meeshy.sdk.model.MessageEffectRenderPlanner
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.PersistentEffect
+import me.meeshy.sdk.model.SparkleFields
 import me.meeshy.ui.theme.MeeshyPalette
 
 /**
@@ -66,6 +68,7 @@ public fun Modifier.messageEffects(
     return this
         .appearanceTransforms(plan, appearanceSeed)
         .persistentEffects(plan, shape)
+        .sparkleCanvas(plan)
         .appearanceParticles(plan, appearanceSeed)
 }
 
@@ -223,8 +226,47 @@ private fun Modifier.appearanceParticles(plan: MessageEffectRenderPlan, seed: Lo
     }
 }
 
+/**
+ * The continuous white-twinkle overlay (iOS `SparkleEffect`). The per-instant sparkle geometry is
+ * the pure [SparkleFields]; this only advances a wall-clock `time` (seconds) via an infinite
+ * transition and paints the eight sparks over the bubble content in the draw phase, so the bubble
+ * subtree never recomposes per frame. The ramp period is [SPARKLE_CYCLE_SECONDS] = `20π`, chosen so
+ * every twinkle sinusoid (`1.3·t`, `0.9·t`, `2·t`) completes a whole number of cycles and the loop
+ * restarts seamlessly.
+ */
+@Composable
+private fun Modifier.sparkleCanvas(plan: MessageEffectRenderPlan): Modifier {
+    if (PersistentEffect.SPARKLE !in plan.persistent) return this
+
+    val transition = rememberInfiniteTransition(label = "sparkle")
+    val time by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = SPARKLE_CYCLE_SECONDS,
+        animationSpec = infiniteRepeatable(
+            tween(durationMillis = (SPARKLE_CYCLE_SECONDS * 1000f).toInt(), easing = LinearEasing),
+            RepeatMode.Restart,
+        ),
+        label = "sparkle-time",
+    )
+
+    return this.drawWithContent {
+        drawContent()
+        SparkleFields.field(time = time.toDouble(), width = size.width, height = size.height)
+            .forEach { sparkle ->
+                drawCircle(
+                    color = MeeshyPalette.White.copy(alpha = sparkle.alpha),
+                    radius = sparkle.size / 2f,
+                    center = Offset(sparkle.x, sparkle.y),
+                )
+            }
+    }
+}
+
 /** One-shot appearance-transform run length in ms — covers the longest effect (waoo ≈ 0.7s). */
 private const val TRANSFORM_DURATION_MS: Int = 700
+
+/** Sparkle time-ramp period in seconds (`20π`) — a whole-cycle length for a seamless loop. */
+private const val SPARKLE_CYCLE_SECONDS: Float = 62.831852f
 
 /** How far the waoo glow halo spreads past the bubble edge, in px. */
 private const val GLOW_SPREAD_PX: Float = 24f

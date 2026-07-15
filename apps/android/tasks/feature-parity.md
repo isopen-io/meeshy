@@ -713,7 +713,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       expéditeur) au lieu du corps. Strings `bubble_burned`/`bubble_burned_a11y` en/fr/es/pt. **Pending:** le
       consume view-once serveur (endpoint `requiresConsume` → gateway view-count, non câblé) qui déclenchera
       ce tombstone en temps réel.
-- [◐] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
+- [✅] Message visual effects (shake/zoom/explode/waoo/confetti/fireworks/glow/pulse/rainbow/sparkle)
       — picker sheet + cross-platform bitfield encoding. **Wire contract + resolver done**
       (`chat-message-effects-resolver` 2026-07-14 : la source de vérité `MessageEffectFlags`
       (bits 0-19, partagée avec `packages/shared/types/message-effect-flags.ts` + iOS
@@ -813,7 +813,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Câblé pour de vrai : `Modifier.messageEffects` gagne un layer `appearanceTransforms` (glue Compose exempte :
       anime un progress one-shot `0→1` sur 700 ms, applique le spec via `graphicsLayer` en phase layer +
       dessine le glow waoo via `drawBehind` en phase draw → zéro recomposition par frame), gaté par
-      `plan.appearance`/`hasPlayedAppearance`. Reste : le sparkle canvas (dernier persistant non bâti).
+      `plan.appearance`/`hasPlayedAppearance`. **Sparkle canvas done — effects stack COMPLETE**
+      (`chat-sparkle-canvas` 2026-07-15 : le SSOT pur `SparkleFields.sparkleAt(index, time, width,
+      height): Sparkle` + `field(time, width, height)` (`:core:model`) porte la géométrie twinkle de
+      l'iOS `SparkleEffect` — 8 sparks blancs pilotés purement par `time` (secondes) : position
+      `x = (sin(phase·1.3+i)·0.4+0.5)·w`, `y = (cos(phase·0.9+i·0.7)·0.4+0.5)·h` avec `phase = time+0.5i`
+      (le facteur `0.4` garde chaque spark dans la bande centrale `0.1..0.9`, jamais de clip au bord) ;
+      taille ET alpha lisent le MÊME twinkle `sin(phase·2+i)` (`size∈[2,8]`, `alpha∈[0.1,0.7]`) donc un
+      spark grossit et s'éclaircit ensemble (parité iOS `sparkleSize`/`sparkleOpacity`). **Mieux que
+      l'iOS** : tout le twinkle sort de la closure `Canvas` intestable vers une fonction JVM couverte ;
+      dims négatives clampées à zéro. +10 tests, preuve RED par mutation (swap sin→cos sur x casse
+      exactement `referenceSparkleAtOriginTimeHasCleanValues`, les 9 autres verts). Câblé pour de vrai :
+      `Modifier.messageEffects` gagne un layer `sparkleCanvas` (glue Compose exempte : avance un `time`
+      via `rememberInfiniteTransition` sur une période `20π` s — longueur à cycle entier pour une boucle
+      sans couture — et peint les 8 sparks blancs via `drawWithContent` en phase draw, zéro recomposition
+      par frame) gaté par `PersistentEffect.SPARKLE in plan.persistent`. Les 10 effets rendent désormais.
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
