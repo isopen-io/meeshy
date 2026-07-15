@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
+> - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
+>   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).
+>   **1 migré** `.font(.system(size:))` → `MeeshyFont.relative` (chevron.left 16 bold ; slot fixe 40×40
+>   généreux → scale sans clip). **1 figé** commenté **82i/GlobalSearchView** : badge unread 12 bold rounded
+>   (pill compacte `.fixedSize`+`minWidth:22` → scaler casse la capsule et la pousse hors de la pastille
+>   glass). Le libellé ligne 204 était **déjà** `relative`. A11y déjà en place (`Button` labellisé
+>   `a11y.back`/`a11y.back.with_unread` ; badge `.accessibilityHidden(true)`). Logique retour/unread non
+>   touchée. 1 fichier, 0 logique, 0 test/clé i18n neuve. Piste iOS : 0 PR sur ce fichier → 0 contention
+>   (#1961 `modernization-and-quality-audit` = piste distincte). Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ThemedBackButton` Dynamic Type SOLDÉ** : ne plus reprendre le badge unread figé (pill compacte).
+> - **Base de départ 141i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : traîne 2/1 `.system` (`ContextActionMenu`, `SecurityVerificationView`,
+>   `StatsTimelineChart`, `AudioPostComposerView`, `ConversationBackgroundComponents`, `MessageViewsDetailView`,
+>   `StoryExpiredContent`, `StoryViewerContainer`, `BubbleStandardLayout`, `CommunityLinksView`,
+>   `CommunityLinkDetailView`, `ShareLinksView`, `SharePickerView`, `ConversationView+MessageRow`,
+>   `WebRTCVideoView`…), ou **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
