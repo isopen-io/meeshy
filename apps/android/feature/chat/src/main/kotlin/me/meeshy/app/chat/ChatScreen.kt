@@ -140,6 +140,8 @@ import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import me.meeshy.sdk.link.LinkPreview
+import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.model.call.ActiveCallSession
 import java.time.ZoneId
 import java.util.Locale
@@ -465,6 +467,15 @@ fun ChatScreen(
                                             },
                                         )
                                     }
+                                    LinkPreviewCard(
+                                        state = LinkPreview.stateFor(
+                                            bubble.text,
+                                            LinkPreviewOutcome.Empty,
+                                        ),
+                                        isOutgoing = bubble.isOutgoing,
+                                        accentColor = accentColor,
+                                        onOpenUrl = { url -> runCatching { uriHandler.openUri(url) } },
+                                    )
                                     replyThreads.threadFor(bubble.messageId)?.let { thread ->
                                         ReplyCountPill(
                                             count = thread.count,

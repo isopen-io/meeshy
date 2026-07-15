@@ -2,6 +2,7 @@
 <resources>
     <string name="chat_title">Messages</string>
     <string name="chat_back">Retour</string>
+    <string name="chat_link_open">Ouvrir le lien</string>
     <string name="chat_call_audio">Appel audio</string>
     <string name="chat_call_video">Appel vidéo</string>
     <string name="chat_call_rejoin">Rejoindre</string>
