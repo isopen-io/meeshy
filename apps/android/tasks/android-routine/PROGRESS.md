@@ -1,5 +1,46 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **the sparkle canvas** landed (slice `chat-sparkle-canvas`, feature-parity §Chat
+> "Message visual effects" — **the effects stack is now COMPLETE**: all ten treatments (shake / zoom /
+> explode / waoo / confetti / fireworks / glow / pulse / rainbow / sparkle) render on a real bubble).
+> This was the last unbuilt effect: `PersistentEffect.SPARKLE` was already resolved into `plan.persistent`
+> by the planner, but `Modifier.messageEffects` only painted glow/pulse/rainbow, so a sparkle bit rendered
+> nothing. **Ships (`:core:model`, new `SparkleField.kt`):** `Sparkle(x, y, size, alpha)` + the pure
+> `SparkleFields.sparkleAt(index, time, width, height): Sparkle` and `field(time, width, height):
+> List<Sparkle>` porting iOS `SparkleEffect` (`MessageEffectModifiers.swift`), whose whole twinkle iOS
+> hides inside an untestable in-`Canvas` closure. Eight sparks are driven purely by wall-clock `time`
+> (seconds) — no stored state — each from a shared `phase = time + i·0.5`: **position** `x = (sin(phase·1.3
+> + i)·0.4 + 0.5)·w`, `y = (cos(phase·0.9 + i·0.7)·0.4 + 0.5)·h` (the `0.4` spread pins a spark inside the
+> central `0.1..0.9` band so it never clips the edge — a proven invariant); **size + alpha** both read the
+> *same* twinkle `sin(phase·2 + i)` (`size∈[2,8]`, `alpha∈[0.1,0.7]`), so a spark grows and brightens
+> together (iOS `sparkleSize`/`sparkleOpacity` share the identical expression — asserted via the
+> `(size-2)/6 == (alpha-0.1)/0.6` coupling). Negative dimensions clamp to zero (a zero-size bubble twinkles
+> from the origin, never off-screen). **+10 tests** (fixed 8-count; the clean reference sample x=50/y=90/
+> size=5/alpha=0.4 at index0·time0; inner-band / size-band / alpha-band envelopes swept over 8 sparks ×
+> 41 times; the shared-twinkle coupling invariant; time-evolution grows the spark; negative-dim clamp;
+> determinism; `field`→`sparkleAt` delegation SSOT). **Mutation check (RED proof):** swapping `sin`→`cos`
+> in the x-position failed **exactly 1** test (`referenceSparkleAtOriginTimeHasCleanValues`, x would be 90
+> not 50), the other 9 stayed green — behavioural, not tautological. **Wired for real (`:sdk-ui`, exempt
+> glue):** `Modifier.messageEffects` gains a `sparkleCanvas` layer — advances a `time` float via
+> `rememberInfiniteTransition` over a `20π`-second period (a whole-cycle length for all three sinusoids
+> `1.3·t`/`0.9·t`/`2·t`, so the ramp restarts seamlessly) and paints the eight white sparks over the bubble
+> via `drawWithContent` in the **draw phase**, so the bubble subtree never recomposes per frame (same
+> discipline as the particle/transform layers). Gated by `PersistentEffect.SPARKLE in plan.persistent`; a
+> bubble without the sparkle bit early-returns untouched. **Surpasses iOS** on testability (the whole
+> twinkle is a pure JVM-covered function vs iOS's untestable in-`Canvas` springs) and on render cost
+> (draw-phase reads, no per-frame recompose). **Verification:** full `assembleDebug testDebugUnitTest
+> --max-workers=3` under the UTF-8-daemon recipe → **BUILD SUCCESSFUL**, APK assembles + every module unit
+> suite green (no DataStore flake this run). Reviewer **PASS** (diff `apps/android` only — `:core:model`
+> [new `SparkleField`], `:sdk-ui` [`MessageEffectModifiers` sparkle layer + imports], tracking docs; **SDK
+> purity** — the twinkle geometry is pure `:core:model`, the Canvas is coverage-exempt Compose glue with no
+> singleton reads; **SSOT** — `field` delegates to `sparkleAt`; **UX/colour coherence** — white sparkle is
+> iOS-parity, no dead end; **no coverage floor lowered, no test weakened** — the glow/pulse/rainbow/
+> particle/transform layers and their tests are untouched, only extended). **The chat message-effects
+> feature is now fully at iOS parity (and surpasses it on testability).** **Next slice:** move to the next
+> unchecked §Chat box — the **long-press overlay menu** (iOS `MessageOverlayMenu`: preview bubble + quick
+> reactions bar + action grid + drag-to-detail panel; start with a pure `MessageOverlayDragLaw`-style
+> gesture-resolution function — swipe-up-strong = full menu, swipe-down = dismiss — + exempt overlay glue).
+
 > On 2026-07-15 **one-shot appearance transforms** landed (slice `chat-appearance-transforms`,
 > feature-parity §Chat "Message visual effects", closing the shake/zoom/explode/waoo half of the appearance
 > stack — the sibling of the confetti/fireworks particles shipped earlier the same day). The render plan already
