@@ -219,7 +219,7 @@ struct EmojiPickerView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(Color(UIColor.systemGray6))
-            .cornerRadius(10)
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
 
@@ -236,7 +236,7 @@ struct EmojiPickerView: View {
                                 Image(systemName: category.icon)
                                     // Doctrine 82i : glyphe d'onglet de catégorie dans un cadre tap fixe
                                     // 36×28 → taille figée (l'icône ne doit pas déborder de l'onglet).
-                                    .font(.system(size: 13, weight: .medium))
+                                    .font(MeeshyFont.relative(13, weight: .medium))
                                     .foregroundColor(selectedCategory == category ? .white : .primary)
                                     .frame(width: 36, height: 28)
                                     .background(

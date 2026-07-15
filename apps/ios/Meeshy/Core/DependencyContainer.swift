@@ -253,11 +253,22 @@ final class DependencyContainer {
         // The WAL and SHM siblings reference a now-missing main file and
         // would prevent GRDB from creating a fresh database. They never
         // carry data we can recover separately, so they're safe to remove.
-        do { try fileManager.removeItem(atPath: path + "-wal") } catch {
-            containerLogger.error("Failed to remove WAL file at \(path, privacy: .public)-wal: \(error.localizedDescription, privacy: .public)")
+        let walPath = path + "-wal"
+        if fileManager.fileExists(atPath: walPath) {
+            do {
+                try fileManager.removeItem(atPath: walPath)
+            } catch {
+                containerLogger.error("Failed to remove WAL file at \(path, privacy: .public)-wal: \(error.localizedDescription, privacy: .public)")
+            }
         }
-        do { try fileManager.removeItem(atPath: path + "-shm") } catch {
-            containerLogger.error("Failed to remove SHM file at \(path, privacy: .public)-shm: \(error.localizedDescription, privacy: .public)")
+
+        let shmPath = path + "-shm"
+        if fileManager.fileExists(atPath: shmPath) {
+            do {
+                try fileManager.removeItem(atPath: shmPath)
+            } catch {
+                containerLogger.error("Failed to remove SHM file at \(path, privacy: .public)-shm: \(error.localizedDescription, privacy: .public)")
+            }
         }
 
         return (mainExists && fileManager.fileExists(atPath: quarantined)) ? quarantined : nil
@@ -285,10 +296,12 @@ final class DependencyContainer {
         }
         let base = groupContainer ?? URL.applicationSupportDirectory
         let dbDir = base.appendingPathComponent("Database")
-        do {
-            try FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
-        } catch {
-            containerLogger.error("Failed to create database directory at \(dbDir.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        if !FileManager.default.fileExists(atPath: dbDir.path) {
+            do {
+                try FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
+            } catch {
+                containerLogger.error("Failed to create database directory at \(dbDir.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
         return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
     }
