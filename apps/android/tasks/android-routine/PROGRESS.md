@@ -1,5 +1,45 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **composer effects picker (sheet + real send wiring)** landed (slice `chat-composer-effects-picker`,
+> feature-parity §Chat "Message visual effects … picker sheet", closing the last un-built half of the effects
+> stack — the whole pure effects pipeline (`MessageEffectsResolver`/`Editor`/`Encoder`/`RenderPlanner`) already
+> existed and `MessageRepository.sendOptimistic` was already plumbed to accept `effects`, but **nothing armed or
+> sent them**: the composer had no picker. This slice builds the missing pure SSOT + the real composer→send loop.
+> **Ships (`:core:model`):** `MessageEffectOption` (enum: `flag` + `section` + stable `iconKey`/`labelKey`,
+> declaration order = iOS `EffectsPickerView` render order — BEHAVIOR[ephemeral,blurred,view_once] /
+> ENTRY[shake,zoom,explode,confetti,fireworks,waoo] / PERMANENT[glow,pulse,rainbow,sparkle]) + `inSection`;
+> `MessageEffectSection`; and `MessageEffectsPickerPresenter.build(effects): MessageEffectsPickerPresentation` —
+> a pure derivation of everything the iOS View recomputes inline: per-chip `isActive = effects.has(flag)`, the
+> `ephemeralDurations` list with `isSelected = ephemeralDuration == duration.seconds`, `showEphemeralDuration =
+> has(EPHEMERAL)` (flag authority — a stale duration with the chip off never surfaces the row, mirroring the
+> encoder), `activeCount = popcount` (an unknown high bit with no catalog chip still counts, iOS
+> `nonzeroBitCount`), `showSummary = hasAnyEffect`. **Surpasses iOS** by turning the whole sheet into one testable
+> value. **+16 presenter/catalog tests.** **Mutation check (RED proof):** forcing `showEphemeralDuration = true`
+> failed **exactly 3** tests (`build_emptyEffects…`, `build_singleActiveFlag…`, `build_durationSetButEphemeralFlagOff_hidesRow`),
+> the other 13 stayed green — reverted green, behavioural not tautological. **Wired for real (`:feature:chat`):**
+> `ChatUiState` gains `pendingEffects: MessageEffects` + `isEffectsPickerOpen` + derived `hasPendingEffects`;
+> `ChatViewModel` exposes `openEffectsPicker`/`dismissEffectsPicker` (dismiss KEEPS the armed selection — only a
+> send clears it) + `toggleEffect`/`selectEphemeralDuration`/`clearEffects` (pure delegates to the existing
+> `MessageEffectsEditor`); `send()` now stamps `pendingEffects` onto `sendOptimistic(effects=…)` (already encoded
+> to the outbox wire) then disarms the composer + closes the sheet. `ChatComposer` gains an `AutoAwesome` effects
+> button (accent-tinted when effects are armed, hidden while editing) opening the `EffectsPickerSheet` — coverage-
+> exempt Compose glue: 3 sections of accent-capsule chips in a `FlowRow`, the conditional ephemeral-duration row,
+> the "%d active / Clear all" summary, all driven by the presenter. **+7 ViewModel tests** (arm/disarm, other-bits-
+> untouched, duration record, clear, open-then-dismiss-keeps-selection, send-stamps-effects+resets, plain-send-
+> stamps-empty). Strings en/fr/es/pt. Default `pendingEffects = MessageEffects()` → **zero behaviour change for a
+> plain send** (existing 5-arg `sendOptimistic` verifies still pass). **Verification:** `:core:model` + `:feature:chat`
+> targeted suites green; full `gradle assembleDebug testDebugUnitTest --max-workers=3` under the UTF-8-daemon recipe.
+> Reviewer **PASS** (diff `apps/android` only — `:core:model` [`MessageEffectsPicker`], `:feature:chat`
+> [`ChatViewModel` state+intents+send, `ChatScreen` composer button + `EffectsPickerSheet`], strings, tracking docs;
+> **SDK purity** — the render-state derivation is a pure `:core:model` function, the sheet is coverage-exempt Compose
+> glue with no singleton reads; **SSOT** — reuses `MessageEffectsEditor`/`MessageEffectsEncoder`/`MessageEffectFlags`,
+> re-decides nothing in the composable; **UX/colour coherence** — accent-tinted chips + button mirror iOS
+> `EffectsPickerView`, natural bottom-sheet gesture, dismiss returns to the composer with the selection intact;
+> **no coverage floor lowered, no test weakened**). **Next slice:** the **received-message effect rendering** (propagate
+> the already-decoded `ApiMessage.effects` into `BubbleContent` so the persistent-treatment layer
+> `Modifier.messageEffects` actually fires on incoming messages), OR the **one-shot appearance rendering** (confetti/
+> fireworks particle overlays + shake/zoom transforms the `MessageEffectRenderPlanner` already enumerates).
+
 > On 2026-07-14 **view-once "seen and deleted" burned tombstone** landed (slice `chat-viewonce-burned-tombstone`,
 > feature-parity §Chat "Blurred / view-once messages", closing the burned half of that line). The blur-reveal
 > slice shipped the conceal + tap-to-reveal lifecycle and flagged two pendings: server view-once consume, and

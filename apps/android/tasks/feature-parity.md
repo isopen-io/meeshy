@@ -678,8 +678,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       que le badge, en lock-step), et enveloppe la bulle dans un `AnimatedVisibility` qui la fait
       disparaître avec un fade + `scaleOut(0.8)` + `shrinkVertically` quand le timer expire
       (parité burn-away iOS `opacity 0` + `scaleEffect 0.8`) ; défaut → jamais expiré → zéro
-      changement pour tout appelant existant. **Pending :** le duration picker (partie de
-      l'`EffectsPickerView` non encore construite).
+      changement pour tout appelant existant. **Duration picker done** (`chat-composer-effects-picker`
+      2026-07-15 : le row de durées éphémères fait maintenant partie de l'`EffectsPickerSheet` câblée —
+      chaque chip sélectionne via `MessageEffectsEditor.withEphemeralDuration`, visible seulement quand le
+      chip EPHEMERAL est armé, cf. la ligne « Message visual effects » ci-dessous).
 - [◐] Blurred ("tap to reveal") + view-once messages with fog effect
       — **conceal + reveal lifecycle done** (`chat-blur-reveal-lifecycle` 2026-07-14 : la logique pure
       `BlurRevealLifecycle` (`:core:model`) porte EXACTEMENT iOS `BubbleBlurRevealLifecycle`
@@ -756,10 +758,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       respire radius 4↔12 + alpha `intensity*0.3`↔`intensity` ; pulse = scale 1.0↔1.02 ;
       rainbow = bordure sweep-gradient) via `rememberInfiniteTransition` ; `MessageBubble` gagne
       les params optionnels `effects`/`hasPlayedAppearance` (défaut `null`/`false` → zéro changement
-      pour les appelants existants). Reste : le rendu des one-shot appearance (transforms + overlays
-      particules confetti/fireworks + sparkle canvas — le plan les énumère déjà, la couche se branche
-      sans toucher le planner), la Compose picker sheet, et le peuplement de `effects` depuis le
-      message côté ConversationScreen (le modèle message doit d'abord porter les champs effect).
+      pour les appelants existants). **Picker sheet + composer wiring done** (`chat-composer-effects-picker`
+      2026-07-15 : la SSOT pure `MessageEffectsPickerPresenter.build(effects)` (`:core:model`) dérive tout
+      l'état de rendu que l'iOS `EffectsPickerView` recompute inline — les 3 sections d'options
+      (`MessageEffectOption` : flag + `iconKey`/`labelKey` stables, ordre iOS Comportement/Entrée/Permanent)
+      avec `isActive` par chip, le row de durées avec `isSelected` par durée, `showEphemeralDuration =
+      has(EPHEMERAL)` (autorité flag, une durée périmée chip-off ne surface pas le row), `activeCount =
+      popcount` (un bit inconnu sans chip compte quand même) + `showSummary = hasAnyEffect`. **Mieux que
+      l'iOS** : la sheet entière devient une valeur testable. +16 tests presenter, preuve RED par mutation
+      (forcer `showEphemeralDuration = true` casse exactement 3 tests, les 13 autres verts). Câblé pour de
+      vrai : `ChatUiState` gagne `pendingEffects`/`isEffectsPickerOpen`/`hasPendingEffects` ; le ViewModel
+      expose `openEffectsPicker`/`dismissEffectsPicker` (garde la sélection au dismiss) +
+      `toggleEffect`/`selectEphemeralDuration`/`clearEffects` (délégués purs à `MessageEffectsEditor`) ;
+      `send()` stampe `pendingEffects` sur `sendOptimistic(effects=…)` (déjà plumbé jusqu'au wire outbox) puis
+      désarme le composer ; `ChatComposer` gagne un bouton `AutoAwesome` accent-teinté quand des effets sont
+      armés, ouvrant la `EffectsPickerSheet` (glue exempte : chips capsule accent, FlowRow, strings en/fr/es/pt).
+      +7 tests ViewModel (toggle/duration/clear/open-dismiss/send-stamp+reset/plain-send). Reste : le rendu des
+      one-shot appearance (transforms + overlays particules confetti/fireworks + sparkle canvas — le plan les
+      énumère déjà, la couche se branche sans toucher le planner), et le peuplement de `effects` depuis le
+      message reçu côté ConversationScreen (déjà décodé par `ApiMessage.effects`, reste à propager au bubble).
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera

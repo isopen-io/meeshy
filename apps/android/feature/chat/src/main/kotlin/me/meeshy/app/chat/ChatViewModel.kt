@@ -38,7 +38,10 @@ import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
+import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MessageEditability
+import me.meeshy.sdk.model.MessageEffects
+import me.meeshy.sdk.model.MessageEffectsEditor
 import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.model.PinAction
@@ -96,9 +99,17 @@ data class ChatUiState(
     val explorerMessageId: String? = null,
     val translatingLanguages: Set<String> = emptySet(),
     val languageExplorer: MessageLanguageExplorer? = null,
+    /** The composer's armed message effects — the selection the effects picker edits
+     * and [ChatViewModel.send] stamps onto the outgoing message. Empty = a plain send. */
+    val pendingEffects: MessageEffects = MessageEffects(),
+    /** Whether the effects-picker bottom sheet is presented. */
+    val isEffectsPickerOpen: Boolean = false,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
+
+    /** True when at least one effect is armed — drives the composer's active-effects accent. */
+    val hasPendingEffects: Boolean get() = pendingEffects.hasAnyEffect
 
     /** Every currently-pinned message, newest-pin first — drives the pinned-messages sheet. */
     val pinnedMessages: List<PinnedMessageRow> get() = PinnedMessagesList.of(messages.map { it.toPinnable() })
@@ -633,7 +644,16 @@ class ChatViewModel @Inject constructor(
         }
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = _state.value.replyingToMessageId
-        _state.update { it.copy(draft = "", replyingToMessageId = null, mention = it.mention.reset()) }
+        val effects = _state.value.pendingEffects
+        _state.update {
+            it.copy(
+                draft = "",
+                replyingToMessageId = null,
+                mention = it.mention.reset(),
+                pendingEffects = MessageEffects(),
+                isEffectsPickerOpen = false,
+            )
+        }
         persistDraft("", replyToId = null)
         viewModelScope.launch {
             try {
@@ -646,6 +666,7 @@ class ChatViewModel @Inject constructor(
                     ),
                     sender = user,
                     replyToId = replyToId,
+                    effects = effects,
                 )
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
@@ -654,6 +675,37 @@ class ChatViewModel @Inject constructor(
                 _state.update { it.copy(errorMessage = e.message) }
             }
         }
+    }
+
+    /** Present the composer's message-effects picker sheet. */
+    fun openEffectsPicker() {
+        _state.update { it.copy(isEffectsPickerOpen = true) }
+    }
+
+    /** Dismiss the effects picker; the armed [ChatUiState.pendingEffects] survive
+     * so a reopened sheet shows the same selection (only a send clears it). */
+    fun dismissEffectsPicker() {
+        _state.update { it.copy(isEffectsPickerOpen = false) }
+    }
+
+    /**
+     * Flip an effect chip in the armed selection via the pure [MessageEffectsEditor].
+     * Toggling an already-armed effect off leaves every other bit untouched.
+     */
+    fun toggleEffect(flag: Long) {
+        _state.update { it.copy(pendingEffects = MessageEffectsEditor.toggle(it.pendingEffects, flag)) }
+    }
+
+    /** Record the chosen ephemeral self-destruct [duration] on the armed selection. */
+    fun selectEphemeralDuration(duration: EphemeralDuration) {
+        _state.update {
+            it.copy(pendingEffects = MessageEffectsEditor.withEphemeralDuration(it.pendingEffects, duration))
+        }
+    }
+
+    /** The picker's "clear all" — reset the armed selection to no effects. */
+    fun clearEffects() {
+        _state.update { it.copy(pendingEffects = MessageEffectsEditor.cleared()) }
     }
 
     fun onMessageLongPress(messageId: String) {

@@ -4,7 +4,22 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Media §P) — slice `media-thumbhash-decode` ✅
+## This loop (Phase: Chat) — slice `chat-composer-effects-picker` ✅
+**Composer effects picker — pure presentation SSOT + real send wiring.** The whole pure effects pipeline
+(`MessageEffectsResolver`/`Editor`/`Encoder`/`RenderPlanner`) and the effects-ready `sendOptimistic` already
+existed, but nothing armed or sent effects — the composer had no picker. Ships `:core:model`
+`MessageEffectsPickerPresenter.build(effects)` (+ `MessageEffectOption`/`MessageEffectSection` catalog): a pure
+derivation of the whole sheet state the iOS `EffectsPickerView` recomputes inline (per-chip `isActive`, ephemeral
+`showEphemeralDuration`/`isSelected` under flag authority, `activeCount` popcount, `showSummary`). +16 tests,
+mutation-checked (force `showEphemeralDuration=true` → exactly 3 fail). Wired for real in `:feature:chat`:
+`ChatUiState.pendingEffects`/`isEffectsPickerOpen`, ViewModel intents (`toggleEffect`/`selectEphemeralDuration`/
+`clearEffects`/`open`/`dismiss` — dismiss keeps the selection), `send()` stamps `pendingEffects` onto
+`sendOptimistic(effects=…)` then disarms; `ChatComposer` AutoAwesome button opens the `EffectsPickerSheet` (exempt
+Compose glue, accent chips, en/fr/es/pt). +7 ViewModel tests. Full `assembleDebug testDebugUnitTest` green, APK
+produced, diff = `apps/android` only. Reviewer PASS. Next: propagate the already-decoded `ApiMessage.effects` into
+`BubbleContent` so `Modifier.messageEffects` fires on received messages; or the one-shot appearance rendering.
+
+## Prior loop (Phase: Media §P) — slice `media-thumbhash-decode` ✅
 **ThumbHash decoder pure core** — the decode beneath the app-side blur placeholder. Pure `:core:model`
 `me.meeshy.sdk.model.media.ThumbHash`: faithful port of Evan Wallace's `thumbHashToRGBA` /
 `thumbHashToAverageRGBA` / `thumbHashToApproximateAspectRatio` (`averageColor`, `approximateAspectRatio`,

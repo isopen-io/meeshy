@@ -8,6 +8,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -43,7 +44,10 @@ import me.meeshy.sdk.model.ApiMessageReplyPreview
 import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessagePinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.TranscriptionReadyEvent
@@ -422,6 +426,117 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         coVerify { repo.sendOptimistic("c1", "hello", "de", user, null) }
+    }
+
+    // MARK: - Composer effects picker
+
+    @Test
+    fun toggleEffect_armsAndDisarmsAnEffectInThePendingSelection() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.toggleEffect(MessageEffectFlags.EPHEMERAL)
+        assertThat(vm.state.value.pendingEffects.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+        assertThat(vm.state.value.hasPendingEffects).isTrue()
+
+        vm.toggleEffect(MessageEffectFlags.EPHEMERAL)
+        assertThat(vm.state.value.pendingEffects.hasAnyEffect).isFalse()
+        assertThat(vm.state.value.hasPendingEffects).isFalse()
+    }
+
+    @Test
+    fun toggleEffect_leavesOtherArmedEffectsUntouched() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.toggleEffect(MessageEffectFlags.GLOW)
+        vm.toggleEffect(MessageEffectFlags.SHAKE)
+        vm.toggleEffect(MessageEffectFlags.GLOW)
+
+        assertThat(vm.state.value.pendingEffects.has(MessageEffectFlags.SHAKE)).isTrue()
+        assertThat(vm.state.value.pendingEffects.has(MessageEffectFlags.GLOW)).isFalse()
+    }
+
+    @Test
+    fun selectEphemeralDuration_recordsSecondsOnThePendingSelection() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.toggleEffect(MessageEffectFlags.EPHEMERAL)
+        vm.selectEphemeralDuration(EphemeralDuration.FIVE_MINUTES)
+
+        assertThat(vm.state.value.pendingEffects.ephemeralDuration).isEqualTo(300)
+        assertThat(vm.state.value.pendingEffects.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+    }
+
+    @Test
+    fun clearEffects_resetsThePendingSelection() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.toggleEffect(MessageEffectFlags.EPHEMERAL)
+        vm.selectEphemeralDuration(EphemeralDuration.ONE_HOUR)
+        vm.clearEffects()
+
+        assertThat(vm.state.value.pendingEffects.hasAnyEffect).isFalse()
+        assertThat(vm.state.value.pendingEffects.ephemeralDuration).isNull()
+    }
+
+    @Test
+    fun effectsPicker_openThenDismiss_togglesSheetButKeepsTheArmedSelection() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.toggleEffect(MessageEffectFlags.RAINBOW)
+        vm.openEffectsPicker()
+        assertThat(vm.state.value.isEffectsPickerOpen).isTrue()
+
+        vm.dismissEffectsPicker()
+        assertThat(vm.state.value.isEffectsPickerOpen).isFalse()
+        // Dismiss must not discard the selection — only a send clears it.
+        assertThat(vm.state.value.pendingEffects.has(MessageEffectFlags.RAINBOW)).isTrue()
+    }
+
+    @Test
+    fun send_stampsTheArmedEffectsOntoTheOutgoingMessageAndClearsThem() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        val captured = slot<MessageEffects>()
+        coEvery {
+            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), capture(captured))
+        } returns "cmid_1"
+        advanceUntilIdle()
+
+        vm.toggleEffect(MessageEffectFlags.EPHEMERAL)
+        vm.selectEphemeralDuration(EphemeralDuration.ONE_MINUTE)
+        vm.openEffectsPicker()
+        vm.onDraftChange("boom")
+        vm.send()
+        advanceUntilIdle()
+
+        assertThat(captured.captured.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+        assertThat(captured.captured.ephemeralDuration).isEqualTo(60)
+        // A send disarms the composer: no effect leaks onto the next message,
+        // and the picker sheet closes.
+        assertThat(vm.state.value.pendingEffects.hasAnyEffect).isFalse()
+        assertThat(vm.state.value.isEffectsPickerOpen).isFalse()
+    }
+
+    @Test
+    fun send_withNoArmedEffects_stampsAnEmptyEffectSelection() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        val captured = slot<MessageEffects>()
+        coEvery {
+            repo.sendOptimistic(any(), any(), any(), any(), any(), any(), any(), capture(captured))
+        } returns "cmid_1"
+        advanceUntilIdle()
+
+        vm.onDraftChange("plain")
+        vm.send()
+        advanceUntilIdle()
+
+        assertThat(captured.captured.hasAnyEffect).isFalse()
     }
 
     @Test
