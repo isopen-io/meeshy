@@ -837,8 +837,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       derived `isActionable = !isDeleted && !isPending && !isFailed`. Surpasses iOS by folding the two-tier
       primary/"More…" split into one flat contextual list. `MessageActionsSheet` is now a dumb `when`
       renderer over `actions(ctx)` — the scattered inline `if` blocks + inline `isActionable` are gone.
-      Mutation-proven (swap show-original/show-translation → exactly 3 red). **Pending:** the floating
-      **preview bubble** overlay presentation + the **drag-to-detail** gesture law (iOS `MessageOverlayDragLaw`).
+      Mutation-proven (swap show-original/show-translation → exactly 3 red). **drag-to-detail gesture law done**
+      (slice `chat-overlay-drag-law`, 2026-07-15, +22 tests): pure `:feature:chat` `MessageOverlayDragLaw` SSOT
+      (faithful port of iOS `MessageOverlayDragLaw`) — `MessageOverlayDragOutcome` (OpenMore/Dismiss/SnapBack),
+      `outcome(translation, predicted)` (position-authoritative with velocity only counting in the drag direction;
+      the up-arm checked first so a both-armed input resolves OpenMore; crossed "drag up past threshold then fling
+      down" falls back to OpenMore), the damped-rubber-band `displayOffset(translation)` (1:1 inside the ∓80px
+      thresholds, 0.3 overshoot damping beyond), and `isArmed(translation)`. Wired for real into `MessageActionsSheet`
+      (exempt glue): a custom `OverlayDragHandle` grabber runs the law — swipe-up-strong expands the compact action
+      sheet into the language explorer (`onExploreLanguages`, which clears `actionMessageId` → a clean compact→expanded
+      transition, no stacking), swipe-down-strong dismisses, else the lifted content springs back; the pill widens and
+      takes the accent colour once `isArmed` crosses. Mutation-proven (flip the up-velocity direction guard → exactly 3
+      red). **Pending:** the floating **preview bubble** overlay presentation (elevated bubble hero above the menu).
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
 - [ ] Voice recording UI (iMessage-style pill: cancel, live waveform, timer, min-duration gating)

@@ -1,12 +1,14 @@
 package me.meeshy.app.chat
 
 import android.widget.Toast
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -110,6 +113,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -797,6 +801,13 @@ private fun ReactionReactorRow(reactor: ReactionReactor, accentColor: Color) {
 
 private const val LOAD_OLDER_THRESHOLD = 2
 private const val BOTTOM_TOLERANCE_ITEMS = 2
+
+/**
+ * Seconds of the release velocity to project past the current translation when
+ * resolving the overlay drag — the Compose analogue of UIKit's
+ * `predictedEndTranslation`. Feeds [MessageOverlayDragLaw.outcome]'s `predicted`.
+ */
+private const val OVERLAY_DRAG_VELOCITY_PROJECTION_SECONDS = 0.1f
 
 private fun LazyListState.isNearBottom(lastIndex: Int): Boolean {
     if (lastIndex <= 0) return true
@@ -1658,11 +1669,35 @@ private fun MessageActionsSheet(
         canDeleteForEveryone = canDeleteForEveryone,
         pinAction = pinAction,
     )
+    // The vertical drag on the grabber is resolved by the pure [MessageOverlayDragLaw]
+    // SSOT: a strong swipe up expands the compact action sheet into the full language
+    // explorer ("Plus…" / Menu 2), a strong swipe down dismisses, anything weaker
+    // springs back. The lift follows the finger via [MessageOverlayDragLaw.displayOffset].
+    val scope = rememberCoroutineScope()
+    val liftOffset = remember { Animatable(0f) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        dragHandle = {
+            OverlayDragHandle(
+                accentColor = accentColor,
+                onDrag = { translation -> scope.launch { liftOffset.snapTo(MessageOverlayDragLaw.displayOffset(translation)) } },
+                onSettle = { scope.launch { liftOffset.animateTo(0f) } },
+                onOutcome = { outcome ->
+                    when (outcome) {
+                        MessageOverlayDragOutcome.OpenMore -> onExploreLanguages()
+                        MessageOverlayDragOutcome.Dismiss -> onDismiss()
+                        MessageOverlayDragOutcome.SnapBack -> Unit
+                    }
+                },
+            )
+        },
     ) {
-        Column(modifier = Modifier.padding(bottom = MeeshySpacing.xl)) {
+        Column(
+            modifier = Modifier
+                .offset { IntOffset(0, liftOffset.value.roundToInt()) }
+                .padding(bottom = MeeshySpacing.xl),
+        ) {
             if (ctx.isActionable) {
                 EmojiQuickStrip(
                     emojis = quickReactions,
@@ -1755,6 +1790,71 @@ private fun MessageActionsSheet(
                 }
             }
         }
+    }
+}
+
+/**
+ * The grabber at the top of the long-press overlay sheet. Its vertical drag is
+ * governed entirely by the pure [MessageOverlayDragLaw]: [onDrag] streams the
+ * damped display offset while the finger moves, [onOutcome] fires the resolved
+ * action on release (open "More…", dismiss, or snap back), and [onSettle] springs
+ * the lift back to rest. The pill widens and takes the accent colour once the drag
+ * arms the "More…" threshold ([MessageOverlayDragLaw.isArmed]) so the gesture reads
+ * as intentional before release. All testable decisions live in the pure law; this
+ * is coverage-exempt Compose glue.
+ */
+@Composable
+private fun OverlayDragHandle(
+    accentColor: Color,
+    onDrag: (Float) -> Unit,
+    onSettle: () -> Unit,
+    onOutcome: (MessageOverlayDragOutcome) -> Unit,
+) {
+    var armed by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = MeeshySpacing.md)
+            .pointerInput(Unit) {
+                val tracker = VelocityTracker()
+                var accumulated = 0f
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        accumulated = 0f
+                        armed = false
+                        tracker.resetTracking()
+                    },
+                    onDragEnd = {
+                        val velocityY = tracker.calculateVelocity().y
+                        val predicted = accumulated + velocityY * OVERLAY_DRAG_VELOCITY_PROJECTION_SECONDS
+                        val outcome = MessageOverlayDragLaw.outcome(accumulated, predicted)
+                        armed = false
+                        onSettle()
+                        onOutcome(outcome)
+                    },
+                    onDragCancel = {
+                        accumulated = 0f
+                        armed = false
+                        onSettle()
+                    },
+                    onVerticalDrag = { change, dragAmount ->
+                        accumulated += dragAmount
+                        tracker.addPosition(change.uptimeMillis, change.position)
+                        val nowArmed = MessageOverlayDragLaw.isArmed(accumulated)
+                        if (nowArmed != armed) armed = nowArmed
+                        onDrag(accumulated)
+                    },
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(if (armed) 48.dp else 32.dp)
+                .height(4.dp)
+                .clip(CircleShape)
+                .background(if (armed) accentColor else MeeshyTheme.tokens.backgroundTertiary),
+        )
     }
 }
 

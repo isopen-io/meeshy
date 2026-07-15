@@ -1,5 +1,49 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **the overlay drag-to-detail gesture law** landed (slice `chat-overlay-drag-law`,
+> feature-parity §Chat "Long-press overlay menu" — the **drag-to-detail** part, the sibling of the quick-reactions
+> and action-grid parts shipped earlier the same day). iOS governs the vertical gesture on the long-press overlay
+> (`MessageOverlayMenu`) with a pure `MessageOverlayDragLaw`: swipe-up-strong → open "Plus…" (Menu 2), swipe-down-
+> strong → dismiss, anything weaker → spring back; on Android the compact action sheet had no such gesture (only the
+> ModalBottomSheet's native swipe-down-to-dismiss), so there was no way to *expand* it into the language explorer
+> by gesture. **Ships (`:feature:chat`, new `MessageOverlayDragLaw.kt`):** a faithful port — `MessageOverlayDragOutcome`
+> (`OpenMore`/`Dismiss`/`SnapBack`), `outcome(translation, predicted): MessageOverlayDragOutcome`, the damped
+> `displayOffset(translation): Float`, and `isArmed(translation): Boolean`. Ranges are disjoint by construction:
+> each directional outcome needs a strict sign of `translation`, and the projected velocity (`predicted`) only counts
+> in the drag's own direction — so a *down*-fling while dragging up is inert, and the crossed case "drag up past the
+> −80px threshold then fling down on release" falls back to the **position** rule (`OpenMore`), matching iOS (cancelling
+> requires sliding back under the threshold before releasing). The up-arm is checked before the down-arm, so a
+> pathological both-armed input deterministically resolves `OpenMore`, never `Dismiss`. `displayOffset` tracks the
+> finger 1:1 inside the ∓80px thresholds then applies a `0.3` elastic overshoot damping beyond either end (so
+> `displayOffset(-120) = -92`, `displayOffset(120) = 92`), staying monotonic. **+22 tests** (every `outcome` arm:
+> strong/weak swipe up+down, velocity-in-direction, velocity-against-direction ignored, the up-prediction boundary,
+> the crossed drag-up-then-fling-down, zero-drag, up-takes-priority-when-both-armed; `displayOffset` 1:1 band,
+> both damped ends, monotonicity, damped-trails-raw-finger; `isArmed` at/beyond and under/downward). **Mutation
+> check (RED proof):** flipping the up-velocity direction guard `translation < 0f` → `translation > 0f` failed
+> **exactly 3** tests (the two velocity-in-up-direction openMore tests + the against-direction "ignored" guard), the
+> other 19 stayed green — behavioural, not tautological. (The compile-error RED window was lost to a background-
+> compile race where the production file landed before the Kotlin task executed; the mutation check is the recovery,
+> per the 2026-07-13 `notifications-type-accent-color` NOTES lesson.) **Wired for real (`:feature:chat` `ChatScreen`,
+> exempt glue):** `MessageActionsSheet`'s `ModalBottomSheet` gets a custom `dragHandle` — a new `OverlayDragHandle`
+> grabber whose `detectVerticalDragGestures` accumulate a plain local (zero per-frame recomposition), feed a
+> `VelocityTracker` (release velocity projected `0.1s` past the translation → `predicted`, the Compose analogue of
+> UIKit `predictedEndTranslation`), stream `displayOffset` into a `remember { Animatable }` read only in the
+> `.offset { }` placement lambda, and on release resolve the law → `OpenMore` calls `onExploreLanguages()` (the VM
+> clears `actionMessageId` when opening the explorer, so this is a genuine compact→expanded transition, not a stacked
+> dead-end), `Dismiss` calls `onDismiss()`, `SnapBack` springs the lift home. The pill widens `32→48dp` and takes the
+> `accentColor` once `isArmed` crosses (recomposing only on the arm/disarm transition, not per frame — the
+> `SwipeToReply.armedHaptic` discipline). **Surpasses iOS** on testability (the whole law is a pure JVM-covered
+> function vs iOS's law-plus-`GestureState` mix) and by giving the action sheet a real expand gesture Android lacked.
+> **Verification:** `:feature:chat:testDebugUnitTest` (all green, mutation-proven) + `:app:assembleDebug` → **BUILD
+> SUCCESSFUL in 2m 36s** (APK assembles, whole app compiles with the new grabber). Reviewer **PASS** (diff
+> `apps/android/feature/chat` only — new `MessageOverlayDragLaw` + `ChatScreen` grabber/handle + tracking docs; **SDK
+> purity** — the law is a chat product gesture rule beside `SwipeToReply`/`MessageActionMenu`, takes bare `Float`s not
+> UI types; **SSOT** — one law, `displayOffset`/`outcome`/`isArmed` all consumed for real; **UX/colour coherence** —
+> accent-tinted armed grabber, natural swipe-up-to-expand / swipe-down-to-dismiss, no dead end; **no coverage floor
+> lowered, no test weakened**). **Next slice:** the last §Chat "Long-press overlay menu" part — the floating **preview
+> bubble** overlay presentation (an elevated bubble hero rendered above the menu, iOS `MessageOverlayMenu`'s preview),
+> then move down §Chat to the universal composer / voice-recording ladder.
+
 > On 2026-07-15 **the long-press overlay action grid SSOT** landed (slice `chat-overlay-action-menu`,
 > feature-parity §Chat "Long-press overlay menu" — the **action grid** part). Before this slice the
 > long-press `MessageActionsSheet` composed its action list inline: ~10 scattered `if` blocks inside the
