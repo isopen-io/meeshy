@@ -550,7 +550,7 @@ struct LoginView: View {
                 ForEach(MeeshyConfig.ServerEnvironment.allCases, id: \.rawValue) { env in
                     Button {
                         HapticFeedback.light()
-                        withAnimation(.spring(response: MeeshyAnimation.springFast.response ?? 0.3, dampingFraction: 0.8)) {
+                        withAnimation(MeeshyAnimation.springFast) {
                             selectedEnv = env
                             showCustomInput = env == .custom
                         }
