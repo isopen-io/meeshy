@@ -1,5 +1,46 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **one-shot appearance transforms** landed (slice `chat-appearance-transforms`,
+> feature-parity §Chat "Message visual effects", closing the shake/zoom/explode/waoo half of the appearance
+> stack — the sibling of the confetti/fireworks particles shipped earlier the same day). The render plan already
+> enumerated these four bits in `plan.appearance`, but `Modifier.messageEffects` only painted the confetti/
+> fireworks particle burst; the four *transform* effects (which animate the bubble itself) rendered nothing.
+> **Ships (`:core:model`, new `AppearanceTransform.kt`):** `AppearanceTransformSpec(translationX, scale, alpha,
+> glowAlpha)` (+ `IDENTITY`/`isIdentity`); `AppearanceTransforms.forEffect(effect, progress): AppearanceTransformSpec?`
+> — the pure per-progress geometry porting iOS `ShakeEffect`/`ZoomEffect`/`ExplodeEffect`/`WaooEffect`
+> (`MessageEffectModifiers.swift`), whose spring/ease timings iOS hides inside `withAnimation`: **shake** =
+> `sin(p·π·4)·8` horizontal oscillation that starts AND ends at rest; **zoom** = single-stage mono grow `0.3→1`;
+> **explode** = two-stage pop `0.1→1.15→1` fading in `α 0→1`; **waoo** = two-stage bounce `0.5→1.1→1` with glow
+> `0→0.6→0`. `resolve(effects, progress)` folds several effects into one spec (offsets add, scales multiply,
+> opacities multiply, glow takes the strongest) → `IDENTITY` when no transform effect is present.
+> `transformEffects` is derived from `forEffect` (SSOT) and **partitions** the six appearance effects with
+> `AppearanceParticleFields.particleEffects` — disjoint AND exhaustive (both asserted). Progress clamped `0f..1f`
+> (out-of-range never crashes). **+24 tests** (shake 4: rest-at-ends / +peak at ⅛ / −peak later / no scale-fade-
+> glow; zoom 3: bounds / monotone-no-overshoot / opaque; explode 4: tiny+transparent start / boundary overshoot
+> then settle / fade-in mid-grow / settle-stage opaque-shrinking; waoo 3: small+no-glow start / glow-peak-then-
+> fade / half-glow mid-settle; particle→null 1; clamp 2; transformEffects set 2 incl. the partition invariant;
+> resolve fold 4; isIdentity 1). **Mutation check (RED proof):** negating the shake oscillation failed **exactly
+> 2** tests (the two swing assertions), the other 22 stayed green — behavioural, not tautological. **Wired for
+> real (`:sdk-ui`, exempt glue):** `Modifier.messageEffects` gains an `appearanceTransforms` layer — animates a
+> one-shot `progress 0f→1f` (`Animatable` + `tween(700, LinearOutSlowInEasing)`), applies the resolved
+> offset/scale/fade via `graphicsLayer` in the **layer phase** and paints the waoo glow via `drawBehind` in the
+> **draw phase**, so the bubble subtree never recomposes per frame (same discipline as the particle layer). A
+> message carrying a shake/zoom/explode/waoo bit now pops on appear; a bubble with no transform effect early-
+> returns untouched. **Surpasses iOS** on testability (the whole transform curve is a pure JVM-covered function
+> vs iOS's untestable in-modifier springs) and on render cost (draw/layer-phase reads, no per-frame recompose).
+> **Verification:** `:core:model:testDebugUnitTest` (24/24 green, mutation-proven) + `:sdk-ui:assembleDebug`
+> green + full `assembleDebug testDebugUnitTest --max-workers=3` (APK assembles; every module green except the
+> documented `:sdk-core` DataStore disk-contention flake — `InterfaceLanguageStoreTest`/`ThemeStoreTest`/
+> `MediaDownloadPreferencesStoreTest` `TimeoutCancellationException`, **3→1 on isolated re-run, then green alone**,
+> unrelated to this `:core:model`+`:sdk-ui` diff). Reviewer **PASS** (diff `apps/android` only; SDK purity — the
+> per-progress curve is pure `:core:model`, the modifier is coverage-exempt glue with no singleton reads; SSOT —
+> `transformEffects` derived from `forEffect`, partitions the appearance set with the particle SSOT; UX/colour
+> coherence — waoo glow is iOS-parity yellow, no dead end; no coverage floor lowered, no test weakened — the
+> particle/persistent layers and their tests are untouched, only extended). **Closes the appearance line entirely**
+> (particles ✅ + transforms ✅); the only remaining effect is the persistent **sparkle canvas**. **Next slice:**
+> the **sparkle canvas** (iOS `SparkleEffect`: an 8-point time-driven twinkle over the bubble — a pure
+> twinkle-position function `time+index → x/y/size/opacity` + exempt `Canvas`), the last unbuilt visual effect.
+
 > On 2026-07-15 **one-shot appearance particles** landed (slice `chat-appearance-particle-field`,
 > feature-parity §Chat "Message visual effects", closing the confetti/fireworks half of the last-unbuilt
 > effects layer: the render plan already enumerated `plan.appearance` (shake/zoom/explode/waoo/confetti/
@@ -2858,7 +2899,23 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-15): `chat-appearance-particle-field`** — the confetti/fireworks one-shot appearance
+**Just shipped (2026-07-15): `chat-appearance-transforms`** — the shake/zoom/explode/waoo one-shot appearance
+transforms (the sibling half of the confetti/fireworks particles). Pure `:core:model`
+`AppearanceTransforms.forEffect(effect, progress): AppearanceTransformSpec?` (shake sinusoid / zoom grow /
+explode two-stage pop+fade / waoo two-stage bounce+glow) + `resolve(effects, progress)` fold + `transformEffects`
+SSOT that partitions the appearance set with the particle SSOT; exempt `:sdk-ui` `Modifier.messageEffects` gains
+an `appearanceTransforms` layer (700 ms `graphicsLayer` transform in the layer phase + waoo glow in the draw
+phase, zero per-frame recompose). +24 tests (mutation-proof: negating the shake oscillation breaks exactly the 2
+swing tests). **Closes the appearance line entirely** (particles ✅ + transforms ✅).
+**Recommended next (highest value):**
+- **Sparkle canvas** — the last unbuilt visual effect (iOS `SparkleEffect`: 8-point time-driven twinkle over the
+  bubble). A pure twinkle-position function (`time+index → x/y/size/opacity`) + exempt `Canvas`. Closes the whole
+  message-visual-effects line.
+- **§B "Communities carousel + category filter chips"** (feature-parity.md line ~309, still `[ ]`).
+
+---
+
+**Earlier (2026-07-15): `chat-appearance-particle-field`** — the confetti/fireworks one-shot appearance
 overlays. Pure `:core:model` `ConfettiFieldGenerator`/`FireworksFieldGenerator.generate(count,width,height,seed):
 ParticleField` (seeded, deterministic — surpasses iOS's per-appearance re-roll) + `Particle.xAt/yAt(progress)` +
 `AppearanceParticleFields.forEffect` (confetti/fireworks→field, transforms→null); exempt `:sdk-ui`

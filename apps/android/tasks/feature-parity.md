@@ -800,8 +800,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       26 autres verts). Câblé pour de vrai : `Modifier.messageEffects` gagne un layer `appearanceParticles`
       (glue Compose exempte : anime un progress one-shot `0→1`, peint le field via `drawWithContent`, fade en
       queue) gaté par `plan.appearance` (donc par `hasPlayedAppearance`) ; `MessageBubble` passe un
-      `appearanceSeed = messageId.hashCode()` stable. Reste : le rendu des one-shot appearance *transforms*
-      (shake/zoom/explode/waoo animent la bulle elle-même) + le sparkle canvas — le plan les énumère déjà.
+      `appearanceSeed = messageId.hashCode()` stable. **One-shot appearance transforms done**
+      (`chat-appearance-transforms` 2026-07-15 : le SSOT pur `AppearanceTransforms.forEffect(effect, progress):
+      AppearanceTransformSpec?` (`:core:model`) porte la géométrie par-progrès des `ViewModifier` iOS
+      `ShakeEffect`/`ZoomEffect`/`ExplodeEffect`/`WaooEffect` — shake = oscillation sinusoïdale `sin(p·π·4)·8`
+      qui part et revient au repos, zoom = grow mono `0.3→1`, explode = pop deux-temps `0.1→1.15→1` en
+      fondu-entrant `α 0→1`, waoo = bounce deux-temps `0.5→1.1→1` avec glow `0→0.6→0`. `resolve(effects, progress)`
+      folde plusieurs effets (offsets additionnés, scales multipliés, opacités multipliées, glow au plus fort) ;
+      `transformEffects` est dérivé de `forEffect` (SSOT) et **partitionne** exactement les 6 effets appearance
+      avec `AppearanceParticleFields.particleEffects` (disjoints + exhaustifs, testé). +24 tests, preuve RED par
+      mutation (négation de l'oscillation shake casse exactement les 2 tests de swing, les 22 autres verts).
+      Câblé pour de vrai : `Modifier.messageEffects` gagne un layer `appearanceTransforms` (glue Compose exempte :
+      anime un progress one-shot `0→1` sur 700 ms, applique le spec via `graphicsLayer` en phase layer +
+      dessine le glow waoo via `drawBehind` en phase draw → zéro recomposition par frame), gaté par
+      `plan.appearance`/`hasPlayedAppearance`. Reste : le sparkle canvas (dernier persistant non bâti).
 - [ ] Long-press overlay menu (preview bubble, quick reactions, action grid, drag-to-detail panel)
 - [ ] In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)
 - [ ] Universal composer: text, attachments, voice, location, emoji, camera
