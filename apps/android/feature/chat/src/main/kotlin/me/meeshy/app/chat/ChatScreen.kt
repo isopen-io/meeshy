@@ -110,7 +110,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -237,6 +240,11 @@ fun ChatScreen(
         derivedStateOf { listState.isNearBottom(listItems.lastIndex) }
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
+    // Window-space frame of each rendered message row, captured during layout for
+    // the long-press preview hero (see MessageOverlayPreviewHero). A plain map, not
+    // snapshot state: written from onGloballyPositioned without forcing recomposition,
+    // read only when the overlay opens (an actionMessageId change already recomposes).
+    val bubbleFrames = remember { mutableMapOf<String, Rect>() }
     LaunchedEffect(affordanceMessages, isNearBottom) {
         scrollAffordance = ScrollAffordance.next(scrollAffordance, affordanceMessages, isNearBottom)
     }
@@ -420,6 +428,9 @@ fun ChatScreen(
                                         isOutgoing = bubble.isOutgoing,
                                         accentColor = accentColor,
                                         onReply = { viewModel.startReply(bubble.messageId) },
+                                        modifier = Modifier.onGloballyPositioned {
+                                            bubbleFrames[bubble.messageId] = it.boundsInWindow()
+                                        },
                                     ) {
                                         MessageBubble(
                                             content = bubble,
@@ -549,6 +560,13 @@ fun ChatScreen(
     if (actionTarget != null) {
         val nowMillis = System.currentTimeMillis()
         val createdAtMillis = isoToEpochMillisOrNull(actionTarget.createdAtIso)
+        bubbleFrames[actionTarget.messageId]?.let { frame ->
+            MessageOverlayPreviewHero(
+                frame = frame,
+                content = actionTarget,
+                accentColor = accentColor,
+            )
+        }
         MessageActionsSheet(
             bubble = actionTarget,
             canEdit = MessageEditability.canEdit(
@@ -828,6 +846,7 @@ private fun SwipeToReplyContainer(
     isOutgoing: Boolean,
     accentColor: Color,
     onReply: () -> Unit,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val direction = replyDirection(isOutgoing)
@@ -840,7 +859,7 @@ private fun SwipeToReplyContainer(
     )
     val revealProgress = (abs(animatedOffset) / SwipeToReply.COMMIT_THRESHOLD).coerceIn(0f, 1f)
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = modifier.fillMaxWidth()) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.Reply,
             contentDescription = null,

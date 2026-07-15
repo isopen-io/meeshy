@@ -1,5 +1,53 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **the floating preview-bubble overlay layout law** landed (slice `chat-overlay-preview-bubble`,
+> feature-parity §Chat "Long-press overlay menu" — the **preview bubble** part, the last of the four; the overlay
+> menu line is now **COMPLETE** [x], joining quick-reactions + action-grid + drag-to-detail shipped earlier the same
+> day). iOS renders a real elevated bubble hero *above* its `MessageOverlayMenu`, positioned by a dense "native-lean"
+> geometry block inside `MessageOverlayMenu.swift` (the `nl*` locals): it stacks reactions-bar / preview-bubble /
+> action-menu into one cluster, scales the hero so a tall message stays on-screen, and clamps the whole cluster inside
+> the safe area. On Android the long-press presentation was a bare `ModalBottomSheet` with **no lifted hero at all** —
+> the tapped message just stayed in the list under the scrim. **Ships (`:feature:chat`, new `MessageOverlayLayout.kt`):**
+> a faithful pure port of that geometry — `OverlayRect`/`OverlayPoint` value types, `MessageOverlayCluster`
+> (`scale` + `preview` rect + `emojiBar`/`actionMenu` anchor points), and
+> `MessageOverlayLayout.compute(bubble, screenWidth, screenHeight, safeTop, safeBottom, menuWidth, menuHeight, isOutgoing)`.
+> The scale is a two-stage cascade: a **height cap** (`> 320px → max(0.55, 320/h)`, else 1.0) then a **fit squeeze**
+> (only when `scaledBubbleHeight + chrome > availableBand`, → `max(0.4, min(previewScale, max(60, band-chrome)/max(1,h)))`),
+> the available band floored at 160 so a tiny screen never divides by a negative. The hero anchors to the message's
+> **trailing** edge for own messages (`right - w/2`) and **leading** otherwise (`left + w/2`) and is deliberately
+> **not** X-clamped (it tracks its source bubble even past the menu's clamp band), while the emoji bar (width 300) and
+> the action menu clamp to the side padding **independently** using their own widths. The cluster top is clamped
+> between `safeTop+12` and `availBottom - clusterHeight`, so a message hugging either screen end still yields a fully
+> on-screen cluster. **+17 tests** (full-scale-when-fits, height-cap `320/400=0.8` + the inclusive `h==320` boundary,
+> preview-scale floor 0.55, fit squeeze below the cap + fit floor 0.4, both anchor directions, emoji-vs-menu
+> independent clamps, hero-unclamped-past-menu, cluster-top clamp at both ends, available-band floor / finiteness on a
+> degenerate screen, determinism). **Mutation check (RED proof):** swapping the leading/trailing anchor branches
+> failed **exactly 3** tests (the two anchor tests + the hero-tracks-past-menu test), the other 14 stayed green —
+> behavioural, not tautological. **Notably** the *first* draft of the anchor tests used an unscaled bubble and the same
+> mutation passed all 17 — because at `scale == 1.0`, `right - w/2 == left + w/2` (both equal the bubble's own centre),
+> so leading/trailing are indistinguishable; the fix was to test the anchor only on a **scaled** preview
+> (`bubbleW < width`), where the two directions genuinely diverge (new NOTES lesson). **Wired for real (`:feature:chat`
+> `ChatScreen`, exempt glue):** each message row now records its window frame via `onGloballyPositioned` into a plain
+> (non-snapshot) `bubbleFrames` map — written without forcing recomposition, read only when the overlay opens (an
+> `actionMessageId` change already recomposes). On long-press, a new `MessageOverlayPreviewHero` reads that frame,
+> runs the law against the live window size + system-bar insets, and lifts a **scaled copy of the actual
+> `MessageBubble`** in a non-focusable `Popup` (a `FixedWindowOffsetProvider` places it at the computed
+> `preview` top-left; `graphicsLayer` scales it from the anchored edge). A frame-map miss skips the hero gracefully
+> (`?.let`) — no crash on a not-yet-measured row. **Surpasses iOS** on testability (the whole cluster geometry is a
+> pure JVM-covered function vs iOS's `nl*` locals buried inside a `GeometryReader` closure) and gives Android a real
+> lifted hero it previously lacked entirely. **Verification:** `:app:assembleDebug testDebugUnitTest --max-workers=3`
+> under the UTF-8-locale daemon recipe (see NOTES — a pre-existing `:sdk-core` test method name contains an em-dash,
+> so the Kotlin daemon needs `LC_ALL=C.UTF-8` + `sun.jnu.encoding=UTF-8` or code-gen throws `InvalidPathException`)
+> → **BUILD SUCCESSFUL in 2m 16s**, APK assembles + every module unit suite green. Reviewer **PASS** (diff
+> `apps/android/feature/chat` only — new `MessageOverlayLayout` + `MessageOverlayPreviewHero` + `ChatScreen`
+> frame-capture/hero wiring + a `modifier` param on `SwipeToReplyContainer` + tracking docs; **SDK purity** — the law
+> is a chat product rule beside `MessageOverlayDragLaw`/`MessageActionMenu`, takes bare `Float`s not UI types; **SSOT**
+> — one `compute()`, consumed by the real hero; **UX/colour coherence** — accent-tinted hero, natural long-press-to-
+> lift, the action sheet owns dismissal so no dead end; **no coverage floor lowered, no test weakened**). **Next
+> slice:** move down §Chat — the **universal composer / voice-recording pill** (iMessage-style: cancel, live waveform
+> [the `:core:model` waveform core already exists, `media-waveform-interpolation`], timer, min-duration gating), or the
+> in-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×).
+
 > On 2026-07-15 **the overlay drag-to-detail gesture law** landed (slice `chat-overlay-drag-law`,
 > feature-parity §Chat "Long-press overlay menu" — the **drag-to-detail** part, the sibling of the quick-reactions
 > and action-grid parts shipped earlier the same day). iOS governs the vertical gesture on the long-press overlay
