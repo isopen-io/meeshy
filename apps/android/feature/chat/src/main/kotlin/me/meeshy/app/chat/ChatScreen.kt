@@ -1734,6 +1734,21 @@ private fun MessageActionsSheet(
                 HorizontalDivider(color = MeeshyTheme.tokens.backgroundTertiary)
             }
 
+            // Interactive audio preview for a playable voice/audio attachment —
+            // play/pause, scrubber, ±5s, tap-to-cycle speed — driven by the pure
+            // [OverlayMediaTransport]. Mirrors iOS `PreviewAudioPlayer` in the overlay.
+            bubble.audios.firstOrNull { it.isPlayable }?.let { audio ->
+                OverlayMediaPreview(
+                    audio = audio,
+                    accentColor = accentColor,
+                    modifier = Modifier.padding(
+                        horizontal = MeeshySpacing.lg,
+                        vertical = MeeshySpacing.sm,
+                    ),
+                )
+                HorizontalDivider(color = MeeshyTheme.tokens.backgroundTertiary)
+            }
+
             // The action grid is composed by the pure [MessageActionMenu] SSOT; this
             // block is a dumb renderer mapping each resolved action to its row.
             MessageActionMenu.actions(ctx).forEach { action ->
