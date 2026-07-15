@@ -972,6 +972,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (avatars, not just the name).
 - [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
+    - [x] **Pure link-preview core + tracker stripping** (`:sdk-core` `me.meeshy.sdk.link`): `LinkPreviewParser`
+      (`firstUrl` http/https/`www.` detection with trailing-punctuation + balanced-paren trimming and scheme
+      lowercasing; `canonicalize` strips utm_*/fbclid/gclid case-insensitively + drops empty query/fragment;
+      `parse` OpenGraph/Twitter-card/`<title>`/host-fallback extraction with relative/protocol-relative image
+      resolution; `decodeHtmlEntities` named + decimal + hex), the immutable `LinkMetadata`
+      (`host`/`hasAnyVisibleField`), and the pure `LinkPreview.stateFor` machine (`None`/`Loading`/`Card`/
+      `BareLink`). Wired real (`:feature:chat`): `LinkPreviewCard` renders a tappable accent link chip below any
+      message bubble carrying a URL (the iOS "raw link" graceful fallback), opening it via the URI handler.
+      Slice `chat-link-preview-core` (2026-07-15, +59 tests). SSOT for link detection/OG parsing that iOS
+      spreads across `LinkPreviewFetcher`.
+    - [ ] **Remaining:** async OpenGraph fetch driving `Loading`→`Card` (OkHttp GET → `LinkPreviewParser.parse`,
+      dedupe + negative-cache + logout purge like iOS `LinkPreviewStore`); in-app browser (Chrome Custom Tabs);
+      rich-card image loading. The `Loading`/`Card` arms + `canonicalize` cache key are already in place to drive.
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
 - [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list

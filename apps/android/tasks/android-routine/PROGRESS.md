@@ -1,5 +1,54 @@
 # Progress — state & what to do next
 
+> On 2026-07-15 **the pure OpenGraph link-preview core + tracker-param stripping** landed (slice
+> `chat-link-preview-core`, feature-parity §Chat "OpenGraph link-preview cards + in-app browser; tracker-param
+> stripping" — the detection/parsing/canonicalisation/state layer, the first of that compound item). iOS scatters
+> the whole surface across the `LinkPreviewFetcher` actor (`firstURL` via a shared `NSDataDetector`, `canonicalize`
+> tracker stripping, OpenGraph HTML regex parsing, `trimmedDecoded` entity decoding) plus the app-side
+> `LinkPreviewStore` (cache/negative-cache/logout purge). Android had **no link awareness at all** — a message with
+> a URL rendered as plain text with nothing tappable. **Ships (`:sdk-core` new `me.meeshy.sdk.link`):** the pure,
+> deterministic, JVM-testable heart. `LinkPreviewParser` — `firstUrl(text)` (first `http(s)`/bare-`www.` URL,
+> normalising a bare host to `https://`, lowercasing only the scheme, trimming trailing sentence punctuation while
+> **keeping a balanced `(bar)` inside a wiki URL** but stripping an unbalanced trailing `)`, ignoring mailto/tel);
+> `canonicalize(url)` (strips utm_source/medium/campaign/term/content + fbclid + gclid case-insensitively, drops the
+> query when only trackers remain and an empty `#` fragment, preserves the order of the rest — the cache key that
+> keeps one entry across campaign tags); `parse(html, url)` (og:*/twitter:*/`<title>`/host-fallback with
+> root-relative + protocol-relative image resolution, entity-decoded fields); `decodeHtmlEntities` (named +
+> decimal `&#169;` + hex `&#x00AE;`, out-of-range codepoints left intact). Immutable `LinkMetadata`
+> (`host`, `hasAnyVisibleField` that — like iOS — ignores the ever-present host-derived `siteName` so the raw-link
+> fallback still triggers). The pure `LinkPreview.stateFor(text, outcome)` machine collapses text + fetch outcome
+> into one exhaustive `LinkPreviewState` (`None`/`Loading`/`Card`/`BareLink`), so the Compose card owns no
+> branching. **+59 tests** (detection: empty/blank/no-link/mailto-tel, embedded http & https, query kept, trailing
+> period + multi-punct, unbalanced-paren strip, balanced-paren keep, angle-bracket strip, www→https, scheme
+> lowercase, first-of-many, start/end position, scheme-with-empty-host → null, degenerate www → null;
+> canonicalisation: single + all-trackers stripped, case-insensitive, query-fully-dropped, order preserved,
+> no-query untouched, non-trackers kept, empty vs real fragment, fragment kept after strip, valueless non-tracker
+> kept; parse: full og set, `<title>` fallback, twitter name= variant, content-before-property, root-relative +
+> protocol-relative + path-relative + absolute image, host site-name fallback, entity-decoded fields, no-visible-
+> field gating, fragment-ignored host; decode: named, nbsp/dashes, decimal, hex, trim, out-of-range intact, unknown
+> intact; metadata host/derived surface). **Mutation check (RED proof):** flipping the balanced-paren guard
+> `closes > opens` → `>=` failed **exactly 1** test (`firstUrl keeps a balanced paren inside the url`) while the
+> other 49 stayed green — behavioural, not tautological. (The genuine initial RED was the compile failure: the
+> classes did not exist when the test files were written.) **Wired real (`:feature:chat` `LinkPreviewCard`, exempt
+> glue):** a `when`-exhaustive renderer over `LinkPreviewState`; `ChatScreen` resolves
+> `LinkPreview.stateFor(bubble.text, Empty)` and renders an accent-tinted, tappable link chip (link glyph · host ·
+> URL subtitle, side-aligned like `ReplyCountPill`) below any bubble whose text carries a URL — the iOS graceful
+> "raw link" fallback, opened via `LocalUriHandler`. The `Loading`/`Card` arms are the view for the rich-OpenGraph
+> path a follow-up lights up by swapping the fetch outcome. **Surpasses iOS** on testability (one pure JVM-covered
+> parser + state machine vs an actor + NSDataDetector + scattered store) and determinism (a hand-written detector
+> with defined trailing-punct/paren rules rather than `NSDataDetector`'s opaque behaviour). **Verification:**
+> `:app:assembleDebug :feature:chat:testDebugUnitTest :sdk-core:testDebugUnitTest --tests me.meeshy.sdk.link.*`
+> under the UTF-8 daemon recipe → **BUILD SUCCESSFUL**, APK assembles + 59/59 link suite green + full chat module
+> suite green. Reviewer **PASS** (diff `apps/android` only — new `LinkMetadata`/`LinkPreviewParser`/
+> `LinkPreviewState` + `LinkPreviewCard` + `ChatScreen` wiring + `chat_link_open` ×4 locales + tracking docs;
+> **SDK purity** — the parser/metadata/state are stateless building blocks agnostic of Meeshy singletons, exactly
+> where iOS keeps its `LinkPreviewFetcher` pure surface; the fetch/cache orchestration is deliberately deferred to
+> app-side glue; **SSOT** — one `LinkPreviewParser`; **UX/colour coherence** — accent-tinted chip, natural
+> tap-to-open, no dead end; **no coverage floor lowered, no test weakened**). **Next slice:** the async OpenGraph
+> fetch (OkHttp GET → `LinkPreviewParser.parse` → `Loading`→`Card`, with dedupe + negative-cache + logout purge)
+> and the in-app browser (Chrome Custom Tabs), both under §Chat — or move to §Chat "Static location pin + live
+> location sharing".
+
 > On 2026-07-15 **the in-overlay interactive audio preview transport** landed (slice `chat-overlay-media-transport`,
 > feature-parity §Chat "In-overlay interactive audio/video preview (play/pause, scrub, ±5s, 0.5–2.0×)"). iOS drives
 > the overlay's `PreviewAudioPlayer` / `PreviewVideoPlayer` (`MessageOverlayMenu.swift`) from a private
