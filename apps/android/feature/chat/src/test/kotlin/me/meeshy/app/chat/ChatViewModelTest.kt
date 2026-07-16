@@ -49,6 +49,7 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessagePinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
@@ -151,6 +152,7 @@ class ChatViewModelTest {
         val activeCallRepo: ActiveCallRepository,
         val reportRepo: ReportRepository,
         val mediaQueue: MediaUploadQueue,
+        val mentionSearch: MentionSearch,
     )
 
     private fun viewModel(
@@ -170,6 +172,7 @@ class ChatViewModelTest {
         drafts: Map<String, ConversationDraft> = emptyMap(),
         targetConversations: List<ApiConversation> = emptyList(),
         activeCall: ActiveCallSession? = null,
+        mentionSearch: MentionSearch = FakeMentionSearch(),
     ): Harness {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
@@ -215,6 +218,7 @@ class ChatViewModelTest {
                 activeCallRepo,
                 reportRepo,
                 mediaQueue,
+                mentionSearch,
                 handle,
             ),
             repo,
@@ -229,6 +233,7 @@ class ChatViewModelTest {
             activeCallRepo,
             reportRepo,
             mediaQueue,
+            mentionSearch,
         )
     }
 
@@ -848,6 +853,106 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.vm.state.value.mention).isEqualTo(MentionAutocompleteState())
+    }
+
+    @Test
+    fun a_two_character_at_query_merges_directory_results_below_the_local_roster() = runTest(dispatcher) {
+        val remote = FakeMentionSearch(
+            default = listOf(MentionCandidate(id = "u9", username = "borys", displayName = "Borys R")),
+        )
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = conversationWithRoster(),
+            mentionSearch = remote,
+        )
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @bo")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.mention.suggestions.map { it.username })
+            .containsExactly("bob", "bobby", "borys").inOrder()
+        assertThat(remote.queries).containsExactly("bo")
+    }
+
+    @Test
+    fun a_single_character_at_query_stays_on_the_local_roster() = runTest(dispatcher) {
+        val remote = FakeMentionSearch(
+            default = listOf(MentionCandidate(id = "u9", username = "borys")),
+        )
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = conversationWithRoster(),
+            mentionSearch = remote,
+        )
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @b")
+        advanceUntilIdle()
+
+        assertThat(remote.queries).isEmpty()
+        assertThat(h.vm.state.value.mention.suggestions.map { it.username })
+            .containsExactly("bob", "bobby").inOrder()
+    }
+
+    @Test
+    fun directory_results_never_offer_the_signed_in_user() = runTest(dispatcher) {
+        val remote = FakeMentionSearch(
+            default = listOf(
+                MentionCandidate(id = "me", username = "atabeth", displayName = "Ata Beth"),
+                MentionCandidate(id = "u9", username = "carol"),
+            ),
+        )
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = conversationWithRoster(),
+            mentionSearch = remote,
+        )
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @at")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.mention.suggestions.map { it.username }).containsExactly("carol")
+    }
+
+    @Test
+    fun a_new_fragment_supersedes_the_previous_directory_lookup() = runTest(dispatcher) {
+        val remote = FakeMentionSearch(
+            byQuery = mapOf(
+                "car" to listOf(MentionCandidate(id = "u9", username = "carol")),
+                "dan" to listOf(MentionCandidate(id = "u10", username = "danny")),
+            ),
+        )
+        val h = harness(
+            flowOf(CacheResult.Empty),
+            currentUser = me,
+            conversation = conversationWithRoster(),
+            mentionSearch = remote,
+        )
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hey @car")
+        h.vm.onDraftChange("hey @dan")
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.mention.suggestions.map { it.username }).containsExactly("danny")
+        assertThat(remote.queries).containsExactly("dan")
+    }
+
+    private class FakeMentionSearch(
+        private val byQuery: Map<String, List<MentionCandidate>> = emptyMap(),
+        private val default: List<MentionCandidate> = emptyList(),
+    ) : MentionSearch {
+        val queries = mutableListOf<String>()
+
+        override suspend fun search(query: String): List<MentionCandidate> {
+            queries += query
+            return byQuery[query] ?: default
+        }
     }
 
     private fun directConversation() = ApiConversation(

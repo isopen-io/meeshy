@@ -920,8 +920,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       attachment (gated on the not-yet-built attachment send pipeline).
 - [ ] In-app camera: photo capture + video recording (flash, front/back toggle)
 - [ ] Live sentiment + language detection ("smart context zone") with language pill/picker override
-- [◐] @-mention autocomplete (debounced API + local merge) — local roster done
-      (`chat-mention-autocomplete` 2026-07-06): pure `:feature:chat` `ChatMention` SSOT (port of iOS
+- [✅] @-mention autocomplete (debounced API + local merge) — **local roster + remote merge done**
+      (remote merge `chat-mention-remote-merge` 2026-07-16): the local roster's `ChatMention` SSOT gained the two
+      remaining pure pieces from iOS `MentionComposerController` — `shouldQueryRemote` (only fire once the trimmed
+      `@fragment` reaches 2 significant chars; a bare `@`/single letter is served entirely from the roster) and
+      `mergeSuggestions` (port of `mergeAPISuggestions`: locals keep order and win every collision; a remote row
+      is appended only when its handle — trimmed, case-insensitive — is neither blank, already local, nor a
+      duplicate of an earlier remote row) — plus a staleness-guarded `MentionAutocompleteState.applyRemote(query,
+      remote)` reducer that folds the results in **only** while `query == activeQuery` (a slow response for a stale
+      fragment is dropped, returning the same instance — the pure equivalent of iOS's `Task.isCancelled`).
+      Protocol-injected `MentionSearch` (iOS `MentionServiceProviding` parity) with a `DirectoryMentionSearch`
+      impl over `UserRepository.searchUsers` (failure → empty, roster still serves). `ChatViewModel` fires a
+      300 ms-debounced lookup on `onDraftChange` (each keystroke cancels the previous in-flight `Job`), excludes
+      the signed-in user, and applies via `applyRemote`; cancelled on paste-capture and on select. +20 tests
+      (5 gate, 8 merge, 3 applyRemote, 4 VM: merge-below-roster, single-char-no-fetch, self-excluded, fresh-query-
+      supersedes). Mutation (drop the dedup/blank guard) failed exactly the 6 dedup/blank/merge tests.
+      (local roster `chat-mention-autocomplete` 2026-07-06): pure `:feature:chat` `ChatMention` SSOT (port of iOS
       `MentionComposerController` pure logic) — `extractQuery` (trailing `@fragment`, bare `@` → full roster,
       space → inactive), `filterCandidates` (trimmed case-insensitive over username **or** display name, blank →
       all), `insertMention` (rewrite trailing fragment → `@username `, inert without an active fragment); plus a

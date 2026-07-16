@@ -67,6 +67,37 @@ object ChatMention {
         if (fragment.contains(' ')) return text
         return text.substring(0, lastAt) + "@${candidate.username} "
     }
+
+    /**
+     * Whether a remote directory lookup is worth firing for [query]. Mirrors iOS
+     * `MentionComposerController`: the debounced API call only runs once at least two
+     * significant characters are typed — a bare `@` or a single letter matches too
+     * much of the directory to be useful and is served entirely from the local roster.
+     */
+    fun shouldQueryRemote(query: String): Boolean = query.trim().length >= MIN_REMOTE_QUERY
+
+    /**
+     * Merge remote directory results into the [local] roster suggestions, local-first.
+     * Ports iOS `mergeAPISuggestions`: locals keep their order and win every collision;
+     * a remote candidate is appended only when its handle (trimmed, case-insensitive)
+     * is neither blank, already among the locals, nor a duplicate of an earlier remote
+     * result. A blank handle can never be addressed, so it is dropped.
+     */
+    fun mergeSuggestions(
+        local: List<MentionCandidate>,
+        remote: List<MentionCandidate>,
+    ): List<MentionCandidate> {
+        val taken = local.mapTo(mutableSetOf()) { it.username.trim().lowercase() }
+        val merged = local.toMutableList()
+        remote.forEach { candidate ->
+            val handle = candidate.username.trim().lowercase()
+            if (handle.isEmpty() || !taken.add(handle)) return@forEach
+            merged += candidate
+        }
+        return merged
+    }
+
+    private const val MIN_REMOTE_QUERY = 2
 }
 
 /** Recompute the mention state after the composer [text] changed. */
@@ -76,6 +107,21 @@ fun MentionAutocompleteState.onTextChange(
 ): MentionAutocompleteState {
     val query = ChatMention.extractQuery(text) ?: return cleared()
     return copy(activeQuery = query, suggestions = ChatMention.filterCandidates(candidates, query))
+}
+
+/**
+ * Fold debounced remote directory results into the panel. The merge is applied only
+ * when [query] still equals the [activeQuery] the lookup was fired for — a slower
+ * response for a stale fragment (the user kept typing, or dismissed the panel) is
+ * dropped, returning the same instance. This is the pure, testable equivalent of iOS's
+ * `Task.isCancelled` staleness guard.
+ */
+fun MentionAutocompleteState.applyRemote(
+    query: String,
+    remote: List<MentionCandidate>,
+): MentionAutocompleteState {
+    if (activeQuery != query) return this
+    return copy(suggestions = ChatMention.mergeSuggestions(suggestions, remote))
 }
 
 /** Dismiss the suggestion panel. Draft-mention tracking is preserved; inert if already dismissed. */

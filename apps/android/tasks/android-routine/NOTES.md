@@ -4,6 +4,27 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-16, `chat-mention-remote-merge`) — model a debounced-lookup's staleness as a pure state law, not just `Job.cancel()`; extend the existing pure SSOT rather than adding a parallel one
+Porting the online half of the @-mention autocomplete (iOS `MentionComposerController.mergeAPISuggestions` + its
+300 ms/≥2-char debounced API call). Three takeaways. (1) **A debounced remote lookup has TWO independent races, and
+the cheap one to test is the pure one.** Cancelling the previous `viewModelScope` `Job` on each keystroke handles the
+common case, but a response can still land for a fragment the user has since changed (or after the panel closed). iOS
+guards this imperatively with `Task.isCancelled` checks scattered through the closure. On Android I made it a **pure
+reducer** — `MentionAutocompleteState.applyRemote(query, remote)` folds the merge in *only* while `query ==
+activeQuery`, else returns `this`. That single equality is a total, unit-testable law (3 tests: merges-when-matching,
+drops-when-stale, inert-when-dismissed) — the `Job.cancel()` is then just an optimisation, not the correctness
+mechanism. **When a VM fires async work whose result mutates state, put the "is this result still wanted?" decision in
+the pure state transition, so it's provable without threading/timing.** (2) **Extend the existing pure SSOT object,
+don't mint a parallel one.** The local-roster mention logic already lived in `ChatMention` (`extractQuery`/
+`filterCandidates`/`insertMention`); the remote pieces (`shouldQueryRemote`, `mergeSuggestions`) are the same grain, so
+they went *onto* `ChatMention` and the panel's existing `mention.suggestions` binding rendered the merged rows with
+zero UI change. Reviewer SSOT box stays green for free. (3) **Protocol injection makes the debounce testable with no
+network and no timing hacks.** A `fun`-less `MentionSearch` interface (+ `DirectoryMentionSearch` over
+`UserRepository.searchUsers`, `@Binds`-bound) let the VM test inject a `FakeMentionSearch` recording queries and
+returning per-query lists — so "a single-char `@b` never hits the directory" and "a new fragment supersedes the
+previous lookup so only the latest query fires" are asserted on `fake.queries`, and `runTest`'s virtual clock skips the
+300 ms `delay` under `advanceUntilIdle`. This is exactly the audit's `MentionServiceProviding`-parity recommendation.
+
 ## Lesson (2026-07-16, `chat-clipboard-content-send`) — a second outbox-graft payload shape composes cleanly *because* mismatched decodes fall to null; verify the empty-content contract before shipping an attachment send
 Porting the chat side of the durable upload→send chain. Four takeaways. (1) **The `OutboxDrainer` takes ONE
 `graftProducedId: (payload, placeholder, realId) -> String?`, currently `PublishMediaWriteBack::graft` (story only).**
