@@ -105,6 +105,11 @@ struct ConversationDashboardView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
+                    // The arc gauge is a decorative visualization of the same score — announce
+                    // "Santé, 78 sur 100" as one element instead of a bare, context-free number.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "dashboard.health", defaultValue: "Sante", bundle: .main))
+                    .accessibilityValue(String(format: String(localized: "dashboard.a11y.score-out-of-100", defaultValue: "%d sur 100", bundle: .main), health))
 
                     if summary.engagementLevel != nil || summary.conflictLevel != nil {
                         HStack(spacing: 10) {
@@ -131,6 +136,7 @@ struct ConversationDashboardView: View {
                             .font(.system(size: 48, weight: .bold, design: .serif))
                             .foregroundColor(accent.opacity(0.3))
                             .offset(y: -12)
+                            .accessibilityHidden(true)
                         Text(summary.text)
                             .font(MeeshyFont.relative(14, weight: .regular, design: .serif))
                             .italic()
@@ -474,6 +480,7 @@ struct ConversationDashboardView: View {
                                 .font(MeeshyFont.relative(9))
                                 .foregroundColor(accent.opacity(0.5))
                                 .offset(y: 2)
+                                .accessibilityHidden(true)
                             Text(profile.catchphrases.prefix(3).joined(separator: " \u{00B7} "))
                                 .font(MeeshyFont.relative(11, weight: .medium, design: .serif))
                                 .italic()
@@ -605,6 +612,10 @@ struct ConversationDashboardView: View {
                         .foregroundColor(traitScoreColor(trait.score))
                         .frame(width: 24, alignment: .trailing)
                 }
+                // Trait name + decorative fill bar + score → "Ouverture, 72" as one element.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(trait.label)
+                .accessibilityValue("\(trait.score)")
             }
         }
     }
@@ -671,6 +682,13 @@ struct ConversationDashboardView: View {
                         .frame(width: 40, alignment: .trailing)
                 }
                 .padding(.vertical, 3)
+                // Collapse rank glyph + name + decorative bar + bare counts into a single
+                // ranked announcement ("Alice, 340 messages, 1,2 k mots").
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(
+                    format: String(localized: "dashboard.a11y.participant-summary", defaultValue: "%1$@, %2$d messages, %3$@ mots", bundle: .main),
+                    stat.name, stat.messageCount, formatNumber(stat.wordCount)
+                ))
             }
         }
     }
@@ -726,6 +744,11 @@ struct ConversationDashboardView: View {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
+        // Group emoji + percentage + label so VoiceOver reads "Positif, 45 %" instead of
+        // announcing the emoji glyph name and the number as disconnected fragments.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue("\(pct)%")
     }
 
     private func sentimentBar(analysis: SentimentResult) -> some View {
@@ -762,6 +785,9 @@ struct ConversationDashboardView: View {
         .frame(height: 12)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .shadow(color: dominantColor.opacity(0.3), radius: 4, y: 2)
+        // Decorative proportion bar — the same positive/neutral/negative percentages are
+        // already announced by the sentiment segments above.
+        .accessibilityHidden(true)
     }
 
     // MARK: - Content Types
@@ -808,6 +834,10 @@ struct ConversationDashboardView: View {
                             .frame(width: 40, alignment: .trailing)
                     }
                     .padding(.vertical, 3)
+                    // Icon + type + decorative bar + count → "Photos, 42" as one element.
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(stat.type)
+                    .accessibilityValue("\(stat.count)")
                 }
             }
         }
@@ -842,11 +872,17 @@ struct ConversationDashboardView: View {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
             Text(title.uppercased())
                 .font(MeeshyFont.relative(12, weight: .heavy, design: .rounded))
                 .foregroundColor(theme.textMuted)
                 .tracking(1.5)
         }
+        // VoiceOver reads the natural-case title (not the display uppercasing) as a header
+        // so the rotor can jump between dashboard sections.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Color Helpers
@@ -1180,6 +1216,11 @@ private struct StatRing: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
+        // The ring is a decorative progress fill — announce the label + full count
+        // ("Messages, 42") rather than the abbreviated on-screen value read twice.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue("\(value)")
     }
 }
 
