@@ -2353,7 +2353,7 @@ private fun ChatComposer(
                         placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
                         maxLines = 4,
                     )
-                    if (!isEditing && draft.isBlank()) {
+                    if (!isEditing && draft.isBlank() && clipboardContent == null) {
                         IconButton(onClick = { recording = recording.start() }) {
                             Icon(
                                 imageVector = Icons.Filled.Mic,

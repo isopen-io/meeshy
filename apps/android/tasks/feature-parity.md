@@ -893,8 +893,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       real `MediaRecorder`/`AudioRecord` capture feeding `meter()`, and the voice-attachment send pipeline
       (VM + upload) — the pill drives the *session* today, not yet the audio bytes.
 - [ ] Attachment ladder (emoji, file, location, camera, photo library, voice)
-- [◐] Large-paste detection → clipboard-content attachment — **detection + preview done**
-      (slice `chat-large-paste-detection`, 2026-07-16): pure `:feature:chat` `LargePasteDetector`
+- [x] Large-paste detection → clipboard-content attachment — **detection + preview + send done**
+      (slice `chat-clipboard-content-send`, 2026-07-16): the captured paste is now delivered as a real
+      `text/plain` attachment through the durable upload→graft→send chain (see "Send with attachments"
+      below). `ChatViewModel.send` folds a captured `ClipboardContent` into a `MediaUploadItem`
+      (`clipboard-content.txt`, bytes = the full paste), enqueues it via `MediaUploadQueue`, and calls
+      `sendOptimistic(messageType="file", attachmentUploadCmids=[uploadCmid], attachments=[…])`; the
+      `SEND_MESSAGE` row gates on the upload and carries its cmid as a placeholder `attachmentId` until
+      `MessageMediaWriteBack` grafts the real gateway id in. `canSend` is true with a blank draft when a
+      clip is captured, and the composer shows Send (not the voice Mic) in that state. **Surpasses iOS**,
+      which previews the clipboard chip but never sends it. +9 tests (VM 4, plus repository/graft — see
+      below). **Detection + preview** shipped earlier (slice `chat-large-paste-detection`): pure
+      `:feature:chat` `LargePasteDetector`
       (port of iOS `UniversalComposerBar.handleClipboardCheck` — fires when the composer text grows
       past `MIN_TOTAL_LENGTH=2000` **and** jumps by more than `MIN_GROWTH=250` chars in one edit;
       surpasses iOS by replacing its obfuscated `delta = 2·growth` formula with the readable growth
@@ -936,7 +946,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `onDraftChange` and re-arms `replyingToMessageId` on open; the durable store round-trips the reference. +16
       tests. **Pending:** the language/effects/blur/ephemeral fields (those composer features are not yet built on
       Android — no state to persist).
-- [ ] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress
+- [◐] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress —
+      **REST attachment chain + first real path (clipboard content) done** (slice `chat-clipboard-content-send`,
+      2026-07-16). The durable upload→send chain now carries message attachments, mirroring the proven story
+      publish chain: `MessageRepository.sendOptimistic` gained `messageType` / `attachmentUploadCmids` /
+      `attachments` params (defaulted → text-only sends byte-identical), threading placeholder ids into
+      `SendMessageRequest.attachmentIds` + the optimistic `ApiMessage.attachments` and gating the `SEND_MESSAGE`
+      outbox row on the uploads via `dependsOn`. New pure `:sdk-core` `MessageMediaWriteBack.graft` (exact analog
+      of `PublishMediaWriteBack`, over `attachmentIds`) + a pure `OutboxPayloadGrafts.firstOf` combinator wire both
+      write-backs into the `OutboxDrainer`, so a delivered upload's real gateway id reaches a queued chat send
+      **or** a story publish (each graft owns one payload shape, declines the other). First live producer: the
+      captured clipboard content (REST, `text/plain`, `messageType="file"`). **Pending:** audio over socket
+      (`message:send-with-attachments` — the audio pipeline is socket-only per gateway), a file/photo/camera picker
+      to source other attachment types, real TUS-resumable uploads (today: plain multipart `POST /attachments/upload`),
+      and an upload-progress indicator. +36 tests (graft 10, combinator 4, repository 4, VM 4 + existing send/story
+      chains regression-green), mutation-checked (dropping the identity guard fails exactly the identical-swap test).
 - [◐] In-conversation message search (translation-match aware) + jump-to-result — core+wiring done
       (`chat-search-highlight-wiring` 2026-07-06): pure `:feature:chat` `ChatSearch` SSOT over the opaque
       `SearchableMessage` — `matchIds` (trimmed/case-insensitive `contains` across **every** text of a message,

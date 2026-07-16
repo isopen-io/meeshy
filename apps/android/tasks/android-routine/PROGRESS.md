@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **send a message with attachments — the durable upload→graft→send chain + its first real
+> path (clipboard content)** landed (slice `chat-clipboard-content-send`, feature-parity §Chat "Send with
+> attachments" → ◐, and "Large-paste detection → clipboard-content attachment" → ✅). This is the missing
+> half of the chat attachment pipeline: `SEND_MESSAGE` is now a first-class participant in the same
+> upload→publish chain the story composer already uses. **Ships (`:sdk-core`, 2 pure objects + 1 producer
+> thread):** (1) `MessageMediaWriteBack.graft(payload, placeholder, realId)` — the exact analog of
+> `PublishMediaWriteBack` but over `SendMessageRequest.attachmentIds`: decode → swap every placeholder cmid
+> for the real id (order preserved, dupes collapsed) → re-encode, returning `null` on undecodable / no
+> attachments / absent placeholder / identity swap. (2) `OutboxPayloadGrafts.firstOf(vararg graft)` — a pure
+> combinator returning the first non-null rewrite; `OutboxFlushWorker` now passes
+> `firstOf(MessageMediaWriteBack::graft, PublishMediaWriteBack::graft)` as the drainer's `graftProducedId`,
+> so a delivered upload's real gateway id reaches **both** dependent shapes (a queued chat send **or** a
+> story publish). Each graft owns one payload shape and declines the other — a message payload fails
+> `CreateStoryRequest` decode (→ null → falls through) and a story payload lacks the required
+> `clientMessageId`/`originalLanguage`, so order is immaterial for correctness (tested). (3)
+> `MessageRepository.sendOptimistic` gained `messageType` / `attachmentUploadCmids` / `attachments` params,
+> **all defaulted** so a text-only send is byte-identical (null `attachmentIds`, empty `dependsOn`); a send
+> with attachments carries the placeholder cmids into `attachmentIds` + the optimistic
+> `ApiMessage.attachments` (instant SENDING bubble) and gates the outbox row on the uploads via `dependsOn`.
+> No new repository dependency — the "when to enqueue media" product rule stays in the feature layer (SDK
+> purity), exactly like `StoryComposerViewModel`. **Wired real (exempt glue):** `ChatViewModel` injects
+> `MediaUploadQueue`; `send()` folds a captured `ClipboardContent` into a `MediaUploadItem`
+> (`clipboard-content.txt`, bytes = the full paste, `text/plain`), enqueues it, and calls `sendOptimistic`
+> with `messageType="file"`; `canSend` is now true with a blank draft when a clip is captured, and the
+> composer shows Send (not the voice Mic) in that state. **Surpasses iOS**, which previews the clipboard
+> chip but never sends it — and additionally supports **offline** capture (the paste is durably queued,
+> unlike iOS's synchronous upload). Scoped to the **REST** path (audio must go over the socket
+> `message:send-with-attachments` per the gateway audio-pipeline rule — a separate future slice); the
+> gateway accepts empty `content` when `attachmentIds` is present and `messageType="file"` is a valid enum
+> value (both verified against `services/gateway`). **+36 tests** (MessageMediaWriteBack 10,
+> OutboxPayloadGrafts 4, MessageRepository 4, ChatViewModel 4, existing text-send + story-publish chains
+> regression-green). **Mutation check (RED proof):** dropping `MessageMediaWriteBack`'s identity guard
+> (`if (grafted == attachments) return null`) failed **exactly 1** test (`returns null when the swap would
+> leave the list identical`), the other 9 stayed green — discriminating, behavioural. **Verification:**
+> `assembleDebug testDebugUnitTest` (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe) →
+> **BUILD SUCCESSFUL in 4m 8s** (943 tasks; APK assembles + every module's JVM unit tests green, no
+> DataStore flake this run). Reviewer **PASS** (diff `apps/android` only: 2 new pure `:sdk-core`
+> objects + their tests, `sendOptimistic` producer thread + repository tests, `OutboxFlushWorker` graft
+> composition, `ChatViewModel`/`ChatScreen` glue + VM tests, tracking docs; no production logic outside
+> apps/android; SDK purity kept; UDF + immutable `UiState`; accent-coherent composer, no dead end — the
+> chip now delivers). **Next slice:** §Chat still-open — audio-over-socket send (`message:send-with-attachments`
+> + the voice-recording pill's captured bytes, unblocking the recorded voice note), OR a file/photo picker
+> to source image/file attachments over this same REST chain, OR the conversation info sheet, OR advance to
+> §Feed once Chat's high-value items are exhausted.
+
 > On 2026-07-16 **report a message (typed reasons + detail)** landed (slice `chat-report-message`,
 > feature-parity §Chat "Report message"). iOS surfaces a `ReportMessageSheet` (`ReportType`: spam,
 > inappropriate, harassment, violence, hate_speech, impersonation, other) whose `onReport(type, reason)`

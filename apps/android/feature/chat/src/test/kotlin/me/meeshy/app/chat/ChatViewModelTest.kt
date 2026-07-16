@@ -37,6 +37,8 @@ import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -148,6 +150,7 @@ class ChatViewModelTest {
         val draftStore: InMemoryConversationDraftStore,
         val activeCallRepo: ActiveCallRepository,
         val reportRepo: ReportRepository,
+        val mediaQueue: MediaUploadQueue,
     )
 
     private fun viewModel(
@@ -183,6 +186,8 @@ class ChatViewModelTest {
         val activeCallRepo = mockk<ActiveCallRepository>(relaxed = true)
         coEvery { activeCallRepo.activeCallFor(any()) } returns activeCall
         val reportRepo = mockk<ReportRepository>(relaxed = true)
+        val mediaQueue = mockk<MediaUploadQueue>(relaxed = true)
+        coEvery { mediaQueue.enqueue(any()) } returns "upload-cmid"
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
@@ -209,6 +214,7 @@ class ChatViewModelTest {
                 draftStore,
                 activeCallRepo,
                 reportRepo,
+                mediaQueue,
                 handle,
             ),
             repo,
@@ -222,6 +228,7 @@ class ChatViewModelTest {
             draftStore,
             activeCallRepo,
             reportRepo,
+            mediaQueue,
         )
     }
 
@@ -493,6 +500,90 @@ class ChatViewModelTest {
         vm.removeClipboardContent()
 
         assertThat(vm.state.value.clipboardContent).isNull()
+    }
+
+    @Test
+    fun a_captured_clipboard_makes_the_composer_sendable_with_a_blank_draft() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.onDraftChange("a".repeat(2_500))
+
+        assertThat(vm.state.value.draft).isEmpty()
+        assertThat(vm.state.value.canSend).isTrue()
+    }
+
+    @Test
+    fun sending_a_captured_clipboard_uploads_it_and_sends_a_file_message() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
+        val vm = h.vm
+        advanceUntilIdle()
+        val pasted = "a".repeat(2_500)
+        vm.onDraftChange(pasted)
+
+        vm.send()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.clipboardContent).isNull()
+        val itemSlot = slot<MediaUploadItem>()
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        assertThat(String(itemSlot.captured.bytes, Charsets.UTF_8)).isEqualTo(pasted)
+        assertThat(itemSlot.captured.mimeType).isEqualTo("text/plain")
+        coVerify(exactly = 1) {
+            h.repo.sendOptimistic(
+                conversationId = eq("c1"),
+                content = eq(""),
+                originalLanguage = any(),
+                sender = eq(user),
+                replyToId = any(),
+                effects = any(),
+                messageType = eq("file"),
+                attachmentUploadCmids = eq(listOf("upload-cmid")),
+                attachments = any(),
+            )
+        }
+        coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun sending_a_clipboard_alongside_typed_text_keeps_the_text_as_the_body() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
+        val vm = h.vm
+        advanceUntilIdle()
+        vm.onDraftChange("a".repeat(2_500))
+        vm.onDraftChange("see attached")
+
+        vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            h.repo.sendOptimistic(
+                conversationId = eq("c1"),
+                content = eq("see attached"),
+                originalLanguage = any(),
+                sender = eq(user),
+                replyToId = any(),
+                effects = any(),
+                messageType = eq("file"),
+                attachmentUploadCmids = eq(listOf("upload-cmid")),
+                attachments = any(),
+            )
+        }
+    }
+
+    @Test
+    fun send_with_an_empty_draft_and_no_clipboard_is_a_no_op() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
+        advanceUntilIdle()
+
+        h.vm.send()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
     @Test

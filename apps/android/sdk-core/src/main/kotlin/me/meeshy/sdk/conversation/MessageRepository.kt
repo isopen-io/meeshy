@@ -13,6 +13,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffects
@@ -107,15 +108,23 @@ class MessageRepository @Inject constructor(
         forwardedFromId: String? = null,
         forwardedFromConversationId: String? = null,
         effects: MessageEffects = MessageEffects(),
+        messageType: String = "text",
+        attachmentUploadCmids: List<String> = emptyList(),
+        attachments: List<ApiMessageAttachment> = emptyList(),
     ): String {
         val cmid = OutboxIds.cmid()
         val now = clock.nowMillis()
         val wire = MessageEffectsEncoder.encode(effects, Instant.ofEpochMilli(now))
+        // A queued send references each prerequisite upload by its cmid until the
+        // drainer grafts the real gateway id in (MessageMediaWriteBack); an empty
+        // list keeps a text-only send exactly as before (null attachmentIds).
+        val placeholderIds = attachmentUploadCmids.filter { it.isNotBlank() }.distinct()
         val optimistic = ApiMessage(
             id = cmid,
             conversationId = conversationId,
             senderId = sender.id,
             content = content,
+            messageType = messageType,
             originalLanguage = originalLanguage,
             replyToId = replyToId,
             createdAt = Instant.ofEpochMilli(now).toString(),
@@ -126,6 +135,7 @@ class MessageRepository @Inject constructor(
                 avatar = sender.avatar,
             ),
             clientMessageId = cmid,
+            attachments = attachments,
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
             effectFlags = wire.effectFlags,
@@ -136,8 +146,10 @@ class MessageRepository @Inject constructor(
         val request = SendMessageRequest(
             content = content,
             originalLanguage = originalLanguage,
+            messageType = messageType,
             replyToId = replyToId,
             clientMessageId = cmid,
+            attachmentIds = placeholderIds.ifEmpty { null },
             forwardedFromId = forwardedFromId,
             forwardedFromConversationId = forwardedFromConversationId,
             effectFlags = wire.effectFlags,
@@ -156,6 +168,7 @@ class MessageRepository @Inject constructor(
                 lane = OutboxLanes.forMessage(conversationId),
                 targetId = conversationId,
                 payload = MeeshyApi.json.encodeToString(request),
+                dependsOn = placeholderIds.toSet(),
                 cmid = cmid,
             ),
         )

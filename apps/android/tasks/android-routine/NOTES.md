@@ -4,6 +4,36 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-16, `chat-clipboard-content-send`) — a second outbox-graft payload shape composes cleanly *because* mismatched decodes fall to null; verify the empty-content contract before shipping an attachment send
+Porting the chat side of the durable upload→send chain. Four takeaways. (1) **The `OutboxDrainer` takes ONE
+`graftProducedId: (payload, placeholder, realId) -> String?`, currently `PublishMediaWriteBack::graft` (story only).**
+To let a `SEND_MESSAGE` row also receive a delivered upload's real id, I did NOT special-case the drainer — I wrote a
+pure `MessageMediaWriteBack.graft` over `SendMessageRequest.attachmentIds` (a 1:1 mirror of the story one) and composed
+the two with a pure `OutboxPayloadGrafts.firstOf(...)` returning the first non-null. **Order is immaterial for
+correctness because each graft owns exactly one payload shape and *declines* (null) the other** — the message graft
+`runCatching`-decodes as `SendMessageRequest` (required `content`/`originalLanguage`/`clientMessageId`, so a
+`CreateStoryRequest` JSON throws → null), and the story graft decodes as `CreateStoryRequest` (a message payload
+decodes into it with `ignoreUnknownKeys=true` but yields `mediaIds=null` → null). I tested this cross-shape decline
+explicitly (`ignores a story publish payload it cannot own`) so the composition is provably safe, not just
+probably-safe. (2) **Thread the attachment producer params through the EXISTING `sendOptimistic` as DEFAULTED args, and
+keep the "when to enqueue media" decision in the ViewModel, not the repository.** `sendOptimistic(..., messageType:
+String = "text", attachmentUploadCmids: List<String> = emptyList(), attachments: List<ApiMessageAttachment> =
+emptyList())` — every existing text-only caller and its `coVerify { sendOptimistic("c1","hi","fr",user,null) }` stays
+green (mockk fills the new params with their defaults when no matchers are used). No new repo dependency: the
+`MediaUploadQueue.enqueue` call lives in `ChatViewModel` exactly like `StoryComposerViewModel` (SDK purity — the SDK
+holds the stateless upload/graft blocks, the feature decides *when*). (3) **Before shipping an attachment send, verify
+the gateway's content+attachment contract — don't assume.** iOS captures the large paste into a `clipboard_content`
+chip but **never sends it** (no send handler), so there is no iOS parity target; sending it *surpasses* iOS. That
+meant checking `services/gateway` directly: the REST create route passes `content: content || ''` and the edit route
+rejects only `(!content && !hasAttachments)`, and `messageType` is a Zod enum `['text','image','file','audio','video']`
+— so an empty-body `messageType="file"` message with `attachmentIds` is contract-valid. Also confirmed the audio
+pipeline is **socket-only** (`message:send-with-attachments`), so a `text/plain` clipboard attachment correctly takes
+the REST path and audio stays a separate future slice. (4) **A blank draft + a captured clip must flip the composer
+from Mic→Send.** The composer showed the voice `Mic` on `draft.isBlank()`; with a clip captured the draft is blank but
+the message IS sendable, so both `ChatUiState.canSend` (`|| clipboardContent != null`) and the `ChatScreen` Mic/Send
+branch (`&& clipboardContent == null`) had to learn about the clip — easy to miss because the pure `canSend` change
+alone leaves the button as a dead Mic.
+
 ## Lesson (2026-07-16, `chat-report-message`) — widening a shared enum silently breaks every *exhaustive* `when` on it in sibling features (compile-time, not in your module)
 Reusing the existing report infra for a new target (message) meant adding two cases (`VIOLENCE`, `HATE_SPEECH`) to the shared `:core:model` `ReportReason`. My own module (`:feature:chat`) compiled fine — I wrote its `when` exhaustive from the start. But the **full-tree** `assembleDebug` died at `:feature:profile:compileDebugKotlin` with `'when' expression must be exhaustive. Add the 'VIOLENCE', 'HATE_SPEECH' branches` — `ReportUserScreen.reasonLabel` had a `when (reason)` covering only the original 5 cases. Two takeaways. (1) **After adding a case to any shared enum, `grep -rn "when (<var>" --include=*.kt` across the WHOLE `apps/android` tree (not just your feature) for every exhaustive `when` on that type, before trusting a per-module test run.** A targeted `:feature:chat:testDebugUnitTest` is green while the aggregate build is red — the failure is in a module your diff never *intended* to touch. (2) **The fix stays minimal and keeps the enum-`when` exhaustive-without-`else`:** fold the unreachable-here new cases into an existing arm with a comment (`ReportReason.OTHER, ReportReason.VIOLENCE, ReportReason.HATE_SPEECH -> R.string.report_reason_other`) rather than adding an `else` (which would silently swallow a *future* new case) or minting new per-locale strings for a surface that never shows them. This does mean an apps/android-only slice legitimately touches a second feature module (`:feature:profile`) — still inside the merge gate (the gate forbids web/ios/gateway/shared, not cross-feature Android edits), but record it so the diff scope reads as intentional. (3) **Prefer a single `ReportSubmitStatus` enum over parallel `isSubmitting`/`isSubmitted`/`hasError` booleans** — the profile module's older `ReportUserUiState` uses three booleans (2^3 = 8 nominal states, only 4 legal); one enum makes the illegal states unrepresentable and reads cleaner. A genuine "better at the base than what exists" without touching the working profile code.
 
