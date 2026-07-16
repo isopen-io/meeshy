@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 150i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **150i (en cours, branche `claude/laughing-thompson-11e8cz`, base `main` HEAD `60503a1`)** :
+>   Feedback VoiceOver de validation de la phrase de confirmation de `DeleteAccountView` (flux
+>   destructif de suppression de compte). Le passage « phrase invalide → phrase exacte » — qui fait
+>   apparaître un checkmark vert ET déverrouille le bouton irréversible — était **purement visuel**.
+>   Fix : `.accessibilityValue` sur le `TextField` de confirmation (« Phrase correcte » / « Phrase
+>   incomplete ») + checkmark de validation masqué (`.accessibilityHidden(true)`). 1 fichier, 0
+>   logique, 0 test neuf, 2 clés i18n a11y inline. **0 PR ouverte ne touche `DeleteAccountView` → 0
+>   contention.** Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `DeleteAccountView` feedback validation SOLDÉ** : ne plus reprendre (champ `.accessibilityValue`
+>   + checkmark masqué). Hero ≥40pt (l.268) déjà figé 84i.
+> - **Base de départ 151i : `main` HEAD**. ⚠️ Stack de PR iOS 140i–149i (#1966→#1984) encore **ouvertes
+>   non mergées** (a11y : ThemedBackButton, MyStoriesView, FriendRequestListView, StoryExpiredContent,
+>   MessageViewsDetailView, ConversationDashboard, VoiceProfileManageView, StatsTimelineChart,
+>   StoryViewerContainer, ChangePasswordView) → **éviter ces fichiers** tant qu'ouvertes. Sinon :
+>   `StoryViewerView+Content` (i18n + `@State private` cross-file), traîne 2/1 `.system`
+>   (`ContextActionMenu`, `SecurityVerificationView`, `AudioPostComposerView`,
+>   `ConversationBackgroundComponents`, `BubbleStandardLayout`, `WebRTCVideoView`), ou passe
+>   state-of-the-art a11y au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
