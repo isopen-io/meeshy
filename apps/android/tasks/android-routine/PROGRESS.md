@@ -1,5 +1,48 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **@-mention autocomplete — debounced remote directory merge** landed (slice
+> `chat-mention-remote-merge`, feature-parity §Chat "@-mention autocomplete (debounced API + local merge)" → ✅,
+> the last open sub-item of that row). The local roster autocomplete already shipped (`chat-mention-autocomplete`,
+> 2026-07-06); this is the remaining half — the online directory enrichment iOS `MentionComposerController` does
+> via its `mergeAPISuggestions` + 300 ms-debounced, ≥2-char API call. **Ships (`:feature:chat`, all pure, extending
+> the existing `ChatMention` SSOT — no reimplementation):** (1) `ChatMention.shouldQueryRemote(query)` — the
+> "when to hit the network" gate: `query.trim().length >= 2` (a bare `@` or single letter matches too much of
+> the directory to be worth a call and is served entirely by the roster). (2) `ChatMention.mergeSuggestions(local,
+> remote)` — the local-first dedup: locals keep their order and win every collision; a remote candidate is
+> appended only when its handle (trimmed, case-insensitive) is neither blank, already among the locals, nor a
+> duplicate of an earlier remote result. (3) `MentionAutocompleteState.applyRemote(query, remote)` — a
+> **staleness-guarded** reducer: folds the merge in only while `query == activeQuery`, else returns the same
+> instance — the pure, testable equivalent of iOS's `Task.isCancelled` guard (a slow response for a fragment the
+> user has since changed, or a dismissed panel, is dropped). **Protocol injection (audit-recommended
+> `MentionServiceProviding` parity):** new `MentionSearch` interface + `DirectoryMentionSearch` impl over
+> `UserRepository.searchUsers(query, limit=15)` (a `NetworkResult.Failure` degrades to empty — the roster still
+> serves the panel; handleless rows dropped), bound via a `@Binds` Hilt module. **Wired real (exempt glue):**
+> `ChatViewModel` injects `MentionSearch`; `onDraftChange` fires a **300 ms-debounced** lookup for the active
+> `@fragment` (a fresh keystroke cancels the previous in-flight `Job` — no stale write, no wasted call), excludes
+> the signed-in user from the results, and applies via `applyRemote`; the lookup is cancelled on paste-capture and
+> on `onMentionSelected`. **Surpasses iOS:** the staleness guard is a pure state law (unit-testable) rather than
+> imperative cancellation scattered across a `Task`; the panel binding already renders `mention.suggestions`, so
+> the merged remote rows appear below the roster with **zero UI change** (SSOT). **+20 tests** (ChatMentionTest:
+> 5 `shouldQueryRemote`, 8 `mergeSuggestions`, 3 `applyRemote`; ChatViewModelTest: 4 behavioural — remote rows
+> merge below the roster + only "bo" queried; a single-char `@b` never hits the directory; the signed-in user is
+> never offered; a new fragment supersedes the previous lookup so only the latest query fires). **Mutation check
+> (RED proof):** dropping the dedup/blank guard (`if (handle.isEmpty() || !taken.add(handle)) return@forEach` →
+> unconditional `taken.add(handle)`) failed **exactly 6** tests (the 5 dedup/blank `mergeSuggestions` cases + the
+> `applyRemote` merge case), the other 36 `ChatMentionTest` cases stayed green — discriminating, behavioural.
+> **Verification:** `:feature:chat:testDebugUnitTest` → **BUILD SUCCESSFUL** (compiles + all chat tests green);
+> full-tree `:app:assembleDebug testDebugUnitTest` (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe)
+> → APK assembles + every touched module green; the lone full-run failure was the documented `:sdk-core` DataStore
+> parallel-load flake (`NotificationPreferencesStoreTest`, `TimeoutCancellationException`) in a module this diff
+> never touches — **green in isolation** (`:sdk-core:testDebugUnitTest` alone, `--max-workers=2`, 20 s), confirming
+> environmental exactly as recorded across prior merged slices. Reviewer **PASS** (diff `apps/android` only —
+> `ChatMention` +3 pure functions + tests, `MentionSearch` protocol/impl/binding, `ChatViewModel` debounce glue +
+> VM tests, tracking docs; no production logic outside apps/android; **SDK purity** — the merge/gate/staleness
+> laws are pure and extend the existing feature SSOT, the network plumbing sits behind an injected protocol;
+> **SSOT** — one mention decision surface, reused by the existing panel; no coverage floor lowered, no test
+> weakened). **Next slice:** §Chat still-open — audio-over-socket send (`message:send-with-attachments` + the
+> voice pill's captured bytes), a file/photo picker over the REST attachment chain, the conversation info sheet,
+> OR advance to §Feed per the build order once Chat's high-value items are exhausted.
+
 > On 2026-07-16 **send a message with attachments — the durable upload→graft→send chain + its first real
 > path (clipboard content)** landed (slice `chat-clipboard-content-send`, feature-parity §Chat "Send with
 > attachments" → ◐, and "Large-paste detection → clipboard-content attachment" → ✅). This is the missing

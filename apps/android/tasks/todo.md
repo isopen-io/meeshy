@@ -4,7 +4,24 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Chat) — slice `chat-live-location-socket-fold` ✅
+## This loop (Phase: Chat) — slice `chat-mention-remote-merge` ✅
+**@-mention autocomplete — debounced remote directory merge.** Completes §Chat "@-mention autocomplete (debounced
+API + local merge)" (local roster shipped 2026-07-06; this is the online half). Extends the existing pure
+`:feature:chat` `ChatMention` SSOT with `shouldQueryRemote` (≥2 trimmed chars) + `mergeSuggestions` (local-first
+dedup: locals win, remote appended when its handle — trimmed, case-insensitive — is non-blank, not local, not a
+remote dup), plus a staleness-guarded `MentionAutocompleteState.applyRemote(query, remote)` reducer (folds only while
+`query == activeQuery` — the pure equivalent of iOS's `Task.isCancelled`). Protocol-injected `MentionSearch` +
+`DirectoryMentionSearch` over `UserRepository.searchUsers` (`@Binds` module; failure → empty, roster still serves).
+`ChatViewModel` fires a 300 ms-debounced lookup on `onDraftChange` (each keystroke cancels the previous `Job`),
+excludes self, applies via `applyRemote`; cancelled on paste-capture + select. Panel binding unchanged (merged rows
+render below the roster — SSOT). +20 tests (5 gate, 8 merge, 3 applyRemote, 4 VM), mutation-checked (dropping the
+dedup/blank guard fails exactly the 6 dedup/blank/merge cases). `:feature:chat:testDebugUnitTest` green; full
+`assembleDebug testDebugUnitTest` APK assembles + all touched modules green (lone failure = documented `:sdk-core`
+DataStore flake, green in isolation). Diff = `apps/android` only. Reviewer PASS. Next: audio-over-socket send
+(`message:send-with-attachments` + voice-pill bytes), a file/photo picker over the REST attachment chain, the
+conversation info sheet, or advance to §Feed.
+
+## Prior loop (Phase: Chat) — slice `chat-live-location-socket-fold` ✅
 **Live-location socket start/update/stop wiring.** Feeds the previously-unfed `LiveLocationSessions` reducer from
 the socket. Ships `:core:model` pure `LiveLocationEventFold` (`started`/`updated`/`stopped` fold the already-modelled
 `Location.kt` wire DTOs into the reducer, resolving ISO dates via the shared `isoToEpochMillisOrNull` and applying

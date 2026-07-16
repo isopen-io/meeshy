@@ -202,6 +202,7 @@ class ChatViewModel @Inject constructor(
     private val activeCallRepository: ActiveCallRepository,
     private val reportRepository: ReportRepository,
     private val mediaUploadQueue: MediaUploadQueue,
+    private val mentionSearch: MentionSearch,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -239,6 +240,7 @@ class ChatViewModel @Inject constructor(
     private var typingIdleJob: Job? = null
     private var lastPersistedDraft: ConversationDraft? = null
     private var draftPersistJob: Job? = null
+    private var mentionSearchJob: Job? = null
 
     /**
      * sourceMessageId -> target conversation currently being forwarded to.
@@ -597,11 +599,13 @@ class ChatViewModel @Inject constructor(
                     mention = it.mention.onTextChange("", mentionRoster),
                 )
             }
+            mentionSearchJob?.cancel()
             stopTypingEmission()
             persistDraft("", _state.value.replyingToMessageId)
             return
         }
         _state.update { it.copy(draft = value, mention = it.mention.onTextChange(value, mentionRoster)) }
+        maybeSearchRemoteMentions(_state.value.mention.activeQuery)
         if (value.isBlank()) {
             stopTypingEmission()
         } else {
@@ -659,9 +663,36 @@ class ChatViewModel @Inject constructor(
      * `@fragment`), record it as a draft mention, and dismiss the suggestion panel.
      */
     fun onMentionSelected(candidate: MentionCandidate) {
+        mentionSearchJob?.cancel()
         _state.update { current ->
             val (newDraft, newMention) = current.mention.select(candidate, current.draft)
             current.copy(draft = newDraft, mention = newMention)
+        }
+    }
+
+    /**
+     * Fires a debounced directory lookup for the active `@fragment` and folds the
+     * results into the panel below the local roster. Mirrors iOS
+     * `MentionComposerController`: nothing runs for a dismissed panel or a query under
+     * two significant characters (the roster already covers those); a fresh keystroke
+     * cancels the previous in-flight lookup (300 ms debounce). The self-exclusion and
+     * local-first dedup live in the pure [MentionAutocompleteState.applyRemote] merge,
+     * which also drops a slow response whose fragment is already stale.
+     */
+    private fun maybeSearchRemoteMentions(query: String?) {
+        mentionSearchJob?.cancel()
+        if (query == null || !ChatMention.shouldQueryRemote(query)) return
+        val currentUserId = sessionRepository.currentUser.value?.id
+        mentionSearchJob = viewModelScope.launch {
+            delay(MENTION_SEARCH_DEBOUNCE_MS)
+            val remote = try {
+                mentionSearch.search(query.trim())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return@launch
+            }.filterNot { it.id == currentUserId }
+            _state.update { it.copy(mention = it.mention.applyRemote(query, remote)) }
         }
     }
 
@@ -1521,6 +1552,7 @@ class ChatViewModel @Inject constructor(
         private const val TYPING_TIMEOUT_MS = 5_000L
         private const val TYPING_REEMIT_MS = 3_000L
         private const val TYPING_IDLE_MS = 3_000L
+        private const val MENTION_SEARCH_DEBOUNCE_MS = 300L
         private const val CLIPBOARD_ATTACHMENT_NAME = "clipboard-content.txt"
         private const val CLIPBOARD_ATTACHMENT_MIME = "text/plain"
     }

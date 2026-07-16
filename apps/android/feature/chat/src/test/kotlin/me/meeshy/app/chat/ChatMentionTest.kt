@@ -199,6 +199,124 @@ class ChatMentionTest {
         assertThat(state2.draftMentions.keys).containsExactly("bob", "alice")
     }
 
+    // --- shouldQueryRemote gate ---
+
+    @Test
+    fun `shouldQueryRemote is false for a query shorter than two characters`() {
+        assertThat(ChatMention.shouldQueryRemote("a")).isFalse()
+    }
+
+    @Test
+    fun `shouldQueryRemote is false for an empty query`() {
+        assertThat(ChatMention.shouldQueryRemote("")).isFalse()
+    }
+
+    @Test
+    fun `shouldQueryRemote ignores surrounding whitespace when measuring length`() {
+        assertThat(ChatMention.shouldQueryRemote("  a  ")).isFalse()
+    }
+
+    @Test
+    fun `shouldQueryRemote is true from two significant characters`() {
+        assertThat(ChatMention.shouldQueryRemote("ab")).isTrue()
+    }
+
+    @Test
+    fun `shouldQueryRemote trims before measuring a longer query`() {
+        assertThat(ChatMention.shouldQueryRemote("  ali  ")).isTrue()
+    }
+
+    // --- mergeSuggestions ---
+
+    @Test
+    fun `mergeSuggestions keeps locals untouched when there are no remote results`() {
+        assertThat(ChatMention.mergeSuggestions(roster, emptyList())).isEqualTo(roster)
+    }
+
+    @Test
+    fun `mergeSuggestions returns the deduped remote when there are no locals`() {
+        val remote = listOf(candidate("carol"), candidate("dave"))
+        assertThat(ChatMention.mergeSuggestions(emptyList(), remote).map { it.username })
+            .containsExactly("carol", "dave").inOrder()
+    }
+
+    @Test
+    fun `mergeSuggestions appends remote candidates after the locals in order`() {
+        val remote = listOf(candidate("carol"), candidate("dave"))
+        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+            .containsExactly("bob", "alice", "bobby", "carol", "dave").inOrder()
+    }
+
+    @Test
+    fun `mergeSuggestions drops a remote candidate already present locally`() {
+        val remote = listOf(candidate("carol"), candidate("alice", "Alice Remote"))
+        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+            .containsExactly("bob", "alice", "bobby", "carol").inOrder()
+    }
+
+    @Test
+    fun `mergeSuggestions dedups against locals case-insensitively`() {
+        val remote = listOf(candidate("ALICE", "Alice Caps"))
+        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+            .containsExactly("bob", "alice", "bobby").inOrder()
+    }
+
+    @Test
+    fun `mergeSuggestions collapses duplicates within the remote results`() {
+        val remote = listOf(candidate("carol"), candidate("Carol", "Carol Two"))
+        assertThat(ChatMention.mergeSuggestions(emptyList(), remote).map { it.displayName })
+            .containsExactly("carol").inOrder()
+    }
+
+    @Test
+    fun `mergeSuggestions drops remote candidates with a blank handle`() {
+        val remote = listOf(candidate("", "Nameless"), candidate("carol"))
+        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+            .containsExactly("bob", "alice", "bobby", "carol").inOrder()
+    }
+
+    @Test
+    fun `mergeSuggestions dedups a remote handle that only differs by surrounding whitespace`() {
+        val remote = listOf(candidate(" alice ", "Alice Padded"), candidate("carol"))
+        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+            .containsExactly("bob", "alice", "bobby", "carol").inOrder()
+    }
+
+    // --- applyRemote reducer ---
+
+    @Test
+    fun `applyRemote merges remote results into the suggestions for the active query`() {
+        val active = MentionAutocompleteState(
+            activeQuery = "ca",
+            suggestions = listOf(candidate("carla")),
+        )
+
+        val next = active.applyRemote("ca", listOf(candidate("carol"), candidate("carla")))
+
+        assertThat(next.suggestions.map { it.username }).containsExactly("carla", "carol").inOrder()
+    }
+
+    @Test
+    fun `applyRemote discards a response whose query no longer matches the active one`() {
+        val active = MentionAutocompleteState(
+            activeQuery = "carl",
+            suggestions = listOf(candidate("carla")),
+        )
+
+        val next = active.applyRemote("ca", listOf(candidate("carol")))
+
+        assertThat(next).isSameInstanceAs(active)
+    }
+
+    @Test
+    fun `applyRemote is inert once the mention panel has been dismissed`() {
+        val inert = MentionAutocompleteState(draftMentions = mapOf("bob" to candidate("bob")))
+
+        val next = inert.applyRemote("ca", listOf(candidate("carol")))
+
+        assertThat(next).isSameInstanceAs(inert)
+    }
+
     // --- reset reducer ---
 
     @Test
