@@ -51,6 +51,8 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.work.runtime)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.coil.compose)
+    implementation(libs.androidx.browser)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

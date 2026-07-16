@@ -26,4 +26,12 @@ public data class LinkMetadata(
      */
     val hasAnyVisibleField: Boolean
         get() = !title.isNullOrBlank() || !description.isNullOrBlank() || !imageUrl.isNullOrBlank()
+
+    /**
+     * The [imageUrl] only when it is an http/https image safe to hand to an async image loader —
+     * `null` otherwise (absent, blank, or a non-web scheme like `data:`). Lets the rich card render
+     * its image band from one pure decision instead of branching in the Composable.
+     */
+    val renderableImageUrl: String?
+        get() = imageUrl?.takeIf { LinkOpenPolicy.isRenderableWebImage(it) }
 }

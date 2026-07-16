@@ -1007,7 +1007,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       exposes `liveLocationBadges`; `ChatScreen` renders a self-terminating accent-coherent `LiveLocationBadge`
       above the message list per active session. +17 tests (fold 13 incl. now-vs-startedAt boundary mutation-checked,
       VM 4). **Still pending:** fullscreen map / directions (needs a Maps SDK dependency).
-- [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
+- [x] OpenGraph link-preview cards + in-app browser; tracker-param stripping
     - [x] **Pure link-preview core + tracker stripping** (`:sdk-core` `me.meeshy.sdk.link`): `LinkPreviewParser`
       (`firstUrl` http/https/`www.` detection with trailing-punctuation + balanced-paren trimming and scheme
       lowercasing; `canonicalize` strips utm_*/fbclid/gclid case-insensitively + drops empty query/fragment;
@@ -1029,7 +1029,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       campaign-tagged variants, cancellation-safe. Wired real: `ChatScreen` requests per bubble and projects the
       collected cache into `LinkPreview.stateFor`, so a link now progresses `Loading`→`Card`/`BareLink`. Mirrors
       iOS `LinkPreviewStore.requestMetadata`; SSOT that iOS scatters across `cache`/`negativeCache`/`pendingKeys`.
-    - [ ] **Remaining:** in-app browser (Chrome Custom Tabs); rich-card image loading in `RichLinkCard`.
+    - [x] **In-app browser routing + rich-card image band** (slice `chat-in-app-browser-routing`,
+      2026-07-16, +30 tests): the pure `LinkOpenPolicy.targetFor` (`:sdk-core`) — one decision mapping a
+      raw URL to `LinkOpenTarget.InAppBrowser` (http/https, host-validated, scheme-lowercased),
+      `External` (well-formed non-web schemes — mailto/tel/geo/`meeshy://` deep links/reverse-dns — handed
+      to the OS), or `Unsupported` (blank, hostless-web, or a **blocked** dangerous scheme
+      javascript/data/file/about/blob/vbscript/content). **Surpasses** iOS's `SFSafariViewController`
+      (which silently no-ops on non-http and would run a `javascript:`/`data:` payload): dangerous schemes
+      are refused, non-web schemes reach their real handler, and a scheme-less bare host is promoted to
+      https. Plus the pure `LinkMetadata.renderableImageUrl` (og:image only when http/https) reused by the
+      card. Wired real (exempt glue): `openChatLink` maps each arm to a Chrome **Custom Tab** (accent-tinted
+      toolbar) / `ACTION_VIEW` / no-op, each `runCatching`-guarded; `ChatScreen.onOpenUrl` routes through it;
+      `RichLinkCard` gained a Coil `AsyncImage` hero band gated by `renderableImageUrl`. +30 tests
+      (LinkOpenPolicy 26, LinkMetadata 4); mutation-checked (dropping the blocked-scheme guard killed
+      exactly the 3 dangerous-scheme tests). SSOT for URL-open routing that iOS leaves implicit in
+      `URL(string:)` + `SafariView`.
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
 - [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
