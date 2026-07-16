@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -21,16 +22,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import me.meeshy.feature.chat.R
 import me.meeshy.sdk.link.LinkMetadata
 import me.meeshy.sdk.link.LinkPreviewParser
 import me.meeshy.sdk.link.LinkPreviewState
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyThemeTokens
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
@@ -141,13 +145,38 @@ private fun RichLinkCard(
     val tokens = MeeshyTheme.tokens
     val openLabel = stringResource(R.string.chat_link_open)
     Column(
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
         modifier = Modifier
             .widthIn(max = 280.dp)
             .clip(RoundedCornerShape(MeeshyRadius.md))
             .background(accentColor.copy(alpha = 0.10f))
-            .clickable(onClickLabel = openLabel, onClick = onClick)
-            .padding(MeeshySpacing.md),
+            .clickable(onClickLabel = openLabel, onClick = onClick),
+    ) {
+        // Hero image band — only for an http/https og:image (the pure [LinkMetadata.renderableImageUrl]
+        // decision guards against data:/blank URLs). A missing image collapses the band entirely.
+        metadata.renderableImageUrl?.let { imageUrl ->
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .background(accentColor.copy(alpha = 0.08f)),
+            )
+        }
+        RichLinkBody(metadata = metadata, accentColor = accentColor, tokens = tokens)
+    }
+}
+
+@Composable
+private fun RichLinkBody(
+    metadata: LinkMetadata,
+    accentColor: Color,
+    tokens: MeeshyThemeTokens,
+) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier.padding(MeeshySpacing.md),
     ) {
         (metadata.siteName ?: metadata.host)?.let { site ->
             Text(

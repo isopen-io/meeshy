@@ -1,5 +1,43 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **in-app browser routing + rich-card image band** landed (slice
+> `chat-in-app-browser-routing`, feature-parity §Chat "OpenGraph link-preview cards + in-app browser" — the last
+> open sub-item). iOS taps a link straight into `SFSafariViewController` gated only by `URL(string:)`; Android had
+> `LinkPreviewCard` opening every URL through the raw `LocalUriHandler` and a `RichLinkCard` with no image. **Ships
+> (`:sdk-core` `me.meeshy.sdk.link`, 1 pure object + 1 computed prop):** `LinkOpenPolicy.targetFor(rawUrl)` — the
+> single decision collapsing a URL into `LinkOpenTarget.InAppBrowser` (http/https, scheme lowercased + host
+> validated via the existing `LinkPreviewParser.hostOf`, so a hostless `http://` or `http:example.com` is refused),
+> `External` (a well-formed non-web scheme — mailto/tel/sms/geo/`meeshy://`/reverse-dns deep links — handed to the
+> OS), or `Unsupported` (blank, hostless-web, or a **blocked** dangerous scheme: javascript/data/file/about/blob/
+> vbscript/content); a scheme-less bare host with a dot is promoted to `https://` (whitespace, no-dot, and
+> leading/trailing-dot tokens stay Unsupported). Plus `LinkMetadata.renderableImageUrl` — the og:image only when it
+> is an http/https URL (reusing `LinkOpenPolicy.isRenderableWebImage`), so the card's image band is one pure
+> decision, not Composable branching. **Surpasses iOS:** dangerous schemes are refused (SafariView would happily run
+> a `javascript:`/`data:` payload), non-web schemes reach their real handler instead of silently failing in a
+> browser sheet, and bare hosts open cleanly. **Wired real (exempt glue):** `openChatLink(context, url, accentArgb)`
+> in `:feature:chat` maps each arm to a Chrome **Custom Tab** (accent-tinted toolbar, `setShowTitle`/url-bar-hiding)
+> / an `ACTION_VIEW` intent / a no-op, every launch `runCatching`-guarded so a missing handler degrades to nothing;
+> `ChatScreen.onOpenUrl` routes through it with `accentColor.toArgb()`; `RichLinkCard` gained a Coil `AsyncImage`
+> hero band (140dp, crop) gated by `renderableImageUrl`, body extracted to `RichLinkBody`. New deps (apps/android
+> only): `androidx.browser:browser:1.8.0` + `coil-compose` on `:feature:chat`. **+30 tests** (LinkOpenPolicy 26:
+> http/https route, whitespace trim, scheme-case normalise + host-case preserve, port+query, hostless-web ×2,
+> blocked javascript/data/file, external mailto/tel/meeshy/reverse-dns, bare-host promote ×2, no-dot/whitespace/
+> trailing-dot/leading-dot Unsupported, empty/blank, isRenderableWebImage true/data/null/mailto; LinkMetadata 4:
+> renderableImageUrl https/absent/blank/data). **Mutation check (RED proof):** dropping the blocked-scheme guard
+> (`blockedSchemes -> Unsupported` → `External`) failed **exactly 3** tests (the javascript/data/file cases), the
+> other 27 stayed green — discriminating, behavioural. **Verification:** `assembleDebug testDebugUnitTest`
+> (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe) → APK assembles + all link tests green; the lone
+> full-run failure was the documented `InterfaceLanguageStoreTest` DataStore timeout flake (module untouched by
+> this diff), **green in isolation** at `--max-workers=2`. Reviewer **PASS** (diff `apps/android` only — 1 new pure
+> `:sdk-core` object + 1 computed prop + 2 test files + `ChatLinkOpener`/`ChatScreen`/`RichLinkCard` glue + 2 deps +
+> tracking docs; no production logic outside; **SDK purity** — the routing decision is a stateless building block in
+> `:sdk-core` beside `LinkPreviewParser`/`LinkPreview`, the Custom-Tab/intent plumbing stays app-side; **SSOT** —
+> one URL-open decision, reused for the image band; **UX/colour coherence** — accent-tinted Custom Tab + accent
+> image band, no dead end; **no coverage floor lowered, no test weakened**). **Next slice:** §Chat still-open
+> follow-ups — the attachment send pipeline (§Chat "Send with attachments") which unblocks sending the captured
+> `ClipboardContent` + the live-location start emit; OR "Report message (typed reasons + detail)"; OR advance to
+> §Feed per the build order once Chat's high-value items are exhausted.
+
 > On 2026-07-16 **live-location socket start/update/stop wiring** landed (slice
 > `chat-live-location-socket-fold`, feature-parity §Chat "live location sharing (timed sessions)"). The prior
 > slice `chat-live-location-sessions` shipped the pure timed-session layer (`ActiveLiveLocation`,

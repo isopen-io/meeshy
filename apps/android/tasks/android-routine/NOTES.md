@@ -4,6 +4,21 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-16, `chat-in-app-browser-routing`) — extract the *routing* decision, not just the fetch; and reuse the parser's host helper
+Two takeaways from lighting up the in-app browser + rich card image. (1) **iOS's "open in SafariView" is a
+one-liner (`URL(string:) → SFSafariViewController`) that hides a real decision — surface it as a pure policy.**
+The valuable, testable core here was not the Custom Tab plumbing (glue) but `LinkOpenPolicy.targetFor`: http/https
+→ in-app browser, well-formed non-web scheme (mailto/tel/geo/`meeshy://`/reverse-dns) → OS handler, dangerous
+scheme (javascript/data/file/…) → refused. iOS *silently* fails on the non-web ones and would happily execute a
+`javascript:`/`data:` payload in the sheet — so the Android port genuinely *surpasses* it by classifying instead of
+blindly opening. When a slice looks like "just wire glue", check whether the glue is swallowing a branch worth
+testing. (2) **Validate a web URL by reusing the module's existing `LinkPreviewParser.hostOf`, don't re-parse.**
+A hostless `http://` or a `http:example.com` (missing `//`) must not open a browser; `hostOf` already returns
+`null` for both (it keys on `indexOf("://")` + a non-empty authority), so `webTarget` just checks `hostOf != null`.
+SSOT: one host extractor, reused — no second URL parser in the policy. (3) **Discriminating mutation:** dropping
+the `blockedSchemes -> Unsupported` arm (→ `External`) killed exactly the 3 dangerous-scheme tests and nothing
+else — the tell that those tests actually pin the security branch rather than incidentally covering it.
+
 ## Lesson (2026-07-16, `chat-live-location-socket-fold`) — a "?? now" fallback test is blind unless `now ≠ the other candidate anchor; and check for already-modelled wire DTOs before writing new ones
 Two takeaways from wiring the live-location socket events into the `LiveLocationSessions` reducer. (1) **When a
 model has two plausible fallback anchors (`expiresAt ?? now + window` vs the bug `?? startedAt + window`), the

@@ -114,6 +114,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -206,6 +207,7 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
+    val linkContext = LocalContext.current
     // Async OpenGraph link previews: one screen-scoped store dedupes fetches across bubbles and
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
     // user). Each bubble projects a pure outcome from this collected cache.
@@ -505,7 +507,9 @@ fun ChatScreen(
                                         ),
                                         isOutgoing = bubble.isOutgoing,
                                         accentColor = accentColor,
-                                        onOpenUrl = { url -> runCatching { uriHandler.openUri(url) } },
+                                        onOpenUrl = { url ->
+                                            openChatLink(linkContext, url, accentColor.toArgb())
+                                        },
                                     )
                                     replyThreads.threadFor(bubble.messageId)?.let { thread ->
                                         ReplyCountPill(
