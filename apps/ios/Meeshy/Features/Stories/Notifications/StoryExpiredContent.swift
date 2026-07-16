@@ -89,6 +89,7 @@ public struct StoryExpiredContent: View {
                 context: .custom(32),
                 avatarURL: context.actorAvatar
             )
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(context.actorDisplayName)
                     .font(.headline)
@@ -99,19 +100,29 @@ public struct StoryExpiredContent: View {
             }
             Spacer(minLength: 0)
         }
+        // Avatar label duplicates the adjacent name — hide it, then read the
+        // header as one element ("<name>, <relative time>") for a single swipe.
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
     private var triggerVisual: some View {
         switch context.trigger {
         case .reaction(let emoji):
+            // Hero glyph ≥40pt → kept fixed (scaling a 64pt visual under Dynamic
+            // Type would blow the empty-state layout). The emoji IS the reaction
+            // content, so it stays labelled for VoiceOver.
             Text(emoji)
                 .font(.system(size: 64))
                 .accessibilityLabel(Text(emoji))
         case .comment:
+            // Decorative counterpart to the reaction emoji — the comment excerpt
+            // and localised title already convey the trigger, so hide it from
+            // VoiceOver. Hero glyph ≥40pt → kept fixed, same rationale as above.
             Image(systemName: "bubble.left.fill")
                 .font(.system(size: 56))
                 .foregroundStyle(Self.foregroundOnBackground(background).opacity(0.85))
+                .accessibilityHidden(true)
         }
     }
 
@@ -141,6 +152,8 @@ public struct StoryExpiredContent: View {
                 .foregroundStyle(foreground.opacity(0.8))
                 .multilineTextAlignment(.center)
         }
+        // Read title + subtitle as one statement rather than two separate swipes.
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
