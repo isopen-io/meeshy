@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 147i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **147i (terminée, branche `claude/laughing-thompson-fakfjr`, base `main` HEAD `63cb684`)** :
+>   Dynamic Type + VoiceOver de `StatsTimelineChart` (graphe d'activité Swift `Charts` dans `UserStatsView`).
+>   **2/2** `.font(.system(size: 9))` d'axe → `MeeshyFont.relative(9)` (`import MeeshyUI` ajouté) → libellés
+>   d'axe scalables. **VoiceOver enrichi** : `.accessibilityElement(children: .ignore)` +
+>   `.accessibilityValue(Self.accessibilitySummary(for: timeline))` → le graphe annonce désormais ses
+>   **données** (total / pic / dernier jour) via helper pur `accessibilitySummary(for:)` (empty-state géré,
+>   aucun compte fabriqué). **2 clés i18n neuves × 5 langues** (`stats.timeline.chart.a11y.summary` +
+>   `.empty`, insertion chirurgicale 70 lignes, 0 reformatage `xcstrings`). 1 fichier prod + 1 test
+>   (`StatsTimelineChartAccessibilityTests` : helper + scan source). 0 logique, 0 `@Published`. Piste iOS
+>   passée en lots **a11y VoiceOver + Dynamic Type** (140i→146i, PRs #1966→#1978, toutes distinctes) → **0
+>   contention**. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `StatsTimelineChart` Dynamic Type + VoiceOver SOLDÉ** : ne plus reprendre (axes `relative`, valeur
+>   a11y data-driven, empty-state).
+> - **Base de départ 148i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : traîne 2/1 `.system` (`ContextActionMenu`, `SecurityVerificationView`,
+>   `AudioPostComposerView`, `ConversationBackgroundComponents`, `StoryViewerContainer`, `BubbleStandardLayout`,
+>   `WebRTCVideoView`…), lots **a11y VoiceOver** sur surfaces data (graphes/listes), ou **passe
+>   state-of-the-art** au tarissement. ⚠️ Éviter surfaces des PRs iOS ouvertes #1966→#1978.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
