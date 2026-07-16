@@ -4,7 +4,21 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Chat) — slice `chat-overlay-preview-bubble` ✅
+## This loop (Phase: Chat) — slice `chat-large-paste-detection` ✅
+**Large-paste detection → clipboard-content preview.** Advances the §Chat "Large-paste detection →
+clipboard-content attachment" line to detection+preview done. Ships `:feature:chat` pure `LargePasteDetector`
+(fires when composer text grows past 2000 chars **and** jumps >250 chars in one edit — readable port of iOS
+`handleClipboardCheck`'s `delta = 2·growth` heuristic) + clock-injected `ClipboardContent` value type
+(`of(text, nowMillis)` → id / charCount / 200-char truncated preview; surpasses iOS's twin `Date()` reads +
+id-only equality). Wired real (exempt glue): `ChatViewModel.onDraftChange` folds a captured paste into
+`ChatUiState.clipboardContent` + clears the draft; `removeClipboardContent` discards it; `ChatComposer` shows an
+accent-tinted `ClipboardContentPreview` chip (en/fr/es/pt). +24 tests (detector 13, model 8, VM 3), mutation-checked
+(growth boundary `>`→`>=` fails exactly the boundary test). Full `assembleDebug testDebugUnitTest` green (UTF-8-daemon
+recipe, 5m14s), APK produced, diff = `apps/android/feature/chat` only. Reviewer PASS. Next: send the captured content
+as a real clipboard_content attachment (gated on the attachment send pipeline), or live-location socket wiring, or
+the in-app browser / rich-card image loading link-preview follow-ups.
+
+## Prior loop (Phase: Chat) — slice `chat-overlay-preview-bubble` ✅
 **Floating preview-bubble overlay layout law — pure SSOT + real lifted hero.** Completes the §Chat "Long-press
 overlay menu" line (all four parts now done: quick-reactions + action-grid + drag-to-detail + preview bubble). Ships
 `:feature:chat` `MessageOverlayLayout.compute(...)` — a faithful port of the iOS `MessageOverlayMenu` "native-lean"

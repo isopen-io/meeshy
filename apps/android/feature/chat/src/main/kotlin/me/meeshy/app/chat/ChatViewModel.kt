@@ -104,6 +104,9 @@ data class ChatUiState(
     val pendingEffects: MessageEffects = MessageEffects(),
     /** Whether the effects-picker bottom sheet is presented. */
     val isEffectsPickerOpen: Boolean = false,
+    /** A large paste captured into a clipboard-content attachment, previewed above the
+     * composer until sent or removed. Null when no paste has been captured. */
+    val clipboardContent: ClipboardContent? = null,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
@@ -536,6 +539,23 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onDraftChange(value: String) {
+        val detection = LargePasteDetector.detect(
+            previous = _state.value.draft,
+            current = value,
+            nowMillis = clock.nowMillis(),
+        )
+        if (detection is PasteDetection.Captured) {
+            _state.update {
+                it.copy(
+                    draft = "",
+                    clipboardContent = detection.content,
+                    mention = it.mention.onTextChange("", mentionRoster),
+                )
+            }
+            stopTypingEmission()
+            persistDraft("", _state.value.replyingToMessageId)
+            return
+        }
         _state.update { it.copy(draft = value, mention = it.mention.onTextChange(value, mentionRoster)) }
         if (value.isBlank()) {
             stopTypingEmission()
@@ -543,6 +563,11 @@ class ChatViewModel @Inject constructor(
             startTypingEmission()
         }
         persistDraft(value, _state.value.replyingToMessageId)
+    }
+
+    /** Discards a captured large-paste attachment (the preview chip's remove button). */
+    fun removeClipboardContent() {
+        _state.update { it.copy(clipboardContent = null) }
     }
 
     /**

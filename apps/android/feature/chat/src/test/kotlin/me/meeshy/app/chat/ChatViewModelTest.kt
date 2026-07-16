@@ -378,6 +378,46 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun a_large_paste_is_captured_as_a_clipboard_attachment_and_clears_the_draft() =
+        runTest(dispatcher) {
+            val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+            advanceUntilIdle()
+
+            val pasted = "a".repeat(2_500)
+            vm.onDraftChange(pasted)
+
+            assertThat(vm.state.value.draft).isEmpty()
+            val clip = vm.state.value.clipboardContent
+            assertThat(clip).isNotNull()
+            assertThat(clip!!.text).isEqualTo(pasted)
+            assertThat(clip.charCount).isEqualTo(2_500)
+            assertThat(clip.createdAtMillis).isEqualTo(FIXED_NOW)
+        }
+
+    @Test
+    fun ordinary_typing_does_not_capture_a_clipboard_attachment() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.onDraftChange("just typing along")
+
+        assertThat(vm.state.value.draft).isEqualTo("just typing along")
+        assertThat(vm.state.value.clipboardContent).isNull()
+    }
+
+    @Test
+    fun removing_a_captured_clipboard_attachment_clears_it() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+        vm.onDraftChange("a".repeat(2_500))
+        assertThat(vm.state.value.clipboardContent).isNotNull()
+
+        vm.removeClipboardContent()
+
+        assertThat(vm.state.value.clipboardContent).isNull()
+    }
+
+    @Test
     fun send_dispatches_an_optimistic_message_and_clears_the_draft() = runTest(dispatcher) {
         val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
         val (vm, repo, workManager) = viewModel(flowOf(CacheResult.Empty), currentUser = user)

@@ -119,4 +119,7 @@
     <string name="chat_media_skip_back">Skip back 5 seconds</string>
     <string name="chat_media_skip_forward">Skip forward 5 seconds</string>
     <string name="chat_media_playback_speed">Playback speed</string>
+    <string name="chat_clipboard_title">Clipboard content</string>
+    <string name="chat_clipboard_char_count">%1$d characters</string>
+    <string name="chat_clipboard_remove">Remove clipboard content</string>
 </resources>
