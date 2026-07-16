@@ -982,9 +982,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       message bubble carrying a URL (the iOS "raw link" graceful fallback), opening it via the URI handler.
       Slice `chat-link-preview-core` (2026-07-15, +59 tests). SSOT for link detection/OG parsing that iOS
       spreads across `LinkPreviewFetcher`.
-    - [ ] **Remaining:** async OpenGraph fetch driving `Loading`→`Card` (OkHttp GET → `LinkPreviewParser.parse`,
-      dedupe + negative-cache + logout purge like iOS `LinkPreviewStore`); in-app browser (Chrome Custom Tabs);
-      rich-card image loading. The `Loading`/`Card` arms + `canonicalize` cache key are already in place to drive.
+    - [x] **Async OpenGraph fetch + dedupe/negative-cache/logout-purge** (slice `chat-link-preview-cache`,
+      2026-07-16, +42 tests): the immutable `LinkPreviewCache` SSOT (`:sdk-core`) — `lookup`/`outcomeFor`
+      (Cached/RecentlyFailed/InFlight/ShouldFetch → `LinkPreviewOutcome`), `startFetch`, `resolve` (success
+      caches + clears the prior failure, empty records a 30-min negative window, both clear the in-flight
+      marker), `evictStale` (7-day positive TTL + prunes expired negatives — surpasses iOS which only evicts
+      positives at load), `cleared` (logout purge); the pure `LinkPreviewFetching.outcomeFrom` HTTP→outcome gate
+      (status/content-type/visible-field) + `OkHttpLinkPreviewFetcher` IO glue; the app-side `LinkPreviewStore`
+      (`:feature:chat`) orchestrating *when* to fetch — dedupe, negative window, canonical-key sharing of
+      campaign-tagged variants, cancellation-safe. Wired real: `ChatScreen` requests per bubble and projects the
+      collected cache into `LinkPreview.stateFor`, so a link now progresses `Loading`→`Card`/`BareLink`. Mirrors
+      iOS `LinkPreviewStore.requestMetadata`; SSOT that iOS scatters across `cache`/`negativeCache`/`pendingKeys`.
+    - [ ] **Remaining:** in-app browser (Chrome Custom Tabs); rich-card image loading in `RichLinkCard`.
 - [ ] Report message (typed reasons + detail); per-conversation animated themed background
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
 - [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
