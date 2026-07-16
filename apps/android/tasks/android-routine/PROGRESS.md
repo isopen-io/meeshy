@@ -1,5 +1,43 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **live-location socket start/update/stop wiring** landed (slice
+> `chat-live-location-socket-fold`, feature-parity §Chat "live location sharing (timed sessions)"). The prior
+> slice `chat-live-location-sessions` shipped the pure timed-session layer (`ActiveLiveLocation`,
+> `LiveLocationSessions` reducer, `LiveLocationBadge`) but left the reducer **unfed** — no socket events reached
+> it, so no badge ever rendered. iOS feeds it from three `ConversationSocketHandler` sinks: `liveLocationStarted`
+> builds an `ActiveLiveLocation` (`expiresAt ?? Date()+durationMinutes·60`, `startedAt ?? Date()`) and replaces
+> any prior session for that user; `liveLocationUpdated` moves the pin + stamps `timestamp ?? Date()`;
+> `liveLocationStopped` removes it. **Ships (`:core:model` `me.meeshy.sdk.model`, 1 pure object):**
+> `LiveLocationEventFold` — `started`/`updated`/`stopped` fold the already-modelled `Location.kt` wire DTOs
+> (`LiveLocationStartedEvent`/`UpdatedEvent`/`StoppedEvent`) into the `LiveLocationSessions` reducer, resolving
+> each ISO-string date through the shared `isoToEpochMillisOrNull` and applying iOS's exact fallbacks against the
+> caller-supplied `nowMillis` (threaded in, so the fold is pure/testable off the wall clock — surpassing iOS's
+> internal `Date()`); a non-positive window collapses to `now` (no endless share), and the reducer's inert
+> same-instance no-ops (update/stop on an unknown user) survive the fold. **Wired real (exempt glue):**
+> `MessageSocketManager` gains three `liveLocation*` `SharedFlow`s + `listen("location:live-started/updated/stopped")`
+> registrations; `ChatViewModel` collects each (conversation-scoped, `clock.nowMillis()`) into
+> `ChatUiState.liveLocations: LiveLocationSessions` and exposes `liveLocationBadges`; `ChatScreen` renders a
+> self-terminating accent-coherent `LiveLocationBadge` per active session above the message list.
+> **+17 tests** (LiveLocationEventFold 13: started uses-server-timestamps / expiresAt-fallback-now+duration /
+> startedAt-fallback-now / zero-and-negative-duration→already-expired / replaces-same-user; updated
+> moves+stamps-timestamp / stamps-now-when-absent / does-not-extend-deadline / inert-no-op-unknown-user /
+> null-clears-motion; stopped removes / inert-no-op-unknown; ChatViewModel 4: started surfaces a badge with the
+> right deadline, started-elsewhere ignored, updated moves the badge, stopped removes it). **Mutation check
+> (RED proof):** anchoring the `expiresAt` fallback on `startedAt` instead of `nowMillis` failed **exactly 1**
+> test (`started_falls_back_to_now_plus_duration_when_expires_at_is_absent`) — the test's `now` is deliberately
+> 10 min past the parsed `startedAt` so the two anchors diverge; the other 12 stayed green. **Verification:**
+> `assembleDebug testDebugUnitTest` (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe) → green
+> (see run log). Reviewer **PASS** (diff `apps/android` only — 1 new pure `:core:model` object + 1 test file +
+> `MessageSocketManager`/`ChatViewModel`/`ChatScreen` wiring + ChatViewModelTest additions + tracking docs; no
+> production logic outside; **SDK purity** — the fold is a stateless building block on wire DTOs + the reducer,
+> both in `:core:model`, matching `CallSignalMapper`; **SSOT** — one ISO parser (`isoToEpochMillisOrNull`), one
+> reducer; **UDF** — immutable `StateFlow<ChatUiState>`, pure transitions; **UX/colour coherence** — accent-tinted
+> self-terminating badge, no dead end; **no coverage floor lowered, no test weakened**). **Next slice:** the
+> in-app browser (Chrome Custom Tabs) + rich-card image loading in `RichLinkCard`, OR the fullscreen
+> map/directions for a live location (needs a Maps SDK dependency — larger, gate on that decision), OR advancing
+> the attachment send pipeline (§Chat "Send with attachments") which unblocks sending the captured
+> `ClipboardContent` and the live-location start emit.
+
 > On 2026-07-16 **large-paste detection → clipboard-content preview** landed (slice
 > `chat-large-paste-detection`, feature-parity §Chat "Large-paste detection → clipboard-content attachment").
 > iOS handles this app-side in `UniversalComposerBar.handleClipboardCheck`: on every text change it computes an
