@@ -194,7 +194,7 @@ struct MyStoriesView: View {
         } label: {
             Text(String(localized: "story.mine.delete.selected",
                         defaultValue: "Supprimer (\(selectedStoryIDs.count))"))
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -339,7 +339,7 @@ private struct MyStoryRow: View {
             thumbnail
             VStack(alignment: .leading, spacing: 4) {
                 Text(story.timeAgo)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(isDark ? .white : MeeshyColors.indigo950)
                 HStack(spacing: 12) {
                     metric(icon: "eye.fill", value: story.viewCount ?? 0)
@@ -350,22 +350,38 @@ private struct MyStoryRow: View {
             Spacer()
             if !isSelecting {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(.secondary)
                     .padding(8)
             }
         }
         .padding(.vertical, 4)
-        // Coche/décoche transmise à VoiceOver via la trait de la ligne — le
-        // glyphe de sélection reste décoratif (même pattern que
-        // NewConversationView.userRow, cf. son commentaire "Selection state
-        // is conveyed to VoiceOver by the row's `.isSelected` trait").
+        // La rangée est un seul élément VoiceOver : les 3 métriques sont des
+        // glyphes SF Symbol décoratifs (eye/heart/bubble) qui, lus un par un,
+        // annonceraient des fragments ambigus ("2 h, 5, 3, 2"). On fournit un
+        // libellé unique explicite ; le glyphe ellipsis n'est qu'un indice
+        // visuel du menu (actions réelles via swipe/contextMenu).
+        // Coche/décoche transmise via la trait `.isSelected` de la ligne (même
+        // pattern que NewConversationView.userRow).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var accessibilityDescription: String {
+        String(
+            format: String(localized: "story.mine.row.a11y",
+                           defaultValue: "Story %1$@, %2$@ vues, %3$@ réactions, %4$@ commentaires"),
+            story.timeAgo,
+            "\(story.viewCount ?? 0)",
+            "\(story.reactionCount)",
+            "\(story.commentCount)"
+        )
     }
 
     private var selectionCircle: some View {
         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-            .font(.system(size: 22))
+            .font(MeeshyFont.relative(22))
             .foregroundColor(isSelected ? accentColor : Color.secondary.opacity(0.4))
             .accessibilityHidden(true)
     }
@@ -392,8 +408,8 @@ private struct MyStoryRow: View {
     @ViewBuilder
     private func metric(icon: String, value: Int) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 11))
-            Text("\(value)").font(.system(size: 13, weight: .medium))
+            Image(systemName: icon).font(MeeshyFont.relative(11))
+            Text("\(value)").font(MeeshyFont.relative(13, weight: .medium))
         }
         .foregroundColor(.secondary)
     }
