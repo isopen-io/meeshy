@@ -65,6 +65,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -378,12 +379,14 @@ fun ChatScreen(
                     isEditing = state.isEditing,
                     replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
                     hasEffects = state.hasPendingEffects,
+                    clipboardContent = state.clipboardContent,
                     accentColor = accentColor,
                     onDraftChange = viewModel::onDraftChange,
                     onSend = viewModel::send,
                     onOpenEffects = viewModel::openEffectsPicker,
                     onCancelEdit = viewModel::cancelEdit,
                     onCancelReply = viewModel::cancelReply,
+                    onRemoveClipboard = viewModel::removeClipboardContent,
                 )
             }
         },
@@ -2188,12 +2191,14 @@ private fun ChatComposer(
     isEditing: Boolean,
     replyingToLabel: String?,
     hasEffects: Boolean,
+    clipboardContent: ClipboardContent?,
     accentColor: Color,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onOpenEffects: () -> Unit,
     onCancelEdit: () -> Unit,
     onCancelReply: () -> Unit,
+    onRemoveClipboard: () -> Unit,
 ) {
     Surface(color = MeeshyTheme.tokens.backgroundPrimary) {
         Column(
@@ -2266,6 +2271,14 @@ private fun ChatComposer(
                     }
                 }
             }
+            if (clipboardContent != null) {
+                ClipboardContentPreview(
+                    clip = clipboardContent,
+                    accentColor = accentColor,
+                    onRemove = onRemoveClipboard,
+                    modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+                )
+            }
             var recording by remember { mutableStateOf(VoiceRecordingSession.idle()) }
             LaunchedEffect(recording.isRecording) {
                 while (recording.isRecording) {
@@ -2323,6 +2336,69 @@ private fun ChatComposer(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Preview chip for a large paste captured into a clipboard-content attachment —
+ * the thin, coverage-exempt Compose glue over the pure [ClipboardContent] (parité
+ * iOS `clipboardContentPreview`: doc glyph, title, truncated body, char count, and
+ * an accent-tinted remove button).
+ */
+@Composable
+private fun ClipboardContentPreview(
+    clip: ClipboardContent,
+    accentColor: Color,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.5f))
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Description,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier.size(20.dp),
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = MeeshySpacing.sm),
+        ) {
+            Text(
+                text = stringResource(R.string.chat_clipboard_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = MeeshyTheme.tokens.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = clip.truncatedPreview,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.chat_clipboard_char_count, clip.charCount),
+                style = MaterialTheme.typography.labelSmall,
+                color = accentColor,
+            )
+        }
+        IconButton(onClick = onRemove) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = stringResource(R.string.chat_clipboard_remove),
+                tint = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

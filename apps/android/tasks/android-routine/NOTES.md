@@ -4,6 +4,23 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-16, `chat-large-paste-detection`) — port the *intent*, not an obfuscated iOS formula; and place a composer rule by the sibling-SSOT precedent
+Two takeaways from porting iOS `UniversalComposerBar.handleClipboardCheck`. (1) **iOS's paste heuristic hides a
+`2·growth` behind arithmetic.** Its guard is `newText.count > 2000 && delta > 500` where
+`delta = newText.count - (text.count - (newText.count - text.count))`. Expand it: the inner `(newText.count -
+text.count)` is the growth `g`; `text.count - g = 2·text.count - newText.count`; so `delta = newText.count -
+(2·text.count - newText.count) = 2·(newText.count - text.count) = 2·g`. Thus `delta > 500 ⟺ g > 250`. Porting the
+formula *verbatim* would compile and pass but ship an unreadable expression; the surpass is to name the real
+thresholds (`MIN_TOTAL_LENGTH=2000`, `MIN_GROWTH=250`) and write `growth > MIN_GROWTH`. Always reduce an
+arithmetic guard to its behavioural meaning before porting — the mutation check (`>`→`>=` failing exactly the
+boundary test) then actually pins the intended boundary. (2) **A composer "when to do X" rule with opaque params
+is borderline SDK-vs-app; break the tie with the sibling precedent.** `LargePasteDetector` takes bare strings and
+is stateless (smells SDK), but it encodes a product UX rule ("a big paste becomes an attachment") tightly coupled
+to the composer. The existing composer SSOTs — `ChatMention`, `DraftAutosave`, `ChatSearch` — all live in
+`:feature:chat`, and iOS keeps its `ClipboardContent`/`handleClipboardCheck` in the app target, not `MeeshyUI`. So
+the detector + the `ClipboardContent` value type went to `:feature:chat`, not `:sdk-core`. When the grain test is
+ambiguous, match where the nearest analogous logic already lives on both platforms.
+
 ## Lesson (2026-07-16, `chat-live-location-sessions`) — inject the clock into the model instead of reading `Date()`, so the whole expiry surface is JVM-testable off the wall clock; and a "same-instance on no-op" reducer contract is both a real optimisation and a discriminating test hook
 Two takeaways from porting iOS's `ActiveLiveLocation` + `LiveLocationSessions`. (1) **iOS `ActiveLiveLocation.isExpired`/`remainingTime` read `Date()` internally — a hidden dependency that would force a clock-mock (or Robolectric) to test on Android. Port them as `isExpired(nowEpochMillis)`/`remainingMillis(nowEpochMillis)` that take the reference clock as a parameter.** The Compose badge supplies `System.currentTimeMillis()` at the tick site (exactly like `EphemeralLifecycle.evaluate(expiresAt, now)` already does), and every boundary — inclusive deadline (`now >= expires` → expired *at* the deadline), clamped-at-zero remaining, the `startingAt` non-positive-window→already-expired guard — becomes a plain `assertThat(...)` with hand-picked longs. Rule: when an iOS model reads the ambient clock, thread `now` through the Kotlin port; purity of the *derivation* is worth the one extra parameter at the call site, and the call site is glue that's exempt anyway. (2) **Give an immutable reducer an explicit "returns the same instance when nothing changed" contract on its no-op transitions (`update` on an unknown user, `stop` on an absent user, `pruneExpired` with nothing expired).** It's a genuine allocation-free optimisation for a per-second prune, AND `assertThat(after).isSameInstanceAs(before)` is a *discriminating* assertion that a naive `copy(sessions = sessions.filter{…})` (which always allocates) fails — so the no-op branch is actually covered, not just incidentally green. Pair it with the `size`-unchanged early return (`if (kept.size == sessions.size) this else copy(...)`). This mirrors the waveform slice's "same-instance-when-clean" idiom; keep using it for reducers.
 

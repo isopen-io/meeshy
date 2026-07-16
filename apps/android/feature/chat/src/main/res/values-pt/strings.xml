@@ -119,4 +119,7 @@
     <string name="chat_media_skip_back">Recuar 5 segundos</string>
     <string name="chat_media_skip_forward">Avançar 5 segundos</string>
     <string name="chat_media_playback_speed">Velocidade de reprodução</string>
+    <string name="chat_clipboard_title">Conteúdo da área de transferência</string>
+    <string name="chat_clipboard_char_count">%1$d caracteres</string>
+    <string name="chat_clipboard_remove">Remover conteúdo da área de transferência</string>
 </resources>

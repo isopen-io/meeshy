@@ -1,5 +1,46 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **large-paste detection → clipboard-content preview** landed (slice
+> `chat-large-paste-detection`, feature-parity §Chat "Large-paste detection → clipboard-content attachment").
+> iOS handles this app-side in `UniversalComposerBar.handleClipboardCheck`: on every text change it computes an
+> obfuscated `delta = newText.count - (text.count - (newText.count - text.count))` (which reduces to exactly
+> `2 · growth`) and, when `newText.count > 2000 && delta > 500`, folds the text into a `ClipboardContent` (an
+> app-local struct the audit flags as mis-filed under `MediaPlayerContext.swift`), clears the field, and shows a
+> `clipboardContentPreview` chip. Android had **no paste awareness** — a 5000-char paste sat as raw text in the
+> composer. **Ships (`:feature:chat` `me.meeshy.app.chat`, 2 pure types):** `LargePasteDetector` — the stateless
+> rule: `isLargePaste(previous, current)` returns true iff `current.length > MIN_TOTAL_LENGTH (2000)` **and**
+> `growth (current.length − previous.length) > MIN_GROWTH (250)` — surpassing iOS by porting the *intent* with a
+> readable growth threshold instead of the double-delta trick (iOS `500/2 = 250`); plus `detect(previous, current,
+> nowMillis)` → a `PasteDetection` (`None` / `Captured(content)`). `ClipboardContent` — the clock-injected value
+> type: `of(text, nowMillis)` derives `id="clipboard-$nowMillis"`, `charCount`, a `truncatedPreview` (200-char
+> prefix + "..." only when longer), `createdAtMillis` — surpassing iOS by injecting the clock (pure/testable off
+> the wall clock) and using full structural equality rather than iOS's id-only `==`. **Wired real (`ChatViewModel`
+> + `ChatScreen`, exempt glue):** `onDraftChange` runs `detect` against the previous draft; a `Captured` result
+> sets `ChatUiState.clipboardContent`, clears the draft to "" (so the huge paste is never auto-saved as a draft
+> nor triggers a typing burst) and resets the mention state; `removeClipboardContent` discards the capture; the
+> composer renders an accent-tinted `ClipboardContentPreview` chip (doc glyph, 2-line truncated body, char count,
+> remove ✕ — parité iOS) in en/fr/es/pt. **+24 tests** (LargePasteDetector 13: both-thresholds-pass, total-length
+> boundary at exactly 2000, growth boundary at exactly 250 + one-over, slow-typing-crossing-total not a paste,
+> big-append-to-large qualifies, huge-jump-into-short does not, deletion never a paste, unchanged not a paste,
+> detect None/Captured captures full text + clock stamp; ClipboardContent 8: verbatim text, char count, short-preview
+> no-ellipsis, exactly-at-limit untruncated, one-over truncates+ellipsis, id/createdAt from clock, same-instant-equal,
+> different-instant-distinct; ViewModel 3: large-paste captured+draft-cleared+clock-stamped, ordinary-typing no
+> capture, remove clears). **Mutation check (RED proof):** flipping `growth > MIN_GROWTH` → `>=` failed **exactly 1**
+> test (`growth exactly at the minimum does not qualify`), the other 12 stayed green — discriminating, behavioural.
+> **Verification:** `assembleDebug testDebugUnitTest` (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe)
+> → **BUILD SUCCESSFUL in 5m 14s**, APK assembles + full-tree unit tests green (no DataStore flake this run).
+> Reviewer **PASS** (diff `apps/android` only — 2 new pure `:feature:chat` types + 2 test files + ViewModel/ChatScreen
+> wiring + 4-locale strings + tracking docs; no production logic outside; **SDK purity** — the detector/model are
+> stateless composer building blocks in `:feature:chat` exactly where the sibling composer SSOTs `ChatMention` /
+> `DraftAutosave` / `ChatSearch` live, and where iOS keeps its app-local `ClipboardContent`; **SSOT** — one paste
+> rule, one clipboard value type; **UDF** — immutable `StateFlow<ChatUiState>`, pure transitions; **UX/colour
+> coherence** — accent-tinted chip, natural remove gesture, no dead end; **no coverage floor lowered, no test
+> weakened**). **Next slice:** send the captured `ClipboardContent` as a real `clipboard_content` attachment (gated
+> on building the attachment send pipeline — §Chat "Send with attachments" / "Attachment ladder"), OR the still-open
+> §Chat follow-ups: wire the live-location reducer to the `liveLocation:started/updated/stopped` socket events so an
+> active session renders the badge in `ChatScreen`, or the in-app browser (Chrome Custom Tabs) + rich-card image
+> loading in `RichLinkCard`.
+
 > On 2026-07-16 **the live-location timed-session core + badge/duration-picker UI** landed (slice
 > `chat-live-location-sessions`, feature-parity §Chat "Static location pin + **live location sharing (timed
 > sessions)**"). iOS models this in `LocationModels.swift` (`ActiveLiveLocation` with `isExpired`/`remainingTime`

@@ -893,7 +893,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       real `MediaRecorder`/`AudioRecord` capture feeding `meter()`, and the voice-attachment send pipeline
       (VM + upload) — the pill drives the *session* today, not yet the audio bytes.
 - [ ] Attachment ladder (emoji, file, location, camera, photo library, voice)
-- [ ] Large-paste detection → clipboard-content attachment
+- [◐] Large-paste detection → clipboard-content attachment — **detection + preview done**
+      (slice `chat-large-paste-detection`, 2026-07-16): pure `:feature:chat` `LargePasteDetector`
+      (port of iOS `UniversalComposerBar.handleClipboardCheck` — fires when the composer text grows
+      past `MIN_TOTAL_LENGTH=2000` **and** jumps by more than `MIN_GROWTH=250` chars in one edit;
+      surpasses iOS by replacing its obfuscated `delta = 2·growth` formula with the readable growth
+      threshold) + pure clock-injected `ClipboardContent` value type (`of(text, nowMillis)` →
+      id/charCount/200-char `truncatedPreview`; surpasses iOS by injecting the clock instead of two
+      `Date()` reads and using full structural equality instead of id-only `==`). `ChatViewModel`:
+      `onDraftChange` folds a captured paste into `ChatUiState.clipboardContent` + clears the draft
+      (so the huge paste is never persisted as a draft nor emits typing), `removeClipboardContent`
+      discards it; `ChatComposer` shows an accent-tinted `ClipboardContentPreview` chip (doc glyph,
+      truncated body, char count, remove button — parité iOS `clipboardContentPreview`), en/fr/es/pt.
+      +24 tests (detector 13, model 8, ViewModel 3), mutation-checked (growth boundary `>`→`>=` fails
+      exactly the boundary test). **Pending:** sending the captured content as a real clipboard_content
+      attachment (gated on the not-yet-built attachment send pipeline).
 - [ ] In-app camera: photo capture + video recording (flash, front/back toggle)
 - [ ] Live sentiment + language detection ("smart context zone") with language pill/picker override
 - [◐] @-mention autocomplete (debounced API + local merge) — local roster done

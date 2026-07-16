@@ -119,4 +119,7 @@
     <string name="chat_media_skip_back">Reculer de 5 secondes</string>
     <string name="chat_media_skip_forward">Avancer de 5 secondes</string>
     <string name="chat_media_playback_speed">Vitesse de lecture</string>
+    <string name="chat_clipboard_title">Contenu du presse-papier</string>
+    <string name="chat_clipboard_char_count">%1$d caractères</string>
+    <string name="chat_clipboard_remove">Retirer le contenu du presse-papier</string>
 </resources>
