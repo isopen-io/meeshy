@@ -1,5 +1,49 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **feed new-posts banner + realtime-head merge** landed (slice `feed-new-posts-banner`,
+> feature-parity §Feed "Social feed … new-posts banner + realtime-head merge" → ✅ — the first §Feed
+> realtime slice, opening the build-order move from §Chat to §Feed). iOS `FeedViewModel` inserts a socket
+> `post:created` at index 0, bumps `newPostsCount`, and protects that just-arrived post from a concurrent
+> background refresh via `mergePreservingRealtimeHead`; a "New posts" banner over `newPostsCount` scrolls to
+> top on tap (`acknowledgeNewPosts`). Android had the cache-first SWR feed (`PostRepository.feedStream`) but
+> consumed **none** of the already-live `SocialSocketManager.postCreated` stream (attached by
+> `RealtimeSessionCoordinator`), so a new post only appeared on the next refresh. **Ships (`:feature:feed`,
+> pure SSOT):** `FeedRealtimeHead(posts, newPostsCount)` + `FeedRealtimeReducer` — `accept(state, post,
+> loadedIds)` buffers a genuinely new post newest-first and bumps the count, returning the **same instance**
+> (StateFlow-dedup) for a blank id, a post already in the cache-projected feed (`loadedIds` — the iOS
+> `!posts.contains` guard, also the offline-echo case), or an already-buffered duplicate; `acknowledge`
+> clears the count while the posts stay at head (≠ `posts.size` — matches iOS); `reconcile(loadedIds)` drops
+> buffered posts a refresh has surfaced (count untouched — the banner tracks arrivals) so nothing renders
+> twice; `clear` resets on pull-to-refresh. **Wired real (exempt glue):** `FeedViewModel` injects
+> `SocialSocketManager`, adds `realtimeHead` as a 5th `combine` input, folds `postCreated` through `accept`,
+> **display-filters** the head to be cache-disjoint and prepends it to the projection (so a socket post
+> survives a background feed re-emission — the Android `mergePreservingRealtimeHead`), reconciles the buffer
+> on each cache emit for memory hygiene, and `refresh()` clears it. `latestPosts` (flag-tap target) now spans
+> the realtime head too. `FeedUiState.newPostsCount`; new `acknowledgeNewPosts()`. `FeedScreen` renders a
+> floating accent-tinted "N new posts" pill (`ArrowUpward`, `AnimatedVisibility` slide/fade, `MeeshyRadius.pill`,
+> Indigo500) at `TopCenter` that `animateScrollToItem(0)` + `acknowledgeNewPosts()`; plurals en/fr/es/pt
+> (`feed_new_posts`). **Surpasses iOS:** the buffer/dedup/reconcile laws are a pure, unit-testable reducer
+> (14 branch-swept tests) rather than imperative `posts.insert` scattered across a Combine `sink`; the display
+> filter makes double-render impossible independent of the memory-hygiene reconcile. **+21 tests**
+> (`FeedRealtimeReducerTest` 14 — accept fresh/blank/in-cache/dup + newest-first, acknowledge clear/inert,
+> reconcile empty/none/some/all, clear reset/inert/post-ack; `FeedViewModelTest` 7 behavioural — head+banner
+> raise, in-cache ignored, two stack newest-first, acknowledge keeps posts, survives re-emission, no double
+> render once cache catches up, refresh clears). **Mutation check (RED proof):** dropping the `loadedIds`
+> guard in `accept` (`if (id in loadedIds) return state`) failed **exactly 2** tests (`accept ignores a post
+> already present in the cache-projected feed` + `a realtime post already in the cache feed is ignored`), the
+> other 51 stayed green — discriminating, behavioural. **Verification:** `:feature:feed:testDebugUnitTest`
+> green in isolation; full-tree `:app:assembleDebug testDebugUnitTest` (system Gradle 8.14.3, `--max-workers=3`,
+> UTF-8-daemon recipe) → **BUILD SUCCESSFUL in 59s** (debug APK assembles + every module's JVM unit tests
+> green, no DataStore flake this run). Reviewer **PASS** (diff `apps/android` only: 1 pure `:feature:feed`
+> reducer + tests, `FeedViewModel` combine/socket glue + VM tests, `FeedScreen` banner glue, 4 locale plurals,
+> tracking docs; no production logic outside apps/android; **SDK purity** — the buffer/dedup/reconcile laws are
+> pure feature-layer building blocks, the socket plumbing is injected `SocialSocketManager`; **SSOT** — one
+> realtime-head decision surface, the display filter and reconcile share the same `loadedIds`; **UDF** +
+> immutable `UiState`; accent-coherent pill, natural scroll-to-top gesture, no dead end; no coverage floor
+> lowered, no test weakened). **Next slice:** §Feed still-open — the feed post **detail** screen
+> (text/media/repost + threaded comments), the **new-posts→post:updated/post:deleted** live reconciliation
+> (extend the socket wiring already opened here), OR the statuses/moods bar (§G) per the build order.
+
 > On 2026-07-16 **file/photo attachment picker → REST send** landed (slice `chat-attachment-file-picker`,
 > feature-parity §Chat "Attachment ladder" → ◐ + "Send with attachments" file/photo picker source done). This
 > makes the composer's attachment ladder real: an attach button (`Icons.Filled.AttachFile`) launches the system

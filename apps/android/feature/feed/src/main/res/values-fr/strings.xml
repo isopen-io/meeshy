@@ -13,4 +13,8 @@
     <string name="feed_pinned">Épinglé</string>
     <string name="feed_edited">Modifié</string>
     <string name="feed_reel">Réel</string>
+    <plurals name="feed_new_posts">
+        <item quantity="one">%1$d nouvelle publication</item>
+        <item quantity="other">%1$d nouvelles publications</item>
+    </plurals>
 </resources>

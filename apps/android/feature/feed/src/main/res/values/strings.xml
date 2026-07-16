@@ -13,4 +13,8 @@
     <string name="feed_pinned">Pinned</string>
     <string name="feed_edited">Edited</string>
     <string name="feed_reel">Reel</string>
+    <plurals name="feed_new_posts">
+        <item quantity="one">%1$d new post</item>
+        <item quantity="other">%1$d new posts</item>
+    </plurals>
 </resources>
