@@ -604,8 +604,8 @@ core utilities, crypto/diagnostics, and the bulk of the SDK domain models.
 
 **Android port note**: `data class`es; `CLLocationCoordinate2D` → `com.google.android.gms.maps.model.LatLng` (or a plain pair). Live location uses socket events — wire to the socket layer.
 
-- [ ] Static location sharing in chat
-- [ ] Live location sharing (timed sessions)
+- [x] Static location sharing in chat (`chat-bubble-location` 2026-07-09 — DTOs `me.meeshy.sdk.model.Location`, `BubbleLocation` render)
+- [~] Live location sharing (timed sessions) — pure session/duration/countdown core + badge/picker UI done (`chat-live-location-sessions` 2026-07-16: `ActiveLiveLocation`/`LiveLocationDuration`/`LiveLocationCountdown`/`LiveLocationSessions`); socket start/update/stop wiring pending
 
 ---
 

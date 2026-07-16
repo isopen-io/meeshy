@@ -970,7 +970,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       avatar (the socket payload carries none), and `ChatScreen` renders overlapping accent-tinted avatar
       chips beside the subtitle (slice `chat-typing-header-avatars`, 2026-07-07, +20 tests). Closes iOS parity
       (avatars, not just the name).
-- [ ] Static location pin + live location sharing (timed sessions) + fullscreen map / directions
+- [~] Static location pin (done — `chat-bubble-location` 2026-07-09, see Message bubbles above) +
+      live location sharing (timed sessions) core+UI done (`chat-live-location-sessions` 2026-07-16 :
+      port iOS `ActiveLiveLocation`/`LiveLocationDuration`/`LiveLocationBadge` — the pure timed-session
+      layer in `:core:model` (`LiveLocationDuration` 15m–8h with `durationMillis`/`fromMinutes`;
+      `ActiveLiveLocation` keyed by userId with clock-injected `isExpired`/`remainingMillis` + `startingAt`
+      window→deadline factory guarding a non-positive window; `LiveLocationCountdown.of` — port of the badge's
+      `formattedRemaining` returning a structured hours/minutes/seconds + `Tier` + iOS-shaped `clockLabel`, i18n
+      word deferred app-side; `LiveLocationSessions` — the immutable reducer that ports what iOS scatters across
+      `ConversationSocketManager.activeLiveLocations`: `start`/`update`(no-op on unknown user)/`stop`/`active`/
+      `pruneExpired`, surpassing iOS by pruning lapsed sessions the moment the clock passes their deadline) +
+      the `:sdk-ui` `LiveLocationBadge` (pulsing green dot, accent glyph, name, live self-terminating countdown,
+      optional Stop) and `LiveLocationDurationPicker` capsule chips, both accent-coherent, EN/FR/ES/PT strings,
+      +42 tests. **Still pending:** the socket start/update/stop wiring feeding the reducer + fullscreen map /
+      directions (needs a Maps SDK dependency).
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
     - [x] **Pure link-preview core + tracker stripping** (`:sdk-core` `me.meeshy.sdk.link`): `LinkPreviewParser`
       (`firstUrl` http/https/`www.` detection with trailing-punctuation + balanced-paren trimming and scheme

@@ -21,6 +21,15 @@
     <string name="bubble_attachment_file_fallback">Fichier</string>
     <string name="bubble_location_shared">Position partagée</string>
     <string name="bubble_location_open">Ouvrir dans Plans</string>
+    <string name="live_location_sharing_by">%1$s partage sa position</string>
+    <string name="live_location_remaining">%1$s restantes</string>
+    <string name="live_location_stop">Arrêter</string>
+    <string name="live_location_duration_title">Durée du partage</string>
+    <string name="live_location_duration_15m">15 min</string>
+    <string name="live_location_duration_30m">30 min</string>
+    <string name="live_location_duration_1h">1 heure</string>
+    <string name="live_location_duration_2h">2 heures</string>
+    <string name="live_location_duration_8h">8 heures</string>
     <string name="bubble_audio_play">Lire le message vocal</string>
     <string name="bubble_file_size_bytes">%1$s o</string>
     <string name="bubble_file_size_kb">%1$s Ko</string>
