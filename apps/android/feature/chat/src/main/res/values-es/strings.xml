@@ -122,4 +122,20 @@
     <string name="chat_clipboard_title">Contenido del portapapeles</string>
     <string name="chat_clipboard_char_count">%1$d caracteres</string>
     <string name="chat_clipboard_remove">Quitar el contenido del portapapeles</string>
+
+    <!-- Report a message -->
+    <string name="chat_action_report">Denunciar</string>
+    <string name="report_message_title">¿Por qué denuncias este mensaje?</string>
+    <string name="report_message_details_header">Detalles (opcional)</string>
+    <string name="report_message_details_placeholder">Describe el problema…</string>
+    <string name="report_message_submit">Enviar denuncia</string>
+    <string name="report_message_error">No se pudo enviar la denuncia. Inténtalo de nuevo.</string>
+    <string name="report_message_sent">Denuncia enviada</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_inappropriate">Contenido inapropiado</string>
+    <string name="report_reason_harassment">Acoso</string>
+    <string name="report_reason_violence">Violencia</string>
+    <string name="report_reason_hate_speech">Discurso de odio</string>
+    <string name="report_reason_impersonation">Suplantación de identidad</string>
+    <string name="report_reason_other">Otro</string>
 </resources>

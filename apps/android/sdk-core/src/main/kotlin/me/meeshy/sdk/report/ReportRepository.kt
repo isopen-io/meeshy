@@ -41,4 +41,19 @@ public class ReportRepository @Inject constructor(
         val request = ReportRequestBuilder.forUser(userId, reason, details) ?: return null
         return apiCall { reportApi.create(request) }.map { }
     }
+
+    /**
+     * Reports [messageId] for [reason] with optional free-text [details] — the message analogue of
+     * [reportUser]. Same session gate and inert (`null`) semantics: a signed-out caller or a blank
+     * [messageId] never fires a guaranteed-failing request.
+     */
+    public suspend fun reportMessage(
+        messageId: String,
+        reason: ReportReason,
+        details: String?,
+    ): NetworkResult<Unit>? {
+        sessionRepository.currentUserId?.takeIf { it.isNotBlank() } ?: return null
+        val request = ReportRequestBuilder.forMessage(messageId, reason, details) ?: return null
+        return apiCall { reportApi.create(request) }.map { }
+    }
 }

@@ -55,7 +55,7 @@ class MessageActionMenuTest {
     // MARK: - composition
 
     @Test
-    fun a_basic_received_text_offers_reply_forward_copy_pin_star_delete_for_me() {
+    fun a_basic_received_text_offers_reply_forward_copy_pin_star_delete_for_me_report() {
         assertThat(MessageActionMenu.actions(ctx())).containsExactly(
             MessageAction.Reply,
             MessageAction.Forward,
@@ -63,6 +63,7 @@ class MessageActionMenuTest {
             MessageAction.Pin,
             MessageAction.Star,
             MessageAction.DeleteForMe,
+            MessageAction.Report,
         ).inOrder()
     }
 
@@ -161,6 +162,37 @@ class MessageActionMenuTest {
         val actions = MessageActionMenu.actions(ctx(isStarred = true))
         assertThat(actions).contains(MessageAction.Unstar)
         assertThat(actions).doesNotContain(MessageAction.Star)
+    }
+
+    // MARK: - report branch
+
+    @Test
+    fun an_incoming_actionable_message_offers_report_last() {
+        val actions = MessageActionMenu.actions(ctx(isOutgoing = false))
+        assertThat(actions).contains(MessageAction.Report)
+        assertThat(actions.last()).isEqualTo(MessageAction.Report)
+    }
+
+    @Test
+    fun an_own_message_never_offers_report() {
+        // Divergence from iOS (which appends `.report` unconditionally): reporting your own
+        // message to moderators is meaningless — Android hides it, like WhatsApp/Telegram.
+        val actions = MessageActionMenu.actions(
+            ctx(isOutgoing = true, canEdit = true, canDeleteForEveryone = true),
+        )
+        assertThat(actions).doesNotContain(MessageAction.Report)
+    }
+
+    @Test
+    fun a_deleted_incoming_tombstone_never_offers_report() {
+        val actions = MessageActionMenu.actions(ctx(isDeleted = true, pinAction = PinAction.Unavailable))
+        assertThat(actions).doesNotContain(MessageAction.Report)
+    }
+
+    @Test
+    fun a_pending_or_failed_message_never_offers_report() {
+        assertThat(MessageActionMenu.actions(ctx(isPending = true))).doesNotContain(MessageAction.Report)
+        assertThat(MessageActionMenu.actions(ctx(isFailed = true))).doesNotContain(MessageAction.Report)
     }
 
     // MARK: - inert states

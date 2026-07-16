@@ -55,7 +55,10 @@ import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.accentHex
@@ -102,6 +105,8 @@ data class ChatUiState(
     val explorerMessageId: String? = null,
     val translatingLanguages: Set<String> = emptySet(),
     val languageExplorer: MessageLanguageExplorer? = null,
+    /** The open report-a-message sheet, or `null` when it is closed. Drives [ReportMessageForm]. */
+    val reportForm: ReportMessageForm? = null,
     /** The composer's armed message effects — the selection the effects picker edits
      * and [ChatViewModel.send] stamps onto the outgoing message. Empty = a plain send. */
     val pendingEffects: MessageEffects = MessageEffects(),
@@ -192,6 +197,7 @@ class ChatViewModel @Inject constructor(
     private val clock: CacheClock,
     private val draftStore: ConversationDraftStore,
     private val activeCallRepository: ActiveCallRepository,
+    private val reportRepository: ReportRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -1120,6 +1126,46 @@ class ChatViewModel @Inject constructor(
 
     fun dismissLanguageExplorer() {
         _state.update { it.copy(explorerMessageId = null) }
+    }
+
+    /**
+     * Open the report-a-message sheet for [messageId] (long-press → "Report"), closing the action
+     * sheet first so a single sheet is on screen. Only offered for others' messages by the pure
+     * [MessageActionMenu], so no self-report reaches here.
+     */
+    fun openReport(messageId: String) {
+        _state.update { it.copy(reportForm = ReportMessageForm(messageId = messageId), actionMessageId = null) }
+    }
+
+    fun selectReportReason(reason: ReportReason) {
+        _state.update { it.copy(reportForm = it.reportForm?.withReason(reason)) }
+    }
+
+    fun onReportDetailsChange(value: String) {
+        _state.update { it.copy(reportForm = it.reportForm?.withDetails(value)) }
+    }
+
+    /**
+     * File the report. A submission in flight or already succeeded short-circuits a re-tap
+     * ([ReportMessageForm.canSubmit]), so a double tap never fires two reports. An inert repository
+     * result (no session) or a network failure both surface [ReportMessageForm.hasError] and clear
+     * the submitting flag, so the user can retry.
+     */
+    fun submitReport() {
+        val form = _state.value.reportForm ?: return
+        if (!form.canSubmit) return
+        _state.update { it.copy(reportForm = it.reportForm?.submitting()) }
+        viewModelScope.launch {
+            val result = reportRepository.reportMessage(form.messageId, form.selectedReason, form.details)
+            _state.update { current ->
+                val open = current.reportForm ?: return@update current
+                current.copy(reportForm = if (result is NetworkResult.Success) open.submitted() else open.failed())
+            }
+        }
+    }
+
+    fun dismissReport() {
+        _state.update { it.copy(reportForm = null) }
     }
 
     /**

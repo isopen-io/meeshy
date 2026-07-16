@@ -1,5 +1,43 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **report a message (typed reasons + detail)** landed (slice `chat-report-message`,
+> feature-parity §Chat "Report message"). iOS surfaces a `ReportMessageSheet` (`ReportType`: spam,
+> inappropriate, harassment, violence, hate_speech, impersonation, other) whose `onReport(type, reason)`
+> calls `reportMessage` → `POST /admin/reports`; the `.report` action is appended **unconditionally** by
+> `MessageActionResolver.moreSections`, even on your own message. Android already had the *user*-report
+> path (`ReportReason` 5-value enum, `ReportRequestBuilder.forUser`, `ReportRepository.reportUser`,
+> `ReportUserViewModel/Screen` in `:feature:profile`) but **no message report**. **Ships:** (`:core:model`)
+> `ReportReason` gains the two message-only reasons `VIOLENCE`/`HATE_SPEECH` (gateway-valid tokens) + a
+> `messageOrdered` list mirroring iOS `ReportType` order, while the narrower user `ordered` list is
+> **untouched** (reporting a *person* for violence/hate-speech is a message-content judgement); plus a
+> pure `ReportRequestBuilder.forMessage` (`reportedType="message"`, same id-guard + details sanitisation
+> as `forUser`, refactored to a shared private `build`). (`:sdk-core`) `ReportRepository.reportMessage`
+> mirrors `reportUser` — session-gated, inert `null` off-session. (`:feature:chat`) the submit lifecycle
+> is a **pure `ReportMessageForm` reducer** modelling one `ReportSubmitStatus` enum (Idle/Submitting/
+> Submitted/Error) — cleaner than iOS's three `@State` booleans and than the profile module's three
+> parallel booleans — with a double-submit guard and an "editing clears a prior error" rule.
+> **Surpasses iOS:** `MessageActionMenu` offers **Report only on an incoming, still-present message**
+> (never your own — like WhatsApp/Telegram), a genuine correctness win over iOS's unconditional append.
+> **Wired real (exempt glue):** `ChatViewModel.openReport/selectReportReason/onReportDetailsChange/
+> submitReport/dismissReport`, a `ReportMessageSheet` bottom sheet (accent-tinted radio reasons + capped
+> details field + live counter + toast-on-success + retryable error) in en/fr/es/pt; `ReportUserScreen`'s
+> reason-label `when` gained the two new arms (folded into "Other" — unreachable in the user list, kept
+> only for exhaustiveness). **+36 tests** (ReportReason 3, ReportRequestBuilder 4, ReportRepository 4,
+> MessageActionMenu 5 + updated basic-menu order, ReportMessageForm 11, ChatViewModel 7). **Mutation
+> check (RED proof):** dropping the `!isOutgoing` gate on the Report action failed **exactly 3** tests
+> (the three outgoing-message cases: `an_own_message_never_offers_report`, `an_own_editable_...`,
+> `the_full_menu_keeps_a_stable_order`), the rest stayed green — discriminating, behavioural.
+> **Verification:** `assembleDebug testDebugUnitTest` (system Gradle 8.14.3, UTF-8-daemon recipe) → APK
+> assembles + every touched module green (`:core:model`, `:sdk-core` report, `:feature:chat`,
+> `:feature:profile`); the lone full-run failure was the documented `:sdk-core` DataStore parallel-load
+> flake (`NotificationPreferencesStoreTest`/`PrivacyPreferencesStoreTest`, `TimeoutCancellationException`)
+> in modules this diff never touches — it recurs even at `--max-workers=1` (disk-bound), confirming it is
+> environmental, exactly as recorded across prior merged slices. Reviewer **PASS**. **Next slice:** §Chat
+> still-open items — the attachment send pipeline (§Chat "Send with attachments", which unblocks sending
+> the captured `ClipboardContent` + the live-location start emit), OR the conversation info sheet
+> (hero/direct headers; members/media/stats/options tabs), OR advance to §Feed per the build order once
+> Chat's high-value items are exhausted.
+
 > On 2026-07-16 **in-app browser routing + rich-card image band** landed (slice
 > `chat-in-app-browser-routing`, feature-parity §Chat "OpenGraph link-preview cards + in-app browser" — the last
 > open sub-item). iOS taps a link straight into `SFSafariViewController` gated only by `URL(string:)`; Android had
@@ -4359,6 +4397,41 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-16 — slice `chat-report-message` ✅ impl + reviewer PASS → PR + merge
+- **Opened with rule #0:** no open `claude/apps/android/*` PR to reconcile; `main` fetched clean, last
+  Android slice `chat-in-app-browser-routing` merged as **#1979** (`63cb684`).
+- **Branch:** `claude/apps/android/chat-report-message` (off latest `main` `63cb684`).
+- **Slice:** report a message — long-press → **Report** → typed reasons + optional detail →
+  `POST /admin/reports`. Reuses the existing report infra (user path), extends it for message targets.
+- **Added (production):**
+  - `:core:model` — `ReportReason.VIOLENCE`/`HATE_SPEECH` (gateway-valid tokens) + `messageOrdered`
+    (parity with iOS `ReportType`); user `ordered` untouched. `ReportRequestBuilder.forMessage`
+    (`reportedType="message"`, shared private `build`).
+  - `:sdk-core` — `ReportRepository.reportMessage` (session-gated, inert `null` off-session).
+  - `:feature:chat` — pure `ReportMessageForm` reducer (one `ReportSubmitStatus` enum, double-submit
+    guard, editing-clears-error), `MessageActionMenu.Report` (gated `isActionable && !isOutgoing` — a
+    correctness win over iOS's unconditional append), `ChatViewModel` report methods, `ReportMessageSheet`
+    bottom sheet, en/fr/es/pt strings.
+  - `:feature:profile` — `ReportUserScreen` reason-label `when` gained the two new arms (folded to
+    "Other", unreachable in the user list, exhaustiveness only).
+- **Tests (+36):** ReportReason 3, ReportRequestBuilder 4, ReportRepository 4, MessageActionMenu 5 +
+  updated basic-menu order, ReportMessageForm 11, ChatViewModel 7. Red→green, behavioural, no tautologies,
+  no floor lowered (the `ordered covers full enum` invariant moved to `messageOrdered covers full enum`,
+  equivalent strength).
+- **Edge cases:** blank/absent id inert; no-session inert → error; boundary details cap; double-submit
+  fires once; failure retryable; editing clears error; dismiss clears; report last & absent on own/
+  deleted/pending/failed.
+- **Mutation (RED proof):** dropping the `!isOutgoing` gate failed exactly the 3 outgoing-message tests.
+- **Verify:** `assembleDebug testDebugUnitTest` → APK assembles + every touched module green; only the
+  documented `:sdk-core` DataStore parallel-load flake failed (untouched module, recurs at
+  `--max-workers=1`, disk-bound → environmental). `:core:model`, `:sdk-core` report, `:feature:chat`,
+  `:feature:profile` green in targeted runs.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural TDD, no tautologies; SDK purity (models +
+  pure builder in `:core:model`, session-gated delivery in `:sdk-core`, the "when to offer report / how
+  the submit lifecycle behaves" product rules in `:feature:chat`); SSOT (one reason enum, one details
+  cap, accent via param); UDF (immutable `StateFlow<ChatUiState>`, pure reducer); UX/colour coherence
+  (accent-tinted sheet, natural dismissal, toast-on-success, retryable error — no dead end).
 
 ### 2026-07-15 — slice `chat-appearance-particle-field` ✅ impl + reviewer PASS → PR + merge
 - **Opened with rule #0:** no open `claude/apps/android/*` PR to reconcile (only Dependabot + one iOS PR open);

@@ -68,7 +68,9 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.InMemoryEmojiUsageStore
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.reaction.ReactionRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.accentHex
@@ -145,6 +147,7 @@ class ChatViewModelTest {
         val starred: InMemoryStarredMessagesStore,
         val draftStore: InMemoryConversationDraftStore,
         val activeCallRepo: ActiveCallRepository,
+        val reportRepo: ReportRepository,
     )
 
     private fun viewModel(
@@ -179,6 +182,7 @@ class ChatViewModelTest {
         val workManager = mockk<WorkManager>(relaxed = true)
         val activeCallRepo = mockk<ActiveCallRepository>(relaxed = true)
         coEvery { activeCallRepo.activeCallFor(any()) } returns activeCall
+        val reportRepo = mockk<ReportRepository>(relaxed = true)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
         val socket = socketManager()
         val emojiUsage = InMemoryEmojiUsageStore()
@@ -204,6 +208,7 @@ class ChatViewModelTest {
                 clock,
                 draftStore,
                 activeCallRepo,
+                reportRepo,
                 handle,
             ),
             repo,
@@ -216,6 +221,7 @@ class ChatViewModelTest {
             starred,
             draftStore,
             activeCallRepo,
+            reportRepo,
         )
     }
 
@@ -3200,5 +3206,106 @@ class ChatViewModelTest {
         h.vm.closeReactionDetails()
 
         assertThat(h.vm.state.value.reactionDetails).isNull()
+    }
+
+    // MARK: - report a message
+
+    @Test
+    fun opening_report_shows_the_sheet_and_closes_the_action_sheet() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.onMessageLongPress("m9")
+
+        h.vm.openReport("m9")
+
+        val form = h.vm.state.value.reportForm
+        assertThat(form).isNotNull()
+        assertThat(form!!.messageId).isEqualTo("m9")
+        assertThat(form.selectedReason).isEqualTo(ReportReason.SPAM)
+        assertThat(h.vm.state.value.actionMessageId).isNull()
+    }
+
+    @Test
+    fun selecting_a_reason_and_editing_details_updates_the_report_form() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+
+        h.vm.selectReportReason(ReportReason.HATE_SPEECH)
+        h.vm.onReportDetailsChange("uses slurs")
+
+        val form = h.vm.state.value.reportForm!!
+        assertThat(form.selectedReason).isEqualTo(ReportReason.HATE_SPEECH)
+        assertThat(form.details).isEqualTo("uses slurs")
+    }
+
+    @Test
+    fun submitting_a_report_sends_the_selection_and_latches_submitted() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns NetworkResult.Success(Unit)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+        h.vm.selectReportReason(ReportReason.VIOLENCE)
+        h.vm.onReportDetailsChange("threatened another member")
+
+        h.vm.submitReport()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.reportRepo.reportMessage("m9", ReportReason.VIOLENCE, "threatened another member") }
+        assertThat(h.vm.state.value.reportForm!!.isSubmitted).isTrue()
+    }
+
+    @Test
+    fun a_failed_report_surfaces_an_error_and_stays_retryable() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+
+        h.vm.submitReport()
+        advanceUntilIdle()
+
+        val form = h.vm.state.value.reportForm!!
+        assertThat(form.hasError).isTrue()
+        assertThat(form.canSubmit).isTrue()
+    }
+
+    @Test
+    fun an_inert_report_with_no_session_surfaces_an_error() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns null
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+
+        h.vm.submitReport()
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.reportForm!!.hasError).isTrue()
+    }
+
+    @Test
+    fun a_double_submit_only_files_one_report() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        coEvery { h.reportRepo.reportMessage(any(), any(), any()) } returns NetworkResult.Success(Unit)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+
+        h.vm.submitReport()
+        h.vm.submitReport()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { h.reportRepo.reportMessage(any(), any(), any()) }
+    }
+
+    @Test
+    fun dismissing_report_clears_the_sheet() = runTest(dispatcher) {
+        val h = harness(flowOf(CacheResult.Empty), currentUser = me)
+        advanceUntilIdle()
+        h.vm.openReport("m9")
+        assertThat(h.vm.state.value.reportForm).isNotNull()
+
+        h.vm.dismissReport()
+
+        assertThat(h.vm.state.value.reportForm).isNull()
     }
 }

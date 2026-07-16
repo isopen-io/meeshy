@@ -23,6 +23,7 @@ enum class MessageAction {
     Edit,
     DeleteForEveryone,
     DeleteForMe,
+    Report,
 }
 
 /**
@@ -86,6 +87,12 @@ object MessageActionMenu {
         }
         if (ctx.isActionable) {
             add(MessageAction.DeleteForMe)
+        }
+        // Report is a moderation action against *someone else's* content — offered last, and only
+        // for an incoming, still-present message. Diverges from iOS (which appends `.report`
+        // unconditionally): reporting your own message is meaningless, so Android hides it.
+        if (ctx.isActionable && !ctx.isOutgoing) {
+            add(MessageAction.Report)
         }
     }
 }
