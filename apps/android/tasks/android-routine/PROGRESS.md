@@ -1,5 +1,52 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **the live-location timed-session core + badge/duration-picker UI** landed (slice
+> `chat-live-location-sessions`, feature-parity §Chat "Static location pin + **live location sharing (timed
+> sessions)**"). iOS models this in `LocationModels.swift` (`ActiveLiveLocation` with `isExpired`/`remainingTime`
+> reading `Date()`, `LiveLocationDuration` 15m–8h) + `LiveLocationBadge.swift` (the `formattedRemaining` label +
+> the duration-picker chips) and maintains a per-user `activeLiveLocations` map inside `ConversationSocketManager`
+> across the started/updated/stopped socket handlers. Android had the static-pin bubble (`chat-bubble-location`)
+> and the wire DTOs (`Location.kt`) but **no session model, no expiry logic, no live UI**. **Ships (`:core:model`
+> `me.meeshy.sdk.model`, 4 pure types):** `LiveLocationDuration` (15/30/60/120/480 min, `durationMillis`,
+> `fromMinutes`→case-or-null, `DEFAULT`); `ActiveLiveLocation` (keyed by userId — `id == userId`; clock-**injected**
+> `isExpired(now)` inclusive-deadline + `remainingMillis(now)` clamped-at-zero, so the model is pure/testable off
+> the wall clock, surpassing iOS's internal `Date()`; `startingAt(...)` window→deadline factory that collapses a
+> non-positive window to an already-expired session so a bogus duration never grants an endless share);
+> `LiveLocationCountdown.of(remainingMillis)` — port of the badge's `formattedRemaining`, returning a structured
+> `Remaining(hours,minutes,seconds,Tier)` + the iOS-shaped `clockLabel` ("1h05"/"5min03"/"42s"), floored to whole
+> seconds and clamped on a negative reading, with the localised "… remaining" word **deferred app-side** (surpasses
+> iOS's hard-coded French); `LiveLocationSessions` — the immutable reducer that gathers what iOS scatters across
+> `ConversationSocketManager.activeLiveLocations`: `start` (insert/replace, order-preserving), `update`
+> (moves the pin + stamps lastUpdated **without** touching the deadline; inert same-instance no-op on an unknown
+> user; a null motion vector clears the previous one), `stop` (remove; inert on unknown), `active(now)` (non-expired
+> in order), `pruneExpired(now)` (drops lapsed, **same instance when clean**) — surpassing iOS by dropping a session
+> the moment the clock passes its deadline instead of waiting for a `stopped` event. **Ships (`:sdk-ui`
+> `me.meeshy.ui.component.location`):** `LiveLocationBadge` — pulsing green dot (`MeeshyPalette.Success`), accent
+> location glyph, "X is sharing their location", a **self-terminating live countdown** (the same `produceState`
+> tick as `EphemeralCountdownBadge` — re-reads the clock each second, breaks + renders nothing on expiry), optional
+> accent Stop pill; `LiveLocationDurationPicker` — stateless accent capsule chips over `LiveLocationDuration.entries`.
+> EN/FR/ES/PT strings. **+42 tests** (Duration 6: raw values/durationMillis/DEFAULT/fromMinutes known-unknown-nonpositive;
+> ActiveLiveLocation 9: id, isExpired before/at/after boundary, remaining positive/clamped, startingAt derive-deadline/
+> nonpositive-expired/carries-motion; Countdown 12: hours split+pad, exactly-1h boundary, just-below-1h, minutes pad,
+> exactly-1m boundary, just-below-1m, seconds raw, sub-second floor, zero, negative-clamp; Sessions 15: empty, start,
+> replace-same-user, two-users-in-order, update moves+stamps/keeps-deadline/null-clears-motion/unknown-inert,
+> stop present/unknown-inert, active excludes-expired/all-live-in-order, pruneExpired drops-lapsed/same-instance-clean).
+> **Mutation check (RED proof):** flipping `LiveLocationCountdown`'s hour boundary `>= 3_600` → `> 3_600` failed
+> **exactly 1** test (`exactlyOneHour_entersHoursBand`), the other 10 stayed green — a discriminating mutation
+> (3600s genuinely straddles the HOURS/MINUTES bands), behavioural not tautological. **Verification:**
+> `assembleDebug testDebugUnitTest` (`--max-workers=3`, system Gradle 8.14.3, UTF-8-daemon recipe) → **BUILD
+> SUCCESSFUL in 5m 42s**, APK assembles + full-tree unit tests green (no DataStore flake this run). Reviewer
+> **PASS** (diff `apps/android` only — new 4 `:core:model` types + 4 test files + `:sdk-ui` badge/picker + 4-locale
+> strings + tracking docs; no production logic outside; **SDK purity** — the session/duration/countdown reducers are
+> stateless building blocks in `:core:model` exactly where iOS keeps `ActiveLiveLocation`/`LiveLocationDuration`, and
+> the badge/picker are opaque-param `:sdk-ui` components like iOS's `MeeshyUI` `LiveLocationBadge`; the socket
+> orchestration is deliberately deferred app-side; **SSOT** — one countdown formatter, one session reducer;
+> **UX/colour coherence** — accent-tinted badge + picker, pulsing-green presence-consistent dot, no dead end; **no
+> coverage floor lowered, no test weakened**). **Next slice:** wire the reducer to the live-location socket events
+> (`liveLocation:started/updated/stopped`) in `:feature:chat` so an active session renders the badge in `ChatScreen`,
+> then the fullscreen map / directions (needs a Maps SDK dependency) — both under §Chat — or the in-app browser
+> (Chrome Custom Tabs) + rich-card image loading follow-ups still open under §Chat link-preview.
+
 > On 2026-07-16 **the async OpenGraph fetch + dedupe / negative-cache / logout-purge decision layer** landed
 > (slice `chat-link-preview-cache`, feature-parity §Chat "OpenGraph link-preview cards … tracker-param stripping"
 > — the second, orchestration half of that compound item after `chat-link-preview-core`). iOS scatters this across

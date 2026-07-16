@@ -21,6 +21,15 @@
     <string name="bubble_attachment_file_fallback">Arquivo</string>
     <string name="bubble_location_shared">Localização compartilhada</string>
     <string name="bubble_location_open">Abrir no mapa</string>
+    <string name="live_location_sharing_by">%1$s está a partilhar a localização</string>
+    <string name="live_location_remaining">%1$s restantes</string>
+    <string name="live_location_stop">Parar</string>
+    <string name="live_location_duration_title">Duração da partilha</string>
+    <string name="live_location_duration_15m">15 min</string>
+    <string name="live_location_duration_30m">30 min</string>
+    <string name="live_location_duration_1h">1 hora</string>
+    <string name="live_location_duration_2h">2 horas</string>
+    <string name="live_location_duration_8h">8 horas</string>
     <string name="bubble_audio_play">Reproduzir mensagem de voz</string>
     <string name="bubble_file_size_bytes">%1$s B</string>
     <string name="bubble_file_size_kb">%1$s KB</string>
