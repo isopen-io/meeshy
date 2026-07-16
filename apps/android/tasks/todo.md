@@ -4,7 +4,21 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Chat) — slice `chat-large-paste-detection` ✅
+## This loop (Phase: Chat) — slice `chat-live-location-socket-fold` ✅
+**Live-location socket start/update/stop wiring.** Feeds the previously-unfed `LiveLocationSessions` reducer from
+the socket. Ships `:core:model` pure `LiveLocationEventFold` (`started`/`updated`/`stopped` fold the already-modelled
+`Location.kt` wire DTOs into the reducer, resolving ISO dates via the shared `isoToEpochMillisOrNull` and applying
+iOS's exact fallbacks — `expiresAt ?? now+duration·60`, `startedAt ?? now`, `timestamp ?? now`, non-positive
+window→`now` — with `now` threaded in for purity, surpassing iOS's internal `Date()`). Wired real (exempt glue):
+`MessageSocketManager` gains three `liveLocation*` flows + `location:live-*` listeners; `ChatViewModel` collects
+them (conversation-scoped) into `ChatUiState.liveLocations` and exposes `liveLocationBadges`; `ChatScreen` renders a
+self-terminating accent-coherent `LiveLocationBadge` per active session. +17 tests (fold 13, VM 4), mutation-checked
+(anchoring the expiry fallback on `startedAt` vs `now` fails exactly the boundary test — `now` set 10 min past
+`startedAt`). Full `assembleDebug testDebugUnitTest` green (UTF-8-daemon recipe), APK produced, diff = `apps/android`
+only. Reviewer PASS. Next: in-app browser (Chrome Custom Tabs) + rich-card image loading, or the fullscreen
+map/directions for live location (needs Maps SDK), or the attachment send pipeline.
+
+## Prior loop (Phase: Chat) — slice `chat-large-paste-detection` ✅
 **Large-paste detection → clipboard-content preview.** Advances the §Chat "Large-paste detection →
 clipboard-content attachment" line to detection+preview done. Ships `:feature:chat` pure `LargePasteDetector`
 (fires when composer text grows past 2000 chars **and** jumps >250 chars in one edit — readable port of iOS

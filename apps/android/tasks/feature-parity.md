@@ -996,8 +996,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `pruneExpired`, surpassing iOS by pruning lapsed sessions the moment the clock passes their deadline) +
       the `:sdk-ui` `LiveLocationBadge` (pulsing green dot, accent glyph, name, live self-terminating countdown,
       optional Stop) and `LiveLocationDurationPicker` capsule chips, both accent-coherent, EN/FR/ES/PT strings,
-      +42 tests. **Still pending:** the socket start/update/stop wiring feeding the reducer + fullscreen map /
-      directions (needs a Maps SDK dependency).
+      +42 tests. Socket start/update/stop wiring **done** (`chat-live-location-socket-fold` 2026-07-16):
+      the pure `:core:model` `LiveLocationEventFold` folds the `location:live-started/updated/stopped`
+      wire events (already-modelled `Location.kt` DTOs) into the `LiveLocationSessions` reducer — resolving
+      each ISO date through the shared `isoToEpochMillisOrNull` and applying iOS's exact fallbacks
+      (`expiresAt ?? now + durationMinutes·60`, `startedAt ?? now`, `timestamp ?? now`, non-positive window →
+      `now`) — a faithful port of the three `ConversationSocketHandler` sinks, with the reducer's inert/no-op
+      contracts preserved. `MessageSocketManager` gains the three `liveLocation*` `SharedFlow`s + `listen`
+      registrations; `ChatViewModel` collects them (conversation-scoped) into `ChatUiState.liveLocations` and
+      exposes `liveLocationBadges`; `ChatScreen` renders a self-terminating accent-coherent `LiveLocationBadge`
+      above the message list per active session. +17 tests (fold 13 incl. now-vs-startedAt boundary mutation-checked,
+      VM 4). **Still pending:** fullscreen map / directions (needs a Maps SDK dependency).
 - [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
     - [x] **Pure link-preview core + tracker stripping** (`:sdk-core` `me.meeshy.sdk.link`): `LinkPreviewParser`
       (`firstUrl` http/https/`www.` detection with trailing-punctuation + balanced-paren trimming and scheme

@@ -4,6 +4,21 @@ Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
 
+## Lesson (2026-07-16, `chat-live-location-socket-fold`) — a "?? now" fallback test is blind unless `now ≠ the other candidate anchor; and check for already-modelled wire DTOs before writing new ones
+Two takeaways from wiring the live-location socket events into the `LiveLocationSessions` reducer. (1) **When a
+model has two plausible fallback anchors (`expiresAt ?? now + window` vs the bug `?? startedAt + window`), the
+boundary test only discriminates if the test's `now` differs from `startedAt`.** My first draft set the test's
+`now` equal to the parsed `startedAt` (both `1_700_000_000_000`), so the `expiresAt`-absent assertion `now +
+window` was numerically identical to `startedAt + window` — the anchor-swap mutation failed **0** tests, a silent
+blind spot (the same class of trap as the overlay anchor-at-scale-1.0 lesson). Fix: set `now = startMillis + 10
+min` so the two anchors diverge; the mutation then failed exactly the one boundary test. **Rule: whenever a
+derivation picks between two time anchors, make every input clock in the test distinct, then mutation-check the
+pick.** (2) **Before writing socket-event DTOs, grep the model layer — they may already exist.** `Location.kt`
+already carried fully-`@Serializable` `LiveLocationStartedEvent`/`UpdatedEvent`/`StoppedEvent` (with the wire
+dates as ISO `String?`), modelled by an earlier slice ahead of the wiring. The slice reduced to one pure fold
+object + flows + collectors, not a DTO rewrite. Likewise `isoToEpochMillisOrNull` (`IsoTime.kt`) is the SSOT for
+ISO→epoch; don't hand-roll `Instant.parse`. Check `core/model` for both the DTO and the parser before adding either.
+
 ## Lesson (2026-07-16, `chat-large-paste-detection`) — port the *intent*, not an obfuscated iOS formula; and place a composer rule by the sibling-SSOT precedent
 Two takeaways from porting iOS `UniversalComposerBar.handleClipboardCheck`. (1) **iOS's paste heuristic hides a
 `2·growth` behind arithmetic.** Its guard is `newText.count > 2000 && delta > 500` where

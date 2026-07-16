@@ -50,6 +50,9 @@ import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessagePinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
+import me.meeshy.sdk.model.LiveLocationStartedEvent
+import me.meeshy.sdk.model.LiveLocationStoppedEvent
+import me.meeshy.sdk.model.LiveLocationUpdatedEvent
 import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TranslatedAudioPayload
 import me.meeshy.sdk.model.TranslationEvent
@@ -103,6 +106,9 @@ class ChatViewModelTest {
     private val translationInProgress = MutableSharedFlow<TranslationEvent>()
     private val transcriptionReady = MutableSharedFlow<TranscriptionReadyEvent>()
     private val audioTranslationReady = MutableSharedFlow<AudioTranslationEvent>()
+    private val liveLocationStarted = MutableSharedFlow<LiveLocationStartedEvent>()
+    private val liveLocationUpdated = MutableSharedFlow<LiveLocationUpdatedEvent>()
+    private val liveLocationStopped = MutableSharedFlow<LiveLocationStoppedEvent>()
 
     private fun socketManager(): MessageSocketManager =
         mockk<MessageSocketManager> {
@@ -120,6 +126,9 @@ class ChatViewModelTest {
             every { this@mockk.reactionAdded } returns this@ChatViewModelTest.reactionAdded
             every { this@mockk.reactionRemoved } returns this@ChatViewModelTest.reactionRemoved
             every { this@mockk.readStatusUpdated } returns this@ChatViewModelTest.readStatusUpdated
+            every { this@mockk.liveLocationStarted } returns this@ChatViewModelTest.liveLocationStarted
+            every { this@mockk.liveLocationUpdated } returns this@ChatViewModelTest.liveLocationUpdated
+            every { this@mockk.liveLocationStopped } returns this@ChatViewModelTest.liveLocationStopped
             justRun { emitTypingStart(any()) }
             justRun { emitTypingStop(any()) }
         }
@@ -288,6 +297,69 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         coVerify(exactly = 1) { h.conversations.markReadOptimistic(any()) }
+    }
+
+    @Test
+    fun a_live_location_started_event_surfaces_a_badge() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        liveLocationStarted.emit(
+            LiveLocationStartedEvent(conversationId = "c1", userId = "u2", username = "Ada", durationMinutes = 30),
+        )
+        advanceUntilIdle()
+
+        val badges = h.vm.state.value.liveLocationBadges
+        assertThat(badges).hasSize(1)
+        assertThat(badges.first().username).isEqualTo("Ada")
+        assertThat(badges.first().expiresAtMillis).isEqualTo(FIXED_NOW + 30 * 60_000L)
+    }
+
+    @Test
+    fun a_live_location_started_event_in_another_conversation_is_ignored() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        liveLocationStarted.emit(
+            LiveLocationStartedEvent(conversationId = "other", userId = "u2", username = "Ada", durationMinutes = 30),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.liveLocationBadges).isEmpty()
+    }
+
+    @Test
+    fun a_live_location_updated_event_moves_the_existing_badge() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+        liveLocationStarted.emit(
+            LiveLocationStartedEvent(conversationId = "c1", userId = "u2", username = "Ada", latitude = 1.0, durationMinutes = 30),
+        )
+        advanceUntilIdle()
+
+        liveLocationUpdated.emit(
+            LiveLocationUpdatedEvent(conversationId = "c1", userId = "u2", latitude = 5.0, longitude = 6.0),
+        )
+        advanceUntilIdle()
+
+        val badge = h.vm.state.value.liveLocationBadges.single()
+        assertThat(badge.latitude).isEqualTo(5.0)
+        assertThat(badge.longitude).isEqualTo(6.0)
+    }
+
+    @Test
+    fun a_live_location_stopped_event_removes_the_badge() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+        liveLocationStarted.emit(
+            LiveLocationStartedEvent(conversationId = "c1", userId = "u2", username = "Ada", durationMinutes = 30),
+        )
+        advanceUntilIdle()
+
+        liveLocationStopped.emit(LiveLocationStoppedEvent(conversationId = "c1", userId = "u2"))
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.liveLocationBadges).isEmpty()
     }
 
     @Test

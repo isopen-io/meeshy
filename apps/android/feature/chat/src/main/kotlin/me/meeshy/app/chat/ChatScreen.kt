@@ -162,6 +162,7 @@ import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.MeeshySkeletonBox
@@ -408,6 +409,16 @@ fun ChatScreen(
                             accentColor = accentColor,
                             onClick = viewModel::onPinnedBannerTap,
                             onOpenList = viewModel::openPinnedSheet,
+                        )
+                    }
+                    state.liveLocationBadges.forEach { session ->
+                        LiveLocationBadge(
+                            username = session.username,
+                            expiresAtMillis = session.expiresAtMillis,
+                            accentColor = state.accentColorHex,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
                         )
                     }
                     Box(modifier = Modifier.weight(1f)) {

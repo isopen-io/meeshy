@@ -23,6 +23,9 @@ import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
+import me.meeshy.sdk.model.LiveLocationStartedEvent
+import me.meeshy.sdk.model.LiveLocationUpdatedEvent
+import me.meeshy.sdk.model.LiveLocationStoppedEvent
 import org.json.JSONObject
 import timber.log.Timber
 import javax.inject.Inject
@@ -63,6 +66,9 @@ class MessageSocketManager @Inject constructor(
     private val _participantBanned = buf<ParticipantBannedEvent>()
     private val _participantRoleUpdated = buf<ParticipantRoleUpdatedEvent>()
     private val _readStatusUpdated = buf<ReadStatusUpdatedEvent>()
+    private val _liveLocationStarted = buf<LiveLocationStartedEvent>()
+    private val _liveLocationUpdated = buf<LiveLocationUpdatedEvent>()
+    private val _liveLocationStopped = buf<LiveLocationStoppedEvent>()
 
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.asSharedFlow()
     val messageUpdated: SharedFlow<ApiMessage> = _messageUpdated.asSharedFlow()
@@ -87,6 +93,9 @@ class MessageSocketManager @Inject constructor(
     val participantBanned: SharedFlow<ParticipantBannedEvent> = _participantBanned.asSharedFlow()
     val participantRoleUpdated: SharedFlow<ParticipantRoleUpdatedEvent> = _participantRoleUpdated.asSharedFlow()
     val readStatusUpdated: SharedFlow<ReadStatusUpdatedEvent> = _readStatusUpdated.asSharedFlow()
+    val liveLocationStarted: SharedFlow<LiveLocationStartedEvent> = _liveLocationStarted.asSharedFlow()
+    val liveLocationUpdated: SharedFlow<LiveLocationUpdatedEvent> = _liveLocationUpdated.asSharedFlow()
+    val liveLocationStopped: SharedFlow<LiveLocationStoppedEvent> = _liveLocationStopped.asSharedFlow()
 
     fun attach() {
         listen("message:new", _messageReceived)
@@ -112,6 +121,9 @@ class MessageSocketManager @Inject constructor(
         listen("conversation:participant-banned", _participantBanned)
         listen("participant:role-updated", _participantRoleUpdated)
         listen("read-status:updated", _readStatusUpdated)
+        listen("location:live-started", _liveLocationStarted)
+        listen("location:live-updated", _liveLocationUpdated)
+        listen("location:live-stopped", _liveLocationStopped)
     }
 
     /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */

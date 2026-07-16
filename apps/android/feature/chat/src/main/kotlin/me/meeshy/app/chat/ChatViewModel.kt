@@ -33,8 +33,11 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.LiveLocationEventFold
+import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MentionCandidate
@@ -107,9 +110,17 @@ data class ChatUiState(
     /** A large paste captured into a clipboard-content attachment, previewed above the
      * composer until sent or removed. Null when no paste has been captured. */
     val clipboardContent: ClipboardContent? = null,
+    /** Live-location sessions broadcast by conversation participants, folded from the
+     * `location:live-*` socket events (see [LiveLocationEventFold]). Drives the badges
+     * surfaced above the message list. */
+    val liveLocations: LiveLocationSessions = LiveLocationSessions.EMPTY,
 ) {
     val canSend: Boolean get() = draft.isNotBlank()
     val isEditing: Boolean get() = editingMessageId != null
+
+    /** The live-location sessions to render as badges, in registry order. The badge
+     * self-terminates on expiry, so the raw session list is safe to surface directly. */
+    val liveLocationBadges: List<ActiveLiveLocation> get() = liveLocations.sessions.values.toList()
 
     /** True when at least one effect is armed — drives the composer's active-effects accent. */
     val hasPendingEffects: Boolean get() = pendingEffects.hasAnyEffect
@@ -488,6 +499,30 @@ class ChatViewModel @Inject constructor(
                     if (event.conversationId == conversationId) {
                         typingCleanupJobs.remove(event.userId)?.cancel()
                         removeTypingUser(event.userId)
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.liveLocationStarted.collect { event ->
+                    if (event.conversationId != conversationId) return@collect
+                    _state.update {
+                        it.copy(liveLocations = LiveLocationEventFold.started(it.liveLocations, event, clock.nowMillis()))
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.liveLocationUpdated.collect { event ->
+                    if (event.conversationId != conversationId) return@collect
+                    _state.update {
+                        it.copy(liveLocations = LiveLocationEventFold.updated(it.liveLocations, event, clock.nowMillis()))
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.liveLocationStopped.collect { event ->
+                    if (event.conversationId != conversationId) return@collect
+                    _state.update {
+                        it.copy(liveLocations = LiveLocationEventFold.stopped(it.liveLocations, event))
                     }
                 }
             }
