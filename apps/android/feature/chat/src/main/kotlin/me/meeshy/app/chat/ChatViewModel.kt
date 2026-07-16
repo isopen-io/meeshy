@@ -31,7 +31,10 @@ import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ConversationDraft
@@ -120,7 +123,7 @@ data class ChatUiState(
      * surfaced above the message list. */
     val liveLocations: LiveLocationSessions = LiveLocationSessions.EMPTY,
 ) {
-    val canSend: Boolean get() = draft.isNotBlank()
+    val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
     val isEditing: Boolean get() = editingMessageId != null
 
     /** The live-location sessions to render as badges, in registry order. The badge
@@ -198,6 +201,7 @@ class ChatViewModel @Inject constructor(
     private val draftStore: ConversationDraftStore,
     private val activeCallRepository: ActiveCallRepository,
     private val reportRepository: ReportRepository,
+    private val mediaUploadQueue: MediaUploadQueue,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -701,7 +705,8 @@ class ChatViewModel @Inject constructor(
 
     fun send() {
         val text = _state.value.draft.trim()
-        if (text.isEmpty()) return
+        val clipboard = _state.value.clipboardContent
+        if (text.isEmpty() && clipboard == null) return
         stopTypingEmission()
         val editingId = _state.value.editingMessageId
         if (editingId != null) {
@@ -714,6 +719,7 @@ class ChatViewModel @Inject constructor(
         _state.update {
             it.copy(
                 draft = "",
+                clipboardContent = null,
                 replyingToMessageId = null,
                 mention = it.mention.reset(),
                 pendingEffects = MessageEffects(),
@@ -723,17 +729,21 @@ class ChatViewModel @Inject constructor(
         persistDraft("", replyToId = null)
         viewModelScope.launch {
             try {
-                messageRepository.sendOptimistic(
-                    conversationId = conversationId,
-                    content = text,
-                    originalLanguage = ComposeLanguageDetector.detect(
-                        text,
-                        fallback = LanguageResolver.resolveUserLanguage(user),
-                    ),
-                    sender = user,
-                    replyToId = replyToId,
-                    effects = effects,
-                )
+                if (clipboard != null) {
+                    sendClipboardContent(text, clipboard, user, replyToId, effects)
+                } else {
+                    messageRepository.sendOptimistic(
+                        conversationId = conversationId,
+                        content = text,
+                        originalLanguage = ComposeLanguageDetector.detect(
+                            text,
+                            fallback = LanguageResolver.resolveUserLanguage(user),
+                        ),
+                        sender = user,
+                        replyToId = replyToId,
+                        effects = effects,
+                    )
+                }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
                 throw e
@@ -741,6 +751,53 @@ class ChatViewModel @Inject constructor(
                 _state.update { it.copy(errorMessage = e.message) }
             }
         }
+    }
+
+    /**
+     * Delivers a captured large paste as a real `text/plain` attachment through the
+     * durable upload→send chain: the bytes are queued for upload, the send is
+     * enqueued gated on that upload and carrying its cmid as a placeholder
+     * attachment id, and the drainer grafts the real gateway id in once the upload
+     * lands ([me.meeshy.sdk.conversation.MessageMediaWriteBack]). Surpasses iOS,
+     * which previews the clipboard chip but never sends it.
+     */
+    private suspend fun sendClipboardContent(
+        text: String,
+        clipboard: ClipboardContent,
+        user: MeeshyUser,
+        replyToId: String?,
+        effects: MessageEffects,
+    ) {
+        val bytes = clipboard.text.toByteArray(Charsets.UTF_8)
+        val uploadCmid = mediaUploadQueue.enqueue(
+            MediaUploadItem(
+                bytes = bytes,
+                fileName = CLIPBOARD_ATTACHMENT_NAME,
+                mimeType = CLIPBOARD_ATTACHMENT_MIME,
+            ),
+        )
+        messageRepository.sendOptimistic(
+            conversationId = conversationId,
+            content = text,
+            originalLanguage = ComposeLanguageDetector.detect(
+                text.ifBlank { clipboard.text },
+                fallback = LanguageResolver.resolveUserLanguage(user),
+            ),
+            sender = user,
+            replyToId = replyToId,
+            effects = effects,
+            messageType = "file",
+            attachmentUploadCmids = listOf(uploadCmid),
+            attachments = listOf(
+                ApiMessageAttachment(
+                    id = uploadCmid,
+                    fileName = CLIPBOARD_ATTACHMENT_NAME,
+                    originalName = CLIPBOARD_ATTACHMENT_NAME,
+                    mimeType = CLIPBOARD_ATTACHMENT_MIME,
+                    fileSize = bytes.size,
+                ),
+            ),
+        )
     }
 
     /** Present the composer's message-effects picker sheet. */
@@ -1464,6 +1521,8 @@ class ChatViewModel @Inject constructor(
         private const val TYPING_TIMEOUT_MS = 5_000L
         private const val TYPING_REEMIT_MS = 3_000L
         private const val TYPING_IDLE_MS = 3_000L
+        private const val CLIPBOARD_ATTACHMENT_NAME = "clipboard-content.txt"
+        private const val CLIPBOARD_ATTACHMENT_MIME = "text/plain"
     }
 }
 
