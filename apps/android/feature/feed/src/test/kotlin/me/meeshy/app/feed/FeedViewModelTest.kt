@@ -6,6 +6,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.Dispatchers
@@ -18,9 +19,11 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -42,6 +45,8 @@ class FeedViewModelTest {
 
     private val repository: PostRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
+    private val socialSocket: SocialSocketManager = mockk(relaxed = true)
+    private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
@@ -49,7 +54,8 @@ class FeedViewModelTest {
     private fun viewModel(hasMore: Boolean = true): FeedViewModel {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(hasMore)
-        return FeedViewModel(repository, session, config)
+        every { socialSocket.postCreated } returns postCreated
+        return FeedViewModel(repository, session, socialSocket, config)
     }
 
     @Test
@@ -189,7 +195,8 @@ class FeedViewModelTest {
         every { session.currentUser } returns MutableStateFlow(user)
         every { repository.feedHasMore } returns MutableStateFlow(true)
         every { repository.feedStream(any(), any()) } returns stream
-        return FeedViewModel(repository, session, config)
+        every { socialSocket.postCreated } returns postCreated
+        return FeedViewModel(repository, session, socialSocket, config)
     }
 
     @Test
@@ -245,5 +252,97 @@ class FeedViewModelTest {
         stream.value = CacheResult.Fresh(listOf(translatedPost("1")), 0L)
 
         assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+    }
+
+    // --- Realtime new-posts banner (post:created) ---
+
+    @Test
+    fun `a realtime post arrives at the head and raises the new-posts banner`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        postCreated.emit(SocketPostCreatedData(post("new")))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("new", "1", "2").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a realtime post already in the cache feed is ignored`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        postCreated.emit(SocketPostCreatedData(post("2")))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("1", "2").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `two realtime posts stack newest-first above the feed and count to two`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+
+        postCreated.emit(SocketPostCreatedData(post("a")))
+        postCreated.emit(SocketPostCreatedData(post("b")))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("b", "a", "1").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `acknowledgeNewPosts clears the banner count but keeps the post at the head`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        postCreated.emit(SocketPostCreatedData(post("new")))
+
+        vm.acknowledgeNewPosts()
+
+        val s = vm.state.value
+        assertThat(s.newPostsCount).isEqualTo(0)
+        assertThat(s.posts.map { it.id }).containsExactly("new", "1").inOrder()
+    }
+
+    @Test
+    fun `a realtime post survives a background feed re-emission`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Stale(listOf(post("1")), 0L),
+        )
+        val vm = viewModel(null, stream)
+        postCreated.emit(SocketPostCreatedData(post("new")))
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
+
+        // A refresh that does not yet carry the socket post must not erase it.
+        stream.value = CacheResult.Fresh(listOf(post("1"), post("0")), 100L)
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1", "0").inOrder()
+        assertThat(vm.state.value.newPostsCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `once the cache surfaces the realtime post it is not rendered twice`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(post("1")), 0L),
+        )
+        val vm = viewModel(null, stream)
+        postCreated.emit(SocketPostCreatedData(post("new")))
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
+
+        // The refresh now includes "new" — it must appear exactly once.
+        stream.value = CacheResult.Fresh(listOf(post("new"), post("1")), 100L)
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("new", "1").inOrder()
+    }
+
+    @Test
+    fun `refresh drops the realtime head and clears the banner`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        postCreated.emit(SocketPostCreatedData(post("new")))
+        assertThat(vm.state.value.newPostsCount).isEqualTo(1)
+
+        vm.refresh()
+
+        val s = vm.state.value
+        assertThat(s.newPostsCount).isEqualTo(0)
+        assertThat(s.posts.map { it.id }).containsExactly("1")
     }
 }

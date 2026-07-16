@@ -1607,11 +1607,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Accessibility for canvas elements (labels, custom delete/duplicate/reorder actions)
 
 ## F. Feed & Posts
-- [~] Social feed: cache-first SWR list + pull-to-refresh + cursor-paginated infinite
+- [x] Social feed: cache-first SWR list + pull-to-refresh + cursor-paginated infinite
       scroll done (`PostRepository.feedStream`/`loadMore`/`feedHasMore`, skeleton on cold
       cache, silent background revalidation, 5-from-tail prefetch + footer spinner,
-      dedupe-append, history pages do not bump the freshness watermark) ; new-posts banner
-      + realtime-head merge pending
+      dedupe-append, history pages do not bump the freshness watermark) ; **new-posts banner
+      + realtime-head merge done** (slice `feed-new-posts-banner`, 2026-07-16): pure
+      `:feature:feed` `FeedRealtimeReducer`/`FeedRealtimeHead` SSOT — a socket `post:created`
+      buffers above the cache feed (newest-first) and bumps a `newPostsCount`, ignoring a
+      blank id, a post already in the cache feed (iOS `!posts.contains` guard), or an
+      already-buffered echo; `acknowledge` clears the count but keeps the posts at head;
+      `reconcile` drops buffered posts the cache refresh has surfaced (no double-render);
+      `clear` on pull-to-refresh. `FeedViewModel` injects `SocialSocketManager`, folds
+      `postCreated` through the reducer, prepends the (cache-disjoint) realtime head to the
+      projection, and survives a background feed re-emission — the Android analogue of iOS
+      `mergePreservingRealtimeHead`. `FeedScreen` shows a floating accent "N new posts" pill
+      (`ArrowUpward`, plurals en/fr/es/pt) that scrolls to top + acknowledges. +21 tests
+      (14 reducer, 7 VM). Mutation-proof: dropping the `loadedIds` guard fails exactly 2 tests.
 - [x] Post reactions (heart like) — **optimistic** toggle via `PostRepository.toggleLike`
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
@@ -1626,8 +1637,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)
-- [~] Social feed: cursor-paginated post list + infinite scroll done (see above) ;
-      new-posts banner pending
+- [x] Social feed: cursor-paginated post list + infinite scroll done (see above) ;
+      new-posts banner + realtime-head merge done (slice `feed-new-posts-banner`, 2026-07-16)
 - [ ] Feed overlay shell with draggable floating buttons + radial menu ladder
 - [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
 - [ ] Unified post composer (Post / Status / Story tabs)

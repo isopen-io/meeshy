@@ -18,6 +18,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import javax.inject.Inject
 
@@ -28,12 +29,15 @@ data class FeedUiState(
     val errorMessage: String? = null,
     val hasMore: Boolean = true,
     val isLoadingMore: Boolean = false,
+    /** Count of posts that arrived via `post:created` since the last acknowledge/refresh. */
+    val newPostsCount: Int = 0,
 )
 
 @HiltViewModel
 class FeedViewModel @Inject constructor(
     private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
+    private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
 ) : ViewModel() {
 
@@ -47,8 +51,18 @@ class FeedViewModel @Inject constructor(
      */
     private val activeLanguageOverride = MutableStateFlow<Map<String, String>>(emptyMap())
 
+    /**
+     * Socket-arrived posts (`post:created`) that sit above the cache-projected feed,
+     * plus the "new posts" banner count. Kept outside the cache stream so a just-arrived
+     * post is never erased by a background refresh (the protective realtime-head merge).
+     */
+    private val realtimeHead = MutableStateFlow(FeedRealtimeHead())
+
     /** The raw posts currently displayed — the flag-tap handler resolves against these. */
     private var latestPosts: List<ApiPost> = emptyList()
+
+    /** The cache-projected posts alone (excludes the realtime head), kept across re-emits. */
+    private var latestCachePosts: List<ApiPost> = emptyList()
 
     init {
         viewModelScope.launch {
@@ -63,14 +77,47 @@ class FeedViewModel @Inject constructor(
                 sessionRepository.currentUser,
                 postRepository.feedHasMore,
                 activeLanguageOverride,
-            ) { result, user, hasMore, overrides -> FeedInputs(result, user, hasMore, overrides) }
-                .collect { (result, user, hasMore, overrides) ->
-                    latestPosts = result.postsOrNull() ?: latestPosts
+                realtimeHead,
+            ) { result, user, hasMore, overrides, head -> FeedInputs(result, user, hasMore, overrides, head) }
+                .collect { (result, user, hasMore, overrides, head) ->
+                    val cachePosts = result.postsOrNull() ?: latestCachePosts
+                    latestCachePosts = cachePosts
+                    val cacheIds = cachePosts.mapTo(HashSet()) { it.id }
+
+                    // Prune buffered posts the cache has now surfaced (memory hygiene); the
+                    // display filter below already keeps them from double-rendering.
+                    val reconciled = FeedRealtimeReducer.reconcile(head, cacheIds)
+                    if (reconciled !== head) realtimeHead.value = reconciled
+
+                    val visibleRealtime = reconciled.posts.filterNot { it.id in cacheIds }
+                    latestPosts = visibleRealtime + cachePosts
                     _state.update {
-                        it.applyResult(result, user, config.socketUrl, overrides).copy(hasMore = hasMore)
+                        it.project(
+                            result = result,
+                            cachePosts = cachePosts,
+                            realtimePosts = visibleRealtime,
+                            user = user,
+                            mediaBaseUrl = config.socketUrl,
+                            overrides = overrides,
+                            newPostsCount = reconciled.newPostsCount,
+                        ).copy(hasMore = hasMore)
                     }
                 }
         }
+        viewModelScope.launch {
+            socialSocket.postCreated.collect { payload ->
+                val cacheIds = latestCachePosts.mapTo(HashSet()) { it.id }
+                realtimeHead.update { FeedRealtimeReducer.accept(it, payload.post, cacheIds) }
+            }
+        }
+    }
+
+    /**
+     * Tap on the "new posts" banner (scroll-to-top): clear the banner count. The posts
+     * already sit at the head, so only the counter resets. Port of iOS `acknowledgeNewPosts`.
+     */
+    fun acknowledgeNewPosts() {
+        realtimeHead.update { FeedRealtimeReducer.acknowledge(it) }
     }
 
     /**
@@ -127,6 +174,7 @@ class FeedViewModel @Inject constructor(
     }
 
     fun refresh() {
+        realtimeHead.update { FeedRealtimeReducer.clear(it) }
         _state.update { it.copy(errorMessage = null, isSyncing = true) }
         viewModelScope.launch {
             try {
@@ -156,12 +204,13 @@ class FeedViewModel @Inject constructor(
     }
 }
 
-/** The 4 combined inputs of the feed projection (Kotlin has no built-in Quadruple). */
+/** The combined inputs of the feed projection (Kotlin has no built-in Quintuple). */
 private data class FeedInputs(
     val result: CacheResult<List<ApiPost>>,
     val user: MeeshyUser?,
     val hasMore: Boolean,
     val overrides: Map<String, String>,
+    val head: FeedRealtimeHead,
 )
 
 /** The posts a cache result carries, or null when it holds none (keep the prior list). */
@@ -188,36 +237,41 @@ private fun List<ApiPost>.toPresentations(
 ): List<FeedPostPresentation> =
     map { FeedPostBuilder.build(it, preferences, mediaBaseUrl, activeLanguageCode = overrides[it.id]) }
 
-private fun FeedUiState.applyResult(
+/**
+ * Projects the cache result plus the real-time head into the UI state. Realtime posts
+ * (already filtered to be disjoint from the cache) are prepended to the cache-projected
+ * list; skeleton shows only when there is genuinely nothing to display.
+ */
+private fun FeedUiState.project(
     result: CacheResult<List<ApiPost>>,
+    cachePosts: List<ApiPost>,
+    realtimePosts: List<ApiPost>,
     user: MeeshyUser?,
     mediaBaseUrl: String,
     overrides: Map<String, String>,
+    newPostsCount: Int,
 ): FeedUiState {
     val prefs = user ?: EmptyContentPreferences
-    return when (result) {
-        is CacheResult.Fresh -> copy(
-            posts = result.value.toPresentations(prefs, mediaBaseUrl, overrides),
-            isSyncing = false,
-            showSkeleton = false,
-            errorMessage = null,
-        )
-        is CacheResult.Stale -> copy(
-            posts = result.value.toPresentations(prefs, mediaBaseUrl, overrides),
-            isSyncing = true,
-            showSkeleton = false,
-        )
-        is CacheResult.Syncing -> copy(
-            posts = result.value?.toPresentations(prefs, mediaBaseUrl, overrides) ?: posts,
-            isSyncing = true,
-            showSkeleton = result.value == null && posts.isEmpty() && errorMessage == null,
-        )
-        CacheResult.Empty -> copy(
-            posts = emptyList(),
-            isSyncing = false,
-            showSkeleton = errorMessage == null,
-        )
+    val projected = realtimePosts.toPresentations(prefs, mediaBaseUrl, overrides) +
+        cachePosts.toPresentations(prefs, mediaBaseUrl, overrides)
+    val clearedError = if (result is CacheResult.Fresh) null else errorMessage
+    val isSyncing = when (result) {
+        is CacheResult.Fresh -> false
+        is CacheResult.Stale -> true
+        is CacheResult.Syncing -> true
+        CacheResult.Empty -> false
     }
+    val showSkeleton = when (result) {
+        is CacheResult.Fresh, is CacheResult.Stale -> false
+        is CacheResult.Syncing, CacheResult.Empty -> projected.isEmpty() && clearedError == null
+    }
+    return copy(
+        posts = projected,
+        isSyncing = isSyncing,
+        showSkeleton = showSkeleton,
+        errorMessage = clearedError,
+        newPostsCount = newPostsCount,
+    )
 }
 
 private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
