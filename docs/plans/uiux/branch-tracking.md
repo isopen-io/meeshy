@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 146i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **146i (terminée, branche `claude/laughing-thompson-5b696g`, base `main` HEAD `bd86317`)** :
+>   A11y VoiceOver + Dynamic Type de `VoiceProfileManageView` (écran de gestion du profil vocal). **Défaut
+>   a11y réel corrigé** : le bouton de fermeture du header (`xmark.circle.fill` 28) n'avait **aucun
+>   `.accessibilityLabel`** → ajout de `common.close` (« Fermer »). Héros `person.wave.2.fill` (64) →
+>   `.accessibilityHidden(true)` (décoratif ≥40pt, doctrine 84i, figé). Glyphe de statut (`statusIcon` 28)
+>   → `MeeshyFont.relative(28)` (scale avec le libellé adjacent) **+** `.accessibilityHidden(true)` (sens
+>   porté par le libellé texte → évite l'annonce redondante du symbole). Carte de statut →
+>   `.accessibilityElement(children: .combine)` (1 arrêt VoiceOver au lieu de 4, aligné sur les toggles du
+>   même fichier). 2 `.system` restants **assumés figés** (close 82i/87i, héros 84i) — annotés + traités
+>   VoiceOver. Statuts distingués par forme du symbole + libellé (pas couleur seule). 1 fichier, 0 logique,
+>   0 test/clé i18n neuve (`common.close` réutilisée). 0 contention : #1961 « Modernize » (get_files
+>   vérifié) + 6 PR a11y ouvertes ne touchent pas ce fichier. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `VoiceProfileManageView` SOLDÉ 146i** : ne plus reprendre (close + héros figés annotés & masqués).
+> - **Base de départ 147i : `main` HEAD**. Candidats frais restants (glyphes SF non traités VoiceOver) :
+>   `AddParticipantSheet`, `IncomingCallView`, `VoiceProfileWizardView`, `InviteFriendsSheet` (déjà annoté),
+>   ou traîne 2/1 `.system`. Sinon **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
