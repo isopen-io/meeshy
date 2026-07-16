@@ -14,6 +14,30 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 144i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **144i (branche `claude/laughing-thompson-yv7ym8`, base `main` HEAD `b92c96b`)** :
+>   Dynamic Type + structure VoiceOver des **icônes d'état** de `MessageViewsDetailView` (panneau détail
+>   vues/lectures/livraisons du message). **2 icônes SF Symbol à 28pt** (`emptyStateView`,
+>   `retryableErrorView`) : (1) `.system(size: 28, weight: .light)` → `MeeshyFont.relative(28, weight: .light)`
+>   — 28pt < seuil hero 40pt, appariées à une légende `.footnote` qui scale déjà → l'icône scale désormais en
+>   proportion ; (2) `.accessibilityHidden(true)` sur les 2 icônes décoratives (le sens est porté par la
+>   légende / le bouton Réessayer). `emptyStateView` : `.accessibilityElement(children: .combine)` (lit la
+>   légende en 1 élément) ; `retryableErrorView` : **pas** combiné (le bouton Réessayer reste focusable). 0
+>   logique, 0 clé i18n, 0 test neuf ; `MeeshyFont` déjà résolu via `import MeeshyUI`. Aucun test ne référence
+>   la surface. Vérif : 0 `.system(size:)` restant, 2 `relative`, 2 `accessibilityHidden`. PRs iOS ouvertes
+>   #1966/#1968/#1970/#1972 (ThemedBackButton/MyStoriesView/FriendRequestListView/StoryExpiredContent) → pas
+>   `MessageViewsDetailView` → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `MessageViewsDetailView` icônes d'état SOLDÉ** : ne plus reprendre les 2 `.system` (migrés + masqués).
+> - **⚠️ 140i–143i sont des PRs iOS OUVERTES (non mergées)** : #1966 (140i ThemedBackButton), #1968 (141i
+>   MyStoriesView), #1970 (142i FriendRequestListView), #1972 (143i StoryExpiredContent). `main` HEAD `b92c96b`
+>   n'en contient aucune → base 144i = `main` HEAD, 0 chevauchement de fichiers.
+> - **Base de départ 145i : `main` HEAD**. Reste : **dette i18n** (`emptyStateView` appelé avec 5 légendes FR
+>   en dur, lignes ~467/503/540/586/610 → itération i18n dédiée, hors cadence Dynamic Type) ; annoter (ne PAS
+>   migrer) les 2 labels d'axe 9pt de `StatsTimelineChart` (exception Charts, cf. `ConversationDashboardView`) ;
+>   figer + masquer les 2 glyphes ambiants de `ConversationBackgroundComponents` ; puis la traîne 2/1 `.system`
+>   (`BubbleStandardLayout` 2 — leaf chaud, prudence) ou `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Éviter les fichiers des PRs iOS ouvertes (#1966/#1968/#1970/#1972).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
