@@ -35,6 +35,8 @@ import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.AttachmentMessageType
+import me.meeshy.sdk.model.MimeTypeResolver
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ConversationDraft
@@ -831,6 +833,76 @@ class ChatViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Sends a file picked from the system document/photo picker through the same
+     * durable upload→graft→send chain the clipboard path already uses: the bytes
+     * are queued for upload, the send is enqueued gated on that upload and carrying
+     * its cmid as a placeholder attachment id, and the drainer grafts the real
+     * gateway id in once the upload lands. The message's coarse `messageType`
+     * (image/video/audio/file) is inferred from the resolved MIME via
+     * [AttachmentMessageType]; any text already in the composer rides along as the
+     * body and is cleared, mirroring [sendClipboardContent].
+     *
+     * A blank pick ([bytes] empty) or a signed-out session is inert. Note: audio
+     * picked here is delivered over REST like any other file — the socket audio
+     * pipeline (transcription/translation) is a separate slice; this path never
+     * triggers it.
+     */
+    fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) {
+        if (bytes.isEmpty()) return
+        val user = sessionRepository.currentUser.value ?: return
+        val text = _state.value.draft.trim()
+        val replyToId = _state.value.replyingToMessageId
+        val effects = _state.value.pendingEffects
+        stopTypingEmission()
+        _state.update {
+            it.copy(
+                draft = "",
+                replyingToMessageId = null,
+                mention = it.mention.reset(),
+                pendingEffects = MessageEffects(),
+                isEffectsPickerOpen = false,
+            )
+        }
+        persistDraft("", replyToId = null)
+        viewModelScope.launch {
+            try {
+                val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
+                val mime = MimeTypeResolver.resolve(declaredMimeType, safeName)
+                val uploadCmid = mediaUploadQueue.enqueue(
+                    MediaUploadItem(bytes = bytes, fileName = safeName, mimeType = mime),
+                )
+                messageRepository.sendOptimistic(
+                    conversationId = conversationId,
+                    content = text,
+                    originalLanguage = ComposeLanguageDetector.detect(
+                        text,
+                        fallback = LanguageResolver.resolveUserLanguage(user),
+                    ),
+                    sender = user,
+                    replyToId = replyToId,
+                    effects = effects,
+                    messageType = AttachmentMessageType.forMime(mime),
+                    attachmentUploadCmids = listOf(uploadCmid),
+                    attachments = listOf(
+                        ApiMessageAttachment(
+                            id = uploadCmid,
+                            fileName = safeName,
+                            originalName = safeName,
+                            mimeType = mime,
+                            fileSize = bytes.size,
+                        ),
+                    ),
+                )
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
     /** Present the composer's message-effects picker sheet. */
     fun openEffectsPicker() {
         _state.update { it.copy(isEffectsPickerOpen = true) }
@@ -1555,6 +1627,7 @@ class ChatViewModel @Inject constructor(
         private const val MENTION_SEARCH_DEBOUNCE_MS = 300L
         private const val CLIPBOARD_ATTACHMENT_NAME = "clipboard-content.txt"
         private const val CLIPBOARD_ATTACHMENT_MIME = "text/plain"
+        private const val DEFAULT_ATTACHMENT_NAME = "attachment"
     }
 }
 

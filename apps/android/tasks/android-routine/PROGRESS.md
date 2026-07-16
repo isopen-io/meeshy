@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **file/photo attachment picker → REST send** landed (slice `chat-attachment-file-picker`,
+> feature-parity §Chat "Attachment ladder" → ◐ + "Send with attachments" file/photo picker source done). This
+> makes the composer's attachment ladder real: an attach button (`Icons.Filled.AttachFile`) launches the system
+> document/photo picker (`GetContent("*/*")`), and the pick flows through the **same** durable upload→graft→send
+> chain the clipboard-content slice proved — no new transport. **Ships (`:core:model`, 2 pure objects, the
+> testable heart):** (1) `MimeTypeResolver` — faithful port of iOS `MimeTypeResolver.swift` (MeeshySDK): the
+> full extension→mime forward table + mime→preferred-extension reverse table (synonym couples jpg/jpeg,
+> mp4/m4v, heic/heif, ogg/oga collapse to one canonical mime), `mimeTypeForExtension` / `mimeTypeForFilename`
+> (last-extension, bare-trailing-dot → octet-stream) / `preferredExtensionForMime` (case-insensitive), plus a
+> **new** `resolve(declaredType, fileName)` chooser Android needs but iOS doesn't — a meaningful declared
+> content-type (non-blank, not `application/octet-stream`, case-insensitive) wins, else the filename extension
+> is consulted (Android's ContentResolver often reports a real type; iOS only ever had the URL extension). (2)
+> `AttachmentMessageType.forMime` — the coarse gateway `messageType` label (image/video/audio/file), reusing
+> `MediaKindClassifier` as the image/video/audio SSOT (no second copy of the MIME rules) with a `file` fallback;
+> port of the iOS `kind == .audio ? .audio : (mime.hasPrefix("video/") ? .video : .image)` inference generalised
+> to the four wire labels. **Wired real (exempt glue):** `ChatViewModel.sendFileAttachment(bytes, fileName,
+> declaredMimeType)` mirrors `sendClipboardContent` — resolves the MIME, types the message, enqueues the bytes
+> on `MediaUploadQueue`, and calls `sendOptimistic` (placeholder cmid → `attachmentIds` + optimistic
+> `ApiMessageAttachment` so a file chip renders instantly, outbox row gated on the upload). Composer text rides
+> along as the body and clears; a blank pick / signed-out session is inert. `ChatScreen` gains the attach button
+> + a `GetContent` launcher + a `null`-safe `readPickedAttachment` (ContentResolver byte read +
+> `OpenableColumns.DISPLAY_NAME` query + declared type). Strings en/fr/es/pt (`chat_attach_file`);
+> `:feature:chat` gains the `activity-compose` dep for the launcher. **Scope note:** audio picked here goes over
+> REST like any file (renders + downloadable) — the socket audio pipeline (transcription/translation) is a
+> separate future slice, and the composer voice pill still produces no bytes (no `MediaRecorder` yet), so an
+> audio-over-socket slice would be orphan today. **+34 tests** (MimeTypeResolver 20, AttachmentMessageType 8 —
+> 28 pure at ~full branch coverage — plus 6 `ChatViewModelTest` behavioural: a picked PDF uploads with the
+> resolved MIME + a `file`-typed message carrying name/size; a PNG types as `image`; typed draft text becomes
+> the body and the composer clears; an octet-stream declared type resolves from the filename; a blank name
+> falls back to `attachment`; an empty pick is a no-op). **Mutation check (RED proof):** dropping the
+> octet-stream guard in `MimeTypeResolver.resolve` (`declared.isNotEmpty() && !declared.equals(OCTET_STREAM,
+> ignoreCase = true)` → `declared.isNotEmpty()`) failed **exactly 2** tests (`an_octet_stream_declared_type_
+> defers_to_the_filename` + `octet_stream_detection_is_case_insensitive`), the other 18 stayed green —
+> discriminating, behavioural. **Verification:** `:core:model` + `:feature:chat` test runs green in isolation;
+> full-tree `assembleDebug testDebugUnitTest` (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe) →
+> **BUILD SUCCESSFUL in 3m 42s** (943 tasks; debug APK assembles + every module's JVM unit tests green, no
+> DataStore parallel-load flake this run). Reviewer **PASS** (diff `apps/android` only: 2 pure `:core:model` objects + tests,
+> `ChatViewModel` glue + VM tests, `ChatScreen` picker glue, one build-file dep, 4 locale strings, tracking
+> docs; no production logic outside apps/android; **SDK purity** — the MIME tables + type labels are pure,
+> agnostic building blocks in `:core:model` reusing the existing `MediaKindClassifier` SSOT, the picker
+> orchestration lives in the feature layer; **SSOT** — one MIME table, one send chain, reused; no coverage floor
+> lowered, no test weakened). **Next slice:** §Chat still-open — the conversation info sheet (hero/direct
+> headers, members/media/stats tabs), in-app camera capture, OR advance to §Feed per the build order once
+> Chat's high-value items are exhausted.
+
 > On 2026-07-16 **@-mention autocomplete — debounced remote directory merge** landed (slice
 > `chat-mention-remote-merge`, feature-parity §Chat "@-mention autocomplete (debounced API + local merge)" → ✅,
 > the last open sub-item of that row). The local roster autocomplete already shipped (`chat-mention-autocomplete`,
@@ -4485,6 +4530,34 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-16 — slice `chat-attachment-file-picker` ✅ impl + reviewer PASS → PR + merge
+- **Opened with rule #0:** no open `claude/apps/android/*` PR to reconcile; `main` fetched clean, branch
+  even with `origin/main` (last Android slice `chat-mention-remote-merge` merged as **#1985**, `60503a1`).
+- **Branch:** `claude/apps/android/chat-attachment-file-picker` (off latest `main` `60503a1`).
+- **Slice:** file/photo attachment picker → the composer attach button launches the system document/photo
+  picker; the pick flows through the same durable upload→graft→send REST chain the clipboard slice proved.
+- **Added (production):**
+  - `:core:model` — `MimeTypeResolver` (iOS `MimeTypeResolver.swift` port: extension↔mime forward/reverse
+    tables + `resolve(declaredType, fileName)` chooser) and `AttachmentMessageType.forMime` (coarse gateway
+    label image/video/audio/file, reusing `MediaKindClassifier` as the media-detection SSOT).
+  - `:feature:chat` — `ChatViewModel.sendFileAttachment` (mirror of `sendClipboardContent`), `ChatScreen`
+    attach button + `GetContent` launcher + `null`-safe `readPickedAttachment` ContentResolver glue,
+    `activity-compose` dep, `chat_attach_file` strings (en/fr/es/pt).
+- **Tests (TDD red→green):** +34 — MimeTypeResolver 20, AttachmentMessageType 8 (28 pure, ~full branch),
+  ChatViewModel 6 behavioural (PDF→file-typed w/ resolved MIME; PNG→image; draft text→body & clears;
+  octet-stream→filename-resolved; blank name→`attachment`; empty pick→no-op).
+- **Mutation (RED proof):** dropping the octet-stream guard in `MimeTypeResolver.resolve` failed **exactly 2**
+  tests (`an_octet_stream_declared_type_defers_to_the_filename` + `octet_stream_detection_is_case_insensitive`),
+  other 18 green — discriminating.
+- **Verification:** `:core:model` + `:feature:chat` green in isolation; full-tree `assembleDebug
+  testDebugUnitTest` (`--max-workers=3`, UTF-8-daemon recipe) → **BUILD SUCCESSFUL in 3m 42s** (943 tasks,
+  no DataStore flake).
+- **Reviewer:** **PASS** — diff `apps/android` only; SDK purity (pure MIME tables/labels in `:core:model`
+  reusing `MediaKindClassifier`, picker orchestration in feature layer); SSOT (one MIME table, one send
+  chain); no coverage floor lowered, no test weakened; accent-coherent composer, no dead end (the pick
+  delivers a rendered file chip).
+- **PR + CI + merge:** see below.
 
 ### 2026-07-16 — slice `chat-report-message` ✅ impl + reviewer PASS → PR + merge
 - **Opened with rule #0:** no open `claude/apps/android/*` PR to reconcile; `main` fetched clean, last

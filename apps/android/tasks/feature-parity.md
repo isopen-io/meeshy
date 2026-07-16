@@ -892,7 +892,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       send, stop+send gated by `canSend`) replaces the input row while recording. **Pending follow-up:**
       real `MediaRecorder`/`AudioRecord` capture feeding `meter()`, and the voice-attachment send pipeline
       (VM + upload) — the pill drives the *session* today, not yet the audio bytes.
-- [ ] Attachment ladder (emoji, file, location, camera, photo library, voice)
+- [◐] Attachment ladder (emoji, file, location, camera, photo library, voice) — **file + photo-library picker done**
+      (slice `chat-attachment-file-picker`, 2026-07-16): the composer now carries an attach button
+      (`Icons.Filled.AttachFile`) launching the system document/photo picker (`GetContent("*/*")`); the pick is
+      read into memory (`readPickedAttachment` — ContentResolver byte read + `OpenableColumns.DISPLAY_NAME`
+      query + declared content-type, `null`-safe on a revoked grant), its MIME resolved via the new pure
+      `MimeTypeResolver` SSOT (iOS `MimeTypeResolver.swift` port — declared type first, filename extension as
+      fallback), typed via pure `AttachmentMessageType.forMime` (reusing `MediaKindClassifier`), and sent through
+      the **same** durable upload→graft→send chain the clipboard path uses (`ChatViewModel.sendFileAttachment`).
+      Any composer text rides along as the body and clears. **Pending:** in-app camera capture, an emoji-ladder
+      tray grouping the entries, voice (socket audio pipeline), and per-pick upload-progress. **Location** ships
+      separately (see live-location rows).
 - [x] Large-paste detection → clipboard-content attachment — **detection + preview + send done**
       (slice `chat-clipboard-content-send`, 2026-07-16): the captured paste is now delivered as a real
       `text/plain` attachment through the durable upload→graft→send chain (see "Send with attachments"
@@ -975,6 +985,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       to source other attachment types, real TUS-resumable uploads (today: plain multipart `POST /attachments/upload`),
       and an upload-progress indicator. +36 tests (graft 10, combinator 4, repository 4, VM 4 + existing send/story
       chains regression-green), mutation-checked (dropping the identity guard fails exactly the identical-swap test).
+      **File/photo picker source done** (slice `chat-attachment-file-picker`, 2026-07-16): a system
+      document/photo picker now sources image/video/document attachments over this same REST chain — the picked
+      bytes are read from the content Uri, the MIME resolved via the new pure `MimeTypeResolver` SSOT and typed
+      via `AttachmentMessageType.forMime`, then delivered through `ChatViewModel.sendFileAttachment` (mirror of
+      the clipboard path). +34 tests (MimeTypeResolver 20, AttachmentMessageType 8 — 28 pure — plus 6 VM
+      behavioural), mutation-checked (dropping the octet-stream guard in `resolve` fails exactly the 2
+      octet-stream deferral tests). **Still pending:** audio over socket, in-app camera, TUS-resumable, progress.
 - [◐] In-conversation message search (translation-match aware) + jump-to-result — core+wiring done
       (`chat-search-highlight-wiring` 2026-07-06): pure `:feature:chat` `ChatSearch` SSOT over the opaque
       `SearchableMessage` — `matchIds` (trimmed/case-insensitive `contains` across **every** text of a message,
