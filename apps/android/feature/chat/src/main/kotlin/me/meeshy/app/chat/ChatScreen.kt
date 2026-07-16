@@ -142,6 +142,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewOutcome
+import me.meeshy.sdk.link.LinkPreviewParser
 import me.meeshy.sdk.model.call.ActiveCallSession
 import java.time.ZoneId
 import java.util.Locale
@@ -203,6 +204,11 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
+    // Async OpenGraph link previews: one screen-scoped store dedupes fetches across bubbles and
+    // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
+    // user). Each bubble projects a pure outcome from this collected cache.
+    val linkPreviewStore = remember { LinkPreviewStore(scope) }
+    val linkPreviewCache by linkPreviewStore.cache.collectAsStateWithLifecycle()
     val listItems = remember(state.messages) {
         buildChatListItems(state.messages, ZoneId.systemDefault())
     }
@@ -467,10 +473,21 @@ fun ChatScreen(
                                             },
                                         )
                                     }
+                                    val linkUrl = remember(bubble.text) {
+                                        LinkPreviewParser.firstUrl(bubble.text)
+                                    }
+                                    if (linkUrl != null) {
+                                        LaunchedEffect(linkUrl) { linkPreviewStore.request(linkUrl) }
+                                    }
                                     LinkPreviewCard(
                                         state = LinkPreview.stateFor(
                                             bubble.text,
-                                            LinkPreviewOutcome.Empty,
+                                            linkUrl?.let {
+                                                linkPreviewCache.outcomeFor(
+                                                    LinkPreviewParser.canonicalize(it),
+                                                    System.currentTimeMillis(),
+                                                )
+                                            } ?: LinkPreviewOutcome.Empty,
                                         ),
                                         isOutgoing = bubble.isOutgoing,
                                         accentColor = accentColor,

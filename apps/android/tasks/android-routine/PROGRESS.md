@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **the async OpenGraph fetch + dedupe / negative-cache / logout-purge decision layer** landed
+> (slice `chat-link-preview-cache`, feature-parity §Chat "OpenGraph link-preview cards … tracker-param stripping"
+> — the second, orchestration half of that compound item after `chat-link-preview-core`). iOS scatters this across
+> `LinkPreviewStore`'s `cache` (positive), `negativeCache` (failed URLs, 30-min window) and `pendingKeys`
+> (in-flight dedupe) maps plus the imperative `requestMetadata` guards, with the SDK `LinkPreviewFetcher` doing the
+> URLSession GET. Android previously showed a link only as an immediate `BareLink` chip (last slice) with the
+> `Loading`/`Card` arms unlit. **Ships (`:sdk-core` `me.meeshy.sdk.link`):** the pure heart — `LinkPreviewCache`,
+> one immutable value type gathering all three iOS maps: `lookup(url, now)` → a `LinkPreviewLookup`
+> (`Cached`/`RecentlyFailed`/`InFlight`/`ShouldFetch`, positive-wins-then-fresh-failure-then-in-flight priority; an
+> expired failure falls through to a fresh fetch so an outage self-heals), `outcomeFor` projecting that onto a
+> `LinkPreviewOutcome` so it feeds straight into the already-shipped `LinkPreview.stateFor`, `startFetch`
+> (idempotent in-flight mark), `resolve(url, outcome, now)` (success caches metadata + **clears any prior
+> failure**, empty records the negative timestamp, both clear the in-flight marker, `Pending` is an inert no-op),
+> `evictStale(now)` (drops positives older than a 7-day `MAX_AGE` **and** prunes expired negatives — surpasses iOS,
+> which only evicts positives at disk load and lets the negative map grow), and `cleared()` (logout purge). Plus
+> the pure `LinkPreviewFetching.outcomeFrom(status, contentType, body, url)` HTTP→outcome gate (non-2xx / non-HTML /
+> blank-body / no-visible-field → `Empty`, else `parse` keyed by the canonical URL) and the `OkHttpLinkPreviewFetcher`
+> IO glue (capped `peekBody`, 8s timeouts, follows redirects, any throw → `Empty`). **Ships (`:feature:chat`):**
+> the app-side `LinkPreviewStore` — the orchestration that owns a `StateFlow<LinkPreviewCache>` and decides *when*
+> to hit the network: canonicalises the URL (so `?utm_source=…` and the bare URL share ONE fetch + cache entry),
+> `request` only fetches on `ShouldFetch`, dedupes concurrent requests via the in-flight marker, honours the
+> negative window, is `CancellationException`-safe (rethrows, never records a cancelled fetch as a failure), and
+> `clear()`s on logout. **+42 tests** (LinkPreviewCache 23 — lookup empty/cached/recent-fail/expired-fail-boundary/
+> in-flight/cached-wins; outcomeFor 4 arms; startFetch mark + idempotent; resolve success/empty/success-clears-
+> failure/pending-noop; evictStale drop-old/keep-at-boundary/drop-expired-neg/keep-valid-neg/same-instance-when-
+> clean; cleared; immutability sweep. LinkPreviewFetching 10 — 2xx-og-resolves, non-2xx, redirect-range, non-html,
+> xhtml, absent-content-type-lenient, blank/null body, no-visible-field, canonical-key. LinkPreviewStore 9 —
+> fetch+cache, two-requests-dedupe, already-cached-skips, empty→negative-not-refetched-in-window, refetch-after-
+> window, fetcher-failure→Empty, cancelled-not-a-failure, campaign-variants-share-one-fetch, clear-purges).
+> **Mutation check (RED proof):** flipping `evictStale`'s boundary `<= MAX_AGE` → `< MAX_AGE` failed **exactly 1**
+> test (`evictStale keeps a positive entry exactly at the max age boundary`), the other 22 stayed green —
+> behavioural, not tautological. **Wired real (`ChatScreen`, exempt glue):** one screen-scoped `LinkPreviewStore`
+> (dies with the screen → its cache is discarded on leave/logout, nothing leaks to the next user), its cache
+> collected once, and per bubble a `LaunchedEffect` requests the URL + the collected cache projects `outcomeFor`
+> into `LinkPreview.stateFor` — so a link now progresses `Loading`(dim chip)→`Card`(rich OG) or `BareLink`(no OG),
+> the exact iOS skeleton→settle. **Surpasses iOS** on testability (one pure JVM-covered cache + fetch-mapper vs an
+> `@MainActor` store threaded through Combine) and on hygiene (negative-map pruning; a success forgets the prior
+> failure). **SDK-purity:** the cache reducer + fetch interface/mapper are stateless `:sdk-core` building blocks
+> (iOS keeps its `LinkPreviewFetcher` in the SDK too); the "when to fetch / logout purge" orchestration is app-side
+> (iOS keeps `LinkPreviewStore` in the app target). **Verification:** `assembleDebug testDebugUnitTest`
+> (`--max-workers=3`, UTF-8-daemon recipe) → **APK assembles** + 42/42 link-slice tests green; the only red was the
+> pre-existing environmental `ThemeStoreTest` DataStore `TimeoutCancellationException` (green in isolation — the
+> documented disk-I/O flake, untouched by this diff). Reviewer **PASS** (diff `apps/android` only — new
+> `LinkPreviewCache`/`LinkPreviewFetcher`(+`LinkPreviewFetching`) + `LinkPreviewStore` + `ChatScreen` wiring + tests
+> + tracking docs; no production logic outside; SSOT — one cache reducer; UX/colour coherence — the existing
+> accent-tinted chip/card, natural tap-to-open, no dead end; no coverage floor lowered, no test weakened).
+> **Next slice:** the **in-app browser (Chrome Custom Tabs)** so a tapped preview opens in-app instead of handing
+> off to the system browser, and **rich-card image loading** in `RichLinkCard` (Coil `AsyncImage` of
+> `metadata.imageUrl`) — both under §Chat — or move to §Chat "Static location pin + live location sharing".
+
 > On 2026-07-15 **the pure OpenGraph link-preview core + tracker-param stripping** landed (slice
 > `chat-link-preview-core`, feature-parity §Chat "OpenGraph link-preview cards + in-app browser; tracker-param
 > stripping" — the detection/parsing/canonicalisation/state layer, the first of that compound item). iOS scatters
