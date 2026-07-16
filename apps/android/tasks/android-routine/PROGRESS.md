@@ -25,7 +25,10 @@
 > tombstone add in `remove` (`removedIds = state.removedIds + postId` → `state.removedIds`) failed **exactly 7**
 > discriminating tombstone tests, the other 61 stayed green — behavioural. **Verification:** `:feature:feed:testDebugUnitTest`
 > green in isolation (68 tests: reducer 24, VM 26, builder 18); full-tree `assembleDebug testDebugUnitTest`
-> (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe) → recorded in the run log. Reviewer **PASS**
+> (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe) → **BUILD SUCCESSFUL** (debug APK assembles +
+> all module JVM unit tests green, no DataStore flake). **PR #1990 open — merge is pending a GitHub API 503
+> outage** (all API reads 503 after the PR was created; CI could not be verified, so the slice was NOT
+> blind-merged — see the run log). Reviewer **PASS**
 > (diff `apps/android` only: 1 pure `:feature:feed` reducer/head extension + tests, `FeedViewModel` collect+filter
 > glue + VM tests, tracking docs; no production logic outside apps/android; **SDK purity** — the tombstone law is a
 > pure feature-layer building block, the socket plumbing is the injected `SocialSocketManager`; **SSOT** — one
@@ -4610,7 +4613,14 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
-### 2026-07-16 — slice `feed-realtime-post-deleted` ✅ impl + reviewer PASS → PR + merge
+### 2026-07-16 — slice `feed-realtime-post-deleted` ✅ impl + local gate green + reviewer PASS → PR #1990 open ⚠ merge pending (GitHub API 503 outage)
+- **⚠ Merge blocked on infra, not code:** after opening PR #1990 the GitHub API began returning **503 on all
+  reads** (`get_check_runs`/`get`/`list_pull_requests` all 503; raw `api.github.com` probe also failed; the agent
+  proxy is healthy with no relay failures — a GitHub-side incident). The create-PR **write** had already
+  succeeded, so #1990 exists. CI status could not be verified and the slice was **not merged** — never blind-merge
+  past unverified CI. Retried over ~15 min with backoff. **Resume:** when the API recovers, verify CI green
+  (the diff is apps/android-only, so the JS/TS/Python monorepo CI is unaffected → expected green) then
+  squash-merge #1990. Subscription to #1990 activity remains active.
 - **Opened with rule #0:** no open `claude/apps/android/*` PR to reconcile; `main` fetched clean, branch
   even with `origin/main` (last Android slice `feed-new-posts-banner` merged as **#1989**, `4c6b1f3`).
 - **Branch:** `claude/apps/android/feed-realtime-post-deleted` (off latest `main` `4c6b1f3`).
