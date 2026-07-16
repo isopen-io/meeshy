@@ -89,12 +89,17 @@ class FeedViewModel @Inject constructor(
                     val reconciled = FeedRealtimeReducer.reconcile(head, cacheIds)
                     if (reconciled !== head) realtimeHead.value = reconciled
 
-                    val visibleRealtime = reconciled.posts.filterNot { it.id in cacheIds }
-                    latestPosts = visibleRealtime + cachePosts
+                    // Tombstoned posts (live `post:deleted`) are hidden from both the head and
+                    // the cache-projected list until a refresh drops them from the cache.
+                    val removed = reconciled.removedIds
+                    val visibleCache = if (removed.isEmpty()) cachePosts
+                    else cachePosts.filterNot { it.id in removed }
+                    val visibleRealtime = reconciled.posts.filterNot { it.id in cacheIds || it.id in removed }
+                    latestPosts = visibleRealtime + visibleCache
                     _state.update {
                         it.project(
                             result = result,
-                            cachePosts = cachePosts,
+                            cachePosts = visibleCache,
                             realtimePosts = visibleRealtime,
                             user = user,
                             mediaBaseUrl = config.socketUrl,
@@ -108,6 +113,11 @@ class FeedViewModel @Inject constructor(
             socialSocket.postCreated.collect { payload ->
                 val cacheIds = latestCachePosts.mapTo(HashSet()) { it.id }
                 realtimeHead.update { FeedRealtimeReducer.accept(it, payload.post, cacheIds) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postDeleted.collect { payload ->
+                realtimeHead.update { FeedRealtimeReducer.remove(it, payload.postId) }
             }
         }
     }

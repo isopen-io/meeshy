@@ -1623,6 +1623,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `mergePreservingRealtimeHead`. `FeedScreen` shows a floating accent "N new posts" pill
       (`ArrowUpward`, plurals en/fr/es/pt) that scrolls to top + acknowledges. +21 tests
       (14 reducer, 7 VM). Mutation-proof: dropping the `loadedIds` guard fails exactly 2 tests.
+      **Live `post:deleted` removal done** (slice `feed-realtime-post-deleted`, 2026-07-16):
+      the previously-unconsumed `SocialSocketManager.postDeleted` stream now folds through a
+      pure `FeedRealtimeReducer.remove` — a deleted id is *tombstoned* (`FeedRealtimeHead.removedIds`)
+      so the feed hides it from both the realtime head and the cache-projected list; a buffered
+      still-unseen arrival is dropped from the head and the banner count decremented (floored at 0,
+      never claiming a gone post); `reconcile` releases a tombstone once a refresh drops the post
+      from the cache; `accept` clears a tombstone if the post is re-created; `clear` (pull-to-refresh)
+      drops all tombstones. The Android analogue of iOS FeedViewModel removing the post from its
+      in-memory array — but pure/unit-testable and race-proof (a lagging stale re-emission that still
+      carries the deleted post keeps it hidden). +15 tests (10 reducer, 5 VM). Mutation-proof:
+      dropping the tombstone add fails exactly 7 discriminating tests, the other 61 stay green.
 - [x] Post reactions (heart like) — **optimistic** toggle via `PostRepository.toggleLike`
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`

@@ -1,5 +1,40 @@
 # Progress — state & what to do next
 
+> On 2026-07-16 **feed live `post:deleted` removal** landed (slice `feed-realtime-post-deleted`,
+> feature-parity §F "Live `post:deleted` removal done" → the second §Feed realtime slice, extending the
+> socket wiring opened by `feed-new-posts-banner`). The `SocialSocketManager.postDeleted` stream was already
+> attached by `RealtimeSessionCoordinator` but consumed by **no** feed code, so a post deleted elsewhere only
+> vanished on the next paginated refresh. iOS FeedViewModel removes the post from its in-memory `posts` array
+> on `post:deleted`; Android's SSOT is the cache, so a straight remove would be overwritten by the next cache
+> re-emit. **Ships (`:feature:feed`, pure SSOT):** extends `FeedRealtimeHead` with `removedIds: Set<String>`
+> (a **tombstone** overlay) + `FeedRealtimeReducer.remove(state, postId)` — tombstones the id (so the feed hides
+> it from both the realtime head and the cache-projected list via a display filter), drops a still-buffered
+> arrival from the head and **decrements the banner count floored at 0** (never claiming a post that is gone),
+> and is inert for a blank id or an already-tombstoned/absent post (same-instance → StateFlow dedup). `reconcile`
+> now also **releases** a tombstone once a refresh has dropped the post from the cache (`removedIds ∩ loadedIds`),
+> so tombstones don't leak; `accept` **clears** a tombstone when the same id is re-created (post:deleted→post:created);
+> `clear` (pull-to-refresh) drops all tombstones. **Wired real (exempt glue):** `FeedViewModel` collects
+> `socialSocket.postDeleted` → `remove`; the combine block display-filters `removedIds` out of both the head and
+> the cache projection. **No Compose change** — the `LazyColumn` reactively drops the removed row. **Surpasses
+> iOS:** the removal is a pure, unit-testable tombstone law that is **race-proof** — a lagging stale re-emission
+> that still carries the deleted post keeps it hidden, where iOS's imperative array-remove would let a background
+> fetch resurrect it. **+15 tests** (`FeedRealtimeReducerTest` 10 — remove tombstone/blank/idempotent/head-drop+decrement/
+> count-floor, reconcile keep/release/partial-release, accept-untombstone, clear-releases; `FeedViewModelTest` 5
+> behavioural — delete removes a cache post, delete removes a buffered arrival + lowers the count, unknown-id inert,
+> stays hidden across a stale re-emission, re-created post reappears). **Mutation check (RED proof):** dropping the
+> tombstone add in `remove` (`removedIds = state.removedIds + postId` → `state.removedIds`) failed **exactly 7**
+> discriminating tombstone tests, the other 61 stayed green — behavioural. **Verification:** `:feature:feed:testDebugUnitTest`
+> green in isolation (68 tests: reducer 24, VM 26, builder 18); full-tree `assembleDebug testDebugUnitTest`
+> (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe) → recorded in the run log. Reviewer **PASS**
+> (diff `apps/android` only: 1 pure `:feature:feed` reducer/head extension + tests, `FeedViewModel` collect+filter
+> glue + VM tests, tracking docs; no production logic outside apps/android; **SDK purity** — the tombstone law is a
+> pure feature-layer building block, the socket plumbing is the injected `SocialSocketManager`; **SSOT** — one
+> realtime-overlay decision surface, the display filter reuses `removedIds`; **UDF** + immutable `UiState`; no
+> coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — live `post:liked`/`post:unliked`
+> count sync (the `postLiked`/`postUnliked` streams are exposed but unconsumed; needs a like-overlay reconciled
+> against the cache + the existing optimistic `toggleLike`), the feed post **detail** screen (text/media/repost +
+> threaded comments), OR the statuses/moods bar (§G) per the build order.
+
 > On 2026-07-16 **feed new-posts banner + realtime-head merge** landed (slice `feed-new-posts-banner`,
 > feature-parity §Feed "Social feed … new-posts banner + realtime-head merge" → ✅ — the first §Feed
 > realtime slice, opening the build-order move from §Chat to §Feed). iOS `FeedViewModel` inserts a socket
@@ -4574,6 +4609,25 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-16 — slice `feed-realtime-post-deleted` ✅ impl + reviewer PASS → PR + merge
+- **Opened with rule #0:** no open `claude/apps/android/*` PR to reconcile; `main` fetched clean, branch
+  even with `origin/main` (last Android slice `feed-new-posts-banner` merged as **#1989**, `4c6b1f3`).
+- **Branch:** `claude/apps/android/feed-realtime-post-deleted` (off latest `main` `4c6b1f3`).
+- **Slice:** live `post:deleted` removal — the exposed-but-unconsumed `SocialSocketManager.postDeleted` stream
+  now retires a deleted post from the feed live via a pure tombstone overlay, hidden until the cache drops it.
+- **Added (production):**
+  - `:feature:feed` — `FeedRealtimeHead.removedIds` tombstone set + `FeedRealtimeReducer.remove` (tombstone,
+    head-drop + banner-count decrement floored at 0, idempotent); `reconcile` releases tombstones the cache has
+    dropped; `accept` clears a tombstone on re-create; `clear` drops all tombstones. `FeedViewModel` collects
+    `postDeleted` → `remove` and display-filters `removedIds` out of the head + cache projection. No Compose change.
+- **Tests (TDD red→green):** +15 — reducer 10 (tombstone/blank/idempotent/head-drop+decrement/count-floor,
+  reconcile keep/release/partial, accept-untombstone, clear-releases), VM 5 behavioural (cache-post removal,
+  buffered-arrival removal + count drop, unknown-id inert, hidden across stale re-emission, re-created reappears).
+  Module suite now 68 (reducer 24, VM 26, builder 18), green in isolation.
+- **Mutation check (RED proof):** `removedIds = state.removedIds + postId` → `state.removedIds` in `remove`
+  failed **exactly 7** discriminating tombstone tests; the other 61 stayed green.
+- **Full gate:** `assembleDebug testDebugUnitTest` (system Gradle 8.14.3, `--max-workers=3`, UTF-8-daemon recipe).
 
 ### 2026-07-16 — slice `chat-attachment-file-picker` ✅ impl + reviewer PASS → PR + merge
 - **Opened with rule #0:** no open `claude/apps/android/*` PR to reconcile; `main` fetched clean, branch

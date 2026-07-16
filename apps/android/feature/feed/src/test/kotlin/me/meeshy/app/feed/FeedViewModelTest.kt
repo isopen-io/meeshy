@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketPostCreatedData
+import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -47,6 +48,7 @@ class FeedViewModelTest {
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
+    private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
@@ -55,6 +57,7 @@ class FeedViewModelTest {
         every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         every { repository.feedHasMore } returns MutableStateFlow(hasMore)
         every { socialSocket.postCreated } returns postCreated
+        every { socialSocket.postDeleted } returns postDeleted
         return FeedViewModel(repository, session, socialSocket, config)
     }
 
@@ -196,6 +199,7 @@ class FeedViewModelTest {
         every { repository.feedHasMore } returns MutableStateFlow(true)
         every { repository.feedStream(any(), any()) } returns stream
         every { socialSocket.postCreated } returns postCreated
+        every { socialSocket.postDeleted } returns postDeleted
         return FeedViewModel(repository, session, socialSocket, config)
     }
 
@@ -344,5 +348,69 @@ class FeedViewModelTest {
         val s = vm.state.value
         assertThat(s.newPostsCount).isEqualTo(0)
         assertThat(s.posts.map { it.id }).containsExactly("1")
+    }
+
+    // --- Realtime post:deleted removal ---
+
+    @Test
+    fun `a realtime post-deleted removes the post from the displayed feed`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2"), post("3")), 0L)))
+
+        postDeleted.emit(SocketPostDeletedData(postId = "2"))
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("1", "3").inOrder()
+    }
+
+    @Test
+    fun `a realtime post-deleted removes a buffered realtime post and lowers the banner count`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        postCreated.emit(SocketPostCreatedData(post("new")))
+        assertThat(vm.state.value.newPostsCount).isEqualTo(1)
+
+        postDeleted.emit(SocketPostDeletedData(postId = "new"))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("1")
+        assertThat(s.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a post-deleted for a post the feed does not hold is inert`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        postDeleted.emit(SocketPostDeletedData(postId = "zzz"))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("1", "2").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a deleted post stays hidden across a stale re-emission that still carries it`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(post("1"), post("2")), 0L),
+        )
+        val vm = viewModel(null, stream)
+        postDeleted.emit(SocketPostDeletedData(postId = "2"))
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("1")
+
+        // Server lag: a background re-emission still carries the deleted post — the tombstone holds.
+        stream.value = CacheResult.Stale(listOf(post("1"), post("2")), 100L)
+
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("1")
+    }
+
+    @Test
+    fun `a post re-created after deletion reappears at the head`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        postCreated.emit(SocketPostCreatedData(post("new")))
+        postDeleted.emit(SocketPostDeletedData(postId = "new"))
+        assertThat(vm.state.value.posts.map { it.id }).containsExactly("1")
+
+        postCreated.emit(SocketPostCreatedData(post("new")))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("new", "1").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(1)
     }
 }
