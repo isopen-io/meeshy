@@ -65,6 +65,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
@@ -645,7 +646,19 @@ fun ChatScreen(
             onStar = { viewModel.toggleStar(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onExploreLanguages = { viewModel.openLanguageExplorer(actionTarget.messageId) },
+            onReport = { viewModel.openReport(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
+        )
+    }
+
+    state.reportForm?.let { form ->
+        ReportMessageSheet(
+            form = form,
+            accentColor = accentColor,
+            onSelectReason = viewModel::selectReportReason,
+            onDetailsChange = viewModel::onReportDetailsChange,
+            onSubmit = viewModel::submitReport,
+            onDismiss = viewModel::dismissReport,
         )
     }
 
@@ -1721,6 +1734,7 @@ private fun MessageActionsSheet(
     onStar: () -> Unit,
     onToggleOriginal: () -> Unit,
     onExploreLanguages: () -> Unit,
+    onReport: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -1868,6 +1882,12 @@ private fun MessageActionsSheet(
                         label = stringResource(R.string.chat_action_delete_for_me),
                         tint = MeeshyPalette.Error,
                         onClick = onDeleteForMe,
+                    )
+                    MessageAction.Report -> SheetAction(
+                        icon = Icons.Outlined.Flag,
+                        label = stringResource(R.string.chat_action_report),
+                        tint = MeeshyPalette.Error,
+                        onClick = onReport,
                     )
                 }
             }

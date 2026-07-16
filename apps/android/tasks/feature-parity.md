@@ -1044,7 +1044,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (LinkOpenPolicy 26, LinkMetadata 4); mutation-checked (dropping the blocked-scheme guard killed
       exactly the 3 dangerous-scheme tests). SSOT for URL-open routing that iOS leaves implicit in
       `URL(string:)` + `SafariView`.
-- [ ] Report message (typed reasons + detail); per-conversation animated themed background
+- [~] Report message (typed reasons + detail) **shipped** (slice `chat-report-message`, 2026-07-16,
+      +36 tests); per-conversation animated themed background still open.
+    - [x] **Report a message** — long-press → **Report** (offered *only* on an incoming, still-present
+      message: a genuine improvement over iOS, which appends `.report` unconditionally, even on your
+      own message). The pure `ReportReason` SSOT (`:core:model`) gained the two message-only reasons
+      `VIOLENCE`/`HATE_SPEECH` + a `messageOrdered` list (parity with iOS `ReportMessageSheet.ReportType`:
+      spam, inappropriate, harassment, violence, hate_speech, impersonation, other), while the narrower
+      user-report `ordered` list stays untouched. `ReportRequestBuilder.forMessage` + `ReportRepository.
+      reportMessage` mirror the user path (session-gated, inert `null` off-session). The submit lifecycle
+      is a pure `ReportMessageForm` reducer modelling one `ReportSubmitStatus` enum (Idle/Submitting/
+      Submitted/Error) — cleaner than iOS's three `@State` booleans — with a double-submit guard and an
+      "editing clears a prior error" rule. Wired real (exempt glue): `MessageActionMenu.Report`,
+      `ChatViewModel.openReport/selectReportReason/onReportDetailsChange/submitReport/dismissReport`, a
+      `ReportMessageSheet` bottom sheet (accent-tinted radio reasons + capped details field + toast on
+      success) in en/fr/es/pt. +36 tests (ReportReason 3, ReportRequestBuilder 4, ReportRepository 4,
+      MessageActionMenu 5, ReportMessageForm 11, ChatViewModel 7, plus the updated basic-menu order);
+      mutation-checked (dropping the `!isOutgoing` gate killed exactly the 3 outgoing-message tests).
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
 - [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
 - [ ] Member moderation: promote/demote, expel, ban, add member
