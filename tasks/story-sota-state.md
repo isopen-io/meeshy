@@ -1125,6 +1125,41 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
+## it.102 — C17 suite : sheet audience EXCEPT/ONLY (sélection utilisateurs) non localisée
+
+- Reprise du balayage systématique là où it.100 l'avait laissé HORS scope : la sheet
+  audience EXCEPT/ONLY (déclenchée depuis le picker de visibilité → « Except… » / « Only… »)
+  n'avait encore jamais été ouverte en QA. Test multi-slide en amont (ajout de 2 slides via
+  « Add a slide », navigation entre miniatures, contenu texte distinct par slide) : tout
+  fonctionne, RAS. Reorder par drag natif (`.draggable`/`.dropDestination`) et suppression
+  via `.contextMenu` (long-press) : implémentés + couverts par
+  `StoryComposerViewModelTests` (moveSlide/removeSlide/duplicateSlide), mais NON
+  vérifiables au simulateur — même limitation tooling déjà documentée (idb long-press ne
+  déclenche pas `.contextMenu` natif ; `.draggable` natif encore moins simulable qu'un
+  `DragGesture`). Pas de nouvelle investigation forcée, confiance basée code+tests.
+- Bug réel trouvé en ouvrant la sheet EXCEPT : titre « Tout le monde sauf » et placeholder
+  « Rechercher... » affichés en FR alors que « Cancel »/« OK » (mêmes clés génériques
+  `common.cancel`/`common.done`, déjà catalogués) s'affichaient correctement en EN — même
+  signature que it.95/it.98 (mélange FR/EN au sein du MÊME écran).
+- Root cause double, dans `packages/MeeshySDK/Sources/MeeshyUI/Story/AudienceUserPickerView.swift` :
+  1. Les 3 `String(localized:)` (`audience.picker.except.title`, `.only.title`, `.search`)
+     n'avaient PAS `bundle: .module` → résolution implicite contre `Bundle.main` (catalogue
+     APP), qui ne contient pas ces clés SDK-only.
+  2. Même en ajoutant `bundle: .module`, le catalogue SDK
+     (`packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings`) ne contenait
+     QUE la localisation `fr` pour ces 3 clés (`sourceLanguage: fr`) — aucune `en`/`de`/`es`.
+- Fix : `bundle: .module` ajouté aux 3 appels + `de`/`en`/`es` ajoutés au catalogue SDK pour
+  les 3 clés (convention de/en/es/fr de ce catalogue, pas de pt-BR ici — cf. it.99).
+  Build vert (62s), 800+ tests `MeeshyUITests` verts (exit 0, 0 failure). VÉRIFIÉ
+  SIMULATEUR : sheet réouverte après relaunch (draft 3-slides + sélection « Except »
+  persistés à travers le relaunch — bon signal côté draft persistence) → « Everyone
+  except » + « Search... » en EN, cohérent avec Cancel/OK. Draft de test jeté (Quit sans
+  publier) après vérification.
+- Reste HORS scope : re-tester le fond vidéo avec un vrai fichier (pas un stub simulateur),
+  audio de fond/premier-plan (lecture réelle — sheet record ouverte mais record→stop→replay
+  non concluant, friction tooling pas un défaut observé), éditeurs plein écran dédiés,
+  export MP4.
+
 ## it.101 — Investigation fond vidéo « canvas noir » : ÉCARTÉ, artefact simulateur (pas un bug)
 
 - Poursuite QA composer : sélection d'une vidéo comme fond dans le panneau Media. Le canvas
