@@ -2359,3 +2359,73 @@ W3, W1-inc.4, R12/G1-projection (plans), incréments 2 de R4/E4.
   pinner 8 groupes × N médias rendrait le store massivement non-évincable.
 - Vérif : StoryViewModelTests (4 nouveaux tests) verts sur 18.2, dont câblage réel via
   `CacheCoordinator.shared.video.isPinned` (le pin ne touche pas le réseau).
+
+## 8. Checklist QA composer↔reader — état consolidé (mise à jour à chaque itération majeure)
+
+> Référence stable (contrairement au §7, append-only) — mettre à jour l'état d'un item
+> plutôt que d'en ajouter un nouveau. `✅ sain` = vérifié simulateur cette itération ou une
+> précédente sans régression depuis. `🔧 fixé` = bug réel trouvé + corrigé + reversé à ✅
+> après. `⛔ non-testable` = limitation outillage documentée, PAS un défaut produit connu.
+> `⬜ non testé` = jamais couvert par une itération.
+
+### Outils de composition (slide courante)
+
+| Outil | État | Vérifié par | Notes |
+|---|---|---|---|
+| Media → Image (Photos picker) | ✅ sain | it.96, it.97 | Rendu composer↔reader cohérent |
+| Media → Vidéo réelle (Photos picker) | ✅ sain | it.104 | Réel fichier (10s) : rendu pixel-parfait composer+reader immédiat |
+| Media → Vidéo stub simulateur (1703 octets) | ⛔ non-testable | it.101 | Placeholder Photos par défaut, sans piste vidéo décodable — pas un bug produit |
+| Sound → Audio (fichier, `.fileImporter`) | ✅ sain | it.103-104 | Ouvre le picker Files correctement ; vide car simulateur sans fichiers audio (pas un bug) |
+| Sound → Record (voix) — navigation sheet | ✅ sain | it.104 | Ouvre/annule proprement, sélecteur langue fonctionne |
+| Sound → Record (voix) — capture réelle | ⛔ non-testable | it.104 | Nécessite un input microphone matériel réel ; `AudioRecorderManagerTests` (15 tests) couvre la state machine (init/stop/cancel/erreurs), pas la capture elle-même |
+| Sound → toggle Foreground/Background (`StoryAudioCell`) | ⬜ non testé | — | UI existe (`onToggleBackground`), jamais exercée au simulateur faute d'un item audio capturable |
+| Text → ajout/édition/style/couleur/taille/alignement/fond/cadrage/contour | ✅ sain | it.95, it.104 | Toolbar 9 boutons vérifiée, live preview correcte |
+| Drawing (PencilKit) | ⛔ non-testable | (pré-session) | Trait multi-segment non simulable via `idb ui swipe` — historique de vérification manuelle extensif documenté ailleurs |
+| Background (couleur/fond) | ✅ sain | it.104 (navigation) | Panneau accessible, chips fonctionnels |
+| Filters (grille) | ⬜ non testé | — | `StoryFilterGridView` jamais exercée cette session |
+| Timeline (édition/durée) | ✅ sain | it.98 | Bug switch-chip trouvé + fixé ; navigation panneau saine |
+
+### Multi-slide
+
+| Action | État | Vérifié par | Notes |
+|---|---|---|---|
+| Ajouter une slide (`Add a slide`) | ✅ sain | it.104 | Correctement gaté : désactivé tant que la slide courante est vide |
+| Naviguer entre slides (tap miniature) | ✅ sain | it.104 | Miniatures reflètent fidèlement fond+texte de chaque slide |
+| Réordonner (drag natif `.draggable`) | ⛔ non-testable | it.104 | Drag-and-drop natif iOS, hors de portée d'`idb ui swipe` ; `moveSlide`/`reorderSlides` couverts par `StoryComposerViewModelTests` |
+| Supprimer une slide (`.contextMenu` long-press) | ⛔ non-testable | it.104 | Long-press idb ne déclenche pas `.contextMenu` natif (limitation documentée iOS 26) ; `removeSlide` testé unitairement |
+| Dupliquer une slide (`.contextMenu`) | ⛔ non-testable | it.104 | Même limitation ; `duplicateSlide` testé unitairement |
+
+### Visibilité / audience
+
+| Écran | État | Vérifié par | Notes |
+|---|---|---|---|
+| Picker Public/Communautés/Contacts/Sauf/Seulement/Privé | ✅ sain | it.100 | 6 clés app catalog ajoutées, vérifié EN complet |
+| Sheet « Except… » (sélection utilisateurs à exclure) | 🔧 fixé | it.102 | Titre+placeholder recherche non localisés (bundle manquant + clés FR-only) |
+| Sheet « Only… » (sélection utilisateurs autorisés) | 🔧 fixé | it.102 | Même composant que Except, même fix |
+
+### Export & partage
+
+| Flux | État | Vérifié par | Notes |
+|---|---|---|---|
+| Export MP4 (bake + `UIActivityViewController`) | ✅ sain | it.103 | Bout-en-bout : bake réel (88 Ko), partage natif, fermeture propre |
+| Sous-titre sheet export | 🔧 fixé | it.103 | Clé catalogue app manquante (oubli isolé, siblings déjà OK) |
+
+### Accessibilité (VoiceOver)
+
+| Surface | État | Vérifié par | Notes |
+|---|---|---|---|
+| Canvas composer+reader (média/texte/sticker/actions) | 🔧 fixé | it.104 | Calque entier jamais localisé (littéraux FR bruts) — 4 nouvelles clés + réutilisation de 4 clés existantes |
+
+### Cohérence composer ↔ reader (exigence explicite user)
+
+| Contenu | État | Vérifié par |
+|---|---|---|
+| Image de fond | ✅ sain | it.96 |
+| Vidéo de fond (réelle) | ✅ sain | it.104 |
+| Texte | ✅ sain | it.95, it.96 |
+| Story multi-slide publiée | ✅ sain | it.104 (implicite via export) |
+
+### Reste ouvert pour une itération future
+1. Toggle Foreground/Background sur un item audio réel (bloqué tant que la capture n'est pas testable, mais le toggle UI pourrait être exercé sur un item audio importé via Files si un fichier de test y était placé).
+2. Grille de filtres (`StoryFilterGridView`) — jamais ouverte cette session.
+3. Éditeurs plein écran dédiés image/vidéo — recherche de code n'a trouvé AUCUNE feature de ce nom distincte des panneaux déjà testés (probable confusion initiale du backlog, à ne plus lister comme un gap réel sauf nouvelle preuve).
