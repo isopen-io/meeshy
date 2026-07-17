@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 154i, 2026-07-17)** — piste iOS indépendante (suffixe `i`).
+> - **154i (terminée, branche `claude/laughing-thompson-jpq5us`, base `main` HEAD post-#1995)** :
+>   passe VoiceOver + sélection de contenu de `AudioPostComposerView` (composer d'enregistrement
+>   audio + transcription on-device). Surface **fraîche** : jamais auditée a11y (les iters 44/45 n'ont
+>   flaggé que ses 2 washes hex sombres = décision design). Typo **déjà sémantique** (0 `.system(size:)`
+>   à migrer). **5 correctifs additifs** : (1) chip de langue = `.accessibilityLabel(nom complet localisé)`
+>   + `.accessibilityAddTraits(.isSelected)` — la sélection n'était portée que par la couleur (fond
+>   gradient), invisible VoiceOver ; helper `fullDisplayName` calqué sur l'idiome existant du même fichier
+>   (0 clé i18n). (2) `centerContent` décoratif (waveform/sceau/micro/spinner) → `.accessibilityHidden(true)`
+>   (état parlé porté par `durationLabel`). (3) 4 glyphes SF inline décoratifs (globe/text.bubble/triangle
+>   erreur/filtre) → `.accessibilityHidden`. (4) bouton « Plus » ambigu → `.accessibilityLabel("Plus de langues")`
+>   (1 `String(localized:defaultValue:)` inline, 0 xcstrings). (5) texte de transcription = `.textSelection(.enabled)`
+>   (contenu utilisateur copiable, thème 74i/86i/98i). 1 fichier, 0 logique / 0 test / 0 clé xcstrings neuve.
+>   Gate = CI `ios-tests` (env Linux, pas de build Xcode local). PR à venir.
+> - **Numéro 154i** = strictement > plus haut en vol (153i = #1994 `MessageDetailSentimentTab`) pour éviter la collision.
+> - **⚠️ `AudioPostComposerView` VoiceOver/sélection SOLDÉ** : ne plus reprendre (chip `.isSelected`, glyphes déco
+>   masqués, transcription sélectionnable, label « Plus de langues »). Washes sombres = décision design, ne pas convertir.
+> - **Base de départ 155i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private` cross-file),
+>   traîne 2/1 `.system` (`BubbleStandardLayout` — prudent Zero-re-render, `WebRTCVideoView`…), ou passe state-of-the-art.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
