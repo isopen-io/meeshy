@@ -1,6 +1,7 @@
 package me.meeshy.app.feed
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,6 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -78,7 +85,7 @@ internal fun PostCommentsSection(
             )
             else -> Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 state.comments.forEach { comment ->
-                    CommentRow(comment = comment)
+                    CommentRow(comment = comment, onToggleLike = viewModel::toggleLike)
                 }
             }
         }
@@ -101,7 +108,7 @@ internal fun PostCommentsSection(
 }
 
 @Composable
-private fun CommentRow(comment: CommentPresentation) {
+private fun CommentRow(comment: CommentPresentation, onToggleLike: (String) -> Unit) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(
         modifier = Modifier
@@ -157,6 +164,36 @@ private fun CommentRow(comment: CommentPresentation) {
                     color = MeeshyTheme.tokens.textPrimary,
                 )
             }
+            CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
+        }
+    }
+}
+
+@Composable
+private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (String) -> Unit) {
+    val label = stringResource(if (comment.isLiked) R.string.feed_unlike else R.string.feed_like)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier
+            .padding(top = MeeshySpacing.xs)
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .clickable(enabled = !comment.isPending) { onToggleLike(comment.id) }
+            .semantics { role = Role.Button; contentDescription = label }
+            .padding(vertical = 2.dp, horizontal = 2.dp),
+    ) {
+        Icon(
+            imageVector = if (comment.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+            contentDescription = null,
+            tint = if (comment.isLiked) MeeshyPalette.Error else MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        if (comment.likeCount > 0) {
+            Text(
+                text = comment.likeCount.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (comment.isLiked) MeeshyPalette.Error else MeeshyTheme.tokens.textSecondary,
+            )
         }
     }
 }

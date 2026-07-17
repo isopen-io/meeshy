@@ -197,4 +197,86 @@ class PostCommentsViewModelTest {
         vm.submit("hi")
         coVerify(exactly = 0) { repository.addComment(any(), any(), any(), any()) }
     }
+
+    private fun likedComment(id: String) =
+        ApiPostComment(id = id, likeCount = 2, currentUserReactions = listOf("❤️"))
+
+    @Test
+    fun `a loaded like from the server seeds the liked state`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(likedComment("a"), comment("b")))
+        val vm = viewModel()
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.comments.single { it.id == "a" }.isLiked).isTrue()
+            assertThat(s.comments.single { it.id == "b" }.isLiked).isFalse()
+        }
+    }
+
+    @Test
+    fun `toggleLike optimistically likes an unliked comment and calls likeComment`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
+        coEvery { repository.likeComment("p1", "a") } returns NetworkResult.Success(Unit)
+        val vm = viewModel()
+        vm.toggleLike("a")
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.comments.single { it.id == "a" }.isLiked).isTrue()
+        }
+        coVerify(exactly = 1) { repository.likeComment("p1", "a") }
+        coVerify(exactly = 0) { repository.unlikeComment(any(), any()) }
+    }
+
+    @Test
+    fun `toggleLike optimistically unlikes a liked comment and calls unlikeComment`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(likedComment("a")))
+        coEvery { repository.unlikeComment("p1", "a") } returns NetworkResult.Success(Unit)
+        val vm = viewModel()
+        vm.toggleLike("a")
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.comments.single { it.id == "a" }.isLiked).isFalse()
+            assertThat(s.comments.single { it.id == "a" }.likeCount).isEqualTo(1)
+        }
+        coVerify(exactly = 1) { repository.unlikeComment("p1", "a") }
+    }
+
+    @Test
+    fun `toggleLike rolls back the optimistic like when the network fails`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
+        coEvery { repository.likeComment("p1", "a") } returns NetworkResult.Failure(ApiError(message = "nope"))
+        val vm = viewModel()
+        vm.toggleLike("a")
+        vm.state.test {
+            assertThat(awaitItem().comments.single { it.id == "a" }.isLiked).isFalse()
+        }
+    }
+
+    @Test
+    fun `toggleLike guards a double tap so only one network call fires`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
+        val gate = CompletableDeferred<NetworkResult<Unit>>()
+        coEvery { repository.likeComment("p1", "a") } coAnswers { gate.await() }
+        val vm = viewModel()
+        vm.toggleLike("a")
+        vm.toggleLike("a")
+        gate.complete(NetworkResult.Success(Unit))
+        coVerify(exactly = 1) { repository.likeComment("p1", "a") }
+    }
+
+    @Test
+    fun `toggleLike is inert for a blank postId`() = runTest {
+        val vm = viewModel(postId = null)
+        vm.toggleLike("a")
+        coVerify(exactly = 0) { repository.likeComment(any(), any()) }
+        coVerify(exactly = 0) { repository.unlikeComment(any(), any()) }
+    }
+
+    @Test
+    fun `toggleLike is inert for a blank commentId`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
+        val vm = viewModel()
+        vm.toggleLike("  ")
+        coVerify(exactly = 0) { repository.likeComment(any(), any()) }
+    }
 }

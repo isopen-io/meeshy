@@ -54,6 +54,7 @@ class PostCommentsViewModel @Inject constructor(
 
     private val thread = MutableStateFlow(CommentThreadState())
     private val status = MutableStateFlow(Status())
+    private val likes = MutableStateFlow(CommentLikeState())
     private var pendingSeq = 0
 
     private val _state = MutableStateFlow(PostCommentsUiState())
@@ -61,8 +62,8 @@ class PostCommentsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(thread, sessionRepository.currentUser, status) { t, user, st ->
-                project(t, user, st)
+            combine(thread, sessionRepository.currentUser, status, likes) { t, user, st, likeState ->
+                project(t, user, st, likeState)
             }.collect { projected -> _state.value = projected }
         }
         loadInitial()
@@ -98,6 +99,7 @@ class PostCommentsViewModel @Inject constructor(
                         val more = page.size >= PAGE_SIZE
                         val nextCursor = if (more) page.lastOrNull()?.id else null
                         thread.update { it.appended(page, nextCursor, more) }
+                        likes.update { it.seeded(page, HEART_EMOJI) }
                         status.update { it.copy(isLoading = false, isLoadingMore = false, error = null) }
                     }
                     is NetworkResult.Failure ->
@@ -145,6 +147,34 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Like/unlike a comment optimistically: the heart flips and the count moves instantly
+     * (Instant-App feedback), then the matching endpoint confirms it or a failure rolls it
+     * back. A blank post/comment id or a toggle already in flight for the same comment is
+     * inert — [CommentLikeState.beginToggle] returns `null` on the re-entrancy guard.
+     */
+    fun toggleLike(commentId: String) {
+        if (postId.isBlank() || commentId.isBlank()) return
+        val wasLiked = likes.value.isLiked(commentId)
+        val began = likes.value.beginToggle(commentId) ?: return
+        likes.value = began
+        viewModelScope.launch {
+            try {
+                val result =
+                    if (wasLiked) postRepository.unlikeComment(postId, commentId)
+                    else postRepository.likeComment(postId, commentId)
+                when (result) {
+                    is NetworkResult.Success -> likes.update { it.settle(commentId) }
+                    is NetworkResult.Failure -> likes.update { it.rollback(commentId) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                likes.update { it.rollback(commentId) }
+            }
+        }
+    }
+
     private fun optimisticRow(tempId: String, content: String): ApiPostComment {
         val me = sessionRepository.currentUser.value
         return ApiPostComment(
@@ -154,10 +184,21 @@ class PostCommentsViewModel @Inject constructor(
         )
     }
 
-    private fun project(thread: CommentThreadState, user: MeeshyUser?, st: Status): PostCommentsUiState {
+    private fun project(
+        thread: CommentThreadState,
+        user: MeeshyUser?,
+        st: Status,
+        likeState: CommentLikeState,
+    ): PostCommentsUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
         val rows = thread.comments.map {
-            CommentProjection.build(it, prefs, config.socketUrl, isPending = it.id in thread.pendingIds)
+            CommentProjection.build(
+                it,
+                prefs,
+                config.socketUrl,
+                isPending = it.id in thread.pendingIds,
+                likeState = likeState,
+            )
         }
         val showSkeleton = st.isLoading && !thread.hasLoaded && thread.comments.isEmpty() && st.error == null
         return PostCommentsUiState(
@@ -175,6 +216,7 @@ class PostCommentsViewModel @Inject constructor(
     companion object {
         const val POST_ID_ARG = "postId"
         private const val PAGE_SIZE = 20
+        private const val HEART_EMOJI = "❤️"
     }
 }
 
