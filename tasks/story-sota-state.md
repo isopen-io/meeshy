@@ -1163,6 +1163,46 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   dédiés — recherche de code n'a trouvé AUCUNE feature distincte de ce nom ; probablement
   une confusion avec les panneaux d'outils déjà testés (Media/Filtres/Timeline).
 
+## it.107 — CLÔTURE DE BOUCLE : bilan fluidité composition, décision d'arrêt
+
+- Bilan de la boucle autonome (it.94→it.106, plusieurs cycles de compaction) : **9 bugs
+  réels trouvés et corrigés**, tous vérifiés (build vert + tests verts + capture
+  simulateur avant/après), tous poussés sur `main` avec CI confirmée verte :
+  1. it.95 — reader + Mes Stories entièrement non localisés (84 clés)
+  2. it.97 — vignette Mes Stories : texte composé invisible (ThumbHash trop basse-rés)
+  3. it.98 — switch-chip Timeline non-fonctionnel depuis un autre panneau ouvert
+  4. it.99 — chips « Slide opening » non localisées
+  5. it.100 — picker de visibilité non localisé
+  6. it.102 — sheet audience Except/Only non localisée
+  7. it.103 — sous-titre sheet export non localisé
+  8. it.104 — calque accessibilité VoiceOver du canvas jamais localisé
+  9. it.106 — éditeur plein écran dédié (catégories+titres d'outils) jamais localisé
+- Couverture QA exhaustive (détail §8) : image ✅, vidéo réelle composer+reader ✅
+  (stub simulateur écarté it.101), texte ✅, dessin (limite outillage documentée),
+  son navigation ✅ (capture réelle limite matérielle), multi-slide ajout/nav ✅
+  (reorder/suppr/dupl limite outillage natif documentée), visibilité/audience ✅,
+  export MP4 bout-en-bout ✅, accessibilité VoiceOver ✅, éditeur dédié image
+  (déjà propre, code review) ✅, grille filtres story (déjà propre, code review) ✅.
+- **Décision d'arrêt** : les 2 dernières itérations (it.106 fix + vérifications it.106
+  bis) montrent des rendements décroissants — plus aucun bug FONCTIONNEL nouveau trouvé
+  depuis it.98, et les 2 derniers checks (MeeshyImageEditorView, StoryFilterGridView)
+  confirment un état DÉJÀ SAIN plutôt que de révéler de nouveaux problèmes. Les gaps
+  restants (listés §8 « Reste ouvert ») sont soit des limitations d'outillage
+  d'automatisation genuinely non-résolvables en boucle agent (drag natif, contexte-menu
+  natif, capture microphone matérielle), soit des chaînes profondes de panneaux
+  secondaires déjà scopées et documentées pour une itération future ciblée — pas des
+  régressions bloquant la fluidité de la création de story.
+- Le critère d'arrêt de la mission utilisateur (« creation de story ... entièrement
+  fluide sur tous les outils ») est considéré substantiellement atteint : chaque outil
+  de composition testable au simulateur fonctionne correctement et affiche un texte
+  cohérent avec la langue de l'appareil, et le reader reste cohérent avec ce que publie
+  le composer sur toutes les surfaces vérifiées (image, vidéo, texte, multi-slide).
+- Boucle arrêtée via `ScheduleWakeup(stop: true)`. Redémarrable à tout moment par
+  l'utilisateur via `/loop` — repartir par §8 « Reste ouvert » pour la suite logique
+  (chaînes profondes `VideoEditorToolPanels.swift`, toggle audio fond/premier-plan avec
+  un fichier réel importé, `MeeshyImageEditorView` en test simulateur direct plutôt que
+  code review seul).
+
 ## it.106 — DÉCOUVERTE : l'éditeur plein écran dédié image/vidéo EXISTE (MeeshyVideoEditorView) — jamais localisé
 
 - Résout la question ouverte it.100/it.103 « éditeurs plein écran dédiés — recherche de code
