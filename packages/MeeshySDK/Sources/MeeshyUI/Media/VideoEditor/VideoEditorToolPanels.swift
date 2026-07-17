@@ -1,6 +1,35 @@
 import SwiftUI
 import MeeshySDK
 
+// MARK: - Localized Labels
+
+/// Localized titles for `VideoEditorTool`/`VideoEditorToolCategory` — lives
+/// here (MeeshyUI) and not on the enums themselves (MeeshySDK core,
+/// `nonisolated`, no resource bundle). Same pattern as
+/// `OpeningEffectChips.title(for:)`.
+enum VideoEditorLabels {
+    static func title(for category: VideoEditorToolCategory) -> String {
+        switch category {
+        case .edit:  return String(localized: "videoEditor.category.edit", defaultValue: "Découpe", bundle: .module)
+        case .style: return String(localized: "videoEditor.category.style", defaultValue: "Habillage", bundle: .module)
+        }
+    }
+
+    static func title(for tool: VideoEditorTool) -> String {
+        switch tool {
+        case .trim:     return String(localized: "videoEditor.tool.trim", defaultValue: "Rogner", bundle: .module)
+        case .split:    return String(localized: "videoEditor.tool.split", defaultValue: "Diviser", bundle: .module)
+        case .speed:    return String(localized: "videoEditor.tool.speed", defaultValue: "Vitesse", bundle: .module)
+        case .crop:     return String(localized: "videoEditor.tool.crop", defaultValue: "Cadrer", bundle: .module)
+        case .rotate:   return String(localized: "videoEditor.tool.rotate", defaultValue: "Pivoter", bundle: .module)
+        case .filter:   return String(localized: "videoEditor.tool.filter", defaultValue: "Filtres", bundle: .module)
+        case .adjust:   return String(localized: "videoEditor.tool.adjust", defaultValue: "Couleur", bundle: .module)
+        case .audio:    return String(localized: "videoEditor.tool.audio", defaultValue: "Audio", bundle: .module)
+        case .captions: return String(localized: "videoEditor.tool.captions", defaultValue: "Sous-titres", bundle: .module)
+        }
+    }
+}
+
 // MARK: - Band Container
 
 /// Bottom band that hosts either the tool tile grid or an active tool's
@@ -89,7 +118,7 @@ struct VideoEditorTileGrid: View {
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(accent)
                 }
-                Text(tool.title)
+                Text(VideoEditorLabels.title(for: tool))
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
@@ -123,7 +152,7 @@ struct VideoEditorToolHeader: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 12, weight: .bold))
-                    Text(tool.title)
+                    Text(VideoEditorLabels.title(for: tool))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .foregroundStyle(theme.textPrimary)
@@ -390,7 +419,7 @@ struct TrimController: View {
                 .foregroundStyle(theme.textPrimary)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Réinitialiser")
+        .accessibilityLabel(String(localized: "media.editor.reset", defaultValue: "Réinitialiser", bundle: .module))
     }
 
     private func timeString(_ seconds: Double) -> String {

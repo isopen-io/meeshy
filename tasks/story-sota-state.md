@@ -1163,6 +1163,54 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   dédiés — recherche de code n'a trouvé AUCUNE feature distincte de ce nom ; probablement
   une confusion avec les panneaux d'outils déjà testés (Media/Filtres/Timeline).
 
+## it.106 — DÉCOUVERTE : l'éditeur plein écran dédié image/vidéo EXISTE (MeeshyVideoEditorView) — jamais localisé
+
+- Résout la question ouverte it.100/it.103 « éditeurs plein écran dédiés — recherche de code
+  infructueuse ». Root cause de l'échec de recherche précédent : mauvais noms grep
+  (`FullScreenImageEditor` au lieu du nom réel `MeeshyVideoEditorView`/`MeeshyImageEditorView`,
+  `packages/MeeshySDK/Sources/MeeshyUI/Media/`). Trouvé par exploration UI directe : tap sur
+  le crayon « Éditer » d'un média dans le panneau Media → éditeur plein écran professionnel
+  complet (Simple/Pro, Undo/Redo, timeline zoomable avec waveform, 2 catégories FAB
+  Découpe/Habillage → 9 outils : Rogner/Diviser/Vitesse/Cadrer/Pivoter/Filtres/Couleur/
+  Audio/Sous-titres). Fonctionnellement SAIN : lecture vidéo réelle vérifiée (frames
+  changent), filtre appliqué avec vrai changement visuel (Warm → teinte jaune confirmée),
+  fermeture propre.
+- Bug réel (scope large, ~30 chaînes) : intégralité des libellés de catégories/outils en FR
+  brut alors que le chrome parent (Simple/Pro/Finish/Close/Undo/Redo) s'affiche déjà en EN
+  — MAIS ce dernier n'est PAS localisé non plus : investigation a montré que « Undo »/« Redo »
+  proviennent des noms SF Symbol par défaut d'Apple (localisés OS, aucun code app), et
+  « Simple »/« Pro » sont des mots identiques FR/EN (coïncidence, pas un fix). Le bouton
+  « Finish » reste un mystère non résolu (le code source montre `Text("Terminer")` en dur
+  sans wrapper de localisation, mais le rendu live confirme « Finish » — mécanisme non
+  identifié, HORS scope car déjà correct empiriquement, ne pas toucher).
+- Root cause des libellés catégorie/outil : `VideoEditorToolCategory`/`VideoEditorTool` sont
+  des `nonisolated enum` dans MeeshySDK core-adjacent (en fait déjà dans MeeshyUI mais
+  `nonisolated`) — même piège que `StoryTransitionEffect.label` (it.99) : un `nonisolated
+  enum` ne peut pas appeler `Bundle.module` (MainActor-isolé dans ce target) depuis une
+  computed property sur le TYPE lui-même.
+- Fix (scope volontairement limité aux libellés les PLUS visibles — catégories + titres
+  d'outils + bouton Réinitialiser, PAS les ~15 chaînes plus profondes par panneau) : pattern
+  `OpeningEffectChips.title(for:)` répliqué → nouveau `VideoEditorLabels` enum (static
+  `title(for: VideoEditorToolCategory)` / `title(for: VideoEditorTool)`) dans
+  `VideoEditorToolPanels.swift`, 3 call sites reliés (`VideoEditorFABColumn.swift` +
+  2× `VideoEditorToolPanels.swift`). 11 nouvelles clés catalogue SDK (2 catégories + 9
+  outils, de/en/es/fr). `Réinitialiser` (TrimController, accessibilité) réutilise la clé
+  déjà 5-langues `media.editor.reset` (trouvée existante). `VideoFilterPreset.displayName`
+  (Original/Vivid/Warm/Cool/Mono/Noir/Vintage/Fade) volontairement PAS touché — noms de
+  marque universels façon Instagram/VSCO, jamais traduits par convention, pas un bug.
+- Vérifié simulateur (clean+rebuild, piège stale-artifact contourné) : tuiles Habillage →
+  « Crop »/« Rotate »/« Filters »/« Color » en EN ; header panneau Filtres → « Filters ».
+  Build vert (54s), 800+ tests `MeeshyUITests` verts (exit 0, aucune régression — aucun test
+  existant ne pinnait ces libellés).
+- **Reste HORS scope, documenté pour itération future** : ~15 chaînes plus profondes par
+  panneau (readouts Début/Durée/Fin, « Début ici »/« Fin ici », hint poignées timeline,
+  « Diviser au point de lecture », « Segment N », « Toute la vidéo »/« Segment sélectionné »,
+  « Original » du CropController — PAS le même que le filtre, ratio libre —, « Recommandé
+  pour X : Y », Gauche/Droite/Rotation, Luminosité/Contraste/Saturation, Son/Muet/Actif,
+  Volume/Fondu d'entrée/Fondu de sortie) + le mystère « Terminer »→« Finish » non résolu.
+  `MeeshyImageEditorView.swift` (variante image, structure probablement similaire) pas
+  auditée du tout cette itération.
+
 ## it.103 — C17 suite : export MP4 (sous-titre sheet non localisé) + vérif flux complet
 
 - Reprise HORS scope it.102 : export MP4 (jamais testé de bout en bout jusqu'ici).
@@ -2425,7 +2473,18 @@ W3, W1-inc.4, R12/G1-projection (plans), incréments 2 de R4/E4.
 | Texte | ✅ sain | it.95, it.96 |
 | Story multi-slide publiée | ✅ sain | it.104 (implicite via export) |
 
+### Éditeur plein écran dédié (`MeeshyVideoEditorView` / `MeeshyImageEditorView`)
+
+| Surface | État | Vérifié par | Notes |
+|---|---|---|---|
+| Navigation (Simple/Pro, Undo/Redo, Finish, timeline zoomable) | ✅ sain | it.106 | Lecture vidéo réelle + filtre appliqué (changement visuel confirmé) |
+| Libellés catégories (Découpe/Habillage) + 9 titres d'outils | 🔧 fixé | it.106 | `nonisolated enum` sans accès bundle — pattern `OpeningEffectChips` répliqué, 11 clés catalogue |
+| Réinitialiser (TrimController, a11y) | 🔧 fixé | it.106 | Réutilise `media.editor.reset` (déjà 5 langues) |
+| ~15 chaînes profondes par panneau (readouts, hints, segments, sliders) | ⬜ non testé | — | Scope volontairement différé — voir it.106 pour la liste exhaustive |
+| `MeeshyImageEditorView.swift` (variante image) | ⬜ non testé | — | Jamais ouverte, structure probablement similaire au vidéo |
+| Mystère « Terminer »→« Finish » | ⬜ non résolu | it.106 | Rendu EN confirmé en live malgré `Text("Terminer")` en dur dans le code lu — mécanisme non identifié, NE PAS toucher (déjà correct) |
+
 ### Reste ouvert pour une itération future
 1. Toggle Foreground/Background sur un item audio réel (bloqué tant que la capture n'est pas testable, mais le toggle UI pourrait être exercé sur un item audio importé via Files si un fichier de test y était placé).
-2. Grille de filtres (`StoryFilterGridView`) — jamais ouverte cette session.
-3. Éditeurs plein écran dédiés image/vidéo — recherche de code n'a trouvé AUCUNE feature de ce nom distincte des panneaux déjà testés (probable confusion initiale du backlog, à ne plus lister comme un gap réel sauf nouvelle preuve).
+2. Grille de filtres du COMPOSER STORY (`StoryFilterGridView`, différente de l'éditeur plein écran) — jamais ouverte cette session.
+3. Localisation complète des ~15 chaînes profondes de `VideoEditorToolPanels.swift` (readouts trim, hints, segments split, sliders couleur/audio) + audit de `MeeshyImageEditorView.swift`.
