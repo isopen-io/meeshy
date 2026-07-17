@@ -2481,7 +2481,7 @@ W3, W1-inc.4, R12/G1-projection (plans), incréments 2 de R4/E4.
 | Libellés catégories (Découpe/Habillage) + 9 titres d'outils | 🔧 fixé | it.106 | `nonisolated enum` sans accès bundle — pattern `OpeningEffectChips` répliqué, 11 clés catalogue |
 | Réinitialiser (TrimController, a11y) | 🔧 fixé | it.106 | Réutilise `media.editor.reset` (déjà 5 langues) |
 | ~15 chaînes profondes par panneau (readouts, hints, segments, sliders) | ⬜ non testé | — | Scope volontairement différé — voir it.106 pour la liste exhaustive |
-| `MeeshyImageEditorView.swift` (variante image) | ⬜ non testé | — | Jamais ouverte, structure probablement similaire au vidéo |
+| `MeeshyImageEditorView.swift` (variante image) | ✅ sain | it.106 (code review) | Implémentation SŒUR distincte, PAS un partage de composants avec le vidéo — 22 appels `String(localized:...,bundle:.module)`, namespace catalogue `media.editor.*` propre dès l'origine (Recadrer/Filtres/Ajuster/Effets/Terminé/Annuler/Historique/Pivoter/Miroir/Réinitialiser tous couverts). Aucun fix requis. |
 | Mystère « Terminer »→« Finish » | ⬜ non résolu | it.106 | Rendu EN confirmé en live malgré `Text("Terminer")` en dur dans le code lu — mécanisme non identifié, NE PAS toucher (déjà correct) |
 
 ### Reste ouvert pour une itération future
