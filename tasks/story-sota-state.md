@@ -2430,7 +2430,7 @@ W3, W1-inc.4, R12/G1-projection (plans), incréments 2 de R4/E4.
 | Text → ajout/édition/style/couleur/taille/alignement/fond/cadrage/contour | ✅ sain | it.95, it.104 | Toolbar 9 boutons vérifiée, live preview correcte |
 | Drawing (PencilKit) | ⛔ non-testable | (pré-session) | Trait multi-segment non simulable via `idb ui swipe` — historique de vérification manuelle extensif documenté ailleurs |
 | Background (couleur/fond) | ✅ sain | it.104 (navigation) | Panneau accessible, chips fonctionnels |
-| Filters (grille) | ⬜ non testé | — | `StoryFilterGridView` jamais exercée cette session |
+| Filters (grille, `StoryFilterGridView`) | ✅ sain (code review) | it.106 | Point d'entrée UI non localisé au simulateur (`.filters` `BandCategory` sans FAB direct dans la grille à 6 tuiles — probablement nichée ailleurs, non trouvée cette itération) mais code source propre : header « Effets »/« Effects » déjà localisé (`story.tool.filters`), seul « Original » en dur (même convention volontaire noms de marque que `VideoFilterPreset`) |
 | Timeline (édition/durée) | ✅ sain | it.98 | Bug switch-chip trouvé + fixé ; navigation panneau saine |
 
 ### Multi-slide
