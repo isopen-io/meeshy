@@ -1125,6 +1125,39 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
+## it.97 — vignette « Mes stories » : ThumbHash trop basse-résolution pour le texte, overlay dédié
+
+- Suite directe d'it.96. Re-preuve AVANT fix (protocole) : `MyStoryThumbnailResolver`
+  (nouveau, testé 5/5) branché sur `storyEffects.thumbHash` d'abord — décodage confirmé
+  RÉUSSI en isolation (test diagnostic temporaire : `UIImage.fromThumbHash(hash)` sur le
+  hash RÉEL de production → image 18×32 valide, PAS nil) MAIS invisible à l'écran une fois
+  affiché. Cause réelle (pas un bug de câblage, un plafond intrinsèque de ThumbHash) :
+  18×32px = résolution insuffisante pour préserver des glyphes de texte fin — un smudge de
+  luminance légèrement plus clair, indiscernable visuellement de la couleur de fond unie.
+  Vérifié log runtime (`story.storyEffects?.thumbHash` bien peuplé, pas nil — la donnée
+  ÉTAIT correcte, seul le pixel budget du format ThumbHash est en cause).
+- Fix final : cascade fond (composite ThumbHash → thumbnailUrl brut → icône) INCHANGÉE
+  (reste une amélioration réelle pour les stories vidéo/couleur où le hint de teinte/forme
+  a de la valeur) + overlay `textObjectsOverlay` DÉDIÉ par-dessus, qui rejoue
+  `storyEffects.textObjects` directement (aucun chargement réseau requis, contrairement au
+  média) avec le même positionnement normalisé x/y que `SlideMiniPreview.textItem` (composer),
+  à l'échelle miniature (36-64pt). `SlideMiniPreview` lui-même NON réutilisé tel quel : son
+  layer de fond force `Color.black` dès `hasVisualBackgroundMedia` — incompatible avec la
+  cascade CachedAsyncImage/ThumbHash déjà en place dans `MyStoryRow` (aurait masqué le fond
+  réel). D'où l'overlay texte-seul dédié plutôt qu'une réutilisation monolithique.
+- `MyStoryThumbnailResolver` (nouveau fichier, pattern `StoryThumbnailSizing` : enum pur
+  statique + test XCTest co-localisé) : 5/5 tests. `xcodegen generate` requis (2 nouveaux
+  fichiers, `meeshy.sh build` ne le lance pas) — build number restauré 1248 après (piège
+  connu). 20/20 tests (resolver + sizing + guards MyStories + Localization) verts.
+  VÉRIFIÉ SIMULATEUR AVANT/APRÈS (captures scratchpad it97-*) : « Hello SOTA » désormais
+  lisible dans la vignette liste, avant = carré violet uni sans aucune trace de texte.
+  Commit `a30c1b827`.
+- LEÇON méthodo : avoir un test qui prouve le DÉCODAGE réussit (`fromThumbHash` != nil)
+  n'était PAS suffisant pour prouver le FIX correct — la preuve visuelle simulateur reste
+  irremplaçable pour juger de la LISIBILITÉ perçue, pas seulement de la non-nullité d'une
+  valeur. Repéré via une instrumentation `print()` temporaire + capture du flux console
+  (`simctl launch --console-pty`), retirée avant commit.
+
 ## it.96 — Vérif composer→reader (image+texte) : COHÉRENTE ; nouveau finding vignette liste
 
 - Vérification directe demandée par le user (« veiller à ce que le READER FONCTIONNE en
