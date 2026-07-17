@@ -1,5 +1,42 @@
 # Progress — state & what to do next
 
+> On 2026-07-17 **bookmarked posts (saved) feed** landed (slice `feed-bookmarks-screen`, feature-parity §Feed →
+> "Bookmarked posts feed (saved posts) with infinite scroll" ✅ — the fifth §Feed slice, and the first
+> **stand-alone screen** the feed area gets beyond the main timeline). iOS has a `BookmarksView` (cache-first
+> load, cursor pagination, optimistic `removeBookmark`); Android had `PostRepository.getBookmarks` but **no**
+> saved-posts UI, no pagination watermark on that call, and no entry point. **Ships a full vertical:**
+> (1) `sdk-core` — `PostRepository.getBookmarksPage(cursor,limit): NetworkResult<BookmarkPage>` using `rawApiCall`
+> to keep the `nextCursor`/`hasMore` envelope the plain `getBookmarks` drops (folds `success:false`/dataless into
+> `Failure` like `apiCall`); (2) `:feature:feed` pure — `BookmarksListState` (immutable accumulation SSOT:
+> `appended` de-dups a page by id + advances the watermark + marks `hasLoaded`; `removed` is inert for an absent
+> id; `canLoadMore = hasMore && cursor != null`, so a malformed `hasMore`-with-no-cursor tail can't spin an
+> unbounded loop); (3) `BookmarksViewModel` — cursor paging via the pure state, **optimistic un-bookmark**
+> (snapshot → `removed` → `removeBookmark` → restore snapshot on `Failure`/throw), skeleton only on a cold empty
+> load, pull-to-refresh (reset + reload), infinite scroll at a 5-from-tail threshold; projects `ApiPost` →
+> `FeedPostPresentation` through the **shared** `FeedPostBuilder` so the Prisme language rendering matches the
+> main feed. **Coherence:** reached from a new feed top-bar bookmark action (`onOpenSaved` → `Routes.SAVED_POSTS`),
+> back-arrow returns to the feed (no dead end); accent-tinted (`Indigo500`) filled-bookmark = the remove affordance.
+> **SSOT refactor:** extracted the anonymous-session `EmptyContentPreferences` out of `FeedViewModel` into an
+> `internal` top-level object both view models share. **+29 tests** (`BookmarksListStateTest` 12 — append seed/
+> dedup/order-preserve/empty-page-still-loads/full-dup, remove match/sole/absent-inert, canLoadMore true/no-more/
+> no-cursor, cold default; `BookmarksViewModelTest` 12 — first-page populate, cold skeleton→settled (deferred gate),
+> failure surfaces+no skeleton, empty→empty-state, load guarded after first load, loadMore appends near tail /
+> inert when no-more / inert when far from tail, removeBookmark optimistic+persist / rollback-on-failure /
+> inert-for-absent, refresh reset+reload; `PostRepositoryTest` +5 — page watermark, cursor forwarded, `success:false`
+> → Failure, transport → Failure, hasMore defaults false when pagination absent). **Gate:** `:feature:feed` +
+> `:sdk-core` `testDebugUnitTest` → BookmarksListState 12/0, BookmarksViewModel 12/0, PostRepositoryTest 15/0,
+> full feed module green (FeedViewModel 39, FeedPostBuilder 19, FeedRealtimeReducer 51); `:app:assembleDebug` →
+> APK assembles. The only 2 red are the **known environmental `:sdk-core` DataStore timeout flakes**
+> (`InterfaceLanguageStoreTest`, `MediaDownloadPreferencesStoreTest` — `TimeoutCancellationException`, unrelated to
+> this diff, green in isolation at `--max-workers=1`). Reviewer **PASS** (diff `apps/android` only; **SDK purity** —
+> the pagination/removal laws are pure `:feature:feed` building blocks, the stateless page fetch sits in `:sdk-core`
+> beside `getBookmarks`; **SSOT** — one `BookmarksListState`, shared `FeedPostBuilder` + `EmptyContentPreferences`;
+> **UDF** + immutable `UiState`; **instant-app** — skeleton only on cold empty, no blocking spinner when posts exist;
+> accent-coherent, natural back gesture, no dead end; no coverage floor lowered, no test weakened). **Next slice:**
+> §Feed still-open — the feed post **detail** screen (text/media/repost + threaded comments + post-detail room
+> subscriptions), the **statuses/moods bar** (§G), OR user-profile/community posts feeds (both can reuse the
+> `getUserPosts`/`getCommunityPosts` repo calls + this cursor-list + `FeedPostBuilder` pattern).
+
 > On 2026-07-17 **feed bookmark / un-bookmark — optimistic toggle + live `post:bookmarked` overlay** landed
 > (slice `feed-realtime-bookmark-sync`, feature-parity §Feed → "Bookmark / un-bookmark" ✅ — the fourth §Feed
 > realtime slice, extending the like-overlay pattern of `feed-realtime-like-sync` (#1992) to the bookmark

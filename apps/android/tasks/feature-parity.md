@@ -1679,7 +1679,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [ ] Feed post detail with text/media/repost, translation flags, threaded comments
 - [ ] User-profile posts feed + community posts feed
-- [ ] Bookmarked posts feed (saved posts) with infinite scroll
+- [x] Bookmarked posts feed (saved posts) with infinite scroll — pure `BookmarksListState`
+      (dedup-append cursor pagination + optimistic `removed` + `canLoadMore` law) driving
+      `BookmarksViewModel` (cursor paging, optimistic un-bookmark with rollback, skeleton-on-cold,
+      pull-to-refresh); `PostRepository.getBookmarksPage` carries the pagination watermark; reached
+      from the feed top-bar bookmark action → `Routes.SAVED_POSTS` (slice `feed-bookmarks-screen`, 2026-07-17)
 - [ ] Post-detail room real-time subscriptions
 - [ ] Story repost-embed cell in the feed
 
