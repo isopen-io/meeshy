@@ -13,7 +13,6 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
-import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.post.PostRepository
@@ -314,15 +313,6 @@ private fun CacheResult<List<ApiPost>>.postsOrNull(): List<ApiPost>? = when (thi
     is CacheResult.Syncing -> value
     CacheResult.Empty -> emptyList()
 }
-
-private fun Map<String, ApiPostTranslationEntry>?.toTranslationRows():
-    List<LanguageResolver.TranslationLike> =
-    this?.map { (code, entry) -> PostTranslationRow(code, entry.text) }.orEmpty()
-
-private data class PostTranslationRow(
-    override val targetLanguage: String,
-    override val translatedContent: String,
-) : LanguageResolver.TranslationLike
 
 private fun List<ApiPost>.toPresentations(
     preferences: LanguageResolver.ContentLanguagePreferences,

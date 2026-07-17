@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
-import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.ui.component.bubble.LanguageChip
@@ -152,15 +151,6 @@ object FeedPostBuilder {
         this == originalCode || post.translations?.any {
             it.key.normalizedCode() == this && it.value.text.isNotBlank()
         } == true
-
-    private fun Map<String, ApiPostTranslationEntry>?.toTranslationRows():
-        List<LanguageResolver.TranslationLike> =
-        this?.map { (code, entry) -> PostTranslationRow(code, entry.text) }.orEmpty()
-
-    private data class PostTranslationRow(
-        override val targetLanguage: String,
-        override val translatedContent: String,
-    ) : LanguageResolver.TranslationLike
 
     private fun String?.normalizedCode(): String? =
         this?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }

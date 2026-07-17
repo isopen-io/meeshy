@@ -22,6 +22,10 @@
     <string name="user_posts_title">Publicações</string>
     <string name="user_posts_empty">Nenhuma publicação ainda</string>
     <string name="user_posts_back">Voltar</string>
+    <string name="post_detail_title">Publicação</string>
+    <string name="post_detail_back">Voltar</string>
+    <string name="post_detail_not_found">Esta publicação já não está disponível</string>
+    <string name="post_detail_empty">Não foi possível carregar esta publicação</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d nova publicação</item>
         <item quantity="other">%1$d novas publicações</item>

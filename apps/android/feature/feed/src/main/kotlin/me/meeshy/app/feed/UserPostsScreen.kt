@@ -74,6 +74,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 fun UserPostsScreen(
     onBack: () -> Unit = {},
     onPostClick: (String) -> Unit = {},
+    onOpenPost: (String) -> Unit = {},
     viewModel: UserPostsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -140,7 +141,7 @@ fun UserPostsScreen(
                             }
                             UserPostCard(
                                 post = post,
-                                onClick = { if (post.isReel) onPostClick(post.id) },
+                                onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                             )
                         }
                         if (state.isLoadingMore) {

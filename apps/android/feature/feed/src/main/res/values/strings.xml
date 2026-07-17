@@ -22,6 +22,10 @@
     <string name="user_posts_title">Posts</string>
     <string name="user_posts_empty">No posts yet</string>
     <string name="user_posts_back">Back</string>
+    <string name="post_detail_title">Post</string>
+    <string name="post_detail_back">Back</string>
+    <string name="post_detail_not_found">This post is no longer available</string>
+    <string name="post_detail_empty">Couldn\'t load this post</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d new post</item>
         <item quantity="other">%1$d new posts</item>
