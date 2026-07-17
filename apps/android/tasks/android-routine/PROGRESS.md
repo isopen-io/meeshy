@@ -1,5 +1,51 @@
 # Progress — state & what to do next
 
+> On 2026-07-17 **comment likes** landed (slice `feed-comment-likes`, feature-parity §Feed → "Feed post detail …" —
+> the comment-thread's like half now done; replies/mentions/realtime-room still open). iOS renders a heart on every
+> post-detail comment with an optimistic like toggle (`PostDetailViewModel.toggleCommentLike`: heart reaction,
+> optimistic + rollback, seeded from `currentUserReactions`); Android's comment thread (shipped the prior slice)
+> rendered author/content but **no like affordance**. **Ships a full vertical on the existing endpoints (no new repo
+> method — `PostRepository.likeComment`/`unlikeComment` already existed):**
+> **(1) `:feature:feed` pure core** — `CommentLikeState` (immutable optimistic-like SSOT): `likedIds` (the viewer's
+> liked comment ids) + `deltas` (a per-comment optimistic count delta layered on the server `likeCount`) +
+> `inFlightIds` (the re-entrancy guard). `seeded(page, heart)` marks a comment liked when its
+> `currentUserReactions` contains the heart `❤️`, **additive across pages** and **never overriding a comment the
+> viewer has locally toggled** (skips ids already in `deltas` → a re-fetch can't resurrect a just-removed like — a
+> deliberate improvement over iOS's plain `formUnion`). `beginToggle(id)` flips the liked flag, moves the delta ±1,
+> marks it in-flight, and returns **`null` when a toggle is already in flight** (double-tap guard → the VM skips the
+> network). `settle(id)` keeps the optimistic result + clears in-flight; `rollback(id)` reverts the flip + clears
+> in-flight; both inert when nothing is in flight for that id. `displayCount(id, base)` = `(base + delta).coerceAtLeast(0)`
+> so a like→unlike round-trip nets zero and the count reverts to the server base, never negative. **(2) projection** —
+> `CommentPresentation` gains `isLiked`; `CommentProjection.build` takes an optional `likeState` and projects
+> `isLiked` + the optimistic `likeCount` (default empty state → base count, not-liked; existing projection tests
+> unchanged & green). **(3) `PostCommentsViewModel`** — seeds `likes` from every fetched page; `toggleLike(commentId)`
+> is inert for a blank post/comment id, captures `wasLiked` **before** the optimistic flip, applies `beginToggle`
+> (skips the call on the guard), then calls `unlikeComment` (if it was liked) or `likeComment`, folding `settle` on
+> `Success` and `rollback` on `Failure`/exception (`viewModelScope` rethrows `CancellationException`); the like state
+> joins the `combine(thread, currentUser, status, likes)` projection. **(4) Compose** — an accent-coherent heart in
+> each `CommentRow`: `Icons.Filled.Favorite` + `MeeshyPalette.Error` (red) when liked, `FavoriteBorder` + secondary
+> otherwise, count shown when >0, tap disabled while the row is a pending optimistic comment — **exact visual parity
+> with the feed-post like button** (`FeedScreen.PostStatsRow`), reusing the shared `feed_like`/`feed_unlike` strings
+> (no new strings, all 4 locales already present). **+25 tests** (`CommentLikeStateTest` 15 — fresh state, seed
+> heart-match/no-delta/additive/never-override-local-toggle, begin like/unlike/guard, settle keep+inert, rollback
+> revert-like/revert-unlike/inert, re-toggle after settle, count-clamp ≥0; `CommentProjectionTest` +3 — default
+> not-liked+base, optimistic like +count, optimistic unlike −count; `PostCommentsViewModelTest` +7 — server-seed,
+> optimistic like→likeComment, optimistic unlike→unlikeComment, rollback on failure, double-tap fires one call,
+> blank-postId inert, blank-commentId inert). **Mutation check (RED proof):** dropping the `if (id in inFlightIds)
+> return null` guard failed **only** the "guarded while a toggle is already in flight" test (34/35 green —
+> behavioural, not tautological); the initial run also caught two count-semantics expectations (like→unlike nets
+> zero, seed-vs-local-toggle) before I corrected them. **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 zip is
+> blocked by the sandbox proxy, see NOTES):** `:feature:feed:testDebugUnitTest` + `:core:model:testDebugUnitTest`
+> → **BUILD SUCCESSFUL** (feed module green incl. the 25 new); `:app:assembleDebug` → **BUILD SUCCESSFUL** (heart
+> affordance compiles). Reviewer **PASS** (diff `apps/android` only; **SDK purity** — pure like state + projection +
+> "when to like" orchestration in `:feature:feed`, repo methods in `:sdk-core`, Compose stays dumb; **SSOT** — one
+> `CommentLikeState`, one heart-emoji constant, reused `feed_like`/`feed_unlike` + `MeeshyPalette.Error`;
+> **Instant-App** — optimistic toggle, no spinner; **UDF** + immutable `UiState`/`CommentLikeState`; accent-coherent
+> heart matching the feed post, natural tap, no dead end; no coverage floor lowered, no test weakened).
+> **Next slice:** §Feed still-open — comment **replies** (`getCommentReplies` → 1-level threading, "view N more"),
+> the post-detail **realtime room** (live `comment:added`/`post:liked` for the open post), the **community posts
+> feed** (needs a community entry point first), OR the statuses/moods bar (§G).
+
 > On 2026-07-17 **post-detail threaded comments** landed (slice `feed-post-detail-comments`, feature-parity §Feed →
 > "Feed post detail …" — the comment thread half now done; replies/likes/realtime-room still open). iOS renders a
 > comment thread on the post detail; Android had the full `PostRepository` comment surface (`getComments`,

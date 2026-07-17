@@ -20,6 +20,7 @@ data class CommentPresentation(
     val content: String,
     val isTranslated: Boolean,
     val likeCount: Int,
+    val isLiked: Boolean,
     val replyCount: Int,
     val parentId: String?,
     val isReply: Boolean,
@@ -38,6 +39,7 @@ object CommentProjection {
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
         isPending: Boolean = false,
+        likeState: CommentLikeState = CommentLikeState(),
     ): CommentPresentation = CommentPresentation(
         id = comment.id,
         authorName = (comment.author?.displayName ?: comment.author?.username)
@@ -48,7 +50,8 @@ object CommentProjection {
         createdAtIso = comment.createdAt,
         content = comment.displayContent(preferences),
         isTranslated = comment.isTranslated(preferences),
-        likeCount = comment.likeCount ?: 0,
+        likeCount = likeState.displayCount(comment.id, comment.likeCount ?: 0),
+        isLiked = likeState.isLiked(comment.id),
         replyCount = comment.replyCount ?: 0,
         parentId = comment.parentId?.takeIf { it.isNotBlank() },
         isReply = !comment.parentId.isNullOrBlank(),

@@ -1702,8 +1702,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       badge+relative time+Prisme content, composer with send/spinner, "show more"). **SSOT:** collapsed the
       three duplicate `resolveMediaUrl` copies in the feed module into one shared `resolveFeedMediaUrl`
       (`FeedMediaUrl.kt`; FeedPostBuilder/RepostEmbed migrated, their tests unchanged & green). EN/FR/ES/PT.
-      **Still open:** comment replies (`getCommentReplies`)/likes/mentions, post-detail realtime room,
-      per-post + comment cache-first. +41 tests (6 `CommentPrismeTest`, 9 `CommentProjectionTest`,
+      **Comment likes now landed** (slice `feed-comment-likes`, 2026-07-17): each comment carries a heart
+      like affordance with an **optimistic toggle**, on the **existing** `PostRepository.likeComment`/
+      `unlikeComment`. `:feature:feed` pure — `CommentLikeState` (immutable optimistic-like SSOT: `likedIds`
+      + per-comment count `deltas` + `inFlightIds` guard; `seeded` marks likes from the server
+      `currentUserReactions` heart, additive across pages and never resurrecting a locally-toggled like;
+      `beginToggle` flips + guards a double-tap re-entrantly (`null` = skip network), `settle` keeps the
+      optimistic result, `rollback` reverts on failure; `displayCount` clamps ≥0). Mirror of iOS
+      `PostDetailViewModel.toggleCommentLike`. `CommentProjection` now projects `isLiked` + the optimistic
+      count; `PostCommentsViewModel.toggleLike` guards blank post/comment ids, calls like/unlike, and rolls
+      back on `Failure`/exception (cancellation-safe). Compose: accent-coherent heart (filled + `Error` red
+      when liked, `FavoriteBorder` + secondary otherwise — exact parity with the feed-post like) reusing the
+      shared `feed_like`/`feed_unlike` strings (no new strings). +25 tests (15 `CommentLikeStateTest`,
+      +3 `CommentProjectionTest`, +7 `PostCommentsViewModelTest`; mutation-proven: dropping the in-flight
+      guard fails only the double-tap guard test). **Still open:** comment replies (`getCommentReplies`)/
+      mentions, post-detail realtime room, per-post + comment cache-first.
+      Prior comment thread: +41 tests (6 `CommentPrismeTest`, 9 `CommentProjectionTest`,
       12 `CommentThreadStateTest`, 14 `PostCommentsViewModelTest`).
       +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).
       **Repost embed cell now landed** (slice `feed-repost-embed-cell`, 2026-07-17): a reposted/quoted

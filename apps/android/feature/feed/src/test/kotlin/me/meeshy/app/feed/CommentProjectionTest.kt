@@ -113,4 +113,29 @@ class CommentProjectionTest {
         assertThat(pending.createdAtIso).isEqualTo("2026-07-17T10:00:00Z")
         assertThat(CommentProjection.build(comment(), Prefs(), null).isPending).isFalse()
     }
+
+    @Test
+    fun build_defaultsToNotLikedWithBaseCount() {
+        val p = CommentProjection.build(comment(likeCount = 4), Prefs(), null)
+        assertThat(p.isLiked).isFalse()
+        assertThat(p.likeCount).isEqualTo(4)
+    }
+
+    @Test
+    fun build_reflectsOptimisticLikeStateAndCount() {
+        val liked = CommentLikeState().beginToggle("c1")!!
+        val p = CommentProjection.build(comment(id = "c1", likeCount = 2), Prefs(), null, likeState = liked)
+        assertThat(p.isLiked).isTrue()
+        assertThat(p.likeCount).isEqualTo(3)
+    }
+
+    @Test
+    fun build_reflectsOptimisticUnlikeCount() {
+        val unliked = CommentLikeState()
+            .seeded(listOf(ApiPostComment(id = "c1", currentUserReactions = listOf("❤️"))), "❤️")
+            .beginToggle("c1")!!
+        val p = CommentProjection.build(comment(id = "c1", likeCount = 5), Prefs(), null, likeState = unliked)
+        assertThat(p.isLiked).isFalse()
+        assertThat(p.likeCount).isEqualTo(4)
+    }
 }
