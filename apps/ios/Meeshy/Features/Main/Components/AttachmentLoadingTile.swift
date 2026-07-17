@@ -24,6 +24,13 @@ struct AttachmentLoadingTile: View {
                 tileBody
                     .frame(width: size, height: size)
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                    // 157i : la tuile s'annonce comme un seul élément VoiceOver cohérent
+                    // (« Photo, Compression… » / « Photo, Erreur ») au lieu d'exposer le
+                    // spinner, le libellé d'étape et le nom de type en fragments séparés.
+                    // Le bouton d'annulation reste un élément distinct (frère du ZStack).
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(kindLabel)
+                    .accessibilityValue(stageAccessibilityValue)
 
                 if let onCancel {
                     Button {
@@ -51,6 +58,8 @@ struct AttachmentLoadingTile: View {
                 .foregroundColor(ThemeManager.shared.textSecondary)
                 .lineLimit(1)
                 .frame(width: max(size, 60))
+                // La tuile ci-dessus porte déjà le type + l'état pour VoiceOver.
+                .accessibilityHidden(true)
         }
         .animation(.easeInOut(duration: 0.2), value: stageKey)
     }
@@ -163,6 +172,12 @@ struct AttachmentLoadingTile: View {
 
     private var label: String {
         if case .failed(let msg) = prep.stage, !msg.isEmpty { return msg }
+        return kindLabel
+    }
+
+    /// Localized attachment-kind noun used both as the VoiceOver label and as the
+    /// visible caption fallback (when not in a `.failed` state carrying a message).
+    private var kindLabel: String {
         switch prep.kind {
         case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
         case .video: return String(localized: "attachment.kind.video", defaultValue: "Video", bundle: .main)
@@ -170,6 +185,18 @@ struct AttachmentLoadingTile: View {
         case .file:  return String(localized: "attachment.kind.file", defaultValue: "File", bundle: .main)
         case .location: return String(localized: "attachment.kind.location", defaultValue: "Location", bundle: .main)
         }
+    }
+
+    /// VoiceOver value announced after `kindLabel` — the current preparation stage
+    /// (« Compression… », « Erreur »…). Empty when `.ready` so the tile simply reads
+    /// as its kind once prepared.
+    private var stageAccessibilityValue: String {
+        if case .failed(let msg) = prep.stage {
+            return msg.isEmpty
+                ? String(localized: "attachment.loading.error", defaultValue: "Error", bundle: .main)
+                : msg
+        }
+        return stageLabel
     }
 
     private var stageLabel: String {
