@@ -1634,6 +1634,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       in-memory array — but pure/unit-testable and race-proof (a lagging stale re-emission that still
       carries the deleted post keeps it hidden). +15 tests (10 reducer, 5 VM). Mutation-proof:
       dropping the tombstone add fails exactly 7 discriminating tests, the other 61 stay green.
+      **Live `post:liked`/`post:unliked` count sync done** (slice `feed-realtime-like-sync`, 2026-07-17):
+      the previously-unconsumed `SocialSocketManager.postLiked`/`postUnliked` streams now fold through a
+      pure `FeedRealtimeReducer.like` into a `FeedRealtimeHead.likes` *overlay* (`LikeOverlay(count, mine)`):
+      the gateway's ABSOLUTE `likesCount` overrides the (possibly stale) cache count, while the viewer's
+      own `isLiked` flips **only** when the event carries the viewer's own userId (`mine` true/false) —
+      another user's like moves the count but preserves the viewer's own state (`mine` null → defer, prior
+      own-state preserved). `reconcileLikes` releases an overlay once a refresh's cache count/own-state
+      catches up (never reverting a live count to a stale cache value); `clear` (pull-to-refresh) drops all
+      overlays. Surpasses iOS: the count/own-state law is a pure, unit-testable overlay — and it fixes the
+      iOS `FeedSocketHandler` bug where *any* user's like flips the viewer's own `isLikedByMe` (Android
+      gates it on userId in one place). +23 tests (15 reducer, 8 VM). Mutation-proof: dropping the prior-`mine`
+      preservation fails exactly the discriminating "another user preserves a prior viewer-own like" test.
 - [x] Post reactions (heart like) — **optimistic** toggle via `PostRepository.toggleLike`
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
@@ -1654,7 +1666,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
-- [ ] Post reactions (heart like) — optimistic + live socket sync; bookmark / un-bookmark
+- [~] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
+      count sync **done** (slice `feed-realtime-like-sync`, 2026-07-17); bookmark / un-bookmark pending
 - [ ] Adaptive multi-image collage layouts (1–5+ media) + fullscreen gallery
 - [ ] Threaded comments: auto-preview replies, expand threads ("view N more"), comment likes,
       mentions, effects/blur, per-comment language switcher
