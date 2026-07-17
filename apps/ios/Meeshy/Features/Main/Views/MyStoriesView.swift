@@ -123,7 +123,7 @@ struct MyStoriesView: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "common.done", defaultValue: "OK")) { dismiss() }
+                    Button(String(localized: "common.ok", defaultValue: "OK")) { dismiss() }
                 }
             }
             .safeAreaInset(edge: .bottom) {

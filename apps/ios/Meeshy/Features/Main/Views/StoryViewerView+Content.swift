@@ -784,13 +784,15 @@ extension StoryViewerView {
 
     func storyTimeRemaining(_ expiresAt: Date) -> String {
         let seconds = Int(expiresAt.timeIntervalSinceNow)
-        if seconds <= 0 { return "expire bientot" }
+        if seconds <= 0 {
+            return String(localized: "story.viewer.expiresNow", defaultValue: "Expire bientôt", bundle: .main)
+        }
         let hours = seconds / 3600
         let minutes = (seconds % 3600) / 60
         if hours > 0 {
-            return "expire dans \(hours)h"
+            return String(localized: "story.viewer.expiresInHours", defaultValue: "Expire dans \(hours)h", bundle: .main)
         }
-        return "expire dans \(minutes)min"
+        return String(localized: "story.viewer.expiresInMinutes", defaultValue: "Expire dans \(minutes)min", bundle: .main)
     }
 
     // MARK: - Delete Story

@@ -340,6 +340,65 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   traduction EN, les tuiles retombent sur defaultValue FR (locale simu EN). Auditer les
   xcstrings du composer (story.composer.*) pour une couverture homogène 5 langues.
 
+- [x] **C17 (P1, découvert it.95 — simulateur en direct, device locale EN) Reader + Mes
+  stories entièrement non localisés (catalogue APP, pas le composer).** ✅ it.95
+  C12 avait audité `story.composer.*` dans le catalogue **SDK/MeeshyUI**
+  (`packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings`) — jamais le
+  catalogue **APP** (`apps/ios/Meeshy/Localizable.xcstrings`) que consomment
+  `StoryViewerView+Sidebar.swift` (rail d'actions + header + menu ⋯), `StoryViewerView+Content
+  .swift` (expiry), `MyStoriesView.swift` (liste « Mes stories »), `StoryTrayView.swift`,
+  `StoryExportShareSheet.swift`, `StoryRepostEmbedCell.swift`. Preuve simulateur (locale
+  device EN, session « atabeth ») : liste « Mes stories » entière en français (« Mes
+  stories »/« Sélectionner »/« OK ») alors que le reste de l'app (login, chat) est en
+  anglais ; sidebar du reader (« Envoyer »/« Vues »/« Exporter »/« Mute »/« Son ») idem,
+  malgré un chrome COMPOSER correctement anglais à côté (C12 tient toujours). Cause : soit
+  `String(localized:defaultValue:)` sans AUCUNE entrée catalogue (defaultValue FR gagne
+  toujours, quel que soit le device), soit littéraux bruts jamais wrappés du tout
+  (`label: "Envoyer"`, `"expire dans \(hours)h"`).
+  Audit scripté (regex `String(localized: "story\.[a-zA-Z0-9_.]+"` sur les 11 fichiers
+  `Story*.swift` de `apps/ios/Meeshy/Features/Main/Views/`) : 72 clés `story.*` utilisées,
+  **59 ABSENTES** du catalogue APP (dont `story.mine.*` — 22 clés, la liste « Mes stories »
+  n'avait STRICTEMENT AUCUNE entrée) + 3 littéraux jamais wrappés (`storyTimeRemaining`).
+  Fix : (1) `MyStoriesView.swift` — `common.done` (inexistant) → réutilise `common.ok`
+  (existant, 5 langues) ; 22 clés `story.mine.*` ajoutées. (2)
+  `StoryViewerView+Sidebar.swift` — 9 labels de bouton (React/Répondre/Envoyer/Partager/
+  Vues/Exporter/Mute/Son/Traductions) + 5 toasts repost wrappés en `String(localized:)`
+  (14 nouvelles clés `story.viewer.action.*`/`story.viewer.repost.*`) ; `AvatarContextMenu
+  Item("Voir le profil")` réutilise `story.viewer.viewProfile` (déjà présent dans le code,
+  jamais catalogué — évite un doublon). (3) `StoryViewerView+Content.swift` —
+  `storyTimeRemaining` (3 littéraux `"expire dans...\|expire bientot"`) → 3 clés
+  `story.viewer.expires*`. (4) 45 clés PRÉ-EXISTANTES (jamais catalogué, code déjà correct)
+  ajoutées telles quelles : `story.viewer.a11y.*` (9), `story.viewer.fullscreen/delete/report/
+  repostAsPost/editAndRepostAsPost/share.external/viewProfile/close/label/loading/retry/
+  notFound.*/reply.*/replyTo/viewsAndImpressions` (18), `story.tray.*` (5), `story.groupIntro.*`
+  (5), `story.export.share.*` (6), `story.repost.by` (1) — total 59 nouvelles entrées APP
+  catalog + 3 `expires*` = 62, plus 22 `story.mine.*` = 84 nouvelles clés APP au total.
+  5 langues (de/en/es/fr/pt-BR) systématiques ; substitutions Swift interpolées converties en
+  `%@`/`%lld` (ex. `story.viewer.a11y.profileOf`, `story.viewer.replyTo`,
+  `story.viewer.viewsAndImpressions`) ; 2 typos FR corrigées au passage (« Reessayer » →
+  « Réessayer », sans risque de régression — l'ancien defaultValue-only affichait déjà le
+  typo à TOUS les locales). Piège d'édition : `json.dumps` standard NE round-trippe PAS ce
+  fichier (Xcode inline certains leaf dicts sur une ligne par endroits) → édition par
+  insertion de texte brut ancrée sur la fin de fichier exacte (diff = 100 % additions,
+  vérifié `git diff | grep '^-'` vide hors en-tête).
+  Vérif : `LocalizationConsistencyTests` 2/2 verts (build-for-testing + test-without-building)
+  + 3 suites guard `MyStories*`/`StoryTrayMyStoryTapGuardTests` (7/7) non-régressées ; build
+  app vert (3 rebuilds incrémentaux, 17-56 s) ; VÉRIFIÉ SIMULATEUR AVANT/APRÈS (captures
+  scratchpad it95-*) : « Mes stories »→« My Stories », « Envoyer/Vues/Exporter »→
+  « Send/Views/Export », « expire dans 20h »→« Expires in 20h ».
+  RESTE (nouveau backlog, non traité ce tour) : (a) vignettes de la liste « Mes stories »
+  = icône photo générique pour toutes les entrées (thumbnailUrl/url vides ?) — à
+  auditer séparément, possible bug distinct de la localisation ; (b) `story.repost.by`
+  concatène `"\(String(localized:...)) \(repost.author)"` — ordre des mots non-adaptable
+  par langue (structure correcte pour fr/en/es/pt-BR testés mais fragile ; idéalement un
+  seul format `%@` par langue) ; (c) `story.viewer.action.repost` réutilise le libellé
+  visuel « Partager »/« Share » pour l'action REPOST (bouton `arrow.2.squarepath`), qui
+  prête à confusion avec le VRAI partage externe (`story.viewer.share.external`) — pas
+  touché ce tour (aurait changé la sémantique UX, pas juste la localisation) ; (d) chaque
+  NOUVEAU fichier `Story*.swift` futur doit repasser par ce même audit scripté (regex ci-
+  dessus) avant de considérer la localisation du reader complète — seuls les 11 fichiers
+  existants au 2026-07-17 ont été couverts.
+
 - [~] **C-DIR2 (P0, directive user 2026-07-04 #2) Canvas TOUJOURS entièrement visible +
   chrome unifié header/FABs.** — (b)(c)(d) LIVRÉS it.73 ; (a) vérification dédiée restante.
   ✅ (d)+(c) : `ComposerChromePolicy.fullChromeVisible` (rule engine pur, 6 tests) — header
@@ -1061,6 +1120,29 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > Format : `## it.N — <titre> (<commit>)` + preuves (RED reproduit, tests verts, vérif visuelle)
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
+
+## it.95 — C17 : reader + Mes stories entièrement non localisés (catalogue APP) — 84 clés ajoutées
+
+- Relance du user 2026-07-17 (« la composition de story ne semble pas si moderne ») —
+  suite du /loop autonome. Étape 0 : lu l'état complet (it.1→it.94 + backlog), cross-check
+  `git log` (dernier commit story = 7cb93260c, 2026-07-14 — 3 jours de silence story avant
+  ce tour), rien d'inattendu.
+- Action = exactement ce que demande la directive : build (`meeshy.sh build`, 86 s),
+  simulateur (login `atabeth`, locale device EN), navigation réelle composer (Média→image,
+  Texte→« Hello SOTA », panneaux Sound/Drawing/Timeline visités) — chrome composer
+  correctement EN partout (C12 tient). Puis navigation « Mes stories » (liste + reader) :
+  FRANÇAIS partout malgré device EN → C17 (détail §3, item complet).
+- 3 rebuilds incrémentaux (17-56 s), `LocalizationConsistencyTests` 2/2 + 3 suites guard
+  MyStories 7/7 verts, vérification simulateur AVANT/APRÈS à chaque étape (captures
+  scratchpad `story-loop/`). Diff : 4 fichiers, +2953/-3 (100 % additions sur le xcstrings,
+  round-trip vérifié).
+- RESTE ce tour : (a) vignettes génériques dans « Mes stories » (photo icon, pas le
+  contenu réel) — prochaine cible, à re-prouver dans le code (thumbnailUrl/url) avant fix ;
+  (b) les 6 stories test du compte `atabeth` ouvertes montrent un canvas NOIR (slide 6/6) —
+  à vérifier si c'est un slide de test authentiquement vide ou un bug de rendu, AVANT de
+  publier une nouvelle story de test pour la vérif composer→reader (tâche encore ouverte) ;
+  (c) item C17(b)(c)(d) — voir détail. Pas de commit/push encore effectué au moment de cette
+  entrée (suit immédiatement, cf. protocole « committer régulièrement »).
 
 ## it.94 — MISSION D (directive 2026-07-10) : présence au switch + rail figé/dense + composer barre bas/header flottant (27d3fac→83e7bfe)
 
