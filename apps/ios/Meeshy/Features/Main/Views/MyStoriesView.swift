@@ -370,23 +370,62 @@ private struct MyStoryRow: View {
             .accessibilityHidden(true)
     }
 
+    /// Cascade : composite ThumbHash (inclut texte/dessin/stickers, seule
+    /// représentation client du VRAI contenu composé — cf.
+    /// `MyStoryThumbnailResolver`) → miniature brute du média de fond
+    /// (stories legacy sans thumbHash) → icône générique (story vide).
     @ViewBuilder
     private var thumbnail: some View {
         let width = StoryThumbnailSizing.width(forAspectRatio: story.media.first?.aspectRatio)
         let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
         Group {
-            if let urlString = thumbnailURLString, !urlString.isEmpty {
+            switch MyStoryThumbnailResolver.resolve(thumbHash: story.storyEffects?.thumbHash, remoteURL: thumbnailURLString) {
+            case .composite(let hash):
+                if let img = UIImage.fromThumbHash(hash) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                } else if let urlString = thumbnailURLString, !urlString.isEmpty {
+                    CachedAsyncImage(url: urlString, targetSize: CGSize(width: width, height: 64)) {
+                        shape.fill(accentColor.opacity(0.25))
+                    }
+                } else {
+                    shape.fill(accentColor.opacity(0.25))
+                        .overlay(Image(systemName: "photo").foregroundColor(accentColor))
+                }
+            case .remoteURL(let urlString):
                 CachedAsyncImage(url: urlString, targetSize: CGSize(width: width, height: 64)) {
                     shape.fill(accentColor.opacity(0.25))
                 }
-            } else {
+            case .placeholder:
                 shape.fill(accentColor.opacity(0.25))
                     .overlay(Image(systemName: "photo").foregroundColor(accentColor))
             }
         }
         .frame(width: width, height: 64)
         .clipShape(shape)
+        .overlay(textObjectsOverlay(width: width))
         .overlay(shape.stroke(accentColor.opacity(0.3), lineWidth: 1))
+    }
+
+    /// Le texte composé n'est PAS visible dans le composite ThumbHash (résolution
+    /// ~18×32px — les glyphes se noient dans le flou, cf. `MyStoryThumbnailResolver`
+    /// doc). Contrairement au média de fond, le texte ne nécessite aucun chargement
+    /// réseau : on le rejoue directement depuis `storyEffects.textObjects`, même
+    /// positionnement normalisé que `SlideMiniPreview.textItem` (composer), à cette
+    /// échelle miniature.
+    @ViewBuilder
+    private func textObjectsOverlay(width: CGFloat) -> some View {
+        let size = CGSize(width: width, height: 64)
+        ForEach(story.storyEffects?.textObjects ?? []) { text in
+            let fontSize = max(3, CGFloat(text.fontSize) * width / CGFloat(CanvasGeometry.designWidth))
+            Text(text.text)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundColor(Color(hex: text.textColor ?? "FFFFFF"))
+                .lineLimit(1)
+                .shadow(color: .black.opacity(0.6), radius: 1)
+                .position(x: CGFloat(text.x) * size.width, y: CGFloat(text.y) * size.height)
+        }
     }
 
     @ViewBuilder
