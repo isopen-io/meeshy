@@ -66,14 +66,21 @@ public struct TransitionInspector: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             header
             kindPicker
             durationSlider
             easingPicker
             deleteButton
         }
-        .padding(18)
+        .padding(14)
+        // Même composition que ClipInspector/KeyframeInspector : matériau
+        // sous le contenu (jamais glassEffect, le verre ne peut pas
+        // échantillonner du verre — artefacts iOS 26).
+        .background(
+            RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial)
+        )
+        .frame(maxWidth: 360, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.a11y.transition", bundle: .module))
     }

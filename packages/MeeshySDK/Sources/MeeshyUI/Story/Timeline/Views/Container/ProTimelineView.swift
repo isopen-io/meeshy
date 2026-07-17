@@ -562,7 +562,8 @@ public struct ProTimelineView: View {
             },
             onDelete: { [viewModel] in
                 viewModel.deleteKeyframe(clipId: clipId, keyframeId: keyframeId)
-            }
+            },
+            onClose: { viewModel.selectClip(id: nil) }
         )
         .padding(12)
         .transition(.opacity)

@@ -135,7 +135,7 @@ public struct VideoClipBar: View, Equatable {
             }
         }
         .frame(width: width, height: laneHeight - 4)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .offset(x: xOrigin)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { onDoubleTap() }

@@ -364,7 +364,8 @@ public struct QuickTimelineView: View {
                     Text(isExpanded ? raw : String(format: raw, hidden))
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
                         .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.18)))
                         .foregroundStyle(MeeshyColors.indigo700)
                 }

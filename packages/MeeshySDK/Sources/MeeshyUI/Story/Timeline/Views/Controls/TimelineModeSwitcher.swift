@@ -51,11 +51,17 @@ public struct TimelineModeSwitcher: View, Equatable {
             segment(for: .pro,   systemImage: "slider.horizontal.below.rectangle")
         }
         .padding(4)
+        // Material in front (Liquid Glass, matches TimelineToolbar/TransportBar),
+        // indigo tint layered behind it — same "tinted glass" composition as the
+        // rest of the timeline sheet's floating controls.
+        .background(
+            Capsule().fill(.ultraThinMaterial)
+        )
         .background(
             Capsule()
                 .fill(isDark
-                      ? MeeshyColors.indigo900.opacity(0.55)
-                      : MeeshyColors.indigo100.opacity(0.85))
+                      ? MeeshyColors.indigo900.opacity(0.35)
+                      : MeeshyColors.indigo100.opacity(0.55))
         )
         .overlay(
             Capsule()
