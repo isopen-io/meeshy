@@ -46,6 +46,7 @@ data class FeedPostPresentation(
     val isPinned: Boolean,
     val isEdited: Boolean,
     val isReel: Boolean,
+    val repostEmbed: RepostEmbedPresentation?,
 )
 
 object FeedPostBuilder {
@@ -110,6 +111,7 @@ object FeedPostBuilder {
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,
             isReel = post.type.equals("reel", ignoreCase = true),
+            repostEmbed = RepostEmbedBuilder.build(post.repostOf, preferences, mediaBaseUrl),
         )
     }
 

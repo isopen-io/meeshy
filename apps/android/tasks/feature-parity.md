@@ -1689,8 +1689,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (feed, saved, user-posts) so no non-reel tap dead-ends anywhere; reels still route to the reels player;
       back returns to the source. **SSOT refactor:** collapsed the three duplicate `toTranslationRows` copies
       (FeedViewModel, FeedPostBuilder, and the new VM) into one shared internal `PostTranslationRows.kt`.
-      **Still open:** repost embed cell, threaded comments, post-detail realtime room, per-post cache-first.
+      **Still open:** threaded comments, post-detail realtime room, per-post cache-first.
       +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).
+      **Repost embed cell now landed** (slice `feed-repost-embed-cell`, 2026-07-17): a reposted/quoted
+      post rendered as an accent-coherent quote block inside the feed card AND the post detail (and the
+      saved / user-posts surfaces, for cross-surface coherence). Pure `RepostEmbedBuilder` projects
+      `ApiPost.repostOf` → `RepostEmbedPresentation` (Prisme content via the shared, now-promoted
+      `preferredEntry` law extended onto `ApiRepostOf` in `core:model`; author, avatar/media URL
+      resolution, first-media preview + "+N" surplus, quote-vs-repost flag, story/reel kind badge).
+      The embed's tap target is the ORIGINAL reposted post's id (never the outer card) — mirrors iOS
+      `FeedPostCard.repostTapTargetId`; tapping opens its detail. Full story-/reel-canvas embed
+      (iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`) deferred — no Android story-canvas renderer
+      yet, so those render the same quote block + discreet kind badge. +22 tests (14
+      `RepostEmbedBuilderTest`, +2 `FeedPostBuilderTest` wiring, 6 `RepostPrismeTest`; mutation-proven
+      on the media-surplus branch).
 - [~] User-profile posts feed **done** (slice `feed-user-posts-screen`, 2026-07-17): cursor-paginated
       list of a user's authored posts. Generalised the saved-posts pattern into one SSOT — the page DTO
       (`PostPage`, with `BookmarkPage` now a typealias), the pure accumulation law (`PostPageListState`,
@@ -1711,7 +1723,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       pull-to-refresh); `PostRepository.getBookmarksPage` carries the pagination watermark; reached
       from the feed top-bar bookmark action → `Routes.SAVED_POSTS` (slice `feed-bookmarks-screen`, 2026-07-17)
 - [ ] Post-detail room real-time subscriptions
-- [ ] Story repost-embed cell in the feed
+- [~] Repost / quote embed cell in the feed — the reposted/quoted post rendered as an
+      accent-coherent quote block (author, Prisme content, first-media preview + "+N", quote/repost
+      + story/reel kind badge) inside the feed card, post detail, saved and user-posts surfaces; tap
+      opens the ORIGINAL post's detail. Pure `RepostEmbedBuilder` + shared `ApiRepostOf` Prisme law
+      (slice `feed-repost-embed-cell`, 2026-07-17). **Still open:** the full story-/reel-canvas embed
+      (needs an Android story-canvas renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`).
 
 ## G. Statuses / Moods
 - [ ] Statuses/moods bar: emoji pills, popover details, infinite scroll

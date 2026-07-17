@@ -15,6 +15,11 @@
     <string name="feed_pinned">Fixado</string>
     <string name="feed_edited">Editado</string>
     <string name="feed_reel">Reel</string>
+    <string name="feed_repost_reposted">Republicado</string>
+    <string name="feed_repost_quoted">Citado</string>
+    <string name="feed_repost_story">Story</string>
+    <string name="feed_repost_open">Abrir a publicação republicada</string>
+    <string name="feed_repost_more_media">+%1$d</string>
     <string name="bookmarks_title">Salvos</string>
     <string name="bookmarks_empty">Nenhuma publicação salva ainda</string>
     <string name="bookmarks_back">Voltar</string>
