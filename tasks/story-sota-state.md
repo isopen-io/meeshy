@@ -1125,6 +1125,53 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
+## it.98 — BUG RÉEL : le switch-chip Timeline ne fonctionnait QUE depuis l'état fermé
+
+- Suite du /loop autonome, exploration systématique des outils composer restants (Sound,
+  Drawing, Timeline, Background — Media/Text déjà couverts it.95/96). Reproduit 5× de
+  suite sur simulateur (coordonnées re-vérifiées via `idb ui describe-all` à chaque tentative,
+  scroll de la bande de chips confirmé, tap sur un chip SIBLING « Text » utilisé comme
+  contrôle et fonctionnant du premier coup) : taper le chip « Timeline » depuis N'IMPORTE
+  QUEL autre panneau déjà ouvert (Sound, Text, Drawing…) ne fait RIEN — le panneau affiché
+  ne change pas, silencieusement, sans erreur.
+- Root cause (code, `ComposerControlsLayer.swift`) : `onTapTile` spécial-casait encore
+  `.timeline` (`if tool == .timeline { isTimelineVisible = true } else { bandStateMachine
+  .tapTile(tool); selectTool(tool) }`) — un reliquat de l'ère « timeline en sheet modale »
+  (avant 2026-07-14). Le refactor `02acbfc0e` a rendu `BandStateMachine.tapTile`/`tapFAB`
+  GÉNÉRIQUES pour `.timeline` (plus aucune exclusion interne — confirmé par lecture directe
+  + nouveau test), mais CE call site n'a jamais été mis à jour : il continuait à SAUTER
+  l'appel `bandStateMachine.tapTile(.timeline)`, donc `machineState` restait bloqué sur
+  l'ancien outil et `resolveEffectiveBandState` (jamais touché, ses tests restent valides
+  inchangés) retombait sur `return machineState` puisque son override `timelineVisible`
+  n'agit QUE si `machineState == .hidden` (design délibéré, cf. commentaire — correct pour
+  l'entrée FAB depuis l'état fermé, jamais prévu pour le switch-chip depuis un panneau déjà
+  ouvert).
+- Fix minimal : `onTapTile` traite désormais `.timeline` UNIFORMÉMENT avec les autres outils
+  (`isTimelineVisible = (tool == .timeline); bandStateMachine.tapTile(tool); selectTool(tool)`)
+  — la machine gère la transition nativement, `resolveEffectiveBandState` n'a plus besoin
+  d'intervenir pour ce chemin (son override reste utile pour FAB/bouton top-bar, entrées
+  déjà `.hidden`). Effet de bord détecté ET corrigé dans la foulée : `onBackFromToolPanel`
+  avait le même schéma conditionnel fragile (`if isTimelineVisible {…} else {…}`) — avec le
+  fix, `machineState` peut désormais valoir `.toolPanel(.timeline)` APRÈS un switch-chip, et
+  l'ancien conditionnel n'aurait fermé QUE le flag sans faire revenir la machine à `.hidden`
+  (panneau resté ouvert au tap retour). Remplacé par le même schéma « toujours les deux »
+  déjà utilisé par `onResizeDismiss` juste en dessous dans le même fichier (motif existant
+  réutilisé, pas inventé) — `backFromToolPanel()` est un no-op sûr si l'état n'est pas déjà
+  `.toolPanel`.
+- Tests : nouveau `BandStateMachineTests.tapTileTimelineSwapsOpenPanel` (comble un TROU de
+  couverture réel — l'équivalent `tapFAB` existait déjà mais pas `tapTile`, exactement le
+  chemin cassé) ; 20/20 BandStateMachineTests + 5/5 ComposerControlsLayerEffectiveBandState
+  Tests verts (suite `resolveEffectiveBandState` intacte, non touchée). VÉRIFIÉ SIMULATEUR
+  bout-en-bout (captures scratchpad it98-*) : Drawing→(switch-chip)→Timeline s'ouvre
+  correctement (transport, scrubber, « No tracks » — vs AVANT : rien ne se passait) ; bouton
+  retour depuis Timeline referme proprement vers la rangée FAB (vs régression potentielle
+  que le fix `onBackFromToolPanel` prévient).
+- LEÇON méthodo (2e fois ce tour, cf. it.97) : un contrôle négatif (chip SIBLING qui
+  fonctionne du premier coup) a été décisif pour distinguer "coordonnées idb fragiles" de
+  "vrai bug produit" — sans lui, 5 échecs identiques auraient pu (à tort) être attribués à
+  l'outillage de simulation comme le cas dessin/`idb swipe` rencontré juste avant dans la
+  même session.
+
 ## it.97 — vignette « Mes stories » : ThumbHash trop basse-résolution pour le texte, overlay dédié
 
 - Suite directe d'it.96. Re-preuve AVANT fix (protocole) : `MyStoryThumbnailResolver`

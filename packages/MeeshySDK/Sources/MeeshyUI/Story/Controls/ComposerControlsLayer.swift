@@ -204,21 +204,32 @@ public struct ComposerControlsLayer: View {
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
                     showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                    // La machine gère `.timeline` de façon générique depuis le
+                    // refactor 2026-07-14 (`BandStateMachineTests.
+                    // tapTileTimelineSwapsOpenPanel`) — le spécial-cas qui
+                    // sautait `tapTile`/`selectTool` pour `.timeline` datait
+                    // de l'ère « timeline en sheet » et empêchait le switch-chip
+                    // Timeline de fonctionner depuis un AUTRE panneau déjà
+                    // ouvert (bug reproduit simulateur : le chip restait sans
+                    // effet, aucun panneau ne changeait). `isTimelineVisible`
+                    // reste nécessaire pour `resolveEffectiveBandState` côté
+                    // FAB/bouton top-bar (entrée depuis `.hidden`).
                     onTapTile: { tool in
-                        if tool == .timeline {
-                            viewModel.isTimelineVisible = true
-                        } else {
-                            viewModel.isTimelineVisible = false
-                            bandStateMachine.tapTile(tool)
-                            viewModel.selectTool(tool)
-                        }
+                        viewModel.isTimelineVisible = (tool == .timeline)
+                        bandStateMachine.tapTile(tool)
+                        viewModel.selectTool(tool)
                     },
                     onBackFromToolPanel: {
-                        if viewModel.isTimelineVisible {
-                            viewModel.isTimelineVisible = false
-                        } else {
-                            bandStateMachine.backFromToolPanel()
-                        }
+                        // Toujours les DEUX (même schéma que `onResizeDismiss`
+                        // ci-dessous) : `onTapTile` peut désormais avoir fait
+                        // transiter `bandStateMachine` en `.toolPanel(.timeline)`
+                        // (switch-chip) OU l'avoir laissée `.hidden` (FAB/bouton
+                        // top-bar, override `isTimelineVisible` seul) — le
+                        // conditionnel précédent ne fermait que l'un des deux
+                        // chemins selon l'entrée. `backFromToolPanel()` est un
+                        // no-op sûr quand l'état n'est pas `.toolPanel`.
+                        viewModel.isTimelineVisible = false
+                        bandStateMachine.backFromToolPanel()
                     },
                     onCloseFormatPanel: {
                         bandStateMachine.closeFormatPanel()
