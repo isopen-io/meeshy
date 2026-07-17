@@ -1282,7 +1282,11 @@ private struct TypingIndicatorBubble: View {
             HStack(spacing: 6) {
                 if !label.isEmpty {
                     Text(label)
-                        .font(.system(size: 12, weight: .medium))
+                        // Dynamic Type (153i) : libellé « X écrit… » réel et localisé —
+                        // scale via MeeshyFont.relative. La bulle est dimensionnée par
+                        // padding (pas de frame figée), donc elle grandit proprement ;
+                        // les 3 points restent des `Circle` décoratifs de 5pt.
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
                         .lineLimit(1)
                 }

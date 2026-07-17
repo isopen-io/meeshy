@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 153i, 2026-07-17)** — piste iOS indépendante (suffixe `i`).
+> - **153i (terminée, branche `claude/laughing-thompson-yl81k3`, base `main` HEAD `14030ae`)** :
+>   Dynamic Type de `TypingIndicatorBubble` (indicateur « X écrit… », dernière cellule du flux de messages,
+>   dans `MessageListViewController.swift`). **1/1** `.font(.system(size: 12, weight: .medium))` →
+>   `MeeshyFont.relative(12, weight: .medium)` : le libellé réel et localisé (`typing.named`/`typing.double`/
+>   `typing.several`) scale désormais sous Dynamic Type. **0 gel** : la bulle est padding-sizée (aucune `.frame`
+>   figée) → grandit proprement ; les 3 points sont des `Circle` décoratifs de 5pt (pas des `.font`). A11y
+>   déjà complète (`.accessibilityElement(children: .combine)` + `.accessibilityLabel(label)`). Standalone :
+>   le libellé n'est pas voisin d'un corps de bulle figé → aucune divergence. 1 fichier, 0 logique, 0 test/clé
+>   i18n neuve. **0 contention** : les PR ouvertes 140i→152i ne touchent pas `MessageListViewController`.
+>   Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `TypingIndicatorBubble` Dynamic Type SOLDÉ** : ne plus reprendre (unique `.system` migré ; points figés).
+> - **Base de départ 154i : `main` HEAD**. Traîne texte-réel restante : `AudioCarouselView` (compteur
+>   monospaced), `StatusBarView`. **À NE PAS migrer isolément** : `BubbleExpandableText` (« Voir plus ») et
+>   `BubbleStandardLayout` (emoji) — le corps de bulle voisin est figé (`MessageTextRenderer` `.system(15)`),
+>   donc migration = divergence → **gel** tant que le renderer n'est pas traité globalement. `StoryViewerView+Content`
+>   (31 `.system`) reste ⚠️ (i18n + `@State private` cross-file). Sinon **passe state-of-the-art** (VoiceOver).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
