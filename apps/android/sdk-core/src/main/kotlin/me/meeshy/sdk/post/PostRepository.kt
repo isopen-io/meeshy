@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateCommentRequest
 import me.meeshy.sdk.net.api.CreatePostRequest
@@ -31,6 +32,13 @@ import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.rawApiCall
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** One cursor page of bookmarked posts plus the pagination watermark to fetch the next. */
+data class BookmarkPage(
+    val posts: List<ApiPost>,
+    val nextCursor: String?,
+    val hasMore: Boolean,
+)
 
 /** Posts, comments, reposts and feed variants — port of PostService (PostService.swift). */
 @Singleton
@@ -196,6 +204,7 @@ class PostRepository @Inject constructor(
 
     private companion object {
         const val FEED_PAGE_SIZE = 30
+        const val BOOKMARKS_PAGE_SIZE = 20
     }
 
     suspend fun getFeed(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =
@@ -269,6 +278,41 @@ class PostRepository @Inject constructor(
 
     suspend fun getBookmarks(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =
         apiCall { postApi.getBookmarks(cursor, limit) }
+
+    /**
+     * A single cursor page of the signed-in user's bookmarked posts, carrying the
+     * pagination watermark the plain [getBookmarks] drops. The saved-posts screen
+     * owns the accumulation (there is no repository-level bookmark cache yet), so it
+     * needs `nextCursor`/`hasMore` to drive its own infinite scroll. A `success:false`
+     * or dataless envelope is folded into a [NetworkResult.Failure] like [apiCall].
+     */
+    suspend fun getBookmarksPage(
+        cursor: String? = null,
+        limit: Int = BOOKMARKS_PAGE_SIZE,
+    ): NetworkResult<BookmarkPage> =
+        when (val result = rawApiCall { postApi.getBookmarks(cursor, limit) }) {
+            is NetworkResult.Success -> {
+                val response = result.data
+                val page = response.data
+                if (!response.success || page == null) {
+                    NetworkResult.Failure(
+                        ApiError(
+                            message = response.error ?: response.message ?: "Unknown error",
+                            code = response.code,
+                        ),
+                    )
+                } else {
+                    NetworkResult.Success(
+                        BookmarkPage(
+                            posts = page,
+                            nextCursor = response.pagination?.nextCursor,
+                            hasMore = response.pagination?.hasMore ?: false,
+                        ),
+                    )
+                }
+            }
+            is NetworkResult.Failure -> result
+        }
 
     suspend fun pinPost(postId: String): NetworkResult<Unit> =
         apiCall { postApi.pin(postId) }

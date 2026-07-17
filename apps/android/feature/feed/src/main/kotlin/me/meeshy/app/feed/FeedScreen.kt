@@ -43,6 +43,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -97,6 +98,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 @Composable
 fun FeedScreen(
     onPostClick: (String) -> Unit = {},
+    onOpenSaved: () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -119,6 +121,15 @@ fun FeedScreen(
                 ),
                 title = {
                     Text(stringResource(R.string.feed_title), fontWeight = FontWeight.Bold)
+                },
+                actions = {
+                    IconButton(onClick = onOpenSaved) {
+                        Icon(
+                            imageVector = Icons.Outlined.BookmarkBorder,
+                            contentDescription = stringResource(R.string.bookmarks_title),
+                            tint = MeeshyTheme.tokens.textPrimary,
+                        )
+                    }
                 },
             )
         },

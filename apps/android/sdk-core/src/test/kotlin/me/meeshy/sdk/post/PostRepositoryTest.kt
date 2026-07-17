@@ -11,6 +11,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PostApi
 import org.junit.Test
 import java.io.IOException
@@ -203,5 +204,62 @@ class PostRepositoryTest {
         assertThat(repo.loadMore()).isFalse()
 
         coVerify(exactly = 1) { api.getFeed(any(), any()) }
+    }
+
+    @Test
+    fun getBookmarksPage_returnsPostsWithPaginationWatermark() = runTest {
+        coEvery { api.getBookmarks(null, any()) } returns
+            page(listOf(ApiPost(id = "b1", content = "a"), ApiPost(id = "b2", content = "b")), "cur2", true)
+        val repo = PostRepository(api)
+
+        val result = repo.getBookmarksPage(cursor = null)
+
+        val data = (result as NetworkResult.Success).data
+        assertThat(data.posts.map { it.id }).containsExactly("b1", "b2").inOrder()
+        assertThat(data.nextCursor).isEqualTo("cur2")
+        assertThat(data.hasMore).isTrue()
+    }
+
+    @Test
+    fun getBookmarksPage_forwardsTheCursorToTheApi() = runTest {
+        coEvery { api.getBookmarks("cur2", any()) } returns
+            page(listOf(ApiPost(id = "b3", content = "c")), nextCursor = null, hasMore = false)
+        val repo = PostRepository(api)
+
+        val result = repo.getBookmarksPage(cursor = "cur2")
+
+        assertThat((result as NetworkResult.Success).data.posts.map { it.id }).containsExactly("b3")
+        assertThat(result.data.hasMore).isFalse()
+        coVerify(exactly = 1) { api.getBookmarks("cur2", any()) }
+    }
+
+    @Test
+    fun getBookmarksPage_foldsUnsuccessfulEnvelopeIntoFailure() = runTest {
+        coEvery { api.getBookmarks(any(), any()) } returns
+            ApiResponse(success = false, data = null, error = "nope")
+        val repo = PostRepository(api)
+
+        val result = repo.getBookmarksPage()
+
+        assertThat((result as NetworkResult.Failure).error.message).isEqualTo("nope")
+    }
+
+    @Test
+    fun getBookmarksPage_foldsTransportFailureIntoFailure() = runTest {
+        coEvery { api.getBookmarks(any(), any()) } throws IOException("offline")
+        val repo = PostRepository(api)
+
+        assertThat(repo.getBookmarksPage()).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    @Test
+    fun getBookmarksPage_defaultsHasMoreFalseWhenPaginationAbsent() = runTest {
+        coEvery { api.getBookmarks(any(), any()) } returns
+            ApiResponse(success = true, data = listOf(ApiPost(id = "b1", content = "a")))
+        val repo = PostRepository(api)
+
+        val data = (repo.getBookmarksPage() as NetworkResult.Success).data
+        assertThat(data.hasMore).isFalse()
+        assertThat(data.nextCursor).isNull()
     }
 }

@@ -15,6 +15,10 @@
     <string name="feed_pinned">Fijado</string>
     <string name="feed_edited">Editado</string>
     <string name="feed_reel">Reel</string>
+    <string name="bookmarks_title">Guardados</string>
+    <string name="bookmarks_empty">Aún no hay publicaciones guardadas</string>
+    <string name="bookmarks_back">Atrás</string>
+    <string name="bookmarks_remove">Quitar de guardados</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d publicación nueva</item>
         <item quantity="other">%1$d publicaciones nuevas</item>

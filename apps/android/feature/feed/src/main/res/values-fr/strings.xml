@@ -15,6 +15,10 @@
     <string name="feed_pinned">Épinglé</string>
     <string name="feed_edited">Modifié</string>
     <string name="feed_reel">Réel</string>
+    <string name="bookmarks_title">Enregistrés</string>
+    <string name="bookmarks_empty">Aucune publication enregistrée</string>
+    <string name="bookmarks_back">Retour</string>
+    <string name="bookmarks_remove">Retirer des enregistrés</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d nouvelle publication</item>
         <item quantity="other">%1$d nouvelles publications</item>
