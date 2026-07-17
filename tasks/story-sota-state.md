@@ -1125,6 +1125,44 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
+## it.104 — Fond vidéo réel CONFIRMÉ sain (composer+reader) + C17 : accessibilité canvas non localisée
+
+- **Clôture positive de l'investigation vidéo it.101/it.103** : un vrai fichier vidéo
+  (10s, thumbnail réelle, trouvé dans l'album Photos « Meeshy ») sélectionné comme fond —
+  rendu PIXEL-PARFAIT immédiat dans le composer (aucun délai, aucun écran noir, contenu
+  réel visible dès la sélection) ET dans le reader après publication (identique,
+  full-bleed, cohérent composer↔reader — exigence explicite de la boucle user). Preuve
+  définitive que it.101 (stub simulateur 1703 octets) était bien la seule cause du
+  symptôme observé — le pipeline vidéo fond est sain de bout en bout.
+- En inspectant l'arbre d'accessibilité pendant ce test, élément VoiceOver du média
+  étiqueté « Vidéo » (FR) repéré → root cause plus large que prévu : TOUT le calque
+  d'accessibilité du canvas story (`StoryCanvasUIView+Accessibility.swift`, partagé
+  composer ET reader) utilisait des littéraux FR bruts jamais enveloppés dans
+  `String(localized:)` — contrairement aux autres bugs it.95-it.103 (bundle manquant ou
+  clé catalogue manquante), ici c'était une omission totale : « Vidéo »/« Image »,
+  « Vidéo de fond »/« Photo de fond », « Sticker … », « Texte : … », et les 3 actions
+  personnalisées VoiceOver (« Supprimer »/« Dupliquer »/« Mettre à l'arrière »).
+- Fix : réutilisation maximale des clés déjà couvertes 5 langues (`story.media.video`,
+  `story.media.image`, `story.composer.deleteSlide`, `story.composer.duplicateSlide`) +
+  4 nouvelles clés SDK (`story.canvas.a11y.{backgroundPhoto,backgroundVideo,sendToBack,
+  sticker,textPrefix}`, convention de/en/es/fr de ce catalogue). Tous les sites d'appel de
+  `StoryCanvasUIView+Accessibility.swift` reliés à `String(localized:...,bundle: .module)`.
+- 3 tests préexistants dans `StoryCanvasUIView_ReaderAccessibilityTests.swift` échouaient
+  après le fix — PAS une régression : ils épinglaient les anciens littéraux FR/EN bruts en
+  dur (même piège que it.99). Corrigés pour comparer contre le MÊME appel de localisation
+  que la prod (`String(localized: "story.canvas.a11y.textPrefix", bundle: .module)`, etc.)
+  au lieu d'un littéral figé — robuste à la locale de l'hôte de test, jamais fragile.
+  800+ tests `MeeshyUITests` verts (exit 0) après correction.
+- CI : run précédent (it.103, `012eeb61f`) montre un job Python translator "cancelled"
+  — vérifié BÉNIN (`gh run view --job` : l'étape de test elle-même est passée ✓, seule
+  l'upload de couverture a été annulée par un push plus récent dans le même concurrency
+  group — sans rapport avec ce travail iOS/SDK).
+- Story de test (fond vidéo réel) publiée puis laissée expirer naturellement (comme les
+  précédentes, pas de nettoyage nécessaire).
+- Reste HORS scope : audio de fond/premier-plan (lecture réelle), éditeurs plein écran
+  dédiés — recherche de code n'a trouvé AUCUNE feature distincte de ce nom ; probablement
+  une confusion avec les panneaux d'outils déjà testés (Media/Filtres/Timeline).
+
 ## it.103 — C17 suite : export MP4 (sous-titre sheet non localisé) + vérif flux complet
 
 - Reprise HORS scope it.102 : export MP4 (jamais testé de bout en bout jusqu'ici).
