@@ -75,6 +75,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 fun BookmarksScreen(
     onBack: () -> Unit = {},
     onPostClick: (String) -> Unit = {},
+    onOpenPost: (String) -> Unit = {},
     viewModel: BookmarksViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -142,7 +143,7 @@ fun BookmarksScreen(
                             SavedPostCard(
                                 post = post,
                                 onRemove = { viewModel.removeBookmark(post.id) },
-                                onClick = { if (post.isReel) onPostClick(post.id) },
+                                onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                             )
                         }
                         if (state.isLoadingMore) {

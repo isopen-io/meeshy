@@ -57,6 +57,8 @@ import me.meeshy.app.conversations.NewConversationScreen
 import me.meeshy.app.feed.BookmarksScreen
 import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.feed.FeedScreen
+import me.meeshy.app.feed.PostDetailScreen
+import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
@@ -92,6 +94,7 @@ object Routes {
     const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
     const val SAVED_POSTS = "feed/saved"
+    const val POST_DETAIL = "feed/post/{${PostDetailViewModel.POST_ID_ARG}}"
     const val CALLS = "calls"
     const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
@@ -120,6 +123,8 @@ object Routes {
     val CALL = CallRoute.PATTERN
 
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
+
+    fun postDetail(postId: String): String = "feed/post/$postId"
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
     fun userPosts(userId: String): String = "profile/$userId/posts"
@@ -344,6 +349,7 @@ fun MeeshyApp(
             composable(Routes.FEED) {
                 FeedScreen(
                     onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                     onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },
                 )
             }
@@ -351,7 +357,16 @@ fun MeeshyApp(
                 BookmarksScreen(
                     onBack = { navController.popBackStack() },
                     onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                 )
+            }
+            composable(
+                route = Routes.POST_DETAIL,
+                arguments = listOf(
+                    navArgument(PostDetailViewModel.POST_ID_ARG) { type = NavType.StringType },
+                ),
+            ) {
+                PostDetailScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.CALLS) {
                 CallHistoryScreen(
@@ -464,6 +479,7 @@ fun MeeshyApp(
                 UserPostsScreen(
                     onBack = { navController.popBackStack() },
                     onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                 )
             }
             composable(

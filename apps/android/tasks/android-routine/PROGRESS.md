@@ -1,5 +1,41 @@
 # Progress — state & what to do next
 
+> On 2026-07-17 **feed post detail screen** landed (slice `feed-post-detail-screen`, feature-parity §Feed →
+> "Feed post detail …" now `[~]` — the detail screen half done; repost embed + threaded comments + realtime
+> room still open). **Fixed a real dead-end:** the feed card only routed **reels** (`if (post.isReel)
+> onPostClick`); tapping a text/media post did nothing. Now a non-reel tap opens a full-screen
+> `PostDetailScreen`. **(1) `:feature:feed`** — `PostDetailViewModel` reads the route `postId`
+> (`SavedStateHandle`), fetches via the **existing** `PostRepository.getPost(id)` (no new repo method), and a
+> `combine(rawPost, currentUser, activeCode, status)` chain projects through the **shared** `FeedPostBuilder`
+> (Prisme parity with the feed). A working per-post language switch reuses the shared `LanguageFlagTapResolver`
+> + `FeedPostBuilder.resolveActiveCode` — one flag-tap rule across feed/chat/detail. `loadInitial` is guarded
+> (re-entrant/after-load no-op; blank id → not-found, **no network**), `refresh` re-fetches keeping the current
+> post visible, cold open shows a skeleton (no per-post cache yet), a `Failure` surfaces an error (no crash),
+> `viewModelScope` work rethrows `CancellationException`. **(2) SSOT refactor** — collapsed the **three**
+> duplicate `toTranslationRows` copies (FeedViewModel, FeedPostBuilder, and the new VM) into one shared
+> `internal PostTranslationRows.kt`; FeedViewModel/FeedPostBuilder now reference it (their tests unchanged and
+> green, proving a pure extraction). **(3) `PostDetailScreen`** — accent-coherent (`Indigo500`) detail card
+> (author, mood, relative time, Prisme content + tappable flag strip, image, reel badge, read-only stat row),
+> skeleton on cold, coherent not-found/error placeholder, pull-to-refresh, EN/FR/ES/PT strings. **(4) Coherence**
+> — wired `onOpenPost` from **all three** feed surfaces (feed, saved, user-posts) so no non-reel tap dead-ends
+> anywhere; reels still route to the reels player; back returns to the source. **+12 tests**
+> (`PostDetailViewModelTest`: first-page populate, route-postId forwarded, blank-id not-found+no-network, cold
+> skeleton→settled deferred gate, failure surfaces+no skeleton, guarded after load, refresh re-fetch, refresh
+> blank-id inert, flag-tap switches language, flag-tap reverts, flag-tap-before-load inert, content-less lang
+> inert). **Mutation check (RED proof):** neutralising the `showSkeleton` expression → only the cold-skeleton
+> test failed; neutralising the `Revert` branch → only the revert test failed (2/12 each, the other 10 green —
+> behavioural, not tautological). **Gate:** `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK assembles; screen +
+> nav compile); `:feature:feed:testDebugUnitTest` → **156/156 green** (PostDetailViewModel 12, BookmarksListState
+> 12, BookmarksViewModel 12, FeedPostBuilder 19, FeedRealtimeReducer 51, FeedViewModel 39, UserPostsViewModel 11);
+> `:app:testDebugUnitTest` → green (nav change safe). Reviewer **PASS** (diff `apps/android` only; **SDK purity**
+> — `getPost` in `:sdk-core`, "when to fetch" + projection orchestration in `:feature:feed`; **SSOT** — one
+> `toTranslationRows`, shared `FeedPostBuilder` + `LanguageFlagTapResolver`; **UDF** + immutable `UiState`, pure
+> `project`; **instant-app** — skeleton only on cold empty; accent-coherent, natural back gesture, removes three
+> dead-ends; no coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — the post-detail
+> **threaded comments** (`getComments`/`addComment` exist) + realtime room subscription, the **repost embed cell**
+> (a reposted post rendered inside another), the **community posts feed** (needs a community entry point first —
+> no community detail screen exists yet, so it'd be orphan today), OR the statuses/moods bar (§G).
+
 > On 2026-07-17 **user-profile posts feed** landed (slice `feed-user-posts-screen`, feature-parity §Feed →
 > "User-profile posts feed + community posts feed" now `[~]` — the user-profile half done, community half still
 > open). iOS surfaces a user's posts inside `UserProfileView`; Android had `PostRepository.getUserPosts` but **no**

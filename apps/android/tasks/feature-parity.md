@@ -1677,7 +1677,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       mentions, effects/blur, per-comment language switcher
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
-- [ ] Feed post detail with text/media/repost, translation flags, threaded comments
+- [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
+      done** (slice `feed-post-detail-screen`, 2026-07-17): tapping a **non-reel** feed post (previously a
+      dead-end — the card only routed reels) now opens a full-screen `PostDetailScreen`. `PostDetailViewModel`
+      reads the route `postId` (`SavedStateHandle`), fetches via the existing `PostRepository.getPost(id)`,
+      projects through the **shared** `FeedPostBuilder` (Prisme parity with the feed), and drives a working
+      per-post language switch (the flag strip) via the shared `LanguageFlagTapResolver` + `FeedPostBuilder.
+      resolveActiveCode` — one flag-tap rule with the feed and chat. Cold open shows a skeleton (no per-post
+      cache yet); a blank id → coherent not-found; a fetch failure → error state + snackbar; pull-to-refresh;
+      read-only engagement counts (likes/comments/reposts/bookmarks). Wired from all three feed surfaces
+      (feed, saved, user-posts) so no non-reel tap dead-ends anywhere; reels still route to the reels player;
+      back returns to the source. **SSOT refactor:** collapsed the three duplicate `toTranslationRows` copies
+      (FeedViewModel, FeedPostBuilder, and the new VM) into one shared internal `PostTranslationRows.kt`.
+      **Still open:** repost embed cell, threaded comments, post-detail realtime room, per-post cache-first.
+      +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).
 - [~] User-profile posts feed **done** (slice `feed-user-posts-screen`, 2026-07-17): cursor-paginated
       list of a user's authored posts. Generalised the saved-posts pattern into one SSOT — the page DTO
       (`PostPage`, with `BookmarkPage` now a typealias), the pure accumulation law (`PostPageListState`,

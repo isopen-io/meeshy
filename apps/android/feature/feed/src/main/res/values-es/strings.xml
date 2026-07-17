@@ -22,6 +22,10 @@
     <string name="user_posts_title">Publicaciones</string>
     <string name="user_posts_empty">Aún no hay publicaciones</string>
     <string name="user_posts_back">Atrás</string>
+    <string name="post_detail_title">Publicación</string>
+    <string name="post_detail_back">Atrás</string>
+    <string name="post_detail_not_found">Esta publicación ya no está disponible</string>
+    <string name="post_detail_empty">No se pudo cargar esta publicación</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d publicación nueva</item>
         <item quantity="other">%1$d publicaciones nuevas</item>

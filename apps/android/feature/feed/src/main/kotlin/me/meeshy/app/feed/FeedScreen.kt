@@ -98,6 +98,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 @Composable
 fun FeedScreen(
     onPostClick: (String) -> Unit = {},
+    onOpenPost: (String) -> Unit = {},
     onOpenSaved: () -> Unit = {},
     viewModel: FeedViewModel = hiltViewModel(),
 ) {
@@ -168,7 +169,7 @@ fun FeedScreen(
                             onFlagTap = { code -> viewModel.onPostFlagTap(post.id, code) },
                             // Only reels open the full-screen reel overlay; regular
                             // posts have no detail screen yet, so tapping is inert.
-                            onClick = { if (post.isReel) onPostClick(post.id) },
+                            onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
                         )
                     }
                     if (state.isLoadingMore) {
