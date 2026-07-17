@@ -386,9 +386,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   app vert (3 rebuilds incrémentaux, 17-56 s) ; VÉRIFIÉ SIMULATEUR AVANT/APRÈS (captures
   scratchpad it95-*) : « Mes stories »→« My Stories », « Envoyer/Vues/Exporter »→
   « Send/Views/Export », « expire dans 20h »→« Expires in 20h ».
-  RESTE (nouveau backlog, non traité ce tour) : (a) vignettes de la liste « Mes stories »
-  = icône photo générique pour toutes les entrées (thumbnailUrl/url vides ?) — à
-  auditer séparément, possible bug distinct de la localisation ; (b) `story.repost.by`
+  RESTE (nouveau backlog, non traité ce tour) : (a) ÉCARTÉ avec preuve it.95 : vignettes
+  génériques dans « Mes stories » — `GET /posts/feed/stories` (curl authentifié atabeth)
+  confirme les 6 stories du compte test ont `media: []` + `content: null` + `textObjects: []`
+  (stories authentiquement VIDES, artefacts de sessions QA antérieures, PAS un bug de
+  rendu — le fallback icône photo de `MyStoryRow.thumbnail` est le comportement CORRECT
+  pour une story sans média). Le canvas noir observé au reader (§ ci-dessus) a la même
+  cause exacte. Zéro code. (b) `story.repost.by` concatène
   concatène `"\(String(localized:...)) \(repost.author)"` — ordre des mots non-adaptable
   par langue (structure correcte pour fr/en/es/pt-BR testés mais fragile ; idéalement un
   seul format `%@` par langue) ; (c) `story.viewer.action.repost` réutilise le libellé
@@ -1120,6 +1124,32 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > Format : `## it.N — <titre> (<commit>)` + preuves (RED reproduit, tests verts, vérif visuelle)
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
+
+## it.96 — Vérif composer→reader (image+texte) : COHÉRENTE ; nouveau finding vignette liste
+
+- Vérification directe demandée par le user (« veiller à ce que le READER FONCTIONNE en
+  cohérence de ce qui se publie ») : draft repris (autosave E1 confirmé vivant — image
+  fond violette + texte « Hello SOTA »), publié (toast « Story published » EN — confirme
+  aussi C17 en conditions réelles), rouvert dans le VRAI reader (pas un test). RÉSULTAT :
+  fond image plein cadre + texte centré blanc « Hello SOTA » — IDENTIQUE au composer.
+  Sidebar EN (Send/Views/Export) + « 1 min » EN — C17 re-confirmé sur une story fraîche.
+- Cross-check API (`GET /posts/feed/stories` authentifié) : `storyEffects.mediaObjects`
+  (bg image, isBackground:true) + `textObjects` (« Hello SOTA », x/y 0.5/0.5) + `media[0]
+  .thumbnailUrl` peuplé + `thumbHash` composite présent — payload RAW publish sain,
+  round-trip complet.
+- NOUVEAU FINDING (P2, non corrigé ce tour) : la liste « Mes stories » (`MyStoryRow.
+  thumbnail`, MyStoriesView.swift) affiche `story.media.first?.thumbnailUrl` BRUT (juste
+  l'image de fond, sans le texte ni le dessin) — alors que `storyEffects.thumbHash` (composite
+  TOUTES couches, cf. it.1/it.2 de `story-consolidation-backlog.md`) existe déjà et est
+  consommé ailleurs (tray, slide-strip). Pour cette story de test, le résultat visuel est un
+  simple carré violet SANS le texte visible dans la liste — alors que le VRAI reader (ouvert
+  juste après) montre bien le texte. Proof re-confirmée sur les 6 stories vides (§ C17
+  écarté) : leur vignette générique était correcte (pas de média) ; CETTE story a un média +
+  texte réels et le manque quand même dans la liste. Piste : brancher `MyStoryRow.thumbnail`
+  sur le thumbHash composite (ou une image de couverture équivalente) au lieu du
+  `media.first.thumbnailUrl` brut — cohérent avec le principe SSOT déjà appliqué ailleurs
+  (StoryRenderer = source unique tray/slide-strip/reader/export, seul `MyStoryRow` diverge).
+  PROCHAIN ITEM DE LA BOUCLE.
 
 ## it.95 — C17 : reader + Mes stories entièrement non localisés (catalogue APP) — 84 clés ajoutées
 
