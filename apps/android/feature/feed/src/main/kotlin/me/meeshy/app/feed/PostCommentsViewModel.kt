@@ -33,6 +33,7 @@ import javax.inject.Inject
  */
 data class PostCommentsUiState(
     val comments: List<CommentPresentation> = emptyList(),
+    val replyThreads: Map<String, ReplyThreadUiState> = emptyMap(),
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val showSkeleton: Boolean = false,
@@ -40,6 +41,13 @@ data class PostCommentsUiState(
     val canLoadMore: Boolean = false,
     val isEmpty: Boolean = false,
     val errorMessage: String? = null,
+)
+
+/** The projected reply thread for one expanded top-level comment. */
+data class ReplyThreadUiState(
+    val isExpanded: Boolean,
+    val isLoading: Boolean,
+    val replies: List<CommentPresentation>,
 )
 
 @HiltViewModel
@@ -55,6 +63,7 @@ class PostCommentsViewModel @Inject constructor(
     private val thread = MutableStateFlow(CommentThreadState())
     private val status = MutableStateFlow(Status())
     private val likes = MutableStateFlow(CommentLikeState())
+    private val replies = MutableStateFlow(CommentRepliesState())
     private var pendingSeq = 0
 
     private val _state = MutableStateFlow(PostCommentsUiState())
@@ -62,8 +71,8 @@ class PostCommentsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(thread, sessionRepository.currentUser, status, likes) { t, user, st, likeState ->
-                project(t, user, st, likeState)
+            combine(thread, sessionRepository.currentUser, status, likes, replies) { t, user, st, likeState, replyState ->
+                project(t, user, st, likeState, replyState)
             }.collect { projected -> _state.value = projected }
         }
         loadInitial()
@@ -175,6 +184,41 @@ class PostCommentsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Expand or collapse the reply thread beneath a top-level comment. Expanding fetches
+     * its replies once (cache-first on re-expand — a loaded thread is never refetched);
+     * a fetch failure collapses the thread. A blank post/comment id is inert.
+     */
+    fun toggleReplies(commentId: String) {
+        if (postId.isBlank() || commentId.isBlank()) return
+        if (replies.value.isExpanded(commentId)) {
+            replies.update { it.collapsed(commentId) }
+            return
+        }
+        replies.update { it.expanded(commentId) }
+        val began = replies.value.beginLoad(commentId) ?: return
+        replies.value = began
+        fetchReplies(commentId)
+    }
+
+    private fun fetchReplies(commentId: String) {
+        viewModelScope.launch {
+            try {
+                when (val result = postRepository.getCommentReplies(postId, commentId, null, PAGE_SIZE)) {
+                    is NetworkResult.Success -> {
+                        replies.update { it.loaded(commentId, result.data) }
+                        likes.update { it.seeded(result.data, HEART_EMOJI) }
+                    }
+                    is NetworkResult.Failure -> replies.update { it.failed(commentId) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                replies.update { it.failed(commentId) }
+            }
+        }
+    }
+
     private fun optimisticRow(tempId: String, content: String): ApiPostComment {
         val me = sessionRepository.currentUser.value
         return ApiPostComment(
@@ -189,9 +233,11 @@ class PostCommentsViewModel @Inject constructor(
         user: MeeshyUser?,
         st: Status,
         likeState: CommentLikeState,
+        replyState: CommentRepliesState,
     ): PostCommentsUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
-        val rows = thread.comments.map {
+        val topLevel = thread.comments.filter { it.parentId.isNullOrBlank() }
+        val rows = topLevel.map {
             CommentProjection.build(
                 it,
                 prefs,
@@ -200,9 +246,21 @@ class PostCommentsViewModel @Inject constructor(
                 likeState = likeState,
             )
         }
+        val replyThreads = topLevel
+            .filter { replyState.isExpanded(it.id) }
+            .associate { comment ->
+                comment.id to ReplyThreadUiState(
+                    isExpanded = true,
+                    isLoading = replyState.isLoading(comment.id),
+                    replies = replyState.repliesFor(comment.id).map {
+                        CommentProjection.build(it, prefs, config.socketUrl, likeState = likeState)
+                    },
+                )
+            }
         val showSkeleton = st.isLoading && !thread.hasLoaded && thread.comments.isEmpty() && st.error == null
         return PostCommentsUiState(
             comments = rows,
+            replyThreads = replyThreads,
             isLoading = st.isLoading,
             isLoadingMore = st.isLoadingMore,
             showSkeleton = showSkeleton,

@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -86,6 +87,12 @@ internal fun PostCommentsSection(
             else -> Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 state.comments.forEach { comment ->
                     CommentRow(comment = comment, onToggleLike = viewModel::toggleLike)
+                    ReplyThread(
+                        comment = comment,
+                        thread = state.replyThreads[comment.id],
+                        onToggleReplies = viewModel::toggleReplies,
+                        onToggleLike = viewModel::toggleLike,
+                    )
                 }
             }
         }
@@ -165,6 +172,63 @@ private fun CommentRow(comment: CommentPresentation, onToggleLike: (String) -> U
                 )
             }
             CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
+        }
+    }
+}
+
+/**
+ * The 1-level reply thread beneath a top-level [comment]. Renders nothing when the
+ * comment has no replies and is not expanded; otherwise a natural toggle affordance
+ * ("View N replies" / "Hide replies") and, when expanded, the indented reply rows with
+ * a discreet loading spinner while they fetch. Accent-coherent (Indigo) with the thread.
+ */
+@Composable
+private fun ReplyThread(
+    comment: CommentPresentation,
+    thread: ReplyThreadUiState?,
+    onToggleReplies: (String) -> Unit,
+    onToggleLike: (String) -> Unit,
+) {
+    val isExpanded = thread?.isExpanded == true
+    if (comment.replyCount <= 0 && !isExpanded) return
+
+    Column(modifier = Modifier.padding(start = 40.dp, top = MeeshySpacing.xs)) {
+        val label = if (isExpanded) {
+            stringResource(R.string.post_comments_hide_replies)
+        } else {
+            pluralStringResource(R.plurals.post_comments_view_replies, comment.replyCount, comment.replyCount)
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            modifier = Modifier
+                .clip(RoundedCornerShape(MeeshyRadius.pill))
+                .clickable { onToggleReplies(comment.id) }
+                .semantics { role = Role.Button; contentDescription = label }
+                .padding(vertical = 2.dp, horizontal = 2.dp),
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MeeshyPalette.Indigo500,
+            )
+            if (thread?.isLoading == true) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp,
+                    color = MeeshyPalette.Indigo500,
+                )
+            }
+        }
+
+        if (isExpanded && thread != null) {
+            Spacer(Modifier.height(MeeshySpacing.sm))
+            Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+                thread.replies.forEach { reply ->
+                    CommentRow(comment = reply, onToggleLike = onToggleLike)
+                }
+            }
         }
     }
 }

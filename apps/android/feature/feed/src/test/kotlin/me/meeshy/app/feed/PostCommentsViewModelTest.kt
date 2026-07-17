@@ -279,4 +279,121 @@ class PostCommentsViewModelTest {
         vm.toggleLike("  ")
         coVerify(exactly = 0) { repository.likeComment(any(), any()) }
     }
+
+    // --- Reply threads (1-level) ---
+
+    private fun reply(id: String, parentId: String, content: String = "r") =
+        ApiPostComment(id = id, content = content, parentId = parentId)
+
+    @Test
+    fun `toggleReplies expands the thread and loads its replies under the parent`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1"), reply("r2", "c1")))
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+        vm.state.test {
+            val thread = awaitItem().replyThreads.getValue("c1")
+            assertThat(thread.isExpanded).isTrue()
+            assertThat(thread.isLoading).isFalse()
+            assertThat(thread.replies.map { it.id }).containsExactly("r1", "r2").inOrder()
+        }
+        coVerify(exactly = 1) { repository.getCommentReplies("p1", "c1", null, any()) }
+    }
+
+    @Test
+    fun `a second toggleReplies collapses the thread`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1")))
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+        vm.toggleReplies("c1")
+        vm.state.test {
+            assertThat(awaitItem().replyThreads).doesNotContainKey("c1")
+        }
+    }
+
+    @Test
+    fun `re-expanding a loaded thread does not refetch the replies`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1")))
+        val vm = viewModel()
+        vm.toggleReplies("c1") // expand + load
+        vm.toggleReplies("c1") // collapse
+        vm.toggleReplies("c1") // re-expand — should reuse cached replies
+        vm.state.test {
+            val thread = awaitItem().replyThreads.getValue("c1")
+            assertThat(thread.replies.map { it.id }).containsExactly("r1")
+        }
+        coVerify(exactly = 1) { repository.getCommentReplies("p1", "c1", null, any()) }
+    }
+
+    @Test
+    fun `a reply-load failure collapses the thread`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Failure(ApiError(message = "boom"))
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+        vm.state.test {
+            assertThat(awaitItem().replyThreads).doesNotContainKey("c1")
+        }
+    }
+
+    @Test
+    fun `toggleReplies guards a double tap so only one reply fetch fires`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("c1")))
+        val gate = CompletableDeferred<NetworkResult<List<ApiPostComment>>>()
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } coAnswers { gate.await() }
+        val vm = viewModel()
+        vm.toggleReplies("c1") // expand + begin load
+        vm.toggleReplies("c1") // collapse
+        vm.toggleReplies("c1") // re-expand while load still in flight → must not refetch
+        gate.complete(NetworkResult.Success(listOf(reply("r1", "c1"))))
+        coVerify(exactly = 1) { repository.getCommentReplies("p1", "c1", null, any()) }
+    }
+
+    @Test
+    fun `toggleReplies is inert for a blank commentId`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("c1")))
+        val vm = viewModel()
+        vm.toggleReplies("  ")
+        coVerify(exactly = 0) { repository.getCommentReplies(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `toggleReplies is inert for a blank postId`() = runTest {
+        val vm = viewModel(postId = null)
+        vm.toggleReplies("c1")
+        coVerify(exactly = 0) { repository.getCommentReplies(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `a reply mixed into the top-level page is not rendered as a top-level comment`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("c1"), reply("r1", "c1")))
+        val vm = viewModel()
+        vm.state.test {
+            assertThat(awaitItem().comments.map { it.id }).containsExactly("c1")
+        }
+    }
+
+    @Test
+    fun `toggleLike likes a loaded reply row`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1")))
+        coEvery { repository.likeComment("p1", "r1") } returns NetworkResult.Success(Unit)
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+        vm.toggleLike("r1")
+        vm.state.test {
+            val thread = awaitItem().replyThreads.getValue("c1")
+            assertThat(thread.replies.single { it.id == "r1" }.isLiked).isTrue()
+        }
+        coVerify(exactly = 1) { repository.likeComment("p1", "r1") }
+    }
 }

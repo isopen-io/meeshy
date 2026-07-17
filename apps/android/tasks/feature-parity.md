@@ -1673,8 +1673,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       reconciled against the cache) + accent-tinted bookmark button in the feed card
       (slice `feed-realtime-bookmark-sync`, 2026-07-17)
 - [ ] Adaptive multi-image collage layouts (1–5+ media) + fullscreen gallery
-- [ ] Threaded comments: auto-preview replies, expand threads ("view N more"), comment likes,
-      mentions, effects/blur, per-comment language switcher
+- [~] Threaded comments: expand threads ("view N replies") + comment likes **done**; auto-preview
+      replies, mentions, effects/blur, per-comment language switcher still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
@@ -1715,8 +1715,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       when liked, `FavoriteBorder` + secondary otherwise — exact parity with the feed-post like) reusing the
       shared `feed_like`/`feed_unlike` strings (no new strings). +25 tests (15 `CommentLikeStateTest`,
       +3 `CommentProjectionTest`, +7 `PostCommentsViewModelTest`; mutation-proven: dropping the in-flight
-      guard fails only the double-tap guard test). **Still open:** comment replies (`getCommentReplies`)/
-      mentions, post-detail realtime room, per-post + comment cache-first.
+      guard fails only the double-tap guard test).
+      **Comment replies (1-level) now landed** (slice `feed-comment-replies`, 2026-07-17): each top-level
+      comment with `replyCount > 0` shows a natural "View N replies" affordance that expands into indented
+      reply rows, on the **existing** `PostRepository.getCommentReplies`. `:feature:feed` pure —
+      `CommentRepliesState` (immutable per-parent SSOT: `expandedIds`/`loadingIds`/`loadedIds`/
+      `repliesByParent`; `expanded`/`collapsed` idempotent, `beginLoad` returns `null` when already loading
+      **or already loaded** so a collapse-then-re-expand never refetches — cache-first Instant-App;
+      `loaded` stores rows + marks loaded + clears loading; `failed` clears loading **and collapses** the
+      thread exactly as iOS `PostDetailViewModel` does on error). `PostCommentsViewModel.toggleReplies`
+      guards blank post/comment ids, expands + fetches once, seeds reply-row likes from
+      `currentUserReactions`, and is cancellation-safe. The projection now **filters the top-level list to
+      `parentId == null`** (mirror of iOS `topLevelComments`) so a reply mixed into the page never renders
+      twice; reply rows reuse `CommentProjection`/`CommentRow` so likes work on replies too. Compose:
+      accent-coherent Indigo toggle + discreet loading spinner + indented reply column. EN/FR/ES/PT
+      (`post_comments_view_replies` plural + `post_comments_hide_replies`). +23 tests (14
+      `CommentRepliesStateTest`, +9 `PostCommentsViewModelTest`; mutation-proven: dropping the
+      already-loaded guard fails exactly the 4 no-refetch tests). **Still open:** auto-preview of the first
+      replies, reply composition (replying to a specific comment), mentions, post-detail realtime room,
+      per-post + comment cache-first.
       Prior comment thread: +41 tests (6 `CommentPrismeTest`, 9 `CommentProjectionTest`,
       12 `CommentThreadStateTest`, 14 `PostCommentsViewModelTest`).
       +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).
