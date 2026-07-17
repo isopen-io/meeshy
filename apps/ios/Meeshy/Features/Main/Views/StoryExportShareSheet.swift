@@ -84,7 +84,7 @@ struct StoryExportShareSheet: View {
                 .accessibilityHidden(true)
             Text(String(
                 localized: "story.export.share.subtitle",
-                defaultValue: "Bake un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."
+                defaultValue: "Génère un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."
             ))
             .font(MeeshyFont.relative(14))
             .multilineTextAlignment(.center)

@@ -37709,6 +37709,41 @@
         }
       }
     },
+    "story.export.share.subtitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstellt ein MP4, das der Vorschau entspricht, um es außerhalb von Meeshy zu teilen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Generates an MP4 that matches the preview, to share it outside Meeshy."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Genera un MP4 fiel a la vista previa para compartirlo fuera de Meeshy."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Génère un MP4 fidèle à la prévisualisation pour le partager hors Meeshy."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gera um MP4 fiel à pré-visualização para compartilhá-lo fora do Meeshy."
+          }
+        }
+      }
+    },
     "story.export.share.title" : {
       "extractionState" : "manual",
       "localizations" : {

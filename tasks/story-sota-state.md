@@ -1125,6 +1125,37 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
+## it.103 — C17 suite : export MP4 (sous-titre sheet non localisé) + vérif flux complet
+
+- Reprise HORS scope it.102 : export MP4 (jamais testé de bout en bout jusqu'ici).
+  Sheet ⋯ Export (sidebar reader, author-only) ouverte sur une story publiée : titre
+  « Export as video » + bouton EN corrects, mais le sous-titre affichait « Bake un MP4
+  fidèle à la prévisualisation pour le partager hors Meeshy. » — FR au milieu d'un écran
+  EN, MÊME signature que it.102 (mélange linguistique intra-écran). Particularité : le
+  texte FR source lui-même contenait déjà un mot anglais (« Bake ») — coquille d'auteur en
+  plus du défaut de localisation.
+- Root cause : contrairement à it.95-it.102 (bugs SDK/MeeshyUI), ce fichier
+  (`apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift`) est APP-side — pas de
+  piège `bundle: .module` ici. Cause unique : `story.export.share.subtitle` était
+  ABSENTE à 100 % du catalogue APP alors que ses 4 clés sœurs du même écran
+  (`.title`, `.errorTitle`, `.languageLabel`, `.languageOriginal`) étaient déjà
+  complètes 5 langues depuis it.95 — un oubli isolé, pas un défaut structurel.
+- Fix : clé `story.export.share.subtitle` ajoutée au catalogue APP (de/en/es/fr/pt-BR,
+  position alphabétique correcte entre `languageOriginal` et `title`) + defaultValue Swift
+  FR corrigée (« Bake » → « Génère »). VÉRIFIÉ SIMULATEUR après clean+rebuild (piège connu
+  `meeshy.sh build` stale artifact rencontré et contourné) : sheet réouverte → tout le texte
+  en EN cohérent (« Generates an MP4 that matches the preview, to share it outside
+  Meeshy. »).
+- **Flux export bout-en-bout vérifié fonctionnel** (jamais testé avant) : tap « Export as
+  video » → bake réel → `UIActivityViewController` natif présenté avec un vrai fichier
+  MP4 (« meeshy-story-export-6a5a2ac126....mp4 », 88 KB) → options Copy/Save
+  Video/Add to Shared Album/Save to Files toutes présentes → fermeture propre, retour au
+  reader sans crash. RAS, feature saine.
+- Reste HORS scope : re-tester le fond vidéo avec un vrai fichier (tentative it.101/103 de
+  contourner les stubs simulateur via `simctl addmedia` infructueuse — tri de la pellicule
+  pas maîtrisable facilement en autonomie, abandonné faute de ROI), audio de fond/premier-plan
+  (lecture réelle), éditeurs plein écran dédiés image/vidéo.
+
 ## it.102 — C17 suite : sheet audience EXCEPT/ONLY (sélection utilisateurs) non localisée
 
 - Reprise du balayage systématique là où it.100 l'avait laissé HORS scope : la sheet
