@@ -274,6 +274,15 @@ struct StoryRingCell: View {
 
     private var isCompact: Bool { context.size <= 44 }
 
+    // VoiceOver : le nom seul ne dit pas si des stories sont non lues (info
+    // portée uniquement par la couleur de l'anneau) — on l'annonce explicitement.
+    private var accessibilityLabelText: String {
+        let status = group.hasUnviewed
+            ? String(localized: "story.tray.a11y.unread", defaultValue: "Stories non lues", bundle: .main)
+            : String(localized: "story.tray.a11y.read", defaultValue: "Stories vues", bundle: .main)
+        return "\(group.username), \(status)"
+    }
+
     var body: some View {
         VStack(spacing: isCompact ? 4 : 5) {
             ZStack {
@@ -318,6 +327,15 @@ struct StoryRingCell: View {
             Logger.messages.info("[StoryRingCell] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
             onViewStory()
         }
+        // La cellule entière est le point d'entrée « ouvrir les stories » (tap
+        // gesture, pas un Button) : sans ceci VoiceOver lit le nom deux fois
+        // (avatar + libellé) sans trait bouton ni action. On fusionne en un
+        // seul élément labellisé actionnable, la couleur d'anneau non lue
+        // devenant lisible. Le menu contextuel de l'avatar reste exposé.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(String(localized: "story.tray.a11y.open", defaultValue: "Ouvre les stories", bundle: .main))
     }
 }
 
