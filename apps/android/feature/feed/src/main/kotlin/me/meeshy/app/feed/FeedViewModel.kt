@@ -367,9 +367,3 @@ private fun FeedUiState.project(
         newPostsCount = newPostsCount,
     )
 }
-
-private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
-    override val systemLanguage: String? = null
-    override val regionalLanguage: String? = null
-    override val customDestinationLanguage: String? = null
-}

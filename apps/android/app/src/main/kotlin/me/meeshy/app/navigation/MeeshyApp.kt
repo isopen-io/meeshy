@@ -54,6 +54,7 @@ import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.conversations.NewConversationScreen
+import me.meeshy.app.feed.BookmarksScreen
 import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.reels.ReelsScreen
@@ -89,6 +90,7 @@ object Routes {
     const val CONVERSATION_SINGULAR_DEEP_LINK = "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
+    const val SAVED_POSTS = "feed/saved"
     const val CALLS = "calls"
     const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
@@ -338,6 +340,13 @@ fun MeeshyApp(
             }
             composable(Routes.FEED) {
                 FeedScreen(
+                    onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+                    onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },
+                )
+            }
+            composable(Routes.SAVED_POSTS) {
+                BookmarksScreen(
+                    onBack = { navController.popBackStack() },
                     onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
                 )
             }
