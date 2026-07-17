@@ -16,14 +16,30 @@ import me.meeshy.sdk.model.ApiPost
  * both the head and the cache-projected list until a background refresh drops them from
  * the cache, at which point [FeedRealtimeReducer.reconcile] releases the tombstone.
  * Android analogue of iOS FeedViewModel removing the post from its in-memory array.
+ *
+ * [likes] are live like-count overrides keyed by post id: a `post:liked` / `post:unliked`
+ * broadcast carries the gateway's ABSOLUTE count, which wins over the (possibly stale)
+ * cache count until a background refresh catches up — at which point
+ * [FeedRealtimeReducer.reconcileLikes] releases the overlay. Android analogue of iOS
+ * FeedViewModel setting `post.likes = data.likeCount` on the two socket streams.
  */
 data class FeedRealtimeHead(
     val posts: List<ApiPost> = emptyList(),
     val newPostsCount: Int = 0,
     val removedIds: Set<String> = emptySet(),
+    val likes: Map<String, LikeOverlay> = emptyMap(),
 ) {
     val hasNewPosts: Boolean get() = newPostsCount > 0
 }
+
+/**
+ * A live like override for a post: the gateway's absolute [count] plus [mine] — whether
+ * the *viewer's own* like flipped (a socket event carrying the viewer's own userId) or
+ * `null` when it was another user's action and the viewer's own `isLiked` must defer to
+ * the cache (or a prior own-action overlay). Mirrors the iOS rule that only sets
+ * `isLiked` when `data.userId == currentUser.id`, while the count is always absolute.
+ */
+data class LikeOverlay(val count: Int, val mine: Boolean?)
 
 /**
  * Pure transitions over [FeedRealtimeHead]. Every transition returns the *same instance*
@@ -68,6 +84,48 @@ object FeedRealtimeReducer {
             newPostsCount = if (inHead) maxOf(0, state.newPostsCount - 1) else state.newPostsCount,
             removedIds = state.removedIds + postId,
         )
+    }
+
+    /**
+     * A socket `post:liked` / `post:unliked` arrived. [likesCount] is the gateway's
+     * ABSOLUTE like count (source of truth for the displayed count — never a delta) and
+     * [mine] is `true`/`false` when the event is the viewer's own like/unlike, or `null`
+     * when it is another user's action: the count still moves, but the viewer's own
+     * `isLiked` defers to the cache or a prior own-action overlay ([mine] is preserved).
+     * Inert for a blank id or when the resulting overlay equals the current one (same
+     * instance → `StateFlow` dedup).
+     */
+    fun like(
+        state: FeedRealtimeHead,
+        postId: String,
+        likesCount: Int,
+        mine: Boolean?,
+    ): FeedRealtimeHead {
+        if (postId.isBlank()) return state
+        val existing = state.likes[postId]
+        val overlay = LikeOverlay(count = likesCount, mine = mine ?: existing?.mine)
+        if (existing == overlay) return state
+        return state.copy(likes = state.likes + (postId to overlay))
+    }
+
+    /**
+     * On each cache re-emit, release like overlays the cache has caught up to: a post the
+     * cache now carries with a matching absolute count (and, when the overlay claims a
+     * viewer-own state, a matching `isLikedByMe`). Overlays for posts still absent from the
+     * cache (a realtime-head arrival, or a not-yet-refreshed post) are kept so a live count
+     * is never reverted to a stale cache value. Inert when nothing changes.
+     */
+    fun reconcileLikes(state: FeedRealtimeHead, cachePosts: List<ApiPost>): FeedRealtimeHead {
+        if (state.likes.isEmpty()) return state
+        val byId = cachePosts.associateBy { it.id }
+        val kept = state.likes.filterNot { (id, overlay) ->
+            val post = byId[id] ?: return@filterNot false
+            val countCaughtUp = (post.likeCount ?: 0) == overlay.count
+            val mineCaughtUp = overlay.mine == null || (post.isLikedByMe == true) == overlay.mine
+            countCaughtUp && mineCaughtUp
+        }
+        if (kept.size == state.likes.size) return state
+        return state.copy(likes = kept)
     }
 
     /**

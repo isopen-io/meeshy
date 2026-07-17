@@ -1,5 +1,25 @@
 # Progress — state & what to do next
 
+> On 2026-07-17 **feed live `post:liked`/`post:unliked` count sync** landed (slice `feed-realtime-like-sync`,
+> feature-parity §Feed → the third §Feed realtime slice, completing the realtime-head trilogy after
+> `feed-new-posts-banner` (#1989) and `feed-realtime-post-deleted` (#1990, squash-merged `dda190e` at the start
+> of this run under rule #0). The previously-unconsumed `SocialSocketManager.postLiked`/`postUnliked` streams now
+> fold through a pure `FeedRealtimeReducer.like` into a `FeedRealtimeHead.likes` overlay (`LikeOverlay(count, mine)`):
+> the gateway's ABSOLUTE `likesCount` overrides a stale cache count, while the viewer's own `isLiked` flips **only**
+> when the socket event carries the viewer's own userId (`mine` true/false) — another user's like moves the count but
+> preserves the viewer's own state (`mine` null → defer / prior own-state preserved). `reconcileLikes` releases an
+> overlay once a refresh's cache count+own-state catches up (never reverting a live count to a stale value); `clear`
+> (pull-to-refresh) drops all overlays. **Surpasses iOS:** a pure, unit-testable overlay law that also fixes the iOS
+> `FeedSocketHandler` bug where *any* user's like flips the viewer's own `isLikedByMe` — Android gates it on userId in
+> one place (the VM, against `sessionRepository.currentUser`). **+23 tests** (reducer 15, VM 8; module suite now 90).
+> **Mutation check (RED proof):** `mine = mine ?: existing?.mine` → `mine = mine` failed exactly the discriminating
+> "another user preserves a prior viewer-own like" test, the other 89 stayed green. **Full gate:** `assembleDebug
+> testDebugUnitTest` (UTF-8-daemon recipe) — APK assembled + all module tests green save the known environmental
+> `:sdk-core` DataStore timeout flake (different test each run; green in isolation at `--max-workers=1`). Reviewer
+> **PASS** (apps/android-only; SDK purity; SSOT; UDF; no floor lowered). **Next slice:** §Feed still-open — the feed
+> post **detail** screen (text/media/repost + threaded comments + post-detail room subscriptions), bookmark/un-bookmark
+> live sync, OR the statuses/moods bar (§G) per the build order.
+
 > On 2026-07-16 **feed live `post:deleted` removal** landed (slice `feed-realtime-post-deleted`,
 > feature-parity §F "Live `post:deleted` removal done" → the second §Feed realtime slice, extending the
 > socket wiring opened by `feed-new-posts-banner`). The `SocialSocketManager.postDeleted` stream was already
@@ -4612,6 +4632,42 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-17 — slice `feed-realtime-like-sync` ✅ impl + local gate green + reviewer PASS → PR + merge
+- **Opened with rule #0:** the prior iteration's PR **#1990** (`feed-realtime-post-deleted`) was open with CI
+  green (workflow "CI" `success` on head `77e656e0`) and `mergeable_state: clean` — squash-merged it to `main`
+  (`dda190e`) before starting, then fetched `main` clean and branched.
+- **Branch:** `claude/apps/android/feed-realtime-like-sync` (off latest `main` `dda190e`).
+- **Slice:** live `post:liked`/`post:unliked` count sync — the exposed-but-unconsumed
+  `SocialSocketManager.postLiked`/`postUnliked` streams now reconcile the displayed like count/own-state live,
+  where before a like from elsewhere only appeared on the next paginated refresh.
+- **Added (production):**
+  - `:feature:feed` — `FeedRealtimeHead.likes: Map<String, LikeOverlay>` (`LikeOverlay(count, mine)`) +
+    `FeedRealtimeReducer.like(postId, likesCount, mine)` — the gateway's ABSOLUTE count overrides a stale
+    cache count; `mine` (true/false for the viewer's own like/unlike, null for another user's) flips `isLiked`
+    only for the viewer, preserving a prior own-state when a later event is another user's. `reconcileLikes`
+    releases an overlay once the cache count/own-state catches up (never reverting a live count to a stale
+    value); `clear` drops all overlays. `FeedViewModel` collects `postLiked`/`postUnliked` → `like` (userId
+    gated against `sessionRepository.currentUser` for `mine`), runs `reconcileLikes` on each cache emit, and
+    applies the overlay to visible cache + realtime posts via `withLikeOverlays`. No Compose change.
+- **Tests (TDD red→green):** +23 — reducer 15 (`like`: record/blank-inert/idempotent/count-update/unlike/
+  another-user-preserves-prior-mine/no-prior-mine; `reconcileLikes`: empty-inert/release-caught-up/keep-count-
+  behind/keep-absent-from-cache/ignore-mine-when-null/keep-mine-behind/partial-release; `clear` drops overlays),
+  VM 8 behavioural (count-live, own-like marks liked, own-unlike clears, another-user never flips own like,
+  count survives stale re-emission, later cache count respected once reconciled, refresh drops overlay).
+  Module suite now **90** (reducer 39, VM 33, builder 18), green in isolation.
+- **Mutation check (RED proof):** `mine = mine ?: existing?.mine` → `mine = mine` in `like` failed **exactly**
+  the discriminating `like by another user … preserves a prior viewer-own like` test; the other 89 stayed green.
+- **Full gate:** `assembleDebug testDebugUnitTest` (system Gradle 8.14.3, UTF-8-daemon recipe) — `:app:assembleDebug`
+  produced the debug APK and every module's JVM unit tests passed **except** the known environmental
+  `:sdk-core` DataStore `TimeoutCancellationException` flake (a *different* DataStore test each run —
+  `InterfaceLanguageStoreTest` then `MediaDownloadPreferencesStoreTest`), which re-ran **green in isolation**
+  at `--max-workers=1` (28s). `:sdk-core` is untouched by this apps/android-only slice.
+- **Reviewer:** PASS — scope `apps/android` only (1 pure `:feature:feed` reducer/overlay + tests, `FeedViewModel`
+  collect+overlay glue + VM tests, tracking docs); no production logic outside apps/android; **SDK purity** (the
+  count/own-state law is a pure feature-layer overlay, the socket plumbing is the injected `SocialSocketManager`);
+  **SSOT** (userId→`mine` decided once in the VM against `sessionRepository.currentUser`); **UDF** + immutable
+  `UiState`; no coverage floor lowered, no test weakened; behavioural, mutation-proven, no tautologies.
 
 ### 2026-07-16 — slice `feed-realtime-post-deleted` ✅ impl + local gate green + reviewer PASS → PR #1990 open ⚠ merge pending (GitHub API 503 outage)
 - **⚠ Merge blocked on infra, not code:** after opening PR #1990 the GitHub API began returning **503 on all

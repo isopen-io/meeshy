@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
+import me.meeshy.sdk.model.SocketPostLikedData
+import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
@@ -49,6 +51,8 @@ class FeedViewModelTest {
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val postCreated = MutableSharedFlow<SocketPostCreatedData>(extraBufferCapacity = 64)
     private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
+    private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
+    private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
@@ -58,6 +62,8 @@ class FeedViewModelTest {
         every { repository.feedHasMore } returns MutableStateFlow(hasMore)
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted
+        every { socialSocket.postLiked } returns postLiked
+        every { socialSocket.postUnliked } returns postUnliked
         return FeedViewModel(repository, session, socialSocket, config)
     }
 
@@ -200,6 +206,8 @@ class FeedViewModelTest {
         every { repository.feedStream(any(), any()) } returns stream
         every { socialSocket.postCreated } returns postCreated
         every { socialSocket.postDeleted } returns postDeleted
+        every { socialSocket.postLiked } returns postLiked
+        every { socialSocket.postUnliked } returns postUnliked
         return FeedViewModel(repository, session, socialSocket, config)
     }
 
@@ -412,5 +420,103 @@ class FeedViewModelTest {
         val s = vm.state.value
         assertThat(s.posts.map { it.id }).containsExactly("new", "1").inOrder()
         assertThat(s.newPostsCount).isEqualTo(1)
+    }
+
+    // --- Realtime like sync (post:liked / post:unliked) ---
+
+    private val me = MeeshyUser(id = "me", username = "me")
+
+    private fun likedPost(id: String, count: Int, liked: Boolean) =
+        ApiPost(id = id, content = "Post $id", likeCount = count, isLikedByMe = liked)
+
+    @Test
+    fun `a realtime post-liked updates the displayed like count live`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(likedPost("1", count = 2, liked = false)), 0L)))
+
+        postLiked.emit(SocketPostLikedData(postId = "1", userId = "other", likesCount = 7))
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.likeCount).isEqualTo(7)
+        assertThat(card.isLiked).isFalse()
+    }
+
+    @Test
+    fun `a realtime post-liked by the viewer marks the post liked`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(likedPost("1", count = 2, liked = false)), 0L)))
+
+        postLiked.emit(SocketPostLikedData(postId = "1", userId = "me", likesCount = 3))
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.likeCount).isEqualTo(3)
+        assertThat(card.isLiked).isTrue()
+    }
+
+    @Test
+    fun `a realtime post-unliked by the viewer clears the like`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(likedPost("1", count = 4, liked = true)), 0L)))
+
+        postUnliked.emit(SocketPostUnlikedData(postId = "1", userId = "me", likesCount = 3))
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.likeCount).isEqualTo(3)
+        assertThat(card.isLiked).isFalse()
+    }
+
+    @Test
+    fun `a realtime post-liked by another user never flips the viewer's own like`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(likedPost("1", count = 4, liked = true)), 0L)))
+
+        postLiked.emit(SocketPostLikedData(postId = "1", userId = "other", likesCount = 9))
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.likeCount).isEqualTo(9)
+        assertThat(card.isLiked).isTrue()
+    }
+
+    @Test
+    fun `the live like count survives a background feed re-emission`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Stale(listOf(likedPost("1", count = 2, liked = false)), 0L),
+        )
+        val vm = viewModel(me, stream)
+        postLiked.emit(SocketPostLikedData(postId = "1", userId = "other", likesCount = 7))
+        assertThat(vm.state.value.posts.single().likeCount).isEqualTo(7)
+
+        // A stale server re-emission still reports the old count — the live overlay holds.
+        stream.value = CacheResult.Fresh(listOf(likedPost("1", count = 2, liked = false)), 100L)
+
+        assertThat(vm.state.value.posts.single().likeCount).isEqualTo(7)
+    }
+
+    @Test
+    fun `a later cache count is respected once the overlay is reconciled away`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(likedPost("1", count = 2, liked = false)), 0L),
+        )
+        val vm = viewModel(me, stream)
+        postLiked.emit(SocketPostLikedData(postId = "1", userId = "other", likesCount = 5))
+        assertThat(vm.state.value.posts.single().likeCount).isEqualTo(5)
+
+        // The cache catches up to the overlay count → the overlay is released.
+        stream.value = CacheResult.Fresh(listOf(likedPost("1", count = 5, liked = false)), 100L)
+        assertThat(vm.state.value.posts.single().likeCount).isEqualTo(5)
+
+        // A subsequent cache count is now authoritative — no stale overlay pins it.
+        stream.value = CacheResult.Fresh(listOf(likedPost("1", count = 8, liked = false)), 200L)
+        assertThat(vm.state.value.posts.single().likeCount).isEqualTo(8)
+    }
+
+    @Test
+    fun `refresh drops a live like overlay`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(likedPost("1", count = 2, liked = false)), 0L),
+        )
+        val vm = viewModel(me, stream)
+        postLiked.emit(SocketPostLikedData(postId = "1", userId = "other", likesCount = 7))
+        assertThat(vm.state.value.posts.single().likeCount).isEqualTo(7)
+
+        vm.refresh()
+
+        assertThat(vm.state.value.posts.single().likeCount).isEqualTo(2)
     }
 }

@@ -84,17 +84,24 @@ class FeedViewModel @Inject constructor(
                     latestCachePosts = cachePosts
                     val cacheIds = cachePosts.mapTo(HashSet()) { it.id }
 
-                    // Prune buffered posts the cache has now surfaced (memory hygiene); the
-                    // display filter below already keeps them from double-rendering.
-                    val reconciled = FeedRealtimeReducer.reconcile(head, cacheIds)
+                    // Prune buffered posts the cache has surfaced (memory hygiene) and release
+                    // like overlays the cache has caught up to; the display work below already
+                    // keeps buffered posts from double-rendering.
+                    val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
+                    val reconciled = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
                     if (reconciled !== head) realtimeHead.value = reconciled
 
                     // Tombstoned posts (live `post:deleted`) are hidden from both the head and
-                    // the cache-projected list until a refresh drops them from the cache.
+                    // the cache-projected list until a refresh drops them from the cache. Live
+                    // like overlays (`post:liked`/`post:unliked`) override the cache count/own-state.
                     val removed = reconciled.removedIds
-                    val visibleCache = if (removed.isEmpty()) cachePosts
-                    else cachePosts.filterNot { it.id in removed }
-                    val visibleRealtime = reconciled.posts.filterNot { it.id in cacheIds || it.id in removed }
+                    val likes = reconciled.likes
+                    val visibleCache = cachePosts
+                        .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
+                        .withLikeOverlays(likes)
+                    val visibleRealtime = reconciled.posts
+                        .filterNot { it.id in cacheIds || it.id in removed }
+                        .withLikeOverlays(likes)
                     latestPosts = visibleRealtime + visibleCache
                     _state.update {
                         it.project(
@@ -120,7 +127,26 @@ class FeedViewModel @Inject constructor(
                 realtimeHead.update { FeedRealtimeReducer.remove(it, payload.postId) }
             }
         }
+        viewModelScope.launch {
+            socialSocket.postLiked.collect { payload ->
+                val mine = if (payload.userId == currentUserId()) true else null
+                realtimeHead.update { FeedRealtimeReducer.like(it, payload.postId, payload.likesCount, mine) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postUnliked.collect { payload ->
+                val mine = if (payload.userId == currentUserId()) false else null
+                realtimeHead.update { FeedRealtimeReducer.like(it, payload.postId, payload.likesCount, mine) }
+            }
+        }
     }
+
+    /**
+     * The signed-in user's id, or null for an anonymous session — used to tell the
+     * viewer's own `post:liked`/`post:unliked` echo (flip `isLiked`) from another
+     * user's like (count only). Mirrors the iOS `data.userId == currentUser.id` guard.
+     */
+    private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
 
     /**
      * Tap on the "new posts" banner (scroll-to-top): clear the banner count. The posts
@@ -222,6 +248,23 @@ private data class FeedInputs(
     val overrides: Map<String, String>,
     val head: FeedRealtimeHead,
 )
+
+/**
+ * Overlay each post's live like state (absolute count + viewer-own flip) when a
+ * `post:liked`/`post:unliked` overlay targets it. An absent overlay leaves the post
+ * untouched; a `null` [LikeOverlay.mine] keeps the cache's `isLikedByMe` (another user's
+ * like), so only the count moves. Returns the same list when no overlay applies.
+ */
+private fun List<ApiPost>.withLikeOverlays(likes: Map<String, LikeOverlay>): List<ApiPost> {
+    if (likes.isEmpty()) return this
+    return map { post ->
+        val overlay = likes[post.id] ?: return@map post
+        post.copy(
+            likeCount = overlay.count,
+            isLikedByMe = overlay.mine ?: post.isLikedByMe,
+        )
+    }
+}
 
 /** The posts a cache result carries, or null when it holds none (keep the prior list). */
 private fun CacheResult<List<ApiPost>>.postsOrNull(): List<ApiPost>? = when (this) {

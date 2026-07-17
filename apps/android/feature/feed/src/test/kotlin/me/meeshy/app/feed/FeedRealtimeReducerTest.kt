@@ -201,6 +201,127 @@ class FeedRealtimeReducerTest {
         assertThat(next.newPostsCount).isEqualTo(1)
     }
 
+    // --- like (post:liked / post:unliked) ---
+
+    private fun likedPost(id: String, count: Int, mine: Boolean) =
+        ApiPost(id = id, content = "Post $id", likeCount = count, isLikedByMe = mine)
+
+    @Test
+    fun `like records the gateway's absolute count as an overlay`() {
+        val next = FeedRealtimeReducer.like(FeedRealtimeHead(), postId = "a", likesCount = 5, mine = true)
+
+        assertThat(next.likes).containsExactly("a", LikeOverlay(count = 5, mine = true))
+    }
+
+    @Test
+    fun `like of a blank id is inert`() {
+        val state = FeedRealtimeHead()
+        val next = FeedRealtimeReducer.like(state, postId = "   ", likesCount = 3, mine = true)
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `like with a repeated identical overlay is inert`() {
+        val once = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = true)
+        val twice = FeedRealtimeReducer.like(once, "a", likesCount = 5, mine = true)
+
+        assertThat(twice).isSameInstanceAs(once)
+    }
+
+    @Test
+    fun `like updates the absolute count on a fresh broadcast`() {
+        val once = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = true)
+        val next = FeedRealtimeReducer.like(once, "a", likesCount = 8, mine = true)
+
+        assertThat(next.likes["a"]).isEqualTo(LikeOverlay(count = 8, mine = true))
+    }
+
+    @Test
+    fun `unlike overlays a false viewer-own state`() {
+        val next = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 4, mine = false)
+
+        assertThat(next.likes["a"]).isEqualTo(LikeOverlay(count = 4, mine = false))
+    }
+
+    @Test
+    fun `like by another user moves the count but preserves a prior viewer-own like`() {
+        val own = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = true)
+        val other = FeedRealtimeReducer.like(own, "a", likesCount = 6, mine = null)
+
+        assertThat(other.likes["a"]).isEqualTo(LikeOverlay(count = 6, mine = true))
+    }
+
+    @Test
+    fun `like by another user with no prior overlay leaves the viewer-own state unknown`() {
+        val next = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 3, mine = null)
+
+        assertThat(next.likes["a"]).isEqualTo(LikeOverlay(count = 3, mine = null))
+    }
+
+    // --- reconcileLikes ---
+
+    @Test
+    fun `reconcileLikes on an empty overlay map is inert`() {
+        val state = FeedRealtimeHead()
+        val next = FeedRealtimeReducer.reconcileLikes(state, cachePosts = listOf(likedPost("a", 5, true)))
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `reconcileLikes releases an overlay the cache has caught up to`() {
+        val state = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = true)
+        val next = FeedRealtimeReducer.reconcileLikes(state, listOf(likedPost("a", count = 5, mine = true)))
+
+        assertThat(next.likes).isEmpty()
+    }
+
+    @Test
+    fun `reconcileLikes keeps an overlay whose count the cache has not caught up to`() {
+        val state = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = true)
+        val next = FeedRealtimeReducer.reconcileLikes(state, listOf(likedPost("a", count = 3, mine = true)))
+
+        assertThat(next).isSameInstanceAs(state)
+        assertThat(next.likes["a"]).isEqualTo(LikeOverlay(count = 5, mine = true))
+    }
+
+    @Test
+    fun `reconcileLikes keeps an overlay for a post still absent from the cache`() {
+        val state = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = null)
+        val next = FeedRealtimeReducer.reconcileLikes(state, cachePosts = emptyList())
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `reconcileLikes ignores the viewer-own state when the overlay claims none`() {
+        val state = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = null)
+        val next = FeedRealtimeReducer.reconcileLikes(state, listOf(likedPost("a", count = 5, mine = false)))
+
+        assertThat(next.likes).isEmpty()
+    }
+
+    @Test
+    fun `reconcileLikes keeps an overlay whose viewer-own state the cache has not caught up to`() {
+        val state = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = true)
+        val next = FeedRealtimeReducer.reconcileLikes(state, listOf(likedPost("a", count = 5, mine = false)))
+
+        assertThat(next.likes["a"]).isEqualTo(LikeOverlay(count = 5, mine = true))
+    }
+
+    @Test
+    fun `reconcileLikes releases only the overlays the cache has caught up to`() {
+        val a = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = true)
+        val ab = FeedRealtimeReducer.like(a, "b", likesCount = 9, mine = null)
+        val next = FeedRealtimeReducer.reconcileLikes(
+            ab,
+            listOf(likedPost("a", count = 5, mine = true), likedPost("b", count = 2, mine = false)),
+        )
+
+        assertThat(next.likes.keys).containsExactly("b")
+    }
+
     // --- clear ---
 
     @Test
@@ -218,6 +339,15 @@ class FeedRealtimeReducerTest {
         val next = FeedRealtimeReducer.clear(removed)
 
         assertThat(next.removedIds).isEmpty()
+        assertThat(next).isEqualTo(FeedRealtimeHead())
+    }
+
+    @Test
+    fun `clear also drops every live like overlay`() {
+        val overlaid = FeedRealtimeReducer.like(FeedRealtimeHead(), "a", likesCount = 5, mine = true)
+        val next = FeedRealtimeReducer.clear(overlaid)
+
+        assertThat(next.likes).isEmpty()
         assertThat(next).isEqualTo(FeedRealtimeHead())
     }
 
