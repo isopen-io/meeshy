@@ -208,6 +208,19 @@ data class SocketPostDeletedData(
     val deletedAt: String? = null,
 )
 
+/**
+ * `post:bookmarked` — a personal event emitted only to the acting user's sockets
+ * (via `emitToUser`), so [bookmarked] is always the viewer's own state and
+ * [bookmarkCount] the gateway's ABSOLUTE bookmark count after the mutation
+ * (mirrors [SocketPostLikedData.likesCount]). Port of PostBookmarkedEventData.
+ */
+@Serializable
+data class SocketPostBookmarkedData(
+    val postId: String,
+    val bookmarked: Boolean = false,
+    val bookmarkCount: Int = 0,
+)
+
 @Serializable
 data class SocketCommentAddedData(
     val postId: String,

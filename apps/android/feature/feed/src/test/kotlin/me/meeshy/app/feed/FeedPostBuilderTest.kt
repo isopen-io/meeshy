@@ -21,6 +21,8 @@ class FeedPostBuilderTest {
         author: ApiAuthor? = ApiAuthor(id = "u1", username = "alice", displayName = "Alice"),
         likeCount: Int? = 3,
         isLikedByMe: Boolean? = false,
+        bookmarkCount: Int? = 4,
+        isBookmarkedByMe: Boolean? = false,
         commentCount: Int? = 2,
         repostCount: Int? = 1,
         media: List<ApiPostMedia>? = null,
@@ -32,6 +34,8 @@ class FeedPostBuilderTest {
         author = author,
         likeCount = likeCount,
         isLikedByMe = isLikedByMe,
+        bookmarkCount = bookmarkCount,
+        isBookmarkedByMe = isBookmarkedByMe,
         commentCount = commentCount,
         repostCount = repostCount,
         media = media,
@@ -120,11 +124,23 @@ class FeedPostBuilderTest {
 
     @Test
     fun build_nullCountsBecomeZero() {
-        val p = post(likeCount = null, commentCount = null, repostCount = null)
+        val p = post(likeCount = null, commentCount = null, repostCount = null, bookmarkCount = null)
         val result = FeedPostBuilder.build(p, Prefs(), null)
         assertThat(result.likeCount).isEqualTo(0)
         assertThat(result.commentCount).isEqualTo(0)
         assertThat(result.repostCount).isEqualTo(0)
+        assertThat(result.bookmarkCount).isEqualTo(0)
+    }
+
+    @Test
+    fun build_bookmarkStateComesFromIsBookmarkedByMe() {
+        // A post bookmarked by others (count 4) but not by me must NOT show as bookmarked.
+        val notMine = post(bookmarkCount = 4, isBookmarkedByMe = false)
+        assertThat(FeedPostBuilder.build(notMine, Prefs(), null).isBookmarked).isFalse()
+        assertThat(FeedPostBuilder.build(notMine, Prefs(), null).bookmarkCount).isEqualTo(4)
+
+        val mine = post(bookmarkCount = 1, isBookmarkedByMe = true)
+        assertThat(FeedPostBuilder.build(mine, Prefs(), null).isBookmarked).isTrue()
     }
 
     // --- Prisme language switch (per-post active-language override) ---

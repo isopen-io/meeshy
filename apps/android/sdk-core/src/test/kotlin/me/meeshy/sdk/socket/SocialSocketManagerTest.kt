@@ -63,6 +63,21 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `post bookmarked payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postBookmarked.test {
+            handlers.getValue("post:bookmarked").invoke(
+                arrayOf(JSONObject("""{"postId":"p1","bookmarked":true,"bookmarkCount":7}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.bookmarked).isTrue()
+            assertThat(event.bookmarkCount).isEqualTo(7)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a malformed reaction payload is ignored without emitting`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.storyReacted.test {

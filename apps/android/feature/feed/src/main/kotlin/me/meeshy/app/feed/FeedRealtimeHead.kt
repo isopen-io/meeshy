@@ -22,12 +22,19 @@ import me.meeshy.sdk.model.ApiPost
  * cache count until a background refresh catches up — at which point
  * [FeedRealtimeReducer.reconcileLikes] releases the overlay. Android analogue of iOS
  * FeedViewModel setting `post.likes = data.likeCount` on the two socket streams.
+ *
+ * [bookmarks] are live bookmark overrides keyed by post id: a `post:bookmarked` broadcast
+ * is a **personal** event (emitted only to the acting user) carrying the gateway's ABSOLUTE
+ * bookmark count and the viewer's own state, which win over the (possibly stale) cache until
+ * a refresh catches up — at which point [FeedRealtimeReducer.reconcileBookmarks] releases the
+ * overlay. Android analogue of iOS setting `post.isBookmarkedByMe`/`bookmarkCount` on the stream.
  */
 data class FeedRealtimeHead(
     val posts: List<ApiPost> = emptyList(),
     val newPostsCount: Int = 0,
     val removedIds: Set<String> = emptySet(),
     val likes: Map<String, LikeOverlay> = emptyMap(),
+    val bookmarks: Map<String, BookmarkOverlay> = emptyMap(),
 ) {
     val hasNewPosts: Boolean get() = newPostsCount > 0
 }
@@ -40,6 +47,14 @@ data class FeedRealtimeHead(
  * `isLiked` when `data.userId == currentUser.id`, while the count is always absolute.
  */
 data class LikeOverlay(val count: Int, val mine: Boolean?)
+
+/**
+ * A live bookmark override for a post: the gateway's absolute [count] plus [mine], the
+ * viewer's own bookmark state. Unlike [LikeOverlay.mine] this is never `null` — the
+ * `post:bookmarked` event is personal (only ever the viewer's own action), so both the
+ * count and the state are always authoritative for the viewer.
+ */
+data class BookmarkOverlay(val count: Int, val mine: Boolean)
 
 /**
  * Pure transitions over [FeedRealtimeHead]. Every transition returns the *same instance*
@@ -126,6 +141,44 @@ object FeedRealtimeReducer {
         }
         if (kept.size == state.likes.size) return state
         return state.copy(likes = kept)
+    }
+
+    /**
+     * A personal `post:bookmarked` arrived. [bookmarkCount] is the gateway's ABSOLUTE
+     * bookmark count (source of truth for the displayed count — never a delta) and
+     * [bookmarked] is the viewer's own bookmark state (the event is personal, so it is
+     * always authoritative). Inert for a blank id or when the resulting overlay equals
+     * the current one (same instance → `StateFlow` dedup).
+     */
+    fun bookmark(
+        state: FeedRealtimeHead,
+        postId: String,
+        bookmarkCount: Int,
+        bookmarked: Boolean,
+    ): FeedRealtimeHead {
+        if (postId.isBlank()) return state
+        val overlay = BookmarkOverlay(count = bookmarkCount, mine = bookmarked)
+        if (state.bookmarks[postId] == overlay) return state
+        return state.copy(bookmarks = state.bookmarks + (postId to overlay))
+    }
+
+    /**
+     * On each cache re-emit, release bookmark overlays the cache has caught up to: a post
+     * the cache now carries with a matching absolute count AND a matching `isBookmarkedByMe`.
+     * Overlays for posts still absent from the cache (or not yet refreshed) are kept so a
+     * live bookmark is never reverted to a stale cache value. Inert when nothing changes.
+     */
+    fun reconcileBookmarks(state: FeedRealtimeHead, cachePosts: List<ApiPost>): FeedRealtimeHead {
+        if (state.bookmarks.isEmpty()) return state
+        val byId = cachePosts.associateBy { it.id }
+        val kept = state.bookmarks.filterNot { (id, overlay) ->
+            val post = byId[id] ?: return@filterNot false
+            val countCaughtUp = (post.bookmarkCount ?: 0) == overlay.count
+            val mineCaughtUp = (post.isBookmarkedByMe == true) == overlay.mine
+            countCaughtUp && mineCaughtUp
+        }
+        if (kept.size == state.bookmarks.size) return state
+        return state.copy(bookmarks = kept)
     }
 
     /**

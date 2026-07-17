@@ -9,6 +9,8 @@
     <string name="feed_comments">Commentaires</string>
     <string name="feed_reposts">Republications</string>
     <string name="feed_unlike">Je n\'aime plus</string>
+    <string name="feed_bookmark">Enregistrer</string>
+    <string name="feed_unbookmark">Retirer l\'enregistrement</string>
     <string name="feed_hidden_images">+%1$d</string>
     <string name="feed_pinned">Épinglé</string>
     <string name="feed_edited">Modifié</string>

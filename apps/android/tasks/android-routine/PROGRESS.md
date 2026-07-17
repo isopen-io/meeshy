@@ -1,5 +1,48 @@
 # Progress — state & what to do next
 
+> On 2026-07-17 **feed bookmark / un-bookmark — optimistic toggle + live `post:bookmarked` overlay** landed
+> (slice `feed-realtime-bookmark-sync`, feature-parity §Feed → "Bookmark / un-bookmark" ✅ — the fourth §Feed
+> realtime slice, extending the like-overlay pattern of `feed-realtime-like-sync` (#1992) to the bookmark
+> action). The gateway already exposed `bookmark`/`removeBookmark` REST + the personal `post:bookmarked` socket
+> event, but Android rendered **no** bookmark UI, had no optimistic toggle, and `ApiPost` carried no
+> `isBookmarkedByMe`. **Ships a full vertical:** (1) `core:model` — `ApiPost.isBookmarkedByMe` (hydrated from the
+> feed projection, which the gateway already sets) + `SocketPostBookmarkedData(postId, bookmarked, bookmarkCount)`;
+> (2) `sdk-core` — `SocialSocketManager.postBookmarked` stream (`listen("post:bookmarked")`, picked up by the
+> existing `attach()`; no coordinator change) + `PostRepository.toggleBookmark` (optimistic: flips
+> `isBookmarkedByMe` + adjusts `bookmarkCount` instantly, rolls back on `NetworkResult.Failure`, returns the
+> gateway-accepted flag — the exact analogue of `toggleLike`, reusing the renamed generic `adjustedCount`);
+> (3) `:feature:feed` — `FeedRealtimeHead.bookmarks: Map<String, BookmarkOverlay>` + pure `FeedRealtimeReducer.bookmark`
+> / `reconcileBookmarks`. **Surpasses iOS / simpler than likes:** because `post:bookmarked` is a **personal** event
+> (emitted only to the acting user via `emitToUser`), `BookmarkOverlay(count, mine: Boolean)` has a **non-nullable**
+> `mine` — no `mine == null` "another user's action" branch the like overlay needs — so both count AND own-state are
+> always authoritative for the viewer. The overlay's ABSOLUTE gateway count wins over a stale cache count until a
+> background refresh catches up (count **and** own-state), at which point `reconcileBookmarks` releases it (never
+> reverting a live bookmark to a stale value); `clear` (pull-to-refresh) drops all overlays. `FeedViewModel` collects
+> `postBookmarked` → `bookmark`, folds `reconcileBookmarks` into the combine chain, applies `withBookmarkOverlays`
+> to both the realtime head and the cache projection, and adds `toggleBookmark(postId)`. `FeedPostPresentation`
+> gains `isBookmarked`/`bookmarkCount`; `FeedScreen` renders a right-aligned accent-tinted (Indigo500 when active,
+> `Icons.Filled.Bookmark` / `Icons.Outlined.BookmarkBorder`) bookmark `StatAction` with EN/FR/ES/PT labels
+> (`feed_bookmark`/`feed_unbookmark`). **+24 tests** (`FeedRealtimeReducerTest` 12 — bookmark record/blank/dedup/
+> update/un-bookmark, reconcileBookmarks empty/release/keep-count/keep-absent/keep-own-state/partial-release, clear;
+> `FeedViewModelTest` 6 — bookmarked marks+count, unbookmarked clears, survives re-emission, later cache respected
+> after reconcile, refresh drops overlay, toggleBookmark delegates; `FeedPostBuilderTest` 1 — own-state from
+> `isBookmarkedByMe` not count; `PostRepositoryTest` 4 — optimistic bookmark/remove/rollback/unknown-id;
+> `SocialSocketManagerTest` 1 — decode). **Mutation check (RED proof):** `mineCaughtUp = (post.isBookmarkedByMe ==
+> true) == overlay.mine` → `true` failed **exactly 1** discriminating test (`reconcileBookmarks keeps an overlay
+> whose viewer-own state the cache has not caught up to`), the other 108 stayed green — behavioural. **Full gate:**
+> `:app:assembleDebug testDebugUnitTest` (UTF-8-daemon recipe: `LANG=C.utf8`, `--stop`ped daemon,
+> `-Pkotlin.daemon.jvmargs="-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8"`, `--max-workers=3`) → debug APK
+> assembles + all module JVM tests green **save the known environmental `:sdk-core` DataStore timeout flake**
+> (`NotificationPreferencesStoreTest`, different test each run, unrelated to this diff) which passes **green in
+> isolation** (`:sdk-core:testDebugUnitTest --max-workers=1` → BUILD SUCCESSFUL, 111 tasks). Reviewer **PASS**
+> (diff `apps/android` only; **SDK purity** — the overlay laws are pure `:feature:feed` building blocks, the socket
+> stream + optimistic toggle sit in `:sdk-core` alongside their like analogues; **SSOT** — one bookmark-overlay
+> decision surface, `withBookmarkOverlays` reuses it; **UDF** + immutable `UiState`; accent-coherent button, natural
+> tap gesture, no dead end; no coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — the feed
+> post **detail** screen (text/media/repost + threaded comments + post-detail room subscriptions), the **bookmarked
+> posts feed** (saved posts, `PostRepository.getBookmarks` already exists — needs a cache-first list + screen), OR
+> the statuses/moods bar (§G) per the build order.
+
 > On 2026-07-17 **feed live `post:liked`/`post:unliked` count sync** landed (slice `feed-realtime-like-sync`,
 > feature-parity §Feed → the third §Feed realtime slice, completing the realtime-head trilogy after
 > `feed-new-posts-banner` (#1989) and `feed-realtime-post-deleted` (#1990, squash-merged `dda190e` at the start

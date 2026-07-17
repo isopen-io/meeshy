@@ -109,6 +109,7 @@ data class ApiPost(
     val storyEffects: StoryEffects? = null,
     val translations: Map<String, ApiPostTranslationEntry>? = null,
     val isLikedByMe: Boolean? = null,
+    val isBookmarkedByMe: Boolean? = null,
     val isViewedByMe: Boolean? = null,
     val currentUserReactions: List<String>? = null,
     val mentionedUsers: List<MentionedUser>? = null,

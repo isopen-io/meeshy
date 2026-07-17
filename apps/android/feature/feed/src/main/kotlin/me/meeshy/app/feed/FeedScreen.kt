@@ -30,11 +30,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -151,6 +153,7 @@ fun FeedScreen(
                         PostCard(
                             post = post,
                             onLike = { viewModel.toggleLike(post.id) },
+                            onBookmark = { viewModel.toggleBookmark(post.id) },
                             onFlagTap = { code -> viewModel.onPostFlagTap(post.id, code) },
                             // Only reels open the full-screen reel overlay; regular
                             // posts have no detail screen yet, so tapping is inert.
@@ -258,6 +261,7 @@ private fun postRelativeTime(iso: String): String {
 private fun PostCard(
     post: FeedPostPresentation,
     onLike: () -> Unit,
+    onBookmark: () -> Unit,
     onFlagTap: (String) -> Unit,
     onClick: () -> Unit,
 ) {
@@ -360,7 +364,7 @@ private fun PostCard(
             }
 
             Spacer(Modifier.height(MeeshySpacing.sm))
-            PostStatsRow(post = post, onLike = onLike)
+            PostStatsRow(post = post, onLike = onLike, onBookmark = onBookmark)
         }
     }
 }
@@ -494,7 +498,7 @@ private fun imageAspectRatio(image: FeedPostImage): Float {
 }
 
 @Composable
-private fun PostStatsRow(post: FeedPostPresentation, onLike: () -> Unit) {
+private fun PostStatsRow(post: FeedPostPresentation, onLike: () -> Unit, onBookmark: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xl),
@@ -521,6 +525,16 @@ private fun PostStatsRow(post: FeedPostPresentation, onLike: () -> Unit) {
             contentDescription = stringResource(R.string.feed_reposts),
             tint = MeeshyTheme.tokens.textSecondary,
             onClick = null,
+        )
+        Spacer(Modifier.weight(1f))
+        val bookmarkLabel =
+            stringResource(if (post.isBookmarked) R.string.feed_unbookmark else R.string.feed_bookmark)
+        StatAction(
+            icon = if (post.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+            count = post.bookmarkCount,
+            contentDescription = bookmarkLabel,
+            tint = if (post.isBookmarked) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
+            onClick = onBookmark,
         )
     }
 }

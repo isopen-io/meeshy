@@ -97,6 +97,69 @@ class PostRepositoryTest {
     }
 
     @Test
+    fun toggleBookmark_bookmarksOptimistically_andCallsApi() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 2, isBookmarkedByMe = false))
+        coEvery { api.bookmark("p1") } returns okUnit()
+
+        repo.feedStream().test {
+            assertThat((awaitItem() as CacheResult.Fresh).value.post("p1").isBookmarkedByMe).isFalse()
+
+            repo.toggleBookmark("p1")
+
+            val after = awaitItem()
+            val bookmarked = ((after as? CacheResult.Fresh)?.value ?: (after as CacheResult.Stale).value).post("p1")
+            assertThat(bookmarked.isBookmarkedByMe).isTrue()
+            assertThat(bookmarked.bookmarkCount).isEqualTo(3)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify(exactly = 1) { api.bookmark("p1") }
+    }
+
+    @Test
+    fun toggleBookmark_removesWhenAlreadyBookmarked() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 5, isBookmarkedByMe = true))
+        coEvery { api.removeBookmark("p1") } returns okUnit()
+
+        repo.toggleBookmark("p1")
+
+        repo.feedStream().test {
+            val item = awaitItem()
+            val post = ((item as? CacheResult.Fresh)?.value ?: (item as CacheResult.Stale).value).post("p1")
+            assertThat(post.isBookmarkedByMe).isFalse()
+            assertThat(post.bookmarkCount).isEqualTo(4)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify(exactly = 1) { api.removeBookmark("p1") }
+    }
+
+    @Test
+    fun toggleBookmark_rollsBackOnFailure() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 2, isBookmarkedByMe = false))
+        coEvery { api.bookmark("p1") } throws IOException("offline")
+
+        val accepted = repo.toggleBookmark("p1")
+
+        assertThat(accepted).isFalse()
+        repo.feedStream().test {
+            val item = awaitItem()
+            val post = ((item as? CacheResult.Fresh)?.value ?: (item as CacheResult.Stale).value).post("p1")
+            assertThat(post.isBookmarkedByMe).isFalse()
+            assertThat(post.bookmarkCount).isEqualTo(2)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun toggleBookmark_returnsFalseForUnknownPost() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "hi", bookmarkCount = 2, isBookmarkedByMe = false))
+
+        val accepted = repo.toggleBookmark("missing")
+
+        assertThat(accepted).isFalse()
+        coVerify(exactly = 0) { api.bookmark(any()) }
+    }
+
+    @Test
     fun feedHasMore_reflectsFirstPagePagination() = runTest {
         coEvery { api.getFeed(null, any()) } returns
             page(listOf(ApiPost(id = "p1", content = "a")), nextCursor = "c1", hasMore = true)

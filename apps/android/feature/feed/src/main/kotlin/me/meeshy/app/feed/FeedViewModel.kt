@@ -88,20 +88,25 @@ class FeedViewModel @Inject constructor(
                     // like overlays the cache has caught up to; the display work below already
                     // keeps buffered posts from double-rendering.
                     val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
-                    val reconciled = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
+                    val reconciledLikes = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
+                    val reconciled = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
                     if (reconciled !== head) realtimeHead.value = reconciled
 
                     // Tombstoned posts (live `post:deleted`) are hidden from both the head and
                     // the cache-projected list until a refresh drops them from the cache. Live
-                    // like overlays (`post:liked`/`post:unliked`) override the cache count/own-state.
+                    // like overlays (`post:liked`/`post:unliked`) and bookmark overlays
+                    // (`post:bookmarked`) override the cache count/own-state.
                     val removed = reconciled.removedIds
                     val likes = reconciled.likes
+                    val bookmarks = reconciled.bookmarks
                     val visibleCache = cachePosts
                         .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
                         .withLikeOverlays(likes)
+                        .withBookmarkOverlays(bookmarks)
                     val visibleRealtime = reconciled.posts
                         .filterNot { it.id in cacheIds || it.id in removed }
                         .withLikeOverlays(likes)
+                        .withBookmarkOverlays(bookmarks)
                     latestPosts = visibleRealtime + visibleCache
                     _state.update {
                         it.project(
@@ -137,6 +142,13 @@ class FeedViewModel @Inject constructor(
             socialSocket.postUnliked.collect { payload ->
                 val mine = if (payload.userId == currentUserId()) false else null
                 realtimeHead.update { FeedRealtimeReducer.like(it, payload.postId, payload.likesCount, mine) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postBookmarked.collect { payload ->
+                realtimeHead.update {
+                    FeedRealtimeReducer.bookmark(it, payload.postId, payload.bookmarkCount, payload.bookmarked)
+                }
             }
         }
     }
@@ -235,6 +247,18 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    fun toggleBookmark(postId: String) {
+        viewModelScope.launch {
+            try {
+                postRepository.toggleBookmark(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
     }
@@ -262,6 +286,23 @@ private fun List<ApiPost>.withLikeOverlays(likes: Map<String, LikeOverlay>): Lis
         post.copy(
             likeCount = overlay.count,
             isLikedByMe = overlay.mine ?: post.isLikedByMe,
+        )
+    }
+}
+
+/**
+ * Overlay each post's live bookmark state (absolute count + viewer-own flip) when a
+ * `post:bookmarked` overlay targets it. An absent overlay leaves the post untouched.
+ * Because the event is personal, both the count and `isBookmarkedByMe` are authoritative.
+ * Returns the same list when no overlay applies.
+ */
+private fun List<ApiPost>.withBookmarkOverlays(bookmarks: Map<String, BookmarkOverlay>): List<ApiPost> {
+    if (bookmarks.isEmpty()) return this
+    return map { post ->
+        val overlay = bookmarks[post.id] ?: return@map post
+        post.copy(
+            bookmarkCount = overlay.count,
+            isBookmarkedByMe = overlay.mine,
         )
     }
 }
