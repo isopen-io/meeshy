@@ -225,7 +225,7 @@ extension FeedView {
             }
             feedCleanupAttachments()
             HapticFeedback.success()
-            FeedbackToastManager.shared.showSuccess("Post en attente d'envoi")
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.pending", defaultValue: "Post en attente d'envoi", bundle: .main))
             Task {
                 await viewModel.createOfflineMediaPost(
                     localMediaURLs: sources,
@@ -303,7 +303,7 @@ extension FeedView {
                     uploadProgress = nil
                     isUploading = false
                     HapticFeedback.success()
-                    FeedbackToastManager.shared.showSuccess("Post publie")
+                    FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.published", defaultValue: "Post publié", bundle: .main))
                 }
             } catch {
                 await MainActor.run {
@@ -313,7 +313,7 @@ extension FeedView {
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     HapticFeedback.error()
-                    FeedbackToastManager.shared.showError("Echec de la publication du post")
+                    FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.publish_error", defaultValue: "Échec de la publication du post", bundle: .main))
                 }
             }
         }
@@ -341,14 +341,14 @@ extension FeedView {
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess("Post audio publie")
+                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audio_published", defaultValue: "Post audio publié", bundle: .main))
             }
         } catch {
             try? FileManager.default.removeItem(at: audioURL)
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.error()
-                FeedbackToastManager.shared.showError("Echec de la publication du post audio")
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audio_error", defaultValue: "Échec de la publication du post audio", bundle: .main))
             }
         }
     }
@@ -526,11 +526,11 @@ extension FeedView {
 
     func feedLabelForAttachment(_ attachment: MessageAttachment) -> String {
         switch attachment.type {
-        case .image: return "Photo"
-        case .video: return "Vid\u{00E9}o"
-        case .audio: return attachment.durationFormatted ?? "Audio"
-        case .file: return attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.type.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.type.video", defaultValue: "Vidéo", bundle: .main)
+        case .audio: return attachment.durationFormatted ?? String(localized: "attachment.type.audio", defaultValue: "Audio", bundle: .main)
+        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.type.file", defaultValue: "Fichier", bundle: .main) : attachment.originalName
+        case .location: return String(localized: "attachment.type.location", defaultValue: "Position", bundle: .main)
         }
     }
 }
@@ -1212,7 +1212,7 @@ struct FeedComposerSheet: View {
             ).rawValue
             onDismiss()
             HapticFeedback.success()
-            FeedbackToastManager.shared.showSuccess("Post en attente d'envoi")
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.pending", defaultValue: "Post en attente d'envoi", bundle: .main))
             Task {
                 await viewModel.createOfflineMediaPost(
                     localMediaURLs: sources,
@@ -1264,7 +1264,7 @@ struct FeedComposerSheet: View {
                     uploadProgress = nil
                     onDismiss()
                     HapticFeedback.success()
-                    FeedbackToastManager.shared.showSuccess("Post publie")
+                    FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.published", defaultValue: "Post publié", bundle: .main))
                 }
             } catch {
                 await MainActor.run {
@@ -1272,7 +1272,7 @@ struct FeedComposerSheet: View {
                     uploadProgress = nil
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     HapticFeedback.error()
-                    FeedbackToastManager.shared.showError("Echec de la publication du post")
+                    FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.publish_error", defaultValue: "Échec de la publication du post", bundle: .main))
                 }
             }
         }
@@ -1296,13 +1296,13 @@ struct FeedComposerSheet: View {
                 isUploading = false
                 onDismiss()
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess("Post audio publie")
+                FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.audio_published", defaultValue: "Post audio publié", bundle: .main))
             }
         } catch {
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.error()
-                FeedbackToastManager.shared.showError("Echec de la publication")
+                FeedbackToastManager.shared.showError(String(localized: "feed.post.toast.audio_error", defaultValue: "Échec de la publication du post audio", bundle: .main))
             }
         }
     }
@@ -1340,11 +1340,11 @@ struct FeedComposerSheet: View {
 
     private func sheetLabelForAttachment(_ attachment: MessageAttachment) -> String {
         switch attachment.type {
-        case .image: return "Photo"
-        case .video: return "Vid\u{00E9}o"
-        case .audio: return attachment.durationFormatted ?? "Audio"
-        case .file: return attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.type.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.type.video", defaultValue: "Vidéo", bundle: .main)
+        case .audio: return attachment.durationFormatted ?? String(localized: "attachment.type.audio", defaultValue: "Audio", bundle: .main)
+        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.type.file", defaultValue: "Fichier", bundle: .main) : attachment.originalName
+        case .location: return String(localized: "attachment.type.location", defaultValue: "Position", bundle: .main)
         }
     }
 }
