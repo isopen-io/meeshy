@@ -31,6 +31,13 @@
     <string name="post_detail_back">Atrás</string>
     <string name="post_detail_not_found">Esta publicación ya no está disponible</string>
     <string name="post_detail_empty">No se pudo cargar esta publicación</string>
+    <string name="post_comments_title">Comentarios</string>
+    <string name="post_comments_empty">Aún no hay comentarios. ¡Sé el primero!</string>
+    <string name="post_comments_load_more">Ver más comentarios</string>
+    <string name="post_comments_input_hint">Añadir un comentario…</string>
+    <string name="post_comments_send">Enviar</string>
+    <string name="post_comments_sending">Enviando…</string>
+    <string name="post_comments_reply_badge">Respuesta</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d publicación nueva</item>
         <item quantity="other">%1$d publicaciones nuevas</item>

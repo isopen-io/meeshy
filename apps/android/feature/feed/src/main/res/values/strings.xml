@@ -31,6 +31,13 @@
     <string name="post_detail_back">Back</string>
     <string name="post_detail_not_found">This post is no longer available</string>
     <string name="post_detail_empty">Couldn\'t load this post</string>
+    <string name="post_comments_title">Comments</string>
+    <string name="post_comments_empty">No comments yet. Be the first!</string>
+    <string name="post_comments_load_more">Show more comments</string>
+    <string name="post_comments_input_hint">Add a comment…</string>
+    <string name="post_comments_send">Send</string>
+    <string name="post_comments_sending">Sending…</string>
+    <string name="post_comments_reply_badge">Reply</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d new post</item>
         <item quantity="other">%1$d new posts</item>

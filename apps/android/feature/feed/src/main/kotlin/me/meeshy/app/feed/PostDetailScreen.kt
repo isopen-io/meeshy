@@ -263,6 +263,9 @@ private fun PostDetailContent(
                 DetailStatsRow(post = post)
             }
         }
+
+        Spacer(Modifier.height(MeeshySpacing.lg))
+        PostCommentsSection()
     }
 }
 
@@ -406,7 +409,7 @@ private fun PostDetailSkeleton() {
 }
 
 @Composable
-private fun detailRelativeTime(iso: String): String {
+internal fun detailRelativeTime(iso: String): String {
     val strings = rememberRelativeTimeStrings()
     val epochMillis = isoToEpochMillisOrNull(iso) ?: return shortDateTimeLabel(iso)
     return RelativeTimeFormat.short(
