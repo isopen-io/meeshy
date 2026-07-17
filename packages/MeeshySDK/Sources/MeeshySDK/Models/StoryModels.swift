@@ -1172,15 +1172,6 @@ public enum StoryTransitionEffect: String, Codable, CaseIterable, Sendable {
     /// Révélation circulaire : clipShape cercle qui s'élargit (0.4s easeOut) à l'entrée
     case reveal
 
-    public var label: String {
-        switch self {
-        case .fade:   return "Fondu"
-        case .zoom:   return "Zoom"
-        case .slide:  return "Glissement"
-        case .reveal: return "Révélation"
-        }
-    }
-
     public var iconName: String {
         switch self {
         case .fade:   return "sun.max"

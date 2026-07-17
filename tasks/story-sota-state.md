@@ -1125,6 +1125,41 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
+## it.99 — C17 suite : chips « Slide opening » (Fondu/Zoom/Glissement/Révélation) non localisés
+
+- Poursuite de l'exploration systématique des outils (dernier restant : Background/Fond).
+  Le panneau Fond affiche correctement en anglais (« Background », switch-chips Media/
+  Sound/Drawing) MAIS sa section « Slide opening » montrait « None / Fondu / Zoom /
+  Glissement / Révélation » — mélange EN/FR au sein du MÊME panneau. Même classe de bug
+  que C12/C17, nouvelle surface.
+- Root cause : `StoryTransitionEffect.label` (MeeshySDK **core**, pas MeeshyUI) retournait
+  des littéraux FR bruts, jamais wrappés `String(localized:)`. Contrainte architecturale
+  découverte en creusant : le target `MeeshySDK` core n'a AUCUN bundle de ressources/
+  catalogue de chaînes (seul `MeeshyUI` en a un) — `bundle: .module` n'y est donc pas
+  disponible. Décision : le label d'affichage est un souci UI, pas modèle (aligné avec le
+  tableau de placement SDK-purity du CLAUDE.md racine) → `label` retiré du modèle SDK,
+  remplacé par `OpeningEffectChips.title(for:)` (MeeshyUI, là où le catalogue existe déjà
+  et où `story.composer.openingNone` prouvait le pattern).
+  Piège Swift 6 rencontré : `nonisolated static func` a d'abord semblé le bon choix (miroir
+  `BandStateMachine`) mais `Bundle.module` lui-même est MainActor-isolated dans ce target →
+  échec de compile. Fix : garder la fonction MainActor implicite (comme le reste de la vue)
+  et marquer le nouveau `@Suite` de test `@MainActor` plutôt que la fonction `nonisolated`.
+- 4 clés ajoutées au catalogue **MeeshyUI** (pas le catalogue APP comme it.95/97/98 — bundle
+  différent) : `story.composer.opening.fade/zoom/slide/reveal`, 4 langues (de/en/es/fr —
+  ce catalogue n'a pas de pt-BR, cohérent avec l'existant `story.composer.openingNone`).
+  Test ancien `testStoryTransitionEffectLabels` (pinnait les littéraux FR bruts) retiré —
+  remplacé par `OpeningEffectChipsTests` (non-vide + distinct par cas, PAS de valeur exacte
+  pinnée — la locale du simulateur de test peut désormais faire varier le résultat une fois
+  la clé catalog présente ; leçon retenue des tours précédents).
+  Build : piège `meeshy.sh build` faux-négatif « App bundle is older than build start »
+  (2 tentatives) → `meeshy.sh clean` + rebuild complet a résolu. VÉRIFIÉ SIMULATEUR
+  (scratchpad it99-*) : panneau Fond → « None / Fade / Zoom / Slide / Reveal » entièrement EN.
+- Avec it.95/97/98/99, le composer et le reader sont maintenant audités quasi-exhaustivement
+  pour la localisation (Media/Sound/Text/Drawing/Timeline/Background tous vérifiés visu).
+  Reste HORS scope de cet audit (non exploré) : sheet ⋯ transitions (C7, mentionne aussi
+  `closing` jamais rendu — cf. C7b), sheet audience/visibilité, éditeurs plein écran image/
+  vidéo dédiés.
+
 ## it.98 — BUG RÉEL : le switch-chip Timeline ne fonctionnait QUE depuis l'état fermé
 
 - Suite du /loop autonome, exploration systématique des outils composer restants (Sound,

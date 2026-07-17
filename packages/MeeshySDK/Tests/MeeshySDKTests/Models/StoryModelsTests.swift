@@ -85,13 +85,6 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertTrue(cases.contains(.reveal))
     }
 
-    func testStoryTransitionEffectLabels() {
-        XCTAssertEqual(StoryTransitionEffect.fade.label, "Fondu")
-        XCTAssertEqual(StoryTransitionEffect.zoom.label, "Zoom")
-        XCTAssertEqual(StoryTransitionEffect.slide.label, "Glissement")
-        XCTAssertEqual(StoryTransitionEffect.reveal.label, "Révélation")
-    }
-
     func testStoryTransitionEffectIconNames() {
         XCTAssertEqual(StoryTransitionEffect.fade.iconName, "sun.max")
         XCTAssertEqual(StoryTransitionEffect.zoom.iconName, "arrow.up.left.and.arrow.down.right")
