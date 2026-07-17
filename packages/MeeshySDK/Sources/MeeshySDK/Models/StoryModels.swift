@@ -75,15 +75,6 @@ public enum StoryTextWeight: String, Codable, CaseIterable, Sendable {
     case normal     // normal
     case semibold   // semi-gras
     case bold       // gras
-
-    public var displayName: String {
-        switch self {
-        case .thin: return "Fin"
-        case .normal: return "Normal"
-        case .semibold: return "Semi"
-        case .bold: return "Gras"
-        }
-    }
 }
 
 // MARK: - Story Filter
@@ -257,17 +248,6 @@ public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
     case diamond     // losange (path-based)
     case cloud       // bulle de pensée nuage (path-based)
     case speech      // bulle de conversation BD avec queue (path-based)
-
-    public var displayName: String {
-        switch self {
-        case .rounded: return "Arrondi"
-        case .pill: return "Pilule"
-        case .rectangle: return "Carré"
-        case .diamond: return "Losange"
-        case .cloud: return "Nuage"
-        case .speech: return "Bulle BD"
-        }
-    }
 
     /// Les formes historiques se rendent par `cornerRadius` sur la calque ;
     /// les nouvelles formes passent par un tracé `CGPath` dédié (losange,
