@@ -170,6 +170,9 @@ fun FeedScreen(
                             // Only reels open the full-screen reel overlay; regular
                             // posts have no detail screen yet, so tapping is inert.
                             onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
+                            // A tap on the embedded repost opens the ORIGINAL post's detail,
+                            // never the outer reposter card.
+                            onOpenPost = onOpenPost,
                         )
                     }
                     if (state.isLoadingMore) {
@@ -276,6 +279,7 @@ private fun PostCard(
     onBookmark: () -> Unit,
     onFlagTap: (String) -> Unit,
     onClick: () -> Unit,
+    onOpenPost: (String) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
@@ -346,6 +350,11 @@ private fun PostCard(
             if (post.images.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.md))
                 PostImageGrid(images = post.images)
+            }
+
+            post.repostEmbed?.let { embed ->
+                Spacer(Modifier.height(MeeshySpacing.md))
+                RepostEmbedCell(embed = embed, onOpen = onOpenPost)
             }
 
             if (post.isReel) {

@@ -87,6 +87,7 @@ import java.util.Locale
 @Composable
 fun PostDetailScreen(
     onBack: () -> Unit = {},
+    onOpenPost: (String) -> Unit = {},
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -140,6 +141,7 @@ fun PostDetailScreen(
                     else -> PostDetailContent(
                         post = state.post!!,
                         onFlagTap = viewModel::onFlagTap,
+                        onOpenPost = onOpenPost,
                     )
                 }
             }
@@ -151,6 +153,7 @@ fun PostDetailScreen(
 private fun PostDetailContent(
     post: FeedPostPresentation,
     onFlagTap: (String) -> Unit,
+    onOpenPost: (String) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Column(
@@ -231,6 +234,11 @@ private fun PostDetailContent(
                             .clip(RoundedCornerShape(MeeshyRadius.md))
                             .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
                     )
+                }
+
+                post.repostEmbed?.let { embed ->
+                    Spacer(Modifier.height(MeeshySpacing.md))
+                    RepostEmbedCell(embed = embed, onOpen = onOpenPost)
                 }
 
                 if (post.isReel) {

@@ -1,5 +1,42 @@
 # Progress — state & what to do next
 
+> On 2026-07-17 **feed repost / quote embed cell** landed (slice `feed-repost-embed-cell`, feature-parity §Feed →
+> "Repost / quote embed cell in the feed" now `[~]` — the quote-block embed done; full story-/reel-canvas embed
+> still open pending an Android story-canvas renderer). iOS renders a reposted post inside the feed card
+> (`StoryRepostEmbedCell`/`ReelRepostEmbedCell` for story/reel reposts, a quote block for POST/STATUS reposts);
+> Android carried `ApiPost.repostOf: ApiRepostOf?` in the model but rendered **nothing**. **Ships a full vertical:**
+> **(1) `core:model` (SSOT Prisme)** — promoted the private `Map<String, ApiPostTranslationEntry>?.preferredEntry`
+> resolution to `internal` and added `ApiRepostOf.displayContent(prefs)` / `isTranslated(prefs)` reusing the exact
+> same law as `ApiPost.displayContent` (the embedded post is prism-translated like any other post; Rule 1 honoured —
+> no arbitrary translation fallback). **(2) `:feature:feed` pure core** — `RepostEmbedBuilder.build(repostOf, prefs,
+> mediaBaseUrl): RepostEmbedPresentation?` projects the reposted post: `null`→no embed, author (displayName ??
+> username, blank→null), avatar + first-media preview URL resolved against the gateway origin, `extraMediaCount`
+> = `(media.size − 1).coerceAtLeast(0)` (the "+N" surplus), `isQuote` from the flag, `isStory`/`isReel` from `type`
+> (case-insensitive). Wired into `FeedPostBuilder.build` as `FeedPostPresentation.repostEmbed`. **(3) Compose** — a
+> shared accent-coherent `RepostEmbedCell` (Indigo-tinted bordered quote block: repost/quote header + kind badge,
+> author row + relative time + discreet translate glyph, Prisme content, media preview with "+N" overlay), rendered
+> in the **feed card, post detail, saved and user-posts** surfaces for cross-surface coherence. **(4) Coherence** —
+> the embed's tap target is the **original** reposted post's id (`RepostEmbedPresentation.id = repostOf.id`, never
+> the outer card — mirrors iOS `FeedPostCard.repostTapTargetId`); tapping opens its `PostDetailScreen` (natural
+> push, back returns). EN/FR/ES/PT strings. **Deferred:** the full story-/reel-canvas embed (no Android
+> story-canvas renderer yet — those reposts render the same quote block + discreet kind badge). **+22 tests**
+> (`RepostEmbedBuilderTest` 14 — null→no-embed, tap-target=original, author prefer/blank/anon, avatar/preview URL
+> resolution, Prisme translated/original Rule-1/null-content, media surplus count / thumbnail-vs-fileUrl / no-media /
+> url-less, quote flag true/false/null, story+reel case-insensitive kind, createdAt passthrough; `FeedPostBuilderTest`
+> +2 — plain post → no embed, repost post → embed projected; `RepostPrismeTest` 6 — the `ApiRepostOf` Prisme law
+> mirrors `PostPrismeTest`). **Mutation check (RED proof):** `extraMediaCount = (mediaCount − 1)` → `mediaCount`
+> failed exactly the 2 surplus-count tests (the other 12 green — behavioural, not tautological). **Gate:**
+> `:core:model:testDebugUnitTest` + `:feature:feed:testDebugUnitTest` → feed module **172/172 green** (RepostEmbedBuilder
+> 14, FeedPostBuilder 21, PostDetailViewModel 12, BookmarksListState 12, BookmarksViewModel 12, FeedPostBuilder(19)→21,
+> FeedRealtimeReducer 51, FeedViewModel 39, UserPostsViewModel 11 …), RepostPrisme 6/6; `:app:assembleDebug` →
+> **BUILD SUCCESSFUL** (embed cell + nav change compile). Reviewer **PASS** (diff `apps/android` only; **SDK purity** —
+> Prisme law in `:core:model` beside `ApiPost.displayContent`, projection + "how to render a repost" orchestration in
+> `:feature:feed`; **SSOT** — one `preferredEntry` law shared by post + repost, one `RepostEmbedCell` across four
+> surfaces; **UDF** + immutable `RepostEmbedPresentation`; accent-coherent, natural tap→original, no dead end; no
+> coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — post-detail **threaded comments**
+> (`getComments`/`addComment` exist) + post-detail **realtime room** subscription, the **community posts feed**
+> (needs a community entry point first), OR the statuses/moods bar (§G).
+
 > On 2026-07-17 **feed post detail screen** landed (slice `feed-post-detail-screen`, feature-parity §Feed →
 > "Feed post detail …" now `[~]` — the detail screen half done; repost embed + threaded comments + realtime
 > room still open). **Fixed a real dead-end:** the feed card only routed **reels** (`if (post.isReel)

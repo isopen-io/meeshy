@@ -144,6 +144,7 @@ fun BookmarksScreen(
                                 post = post,
                                 onRemove = { viewModel.removeBookmark(post.id) },
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
+                                onOpenPost = onOpenPost,
                             )
                         }
                         if (state.isLoadingMore) {
@@ -174,6 +175,7 @@ private fun SavedPostCard(
     post: FeedPostPresentation,
     onRemove: () -> Unit,
     onClick: () -> Unit,
+    onOpenPost: (String) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
@@ -237,6 +239,11 @@ private fun SavedPostCard(
                         .clip(RoundedCornerShape(MeeshyRadius.md))
                         .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
                 )
+            }
+
+            post.repostEmbed?.let { embed ->
+                Spacer(Modifier.height(MeeshySpacing.md))
+                RepostEmbedCell(embed = embed, onOpen = onOpenPost)
             }
 
             if (post.isReel) {
