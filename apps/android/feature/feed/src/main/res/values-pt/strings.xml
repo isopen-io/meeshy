@@ -9,6 +9,8 @@
     <string name="feed_comments">Comentários</string>
     <string name="feed_reposts">Repostagens</string>
     <string name="feed_unlike">Não curtir</string>
+    <string name="feed_bookmark">Salvar</string>
+    <string name="feed_unbookmark">Remover salvo</string>
     <string name="feed_hidden_images">+%1$d</string>
     <string name="feed_pinned">Fixado</string>
     <string name="feed_edited">Editado</string>

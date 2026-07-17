@@ -1666,8 +1666,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
-- [~] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
-      count sync **done** (slice `feed-realtime-like-sync`, 2026-07-17); bookmark / un-bookmark pending
+- [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
+      count sync **done** (slice `feed-realtime-like-sync`, 2026-07-17)
+- [x] Bookmark / un-bookmark — optimistic `toggleBookmark` (flips `isBookmarkedByMe` + count,
+      rolls back on failure) + live personal `post:bookmarked` overlay (absolute count + own-state,
+      reconciled against the cache) + accent-tinted bookmark button in the feed card
+      (slice `feed-realtime-bookmark-sync`, 2026-07-17)
 - [ ] Adaptive multi-image collage layouts (1–5+ media) + fullscreen gallery
 - [ ] Threaded comments: auto-preview replies, expand threads ("view N more"), comment likes,
       mentions, effects/blur, per-comment language switcher

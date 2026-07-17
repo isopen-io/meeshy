@@ -100,12 +100,47 @@ class PostRepository @Inject constructor(
         return true
     }
 
-    private fun adjustedCount(current: Int?, wasLiked: Boolean): Int =
-        ((current ?: 0) + if (wasLiked) -1 else 1).coerceAtLeast(0)
+    private fun adjustedCount(current: Int?, wasSet: Boolean): Int =
+        ((current ?: 0) + if (wasSet) -1 else 1).coerceAtLeast(0)
 
     private fun applyLike(postId: String, liked: Boolean, likeCount: Int?) {
         _feedCache.value = _feedCache.value?.map {
             if (it.id == postId) it.copy(isLikedByMe = liked, likeCount = likeCount) else it
+        }
+    }
+
+    /**
+     * Optimistic bookmark toggle (ARCHITECTURE.md §4), the bookmark analogue of
+     * [toggleLike]. The viewer's own `isBookmarkedByMe` flips instantly with the
+     * count; the network confirms after and the cache rolls back on failure. The
+     * gateway later broadcasts `post:bookmarked` (a personal event) with the
+     * authoritative absolute count, which the feed reconciles. Returns true when the
+     * mutation was accepted by the gateway.
+     */
+    suspend fun toggleBookmark(postId: String): Boolean {
+        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
+        val wasBookmarked = target.isBookmarkedByMe == true
+        applyBookmark(
+            postId,
+            bookmarked = !wasBookmarked,
+            bookmarkCount = adjustedCount(target.bookmarkCount, wasBookmarked),
+        )
+
+        val result = if (wasBookmarked) {
+            apiCall { postApi.removeBookmark(postId) }
+        } else {
+            apiCall { postApi.bookmark(postId) }
+        }
+        if (result is NetworkResult.Failure) {
+            applyBookmark(postId, bookmarked = wasBookmarked, bookmarkCount = target.bookmarkCount)
+            return false
+        }
+        return true
+    }
+
+    private fun applyBookmark(postId: String, bookmarked: Boolean, bookmarkCount: Int?) {
+        _feedCache.value = _feedCache.value?.map {
+            if (it.id == postId) it.copy(isBookmarkedByMe = bookmarked, bookmarkCount = bookmarkCount) else it
         }
     }
 

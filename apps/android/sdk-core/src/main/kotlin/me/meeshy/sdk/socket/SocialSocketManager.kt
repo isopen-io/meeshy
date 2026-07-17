@@ -7,6 +7,7 @@ import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
+import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentLikedData
@@ -31,6 +32,7 @@ class SocialSocketManager @Inject constructor(
     private val _postCreated = buf<SocketPostCreatedData>()
     private val _postLiked = buf<SocketPostLikedData>()
     private val _postUnliked = buf<SocketPostUnlikedData>()
+    private val _postBookmarked = buf<SocketPostBookmarkedData>()
     private val _postDeleted = buf<SocketPostDeletedData>()
     private val _commentAdded = buf<SocketCommentAddedData>()
     private val _commentLiked = buf<SocketCommentLikedData>()
@@ -42,6 +44,7 @@ class SocialSocketManager @Inject constructor(
     val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.asSharedFlow()
     val postLiked: SharedFlow<SocketPostLikedData> = _postLiked.asSharedFlow()
     val postUnliked: SharedFlow<SocketPostUnlikedData> = _postUnliked.asSharedFlow()
+    val postBookmarked: SharedFlow<SocketPostBookmarkedData> = _postBookmarked.asSharedFlow()
     val postDeleted: SharedFlow<SocketPostDeletedData> = _postDeleted.asSharedFlow()
     val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.asSharedFlow()
     val commentLiked: SharedFlow<SocketCommentLikedData> = _commentLiked.asSharedFlow()
@@ -54,6 +57,7 @@ class SocialSocketManager @Inject constructor(
         listen("post:created", _postCreated)
         listen("post:liked", _postLiked)
         listen("post:unliked", _postUnliked)
+        listen("post:bookmarked", _postBookmarked)
         listen("post:deleted", _postDeleted)
         listen("comment:added", _commentAdded)
         listen("comment:liked", _commentLiked)

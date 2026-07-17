@@ -19,6 +19,7 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
@@ -53,6 +54,7 @@ class FeedViewModelTest {
     private val postDeleted = MutableSharedFlow<SocketPostDeletedData>(extraBufferCapacity = 64)
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
+    private val postBookmarked = MutableSharedFlow<SocketPostBookmarkedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
@@ -64,6 +66,7 @@ class FeedViewModelTest {
         every { socialSocket.postDeleted } returns postDeleted
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
+        every { socialSocket.postBookmarked } returns postBookmarked
         return FeedViewModel(repository, session, socialSocket, config)
     }
 
@@ -208,6 +211,7 @@ class FeedViewModelTest {
         every { socialSocket.postDeleted } returns postDeleted
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
+        every { socialSocket.postBookmarked } returns postBookmarked
         return FeedViewModel(repository, session, socialSocket, config)
     }
 
@@ -518,5 +522,92 @@ class FeedViewModelTest {
         vm.refresh()
 
         assertThat(vm.state.value.posts.single().likeCount).isEqualTo(2)
+    }
+
+    // --- live bookmark sync (post:bookmarked, personal event) ---
+
+    private fun bookmarkedPost(id: String, count: Int, bookmarked: Boolean) =
+        ApiPost(id = id, content = "Post $id", bookmarkCount = count, isBookmarkedByMe = bookmarked)
+
+    @Test
+    fun `a realtime post-bookmarked marks the post bookmarked and updates the count`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(bookmarkedPost("1", count = 2, bookmarked = false)), 0L)))
+
+        postBookmarked.emit(SocketPostBookmarkedData(postId = "1", bookmarked = true, bookmarkCount = 3))
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.isBookmarked).isTrue()
+        assertThat(card.bookmarkCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `a realtime post-unbookmarked clears the bookmark and updates the count`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(bookmarkedPost("1", count = 4, bookmarked = true)), 0L)))
+
+        postBookmarked.emit(SocketPostBookmarkedData(postId = "1", bookmarked = false, bookmarkCount = 3))
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.isBookmarked).isFalse()
+        assertThat(card.bookmarkCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `the live bookmark state survives a background feed re-emission`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Stale(listOf(bookmarkedPost("1", count = 2, bookmarked = false)), 0L),
+        )
+        val vm = viewModel(me, stream)
+        postBookmarked.emit(SocketPostBookmarkedData(postId = "1", bookmarked = true, bookmarkCount = 3))
+        assertThat(vm.state.value.posts.single().isBookmarked).isTrue()
+
+        // A stale server re-emission still reports the old state — the live overlay holds.
+        stream.value = CacheResult.Fresh(listOf(bookmarkedPost("1", count = 2, bookmarked = false)), 100L)
+
+        val card = vm.state.value.posts.single()
+        assertThat(card.isBookmarked).isTrue()
+        assertThat(card.bookmarkCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `a later cache state is respected once the bookmark overlay is reconciled away`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(bookmarkedPost("1", count = 2, bookmarked = false)), 0L),
+        )
+        val vm = viewModel(me, stream)
+        postBookmarked.emit(SocketPostBookmarkedData(postId = "1", bookmarked = true, bookmarkCount = 3))
+        assertThat(vm.state.value.posts.single().bookmarkCount).isEqualTo(3)
+
+        // The cache catches up to the overlay → the overlay is released.
+        stream.value = CacheResult.Fresh(listOf(bookmarkedPost("1", count = 3, bookmarked = true)), 100L)
+        assertThat(vm.state.value.posts.single().bookmarkCount).isEqualTo(3)
+
+        // A subsequent cache state is now authoritative — no stale overlay pins it.
+        stream.value = CacheResult.Fresh(listOf(bookmarkedPost("1", count = 1, bookmarked = false)), 200L)
+        val card = vm.state.value.posts.single()
+        assertThat(card.bookmarkCount).isEqualTo(1)
+        assertThat(card.isBookmarked).isFalse()
+    }
+
+    @Test
+    fun `refresh drops a live bookmark overlay`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(bookmarkedPost("1", count = 2, bookmarked = false)), 0L),
+        )
+        val vm = viewModel(me, stream)
+        postBookmarked.emit(SocketPostBookmarkedData(postId = "1", bookmarked = true, bookmarkCount = 3))
+        assertThat(vm.state.value.posts.single().isBookmarked).isTrue()
+
+        vm.refresh()
+
+        assertThat(vm.state.value.posts.single().isBookmarked).isFalse()
+    }
+
+    @Test
+    fun `toggleBookmark delegates to repository`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+
+        vm.toggleBookmark("p1")
+
+        coVerify(exactly = 1) { repository.toggleBookmark("p1") }
     }
 }
