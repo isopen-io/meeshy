@@ -23,6 +23,7 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.export.previewTitle",
         // Mode
         "story.timeline.mode.quick",
+        "story.timeline.mode.quickLabel",
         "story.timeline.mode.pro",
         "story.timeline.mode.switchToQuick",
         "story.timeline.mode.switchToPro",

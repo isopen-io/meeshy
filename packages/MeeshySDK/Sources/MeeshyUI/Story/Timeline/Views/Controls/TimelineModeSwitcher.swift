@@ -22,17 +22,33 @@ public struct TimelineModeSwitcher: View, Equatable {
         self.onSelect = onSelect
     }
 
-    public static func a11yLabelKey(for mode: TimelineMode) -> String {
+    /// Visible segment label AND accessibility label — the same source
+    /// drives both so they can never drift apart (previous bug: VoiceOver
+    /// announced "Quick", from the internal `.quick` case name, while the
+    /// screen showed "Simple", matching the app-wide wording used by the
+    /// video editor's own mode switcher).
+    private static func visibleLabel(for mode: TimelineMode) -> String {
         switch mode {
-        case .quick: return "story.timeline.mode.quick"
-        case .pro:   return "story.timeline.mode.pro"
+        case .quick: return String(localized: "story.timeline.mode.quickLabel", defaultValue: "Simple", bundle: .module)
+        case .pro:   return String(localized: "story.timeline.mode.pro", defaultValue: "Pro", bundle: .module)
+        }
+    }
+
+    /// Switch-action hint, spoken only for the currently-inactive segment
+    /// (hinting "switch to Pro" on a Pro button that's already selected
+    /// doesn't make sense). Catalog entries existed but were never wired to
+    /// any view — dead localized strings until now.
+    private static func switchHint(for mode: TimelineMode) -> String {
+        switch mode {
+        case .quick: return String(localized: "story.timeline.mode.switchToQuick", defaultValue: "Switch to Quick", bundle: .module)
+        case .pro:   return String(localized: "story.timeline.mode.switchToPro", defaultValue: "Switch to Pro", bundle: .module)
         }
     }
 
     public var body: some View {
         HStack(spacing: 4) {
-            segment(for: .quick, label: "Simple", systemImage: "square.split.2x1")
-            segment(for: .pro,   label: "Pro",    systemImage: "slider.horizontal.below.rectangle")
+            segment(for: .quick, systemImage: "square.split.2x1")
+            segment(for: .pro,   systemImage: "slider.horizontal.below.rectangle")
         }
         .padding(4)
         .background(
@@ -49,8 +65,9 @@ public struct TimelineModeSwitcher: View, Equatable {
     }
 
     @ViewBuilder
-    private func segment(for target: TimelineMode, label: String, systemImage: String) -> some View {
+    private func segment(for target: TimelineMode, systemImage: String) -> some View {
         let isActive = (mode == target)
+        let label = Self.visibleLabel(for: target)
         Button { onSelect(target) } label: {
             HStack(spacing: 5) {
                 Image(systemName: systemImage)
@@ -71,7 +88,8 @@ public struct TimelineModeSwitcher: View, Equatable {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: String.LocalizationValue(Self.a11yLabelKey(for: target)), bundle: .module))
+        .accessibilityLabel(label)
+        .accessibilityHint(isActive ? "" : Self.switchHint(for: target))
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 

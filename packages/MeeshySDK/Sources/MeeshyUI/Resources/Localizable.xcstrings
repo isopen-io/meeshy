@@ -23626,6 +23626,22 @@
         }
       }
     },
+    "story.timeline.mode.quickLabel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Simple"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Simple"
+          }
+        }
+      }
+    },
     "story.timeline.mode.switchToPro" : {
       "extractionState" : "stale",
       "localizations" : {

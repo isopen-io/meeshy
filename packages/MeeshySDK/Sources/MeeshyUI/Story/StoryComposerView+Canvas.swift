@@ -335,25 +335,51 @@ extension StoryComposerView {
     }
 
     var shouldShowEmptyStateLargePicker: Bool {
-        // Le picker grand format n'est montré QUE quand :
-        //  - aucun outil n'est sélectionné côté viewModel,
-        //  - le bandeau d'outils est complètement masqué (.hidden — le
-        //    `bandStateMachine` peut être pré-ouvert via empty-state → tile,
-        //    auquel cas le panel doit prendre toute la place),
-        //  - et le slide n'a aucun contenu réel.
-        // Sans le check `state == .hidden`, le picker pouvait persister visuellement
-        // derrière le bandeau pendant les transitions (le band est animé via spring
-        // et le if/else était insuffisant pendant le mid-transition).
-        //  - ET aucune sheet système partielle (timeline / sticker / vocal /
-        //    transitions) n'est présentée : ces sheets ne couvrent que ~45–50 %
-        //    de l'écran, si bien que le titre « Start your story » du picker
-        //    dépassait au-dessus du bord de la sheet (fantôme). On masque donc
-        //    le picker tant qu'une sheet est ouverte — il réapparaît à sa
-        //    fermeture si le slide est toujours vierge.
-        viewModel.activeTool == nil
+        Self.resolveShouldShowEmptyStateLargePicker(
+            activeToolIsNil: viewModel.activeTool == nil,
+            isComposerEmpty: isComposerEmpty,
+            bandStateIsHidden: bandStateMachine.state == .hidden,
+            presentedSystemSheetFraction: presentedSystemSheetFraction,
+            isTimelineVisible: viewModel.isTimelineVisible
+        )
+    }
+
+    /// Résolution pure de `shouldShowEmptyStateLargePicker`, extraite en
+    /// `static` pour être testable sans monter la View — même pattern que
+    /// `ComposerControlsLayer.resolveEffectiveBandState`.
+    ///
+    /// Le picker grand format n'est montré QUE quand :
+    ///  - aucun outil n'est sélectionné côté viewModel,
+    ///  - le bandeau d'outils est complètement masqué (.hidden — le
+    ///    `bandStateMachine` peut être pré-ouvert via empty-state → tile,
+    ///    auquel cas le panel doit prendre toute la place),
+    ///  - et le slide n'a aucun contenu réel.
+    /// Sans le check `bandStateIsHidden`, le picker pouvait persister visuellement
+    /// derrière le bandeau pendant les transitions (le band est animé via spring
+    /// et le if/else était insuffisant pendant le mid-transition).
+    ///  - ET aucune sheet système partielle (sticker / vocal / transitions)
+    ///    n'est présentée : ces sheets ne couvrent que ~45–50 % de l'écran, si
+    ///    bien que le titre « Start your story » du picker dépassait au-dessus
+    ///    du bord de la sheet (fantôme). On masque donc le picker tant qu'une
+    ///    sheet est ouverte — il réapparaît à sa fermeture si le slide est
+    ///    toujours vierge.
+    ///  - ET la timeline n'est pas visible : la tuile Timeline du picker
+    ///    (comme le FAB et le bouton overflow) ne fait que flip
+    ///    `isTimelineVisible`, sans toucher `activeTool`/`bandStateMachine` —
+    ///    sans cette condition le picker restait affiché par-dessus le panel
+    ///    timeline (bug : tuile Timeline sans effet visible, cul-de-sac).
+    static func resolveShouldShowEmptyStateLargePicker(
+        activeToolIsNil: Bool,
+        isComposerEmpty: Bool,
+        bandStateIsHidden: Bool,
+        presentedSystemSheetFraction: CGFloat?,
+        isTimelineVisible: Bool
+    ) -> Bool {
+        activeToolIsNil
             && isComposerEmpty
-            && bandStateMachine.state == .hidden
+            && bandStateIsHidden
             && presentedSystemSheetFraction == nil
+            && !isTimelineVisible
     }
 
     /// Pastel accent color per tile. Picks a distinct hue so the carousel
@@ -526,9 +552,14 @@ extension StoryComposerView {
                 pickerSelectedTool = tool
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                // La timeline se présente en SHEET, jamais dans le band (C5) :
-                // la tuile ouvre la sheet directement, sans selectTool ni band
-                // (parité avec le chemin overflow ⋯ et les switch-chips).
+                // Timeline (2026-07-14) vit dans le band comme les autres
+                // outils — seul `isTimelineVisible` est flippé ici, sans
+                // `selectTool`/`bandStateMachine` (parité avec le FAB et le
+                // bouton overflow) : `ComposerControlsLayer.
+                // resolveEffectiveBandState` force `.toolPanel(.timeline)`
+                // tant que la machine reste `.hidden`, et
+                // `shouldShowEmptyStateLargePicker` cède la place au band dès
+                // que `isTimelineVisible` passe à true.
                 if tool == .timeline {
                     viewModel.isTimelineVisible = true
                     pickerSelectedTool = nil
