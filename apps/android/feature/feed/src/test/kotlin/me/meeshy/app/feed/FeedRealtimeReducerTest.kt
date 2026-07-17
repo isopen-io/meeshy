@@ -116,6 +116,91 @@ class FeedRealtimeReducerTest {
         assertThat(next.newPostsCount).isEqualTo(1)
     }
 
+    // --- remove (post:deleted) ---
+
+    @Test
+    fun `remove tombstones a deleted cache post so the feed can hide it`() {
+        val state = FeedRealtimeHead()
+        val next = FeedRealtimeReducer.remove(state, postId = "a")
+
+        assertThat(next.removedIds).containsExactly("a")
+        assertThat(next.posts).isEmpty()
+        assertThat(next.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `remove of a blank id is inert`() {
+        val state = FeedRealtimeReducer.remove(FeedRealtimeHead(), "a")
+        val next = FeedRealtimeReducer.remove(state, "   ")
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `remove is idempotent for an already-tombstoned post`() {
+        val once = FeedRealtimeReducer.remove(FeedRealtimeHead(), "a")
+        val twice = FeedRealtimeReducer.remove(once, "a")
+
+        assertThat(twice).isSameInstanceAs(once)
+    }
+
+    @Test
+    fun `remove of a buffered head post drops it and decrements the banner count`() {
+        val a = FeedRealtimeReducer.accept(FeedRealtimeHead(), post("a"), emptySet())
+        val b = FeedRealtimeReducer.accept(a, post("b"), emptySet())
+        val next = FeedRealtimeReducer.remove(b, "a")
+
+        assertThat(next.posts.map { it.id }).containsExactly("b")
+        assertThat(next.newPostsCount).isEqualTo(1)
+        assertThat(next.removedIds).contains("a")
+    }
+
+    @Test
+    fun `remove never drives the banner count below zero`() {
+        val buffered = FeedRealtimeReducer.accept(FeedRealtimeHead(), post("a"), emptySet())
+        val acked = FeedRealtimeReducer.acknowledge(buffered)
+        val next = FeedRealtimeReducer.remove(acked, "a")
+
+        assertThat(next.newPostsCount).isEqualTo(0)
+        assertThat(next.posts).isEmpty()
+    }
+
+    @Test
+    fun `reconcile keeps a tombstone while the cache still carries the deleted post`() {
+        val state = FeedRealtimeReducer.remove(FeedRealtimeHead(), "a")
+        val next = FeedRealtimeReducer.reconcile(state, loadedIds = setOf("a"))
+
+        assertThat(next).isSameInstanceAs(state)
+        assertThat(next.removedIds).containsExactly("a")
+    }
+
+    @Test
+    fun `reconcile releases a tombstone once the cache has dropped the deleted post`() {
+        val state = FeedRealtimeReducer.remove(FeedRealtimeHead(), "a")
+        val next = FeedRealtimeReducer.reconcile(state, loadedIds = setOf("x"))
+
+        assertThat(next.removedIds).isEmpty()
+    }
+
+    @Test
+    fun `reconcile releases only the tombstones the cache has dropped`() {
+        val a = FeedRealtimeReducer.remove(FeedRealtimeHead(), "a")
+        val ab = FeedRealtimeReducer.remove(a, "b")
+        val next = FeedRealtimeReducer.reconcile(ab, loadedIds = setOf("a"))
+
+        assertThat(next.removedIds).containsExactly("a")
+    }
+
+    @Test
+    fun `accept of a re-created post clears its tombstone so it renders again`() {
+        val tombstoned = FeedRealtimeReducer.remove(FeedRealtimeHead(), "a")
+        val next = FeedRealtimeReducer.accept(tombstoned, post("a"), loadedIds = emptySet())
+
+        assertThat(next.posts.map { it.id }).containsExactly("a")
+        assertThat(next.removedIds).isEmpty()
+        assertThat(next.newPostsCount).isEqualTo(1)
+    }
+
     // --- clear ---
 
     @Test
@@ -125,6 +210,15 @@ class FeedRealtimeReducerTest {
 
         assertThat(next.posts).isEmpty()
         assertThat(next.newPostsCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `clear also releases every tombstone`() {
+        val removed = FeedRealtimeReducer.remove(FeedRealtimeHead(), "a")
+        val next = FeedRealtimeReducer.clear(removed)
+
+        assertThat(next.removedIds).isEmpty()
+        assertThat(next).isEqualTo(FeedRealtimeHead())
     }
 
     @Test
