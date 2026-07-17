@@ -50,7 +50,7 @@ object RepostEmbedBuilder {
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = repost.author?.avatar
                 ?.takeIf { it.isNotBlank() }
-                ?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             createdAtIso = repost.createdAt,
             content = repost.displayContent(preferences),
             isTranslated = repost.isTranslated(preferences),
@@ -58,17 +58,11 @@ object RepostEmbedBuilder {
                 ?.firstOrNull()
                 ?.let { it.thumbnailUrl ?: it.fileUrl }
                 ?.takeIf { it.isNotBlank() }
-                ?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             extraMediaCount = (mediaCount - 1).coerceAtLeast(0),
             isQuote = repost.isQuote == true,
             isStory = repost.type.equals("story", ignoreCase = true),
             isReel = repost.type.equals("reel", ignoreCase = true),
         )
-    }
-
-    private fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
-        url.startsWith("http") -> url
-        mediaBaseUrl == null -> url
-        else -> mediaBaseUrl.trimEnd('/') + (if (url.startsWith("/")) url else "/$url")
     }
 }

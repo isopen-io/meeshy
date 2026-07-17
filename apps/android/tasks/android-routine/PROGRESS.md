@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-17 **post-detail threaded comments** landed (slice `feed-post-detail-comments`, feature-parity §Feed →
+> "Feed post detail …" — the comment thread half now done; replies/likes/realtime-room still open). iOS renders a
+> comment thread on the post detail; Android had the full `PostRepository` comment surface (`getComments`,
+> `addComment`, `getCommentReplies`, `likeComment`, …) but **no comments UI at all** — the detail screen stopped at
+> the read-only stat row. **Ships a full vertical on the existing endpoints (no new repo method):**
+> **(1) `core:model` (SSOT Prisme)** — `ApiPostComment.displayContent(prefs)` / `isTranslated(prefs)` reusing the
+> exact `preferredEntry` law already shared by `ApiPost`/`ApiRepostOf` (Rule 1 honoured — no arbitrary translation
+> fallback; a comment is prism-translated like any content). **(2) `:feature:feed` pure core** —
+> `CommentThreadState` (immutable accumulation SSOT): `appended(page,cursor,more)` de-dups by id + advances the
+> watermark + marks loaded; `optimistic(c)` prepends a just-sent row + tracks its temp id; `confirmed(temp,real)`
+> swaps for the server row + clears pending; `failed(temp)` rolls back; `canLoadMore = hasMore && cursor non-blank`.
+> `CommentProjection.build` → immutable `CommentPresentation` (author displayName??username→blank=null, avatar URL
+> resolved against gateway origin, Prisme content, reply awareness `parentId!=null`, `isPending`, counts coerced).
+> **(3) `PostCommentsViewModel`** — reads route `postId` (`SavedStateHandle`); loads the first page; **cursor-pages
+> by the last comment's id** (`getComments` returns a bare list with no envelope cursor, so `nextCursor = last.id`
+> when a full page returns, `hasMore = size>=PAGE`); `submit(text)` trims (blank / blank-postId / in-flight →
+> inert), prepends the optimistic row for **instant feedback**, then `addComment` → confirmed or rolled-back +
+> error; `combine(thread, currentUser, status)` projects; skeleton only on cold-empty; `viewModelScope` rethrows
+> `CancellationException`. **(4) Compose** `PostCommentsSection` (hosts its own VM on the same nav entry;
+> accent-coherent Indigo header + rows: avatar/name/reply-badge/relative-time/Prisme content, optimistic row dimmed
+> at 0.5α, "show more" affordance, composer with send-icon/spinner), wired into `PostDetailContent` below the stat
+> row. **SSOT cleanup:** collapsed the **three** duplicate private `resolveMediaUrl` copies in the feed module
+> (FeedPostBuilder, RepostEmbedBuilder, and now comments) into one shared `resolveFeedMediaUrl` (`FeedMediaUrl.kt`);
+> the two migrated files' behaviour tests stayed green (pure extraction). EN/FR/ES/PT strings. **Deferred:** comment
+> **replies** (`getCommentReplies`) / **likes** (`likeComment`) / mentions / effects, the post-detail **realtime
+> room** (live `comment:added`), and comment cache-first. **+41 tests** (`CommentPrismeTest` 6 — preferred/
+> case-insensitive/Rule-1-fallback/blank-ignored/empty-content/secondary-pref; `CommentProjectionTest` 9 —
+> displayName-vs-username, blank→null author, relative-vs-absolute avatar + blank→null, Prisme translated/original,
+> reply parent/blank/null, count coercion, pending+createdAt passthrough; `CommentThreadStateTest` 12 — populate/
+> empty-still-loaded/dedup/canLoadMore-no-cursor/blank-cursor/optimistic-prepend+dedup/confirm-swap+clear/confirm-
+> inert/fail-rollback/fail-inert; `PostCommentsViewModelTest` 14 — populate, route-postId, blank-id no-network+empty,
+> cold skeleton→settled deferred gate, empty state, failure surfaces+no skeleton, guarded after load, full-page
+> enables load-more w/ last-id cursor, short-page no load-more, submit optimistic→confirm ordering, submit
+> rollback+error, submit blank inert, submit blank-postId inert). **Gate:** `:core:model:testDebugUnitTest` +
+> `:feature:feed:testDebugUnitTest` → **BUILD SUCCESSFUL** (feed module green incl. the 41 new + the migrated
+> RepostEmbed/FeedPost URL tests); `:app:assembleDebug` → **BUILD SUCCESSFUL** (comments section + composer
+> compile). Reviewer **PASS** (diff `apps/android` only; **SDK purity** — Prisme law in `core:model` beside
+> `ApiPost.displayContent`, pure thread state + projection + "when to fetch/send" orchestration in `:feature:feed`,
+> Compose stays dumb; **SSOT** — one `preferredEntry`, one `resolveFeedMediaUrl`, one `CommentThreadState`;
+> **Instant-App** — optimistic send + skeleton only on cold-empty; **UDF** + immutable `UiState`/`CommentThreadState`;
+> accent-coherent, natural composer + back gesture, no dead end; no coverage floor lowered, no test weakened).
+> **Next slice:** §Feed still-open — comment **replies** (`getCommentReplies` → 1-level threading, "view N more")
+> + comment **likes** (`likeComment`/`unlikeComment`), the post-detail **realtime room** (live `comment:added`),
+> the **community posts feed** (needs a community entry point first), OR the statuses/moods bar (§G).
+
 > On 2026-07-17 **feed repost / quote embed cell** landed (slice `feed-repost-embed-cell`, feature-parity §Feed →
 > "Repost / quote embed cell in the feed" now `[~]` — the quote-block embed done; full story-/reel-canvas embed
 > still open pending an Android story-canvas renderer). iOS renders a reposted post inside the feed card

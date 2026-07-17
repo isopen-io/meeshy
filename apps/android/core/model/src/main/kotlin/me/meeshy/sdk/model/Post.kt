@@ -158,6 +158,19 @@ fun ApiRepostOf.displayContent(prefs: LanguageResolver.ContentLanguagePreference
 fun ApiRepostOf.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
     translations.preferredEntry(prefs) != null
 
+/**
+ * Content to display for a comment under the Prisme Linguistique: the preferred
+ * translation, or the original [ApiPostComment.content] when no translation targets
+ * a preferred language. Same law as [ApiPost.displayContent] — a comment is
+ * prism-translated like any other content.
+ */
+fun ApiPostComment.displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
+    translations.preferredEntry(prefs)?.text ?: content
+
+/** True when the comment's displayed content is a translation, not the original. */
+fun ApiPostComment.isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
+    translations.preferredEntry(prefs) != null
+
 /** A viewer of a post — port of APIPostViewer (PostModels.swift). */
 @Serializable
 data class ApiPostViewer(

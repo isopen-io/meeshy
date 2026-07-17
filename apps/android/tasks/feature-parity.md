@@ -1689,7 +1689,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (feed, saved, user-posts) so no non-reel tap dead-ends anywhere; reels still route to the reels player;
       back returns to the source. **SSOT refactor:** collapsed the three duplicate `toTranslationRows` copies
       (FeedViewModel, FeedPostBuilder, and the new VM) into one shared internal `PostTranslationRows.kt`.
-      **Still open:** threaded comments, post-detail realtime room, per-post cache-first.
+      **Threaded comments now landed** (slice `feed-post-detail-comments`, 2026-07-17): the post-detail
+      screen renders a full comment thread beneath the post, on the **existing** `PostRepository.getComments`/
+      `addComment`. `core:model` — `ApiPostComment.displayContent`/`isTranslated` (Prisme law reused from
+      `ApiPost` — a comment is prism-translated like any content). `:feature:feed` pure — `CommentThreadState`
+      (immutable accumulation SSOT: `appended` de-dups by id + advances the last-id cursor watermark,
+      `optimistic` prepends a just-sent row, `confirmed` swaps it for the server row, `failed` rolls it back;
+      `canLoadMore = hasMore && cursor non-blank`) + `CommentProjection` (author/avatar/Prisme content/reply
+      awareness/pending flag). `PostCommentsViewModel` reads the route `postId`, cursor-pages by the last
+      comment's id, and **sends optimistically** (Instant-App feedback: the row appears instantly, dimmed,
+      then confirmed or removed). Compose `PostCommentsSection` (accent-coherent Indigo, avatar+name+reply
+      badge+relative time+Prisme content, composer with send/spinner, "show more"). **SSOT:** collapsed the
+      three duplicate `resolveMediaUrl` copies in the feed module into one shared `resolveFeedMediaUrl`
+      (`FeedMediaUrl.kt`; FeedPostBuilder/RepostEmbed migrated, their tests unchanged & green). EN/FR/ES/PT.
+      **Still open:** comment replies (`getCommentReplies`)/likes/mentions, post-detail realtime room,
+      per-post + comment cache-first. +41 tests (6 `CommentPrismeTest`, 9 `CommentProjectionTest`,
+      12 `CommentThreadStateTest`, 14 `PostCommentsViewModelTest`).
       +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).
       **Repost embed cell now landed** (slice `feed-repost-embed-cell`, 2026-07-17): a reposted/quoted
       post rendered as an accent-coherent quote block inside the feed card AND the post detail (and the

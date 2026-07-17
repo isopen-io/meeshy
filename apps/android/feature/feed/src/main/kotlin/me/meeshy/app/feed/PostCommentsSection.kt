@@ -1,0 +1,221 @@
+package me.meeshy.app.feed
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
+import me.meeshy.feature.feed.R
+import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
+
+/**
+ * The comment thread beneath a post in [PostDetailScreen]. Hosts its own
+ * [PostCommentsViewModel] (scoped to the same nav entry, so it reads the same `postId`)
+ * and renders — top to bottom — a section header, the projected comments (each Prisme-
+ * resolved, an optimistic row dimmed until confirmed), an optional "show more" affordance,
+ * and a pinned composer. Accent-coherent (Indigo) with the post card above it.
+ */
+@Composable
+internal fun PostCommentsSection(
+    viewModel: PostCommentsViewModel = hiltViewModel(),
+    modifier: Modifier = Modifier,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.post_comments_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textPrimary,
+            modifier = Modifier.padding(bottom = MeeshySpacing.sm),
+        )
+
+        when {
+            state.showSkeleton -> CommentsSkeleton()
+            state.isEmpty -> Text(
+                text = stringResource(R.string.post_comments_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.padding(vertical = MeeshySpacing.md),
+            )
+            else -> Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+                state.comments.forEach { comment ->
+                    CommentRow(comment = comment)
+                }
+            }
+        }
+
+        if (state.canLoadMore) {
+            TextButton(
+                onClick = viewModel::loadMore,
+                enabled = !state.isLoadingMore,
+            ) {
+                Text(stringResource(R.string.post_comments_load_more), color = MeeshyPalette.Indigo500)
+            }
+        }
+
+        Spacer(Modifier.height(MeeshySpacing.md))
+        CommentComposer(
+            isSubmitting = state.isSubmitting,
+            onSubmit = viewModel::submit,
+        )
+    }
+}
+
+@Composable
+private fun CommentRow(comment: CommentPresentation) {
+    val unknownAuthor = stringResource(R.string.feed_unknown_author)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (comment.isPending) 0.5f else 1f),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            MeeshyAvatar(name = comment.authorName ?: unknownAuthor, size = 32.dp)
+            if (!comment.authorAvatarUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = comment.authorAvatarUrl,
+                    contentDescription = comment.authorName ?: unknownAuthor,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape),
+                )
+            }
+        }
+        Spacer(Modifier.width(MeeshySpacing.sm))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = comment.authorName ?: unknownAuthor,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MeeshyTheme.tokens.textPrimary,
+                )
+                if (comment.isReply) {
+                    Spacer(Modifier.width(MeeshySpacing.xs))
+                    Text(
+                        text = stringResource(R.string.post_comments_reply_badge),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MeeshyPalette.Indigo500,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(MeeshyRadius.sm))
+                            .background(MeeshyPalette.Indigo500.copy(alpha = 0.12f))
+                            .padding(horizontal = 6.dp, vertical = 1.dp),
+                    )
+                }
+                comment.createdAtIso?.let {
+                    Spacer(Modifier.width(MeeshySpacing.xs))
+                    Text(
+                        text = detailRelativeTime(it),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MeeshyTheme.tokens.textSecondary,
+                    )
+                }
+            }
+            SelectionContainer {
+                Text(
+                    text = comment.content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MeeshyTheme.tokens.textPrimary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentComposer(
+    isSubmitting: Boolean,
+    onSubmit: (String) -> Unit,
+) {
+    var draft by remember { mutableStateOf("") }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            placeholder = { Text(stringResource(R.string.post_comments_input_hint)) },
+            modifier = Modifier.weight(1f),
+            maxLines = 4,
+        )
+        Spacer(Modifier.width(MeeshySpacing.sm))
+        if (isSubmitting) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                color = MeeshyPalette.Indigo500,
+            )
+        } else {
+            IconButton(
+                onClick = {
+                    onSubmit(draft)
+                    draft = ""
+                },
+                enabled = draft.isNotBlank(),
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Send,
+                    contentDescription = stringResource(R.string.post_comments_send),
+                    tint = if (draft.isNotBlank()) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommentsSkeleton() {
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+        repeat(3) {
+            Row(Modifier.fillMaxWidth()) {
+                me.meeshy.ui.component.MeeshySkeletonBox(
+                    modifier = Modifier.size(32.dp),
+                    shape = CircleShape,
+                )
+                Spacer(Modifier.width(MeeshySpacing.sm))
+                me.meeshy.ui.component.MeeshySkeletonBox(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp),
+                    shape = RoundedCornerShape(MeeshyRadius.md),
+                )
+            }
+        }
+    }
+}
