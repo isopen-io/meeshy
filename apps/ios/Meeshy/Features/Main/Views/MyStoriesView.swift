@@ -194,7 +194,7 @@ struct MyStoriesView: View {
         } label: {
             Text(String(localized: "story.mine.delete.selected",
                         defaultValue: "Supprimer (\(selectedStoryIDs.count))"))
-                .font(.system(size: 15, weight: .semibold))
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
@@ -339,20 +339,37 @@ private struct MyStoryRow: View {
             thumbnail
             VStack(alignment: .leading, spacing: 4) {
                 Text(story.timeAgo)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(isDark ? .white : MeeshyColors.indigo950)
                 HStack(spacing: 12) {
-                    metric(icon: "eye.fill", value: story.viewCount ?? 0)
-                    metric(icon: "heart.fill", value: story.reactionCount)
-                    metric(icon: "bubble.left.fill", value: story.commentCount)
+                    metric(
+                        icon: "eye.fill",
+                        value: story.viewCount ?? 0,
+                        label: String(localized: "story.mine.metric.views.a11y",
+                                      defaultValue: "\(story.viewCount ?? 0) vues"))
+                    metric(
+                        icon: "heart.fill",
+                        value: story.reactionCount,
+                        label: String(localized: "story.mine.metric.reactions.a11y",
+                                      defaultValue: "\(story.reactionCount) j'aime"))
+                    metric(
+                        icon: "bubble.left.fill",
+                        value: story.commentCount,
+                        label: String(localized: "story.mine.metric.comments.a11y",
+                                      defaultValue: "\(story.commentCount) commentaires"))
                 }
             }
             Spacer()
             if !isSelecting {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(.secondary)
                     .padding(8)
+                    // Affordance visuelle pure : les actions sont exposées à
+                    // VoiceOver via le `contextMenu` (rotor d'actions) et les
+                    // `swipeActions` de la ligne — le glyphe « ... » n'a pas à
+                    // être annoncé.
+                    .accessibilityHidden(true)
             }
         }
         .padding(.vertical, 4)
@@ -365,7 +382,7 @@ private struct MyStoryRow: View {
 
     private var selectionCircle: some View {
         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-            .font(.system(size: 22))
+            .font(MeeshyFont.relative(22))
             .foregroundColor(isSelected ? accentColor : Color.secondary.opacity(0.4))
             .accessibilityHidden(true)
     }
@@ -390,11 +407,15 @@ private struct MyStoryRow: View {
     }
 
     @ViewBuilder
-    private func metric(icon: String, value: Int) -> some View {
+    private func metric(icon: String, value: Int, label: String) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 11))
-            Text("\(value)").font(.system(size: 13, weight: .medium))
+            Image(systemName: icon).font(MeeshyFont.relative(11))
+            Text("\(value)").font(MeeshyFont.relative(13, weight: .medium))
         }
         .foregroundColor(.secondary)
+        // VoiceOver lisait un nombre nu (« 5 ») sans dire de quoi — on fusionne
+        // l'icône + le compteur en un seul élément annonçant le sens.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
     }
 }
