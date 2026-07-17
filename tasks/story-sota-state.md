@@ -1125,6 +1125,38 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
+## it.100 — C17 suite : picker de visibilité (Communautés/Sauf…/Seulement…/Privé) non localisé
+
+- Poursuite du balayage des surfaces annexes après le panneau Fond (it.99) : sheet ⋯
+  Transitions re-vérifiée SAINE (même composant partagé `OpeningEffectChips`, fix it.99
+  confirmé propagé aux DEUX surfaces). Bouton « Contacts » (icône personnes, header) →
+  picker de visibilité `PostVisibility` : « Public / Communautés / Contacts / Sauf… /
+  Seulement… / Privé » — mélange EN/FR à nouveau (« Public » et « Contacts » identiques
+  dans les deux langues, ce qui masquait initialement le bug — 4 des 6 items trahissaient
+  le FR).
+- Root cause différente des tours précédents : `PostVisibility.label`
+  (`packages/MeeshySDK/Sources/MeeshyUI/Story/PostVisibility.swift`) contient déjà un
+  commentaire du développeur ORIGINAL documentant EXACTEMENT le piège `Bundle.module`
+  MainActor rencontré en it.99 (« pas de `bundle:` (Bundle.module est MainActor-isolé
+  sous MeeshyUI) → reste sûr ») — mais sa solution (omettre `bundle:`, résolution implicite
+  `Bundle.main`) exige que les clés existent dans le catalogue **APP**
+  (`apps/ios/Meeshy/Localizable.xcstrings`), jamais ajoutées. Preuve : les 6 clés
+  `post.visibility.*` étaient ABSENTES à 100 % du catalogue APP (vérifié script) —
+  `Public`/`Contacts` semblaient corrects par pure coïncidence orthographique FR≈EN.
+- Fix : 6 clés ajoutées au catalogue APP (5 langues de/en/es/fr/pt-BR, ellipse Unicode
+  réelle « … » préservée à l'identique du defaultValue source). Aucun changement de code
+  Swift requis cette fois (le pattern `Bundle.main` implicite était déjà correct, seul le
+  catalogue manquait). `LocalizationConsistencyTests` 2/2 verts. VÉRIFIÉ SIMULATEUR
+  (scratchpad it100-*) : picker → « Public / Communities / Contacts / Except… / Only… /
+  Private » entièrement EN.
+- `PostVisibility` étant utilisé par le composer story ET potentiellement le composer post
+  standard (nom générique, pas de préfixe `story.`), ce fix bénéficie aux deux surfaces
+  sans travail supplémentaire.
+- Balayage localisation composer/reader (it.95/97/98/99/100) : Media, Sound, Text, Drawing,
+  Timeline, Background, sheet Transitions, picker Visibilité — tous vérifiés propres.
+  Reste HORS scope : éditeurs plein écran image/vidéo dédiés, sheet audience EXCEPT/ONLY
+  (sélection d'utilisateurs, pas encore ouverte), export MP4.
+
 ## it.99 — C17 suite : chips « Slide opening » (Fondu/Zoom/Glissement/Révélation) non localisés
 
 - Poursuite de l'exploration systématique des outils (dernier restant : Background/Fond).
