@@ -55,6 +55,7 @@ import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.conversations.NewConversationScreen
 import me.meeshy.app.feed.BookmarksScreen
+import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.reels.ReelsScreen
@@ -110,6 +111,7 @@ object Routes {
     const val STARRED = "starred"
     const val PROFILE_USER = "profile/{userId}"
     const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
+    const val USER_POSTS = "profile/{userId}/posts"
     const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
@@ -120,6 +122,7 @@ object Routes {
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
+    fun userPosts(userId: String): String = "profile/$userId/posts"
     fun reportUser(userId: String, username: String): String =
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
     fun story(userId: String): String = "story/$userId"
@@ -451,6 +454,16 @@ fun MeeshyApp(
                     onReport = { userId, username ->
                         navController.navigate(Routes.reportUser(userId, username))
                     },
+                    onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
+                )
+            }
+            composable(
+                route = Routes.USER_POSTS,
+                arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+            ) {
+                UserPostsScreen(
+                    onBack = { navController.popBackStack() },
+                    onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
                 )
             }
             composable(

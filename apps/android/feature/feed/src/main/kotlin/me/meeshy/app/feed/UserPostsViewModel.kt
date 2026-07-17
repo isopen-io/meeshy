@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,17 +20,16 @@ import me.meeshy.sdk.session.SessionRepository
 import javax.inject.Inject
 
 /**
- * The saved-posts (bookmarked) feed — port of iOS `BookmarksViewModel`. Loads the
- * signed-in user's bookmarks cursor-page by cursor-page, projects each post through
- * the shared [FeedPostBuilder] (so the Prisme language resolution matches the main
- * feed), and un-bookmarks optimistically with rollback on failure.
+ * A single user's authored-posts feed — the Android take on iOS `UserProfileView`'s posts
+ * list. Loads the profile owner's posts cursor-page by cursor-page, projects each through
+ * the shared [FeedPostBuilder] so the Prisme language resolution matches the main feed, and
+ * pages in more as the reader nears the tail.
  *
- * The list is the pure [BookmarksListState]; this ViewModel is the orchestration
- * layer (when to fetch, when to roll back). There is no repository-level bookmark
- * cache yet, so a cold open shows a skeleton then the first page — a follow-up will
- * add an L1 cache to serve saved posts instantly (instant-app parity with the feed).
+ * The list is the pure [PostPageListState]; this ViewModel is the orchestration layer (when
+ * to fetch, when the cold skeleton stands down). Read-only: the profile posts screen has no
+ * un-bookmark affordance, so no optimistic mutation lives here.
  */
-data class BookmarksUiState(
+data class UserPostsUiState(
     val posts: List<FeedPostPresentation> = emptyList(),
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
@@ -40,17 +40,20 @@ data class BookmarksUiState(
 )
 
 @HiltViewModel
-class BookmarksViewModel @Inject constructor(
+class UserPostsViewModel @Inject constructor(
     private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
+    savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val listState = MutableStateFlow(BookmarksListState())
-    private val status = MutableStateFlow(BookmarksStatus())
+    private val userId: String = savedStateHandle[USER_ID_ARG] ?: ""
 
-    private val _state = MutableStateFlow(BookmarksUiState())
-    val state: StateFlow<BookmarksUiState> = _state.asStateFlow()
+    private val listState = MutableStateFlow(PostPageListState())
+    private val status = MutableStateFlow(UserPostsStatus())
+
+    private val _state = MutableStateFlow(UserPostsUiState())
+    val state: StateFlow<UserPostsUiState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -62,22 +65,20 @@ class BookmarksViewModel @Inject constructor(
     }
 
     /**
-     * First page. Guarded so a re-entrant call (e.g. an `onAppear` re-fire) while a
-     * load is in flight or after the list has already loaded is a no-op — [refresh]
-     * is the way to force a reload.
+     * First page. Guarded so a re-entrant call while a load is in flight or after the list
+     * has already loaded is a no-op — [refresh] is the way to force a reload. A blank
+     * [userId] (a malformed route) never hits the network.
      */
     fun loadInitial() {
-        if (status.value.isLoading || listState.value.hasLoaded) return
+        if (userId.isBlank() || status.value.isLoading || listState.value.hasLoaded) return
         status.update { it.copy(isLoading = true, error = null) }
         fetchFirstPage()
     }
 
-    /**
-     * Pull-to-refresh: reset the accumulation to a cold list and re-fetch the first
-     * page. Mirrors iOS `refresh()` (invalidate + reload).
-     */
+    /** Pull-to-refresh: reset the accumulation to a cold list and re-fetch the first page. */
     fun refresh() {
-        listState.value = BookmarksListState()
+        if (userId.isBlank()) return
+        listState.value = PostPageListState()
         status.update { it.copy(isRefreshing = true, error = null) }
         fetchFirstPage()
     }
@@ -85,7 +86,7 @@ class BookmarksViewModel @Inject constructor(
     private fun fetchFirstPage() {
         viewModelScope.launch {
             try {
-                when (val result = postRepository.getBookmarksPage(cursor = null)) {
+                when (val result = postRepository.getUserPostsPage(userId, cursor = null)) {
                     is NetworkResult.Success -> {
                         listState.update { it.foldPage(result.data) }
                         status.update { it.copy(isLoading = false, isRefreshing = false) }
@@ -104,10 +105,9 @@ class BookmarksViewModel @Inject constructor(
     }
 
     /**
-     * Infinite scroll: once the given post is within [LOAD_MORE_THRESHOLD] of the tail
-     * and the pure state says a page can still be fetched, load it. Re-entrancy is
-     * guarded by [BookmarksStatus.isLoadingMore]; a failed page is silent (the next
-     * scroll re-triggers), matching the feed.
+     * Infinite scroll: once the given post is within [LOAD_MORE_THRESHOLD] of the tail and
+     * the pure state says a page can still be fetched, load it. Re-entrancy is guarded by
+     * [UserPostsStatus.isLoadingMore]; a failed page is silent (the next scroll re-triggers).
      */
     fun loadMoreIfNeeded(postId: String) {
         val current = _state.value
@@ -119,7 +119,7 @@ class BookmarksViewModel @Inject constructor(
         status.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
             try {
-                when (val result = postRepository.getBookmarksPage(cursor = list.cursor)) {
+                when (val result = postRepository.getUserPostsPage(userId, cursor = list.cursor)) {
                     is NetworkResult.Success -> listState.update { it.foldPage(result.data) }
                     is NetworkResult.Failure -> Unit
                 }
@@ -133,40 +133,15 @@ class BookmarksViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Optimistic un-bookmark: drop the post from the list instantly, persist, and
-     * restore the pre-removal snapshot on failure. Port of iOS `removeBookmark`.
-     * Inert when the post is not currently in the list.
-     */
-    fun removeBookmark(postId: String) {
-        val snapshot = listState.value
-        if (snapshot.posts.none { it.id == postId }) return
-        listState.update { it.removed(postId) }
-        viewModelScope.launch {
-            try {
-                val result = postRepository.removeBookmark(postId)
-                if (result is NetworkResult.Failure) {
-                    listState.value = snapshot
-                    status.update { it.copy(error = result.error.message) }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                listState.value = snapshot
-                status.update { it.copy(error = e.message) }
-            }
-        }
-    }
-
     private fun project(
-        list: BookmarksListState,
+        list: PostPageListState,
         user: MeeshyUser?,
-        st: BookmarksStatus,
-    ): BookmarksUiState {
+        st: UserPostsStatus,
+    ): UserPostsUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
         val projected = list.posts.map { FeedPostBuilder.build(it, prefs, config.socketUrl) }
         val showSkeleton = st.isLoading && !list.hasLoaded && projected.isEmpty() && st.error == null
-        return BookmarksUiState(
+        return UserPostsUiState(
             posts = projected,
             isLoading = st.isLoading,
             isRefreshing = st.isRefreshing,
@@ -177,12 +152,13 @@ class BookmarksViewModel @Inject constructor(
         )
     }
 
-    private companion object {
-        const val LOAD_MORE_THRESHOLD = 5
+    companion object {
+        const val USER_ID_ARG = "userId"
+        private const val LOAD_MORE_THRESHOLD = 5
     }
 }
 
-private data class BookmarksStatus(
+private data class UserPostsStatus(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,

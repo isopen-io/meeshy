@@ -19,6 +19,9 @@
     <string name="bookmarks_empty">Aucune publication enregistrée</string>
     <string name="bookmarks_back">Retour</string>
     <string name="bookmarks_remove">Retirer des enregistrés</string>
+    <string name="user_posts_title">Publications</string>
+    <string name="user_posts_empty">Aucune publication pour le moment</string>
+    <string name="user_posts_back">Retour</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d nouvelle publication</item>
         <item quantity="other">%1$d nouvelles publications</item>

@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateCommentRequest
@@ -33,12 +34,15 @@ import me.meeshy.sdk.net.rawApiCall
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** One cursor page of bookmarked posts plus the pagination watermark to fetch the next. */
-data class BookmarkPage(
+/** One cursor page of posts plus the pagination watermark to fetch the next. */
+data class PostPage(
     val posts: List<ApiPost>,
     val nextCursor: String?,
     val hasMore: Boolean,
 )
+
+/** Bookmarked-posts page — the same cursor-page shape as any other post list. */
+typealias BookmarkPage = PostPage
 
 /** Posts, comments, reposts and feed variants — port of PostService (PostService.swift). */
 @Singleton
@@ -205,6 +209,7 @@ class PostRepository @Inject constructor(
     private companion object {
         const val FEED_PAGE_SIZE = 30
         const val BOOKMARKS_PAGE_SIZE = 20
+        const val USER_POSTS_PAGE_SIZE = 20
     }
 
     suspend fun getFeed(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =
@@ -289,8 +294,35 @@ class PostRepository @Inject constructor(
     suspend fun getBookmarksPage(
         cursor: String? = null,
         limit: Int = BOOKMARKS_PAGE_SIZE,
-    ): NetworkResult<BookmarkPage> =
-        when (val result = rawApiCall { postApi.getBookmarks(cursor, limit) }) {
+    ): NetworkResult<PostPage> =
+        foldPostPage(rawApiCall { postApi.getBookmarks(cursor, limit) })
+
+    /**
+     * A single cursor page of the given user's authored posts (`GET /posts/user/:id`),
+     * carrying the `nextCursor`/`hasMore` watermark the plain [getUserPosts] drops. The
+     * user-profile posts screen owns the accumulation (there is no repository-level
+     * per-user cache), so it needs the watermark to drive its own infinite scroll. A
+     * `success:false` or dataless envelope folds into a [NetworkResult.Failure], exactly
+     * like [getBookmarksPage].
+     */
+    suspend fun getUserPostsPage(
+        userId: String,
+        cursor: String? = null,
+        limit: Int = USER_POSTS_PAGE_SIZE,
+    ): NetworkResult<PostPage> =
+        foldPostPage(rawApiCall { postApi.getUserPosts(userId, cursor, limit) })
+
+    /**
+     * Fold a raw list envelope into a [PostPage]: a transport [NetworkResult.Failure]
+     * passes through; a `success:false`/dataless envelope becomes a [NetworkResult.Failure];
+     * otherwise the posts plus the pagination watermark become a [PostPage] (`hasMore`
+     * defaulting to `false` when the envelope omits pagination). The single page-folding
+     * law shared by every cursor-paginated post list.
+     */
+    private fun foldPostPage(
+        result: NetworkResult<ApiResponse<List<ApiPost>>>,
+    ): NetworkResult<PostPage> =
+        when (result) {
             is NetworkResult.Success -> {
                 val response = result.data
                 val page = response.data
@@ -303,7 +335,7 @@ class PostRepository @Inject constructor(
                     )
                 } else {
                     NetworkResult.Success(
-                        BookmarkPage(
+                        PostPage(
                             posts = page,
                             nextCursor = response.pagination?.nextCursor,
                             hasMore = response.pagination?.hasMore ?: false,
