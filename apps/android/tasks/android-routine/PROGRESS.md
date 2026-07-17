@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-17 **comment replies (1-level)** landed (slice `feed-comment-replies`, feature-parity §Feed →
+> "Threaded comments" now `[~]` — expand-threads + likes done; auto-preview/reply-composition/mentions/realtime
+> still open). iOS `PostDetailViewModel` manages reply threads via `expandedThreads` / `repliesMap` /
+> `loadingReplies` + `toggleThread` (expand → `loadReplies` once, collapse on error). Android's post-detail comment
+> thread rendered top-level comments (+ likes the prior two slices) but **replies were unreachable** — a comment
+> with `replyCount > 0` showed a "Reply" awareness badge but no way to open its thread. **Ships a full vertical on
+> the existing endpoint (`PostRepository.getCommentReplies` already existed — no new repo method):**
+> **(1) `:feature:feed` pure core** — `CommentRepliesState` (immutable per-parent SSOT): `expandedIds` (open
+> threads), `loadingIds` (in-flight fetches), `loadedIds` (fetched at least once), `repliesByParent` (the rows).
+> `expanded(id)`/`collapsed(id)` are idempotent/inert. `beginLoad(id)` returns **`null` when a load is already in
+> flight OR the thread was already loaded** — so a collapse-then-re-expand serves the cached replies and never
+> refetches (cache-first Instant-App; a deliberate improvement — iOS re-guards on `repliesMap[id] == nil` but its
+> `toggleThread` re-enters on every open). `loaded(id, rows)` stores + marks loaded + clears loading; `failed(id)`
+> clears loading **and collapses** the thread (mirror of iOS removing it from `expandedThreads` on error).
+> **(2) `PostCommentsViewModel`** — added a 5th combined flow (`replies`); `toggleReplies(commentId)` is inert for
+> a blank post/comment id, collapses an open thread, else expands + `beginLoad` (skips the fetch on the guard) +
+> `fetchReplies` (getCommentReplies, seeds reply-row likes from `currentUserReactions`, `loaded`/`failed`,
+> `viewModelScope` rethrows `CancellationException`). The projection now **filters the top-level list to
+> `parentId == null`** (mirror of iOS `topLevelComments`) so a reply mixed into a `getComments` page never renders
+> twice; reply rows reuse `CommentProjection`/`CommentRow` so the heart like works on replies too. **(3) Compose** —
+> under each top-level `CommentRow`, an accent-coherent Indigo "View N replies" / "Hide replies" toggle (only when
+> `replyCount > 0` or expanded — no dead affordance) with a discreet 14dp loading spinner while fetching, expanding
+> into an indented reply column. EN/FR/ES/PT (`post_comments_view_replies` plural + `post_comments_hide_replies`).
+> **+23 tests** (`CommentRepliesStateTest` 14 — fresh, expand add/idempotent, collapse remove/inert, beginLoad
+> mark/null-when-loading/null-when-loaded, loaded store+mark+clear/empty-still-loaded, failed clear+collapse/
+> reloadable, collapse→re-expand no-reload, distinct threads independent; `PostCommentsViewModelTest` +9 —
+> expand+load-under-parent, second-toggle collapses, re-expand no-refetch (`coVerify exactly 1`), failure collapses,
+> double-tap guard fires one fetch, blank-commentId inert, blank-postId inert, reply-mixed-in not top-level,
+> toggleLike likes a reply row). **Mutation check (RED proof):** dropping the `|| id in loadedIds` guard from
+> `beginLoad` failed **exactly** the 4 no-refetch tests (39/43 green — behavioural, not tautological). **Gate
+> (system Gradle 8.14.3 — wrapper zip proxy-blocked, see NOTES):** `:feature:feed:testDebugUnitTest` +
+> `:core:model:testDebugUnitTest` → **BUILD SUCCESSFUL** (feed green incl. the 23 new); `:app:assembleDebug` →
+> **BUILD SUCCESSFUL** (reply thread + toggle compile). Reviewer **PASS** (diff `apps/android` only; **SDK purity**
+> — pure reply state + "when to expand/fetch" orchestration in `:feature:feed`, `getCommentReplies` in `:sdk-core`,
+> Compose stays dumb; **SSOT** — one `CommentRepliesState`, reused `CommentProjection`/`CommentRow`/`CommentLikeState`;
+> **Instant-App** — cache-first re-expand (no refetch), spinner only during the first fetch; **UDF** + immutable
+> `CommentRepliesState`/`UiState`; accent-coherent Indigo toggle, natural tap, indented thread, no dead end; no
+> coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — reply **composition** (a composer
+> targeting a parent comment — `addComment(postId, content, parentId)`), auto-preview of the first 1-2 replies
+> (cache-first), the post-detail **realtime room** (live `comment:added`/`post:liked` for the open post), the
+> **community posts feed** (needs a community entry point first), OR the statuses/moods bar (§G).
+
 > On 2026-07-17 **comment likes** landed (slice `feed-comment-likes`, feature-parity §Feed → "Feed post detail …" —
 > the comment-thread's like half now done; replies/mentions/realtime-room still open). iOS renders a heart on every
 > post-detail comment with an optimistic like toggle (`PostDetailViewModel.toggleCommentLike`: heart reaction,

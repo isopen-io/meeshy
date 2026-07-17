@@ -38,6 +38,11 @@
     <string name="post_comments_send">Enviar</string>
     <string name="post_comments_sending">Enviando…</string>
     <string name="post_comments_reply_badge">Respuesta</string>
+    <string name="post_comments_hide_replies">Ocultar respuestas</string>
+    <plurals name="post_comments_view_replies">
+        <item quantity="one">Ver %1$d respuesta</item>
+        <item quantity="other">Ver %1$d respuestas</item>
+    </plurals>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d publicación nueva</item>
         <item quantity="other">%1$d publicaciones nuevas</item>
