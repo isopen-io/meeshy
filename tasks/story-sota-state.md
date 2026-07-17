@@ -1125,6 +1125,40 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
+## it.101 — Investigation fond vidéo « canvas noir » : ÉCARTÉ, artefact simulateur (pas un bug)
+
+- Poursuite QA composer : sélection d'une vidéo comme fond dans le panneau Media. Le canvas
+  composer restait NOIR ~7 s puis, après fermeture du panneau, affichait le canvas plein
+  (letterboxé en 4:3, `canvasAspectRatio: 1.333` — conforme à la feature documentée
+  « fond paysage impose la forme du canvas ») mais avec une bande centrale d'un INDIGO PLAT,
+  jamais de vrai contenu vidéo (pixels de la scène filmée). Publié pour comparer avec le
+  reader (story `6a5a2ac1260e799e740cab7c`) : reader reproduit EXACTEMENT le même symptôme
+  (rectangle indigo plat, aucune image vidéo, aucun contrôle) — composer et reader
+  COHÉRENTS entre eux (conforme à l'exigence user), mais ni l'un ni l'autre ne joue la vidéo.
+- Root cause tracée via `xcrun simctl spawn ... log show` filtré sur le process Meeshy :
+  `FigVideoQueueGMStats` répète en boucle continue pendant 4+ minutes
+  `0 frames enqueued in the last 6 seconds ... max PTS: 0.000` — AUCUNE frame vidéo n'a
+  jamais été décodée, pas une seule, ni au chargement ni après publish. Le fichier réel
+  (`GET /posts/feed/stories` → `media[0]`) : `width: 320, height: 240, fileSize: 1703 bytes`.
+  `ffprobe` sur ce fichier échoue à extraire le moindre stream vidéo (codec/dimensions vides)
+  — ce n'est PAS un flux H.264/HEVC valide.
+- 1703 octets est la taille EXACTE des `.MOV` seedés par défaut dans la bibliothèque Photos
+  d'un simulateur iOS fraîchement provisionné (`DCIM/100APPLE/IMG_00XX.MOV`, vérifié : 20
+  fichiers, tous 1703 octets, tous non-probables par ffprobe) — ce sont des stubs factices
+  qu'Apple fournit pour peupler visuellement la pellicule sans embarquer de vraies vidéos.
+  Le panneau Media du composer a picked l'un de ces stubs plutôt qu'un des 4 vrais MP4/MOV
+  du simulateur (IMG_0013/16/17/18, tous probés OK : H.264/HEVC 720×1280 ou 1080×1920).
+- **Conclusion : ÉCARTÉ.** Le canvas noir/plat est le comportement CORRECT d'un lecteur AVPlayer
+  face à un fichier sans piste vidéo décodable — ni le composer ni le reader n'ont de bug ;
+  aucune trace d'erreur applicative, `FigVideoQueue` attend simplement des frames qui n'existent
+  pas dans le fichier source. Pas de fix de code. Pour retester le fond vidéo correctement,
+  sélectionner un des 4 vrais MP4/MOV du simulateur (jamais un stub 1703 octets).
+- Story de test `6a5a2ac1260e799e740cab7c` laissée en l'état (expire naturellement le
+  2026-07-18, `FRIENDS` visibility, pas de nettoyage nécessaire).
+- Reste HORS scope pour cette itération : re-tester le fond vidéo avec un vrai fichier,
+  audio de fond/premier-plan (lecture réelle), multi-slide add/reorder/delete, sheet
+  audience EXCEPT/ONLY (sélection d'utilisateurs), éditeurs plein écran dédiés, export MP4.
+
 ## it.100 — C17 suite : picker de visibilité (Communautés/Sauf…/Seulement…/Privé) non localisé
 
 - Poursuite du balayage des surfaces annexes après le panneau Fond (it.99) : sheet ⋯
