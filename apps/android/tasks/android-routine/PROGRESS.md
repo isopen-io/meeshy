@@ -1,5 +1,40 @@
 # Progress — state & what to do next
 
+> On 2026-07-17 **user-profile posts feed** landed (slice `feed-user-posts-screen`, feature-parity §Feed →
+> "User-profile posts feed + community posts feed" now `[~]` — the user-profile half done, community half still
+> open). iOS surfaces a user's posts inside `UserProfileView`; Android had `PostRepository.getUserPosts` but **no**
+> pagination watermark on that call and **no** posts UI/entry point. This slice generalises the just-merged
+> saved-posts pattern (`feed-bookmarks-screen`, #1995) into a reusable SSOT instead of duplicating it, then builds
+> the user-posts vertical on top: (1) **SSOT generalisation** — `BookmarkPage` → `data class PostPage` +
+> `typealias BookmarkPage = PostPage`; `BookmarksListState` → `data class PostPageListState` +
+> `typealias BookmarksListState = PostPageListState`; the two per-VM `foldPage` privates collapse into one
+> `internal fun PostPageListState.foldPage(PostPage)`; the `getBookmarksPage` folding body extracts into one
+> `private fun foldPostPage(...)` law that `getUserPostsPage` also uses (zero churn to the bookmarks tests — they
+> reference the aliases). (2) `sdk-core` — `PostRepository.getUserPostsPage(userId, cursor, limit): NetworkResult<PostPage>`
+> via `rawApiCall` (carries the `nextCursor`/`hasMore` the plain `getUserPosts` drops; `success:false`/dataless →
+> `Failure`). (3) `:feature:feed` — `UserPostsViewModel` reads the route `userId` from `SavedStateHandle`, cursor-pages
+> via the pure `PostPageListState`, projects `ApiPost` → `FeedPostPresentation` through the **shared** `FeedPostBuilder`
+> (Prisme parity), skeleton only on a cold empty load, pull-to-refresh, 5-from-tail infinite scroll; a **blank userId**
+> (malformed route) never hits the network. Read-only (no un-bookmark affordance in a profile feed). `UserPostsScreen`
+> reuses the feed card projection. **Coherence:** reached from a new profile **Publications** row
+> (`ProfileScreen.onViewPosts` → `Routes.USER_POSTS = profile/{userId}/posts`), accent-tinted (`Indigo500` article
+> icon); back returns to the profile, a reel taps to the reels player (no dead end). **+16 tests**
+> (`UserPostsViewModelTest` 11 — first-page populate, route-userId forwarded, blank-id no network, cold skeleton→settled
+> deferred gate, failure surfaces+no skeleton, empty→empty-state, load guarded after first load, loadMore appends near
+> tail / inert no-more / inert far, refresh reset+reload; `PostRepositoryTest` +5 — user-posts watermark, userId+cursor
+> forwarded, `success:false` → Failure, transport → Failure, hasMore defaults false when pagination absent).
+> **Gate:** `:app:assembleDebug` → **BUILD SUCCESSFUL** (APK assembles; profile + navigation + screen all compile);
+> `:feature:feed:testDebugUnitTest` → all 144 green (BookmarksListState 12, BookmarksViewModel 12 unbroken by the
+> typealias, FeedPostBuilder 19, FeedRealtimeReducer 51, FeedViewModel 39, UserPostsViewModel 11); `:sdk-core`
+> PostRepositoryTest 20/0 (the only full-`:sdk-core` red was the known environmental `InterfaceLanguageStoreTest`
+> DataStore `TimeoutCancellationException`, green in isolation). Reviewer **PASS** (diff `apps/android` only; **SDK
+> purity** — stateless page-fold + endpoint in `:sdk-core`, pure accumulation law + "when to fetch" in `:feature:feed`;
+> **SSOT** — one `PostPage`, one `PostPageListState`, one `foldPage`, shared `FeedPostBuilder`; **UDF** + immutable
+> `UiState`, pure `project`; **instant-app** — skeleton only on cold empty; accent-coherent, natural back gesture, no
+> dead end; no coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — the **community posts
+> feed** (reuse `getCommunityPosts` + this exact cursor-list + `FeedPostBuilder` pattern), the feed post **detail**
+> screen (text/media/repost + threaded comments + post-detail room subscriptions), OR the statuses/moods bar (§G).
+
 > On 2026-07-17 **bookmarked posts (saved) feed** landed (slice `feed-bookmarks-screen`, feature-parity §Feed →
 > "Bookmarked posts feed (saved posts) with infinite scroll" ✅ — the fifth §Feed slice, and the first
 > **stand-alone screen** the feed area gets beyond the main timeline). iOS has a `BookmarksView` (cache-first
@@ -4712,6 +4747,46 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-17 — slice `feed-user-posts-screen` ✅ impl + local gate green + reviewer PASS → PR + merge
+- **Opened with rule #0:** no open PR on the android track (the only open PRs were the parallel iOS
+  swarm's — `laughing-thompson`); `main` already carried #1995 (`feed-bookmarks-screen`, `ca22575`).
+  Fetched `main` clean, branched `claude/apps/android/feed-user-posts-screen`.
+- **Slice:** the **user-profile posts feed** — a cursor-paginated list of one user's authored posts,
+  reached from a profile **Publications** row. Rather than duplicate the just-merged saved-posts vertical,
+  generalised it into a reusable SSOT first, then built the user-posts feed on top.
+- **SSOT generalisation (no bookmarks-test churn — they reference the aliases):**
+  - `BookmarkPage` → `data class PostPage(posts, nextCursor, hasMore)` + `typealias BookmarkPage = PostPage`.
+  - `BookmarksListState` → `data class PostPageListState(...)` (append-dedup + watermark + optimistic `removed`
+    + `canLoadMore`) + `typealias BookmarksListState = PostPageListState`.
+  - Two per-VM `private fun …foldPage` → one `internal fun PostPageListState.foldPage(PostPage)`.
+  - `getBookmarksPage`'s inline folding body → one `private fun foldPostPage(rawApiCall-result)` law.
+- **Added (production):**
+  - `sdk-core` `PostRepository.getUserPostsPage(userId, cursor, limit): NetworkResult<PostPage>` via
+    `rawApiCall { postApi.getUserPosts(...) }` folded through `foldPostPage` — carries the
+    `nextCursor`/`hasMore` the plain `getUserPosts` (`apiCall`) drops; `success:false`/dataless → `Failure`.
+  - `:feature:feed` `UserPostsViewModel`/`UserPostsUiState` — route `userId` from `SavedStateHandle`, cursor
+    paging via the pure state, `FeedPostBuilder` projection (Prisme parity), skeleton-on-cold, pull-to-refresh,
+    5-from-tail infinite scroll; a **blank userId** never hits the network. Read-only (no un-bookmark).
+  - `UserPostsScreen` — feed-card projection, back + reel-tap wiring.
+  - `ProfileScreen.onViewPosts` + accent-tinted **Publications** row (shown when `state.user?.id` is present);
+    `Routes.USER_POSTS = profile/{userId}/posts` + composable in `MeeshyApp`. i18n en/fr/es/pt for the profile
+    row + screen title/back/empty.
+- **Tests:** +11 `UserPostsViewModelTest` (populate, route-userId forwarded, blank-id no-network, cold
+  skeleton→settled deferred gate, failure surfaces+no skeleton, empty→empty-state, load-guarded-after-first,
+  loadMore near-tail / inert-no-more / inert-far, refresh reset+reload) ; +5 `PostRepositoryTest`
+  (user-posts watermark, userId+cursor forwarded, `success:false`→Failure, transport→Failure, hasMore-default).
+  Pure `PostPageListState` law stays covered by the 12 `BookmarksListStateTest` cases via the alias.
+- **Verify:** `:app:assembleDebug` → **BUILD SUCCESSFUL** (2m45s; profile + navigation + screen compile);
+  `:feature:feed:testDebugUnitTest` → 144/0 (BookmarksListState 12, BookmarksViewModel 12, FeedPostBuilder 19,
+  FeedRealtimeReducer 51, FeedViewModel 39, UserPostsViewModel 11); `:sdk-core` PostRepositoryTest 20/0
+  (full `:sdk-core` had only the known `InterfaceLanguageStoreTest` DataStore `TimeoutCancellationException`
+  environmental flake — green in isolation).
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests, no tautologies; **SDK purity** (stateless
+  page-fold + endpoint in `:sdk-core`; pure accumulation law + "when to fetch" orchestration in `:feature:feed`);
+  **SSOT** (one `PostPage`, one `PostPageListState`, one `foldPage`, shared `FeedPostBuilder`); UDF + immutable
+  `UiState`, pure `project`; instant-app skeleton-on-cold; accent-coherent, natural back gesture, no dead end;
+  no coverage floor lowered, no test weakened.
 
 ### 2026-07-17 — slice `feed-realtime-like-sync` ✅ impl + local gate green + reviewer PASS → PR + merge
 - **Opened with rule #0:** the prior iteration's PR **#1990** (`feed-realtime-post-deleted`) was open with CI

@@ -1678,7 +1678,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [ ] Feed post detail with text/media/repost, translation flags, threaded comments
-- [ ] User-profile posts feed + community posts feed
+- [~] User-profile posts feed **done** (slice `feed-user-posts-screen`, 2026-07-17): cursor-paginated
+      list of a user's authored posts. Generalised the saved-posts pattern into one SSOT — the page DTO
+      (`PostPage`, with `BookmarkPage` now a typealias), the pure accumulation law (`PostPageListState`,
+      `BookmarksListState` now a typealias) and the `foldPage` adapter are all shared. `sdk-core`:
+      `PostRepository.getUserPostsPage(userId,cursor,limit)` (via `rawApiCall`, carries the
+      `nextCursor`/`hasMore` watermark the plain `getUserPosts` drops; `success:false`/dataless → `Failure`
+      through the single `foldPostPage` law). `UserPostsViewModel` (route `userId` via `SavedStateHandle`,
+      cursor paging, skeleton-on-cold, pull-to-refresh, 5-from-tail infinite scroll, blank-id never hits the
+      network) projects through the shared `FeedPostBuilder` (Prisme parity with the feed). `UserPostsScreen`
+      reuses the feed card projection (read-only, no un-bookmark). Reached from a new profile **Publications**
+      row (`onViewPosts` → `Routes.USER_POSTS = profile/{userId}/posts`); back returns to the profile, a reel
+      taps to the reels player (no dead end). **community posts feed still pending** (the `getCommunityPosts`
+      call + this cursor-list + `FeedPostBuilder` pattern can be reused). +16 tests (11 `UserPostsViewModelTest`,
+      +5 `PostRepositoryTest`).
 - [x] Bookmarked posts feed (saved posts) with infinite scroll — pure `BookmarksListState`
       (dedup-append cursor pagination + optimistic `removed` + `canLoadMore` law) driving
       `BookmarksViewModel` (cursor paging, optimistic un-bookmark with rollback, skeleton-on-cold,

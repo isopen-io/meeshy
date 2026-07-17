@@ -19,6 +19,9 @@
     <string name="bookmarks_empty">Nenhuma publicação salva ainda</string>
     <string name="bookmarks_back">Voltar</string>
     <string name="bookmarks_remove">Remover dos salvos</string>
+    <string name="user_posts_title">Publicações</string>
+    <string name="user_posts_empty">Nenhuma publicação ainda</string>
+    <string name="user_posts_back">Voltar</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d nova publicação</item>
         <item quantity="other">%1$d novas publicações</item>

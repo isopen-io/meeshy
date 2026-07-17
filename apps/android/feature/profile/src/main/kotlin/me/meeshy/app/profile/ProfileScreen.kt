@@ -22,10 +22,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
@@ -93,6 +96,7 @@ import java.util.Locale
 fun ProfileScreen(
     onBack: () -> Unit,
     onReport: (userId: String, username: String) -> Unit = { _, _ -> },
+    onViewPosts: (userId: String) -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel(),
     uploadViewModel: AvatarBannerUploadViewModel = hiltViewModel(),
 ) {
@@ -412,6 +416,9 @@ fun ProfileScreen(
                     )
                 }
                 header?.let { ProfileDetailsSection(it) }
+                state.user?.id?.takeIf { it.isNotBlank() }?.let { id ->
+                    ProfilePostsRow(onClick = { onViewPosts(id) })
+                }
                 state.stats?.let { ProfileStatsSection(it) }
                 state.timeline?.let { ProfileTimelineSection(it) }
             }
@@ -421,6 +428,41 @@ fun ProfileScreen(
 
     shareTarget?.let { share ->
         ProfileShareSheet(share = share, onDismiss = { shareTarget = null })
+    }
+}
+
+/** A tappable row leading to this user's authored-posts feed. */
+@Composable
+private fun ProfilePostsRow(onClick: () -> Unit) {
+    Spacer(Modifier.height(MeeshySpacing.md))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshySpacing.sm))
+            .clickable(onClick = onClick)
+            .padding(vertical = MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.Article,
+            contentDescription = null,
+            tint = MeeshyPalette.Indigo500,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.width(MeeshySpacing.sm))
+        Text(
+            text = stringResource(R.string.profile_view_posts),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MeeshyTheme.tokens.textPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

@@ -262,4 +262,60 @@ class PostRepositoryTest {
         assertThat(data.hasMore).isFalse()
         assertThat(data.nextCursor).isNull()
     }
+
+    @Test
+    fun getUserPostsPage_returnsPostsWithPaginationWatermark() = runTest {
+        coEvery { api.getUserPosts("u1", null, any()) } returns
+            page(listOf(ApiPost(id = "p1", content = "a"), ApiPost(id = "p2", content = "b")), "cur2", true)
+        val repo = PostRepository(api)
+
+        val data = (repo.getUserPostsPage("u1", cursor = null) as NetworkResult.Success).data
+
+        assertThat(data.posts.map { it.id }).containsExactly("p1", "p2").inOrder()
+        assertThat(data.nextCursor).isEqualTo("cur2")
+        assertThat(data.hasMore).isTrue()
+    }
+
+    @Test
+    fun getUserPostsPage_forwardsUserIdAndCursorToTheApi() = runTest {
+        coEvery { api.getUserPosts("u9", "cur2", any()) } returns
+            page(listOf(ApiPost(id = "p3", content = "c")), nextCursor = null, hasMore = false)
+        val repo = PostRepository(api)
+
+        val result = repo.getUserPostsPage("u9", cursor = "cur2")
+
+        assertThat((result as NetworkResult.Success).data.posts.map { it.id }).containsExactly("p3")
+        assertThat(result.data.hasMore).isFalse()
+        coVerify(exactly = 1) { api.getUserPosts("u9", "cur2", any()) }
+    }
+
+    @Test
+    fun getUserPostsPage_foldsUnsuccessfulEnvelopeIntoFailure() = runTest {
+        coEvery { api.getUserPosts(any(), any(), any()) } returns
+            ApiResponse(success = false, data = null, error = "forbidden")
+        val repo = PostRepository(api)
+
+        val result = repo.getUserPostsPage("u1")
+
+        assertThat((result as NetworkResult.Failure).error.message).isEqualTo("forbidden")
+    }
+
+    @Test
+    fun getUserPostsPage_foldsTransportFailureIntoFailure() = runTest {
+        coEvery { api.getUserPosts(any(), any(), any()) } throws IOException("offline")
+        val repo = PostRepository(api)
+
+        assertThat(repo.getUserPostsPage("u1")).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    @Test
+    fun getUserPostsPage_defaultsHasMoreFalseWhenPaginationAbsent() = runTest {
+        coEvery { api.getUserPosts(any(), any(), any()) } returns
+            ApiResponse(success = true, data = listOf(ApiPost(id = "p1", content = "a")))
+        val repo = PostRepository(api)
+
+        val data = (repo.getUserPostsPage("u1") as NetworkResult.Success).data
+        assertThat(data.hasMore).isFalse()
+        assertThat(data.nextCursor).isNull()
+    }
 }

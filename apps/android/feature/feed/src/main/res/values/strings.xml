@@ -19,6 +19,9 @@
     <string name="bookmarks_empty">No saved posts yet</string>
     <string name="bookmarks_back">Back</string>
     <string name="bookmarks_remove">Remove from saved</string>
+    <string name="user_posts_title">Posts</string>
+    <string name="user_posts_empty">No posts yet</string>
+    <string name="user_posts_back">Back</string>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d new post</item>
         <item quantity="other">%1$d new posts</item>
