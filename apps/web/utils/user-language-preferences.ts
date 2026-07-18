@@ -6,6 +6,7 @@ import type { User } from '@/types';
 import type { LanguageChoice } from '@/types/bubble-stream';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { resolveUserLanguage, resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { getDeviceLocale } from '@/lib/device-locale';
 
 /**
@@ -37,19 +38,24 @@ function findLanguageMeta(code: string | null | undefined) {
 }
 
 export function getUserLanguageChoices(user: User): LanguageChoice[] {
-  // Lookup by the raw (lowercased) preference so an absent systemLanguage keeps
-  // the historical 🇫🇷 « Français » fallback; the emitted code still defaults to 'fr'.
-  const systemRaw = user.systemLanguage?.toLowerCase();
-  const systemCode = systemRaw || 'fr';
-  const regionalCode = user.regionalLanguage?.toLowerCase();
-  const customCode = user.customDestinationLanguage?.toLowerCase();
+  // Normalize each preference through the shared SSOT so the emitted `code`
+  // matches both the canonical SUPPORTED_LANGUAGES codes (else the selectors
+  // drop it via `SUPPORTED_LANGUAGES.find(l => l.code === choice.code)`) and
+  // `resolveUserPreferredLanguage` — a subtagged pref like 'pt-BR' resolves to
+  // 'pt', not the unselectable 'pt-br'. An absent systemLanguage normalizes to
+  // `undefined`, preserving the historical 🇫🇷 « Français » fallback while the
+  // emitted code still defaults to 'fr'.
+  const systemNorm = normalizeLanguageCode(user.systemLanguage);
+  const systemCode = systemNorm || 'fr';
+  const regionalCode = normalizeLanguageCode(user.regionalLanguage);
+  const customCode = normalizeLanguageCode(user.customDestinationLanguage);
 
   const choices: LanguageChoice[] = [
     {
       code: systemCode,
       name: 'Langue système',
-      description: findLanguageMeta(systemRaw)?.name || 'Français',
-      flag: findLanguageMeta(systemRaw)?.flag || '🇫🇷',
+      description: findLanguageMeta(systemNorm)?.name || 'Français',
+      flag: findLanguageMeta(systemNorm)?.flag || '🇫🇷',
       isDefault: true
     }
   ];

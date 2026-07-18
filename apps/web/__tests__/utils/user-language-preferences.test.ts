@@ -182,6 +182,51 @@ describe('getUserLanguageChoices', () => {
       expect(getUserLanguageChoices(user)).toHaveLength(1);
     });
   });
+
+  describe('region-subtag normalization (Prisme SSOT: match SUPPORTED_LANGUAGES / resolveUserPreferredLanguage)', () => {
+    it('normalizes a subtagged systemLanguage to its base code so the choice is selectable', () => {
+      const user = makeUser({ systemLanguage: 'pt-BR' });
+      const choices = getUserLanguageChoices(user);
+
+      // Must emit 'pt' (a canonical SUPPORTED_LANGUAGES code), not 'pt-br' which
+      // the selectors drop via `SUPPORTED_LANGUAGES.find(l => l.code === choice.code)`.
+      expect(choices[0].code).toBe('pt');
+    });
+
+    it('emits a base code equal to resolveUserPreferredLanguage for a subtagged system pref', () => {
+      const user = makeUser({ systemLanguage: 'pt-BR' });
+      const choices = getUserLanguageChoices(user);
+
+      expect(choices[0].code).toBe(resolveUserPreferredLanguage(user));
+    });
+
+    it('normalizes a subtagged regionalLanguage and resolves its catalog meta', () => {
+      const user = makeUser({ systemLanguage: 'fr', regionalLanguage: 'en-US' });
+      const choices = getUserLanguageChoices(user);
+
+      expect(choices).toHaveLength(2);
+      expect(choices[1].code).toBe('en');
+      expect(choices[1].description).toBe('English');
+    });
+
+    it('normalizes a subtagged customDestinationLanguage', () => {
+      const user = makeUser({
+        systemLanguage: 'fr',
+        regionalLanguage: 'en',
+        customDestinationLanguage: 'de-DE',
+      });
+      const choices = getUserLanguageChoices(user);
+
+      expect(choices).toHaveLength(3);
+      expect(choices[2].code).toBe('de');
+      expect(choices[2].description).toBe('German');
+    });
+
+    it('collapses a regional entry that differs from system only by a region subtag', () => {
+      const user = makeUser({ systemLanguage: 'en', regionalLanguage: 'en-US' });
+      expect(getUserLanguageChoices(user)).toHaveLength(1);
+    });
+  });
 });
 
 describe('resolveUserPreferredLanguage', () => {
