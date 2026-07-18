@@ -14,6 +14,28 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 165i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **165i (terminée, branche `claude/laughing-thompson-wnteas`, base `main` HEAD `b36ffd7`)** :
+>   Dynamic Type + VoiceOver de `StatsTimelineChart` (graphique d'activité Swift Charts, écran stats).
+>   **2/2** `AxisValueLabel` (axes X/Y) `.font(.system(size: 9))` → `MeeshyFont.relative(9)` → libellés
+>   d'axe scalent sous Dynamic Type. **VoiceOver** : `LineMark` porte `.accessibilityLabel(<jour>)` +
+>   `.accessibilityValue(<n messages>)` (points explorables + Audio Graph) ; `AreaMark`
+>   `.accessibilityHidden(true)` (anti-doublon). **i18n** : clé plurielle neuve `stats.timeline.point.a11y`
+>   (de/en/es/fr/pt-BR), insertion chirurgicale au format Xcode (95 insertions, 0 reformat). Libellé global
+>   `stats.timeline.chart.a11y` intact. 1 fichier Swift + 1 clé i18n, 0 logique, 0 test neuf. **0 contention**
+>   (PR iOS ouvertes 140i–164i sur d'autres surfaces). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `StatsTimelineChart` SOLDÉ** : ne plus reprendre (2 axes → `relative` ; points VoiceOver ; clé plurielle).
+> - **⚠️ IMPORTANT — dérive `main` vs docs** : les analyses locales s'arrêtaient à 139i mais les PR iOS
+>   ouvertes couraient déjà 140i–164i (non mergées dans `main`). 165i part de `main` HEAD sur une surface
+>   **libre** (`StatsTimelineChart`, hors des 25 PR ouvertes) → aucune contention. Avant toute reprise :
+>   croiser `mcp__github list_pull_requests` (open) pour éviter de re-flagger une surface déjà en PR.
+> - **Base de départ 166i : `main` HEAD**. Surfaces déjà en PR ouverte (NE PAS reprendre) :
+>   `MessageViewsDetailView` (#2020), `SecurityVerificationView` (#2008), `AudioPostComposerView` (#1996),
+>   `StoryViewerView+Content` (#2015), `MessageReactionsDetailView` (#1998), `BubbleExpandableText` (#2001),
+>   `AttachmentLoadingTile` (#2009), `MyStoriesView` (#2013), `InviteFriendsSheet` (#2022), etc. Sinon :
+>   traîne 2/1 `.system` (`ContextActionMenu`, `ConversationBackgroundComponents`, `StoryExpiredContent`,
+>   `BubbleStandardLayout` emoji…) ou **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
