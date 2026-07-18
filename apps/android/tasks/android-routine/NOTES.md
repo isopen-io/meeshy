@@ -2,6 +2,27 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-18, `feed-comment-mention-rendering`) — reuse the ONE rich-text renderer for any new text surface; the display-name map is the only per-surface glue; and watch for pre-existing test-helper name clashes
+Bringing feed comment content to chat-bubble parity (mentions + bold/italic/URL). Three takeaways.
+**(1) Rich text has ONE SSOT on Android — don't reparse.** `:core:model` `MessageTextParser.parse(text, mentionDisplayNames)`
++ `:sdk-ui` `RichMessageText` already render `@mention`/`@Display Name`/bold/italic/strike/underline/`m+`/URL for chat. Any
+new text surface (comment body, and later post body / repost quote) should route through `RichMessageText`, NOT a bespoke
+`Text`. The only per-surface work is the `username → displayName` map: the parser turns `@Display Name` tokens into links only
+when given that map (a bare `@handle` resolves without it). So a "render mentions here too" slice is: build the map + swap
+`Text`→`RichMessageText`. Keeps every surface's mention/markdown behaviour identical by construction.
+**(2) The display-name map is product orchestration → `:feature:*`, not the SDK.** `CommentMentionDirectory` (which
+participants can resolve a mention in a comment thread) sits in `:feature:feed`, exactly like chat's `MentionRoster.displayNames`
+in `:feature:chat`. Filter parity with web `buildMentionDisplayMap` (mention-display.ts): drop a blank handle, an absent/blank
+display name, and a vanity `displayName == handle`. Source it from every comment + **loaded reply** author
+(`thread.comments + replyState.repliesByParent.values.flatten()`), not just the top level.
+**(3) Test-helper name clash.** `PostCommentsViewModelTest` already had a `private fun authored(id, parentId, name)`; my new
+`authored(id, username, displayName, parentId)` overload triggered "Overload resolution ambiguity" at the call sites (default
+args made them ambiguous). Grep the test file for an existing helper name before adding one — I renamed mine to `mentionComment`.
+**Follow-up:** the comment @-mention **autocomplete** is the natural next slice, but its pure SSOT (`ChatMention` /
+`MentionAutocompleteState`) lives in `:feature:chat`. To honour SSOT, promote it to a shared module (a `:feature:mentions` or
+`:core:model`) so chat + comments share ONE controller — the Android mirror of iOS's reusable `MentionComposerController`. Do
+that as its own slice (it edits chat imports — still apps/android, but a distinct concern from the feed wiring).
+
 ## Lesson (2026-07-18, `feed-postdetail-commentcount-badge`) — the post-detail *thread* and its *header badge* are two DIFFERENT ViewModels; wiring the room into one leaves the other frozen; resync to the event's authoritative count, not local arithmetic; and don't `awaitItem()` across an `isRefreshing` overlay flip
 Porting iOS `PostDetailViewModel` `commentAdded`/`commentDeleted` `post.commentCount = data.commentCount`. Four takeaways.
 **(1) The header badge and the thread are owned by SEPARATE Android VMs.** iOS keeps both in one `PostDetailViewModel`, so its

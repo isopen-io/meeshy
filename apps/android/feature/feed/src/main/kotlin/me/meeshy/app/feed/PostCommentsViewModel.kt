@@ -36,6 +36,7 @@ import javax.inject.Inject
 data class PostCommentsUiState(
     val comments: List<CommentPresentation> = emptyList(),
     val replyThreads: Map<String, ReplyThreadUiState> = emptyMap(),
+    val mentionDisplayNames: Map<String, String> = emptyMap(),
     val replyTarget: ReplyTarget? = null,
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
@@ -447,10 +448,14 @@ class PostCommentsViewModel @Inject constructor(
                     hiddenReplyCount = (all.size - shown.size).coerceAtLeast(0),
                 )
             }
+        val mentionDisplayNames = CommentMentionDirectory.build(
+            thread.comments + replyState.repliesByParent.values.flatten(),
+        )
         val showSkeleton = st.isLoading && !thread.hasLoaded && thread.comments.isEmpty() && st.error == null
         return PostCommentsUiState(
             comments = rows,
             replyThreads = replyThreads,
+            mentionDisplayNames = mentionDisplayNames,
             replyTarget = replyTarget,
             isLoading = st.isLoading,
             isLoadingMore = st.isLoadingMore,
