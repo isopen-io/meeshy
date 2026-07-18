@@ -50,6 +50,30 @@ data class CommentRepliesState(
         return copy(loadingIds = loadingIds + id)
     }
 
+    /**
+     * Mark every fresh id in [ids] as loading in a single immutable step — the batch primitive
+     * behind auto-preloading reply previews. Ids already loading or already loaded are dropped
+     * (never refetched); an empty batch is inert. Unlike [beginLoad] this never expands a thread:
+     * a preview is *loaded but collapsed*.
+     */
+    fun beginLoadAll(ids: Collection<String>): CommentRepliesState {
+        val fresh = ids.filterNot { it in loadingIds || it in loadedIds }
+        if (fresh.isEmpty()) return this
+        return copy(loadingIds = loadingIds + fresh)
+    }
+
+    /**
+     * From the ordered [candidateIds] (the first top-level comments known to have replies), the
+     * parent ids to auto-preload: the first [limit], minus any already loaded or in flight. A
+     * non-positive [limit] or no fresh candidate ⇒ empty, so the caller skips the preload fetch.
+     * Bounding to the first [limit] mirrors iOS `preloadReplyPreviews` (`prefix(5)`), so preview
+     * loading stays predictable rather than fanning out across an unbounded comment list.
+     */
+    fun previewTargets(candidateIds: List<String>, limit: Int): List<String> {
+        if (limit <= 0) return emptyList()
+        return candidateIds.take(limit).filterNot { it in loadedIds || it in loadingIds }
+    }
+
     /** Store the fetched [replies] for [id], mark it loaded, and clear the loading mark. */
     fun loaded(id: String, replies: List<ApiPostComment>): CommentRepliesState =
         copy(

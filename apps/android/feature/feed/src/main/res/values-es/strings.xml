@@ -48,6 +48,10 @@
         <item quantity="one">Ver %1$d respuesta</item>
         <item quantity="other">Ver %1$d respuestas</item>
     </plurals>
+    <plurals name="post_comments_view_all_replies">
+        <item quantity="one">Ver la %1$d respuesta</item>
+        <item quantity="other">Ver las %1$d respuestas</item>
+    </plurals>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d publicación nueva</item>
         <item quantity="other">%1$d publicaciones nuevas</item>
