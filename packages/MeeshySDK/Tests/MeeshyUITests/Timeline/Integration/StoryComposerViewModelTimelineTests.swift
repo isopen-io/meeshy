@@ -36,4 +36,25 @@ final class StoryComposerViewModelTimelineTests: XCTestCase {
         // Selection cleared because the new slide does not contain that clip id.
         XCTAssertNil(composer.timelineViewModel.selection.selectedClipId)
     }
+
+    // Regression: the opening/closing effect chips write ONLY to the VM's own
+    // `openingEffect`/`closingEffect` (same source the live canvas preview
+    // reads) — not synchronously through to `currentSlide.effects.opening`/
+    // `.closing`. `TimelineProject(from: slide)` alone would read that stale,
+    // unsynced slide-side value, so the Timeline chrome lane would show
+    // nothing right after a user picks an effect. The live VM value must win.
+    func test_loadCurrentSlideIntoTimeline_prefersLiveVMEffectsOverStaleSlideSnapshot() async {
+        let composer = StoryComposerViewModel()
+        // currentSlide.effects.opening/.closing remain nil/unsynced — only the
+        // VM's own published properties (what the chip UI + canvas actually
+        // write to) carry the freshly-picked values.
+        composer.openingEffect = .fade
+        composer.closingEffect = .zoom
+
+        composer.loadCurrentSlideIntoTimeline()
+        await composer.timelineViewModel.awaitConfigured()
+
+        XCTAssertEqual(composer.timelineViewModel.project.openingEffect, .fade)
+        XCTAssertEqual(composer.timelineViewModel.project.closingEffect, .zoom)
+    }
 }
