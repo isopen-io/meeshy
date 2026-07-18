@@ -34,7 +34,7 @@ pyzmq==27.1.0
 # torch, torchaudio, transformers, librosa installés via chatterbox-tts
 # CRITICAL: numpy<1.24 pour compatibilité ESPnet 202412
 # ESPnet 202412 nécessite numpy<1.24, chatterbox-tts <1.26 → contrainte commune <1.24
-numpy>=1.21.0,<1.24.0
+numpy>=2.2.6,<2.3.0
 # PIN EXACT — versions résolues conjointement avec torch==2.6.0 (cf. Dockerfile) : une
 # borne `>=` sur ces libs ML activement maintenues dérive vers une release qui exige un
 # torch/numpy plus récent (ex: pyannote.audio 3.4.0→4.0.7 == torch>=2.8.0) et casse le
