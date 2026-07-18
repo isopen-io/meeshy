@@ -38,6 +38,11 @@
     <string name="post_comments_send">Envoyer</string>
     <string name="post_comments_sending">Envoi…</string>
     <string name="post_comments_reply_badge">Réponse</string>
+    <string name="post_comments_reply_action">Répondre</string>
+    <string name="post_comments_replying_to">Réponse à %1$s</string>
+    <string name="post_comments_replying_to_generic">Réponse…</string>
+    <string name="post_comments_cancel_reply">Annuler la réponse</string>
+    <string name="post_comments_reply_hint">Ajouter une réponse…</string>
     <string name="post_comments_hide_replies">Masquer les réponses</string>
     <plurals name="post_comments_view_replies">
         <item quantity="one">Voir %1$d réponse</item>

@@ -34,6 +34,7 @@ import javax.inject.Inject
 data class PostCommentsUiState(
     val comments: List<CommentPresentation> = emptyList(),
     val replyThreads: Map<String, ReplyThreadUiState> = emptyMap(),
+    val replyTarget: ReplyTarget? = null,
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val showSkeleton: Boolean = false,
@@ -50,6 +51,15 @@ data class ReplyThreadUiState(
     val replies: List<CommentPresentation>,
 )
 
+/**
+ * The composer's active reply context: the *root* [parentId] the reply attaches to (flat
+ * 2-level threading) and the targeted comment's [authorName] for the "Replying to …" chip.
+ */
+data class ReplyTarget(
+    val parentId: String,
+    val authorName: String?,
+)
+
 @HiltViewModel
 class PostCommentsViewModel @Inject constructor(
     private val postRepository: PostRepository,
@@ -64,6 +74,7 @@ class PostCommentsViewModel @Inject constructor(
     private val status = MutableStateFlow(Status())
     private val likes = MutableStateFlow(CommentLikeState())
     private val replies = MutableStateFlow(CommentRepliesState())
+    private val composer = MutableStateFlow<ReplyTarget?>(null)
     private var pendingSeq = 0
 
     private val _state = MutableStateFlow(PostCommentsUiState())
@@ -72,7 +83,9 @@ class PostCommentsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             combine(thread, sessionRepository.currentUser, status, likes, replies) { t, user, st, likeState, replyState ->
-                project(t, user, st, likeState, replyState)
+                ProjectionInputs(t, user, st, likeState, replyState)
+            }.combine(composer) { inputs, replyTarget ->
+                project(inputs, replyTarget)
             }.collect { projected -> _state.value = projected }
         }
         loadInitial()
@@ -125,13 +138,18 @@ class PostCommentsViewModel @Inject constructor(
     }
 
     /**
-     * Send a comment. Trimmed-blank content, a blank post id, or a send already in flight
-     * are inert. The row is prepended optimistically for instant feedback, then confirmed
-     * with the server row or rolled back if the send fails.
+     * Send from the composer. Trimmed-blank content, a blank post id, or a send already in
+     * flight are inert. When a [ReplyTarget] is active the text is posted as a reply under its
+     * parent; otherwise as a top-level comment. Either way the row appears optimistically for
+     * instant feedback, then confirmed with the server row or rolled back if the send fails.
      */
     fun submit(text: String) {
         val content = text.trim()
         if (content.isEmpty() || postId.isBlank() || status.value.isSubmitting) return
+        composer.value?.let { target ->
+            sendReply(target.parentId, content)
+            return
+        }
         val tempId = "pending-${pendingSeq++}"
         thread.update { it.optimistic(optimisticRow(tempId, content)) }
         status.update { it.copy(isSubmitting = true, error = null) }
@@ -154,6 +172,68 @@ class PostCommentsViewModel @Inject constructor(
                 status.update { it.copy(isSubmitting = false, error = e.message) }
             }
         }
+    }
+
+    /**
+     * Aim the composer at [commentId]. Replying to a reply attaches to the *root* parent
+     * (flat 2-level threading, mirror of iOS `sendReply`), and the parent's thread is opened
+     * and loaded so the viewer sees the context their reply lands in. A blank post/comment id
+     * is inert.
+     */
+    fun beginReply(commentId: String) {
+        if (postId.isBlank() || commentId.isBlank()) return
+        val comment = findComment(commentId)
+        val parentId = comment?.parentId?.takeIf { it.isNotBlank() } ?: commentId
+        val name = comment?.author?.let { it.displayName ?: it.username }?.takeIf { it.isNotBlank() }
+        composer.value = ReplyTarget(parentId, name)
+        ensureThreadLoaded(parentId)
+    }
+
+    /** Drop the active reply target — the composer returns to posting a top-level comment. */
+    fun cancelReply() {
+        composer.value = null
+    }
+
+    private fun sendReply(parentId: String, content: String) {
+        val tempId = "pending-${pendingSeq++}"
+        val row = optimisticRow(tempId, content).copy(parentId = parentId)
+        replies.update { it.optimisticReply(parentId, row) }
+        thread.update { it.bumpReplyCount(parentId, 1) }
+        composer.value = null
+        status.update { it.copy(isSubmitting = true, error = null) }
+        viewModelScope.launch {
+            try {
+                when (val result = postRepository.addComment(postId, content, parentId)) {
+                    is NetworkResult.Success -> {
+                        replies.update { it.confirmedReply(parentId, tempId, result.data) }
+                        status.update { it.copy(isSubmitting = false, error = null) }
+                    }
+                    is NetworkResult.Failure -> {
+                        replies.update { it.failedReply(parentId, tempId) }
+                        thread.update { it.bumpReplyCount(parentId, -1) }
+                        status.update { it.copy(isSubmitting = false, error = result.error.message) }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                replies.update { it.failedReply(parentId, tempId) }
+                thread.update { it.bumpReplyCount(parentId, -1) }
+                status.update { it.copy(isSubmitting = false, error = e.message) }
+            }
+        }
+    }
+
+    private fun findComment(id: String): ApiPostComment? =
+        thread.value.comments.firstOrNull { it.id == id }
+            ?: replies.value.repliesByParent.values.flatten().firstOrNull { it.id == id }
+
+    private fun ensureThreadLoaded(parentId: String) {
+        if (replies.value.isExpanded(parentId)) return
+        replies.update { it.expanded(parentId) }
+        val began = replies.value.beginLoad(parentId) ?: return
+        replies.value = began
+        fetchReplies(parentId)
     }
 
     /**
@@ -228,14 +308,12 @@ class PostCommentsViewModel @Inject constructor(
         )
     }
 
-    private fun project(
-        thread: CommentThreadState,
-        user: MeeshyUser?,
-        st: Status,
-        likeState: CommentLikeState,
-        replyState: CommentRepliesState,
-    ): PostCommentsUiState {
-        val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
+    private fun project(inputs: ProjectionInputs, replyTarget: ReplyTarget?): PostCommentsUiState {
+        val thread = inputs.thread
+        val st = inputs.status
+        val likeState = inputs.likes
+        val replyState = inputs.replies
+        val prefs: LanguageResolver.ContentLanguagePreferences = inputs.user ?: EmptyContentPreferences
         val topLevel = thread.comments.filter { it.parentId.isNullOrBlank() }
         val rows = topLevel.map {
             CommentProjection.build(
@@ -253,7 +331,13 @@ class PostCommentsViewModel @Inject constructor(
                     isExpanded = true,
                     isLoading = replyState.isLoading(comment.id),
                     replies = replyState.repliesFor(comment.id).map {
-                        CommentProjection.build(it, prefs, config.socketUrl, likeState = likeState)
+                        CommentProjection.build(
+                            it,
+                            prefs,
+                            config.socketUrl,
+                            isPending = replyState.isPendingReply(it.id),
+                            likeState = likeState,
+                        )
                     },
                 )
             }
@@ -261,6 +345,7 @@ class PostCommentsViewModel @Inject constructor(
         return PostCommentsUiState(
             comments = rows,
             replyThreads = replyThreads,
+            replyTarget = replyTarget,
             isLoading = st.isLoading,
             isLoadingMore = st.isLoadingMore,
             showSkeleton = showSkeleton,
@@ -283,4 +368,13 @@ private data class Status(
     val isLoadingMore: Boolean = false,
     val isSubmitting: Boolean = false,
     val error: String? = null,
+)
+
+/** The five reactive inputs folded into the projection, threaded past the 5-arg `combine` cap. */
+private data class ProjectionInputs(
+    val thread: CommentThreadState,
+    val user: MeeshyUser?,
+    val status: Status,
+    val likes: CommentLikeState,
+    val replies: CommentRepliesState,
 )
