@@ -656,14 +656,16 @@ public struct ProTimelineView: View {
                 }
                 return []
             }()
+            let mediaStartTime = Float(media.startTime ?? 0)
+            let mediaNativeDuration = TimelineGeometry.effectiveClipDuration(
+                startTime: mediaStartTime,
+                duration: media.duration.map { Float($0) },
+                slideDuration: viewModel.project.slideDuration)
             VideoClipBar(
                 clipId: media.id,
                 title: QuickTimelineView.clipTitle(for: media, isSynthetic: isSynthetic),
-                startTime: Float(media.startTime ?? 0),
-                duration: TimelineGeometry.effectiveClipDuration(
-                    startTime: Float(media.startTime ?? 0),
-                    duration: media.duration.map { Float($0) },
-                    slideDuration: viewModel.project.slideDuration),
+                startTime: mediaStartTime,
+                duration: mediaNativeDuration,
                 fadeIn: Float(media.fadeIn ?? 0),
                 fadeOut: Float(media.fadeOut ?? 0),
                 isSelected: viewModel.selection.selectedClipId == media.id,
@@ -712,7 +714,25 @@ public struct ProTimelineView: View {
                 }
             )
             .equatable()
+            // A looping background clip plays on repeat to fill the slide
+            // (StoryBackgroundLayer wires AVPlayerLooper) — without this, a
+            // short bg clip rendered as one short bar followed by dead track.
+            if isImmovableBackground, media.loop == true {
+                LoopRepeatOverlay(
+                    nativeDuration: mediaNativeDuration,
+                    clipStartTime: mediaStartTime,
+                    slideDuration: viewModel.project.slideDuration,
+                    tint: MeeshyColors.success,
+                    geometry: geometry,
+                    laneHeight: laneHeight
+                )
+            }
         } else if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == clipId }) {
+            let audioStartTime = Float(audio.startTime ?? 0)
+            let audioNativeDuration = TimelineGeometry.effectiveClipDuration(
+                startTime: audio.startTime ?? 0,
+                duration: audio.duration,
+                slideDuration: viewModel.project.slideDuration)
             AudioClipBar(
                 clipId: audio.id,
                 // postMediaId is a UUID — unusable as a user-facing label.
@@ -720,11 +740,8 @@ public struct ProTimelineView: View {
                 // already provides the per-track index ("Audio 1").
                 title: String(localized: "story.timeline.clip.audio",
                               defaultValue: "Audio", bundle: .module),
-                startTime: Float(audio.startTime ?? 0),
-                duration: TimelineGeometry.effectiveClipDuration(
-                    startTime: audio.startTime ?? 0,
-                    duration: audio.duration,
-                    slideDuration: viewModel.project.slideDuration),
+                startTime: audioStartTime,
+                duration: audioNativeDuration,
                 volume: audio.volume,
                 isMuted: Self.isMutedForAudio(globalMute: viewModel.isMuted, audio: audio),
                 isSelected: viewModel.selection.selectedClipId == audio.id,
@@ -766,6 +783,16 @@ public struct ProTimelineView: View {
                 }
             )
             .equatable()
+            if audio.isBackground == true, audio.loop == true {
+                LoopRepeatOverlay(
+                    nativeDuration: audioNativeDuration,
+                    clipStartTime: audioStartTime,
+                    slideDuration: viewModel.project.slideDuration,
+                    tint: MeeshyColors.warning,
+                    geometry: geometry,
+                    laneHeight: laneHeight
+                )
+            }
         } else if let text = viewModel.project.textObjects.first(where: { $0.id == clipId }) {
             TextClipBar(
                 clipId: text.id,

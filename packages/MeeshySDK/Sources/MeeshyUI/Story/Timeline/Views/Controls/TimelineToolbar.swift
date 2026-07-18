@@ -141,6 +141,9 @@ public struct TimelineToolbar: View {
             .font(.system(size: 10, weight: .semibold, design: .monospaced))
             .tracking(0.2)
             .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(Color.gray.opacity(0.1)))
             .accessibilityHidden(true)
     }
 }
