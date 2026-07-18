@@ -78,6 +78,13 @@ public final class TimelineViewModel: ObservableObject {
     @Published public var mode: TimelineMode = .quick
     @Published public var zoomScale: CGFloat = 1.0
     @Published public var errorMessage: String?
+    /// One-shot signal that `project.slideDuration` was just auto-recomputed
+    /// to a NEW value by a content-mutating edit (trim/split/delete/add/move).
+    /// `nil` after the consuming view presents its toast. Never fires when
+    /// the recomputed value matches what was already on screen, and never
+    /// fires mid-clip-drag (only once the drag ends) — see
+    /// `recomputeSlideDuration()`.
+    @Published public var durationDidAutoAdjust: (from: Float, to: Float)?
     @Published public internal(set) var showOfflineQueuedConfirmation: Bool = false
     /// True between `beginScrub()` and `endScrub()` — flipped by the playhead
     /// gesture so `scrub(to:)` can choose a sub-50ms tolerance during the drag
@@ -291,6 +298,11 @@ public final class TimelineViewModel: ObservableObject {
         )
         commandStack.push(.moveClip(cmd))
         selection.endDrag()
+        // AFTER endDrag(): recomputeSlideDuration()'s toast is suppressed
+        // while selection.activeDrag is non-nil (every drag frame already
+        // called it via applyClipPosition) — this call, with the drag now
+        // cleared, is what actually surfaces the final value's toast.
+        recomputeSlideDuration()
     }
 
     /// Cancels an in-flight clip drag, restoring the clip's startTime to the value
@@ -333,35 +345,47 @@ public final class TimelineViewModel: ObservableObject {
     private func applyClipPosition(clipId: String, newStartTime: Float) {
         if let i = project.mediaObjects.firstIndex(where: { $0.id == clipId }) {
             project.mediaObjects[i].startTime = Double(newStartTime)
-            extendSlideDurationIfNeeded(
-                elementEnd: newStartTime + Float(project.mediaObjects[i].duration ?? 0)
-            )
+            recomputeSlideDuration()
             return
         }
         if let i = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) {
             project.audioPlayerObjects[i].startTime = newStartTime
-            extendSlideDurationIfNeeded(
-                elementEnd: newStartTime + (project.audioPlayerObjects[i].duration ?? 0)
-            )
+            recomputeSlideDuration()
             return
         }
         if let i = project.textObjects.firstIndex(where: { $0.id == clipId }) {
             project.textObjects[i].startTime = Double(newStartTime)
-            extendSlideDurationIfNeeded(
-                elementEnd: newStartTime + Float(project.textObjects[i].duration ?? 0)
-            )
+            recomputeSlideDuration()
         }
     }
 
-    /// Auto-extends the working `project.slideDuration` when an element is
-    /// dragged past the current playable range. Without this, the playhead
-    /// (which clamps at `slideDuration`) couldn't reach the element's tail
-    /// after the drop and the ruler / clip lane wouldn't visualise it. The
-    /// computed total duration handles persistence — this is the live in-edit
-    /// equivalent so the editor follows the user's intent in real time.
-    private func extendSlideDurationIfNeeded(elementEnd: Float) {
-        guard elementEnd.isFinite, elementEnd > project.slideDuration else { return }
-        project.slideDuration = elementEnd
+    /// Recomputes `project.slideDuration` from the current content using the
+    /// same "longest data wins" rule as `StorySlide.computedTotalDuration()`
+    /// (via `StoryEffects.contentDerivedDuration`), so the ruler/track length
+    /// always matches what will actually play — never left stale after a
+    /// trim/split/delete/add/move (design doc 2026-07-18). Fires
+    /// `durationDidAutoAdjust` only when the value actually changes, so a
+    /// no-op edit doesn't spam a toast.
+    ///
+    /// Called on every frame of a clip drag via `applyClipPosition` — the
+    /// toast is suppressed while `selection.activeDrag` is non-nil so it
+    /// doesn't fire 60 times/sec mid-gesture; `endClipDrag()` calls this
+    /// again once the drag ends so the final value still gets its toast.
+    func recomputeSlideDuration() {
+        let auto = Float(StoryEffects.contentDerivedDuration(
+            mediaObjects: project.mediaObjects,
+            audioPlayerObjects: project.audioPlayerObjects,
+            textObjects: project.textObjects
+        ))
+        guard abs(auto - project.slideDuration) > 0.05 else { return }
+        let old = project.slideDuration
+        project.slideDuration = auto
+        if selection.activeDrag == nil {
+            durationDidAutoAdjust = (from: old, to: auto)
+        }
+        if currentTime > auto {
+            scrub(to: auto, precise: true)
+        }
     }
 
     private func mapSnapKind(_ kind: SnapCandidate.Kind?) -> ClipSelectionState.ActiveDrag.SnappedKind? {
@@ -477,6 +501,7 @@ public final class TimelineViewModel: ObservableObject {
             try cmd.apply(to: &project)
             commandStack.push(.splitClip(cmd))
             scheduleEngineReconfigure()
+            recomputeSlideDuration()
         } catch {
             errorMessage = error.localizedDescription
         }
