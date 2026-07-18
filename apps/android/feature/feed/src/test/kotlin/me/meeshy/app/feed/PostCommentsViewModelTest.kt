@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketCommentAddedData
+import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -42,6 +43,7 @@ class PostCommentsViewModelTest {
     private val session: SessionRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
+    private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun comment(id: String, content: String = "hi", parentId: String? = null) =
@@ -55,6 +57,7 @@ class PostCommentsViewModelTest {
     ): PostCommentsViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { socialSocket.commentAdded } returns commentAdded
+        every { socialSocket.commentDeleted } returns commentDeleted
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
         return PostCommentsViewModel(repository, session, socialSocket, config, handle)
     }
@@ -734,5 +737,84 @@ class PostCommentsViewModelTest {
         val s = vm.state.value
         assertThat(s.comments.single { it.id == "c1" }.replyCount).isEqualTo(1)
         assertThat(s.replyThreads).doesNotContainKey("c1")
+    }
+
+    // --- Realtime room: live comment:deleted for the open post ---
+
+    @Test
+    fun `a live deleted top-level comment vanishes from the thread`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a"), comment("b"), comment("c")))
+        val vm = viewModel()
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a", "b", "c").inOrder()
+
+        commentDeleted.tryEmit(SocketCommentDeletedData(postId = "p1", commentId = "b", commentCount = 2))
+
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a", "c").inOrder()
+    }
+
+    @Test
+    fun `a delete for a different post is ignored`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a"), comment("b")))
+        val vm = viewModel()
+
+        commentDeleted.tryEmit(SocketCommentDeletedData(postId = "other", commentId = "b"))
+
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a", "b").inOrder()
+    }
+
+    @Test
+    fun `a delete is ignored when the route postId is blank`() = runTest {
+        val vm = viewModel(postId = null)
+
+        commentDeleted.tryEmit(SocketCommentDeletedData(postId = "", commentId = "x"))
+
+        assertThat(vm.state.value.comments).isEmpty()
+    }
+
+    @Test
+    fun `a delete for an unknown comment is a no-op`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a")))
+        val vm = viewModel()
+
+        commentDeleted.tryEmit(SocketCommentDeletedData(postId = "p1", commentId = "ghost"))
+
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a")
+    }
+
+    @Test
+    fun `deleting a top-level comment purges its previewed reply thread`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(withReplies("c1", 1)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1")))
+        val vm = viewModel()
+        assertThat(vm.state.value.replyThreads).containsKey("c1")
+
+        commentDeleted.tryEmit(SocketCommentDeletedData(postId = "p1", commentId = "c1", commentCount = 0))
+
+        val s = vm.state.value
+        assertThat(s.comments).isEmpty()
+        assertThat(s.replyThreads).doesNotContainKey("c1")
+    }
+
+    @Test
+    fun `a live deleted reply vanishes and decrements its parent's reply count`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(withReplies("c1", 2)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1"), reply("r2", "c1")))
+        val vm = viewModel()
+        vm.toggleReplies("c1") // expand so both replies are visible
+        assertThat(vm.state.value.replyThreads.getValue("c1").replies.map { it.id })
+            .containsExactly("r1", "r2").inOrder()
+
+        commentDeleted.tryEmit(SocketCommentDeletedData(postId = "p1", commentId = "r1", commentCount = 2))
+
+        val s = vm.state.value
+        assertThat(s.replyThreads.getValue("c1").replies.map { it.id }).containsExactly("r2")
+        assertThat(s.comments.single { it.id == "c1" }.replyCount).isEqualTo(1)
     }
 }

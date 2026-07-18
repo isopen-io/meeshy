@@ -301,4 +301,87 @@ class CommentRepliesStateTest {
         assertThat(s.repliesFor("c1").map { it.id }).containsExactly("live", "pending-0").inOrder()
         assertThat(s.pendingReplyIds).containsExactly("pending-0")
     }
+
+    // --- parentOfReply / removedReply / removedThread (live comment:deleted) ---
+
+    @Test
+    fun `parentOfReply finds the thread holding a reply`() {
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", listOf(reply("r1"), reply("r2")))
+            .beginLoad("c2")!!.loaded("c2", listOf(reply("r3", "c2")))
+        assertThat(s.parentOfReply("r2")).isEqualTo("c1")
+        assertThat(s.parentOfReply("r3")).isEqualTo("c2")
+    }
+
+    @Test
+    fun `parentOfReply is null when no thread holds the reply`() {
+        val s = CommentRepliesState().beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
+        assertThat(s.parentOfReply("nope")).isNull()
+    }
+
+    @Test
+    fun `removedReply drops a deleted reply from its thread`() {
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", listOf(reply("r1"), reply("r2"), reply("r3")))
+            .removedReply("r2")
+        assertThat(s.repliesFor("c1").map { it.id }).containsExactly("r1", "r3").inOrder()
+    }
+
+    @Test
+    fun `removedReply is inert when no thread holds the reply`() {
+        val base = CommentRepliesState().beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
+        assertThat(base.removedReply("nope")).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun `removedReply is inert on a state with no loaded threads`() {
+        val base = CommentRepliesState()
+        assertThat(base.removedReply("r1")).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun `removedReply clears the pending mark of a deleted optimistic reply`() {
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", emptyList())
+            .optimisticReply("c1", reply("pending-0"))
+            .removedReply("pending-0")
+        assertThat(s.repliesFor("c1")).isEmpty()
+        assertThat(s.pendingReplyIds).isEmpty()
+    }
+
+    @Test
+    fun `removedThread purges a deleted parent's whole reply thread`() {
+        val s = CommentRepliesState()
+            .expanded("c1")
+            .beginLoad("c1")!!.loaded("c1", listOf(reply("r1"), reply("r2")))
+            .removedThread("c1")
+        assertThat(s.isExpanded("c1")).isFalse()
+        assertThat(s.isLoaded("c1")).isFalse()
+        assertThat(s.repliesFor("c1")).isEmpty()
+    }
+
+    @Test
+    fun `removedThread clears pending replies under the deleted parent`() {
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", emptyList())
+            .optimisticReply("c1", reply("pending-0"))
+            .removedThread("c1")
+        assertThat(s.pendingReplyIds).isEmpty()
+    }
+
+    @Test
+    fun `removedThread leaves a sibling thread untouched`() {
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
+            .beginLoad("c2")!!.loaded("c2", listOf(reply("r2", "c2")))
+            .removedThread("c1")
+        assertThat(s.repliesFor("c2").map { it.id }).containsExactly("r2")
+        assertThat(s.isLoaded("c2")).isTrue()
+    }
+
+    @Test
+    fun `removedThread is inert for a parent with no thread state`() {
+        val base = CommentRepliesState().beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
+        assertThat(base.removedThread("zzz")).isSameInstanceAs(base)
+    }
 }

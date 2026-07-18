@@ -78,6 +78,21 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `comment deleted payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.commentDeleted.test {
+            handlers.getValue("comment:deleted").invoke(
+                arrayOf(JSONObject("""{"postId":"p1","commentId":"c9","commentCount":4}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.commentId).isEqualTo("c9")
+            assertThat(event.commentCount).isEqualTo(4)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a malformed reaction payload is ignored without emitting`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.storyReacted.test {

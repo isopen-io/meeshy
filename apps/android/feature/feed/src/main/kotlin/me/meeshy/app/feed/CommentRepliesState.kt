@@ -132,4 +132,46 @@ data class CommentRepliesState(
         if (existing.any { it.id == reply.id }) return this
         return copy(repliesByParent = repliesByParent + (parentId to (listOf(reply) + existing)))
     }
+
+    /** The parent id whose loaded thread contains [replyId], or `null` if no thread holds it. */
+    fun parentOfReply(replyId: String): String? =
+        repliesByParent.entries.firstOrNull { (_, rows) -> rows.any { it.id == replyId } }?.key
+
+    /**
+     * Remove a reply [replyId] deleted elsewhere (a live `comment:deleted`) from whichever thread
+     * holds it, dropping any pending mark it carried. Inert (same instance) when no loaded thread
+     * contains it. The caller decrements the parent's reply-count via
+     * [CommentThreadState.bumpReplyCount] (parent resolved through [parentOfReply]). Mirror of iOS
+     * `PostDetailViewModel` scanning `repliesMap` to remove a deleted reply on `comment:deleted`.
+     */
+    fun removedReply(replyId: String): CommentRepliesState {
+        val parent = parentOfReply(replyId) ?: return this
+        return copy(
+            repliesByParent = repliesByParent + (parent to repliesFor(parent).filterNot { it.id == replyId }),
+            pendingReplyIds = pendingReplyIds - replyId,
+        )
+    }
+
+    /**
+     * Purge a top-level comment's entire reply thread — used when the parent comment itself is
+     * deleted (live `comment:deleted`). Clears its expanded/loading/loaded marks, its rows, and any
+     * pending reply ids beneath it, so no orphan reply rows linger. Inert (same instance) when
+     * [parentId] carries no thread state. Mirror of iOS clearing `repliesMap[id]` and
+     * `expandedThreads` when the top-level comment is removed.
+     */
+    fun removedThread(parentId: String): CommentRepliesState {
+        if (parentId !in expandedIds && parentId !in loadingIds &&
+            parentId !in loadedIds && parentId !in repliesByParent
+        ) {
+            return this
+        }
+        val purgedReplyIds = repliesFor(parentId).mapTo(HashSet()) { it.id }
+        return copy(
+            expandedIds = expandedIds - parentId,
+            loadingIds = loadingIds - parentId,
+            loadedIds = loadedIds - parentId,
+            repliesByParent = repliesByParent - parentId,
+            pendingReplyIds = pendingReplyIds - purgedReplyIds,
+        )
+    }
 }
