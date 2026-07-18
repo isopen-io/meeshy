@@ -1,5 +1,45 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 the **live header comment-count badge** landed (slice `feed-postdetail-commentcount-badge`,
+> feature-parity §Feed → "Threaded comments" — the post-detail realtime room was live for the *thread*
+> (`PostCommentsViewModel`: add/delete/reaction rows), but the full-screen **header** badge is owned by a
+> **separate** VM (`PostDetailViewModel`, the post projection) that never subscribed — so a comment added/deleted
+> **elsewhere** froze the header's comment count until a manual refresh. iOS heals this: both `commentAdded` and
+> `commentDeleted` sinks do `self.post?.commentCount = data.commentCount` — resync to the **server-authoritative**
+> count the event carries (absolute, so it heals any drift from the thread VM's optimistic arithmetic). Android's
+> `SocketCommentAddedData` was even **missing** the `commentCount` field the gateway ships (confirmed in
+> `packages/shared/types/post.ts` `CommentAddedEventData.commentCount` + `SocialEventsHandler.broadcastCommentAdded`).
+> **Ships the header's slice of the room:**
+> **(1) `:core:model`** — `SocketCommentAddedData` gains `commentCount: Int = 0` (line-for-line mirror of the
+> gateway payload + iOS `data.commentCount`; default 0 keeps every existing decode back-compatible).
+> **(2) `PostDetailViewModel`** — injects `SocialSocketManager`; a new `liveCommentCount: StateFlow<Int?>` overlay
+> (null → the fetched post's own count) folded into the `combine` (now 5-arg); `observeRealtime()` (skipped for a
+> blank route) collects `commentAdded`/`commentDeleted` filtered to `postId` and sets `liveCommentCount =
+> event.commentCount`; a **successful fetch clears the overlay** (`liveCommentCount.value = null`) so fresh server
+> truth from a refresh always wins over a stale live value; `project` overlays `presentation.copy(commentCount =
+> liveCount.coerceAtLeast(0))` when the overlay is present (clamped ≥0 for a negative authoritative payload).
+> **(3) Compose** — **no new UI**: the badge already reads `post.commentCount` in `PostDetailScreen`, so the resync
+> is real, not orphan code. **+7 tests** (`PostDetailViewModelTest` +6 — live-add-resyncs, live-delete-resyncs,
+> other-post-ignored, blank-route-never-subscribes, negative-clamped-to-zero, refresh-replaces-overlay-with-server-
+> truth; `SocialSocketManagerTest` +1 — `comment:added` decode now carries the authoritative count).
+> **Mutation check (RED proof):** dropping the `coerceAtLeast(0)` clamp **and** flipping the `postId ==`
+> room filter to `!=` failed **exactly** the 5 badge tests (add/delete/other-post/negative-clamp/refresh) — the
+> decode test stayed green (its path is the model field, not the filter) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3 under `LANG=C.UTF-8`):** `:feature:feed:testDebugUnitTest`
+> (`PostDetailViewModelTest` 18, 0 fail), `:sdk-core:testDebugUnitTest` `SocialSocketManagerTest` green (the 1
+> `MediaDownloadPreferencesStoreTest` DataStore timeout is pre-existing/flaky under parallel load — **passes in
+> isolation**, unrelated to this diff which touches no DataStore), `:app:assembleDebug` → **BUILD SUCCESSFUL** (the
+> two new collectors + 5-arg combine compile, no cross-module breakage). Reviewer **PASS** (diff `apps/android`
+> only; **SDK purity** — `SocketCommentAddedData.commentCount` is a stateless model field in `:core:model`, same
+> grain as `SocketCommentDeletedData.commentCount`; the "when to resync the header" orchestration lives in the
+> `:feature:feed` VM; no Compose change; **SSOT** — reuses the `FeedPostBuilder` projection + one overlay, the
+> badge stays the single `post.commentCount`; **Instant-App** — live badge without a refresh; **UDF** + immutable
+> `StateFlow`, pure `project`; coherent — no dead end, the header count stays honest with the thread; no coverage
+> floor lowered, no test weakened). **Next slice:** §Feed still-open — comment **@mentions** (autocomplete +
+> render, mirror of iOS), per-post + comment **cache-first** (a disk cache mirroring iOS `CacheCoordinator.comments`),
+> the **community posts feed** (needs a community entry point first), OR pivot to the **statuses/moods bar** (§G) /
+> the **unified post composer** (Post/Status/Story tabs).
+
 > On 2026-07-18 **live comment heart reactions** landed (slice `feed-comment-live-reactions`, feature-parity §Feed →
 > "Threaded comments" — expand-threads + likes + reply-composition + auto-preview + realtime-room-`comment:added` +
 > realtime-room-`comment:deleted` + **live `comment:reaction-added`/`comment:reaction-removed` heart sync** now done;
