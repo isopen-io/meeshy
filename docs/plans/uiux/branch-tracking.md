@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 159i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **159i (en cours, branche `claude/laughing-thompson-chfipj`, base `main` HEAD `f489355`)** :
+>   VoiceOver grouping de `AttachmentLoadingTile` (tuile de préparation d'attachement — composer/feed/story).
+>   La tuile lisait ses morceaux en éléments a11y séparés (caption kind + caption d'étape terse + spinner) ;
+>   regroupée en **un seul élément** : `.accessibilityElement(children: .ignore)` + `.accessibilityLabel`
+>   (kind : Photo/Video/Audio/File/Location, stable) + `.accessibilityValue` (étape en phrase pleine :
+>   « Chargement en cours », « Compression en cours », « Génération de l'aperçu », « Finalisation », « Prêt »,
+>   « Échec du chargement — … ») + `.accessibilityAddTraits(isPreparing ? .updatesFrequently : [])`
+>   (ré-annonce à chaque étape). **Cancel exposé en action de rotor** (`.accessibilityActions`) → ne dépend
+>   plus du bouton coin 18pt (< 44pt HIG). Refactor support : `kindLabel` extrait de `label` (réutilisé
+>   caption + a11y). **0 gel touché** (glyphes bornés doctrine 86i inchangés). 1 fichier, 0 logique, 0 test.
+>   6 clés i18n neuves `attachment.loading.a11y-*` en `defaultValue` inline (pas d'édit `.xcstrings`).
+>   Composant **non revendiqué** par les PR ouvertes #1966–#2008 → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `AttachmentLoadingTile` VoiceOver structure SOLDÉ** : ne plus rouvrir les glyphes figés (86i).
+> - **Note track** : la traîne 140i–158i (PR #1966–#2008) est encore **ouverte, non mergée** (20 PR iOS
+>   empilées). 159i repart de `main` HEAD (`f489355`) et cible un composant hors de cette pile.
+> - **Base de départ 160i : `main` HEAD**. Traîne `.font(.system(size:))` restante :
+>   `ConversationView+Composer`, `CallView`, `FeedView`, `ReelsPlayerView`, `ConversationMediaGalleryView`,
+>   `AudioFullscreenView`, `StoryTrayView`, `FeedCommentsSheet` — ou passe VoiceOver/state-of-the-art.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
