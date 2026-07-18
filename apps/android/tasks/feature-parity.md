@@ -1676,8 +1676,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Threaded comments: expand threads ("view N replies") + comment likes + **reply composition** +
       **auto-preview replies** (slice `feed-reply-preview`, 2026-07-18 — the first top-level comments'
       replies auto-preload after the page loads and show a 2-reply inline preview with a "View all N replies"
-      affordance, no tap needed; mirror of iOS `preloadReplyPreviews`) **done**; mentions, effects/blur,
-      per-comment language switcher, post-detail realtime room still open
+      affordance, no tap needed; mirror of iOS `preloadReplyPreviews`) + **post-detail realtime room**
+      (slice `feed-postdetail-realtime-comments`, 2026-07-18 — a live `comment:added` for the open post
+      lands in the thread without a refresh: a top-level comment prepends, a reply prepends into its
+      already-visible thread and bumps the parent's "View N replies" count; mirror of iOS
+      `PostDetailViewModel.subscribeToSocket` `commentAdded` sink filtered to `postId`) **done**; mentions,
+      effects/blur, per-comment language switcher, live `comment:deleted`/`comment:liked` still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
@@ -1754,8 +1758,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       auto-load-without-tap, no-preview-for-zero-replies, capped-to-first-five, expand-previewed-no-refetch,
       empty-preload-no-rows) + 1 rewritten (`collapsing an expanded thread falls back to its reply preview`).
       Mutation-proven: dropping the `take(limit)` cap fails exactly the 3 cap tests (`previewTargets`
-      first-N + bounds-before-drop, `capped to the first five`). **Still open:** reply @mentions,
-      post-detail realtime room, per-post + comment cache-first.
+      first-N + bounds-before-drop, `capped to the first five`). **Post-detail realtime room now landed**
+      (slice `feed-postdetail-realtime-comments`, 2026-07-18): `PostCommentsViewModel` subscribes to
+      `SocialSocketManager.commentAdded` filtered to the route `postId`; a live top-level comment prepends
+      via `CommentThreadState.received` (deduped, not marked pending), a live reply prepends via
+      `CommentRepliesState.receivedReply` (only when the thread is expanded-or-loaded so no phantom partial
+      thread) + bumps the parent's `replyCount`. +18 tests (6 `CommentThreadStateTest` `received`, 6
+      `CommentRepliesStateTest` `receivedReply`, 6 `PostCommentsViewModelTest` realtime). Mutation-proven:
+      flipping `received` prepend→append fails exactly the 3 ordering tests. **Still open:** reply @mentions,
+      live `comment:deleted`/`comment:liked` sync, per-post + comment cache-first.
       Prior comment thread: +41 tests (6 `CommentPrismeTest`, 9 `CommentProjectionTest`,
       12 `CommentThreadStateTest`, 14 `PostCommentsViewModelTest`).
       +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).

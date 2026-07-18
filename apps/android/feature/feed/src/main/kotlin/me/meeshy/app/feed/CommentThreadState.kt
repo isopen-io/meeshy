@@ -43,6 +43,17 @@ data class CommentThreadState(
         return copy(comments = listOf(comment) + comments, pendingIds = pendingIds + comment.id)
     }
 
+    /**
+     * A live `comment:added` top-level comment from another user (the post-detail realtime room):
+     * prepend it (newest on top, mirror of iOS inserting at index 0), deduped by id and **not**
+     * marked pending — it is already a confirmed server row. Inert (same instance) when a comment
+     * with that id is already present (the viewer's own confirmed echo, or a duplicate broadcast).
+     */
+    fun received(comment: ApiPostComment): CommentThreadState {
+        if (comments.any { it.id == comment.id }) return this
+        return copy(comments = listOf(comment) + comments)
+    }
+
     /** Replace the optimistic [tempId] with the server [confirmed] row; inert if not pending. */
     fun confirmed(tempId: String, confirmed: ApiPostComment): CommentThreadState {
         if (tempId !in pendingIds) return this

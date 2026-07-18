@@ -19,6 +19,7 @@ import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import javax.inject.Inject
 
 /**
@@ -71,6 +72,7 @@ data class ReplyTarget(
 class PostCommentsViewModel @Inject constructor(
     private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
+    private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -95,7 +97,36 @@ class PostCommentsViewModel @Inject constructor(
                 project(inputs, replyTarget)
             }.collect { projected -> _state.value = projected }
         }
+        observeRealtime()
         loadInitial()
+    }
+
+    /**
+     * The post-detail realtime room: a live `comment:added` for the open post lands in the thread
+     * without a refresh (Instant-App). A top-level comment prepends; a reply prepends into its
+     * already-visible thread and bumps the parent's reply-count. A blank route [postId] never
+     * subscribes, and events for any other post are ignored. Mirror of iOS
+     * `PostDetailViewModel.subscribeToSocket` (`commentAdded` sink filtered to `postId`).
+     */
+    private fun observeRealtime() {
+        if (postId.isBlank()) return
+        viewModelScope.launch {
+            socialSocket.commentAdded.collect { event ->
+                if (event.postId != postId) return@collect
+                onCommentAdded(event.comment)
+            }
+        }
+    }
+
+    private fun onCommentAdded(comment: ApiPostComment) {
+        val parentId = comment.parentId?.takeIf { it.isNotBlank() }
+        if (parentId == null) {
+            thread.update { it.received(comment) }
+        } else {
+            replies.update { it.receivedReply(parentId, comment) }
+            thread.update { it.bumpReplyCount(parentId, 1) }
+        }
+        likes.update { it.seeded(listOf(comment), HEART_EMOJI) }
     }
 
     /**
