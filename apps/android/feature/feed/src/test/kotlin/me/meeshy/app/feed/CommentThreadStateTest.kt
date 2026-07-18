@@ -112,4 +112,45 @@ class CommentThreadStateTest {
         val base = CommentThreadState().appended(listOf(comment("a")), "c1", false)
         assertThat(base.failed("nope")).isEqualTo(base)
     }
+
+    private fun commentWithReplies(id: String, replyCount: Int?) =
+        ApiPostComment(id = id, content = "c", replyCount = replyCount)
+
+    @Test
+    fun bumpReplyCount_incrementsTheMatchingParent() {
+        val state = CommentThreadState()
+            .appended(listOf(commentWithReplies("a", 2)), null, false)
+            .bumpReplyCount("a", 1)
+        assertThat(state.comments.single { it.id == "a" }.replyCount).isEqualTo(3)
+    }
+
+    @Test
+    fun bumpReplyCount_treatsNullReplyCountAsZero() {
+        val state = CommentThreadState()
+            .appended(listOf(commentWithReplies("a", null)), null, false)
+            .bumpReplyCount("a", 1)
+        assertThat(state.comments.single { it.id == "a" }.replyCount).isEqualTo(1)
+    }
+
+    @Test
+    fun bumpReplyCount_neverGoesBelowZero() {
+        val state = CommentThreadState()
+            .appended(listOf(commentWithReplies("a", 0)), null, false)
+            .bumpReplyCount("a", -1)
+        assertThat(state.comments.single { it.id == "a" }.replyCount).isEqualTo(0)
+    }
+
+    @Test
+    fun bumpReplyCount_inertForUnknownParent() {
+        val base = CommentThreadState().appended(listOf(commentWithReplies("a", 2)), null, false)
+        assertThat(base.bumpReplyCount("zzz", 1)).isEqualTo(base)
+    }
+
+    @Test
+    fun bumpReplyCount_leavesOtherCommentsUntouched() {
+        val state = CommentThreadState()
+            .appended(listOf(commentWithReplies("a", 1), commentWithReplies("b", 4)), null, false)
+            .bumpReplyCount("a", 1)
+        assertThat(state.comments.single { it.id == "b" }.replyCount).isEqualTo(4)
+    }
 }

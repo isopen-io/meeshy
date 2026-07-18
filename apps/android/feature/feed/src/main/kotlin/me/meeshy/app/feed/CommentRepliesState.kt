@@ -20,12 +20,16 @@ data class CommentRepliesState(
     val loadingIds: Set<String> = emptySet(),
     val loadedIds: Set<String> = emptySet(),
     val repliesByParent: Map<String, List<ApiPostComment>> = emptyMap(),
+    val pendingReplyIds: Set<String> = emptySet(),
 ) {
     fun isExpanded(id: String): Boolean = id in expandedIds
 
     fun isLoading(id: String): Boolean = id in loadingIds
 
     fun isLoaded(id: String): Boolean = id in loadedIds
+
+    /** True while a just-sent reply [id] awaits server confirmation. */
+    fun isPendingReply(id: String): Boolean = id in pendingReplyIds
 
     fun repliesFor(id: String): List<ApiPostComment> = repliesByParent[id] ?: emptyList()
 
@@ -57,4 +61,35 @@ data class CommentRepliesState(
     /** Roll back a failed load for [id] — clear the loading mark and collapse the thread. */
     fun failed(id: String): CommentRepliesState =
         copy(loadingIds = loadingIds - id, expandedIds = expandedIds - id)
+
+    /**
+     * Optimistically prepend a just-sent [reply] under [parentId] and open the thread so the
+     * viewer sees it instantly (Instant-App). Deliberately does *not* mark the thread loaded —
+     * a later collapse-then-re-expand can still fetch the parent's existing server replies.
+     */
+    fun optimisticReply(parentId: String, reply: ApiPostComment): CommentRepliesState =
+        copy(
+            expandedIds = expandedIds + parentId,
+            repliesByParent = repliesByParent + (parentId to (listOf(reply) + repliesFor(parentId))),
+            pendingReplyIds = pendingReplyIds + reply.id,
+        )
+
+    /** Swap the optimistic [tempId] reply under [parentId] for the server row; inert if not pending. */
+    fun confirmedReply(parentId: String, tempId: String, confirmed: ApiPostComment): CommentRepliesState {
+        if (tempId !in pendingReplyIds) return this
+        return copy(
+            repliesByParent = repliesByParent +
+                (parentId to repliesFor(parentId).map { if (it.id == tempId) confirmed else it }),
+            pendingReplyIds = pendingReplyIds - tempId,
+        )
+    }
+
+    /** Roll back a failed optimistic [tempId] reply under [parentId] — drop the row; inert if not pending. */
+    fun failedReply(parentId: String, tempId: String): CommentRepliesState {
+        if (tempId !in pendingReplyIds) return this
+        return copy(
+            repliesByParent = repliesByParent + (parentId to repliesFor(parentId).filterNot { it.id == tempId }),
+            pendingReplyIds = pendingReplyIds - tempId,
+        )
+    }
 }

@@ -1673,7 +1673,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       reconciled against the cache) + accent-tinted bookmark button in the feed card
       (slice `feed-realtime-bookmark-sync`, 2026-07-17)
 - [ ] Adaptive multi-image collage layouts (1–5+ media) + fullscreen gallery
-- [~] Threaded comments: expand threads ("view N replies") + comment likes **done**; auto-preview
+- [~] Threaded comments: expand threads ("view N replies") + comment likes + **reply composition** (slice
+      `feed-reply-composition`, 2026-07-18 — optimistic reply targeting a comment, flat 2-level root-parent
+      resolution, "Replying to @name" chip, optimistic parent reply-count bump) **done**; auto-preview
       replies, mentions, effects/blur, per-comment language switcher still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking

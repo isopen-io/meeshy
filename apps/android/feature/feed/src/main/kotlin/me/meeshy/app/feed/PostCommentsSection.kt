@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.CircularProgressIndicator
@@ -86,12 +87,17 @@ internal fun PostCommentsSection(
             )
             else -> Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 state.comments.forEach { comment ->
-                    CommentRow(comment = comment, onToggleLike = viewModel::toggleLike)
+                    CommentRow(
+                        comment = comment,
+                        onToggleLike = viewModel::toggleLike,
+                        onReply = viewModel::beginReply,
+                    )
                     ReplyThread(
                         comment = comment,
                         thread = state.replyThreads[comment.id],
                         onToggleReplies = viewModel::toggleReplies,
                         onToggleLike = viewModel::toggleLike,
+                        onReply = viewModel::beginReply,
                     )
                 }
             }
@@ -109,13 +115,19 @@ internal fun PostCommentsSection(
         Spacer(Modifier.height(MeeshySpacing.md))
         CommentComposer(
             isSubmitting = state.isSubmitting,
+            replyTarget = state.replyTarget,
             onSubmit = viewModel::submit,
+            onCancelReply = viewModel::cancelReply,
         )
     }
 }
 
 @Composable
-private fun CommentRow(comment: CommentPresentation, onToggleLike: (String) -> Unit) {
+private fun CommentRow(
+    comment: CommentPresentation,
+    onToggleLike: (String) -> Unit,
+    onReply: (String) -> Unit,
+) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(
         modifier = Modifier
@@ -171,9 +183,32 @@ private fun CommentRow(comment: CommentPresentation, onToggleLike: (String) -> U
                     color = MeeshyTheme.tokens.textPrimary,
                 )
             }
-            CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+            ) {
+                CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
+                CommentReplyButton(comment = comment, onReply = onReply)
+            }
         }
     }
+}
+
+@Composable
+private fun CommentReplyButton(comment: CommentPresentation, onReply: (String) -> Unit) {
+    val label = stringResource(R.string.post_comments_reply_action)
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = MeeshyTheme.tokens.textSecondary,
+        modifier = Modifier
+            .padding(top = MeeshySpacing.xs)
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .clickable(enabled = !comment.isPending) { onReply(comment.id) }
+            .semantics { role = Role.Button; contentDescription = label }
+            .padding(vertical = 2.dp, horizontal = 4.dp),
+    )
 }
 
 /**
@@ -188,6 +223,7 @@ private fun ReplyThread(
     thread: ReplyThreadUiState?,
     onToggleReplies: (String) -> Unit,
     onToggleLike: (String) -> Unit,
+    onReply: (String) -> Unit,
 ) {
     val isExpanded = thread?.isExpanded == true
     if (comment.replyCount <= 0 && !isExpanded) return
@@ -226,7 +262,7 @@ private fun ReplyThread(
             Spacer(Modifier.height(MeeshySpacing.sm))
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 thread.replies.forEach { reply ->
-                    CommentRow(comment = reply, onToggleLike = onToggleLike)
+                    CommentRow(comment = reply, onToggleLike = onToggleLike, onReply = onReply)
                 }
             }
         }
@@ -265,37 +301,89 @@ private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (Strin
 @Composable
 private fun CommentComposer(
     isSubmitting: Boolean,
+    replyTarget: ReplyTarget?,
     onSubmit: (String) -> Unit,
+    onCancelReply: () -> Unit,
 ) {
     var draft by remember { mutableStateOf("") }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        OutlinedTextField(
-            value = draft,
-            onValueChange = { draft = it },
-            placeholder = { Text(stringResource(R.string.post_comments_input_hint)) },
-            modifier = Modifier.weight(1f),
-            maxLines = 4,
-        )
-        Spacer(Modifier.width(MeeshySpacing.sm))
-        if (isSubmitting) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                color = MeeshyPalette.Indigo500,
-            )
-        } else {
-            IconButton(
-                onClick = {
-                    onSubmit(draft)
-                    draft = ""
+    val isReply = replyTarget != null
+    Column {
+        if (isReply) {
+            ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
+            Spacer(Modifier.height(MeeshySpacing.xs))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                placeholder = {
+                    Text(
+                        stringResource(
+                            if (isReply) R.string.post_comments_reply_hint else R.string.post_comments_input_hint,
+                        ),
+                    )
                 },
-                enabled = draft.isNotBlank(),
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.Send,
-                    contentDescription = stringResource(R.string.post_comments_send),
-                    tint = if (draft.isNotBlank()) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.weight(1f),
+                maxLines = 4,
+            )
+            Spacer(Modifier.width(MeeshySpacing.sm))
+            if (isSubmitting) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = MeeshyPalette.Indigo500,
                 )
+            } else {
+                IconButton(
+                    onClick = {
+                        onSubmit(draft)
+                        draft = ""
+                    },
+                    enabled = draft.isNotBlank(),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = stringResource(R.string.post_comments_send),
+                        tint = if (draft.isNotBlank()) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
+                    )
+                }
             }
+        }
+    }
+}
+
+/**
+ * The "Replying to @name" chip pinned above the composer while a [ReplyTarget] is active,
+ * with a discreet close affordance to drop back to a top-level comment. Accent-coherent Indigo.
+ */
+@Composable
+private fun ReplyTargetChip(target: ReplyTarget, onCancelReply: () -> Unit) {
+    val label = target.authorName
+        ?.let { stringResource(R.string.post_comments_replying_to, it) }
+        ?: stringResource(R.string.post_comments_replying_to_generic)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .background(MeeshyPalette.Indigo500.copy(alpha = 0.10f))
+            .padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MeeshyPalette.Indigo500,
+        )
+        val cancelLabel = stringResource(R.string.post_comments_cancel_reply)
+        IconButton(
+            onClick = onCancelReply,
+            modifier = Modifier.size(24.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = cancelLabel,
+                tint = MeeshyPalette.Indigo500,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }

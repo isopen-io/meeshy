@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.ApiError
@@ -395,5 +396,177 @@ class PostCommentsViewModelTest {
             assertThat(thread.replies.single { it.id == "r1" }.isLiked).isTrue()
         }
         coVerify(exactly = 1) { repository.likeComment("p1", "r1") }
+    }
+
+    // --- Reply composition ---
+
+    private fun authored(id: String, parentId: String? = null, name: String = "Alice") =
+        ApiPostComment(
+            id = id,
+            content = "hi",
+            parentId = parentId,
+            author = ApiAuthor(id = "u_$id", username = name.lowercase(), displayName = name),
+        )
+
+    @Test
+    fun `beginReply targets a top-level comment with its author name`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
+        val vm = viewModel()
+        vm.beginReply("c1")
+        vm.state.test {
+            val target = awaitItem().replyTarget
+            assertThat(target?.parentId).isEqualTo("c1")
+            assertThat(target?.authorName).isEqualTo("Alice")
+        }
+    }
+
+    @Test
+    fun `beginReply on a reply row targets the root parent for flat 2-level threading`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("r1", parentId = "c1", name = "Bob")))
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+        vm.beginReply("r1")
+        vm.state.test {
+            val target = awaitItem().replyTarget
+            assertThat(target?.parentId).isEqualTo("c1")
+            assertThat(target?.authorName).isEqualTo("Bob")
+        }
+    }
+
+    @Test
+    fun `beginReply expands and loads the parent thread for context`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1")))
+        val vm = viewModel()
+        vm.beginReply("c1")
+        vm.state.test {
+            assertThat(awaitItem().replyThreads).containsKey("c1")
+        }
+        coVerify(exactly = 1) { repository.getCommentReplies("p1", "c1", null, any()) }
+    }
+
+    @Test
+    fun `beginReply does not refetch an already-loaded thread`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1")))
+        val vm = viewModel()
+        vm.toggleReplies("c1")
+        vm.beginReply("c1")
+        coVerify(exactly = 1) { repository.getCommentReplies("p1", "c1", null, any()) }
+    }
+
+    @Test
+    fun `beginReply is inert for a blank commentId`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        val vm = viewModel()
+        vm.beginReply("  ")
+        vm.state.test { assertThat(awaitItem().replyTarget).isNull() }
+    }
+
+    @Test
+    fun `beginReply is inert for a blank postId`() = runTest {
+        val vm = viewModel(postId = null)
+        vm.beginReply("c1")
+        vm.state.test { assertThat(awaitItem().replyTarget).isNull() }
+        coVerify(exactly = 0) { repository.getCommentReplies(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `cancelReply clears the reply target`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
+        val vm = viewModel()
+        vm.beginReply("c1")
+        vm.cancelReply()
+        vm.state.test { assertThat(awaitItem().replyTarget).isNull() }
+    }
+
+    @Test
+    fun `submit with a reply target sends a reply under the parent and clears the target`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.addComment("p1", "Salut", "c1", any()) } returns
+            NetworkResult.Success(reply("real", "c1", content = "Salut"))
+        val vm = viewModel()
+        vm.beginReply("c1")
+        vm.submit("  Salut  ")
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.replyTarget).isNull()
+            assertThat(s.replyThreads.getValue("c1").replies.map { it.id }).containsExactly("real")
+        }
+        coVerify(exactly = 1) { repository.addComment("p1", "Salut", "c1", null) }
+        coVerify(exactly = 0) { repository.addComment("p1", any(), null, any()) }
+    }
+
+    @Test
+    fun `a reply appears optimistically in the parent thread before the server confirms`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
+        val gate = CompletableDeferred<NetworkResult<ApiPostComment>>()
+        coEvery { repository.addComment("p1", "Hey", "c1", any()) } coAnswers { gate.await() }
+        val vm = viewModel()
+        vm.beginReply("c1")
+        vm.submit("Hey")
+        vm.state.test {
+            val pending = awaitItem().replyThreads.getValue("c1").replies.single()
+            assertThat(pending.content).isEqualTo("Hey")
+            assertThat(pending.isPending).isTrue()
+            gate.complete(NetworkResult.Success(reply("real", "c1", content = "Hey")))
+            val confirmed = awaitItem().replyThreads.getValue("c1").replies.single()
+            assertThat(confirmed.id).isEqualTo("real")
+            assertThat(confirmed.isPending).isFalse()
+        }
+    }
+
+    @Test
+    fun `sending a reply bumps the parent reply count optimistically`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1").copy(replyCount = 2)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.addComment("p1", "Hey", "c1", any()) } returns
+            NetworkResult.Success(reply("real", "c1"))
+        val vm = viewModel()
+        vm.beginReply("c1")
+        vm.submit("Hey")
+        vm.state.test {
+            assertThat(awaitItem().comments.single { it.id == "c1" }.replyCount).isEqualTo(3)
+        }
+    }
+
+    @Test
+    fun `a reply send failure rolls back the optimistic reply and its count and surfaces an error`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1").copy(replyCount = 2)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.addComment("p1", "Hey", "c1", any()) } returns
+            NetworkResult.Failure(ApiError(message = "nope"))
+        val vm = viewModel()
+        vm.beginReply("c1")
+        vm.submit("Hey")
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.replyThreads.getValue("c1").replies).isEmpty()
+            assertThat(s.comments.single { it.id == "c1" }.replyCount).isEqualTo(2)
+            assertThat(s.errorMessage).isEqualTo("nope")
+        }
+    }
+
+    @Test
+    fun `submit with no reply target still posts a top-level comment`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("a")))
+        coEvery { repository.addComment("p1", "Top", null, any()) } returns
+            NetworkResult.Success(comment("real", content = "Top"))
+        val vm = viewModel()
+        vm.submit("Top")
+        vm.state.test {
+            assertThat(awaitItem().comments.map { it.id }).containsExactly("real", "a").inOrder()
+        }
+        coVerify(exactly = 1) { repository.addComment("p1", "Top", null, null) }
     }
 }

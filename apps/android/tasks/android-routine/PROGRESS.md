@@ -1,5 +1,49 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 **reply composition** landed (slice `feed-reply-composition`, feature-parity §Feed →
+> "Threaded comments" — expand-threads + likes + **reply composition** now done; auto-preview/mentions/realtime
+> still open). iOS `PostDetailViewModel.sendReply` posts a reply via `addComment(postId, content, parentId)` where
+> `parentId = parent.parentId ?? parent.id` (flat 2-level: replying to a reply attaches to the ROOT parent), inserts
+> it at the front of `repliesMap[parentId]`, force-expands the thread, and bumps `comments[idx].replies`. Android had
+> the read side (expand + view N replies + reply likes) but **no way to compose a reply** — the composer only posted
+> top-level comments. **Ships the full write vertical on the existing endpoint (`addComment` already took `parentId`
+> — no new repo method):**
+> **(1) `:feature:feed` pure core** — `CommentRepliesState` gains an optimistic-reply SSOT: `pendingReplyIds` +
+> `optimisticReply(parentId, reply)` (opens the thread, **prepends** the reply, marks it pending — deliberately does
+> NOT mark loaded so a later collapse→re-expand can still fetch the parent's server replies), `confirmedReply`/
+> `failedReply` (swap-for-server / drop-optimistic, both inert when the temp id isn't pending), `isPendingReply`.
+> `CommentThreadState.bumpReplyCount(parentId, delta)` shifts the parent's `replyCount` (null→0, clamped ≥0, inert
+> for an unknown id) so the "View N replies" affordance survives a collapse after you reply to a 0-reply comment
+> (avoids the dead-end iOS also guards against by bumping the count). **(2) `PostCommentsViewModel`** — a 6th input
+> (`composer: ReplyTarget?`) threaded past Kotlin's 5-arg `combine` cap via a nested `.combine(composer)` over a
+> `ProjectionInputs` holder (NOTES recipe). `beginReply(commentId)` resolves the **root** parent from state
+> (`comment.parentId ?: commentId`, so replying to a reply row stays level-2), captures the author name for the
+> chip, and **expands+loads** the parent thread for context (no refetch if already loaded); `cancelReply` clears it;
+> `submit` now branches — a live `ReplyTarget` routes to `sendReply` (optimistic reply + `bumpReplyCount(+1)`, clear
+> target, `addComment(…, parentId)`, confirm or roll back reply **and** count; `viewModelScope` rethrows
+> `CancellationException`), else the unchanged top-level path. Reply rows project `isPending` so the optimistic row
+> dims. **(3) Compose** — a "Reply" text action on every comment/reply row (disabled while pending) → `beginReply`;
+> an accent-coherent Indigo "Replying to @name ✕" chip pinned above the composer (cancel affordance) that swaps the
+> hint to "Add a reply…". EN/FR/ES/PT strings. **+28 tests** (`CommentRepliesStateTest` +9 — optimisticReply
+> expand/prepend/pending, not-marked-loaded, confirmedReply swap+order+inert, failedReply drop+inert, isPendingReply
+> fresh; `CommentThreadStateTest` +5 — bump inc/null-as-zero/clamp-≥0/unknown-inert/others-untouched;
+> `PostCommentsViewModelTest` +14 — target top-level+name, **root-parent for a reply row**, expand+load-for-context,
+> no-refetch-if-loaded, blank-comment/post inert, cancel clears, submit routes to reply + clears target, optimistic
+> reply then confirm, count bump, failure rolls back reply+count+error, top-level still works with no target).
+> **Mutation check (RED proof):** replacing the root-resolution with `parentId = commentId` failed **exactly** the
+> "targets the root parent for flat 2-level threading" test (behavioural, not tautological). **Gate (system Gradle
+> 8.14.3 — wrapper zip proxy-blocked, see NOTES):** `:feature:feed:testDebugUnitTest` + `:core:model:testDebugUnitTest`
+> → **BUILD SUCCESSFUL** (feed green incl. the 28 new: CommentRepliesState 23, CommentThreadState 16,
+> PostCommentsViewModel 41); `:app:assembleDebug` → **BUILD SUCCESSFUL** (reply action + chip compile). Reviewer
+> **PASS** (diff `apps/android` only; **SDK purity** — pure reply/count state + "when to reply" orchestration in
+> `:feature:feed`, `addComment(parentId)` already in `:sdk-core`, Compose stays dumb; **SSOT** — one
+> `CommentRepliesState`, reused `CommentProjection`/`CommentRow`; **Instant-App** — optimistic reply, no spinner;
+> **UDF** + immutable state; accent-coherent Indigo chip/action, natural tap, no dead end after collapse; no coverage
+> floor lowered, no test weakened). **Next slice:** §Feed still-open — auto-**preview** of the first 1-2 replies
+> (cache-first, mirror iOS `preloadReplyPreviews`/`schedulePreloadReplyPreviews`), the post-detail **realtime room**
+> (live `comment:added`/`post:liked` for the open post), comment **@mentions**, the **community posts feed** (needs a
+> community entry point first), OR the statuses/moods bar (§G).
+
 > On 2026-07-17 **comment replies (1-level)** landed (slice `feed-comment-replies`, feature-parity §Feed →
 > "Threaded comments" now `[~]` — expand-threads + likes done; auto-preview/reply-composition/mentions/realtime
 > still open). iOS `PostDetailViewModel` manages reply threads via `expandedThreads` / `repliesMap` /

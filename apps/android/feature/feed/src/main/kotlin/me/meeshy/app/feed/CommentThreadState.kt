@@ -57,4 +57,18 @@ data class CommentThreadState(
         if (tempId !in pendingIds) return this
         return copy(comments = comments.filterNot { it.id == tempId }, pendingIds = pendingIds - tempId)
     }
+
+    /**
+     * Optimistically shift the [parentId] comment's `replyCount` by [delta] (a null count reads
+     * as zero, clamped ≥ 0) so the "View N replies" affordance tracks a just-sent reply. Inert
+     * when no comment matches [parentId].
+     */
+    fun bumpReplyCount(parentId: String, delta: Int): CommentThreadState {
+        if (comments.none { it.id == parentId }) return this
+        return copy(
+            comments = comments.map {
+                if (it.id == parentId) it.copy(replyCount = ((it.replyCount ?: 0) + delta).coerceAtLeast(0)) else it
+            },
+        )
+    }
 }
