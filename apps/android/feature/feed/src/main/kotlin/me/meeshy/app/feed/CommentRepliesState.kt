@@ -116,4 +116,20 @@ data class CommentRepliesState(
             pendingReplyIds = pendingReplyIds - tempId,
         )
     }
+
+    /**
+     * A live `comment:added` [reply] from another user under [parentId] (the post-detail realtime
+     * room): prepend it deduped by id — but only when the thread is already *visible* (expanded or
+     * loaded), so a live reply never conjures a phantom partial thread for an unopened comment. An
+     * unopened thread reflects the reply solely through the parent's bumped reply-count, and the
+     * full set is fetched when the viewer expands it. Inert (same instance) when the thread is not
+     * visible or the reply id is already present. Mirror of iOS inserting into `repliesMap` only
+     * when `expandedThreads.contains(parentId)`; not marked pending (it is a confirmed server row).
+     */
+    fun receivedReply(parentId: String, reply: ApiPostComment): CommentRepliesState {
+        if (parentId !in expandedIds && parentId !in loadedIds) return this
+        val existing = repliesFor(parentId)
+        if (existing.any { it.id == reply.id }) return this
+        return copy(repliesByParent = repliesByParent + (parentId to (listOf(reply) + existing)))
+    }
 }

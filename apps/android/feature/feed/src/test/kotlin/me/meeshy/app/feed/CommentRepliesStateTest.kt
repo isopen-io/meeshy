@@ -255,4 +255,50 @@ class CommentRepliesStateTest {
         val s = CommentRepliesState().beginLoad("c1")!!.loaded("c1", emptyList())
         assertThat(s.previewTargets(listOf("c1", "c2", "c3"), 2)).containsExactly("c2")
     }
+
+    @Test
+    fun `receivedReply prepends a live reply into a loaded thread`() {
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
+            .receivedReply("c1", reply("live"))
+        assertThat(s.repliesFor("c1").map { it.id }).containsExactly("live", "r1").inOrder()
+    }
+
+    @Test
+    fun `receivedReply inserts into an expanded but not-yet-loaded thread`() {
+        val s = CommentRepliesState().expanded("c1").receivedReply("c1", reply("live"))
+        assertThat(s.repliesFor("c1").map { it.id }).containsExactly("live")
+    }
+
+    @Test
+    fun `receivedReply is inert when the thread is neither expanded nor loaded`() {
+        val base = CommentRepliesState()
+        assertThat(base.receivedReply("c1", reply("live"))).isSameInstanceAs(base)
+        assertThat(base.repliesFor("c1")).isEmpty()
+    }
+
+    @Test
+    fun `receivedReply dedups a reply already present`() {
+        val base = CommentRepliesState().beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
+        assertThat(base.receivedReply("c1", reply("r1"))).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun `receivedReply does not mark the live reply pending`() {
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", emptyList())
+            .receivedReply("c1", reply("live"))
+        assertThat(s.isPendingReply("live")).isFalse()
+        assertThat(s.pendingReplyIds).isEmpty()
+    }
+
+    @Test
+    fun `receivedReply leaves an optimistic pending reply untouched`() {
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", emptyList())
+            .optimisticReply("c1", reply("pending-0"))
+            .receivedReply("c1", reply("live"))
+        assertThat(s.repliesFor("c1").map { it.id }).containsExactly("live", "pending-0").inOrder()
+        assertThat(s.pendingReplyIds).containsExactly("pending-0")
+    }
 }

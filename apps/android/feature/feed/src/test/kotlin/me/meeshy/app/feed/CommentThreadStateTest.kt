@@ -153,4 +153,40 @@ class CommentThreadStateTest {
             .bumpReplyCount("a", 1)
         assertThat(state.comments.single { it.id == "b" }.replyCount).isEqualTo(4)
     }
+
+    @Test
+    fun received_prependsALiveTopLevelComment() {
+        val state = CommentThreadState()
+            .appended(listOf(comment("a"), comment("b")), null, false)
+            .received(comment("live"))
+        assertThat(state.comments.map { it.id }).containsExactly("live", "a", "b").inOrder()
+    }
+
+    @Test
+    fun received_intoAnEmptyThread() {
+        val state = CommentThreadState().received(comment("live"))
+        assertThat(state.comments.map { it.id }).containsExactly("live")
+    }
+
+    @Test
+    fun received_dedupsAnAlreadyPresentComment() {
+        val base = CommentThreadState().appended(listOf(comment("a")), null, false)
+        assertThat(base.received(comment("a"))).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun received_doesNotMarkTheLiveCommentPending() {
+        val state = CommentThreadState().received(comment("live"))
+        assertThat(state.pendingIds).doesNotContain("live")
+        assertThat(state.pendingIds).isEmpty()
+    }
+
+    @Test
+    fun received_leavesAnOptimisticPendingCommentUntouched() {
+        val state = CommentThreadState()
+            .optimistic(comment("pending-0"))
+            .received(comment("live"))
+        assertThat(state.comments.map { it.id }).containsExactly("live", "pending-0").inOrder()
+        assertThat(state.pendingIds).containsExactly("pending-0")
+    }
 }

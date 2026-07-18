@@ -1,5 +1,48 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 the **post-detail realtime room** landed (slice `feed-postdetail-realtime-comments`,
+> feature-parity §Feed → "Threaded comments" — expand-threads + likes + reply-composition + auto-preview +
+> **realtime room** now done; @mentions/live-`comment:deleted`+`comment:liked`/per-comment-cache still open).
+> iOS `PostDetailViewModel.subscribeToSocket(postId)` filters `socialSocket.commentAdded` to the open post: a
+> top-level comment inserts at index 0 (deduped by id), a reply inserts into `repliesMap[parentId]` **only when
+> the thread is expanded** and bumps `comments[parentId].replies`. Android's post-detail thread was **read-only
+> after load** — another user's comment/reply on the open post only appeared on a manual refresh. **Ships the
+> live room on the existing `commentAdded` flow (already decoded by `SocialSocketManager`; already consumed by
+> `StoryCommentsViewModel` — same precedent, no new socket plumbing):**
+> **(1) `:feature:feed` pure core** — `CommentThreadState.received(comment)` prepends a live top-level comment
+> (newest on top, mirror of iOS index-0 insert), **deduped by id** (the viewer's own confirmed echo / a
+> duplicate broadcast is inert, same instance) and **not** marked pending (it is a confirmed server row).
+> `CommentRepliesState.receivedReply(parentId, reply)` prepends a live reply deduped — **but only when the
+> thread is expanded OR loaded** (visible), so a live reply never conjures a phantom partial thread for an
+> unopened comment; an unopened thread reflects the reply solely through the parent's bumped `replyCount`, and
+> the full set is fetched when the viewer expands it (mirror of iOS inserting into `repliesMap` only when
+> `expandedThreads.contains`). **(2) `PostCommentsViewModel`** — a new `observeRealtime()` (skipped for a blank
+> route `postId`) collects `socialSocket.commentAdded`, ignores events for any other post, and routes via
+> `onCommentAdded`: a top-level comment → `thread.received`; a reply → `replies.receivedReply` +
+> `thread.bumpReplyCount(+1)`; either way `likes.seeded` so a live comment carrying the viewer's own heart
+> reaction stays consistent. **(3) Compose** — **no new UI**: the live state flows through the existing
+> projection (top-level rows, expanded/preview reply threads, "View N replies" count), so the room is real, not
+> orphan code. **+18 tests** (`CommentThreadStateTest` +6 — received prepend/into-empty/dedup-inert/not-pending/
+> leaves-optimistic-untouched; `CommentRepliesStateTest` +6 — receivedReply into-loaded/into-expanded/inert-when-
+> invisible/dedup-inert/not-pending/leaves-optimistic-untouched; `PostCommentsViewModelTest` +6 — live top-level
+> at top, other-post ignored, blank-route ignored, duplicate no-double-render, live-reply-into-previewed-thread
+> +count-bump, live-reply-into-unloaded bumps-count-no-row). **Mutation check (RED proof):** flipping
+> `received` prepend→append (`listOf(comment)+comments` → `comments+listOf(comment)`) failed **exactly** 3 tests
+> (`received_prependsALiveTopLevelComment`, `received_leavesAnOptimisticPendingCommentUntouched`, `a live
+> top-level comment for this post appears at the top`) — behavioural, not tautological. **Gate (system Gradle
+> 8.14.3 — wrapper zip proxy-blocked, see NOTES):** `:feature:feed:testDebugUnitTest` → **BUILD SUCCESSFUL**
+> (`CommentThreadStateTest` 21, `CommentRepliesStateTest` 39, `PostCommentsViewModelTest` 52, 0 fail);
+> `:app:assembleDebug` → **BUILD SUCCESSFUL** (the injected `SocialSocketManager` + `observeRealtime` compile).
+> Reviewer **PASS** (diff `apps/android` only; **SDK purity** — pure `received`/`receivedReply` state + "when to
+> apply a live event" orchestration in `:feature:feed`, `commentAdded` already in `:sdk-core`, no Compose change;
+> **SSOT** — one `CommentThreadState`/`CommentRepliesState`, reused projection, same socket precedent as
+> `StoryCommentsViewModel`; **Instant-App** — live comment without a refresh; **UDF** + immutable state;
+> coherent — no dead end, the count/preview stay consistent after a live reply; no coverage floor lowered, no
+> test weakened). **Next slice:** §Feed still-open — comment **@mentions**, live **`comment:deleted`** removal +
+> **`comment:liked`** count sync for the open post (extends the room), per-post + comment **cache-first**
+> (a disk cache mirroring iOS `CacheCoordinator.comments`), the **community posts feed** (needs a community
+> entry point first), OR the statuses/moods bar (§G).
+
 > On 2026-07-18 **auto-preview replies** landed (slice `feed-reply-preview`, feature-parity §Feed →
 > "Threaded comments" — expand-threads + likes + reply-composition + **auto-preview** now done;
 > mentions/realtime-room/per-comment-cache still open). iOS `PostDetailViewModel.preloadReplyPreviews`

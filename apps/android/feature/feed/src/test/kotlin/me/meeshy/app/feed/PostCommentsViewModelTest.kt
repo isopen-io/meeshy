@@ -10,6 +10,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -18,11 +19,13 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -37,6 +40,8 @@ class PostCommentsViewModelTest {
 
     private val repository: PostRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
+    private val socialSocket: SocialSocketManager = mockk(relaxed = true)
+    private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun comment(id: String, content: String = "hi", parentId: String? = null) =
@@ -49,8 +54,9 @@ class PostCommentsViewModelTest {
         user: MeeshyUser? = MeeshyUser(id = "me", username = "me"),
     ): PostCommentsViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
+        every { socialSocket.commentAdded } returns commentAdded
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
-        return PostCommentsViewModel(repository, session, config, handle)
+        return PostCommentsViewModel(repository, session, socialSocket, config, handle)
     }
 
     @Test
@@ -651,5 +657,82 @@ class PostCommentsViewModelTest {
             assertThat(thread.replies).isEmpty()
             assertThat(thread.hiddenReplyCount).isEqualTo(0)
         }
+    }
+
+    // --- Realtime room: live comment:added for the open post ---
+
+    @Test
+    fun `a live top-level comment for this post appears at the top`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a"), comment("b")))
+        val vm = viewModel()
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a", "b").inOrder()
+
+        commentAdded.tryEmit(SocketCommentAddedData(postId = "p1", comment = comment("live")))
+
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("live", "a", "b").inOrder()
+    }
+
+    @Test
+    fun `a live comment for a different post is ignored`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a")))
+        val vm = viewModel()
+
+        commentAdded.tryEmit(SocketCommentAddedData(postId = "other", comment = comment("x")))
+
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a")
+    }
+
+    @Test
+    fun `a live comment is ignored when the route postId is blank`() = runTest {
+        val vm = viewModel(postId = null)
+
+        commentAdded.tryEmit(SocketCommentAddedData(postId = "", comment = comment("x")))
+
+        assertThat(vm.state.value.comments).isEmpty()
+    }
+
+    @Test
+    fun `a duplicate live comment does not double-render`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a")))
+        val vm = viewModel()
+
+        commentAdded.tryEmit(SocketCommentAddedData(postId = "p1", comment = comment("a")))
+
+        assertThat(vm.state.value.comments.map { it.id }).containsExactly("a")
+    }
+
+    @Test
+    fun `a live reply into a previewed thread appears and bumps the parent reply count`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(withReplies("c1", 1)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1")))
+        val vm = viewModel()
+        // Auto-preview has loaded c1's replies (collapsed preview) — the thread is visible.
+        assertThat(vm.state.value.replyThreads.getValue("c1").replies.map { it.id })
+            .containsExactly("r1")
+
+        commentAdded.tryEmit(SocketCommentAddedData(postId = "p1", comment = reply("live", "c1")))
+
+        val s = vm.state.value
+        assertThat(s.replyThreads.getValue("c1").replies.map { it.id })
+            .containsExactly("live", "r1").inOrder()
+        assertThat(s.comments.single { it.id == "c1" }.replyCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `a live reply into an unloaded thread bumps the count without a visible row`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(withReplies("c1", 0)))
+        val vm = viewModel()
+
+        commentAdded.tryEmit(SocketCommentAddedData(postId = "p1", comment = reply("live", "c1")))
+
+        val s = vm.state.value
+        assertThat(s.comments.single { it.id == "c1" }.replyCount).isEqualTo(1)
+        assertThat(s.replyThreads).doesNotContainKey("c1")
     }
 }
