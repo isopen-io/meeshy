@@ -2,6 +2,24 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-18, `feed-media-fullscreen-gallery`) — before building a "viewer/lightbox/overlay", grep for an existing one and mirror its open-state SSOT
+When a slice needs a fullscreen media viewer, DON'T write one. `:sdk-ui` already ships
+`MeeshyImageViewer` (pager + pinch-zoom + ±2 prefetch + save-to-gallery), and `:feature:chat` already
+solved "flatten a container's images into pages + resolve the tapped start index" as the pure
+`ConversationMediaGallery.of(...) → ConversationGallery(pages, startIndex)` SSOT, opened via a nullable
+`imageViewer` field in the ViewModel's `UiState` (`openImageViewer`/`dismissImageViewer`). The feed
+gallery is a **1:1 mirror** of that shape (`FeedMediaGallery.of(post, imageIndex) → FeedGallery`), so the
+whole slice was ~2 pure files + 3 wiring edits, no new SDK. The reusable-across-surfaces test: the pure
+flattener stays **per-feature** (it knows `FeedPostPresentation`, a product type — so it can't sink to
+`:sdk-core`), but the *viewer* is the opaque SDK building block. Keep the open-state **ephemeral in the
+flow** (`imageViewer: FeedGallery? = null`) not in local `remember`, so a background re-emit never tears
+a live viewer down — same reason chat keeps it in `UiState`.
+Two more, carried forward: **(a)** `MeeshyImageViewer`'s save-toast strings live in each feature's own
+`res/` — the feed had to add its own `feed_media_saved`/`feed_media_save_failed`/`feed_open_media` across
+all 4 locales (values, -es, -fr, -pt); a per-module `R` doesn't see chat's strings. **(b)** The gradle
+**wrapper** 403s fetching its distribution through the agent proxy — use the **system `gradle` (8.14.3)**
+directly (`gradle :app:assembleDebug testDebugUnitTest`, `LANG=C.UTF-8`), not `./meeshy.sh check`.
+
 ## Lesson (2026-07-18, `feed-adaptive-collage-layout`) — branch from `origin/main`, NOT local `main`; and model an adaptive collage as a pure count→rows solver
 Two takeaways.
 **(1) ALWAYS branch from `origin/main`.** This run's slice branch was first cut with

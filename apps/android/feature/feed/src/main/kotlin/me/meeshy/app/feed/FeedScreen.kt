@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -65,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -87,6 +89,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
@@ -176,6 +179,8 @@ fun FeedScreen(
                             // A tap on the embedded repost opens the ORIGINAL post's detail,
                             // never the outer reposter card.
                             onOpenPost = onOpenPost,
+                            // Tapping an image tile opens the fullscreen media gallery on it.
+                            onImageTap = { index -> viewModel.openImageViewer(post.id, index) },
                         )
                     }
                     if (state.isLoadingMore) {
@@ -209,6 +214,40 @@ fun FeedScreen(
             )
         }
     }
+    }
+
+    val gallery = state.imageViewer
+    if (gallery != null) {
+        val strings = rememberRelativeTimeStrings()
+        val galleryNow = remember(gallery) { System.currentTimeMillis() }
+        val galleryTimestamps = remember(gallery, strings) {
+            gallery.createdAtIsos.map { iso ->
+                iso?.let { isoToEpochMillisOrNull(it) }?.let { millis ->
+                    RelativeTimeFormat.short(
+                        epochMillis = millis,
+                        referenceMillis = galleryNow,
+                        zone = ZoneId.systemDefault(),
+                        locale = Locale.getDefault(),
+                        strings = strings,
+                    )
+                }
+            }
+        }
+        val galleryContext = LocalContext.current
+        val savedMessage = stringResource(R.string.feed_media_saved)
+        val saveFailedMessage = stringResource(R.string.feed_media_save_failed)
+        MeeshyImageViewer(
+            imageUrls = gallery.imageUrls,
+            initialIndex = gallery.startIndex,
+            onDismiss = viewModel::dismissImageViewer,
+            captions = gallery.captions,
+            authors = gallery.authorNames,
+            timestamps = galleryTimestamps,
+            onImageSaved = { result ->
+                val message = if (result.isSuccess) savedMessage else saveFailedMessage
+                Toast.makeText(galleryContext, message, Toast.LENGTH_SHORT).show()
+            },
+        )
     }
 }
 
@@ -283,6 +322,7 @@ private fun PostCard(
     onFlagTap: (String) -> Unit,
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
+    onImageTap: (Int) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
@@ -352,7 +392,7 @@ private fun PostCard(
 
             if (post.images.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.md))
-                PostImageGrid(images = post.images)
+                PostImageGrid(images = post.images, onImageTap = onImageTap)
             }
 
             post.repostEmbed?.let { embed ->
@@ -454,8 +494,9 @@ private fun PostLanguageStripRow(
 private val COLLAGE_HEIGHT = 260.dp
 
 @Composable
-private fun PostImageGrid(images: List<FeedPostImage>) {
+private fun PostImageGrid(images: List<FeedPostImage>, onImageTap: (Int) -> Unit) {
     val shape = RoundedCornerShape(MeeshyRadius.md)
+    val openLabel = stringResource(R.string.feed_open_media)
     val layout = MediaCollage.solve(images.size)
     if (layout.isEmpty) return
     if (layout.isSingle) {
@@ -468,7 +509,8 @@ private fun PostImageGrid(images: List<FeedPostImage>) {
                 .fillMaxWidth()
                 .aspectRatio(imageAspectRatio(image))
                 .clip(shape)
-                .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
+                .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+                .clickable(onClickLabel = openLabel) { onImageTap(0) },
         )
         return
     }
@@ -488,6 +530,8 @@ private fun PostImageGrid(images: List<FeedPostImage>) {
                         image = images[cell.index],
                         overflowCount = cell.overflowCount,
                         shape = shape,
+                        onClick = { onImageTap(cell.index) },
+                        onClickLabel = openLabel,
                         modifier = Modifier
                             .weight(cell.widthWeight)
                             .fillMaxHeight(),
@@ -503,12 +547,15 @@ private fun CollageTile(
     image: FeedPostImage,
     overflowCount: Int,
     shape: Shape,
+    onClick: () -> Unit,
+    onClickLabel: String,
     modifier: Modifier = Modifier,
 ) {
     Box(
         modifier = modifier
             .clip(shape)
-            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
+            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+            .clickable(onClickLabel = onClickLabel, onClick = onClick),
     ) {
         AsyncImage(
             model = image.thumbnailUrl ?: image.url,
