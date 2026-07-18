@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 158i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **158i (terminée, branche `claude/laughing-thompson-akjplz`, base `main` HEAD `f489355`)** :
+>   Passe **accessibilité VoiceOver** de `SecurityVerificationView` (écran de vérification E2E). Les polices
+>   étaient **déjà** en `MeeshyFont.relative` (aucun `.system` résiduel → mention « traîne `.system` » de ce
+>   fichier **PÉRIMÉE**) ; la lacune réelle était l'a11y. Corrections **purement additives** : 2 glyphes
+>   décoratifs (`lock.shield.fill` 64pt, `hourglass.circle` 40pt) → `.accessibilityHidden(true)` (doctrine
+>   74i/86i) ; QR code → `.accessibilityLabel` (`security.verify.qr.a11y`) ; safety number →
+>   `.accessibilityElement(children:.combine)` + label **épelé chiffre-par-chiffre** (helper pur
+>   `spelledSafetyNumber`) pour comparaison à voix haute ; 2 titres → `.isHeader`. 1 fichier, 0 logique
+>   métier, 0 mutation d'état, 0 test neuf, 1 clé i18n (défaut inline). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `SecurityVerificationView` a11y + Dynamic Type SOLDÉ** : ne plus reprendre (polices déjà `relative`,
+>   VoiceOver complet).
+> - **Base de départ 159i : `main` HEAD**. NB : nombreuses PR iOS ouvertes (140i–157i, branches
+>   `claude/laughing-thompson-*`) non mergées — les ré-inspecter avant de choisir une surface pour éviter la
+>   contention. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private` cross-file) ; sinon traîne
+>   `.system`/a11y (`ContextActionMenu`, `ConversationBackgroundComponents`, `BubbleStandardLayout`,
+>   `WebRTCVideoView`…) ou **passe state-of-the-art**.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
