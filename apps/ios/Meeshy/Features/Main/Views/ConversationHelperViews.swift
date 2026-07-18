@@ -66,7 +66,7 @@ struct ThemedBackButton: View {
                 // Chevron — always visible, in a fixed 40-pt slot so the
                 // back affordance stays anchored regardless of pill width
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundStyle(gradientFill)
                     .frame(width: 40, height: 40)
 
@@ -86,6 +86,13 @@ struct ThemedBackButton: View {
                     // affordance. Dark/light parity with the conversation
                     // list row badge via MeeshyColors.unreadBadgeBackground.
                     Text(Self.displayedUnread(unreadCount))
+                        // Fixed: compact numeric unread badge (iMessage
+                        // convention). The pill hugs the digits via
+                        // `.fixedSize` + `minWidth: 22` — letting it scale
+                        // with Dynamic Type would break the pill-tight
+                        // capsule and push it out of the back-button glass.
+                        // VoiceOver reads the count from the button label
+                        // (`a11y.back.with_unread`), so the glyph is hidden.
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .lineLimit(1)
