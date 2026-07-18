@@ -369,7 +369,8 @@ private struct MyStoryRow: View {
         // trait `.isSelected` de la ligne (même pattern que NewConversationView).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(rowAccessibilityLabel)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     /// Libellé VoiceOver composé : tampon temporel + les trois compteurs
