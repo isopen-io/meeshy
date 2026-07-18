@@ -1,6 +1,41 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
+    "story.mine.row.a11y" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@. %2$lld Aufrufe, %3$lld Reaktionen, %4$lld Kommentare"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@. %2$lld views, %3$lld reactions, %4$lld comments"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@. %2$lld visualizaciones, %3$lld reacciones, %4$lld comentarios"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@. %2$lld vues, %3$lld réactions, %4$lld commentaires"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@. %2$lld visualizações, %3$lld reações, %4$lld comentários"
+          }
+        }
+      }
+    },
     "conversation.lock.a11y.delete" : {
       "extractionState" : "manual",
       "localizations" : {
