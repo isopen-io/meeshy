@@ -161,6 +161,23 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   `MessageEditsDetailView`, `MessageTranscriptionDetailView`. Sinon : traîne 2/1 `.system`
 >   (`AudioCarouselView`, `ReelAudioBackdrop`, `VideoLegacySupport`, `MessageEffectModifiers`…), ou
 >   **passe state-of-the-art** au tarissement.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **140i (terminée, branche `claude/laughing-thompson-4bs06w`, base `main` HEAD `aee4798`)** :
+>   Dynamic Type + a11y de `MessageViewsDetailView` (sous-vues état vide + erreur de la feuille de détail
+>   des vues d'un message). **2/2** `.font(.system(size: 28, weight: .light))` → `MeeshyFont.relative` (icônes
+>   illustratives d'état vide + `wifi.slash` d'erreur ; 28 → `.title` textStyle → scalent **en phase** avec le
+>   `.footnote` sous elles, corrige la proportion cassée à Dynamic Type élevé). **+ `.accessibilityHidden(true)`**
+>   sur les 2 icônes décoratives → VoiceOver ne lit que le libellé porteur de sens. Les 7 autres fonts du fichier
+>   utilisent déjà `.system(.caption*, design: .monospaced)` = déjà scalables → intactes. `import MeeshyUI` déjà
+>   présent → 0 import ajouté. 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 PR iOS ouverte → 0 contention.
+>   Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `MessageViewsDetailView` Dynamic Type + a11y SOLDÉ** : ne plus reprendre (2 → `relative` + icônes masquées ;
+>   reste déjà scalable).
+> - **Base de départ 141i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon traîne : `ConversationBackgroundComponents` (2 glyphes 16pt bornés cercles fixes → gel 86i),
+>   `StoryExpiredContent` (2 hero 64/56pt → gel 84i), `StatsTimelineChart` (2 labels d'axe Charts 9pt → migrables
+>   avec prudence), `ContextActionMenu`, `SecurityVerificationView`, `BubbleStandardLayout`, ou **passe
+>   state-of-the-art** (hexes inline vs tokens) au tarissement.
 >
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 145i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
