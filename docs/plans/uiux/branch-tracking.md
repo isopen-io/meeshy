@@ -1691,3 +1691,26 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Base de départ 153i : `main` HEAD** (resync ; supprimer branche mergée). **Différé 153i+** : `ConversationAnimatedBackground` (12, décoratif), `FeedView` (7, revoir 123i), `ReelsPlayerView` (6), `StoryTrayView` (5) ; gros lots critiques en dernier `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationView+Composer` (13, prudent), `OnboardingAnimations` (16, décoratif).
 
 | 152i | claude/laughing-thompson-ir2m79 (iOS Dynamic Type freeze + cleanup `IncomingCallView` : 3/3 `.font(.system(size:))` figés commentés doctrine 82i (initiale avatar 110×110 décorative + `accessibilityHidden` parent ; 2 glyphes boutons 70×70 labellisés) ; 0 migration `relative` (libellés déjà sémantiques `.title`/`.callout`/`.caption2`) ; suppression propriété morte `theme` (comment-only) ; a11y/palette/reduceMotion inchangés ; 1 fichier, 0 logique/0 test neuf/0 clé/0 swap ; gate = CI iOS Tests) | ⏳ | ⏳ |
+> **POINTEUR iOS AUTORITAIRE (mis à jour 155i, 2026-07-17)** — piste iOS (suffixe `i`).
+> - **Contexte** : essaim d'agents dense — PR ouvertes iOS de 140i (#1966 `ThemedBackButton`) à 154i
+>   (#1996 `AudioPostComposerView`). `MyStoriesView` = **déjà pris** par 141i (#1968) — NE PAS toucher.
+>   Numéro **155i** choisi strictement > 154i pour éviter toute collision de nom de doc.
+> - **155i (terminée, branche `claude/laughing-thompson-uxgpnp`, base `main` HEAD `12a8160`)** :
+>   VoiceOver de `MessageReactionsDetailView` (onglet « Réactions » du détail message — capsules de
+>   filtre par emoji + liste des réacteurs + état vide). **Jumeau structurel** de `MessageViewsDetailView`
+>   (144i). **Surface fraîche** (0 analyse antérieure, 0 PR ouverte). Typographie **déjà 100 %
+>   sémantique** → **aucune migration Dynamic Type** ; itération **purement VoiceOver**. 3 lacunes
+>   réelles comblées : (a) capsule de filtre `.accessibilityAddTraits(isSelected ? [.isSelected] : [])`
+>   — l'état sélectionné n'était signalé que par la couleur (fix HIG) ; (b) rangée réacteur
+>   `.accessibilityElement(children: .combine)` + `MeeshyAvatar` `.accessibilityHidden(true)` (1 arrêt
+>   VoiceOver « nom, emoji, quand » au lieu de 4, avatar dé-dupliqué) ; (c) état vide `combine` +
+>   glyphe `face.smiling` masqué. Glyphe 28pt d'état vide conservé identique au jumeau (cohérence).
+>   1 fichier, 0 logique / 0 réseau / 0 clé i18n / 0 test neuf. Gate = CI `iOS Tests`.
+> - **NE PAS re-flagger** `MessageReactionsDetailView` (VoiceOver soldé 155i ; fonts déjà sémantiques).
+> - **Base de départ 156i : `main` HEAD**. **Différé 156i+** : reste de la famille `Message*DetailView`
+>   non traitée (`MessageEditsDetailView`, `MessageTranscriptionDetailView`, `MessageForwardDetailView`
+>   — fonts déjà sémantiques, vérifier VoiceOver rows/état-vide) ; gros lots critiques en dernier
+>   `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationView+Composer` (22, prudent).
+>   **Vérifier `list_pull_requests` avant de choisir** (essaim iOS ≥140i en vol).
+
+| 155i | claude/laughing-thompson-uxgpnp (iOS VoiceOver `MessageReactionsDetailView` — jumeau de `MessageViewsDetailView` 144i : capsule filtre `.accessibilityAddTraits(.isSelected)` conditionnel (état auparavant couleur-only, fix HIG) ; rangée réacteur `.accessibilityElement(children: .combine)` + avatar `.accessibilityHidden` (1 arrêt au lieu de 4) ; état vide `combine` + glyphe `face.smiling` masqué ; fonts déjà sémantiques 0 migration Dynamic Type ; 1 fichier, 0 logique/0 réseau/0 clé/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
