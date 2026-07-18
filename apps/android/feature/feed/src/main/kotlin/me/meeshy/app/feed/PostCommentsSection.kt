@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -89,12 +90,14 @@ internal fun PostCommentsSection(
                 state.comments.forEach { comment ->
                     CommentRow(
                         comment = comment,
+                        mentionDisplayNames = state.mentionDisplayNames,
                         onToggleLike = viewModel::toggleLike,
                         onReply = viewModel::beginReply,
                     )
                     ReplyThread(
                         comment = comment,
                         thread = state.replyThreads[comment.id],
+                        mentionDisplayNames = state.mentionDisplayNames,
                         onToggleReplies = viewModel::toggleReplies,
                         onToggleLike = viewModel::toggleLike,
                         onReply = viewModel::beginReply,
@@ -125,6 +128,7 @@ internal fun PostCommentsSection(
 @Composable
 private fun CommentRow(
     comment: CommentPresentation,
+    mentionDisplayNames: Map<String, String>,
     onToggleLike: (String) -> Unit,
     onReply: (String) -> Unit,
 ) {
@@ -177,10 +181,12 @@ private fun CommentRow(
                 }
             }
             SelectionContainer {
-                Text(
+                RichMessageText(
                     text = comment.content,
-                    style = MaterialTheme.typography.bodyMedium,
                     color = MeeshyTheme.tokens.textPrimary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    linkColor = MeeshyPalette.Indigo500,
+                    mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
                 )
             }
             Row(
@@ -225,6 +231,7 @@ private fun CommentReplyButton(comment: CommentPresentation, onReply: (String) -
 private fun ReplyThread(
     comment: CommentPresentation,
     thread: ReplyThreadUiState?,
+    mentionDisplayNames: Map<String, String>,
     onToggleReplies: (String) -> Unit,
     onToggleLike: (String) -> Unit,
     onReply: (String) -> Unit,
@@ -237,7 +244,12 @@ private fun ReplyThread(
         if (isPreview && thread != null) {
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 thread.replies.forEach { reply ->
-                    CommentRow(comment = reply, onToggleLike = onToggleLike, onReply = onReply)
+                    CommentRow(
+                        comment = reply,
+                        mentionDisplayNames = mentionDisplayNames,
+                        onToggleLike = onToggleLike,
+                        onReply = onReply,
+                    )
                 }
             }
             Spacer(Modifier.height(MeeshySpacing.xs))
@@ -287,7 +299,12 @@ private fun ReplyThread(
             Spacer(Modifier.height(MeeshySpacing.sm))
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 thread.replies.forEach { reply ->
-                    CommentRow(comment = reply, onToggleLike = onToggleLike, onReply = onReply)
+                    CommentRow(
+                        comment = reply,
+                        mentionDisplayNames = mentionDisplayNames,
+                        onToggleLike = onToggleLike,
+                        onReply = onReply,
+                    )
                 }
             }
         }

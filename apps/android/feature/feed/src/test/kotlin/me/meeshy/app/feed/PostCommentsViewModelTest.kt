@@ -899,4 +899,45 @@ class PostCommentsViewModelTest {
 
         assertThat(vm.state.value.comments).isEmpty()
     }
+
+    private fun mentionComment(id: String, username: String, displayName: String?, parentId: String? = null) =
+        ApiPostComment(
+            id = id,
+            content = "hi",
+            parentId = parentId,
+            author = ApiAuthor(id = "u-$id", username = username, displayName = displayName),
+        )
+
+    @Test
+    fun `the mention directory resolves display names from top-level comment authors`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(
+                listOf(
+                    mentionComment("a", "alice", "Alice Wonder"),
+                    mentionComment("b", "bob", "bob"),
+                ),
+            )
+        val vm = viewModel()
+
+        vm.state.test {
+            // The distinct-name author resolves; the vanity name (== handle) contributes nothing.
+            assertThat(awaitItem().mentionDisplayNames).containsExactly("alice", "Alice Wonder")
+        }
+    }
+
+    @Test
+    fun `the mention directory also covers loaded reply authors`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(mentionComment("c1", "alice", "Alice Wonder")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(mentionComment("r1", "carol", "Carol Q", parentId = "c1")))
+        val vm = viewModel()
+
+        vm.toggleReplies("c1")
+
+        vm.state.test {
+            assertThat(awaitItem().mentionDisplayNames)
+                .containsExactly("alice", "Alice Wonder", "carol", "Carol Q")
+        }
+    }
 }

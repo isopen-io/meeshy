@@ -1,5 +1,45 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 **feed comment mention rendering** landed (slice `feed-comment-mention-rendering`, feature-parity
+> §Feed → "Threaded comments" — mention **rendering** now done; @-mention **autocomplete** in the composer,
+> effects/blur, per-comment language switcher still open). Until now a comment's content rendered as flat
+> `Text(comment.content)` — a `@Alice Wonder` mention was inert, unstyled prose, while chat bubbles have long
+> rendered rich text (`@mention`/bold/italic/URL) via the shared `:sdk-ui` `RichMessageText` → `:core:model`
+> `MessageTextParser`. This slice brings comments to **parity with the chat bubble** by routing comment content
+> through the **same** renderer (SSOT — no second parser), plus resolves the human display name for a mention.
+> **Ships:** **(1) `:feature:feed` pure `CommentMentionDirectory.build(comments): Map<String,String>`** — the
+> `username → displayName` directory the parser needs to turn a `@Display Name` token into a mention link. It
+> aggregates every comment + loaded-reply author, mirroring the web `buildMentionDisplayMap` (mention-display.ts)
+> filter — a **blank handle** is dropped (a mention can't address it), an **absent/blank display name** is dropped
+> (only the bare-`@handle` rule can render that author), a **vanity `displayName == handle`** is dropped (no
+> distinct name to resolve); handle + name trimmed; a later author for the same handle wins (web overwrite parity).
+> This is product orchestration (which participants resolve a mention) so it lives in `:feature:feed`, not the SDK,
+> exactly like chat's `MentionRoster.displayNames`. **(2) `PostCommentsViewModel`** — `project()` builds the
+> directory from `thread.comments + replyState.repliesByParent.values.flatten()` and exposes it as a new
+> `PostCommentsUiState.mentionDisplayNames`; pure, no new emit, folded into the existing projection. **(3) Compose**
+> — `PostCommentsSection`'s comment body swaps the plain `Text` for `RichMessageText(text, color, linkColor =
+> Indigo500, mentionDisplayNames = map.ifEmpty { null })`, threaded through `CommentRow` + `ReplyThread` (both
+> preview and expanded reply sites); the bare `@handle` still resolves when the map is empty, so the directory only
+> *adds* display-name resolution. Accent-coherent (Indigo link colour, the section's existing accent). **+12 tests**
+> (`CommentMentionDirectoryTest` 10 — empty, distinct-name mapped, null-author, blank-handle, absent-dn, blank-dn,
+> vanity-skip, trim, distinct-authors, later-wins; `PostCommentsViewModelTest` +2 — directory from top-level
+> authors [vanity skipped], directory also covers loaded reply authors). **Mutation check (RED proof):** dropping
+> the `displayName == handle` vanity skip failed **exactly** 2 tests (the pure vanity-skip test + the VM top-level
+> test where `bob`→`bob` would wrongly appear) — behavioural, not tautological. **Gate (system Gradle 8.14.3 at
+> `/opt/gradle` under `LANG=C.UTF-8`):** `:feature:feed:testDebugUnitTest` green (all feed suites), `:app:assembleDebug`
+> → **BUILD SUCCESSFUL** (the RichMessageText import + threaded `mentionDisplayNames` param compile across
+> `:feature:feed`→`:sdk-ui`, no cross-module breakage). Reviewer **PASS** (diff `apps/android` only; **SDK purity** —
+> `CommentMentionDirectory` is a pure `:feature:feed` orchestration atom reusing the `:sdk-ui`/`:core:model`
+> renderer, the mention parsing/painting stays in the shared SSOT; **SSOT** — comment mentions and chat mentions
+> now share one parser + one renderer, the directory filter mirrors the web map; **Instant-App** — directory derived
+> synchronously in the pure projection, no spinner; **UDF** + immutable `StateFlow`, pure `project`; **coherence** —
+> Indigo link colour matches the section accent, no dead end; no coverage floor lowered, no test weakened). **Next
+> slice:** §Feed still-open — comment **@-mention autocomplete** in the composer (reuse the pure `ChatMention`/
+> `MentionAutocompleteState` SSOT — ideally promoted to a shared module so chat + comments share one controller,
+> mirroring iOS's reusable `MentionComposerController`), per-post/comment **cache-first** (a disk cache mirroring
+> iOS `CacheCoordinator.comments`), the **community posts feed**, OR pivot to the **statuses/moods bar** (§G) / the
+> **unified post composer** (Post/Status/Story tabs).
+
 > On 2026-07-18 the **live header comment-count badge** landed (slice `feed-postdetail-commentcount-badge`,
 > feature-parity §Feed → "Threaded comments" — the post-detail realtime room was live for the *thread*
 > (`PostCommentsViewModel`: add/delete/reaction rows), but the full-screen **header** badge is owned by a
@@ -5218,6 +5258,36 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-18 — slice `feed-comment-mention-rendering` ✅ impl + local gate green + reviewer PASS → PR + merge
+- **Opened with rule #0:** no open PR on the android track (`claude/apps/android/*`) — the 20 open PRs were all
+  the parallel iOS a11y/i18n swarm. `main` carried #2019 (`feed-postdetail-commentcount-badge`, `aee4798`) as its
+  latest android commit; working branch was level with `origin/main`. Branched
+  `claude/apps/android/feed-comment-mention-rendering` off latest `main`.
+- **Slice:** render a feed comment's content as **rich text with resolved @-mentions**, at parity with the chat
+  bubble — the "mention render" half of §Feed "Threaded comments … mentions". Comment content was flat
+  `Text(comment.content)`; a `@Alice Wonder` token was inert prose.
+- **TDD red→green:**
+  - RED: `CommentMentionDirectoryTest` (10) referenced a non-existent `CommentMentionDirectory`; two new
+    `PostCommentsViewModelTest` cases asserted a non-existent `state.mentionDisplayNames`.
+  - GREEN: pure `:feature:feed` `CommentMentionDirectory.build(comments): Map<String,String>` (username→displayName,
+    web `buildMentionDisplayMap` filter parity — blank handle / absent-or-blank name / vanity `name==handle`
+    dropped, trimmed, later-wins); `PostCommentsUiState.mentionDisplayNames` folded into the pure `project()` from
+    `thread.comments + replyState.repliesByParent.values.flatten()`; `PostCommentsSection` swaps plain `Text` for
+    the shared `:sdk-ui` `RichMessageText(linkColor = Indigo500, mentionDisplayNames = map.ifEmpty { null })`,
+    threaded through `CommentRow` + both `ReplyThread` reply sites.
+- **Mutation (RED proof):** dropping the `displayName == handle` vanity skip failed **exactly** 2 tests (pure
+  vanity-skip + the VM top-level `bob→bob` case) — behavioural, not tautological.
+- **Gate (system Gradle 8.14.3 `/opt/gradle`, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+  `:feature:feed:testDebugUnitTest` green (all feed suites incl. +12 new); `:app:assembleDebug` → **BUILD
+  SUCCESSFUL in 2m35s** (APK produced — the cross-module RichMessageText wiring compiles).
+- **Reviewer: PASS.** Diff `apps/android` only (2 new + 3 modified feed files + tracking docs); SDK purity (pure
+  orchestration in `:feature:feed`, parsing/painting in the shared SSOT); SSOT (comment + chat mentions share one
+  parser/renderer; directory filter mirrors web); Instant-App (synchronous derivation, no spinner); UDF + immutable
+  state; accent-coherent Indigo links; no coverage floor lowered, no test weakened.
+- **Next:** comment @-mention **autocomplete** (reuse/promote the pure `ChatMention` SSOT to a shared module so
+  chat + comments share one controller — iOS-parity with the reusable `MentionComposerController`); per-post/comment
+  cache-first; the community posts feed; or pivot to the statuses/moods bar (§G) / unified post composer.
 
 ### 2026-07-17 — slice `feed-user-posts-screen` ✅ impl + local gate green + reviewer PASS → PR + merge
 - **Opened with rule #0:** no open PR on the android track (the only open PRs were the parallel iOS
