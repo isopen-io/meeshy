@@ -97,12 +97,26 @@ public struct TransportBar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
-        .background(.ultraThinMaterial)
+        .background(rowBackground)
         // MARK: - Keyboard Shortcuts (iPad / external keyboard)
         // Space — play/pause
         .keyboardShortcut(" ", modifiers: [])
         // ← / → — step backward / forward by 1 frame (handled via the scrub callback)
         .background(keyboardShortcutOverlay)
+    }
+
+    /// iOS 26+: the parent band (`ComposerBottomBand`) is now real Liquid
+    /// Glass — stacking another `.ultraThinMaterial` here would blur/dull the
+    /// same refracted color the band already shows through, breaking the
+    /// continuous-surface feel. Pre-26 the band stays opaque, so this row
+    /// keeps its own material for visual grouping, exactly as before.
+    @ViewBuilder
+    private var rowBackground: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+        } else {
+            Rectangle().fill(.ultraThinMaterial)
+        }
     }
 
     /// Invisible overlay buttons that capture keyboard shortcuts not expressible

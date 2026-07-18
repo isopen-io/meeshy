@@ -146,41 +146,50 @@ struct ComposerBottomBand: View {
         }
         .padding(.bottom, 16) // Breathing room above home indicator
         .frame(maxWidth: .infinity)
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 24,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 24,
-                style: .continuous
-            )
-            // Bandeau: tint opaque sous le material épais. Ça empêche les fonds
-            // de canvas très clairs (image avec beaucoup de blanc, slide pastel)
-            // d'inverser la perception du material et de tuer le contraste du
-            // texte/icônes. ultraThinMaterial laissait trop transparaître le
-            // canvas en arrière-plan.
-            .fill(
-                (colorScheme == .dark
-                    ? MeeshyColors.indigo950.opacity(0.92)
-                    : Color.white.opacity(0.92))
-            )
-            .overlay(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 24,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: 24,
-                    style: .continuous
-                )
-                .stroke(
-                    (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.08),
-                    lineWidth: 0.5
-                )
-            )
-            .ignoresSafeArea(edges: .bottom)
-        )
+        .background(bandBackground)
         .shadow(color: .black.opacity(0.25), radius: 14, y: -6)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: stateKey)
+    }
+
+    private static let bandShape = UnevenRoundedRectangle(
+        topLeadingRadius: 24,
+        bottomLeadingRadius: 0,
+        bottomTrailingRadius: 0,
+        topTrailingRadius: 24,
+        style: .continuous
+    )
+
+    private var bandStroke: Color {
+        (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.08)
+    }
+
+    /// iOS 26+: the band is real Liquid Glass — refractive, responds to what's
+    /// behind it — strongly tinted so the same contrast guarantee the pre-26
+    /// opaque fill provided (bright/pastel canvas backgrounds never inverting
+    /// text/icon legibility) still holds. iOS < 26: the exact opaque tint this
+    /// shipped with since 2026-05-14 (a true `.ultraThinMaterial` let very
+    /// light canvases show through and killed contrast) — unchanged, zero
+    /// regression risk on OS versions that can't render real glass.
+    @ViewBuilder
+    private var bandBackground: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    .regular.tint(colorScheme == .dark
+                        ? MeeshyColors.indigo950.opacity(0.55)
+                        : Color.white.opacity(0.55)),
+                    in: Self.bandShape
+                )
+                .overlay(Self.bandShape.stroke(bandStroke, lineWidth: 0.5))
+                .ignoresSafeArea(edges: .bottom)
+        } else {
+            Self.bandShape
+                .fill(colorScheme == .dark
+                    ? MeeshyColors.indigo950.opacity(0.92)
+                    : Color.white.opacity(0.92))
+                .overlay(Self.bandShape.stroke(bandStroke, lineWidth: 0.5))
+                .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     /// Poignée du band. En mode redimensionnable (dessin), drag vertical = RESIZE :
