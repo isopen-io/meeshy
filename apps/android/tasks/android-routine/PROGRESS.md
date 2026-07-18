@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 the **per-comment language switcher** landed (slice `feed-comment-language-switcher`,
+> feature-parity §Feed → "Threaded comments" — the per-comment language switcher was the last open item on the
+> comment rendering line [after expand-threads, likes, replies, auto-preview, the realtime add/delete/reaction/
+> count rooms, and mention rendering]). Until now a comment's `CommentPresentation.isTranslated` was **computed
+> but never rendered** — a francophone reader saw a Spanish comment auto-translated to French (Prisme rule) but
+> got **no indicator** that a translation was active and **no way** to see the original or explore another
+> language, while the feed **post** has had a full flag strip (`PostLanguageStrip` + `LanguageFlagTapResolver`)
+> for weeks. This slice brings the comment to **parity with the post** by reusing the **same** SSOT strip +
+> flag-tap resolver — no new SDK code. **Ships:** **(1) `:feature:feed` `CommentPresentation`** gains
+> `languageStrip: List<LanguageChip>`; **`CommentProjection.build`** gains an `activeLanguageCode: String? = null`
+> param and — mirroring `FeedPostBuilder` exactly — a `resolveActiveCode(comment, prefs, override)` (the viewer's
+> override when it names a language the comment carries, else the preferred translation, else the original), a
+> content resolver that honours the override (original text when active-is-original, else the matching
+> translation, else the Prisme default), and the strip via `PostLanguageStrip.build(comment.originalLanguage,
+> comment.translations, prefs, showingOriginal = isTranslated && activeIsOriginal, activeCodeOverride =
+> activeCode)`. The strip is **empty** when the comment isn't translated for the viewer (Prisme rule 1 — nothing
+> to explore). **(2) `PostCommentsViewModel`** — a new `activeLanguages: StateFlow<Map<String,String>>`
+> (comment id → chosen code) folded into the projection combine (a 7th input, threaded past the 5-arg `combine`
+> cap via `inputs to replyTarget` then `.combine(activeLanguages)`); `project` passes `activeLanguages[it.id]`
+> into every `CommentProjection.build` (top-level **and** replies), so an override is **keyed per comment** and
+> a switch on one row never disturbs another; `onCommentFlagTap(commentId, code)` finds the comment (top-level or
+> reply), resolves the decision through the **shared** `LanguageFlagTapResolver` (Activate → set the override,
+> Revert → clear it, RequestTranslation/None → inert), and is inert for a blank/unknown comment or content-less
+> language. **(3) Compose** — `PostCommentsSection`'s `CommentRow` renders a compact `CommentLanguageStrip`
+> (a mirror of the post detail's `DetailLanguageStrip`: `FlowRow` translate glyph + accent-tinted flag chips,
+> the active chip showing its native name) beneath the comment content when `languageStrip` is non-empty;
+> tapping a chip → `onCommentFlagTap(comment.id, code)`, threaded through `CommentRow` + `ReplyThread` (preview
+> and expanded reply sites). Accent-coherent (each chip tinted with the language accent, Indigo section).
+> **+10 tests** (`CommentProjectionTest` +5 — empty-strip-when-not-translated, active-preferred-chip,
+> override-switches-content-and-chip, active-original-shows-original, unknown/content-less-override-falls-back;
+> `PostCommentsViewModelTest` +5 — flag-tap-switches, tap-active-reverts, switches-only-tapped-comment,
+> content-less-inert, blank/unknown-id-inert). **Mutation check (RED proof):** making the projection ignore the
+> per-comment override (`activeLanguageCode = null` on the top-level rows) failed **exactly** the 3 VM switching
+> tests (switches / reverts / switches-only-tapped) — behavioural, not tautological. **Gate (system Gradle
+> 8.14.3 under `LANG=C.UTF-8`):** `:feature:feed:testDebugUnitTest` green (all feed suites), `:app:assembleDebug`
+> → **BUILD SUCCESSFUL** (the `CommentLanguageStrip` + `LanguageChip`/`hexColor` imports compile across
+> `:feature:feed`→`:sdk-ui`, no cross-module breakage). Reviewer **PASS** (diff `apps/android` only; **SDK
+> purity** — no new SDK code; the strip/flag-tap SSOT stays in `:sdk-ui` (`PostLanguageStrip`,
+> `LanguageFlagTapResolver`), the "which language a comment resolves to / when to switch" orchestration lives in
+> `:feature:feed` (`CommentProjection`, the VM), exactly like the post; **SSOT** — comment and post language
+> switching now share one strip builder + one flag-tap rule, no re-implementation; **Instant-App** — switch is a
+> pure synchronous re-projection, no spinner/network; **UDF** + immutable `StateFlow`, pure `project`;
+> **coherence** — the comment strip is a compact mirror of the post detail strip, accent-tinted, natural tap
+> gesture, no dead end; no coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — comment
+> **@-mention autocomplete** in the composer (needs the pure `ChatMention`/`MentionAutocompleteState` SSOT
+> promoted from `:feature:chat` to a shared module so chat + comments share ONE controller — mirror of iOS's
+> reusable `MentionComposerController`; do the promotion as its own slice since it edits chat imports), comment
+> **effects/blur**, per-post/comment **cache-first** (a disk cache mirroring iOS `CacheCoordinator.comments`),
+> the **community posts feed**, OR pivot to the **statuses/moods bar** (§G) / the **unified post composer**.
+
 > On 2026-07-18 **feed comment mention rendering** landed (slice `feed-comment-mention-rendering`, feature-parity
 > §Feed → "Threaded comments" — mention **rendering** now done; @-mention **autocomplete** in the composer,
 > effects/blur, per-comment language switcher still open). Until now a comment's content rendered as flat
