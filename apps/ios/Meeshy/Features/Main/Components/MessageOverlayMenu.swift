@@ -775,11 +775,7 @@ struct MessageOverlayMenu: View {
     // MARK: - Helpers
 
     private func formatFileSize(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        let kb = Double(bytes) / 1024
-        if kb < 1024 { return String(format: "%.1f KB", kb) }
-        let mb = kb / 1024
-        return String(format: "%.1f MB", mb)
+        Int64(bytes).formatted(.byteCount(style: .file))
     }
 
     // MARK: - Dismiss

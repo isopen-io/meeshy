@@ -464,7 +464,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         for delay in delays {
             if delay > 0 {
                 do {
-                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    try await Task.sleep(for: .seconds(delay))
                 } catch {
                     return // Task cancelled
                 }
