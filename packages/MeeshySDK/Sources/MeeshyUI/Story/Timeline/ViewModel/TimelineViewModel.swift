@@ -299,6 +299,7 @@ public final class TimelineViewModel: ObservableObject {
         let unchanged = abs(drag.currentStartTime - drag.originalStartTime) < 0.0005
         guard !unchanged else {
             selection.endDrag()
+            slideDurationBeforeDrag = nil
             return
         }
 

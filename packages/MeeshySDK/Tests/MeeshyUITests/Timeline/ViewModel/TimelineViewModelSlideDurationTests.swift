@@ -167,4 +167,44 @@ final class TimelineViewModelSlideDurationTests: XCTestCase {
         XCTAssertEqual(sut.durationDidAutoAdjust?.from ?? -1, 10, accuracy: 0.01)
         XCTAssertEqual(sut.durationDidAutoAdjust?.to ?? -1, 6, accuracy: 0.01)
     }
+
+    func test_endClipDrag_noNetMovement_doesNotLeakBaselineIntoLaterEdit() async {
+        // A drag that releases at its exact original position takes the
+        // "unchanged" early-return in endClipDrag() — that path must also clear
+        // slideDurationBeforeDrag (same as cancelClipDrag() already does),
+        // otherwise a LATER, unrelated edit's toast uses a stale pre-drag baseline.
+        // This test reproduces the bug on the prior commit (5487a2fca) and verifies
+        // the fix (review finding).
+        let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 4, duration: 6)
+        let sut = await makeSUT(mediaObjects: [media]) // window = 4+6 = 10
+        XCTAssertEqual(sut.project.slideDuration, 10, accuracy: 0.01)
+
+        // No-op drag: begin, don't actually move, end.
+        sut.beginClipDrag(clipId: "m1")
+        sut.endClipDrag()
+        XCTAssertNil(sut.durationDidAutoAdjust, "No-op drag must not fire a toast.")
+
+        // Unrelated edit: manually resize the slide via the duration handle.
+        // This doesn't trigger recomputeSlideDuration(), so it directly sets
+        // project.slideDuration = 20.
+        sut.setSlideDuration(20)
+        XCTAssertEqual(sut.project.slideDuration, 20, accuracy: 0.01)
+
+        // Content edit: add a second clip. This calls recomputeSlideDuration().
+        // The auto value is still 10 (max of windows [10, 3]), which differs from
+        // the current value (20), so a toast SHOULD fire with (from: 20, to: 10).
+        //
+        // BUG ON 5487a2fca: No toast fires because slideDurationBeforeDrag = 10
+        // leaks from the no-op drag, so toastBaseline = 10, and abs(10-10) < 0.05
+        // suppresses the toast.
+        //
+        // FIX: endClipDrag() must clear slideDurationBeforeDrag in the
+        // "unchanged" branch, so toastBaseline = 20, and the toast fires correctly.
+        sut.addMedia(id: "m2", postMediaId: "pm2", kind: .video, startTime: 0, duration: 3)
+        XCTAssertNotNil(sut.durationDidAutoAdjust,
+                        "Toast must fire when auto duration (10s) differs from manual pin (20s).")
+        XCTAssertEqual(sut.durationDidAutoAdjust?.from ?? -1, 20, accuracy: 0.01,
+                       "Toast must use the ACTUAL prior value (20), not the stale pre-drag baseline (10).")
+        XCTAssertEqual(sut.durationDidAutoAdjust?.to ?? -1, 10, accuracy: 0.01)
+    }
 }
