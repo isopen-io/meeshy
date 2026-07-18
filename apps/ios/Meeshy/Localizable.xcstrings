@@ -2443,6 +2443,76 @@
         }
       }
     },
+    "stats.timeline.chart.a11y.empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Noch keine Aktivität aufgezeichnet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No activity recorded yet"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aún no hay actividad registrada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune activité enregistrée"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nenhuma atividade registrada ainda"
+          }
+        }
+      }
+    },
+    "stats.timeline.chart.a11y.summary" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld Nachrichten insgesamt, Spitze von %2$lld an einem Tag, %3$lld am letzten Tag"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld messages total, peak of %2$lld in one day, %3$lld on the most recent day"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld mensajes en total, pico de %2$lld en un día, %3$lld el día más reciente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld messages au total, pic de %2$lld en une journée, %3$lld le jour le plus récent"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld mensagens no total, pico de %2$lld em um dia, %3$lld no dia mais recente"
+          }
+        }
+      }
+    },
     "composer.recording.stopAndAttach.hint" : {
       "extractionState" : "manual",
       "localizations" : {
