@@ -1,5 +1,95 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 the **per-comment language switcher** landed (slice `feed-comment-language-switcher`,
+> feature-parity §Feed → "Threaded comments" — the per-comment language switcher was the last open item on the
+> comment rendering line [after expand-threads, likes, replies, auto-preview, the realtime add/delete/reaction/
+> count rooms, and mention rendering]). Until now a comment's `CommentPresentation.isTranslated` was **computed
+> but never rendered** — a francophone reader saw a Spanish comment auto-translated to French (Prisme rule) but
+> got **no indicator** that a translation was active and **no way** to see the original or explore another
+> language, while the feed **post** has had a full flag strip (`PostLanguageStrip` + `LanguageFlagTapResolver`)
+> for weeks. This slice brings the comment to **parity with the post** by reusing the **same** SSOT strip +
+> flag-tap resolver — no new SDK code. **Ships:** **(1) `:feature:feed` `CommentPresentation`** gains
+> `languageStrip: List<LanguageChip>`; **`CommentProjection.build`** gains an `activeLanguageCode: String? = null`
+> param and — mirroring `FeedPostBuilder` exactly — a `resolveActiveCode(comment, prefs, override)` (the viewer's
+> override when it names a language the comment carries, else the preferred translation, else the original), a
+> content resolver that honours the override (original text when active-is-original, else the matching
+> translation, else the Prisme default), and the strip via `PostLanguageStrip.build(comment.originalLanguage,
+> comment.translations, prefs, showingOriginal = isTranslated && activeIsOriginal, activeCodeOverride =
+> activeCode)`. The strip is **empty** when the comment isn't translated for the viewer (Prisme rule 1 — nothing
+> to explore). **(2) `PostCommentsViewModel`** — a new `activeLanguages: StateFlow<Map<String,String>>`
+> (comment id → chosen code) folded into the projection combine (a 7th input, threaded past the 5-arg `combine`
+> cap via `inputs to replyTarget` then `.combine(activeLanguages)`); `project` passes `activeLanguages[it.id]`
+> into every `CommentProjection.build` (top-level **and** replies), so an override is **keyed per comment** and
+> a switch on one row never disturbs another; `onCommentFlagTap(commentId, code)` finds the comment (top-level or
+> reply), resolves the decision through the **shared** `LanguageFlagTapResolver` (Activate → set the override,
+> Revert → clear it, RequestTranslation/None → inert), and is inert for a blank/unknown comment or content-less
+> language. **(3) Compose** — `PostCommentsSection`'s `CommentRow` renders a compact `CommentLanguageStrip`
+> (a mirror of the post detail's `DetailLanguageStrip`: `FlowRow` translate glyph + accent-tinted flag chips,
+> the active chip showing its native name) beneath the comment content when `languageStrip` is non-empty;
+> tapping a chip → `onCommentFlagTap(comment.id, code)`, threaded through `CommentRow` + `ReplyThread` (preview
+> and expanded reply sites). Accent-coherent (each chip tinted with the language accent, Indigo section).
+> **+10 tests** (`CommentProjectionTest` +5 — empty-strip-when-not-translated, active-preferred-chip,
+> override-switches-content-and-chip, active-original-shows-original, unknown/content-less-override-falls-back;
+> `PostCommentsViewModelTest` +5 — flag-tap-switches, tap-active-reverts, switches-only-tapped-comment,
+> content-less-inert, blank/unknown-id-inert). **Mutation check (RED proof):** making the projection ignore the
+> per-comment override (`activeLanguageCode = null` on the top-level rows) failed **exactly** the 3 VM switching
+> tests (switches / reverts / switches-only-tapped) — behavioural, not tautological. **Gate (system Gradle
+> 8.14.3 under `LANG=C.UTF-8`):** `:feature:feed:testDebugUnitTest` green (all feed suites), `:app:assembleDebug`
+> → **BUILD SUCCESSFUL** (the `CommentLanguageStrip` + `LanguageChip`/`hexColor` imports compile across
+> `:feature:feed`→`:sdk-ui`, no cross-module breakage). Reviewer **PASS** (diff `apps/android` only; **SDK
+> purity** — no new SDK code; the strip/flag-tap SSOT stays in `:sdk-ui` (`PostLanguageStrip`,
+> `LanguageFlagTapResolver`), the "which language a comment resolves to / when to switch" orchestration lives in
+> `:feature:feed` (`CommentProjection`, the VM), exactly like the post; **SSOT** — comment and post language
+> switching now share one strip builder + one flag-tap rule, no re-implementation; **Instant-App** — switch is a
+> pure synchronous re-projection, no spinner/network; **UDF** + immutable `StateFlow`, pure `project`;
+> **coherence** — the comment strip is a compact mirror of the post detail strip, accent-tinted, natural tap
+> gesture, no dead end; no coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — comment
+> **@-mention autocomplete** in the composer (needs the pure `ChatMention`/`MentionAutocompleteState` SSOT
+> promoted from `:feature:chat` to a shared module so chat + comments share ONE controller — mirror of iOS's
+> reusable `MentionComposerController`; do the promotion as its own slice since it edits chat imports), comment
+> **effects/blur**, per-post/comment **cache-first** (a disk cache mirroring iOS `CacheCoordinator.comments`),
+> the **community posts feed**, OR pivot to the **statuses/moods bar** (§G) / the **unified post composer**.
+
+> On 2026-07-18 **feed comment mention rendering** landed (slice `feed-comment-mention-rendering`, feature-parity
+> §Feed → "Threaded comments" — mention **rendering** now done; @-mention **autocomplete** in the composer,
+> effects/blur, per-comment language switcher still open). Until now a comment's content rendered as flat
+> `Text(comment.content)` — a `@Alice Wonder` mention was inert, unstyled prose, while chat bubbles have long
+> rendered rich text (`@mention`/bold/italic/URL) via the shared `:sdk-ui` `RichMessageText` → `:core:model`
+> `MessageTextParser`. This slice brings comments to **parity with the chat bubble** by routing comment content
+> through the **same** renderer (SSOT — no second parser), plus resolves the human display name for a mention.
+> **Ships:** **(1) `:feature:feed` pure `CommentMentionDirectory.build(comments): Map<String,String>`** — the
+> `username → displayName` directory the parser needs to turn a `@Display Name` token into a mention link. It
+> aggregates every comment + loaded-reply author, mirroring the web `buildMentionDisplayMap` (mention-display.ts)
+> filter — a **blank handle** is dropped (a mention can't address it), an **absent/blank display name** is dropped
+> (only the bare-`@handle` rule can render that author), a **vanity `displayName == handle`** is dropped (no
+> distinct name to resolve); handle + name trimmed; a later author for the same handle wins (web overwrite parity).
+> This is product orchestration (which participants resolve a mention) so it lives in `:feature:feed`, not the SDK,
+> exactly like chat's `MentionRoster.displayNames`. **(2) `PostCommentsViewModel`** — `project()` builds the
+> directory from `thread.comments + replyState.repliesByParent.values.flatten()` and exposes it as a new
+> `PostCommentsUiState.mentionDisplayNames`; pure, no new emit, folded into the existing projection. **(3) Compose**
+> — `PostCommentsSection`'s comment body swaps the plain `Text` for `RichMessageText(text, color, linkColor =
+> Indigo500, mentionDisplayNames = map.ifEmpty { null })`, threaded through `CommentRow` + `ReplyThread` (both
+> preview and expanded reply sites); the bare `@handle` still resolves when the map is empty, so the directory only
+> *adds* display-name resolution. Accent-coherent (Indigo link colour, the section's existing accent). **+12 tests**
+> (`CommentMentionDirectoryTest` 10 — empty, distinct-name mapped, null-author, blank-handle, absent-dn, blank-dn,
+> vanity-skip, trim, distinct-authors, later-wins; `PostCommentsViewModelTest` +2 — directory from top-level
+> authors [vanity skipped], directory also covers loaded reply authors). **Mutation check (RED proof):** dropping
+> the `displayName == handle` vanity skip failed **exactly** 2 tests (the pure vanity-skip test + the VM top-level
+> test where `bob`→`bob` would wrongly appear) — behavioural, not tautological. **Gate (system Gradle 8.14.3 at
+> `/opt/gradle` under `LANG=C.UTF-8`):** `:feature:feed:testDebugUnitTest` green (all feed suites), `:app:assembleDebug`
+> → **BUILD SUCCESSFUL** (the RichMessageText import + threaded `mentionDisplayNames` param compile across
+> `:feature:feed`→`:sdk-ui`, no cross-module breakage). Reviewer **PASS** (diff `apps/android` only; **SDK purity** —
+> `CommentMentionDirectory` is a pure `:feature:feed` orchestration atom reusing the `:sdk-ui`/`:core:model`
+> renderer, the mention parsing/painting stays in the shared SSOT; **SSOT** — comment mentions and chat mentions
+> now share one parser + one renderer, the directory filter mirrors the web map; **Instant-App** — directory derived
+> synchronously in the pure projection, no spinner; **UDF** + immutable `StateFlow`, pure `project`; **coherence** —
+> Indigo link colour matches the section accent, no dead end; no coverage floor lowered, no test weakened). **Next
+> slice:** §Feed still-open — comment **@-mention autocomplete** in the composer (reuse the pure `ChatMention`/
+> `MentionAutocompleteState` SSOT — ideally promoted to a shared module so chat + comments share one controller,
+> mirroring iOS's reusable `MentionComposerController`), per-post/comment **cache-first** (a disk cache mirroring
+> iOS `CacheCoordinator.comments`), the **community posts feed**, OR pivot to the **statuses/moods bar** (§G) / the
+> **unified post composer** (Post/Status/Story tabs).
+
 > On 2026-07-18 the **live header comment-count badge** landed (slice `feed-postdetail-commentcount-badge`,
 > feature-parity §Feed → "Threaded comments" — the post-detail realtime room was live for the *thread*
 > (`PostCommentsViewModel`: add/delete/reaction rows), but the full-screen **header** badge is owned by a
@@ -5218,6 +5308,36 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-18 — slice `feed-comment-mention-rendering` ✅ impl + local gate green + reviewer PASS → PR + merge
+- **Opened with rule #0:** no open PR on the android track (`claude/apps/android/*`) — the 20 open PRs were all
+  the parallel iOS a11y/i18n swarm. `main` carried #2019 (`feed-postdetail-commentcount-badge`, `aee4798`) as its
+  latest android commit; working branch was level with `origin/main`. Branched
+  `claude/apps/android/feed-comment-mention-rendering` off latest `main`.
+- **Slice:** render a feed comment's content as **rich text with resolved @-mentions**, at parity with the chat
+  bubble — the "mention render" half of §Feed "Threaded comments … mentions". Comment content was flat
+  `Text(comment.content)`; a `@Alice Wonder` token was inert prose.
+- **TDD red→green:**
+  - RED: `CommentMentionDirectoryTest` (10) referenced a non-existent `CommentMentionDirectory`; two new
+    `PostCommentsViewModelTest` cases asserted a non-existent `state.mentionDisplayNames`.
+  - GREEN: pure `:feature:feed` `CommentMentionDirectory.build(comments): Map<String,String>` (username→displayName,
+    web `buildMentionDisplayMap` filter parity — blank handle / absent-or-blank name / vanity `name==handle`
+    dropped, trimmed, later-wins); `PostCommentsUiState.mentionDisplayNames` folded into the pure `project()` from
+    `thread.comments + replyState.repliesByParent.values.flatten()`; `PostCommentsSection` swaps plain `Text` for
+    the shared `:sdk-ui` `RichMessageText(linkColor = Indigo500, mentionDisplayNames = map.ifEmpty { null })`,
+    threaded through `CommentRow` + both `ReplyThread` reply sites.
+- **Mutation (RED proof):** dropping the `displayName == handle` vanity skip failed **exactly** 2 tests (pure
+  vanity-skip + the VM top-level `bob→bob` case) — behavioural, not tautological.
+- **Gate (system Gradle 8.14.3 `/opt/gradle`, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+  `:feature:feed:testDebugUnitTest` green (all feed suites incl. +12 new); `:app:assembleDebug` → **BUILD
+  SUCCESSFUL in 2m35s** (APK produced — the cross-module RichMessageText wiring compiles).
+- **Reviewer: PASS.** Diff `apps/android` only (2 new + 3 modified feed files + tracking docs); SDK purity (pure
+  orchestration in `:feature:feed`, parsing/painting in the shared SSOT); SSOT (comment + chat mentions share one
+  parser/renderer; directory filter mirrors web); Instant-App (synchronous derivation, no spinner); UDF + immutable
+  state; accent-coherent Indigo links; no coverage floor lowered, no test weakened.
+- **Next:** comment @-mention **autocomplete** (reuse/promote the pure `ChatMention` SSOT to a shared module so
+  chat + comments share one controller — iOS-parity with the reusable `MentionComposerController`); per-post/comment
+  cache-first; the community posts feed; or pivot to the statuses/moods bar (§G) / unified post composer.
 
 ### 2026-07-17 — slice `feed-user-posts-screen` ✅ impl + local gate green + reviewer PASS → PR + merge
 - **Opened with rule #0:** no open PR on the android track (the only open PRs were the parallel iOS

@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -49,10 +53,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.bubble.LanguageChip
+import me.meeshy.ui.component.bubble.RichMessageText
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
 
 /**
  * The comment thread beneath a post in [PostDetailScreen]. Hosts its own
@@ -89,15 +96,19 @@ internal fun PostCommentsSection(
                 state.comments.forEach { comment ->
                     CommentRow(
                         comment = comment,
+                        mentionDisplayNames = state.mentionDisplayNames,
                         onToggleLike = viewModel::toggleLike,
                         onReply = viewModel::beginReply,
+                        onFlagTap = viewModel::onCommentFlagTap,
                     )
                     ReplyThread(
                         comment = comment,
                         thread = state.replyThreads[comment.id],
+                        mentionDisplayNames = state.mentionDisplayNames,
                         onToggleReplies = viewModel::toggleReplies,
                         onToggleLike = viewModel::toggleLike,
                         onReply = viewModel::beginReply,
+                        onFlagTap = viewModel::onCommentFlagTap,
                     )
                 }
             }
@@ -125,8 +136,10 @@ internal fun PostCommentsSection(
 @Composable
 private fun CommentRow(
     comment: CommentPresentation,
+    mentionDisplayNames: Map<String, String>,
     onToggleLike: (String) -> Unit,
     onReply: (String) -> Unit,
+    onFlagTap: (String, String) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Row(
@@ -177,10 +190,19 @@ private fun CommentRow(
                 }
             }
             SelectionContainer {
-                Text(
+                RichMessageText(
                     text = comment.content,
-                    style = MaterialTheme.typography.bodyMedium,
                     color = MeeshyTheme.tokens.textPrimary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    linkColor = MeeshyPalette.Indigo500,
+                    mentionDisplayNames = mentionDisplayNames.ifEmpty { null },
+                )
+            }
+            if (comment.languageStrip.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                CommentLanguageStrip(
+                    chips = comment.languageStrip,
+                    onChipTap = { code -> onFlagTap(comment.id, code) },
                 )
             }
             Row(
@@ -189,6 +211,64 @@ private fun CommentRow(
             ) {
                 CommentLikeButton(comment = comment, onToggleLike = onToggleLike)
                 CommentReplyButton(comment = comment, onReply = onReply)
+            }
+        }
+    }
+}
+
+/**
+ * The subtle Prisme language strip beneath a translated comment: a discreet translate glyph plus
+ * a flag chip per language the viewer can explore (original + configured content languages that
+ * carry text). The active chip is tinted with the language's accent; tapping a chip switches the
+ * comment's displayed language (or reverts when it's already active). Mirror of the post detail's
+ * `DetailLanguageStrip`, kept compact for the comment context. Accent-coherent with the section.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CommentLanguageStrip(
+    chips: List<LanguageChip>,
+    onChipTap: (String) -> Unit,
+) {
+    FlowRow(
+        verticalArrangement = Arrangement.Center,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Translate,
+            contentDescription = stringResource(R.string.feed_translated),
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(13.dp),
+        )
+        chips.forEach { chip ->
+            val info = chip.info
+            val accent = info?.colorHex
+                ?.let(::hexColor)
+                ?.takeIf { it != Color.Unspecified }
+                ?: MeeshyTheme.tokens.textSecondary
+            val flag = info?.flag ?: chip.code.uppercase()
+            val label = info?.name ?: chip.code
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(if (chip.isActive) accent.copy(alpha = 0.16f) else Color.Transparent)
+                    .clickable { onChipTap(chip.code) }
+                    .padding(horizontal = 5.dp, vertical = 2.dp)
+                    .semantics(mergeDescendants = true) {
+                        role = Role.Button
+                        contentDescription = label
+                    },
+            ) {
+                Text(text = flag, style = MaterialTheme.typography.labelSmall)
+                if (chip.isActive && info != null) {
+                    Text(
+                        text = info.nativeName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accent,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 3.dp),
+                    )
+                }
             }
         }
     }
@@ -225,9 +305,11 @@ private fun CommentReplyButton(comment: CommentPresentation, onReply: (String) -
 private fun ReplyThread(
     comment: CommentPresentation,
     thread: ReplyThreadUiState?,
+    mentionDisplayNames: Map<String, String>,
     onToggleReplies: (String) -> Unit,
     onToggleLike: (String) -> Unit,
     onReply: (String) -> Unit,
+    onFlagTap: (String, String) -> Unit,
 ) {
     val isExpanded = thread?.isExpanded == true
     val isPreview = thread?.isPreview == true
@@ -237,7 +319,13 @@ private fun ReplyThread(
         if (isPreview && thread != null) {
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 thread.replies.forEach { reply ->
-                    CommentRow(comment = reply, onToggleLike = onToggleLike, onReply = onReply)
+                    CommentRow(
+                        comment = reply,
+                        mentionDisplayNames = mentionDisplayNames,
+                        onToggleLike = onToggleLike,
+                        onReply = onReply,
+                        onFlagTap = onFlagTap,
+                    )
                 }
             }
             Spacer(Modifier.height(MeeshySpacing.xs))
@@ -287,7 +375,13 @@ private fun ReplyThread(
             Spacer(Modifier.height(MeeshySpacing.sm))
             Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
                 thread.replies.forEach { reply ->
-                    CommentRow(comment = reply, onToggleLike = onToggleLike, onReply = onReply)
+                    CommentRow(
+                        comment = reply,
+                        mentionDisplayNames = mentionDisplayNames,
+                        onToggleLike = onToggleLike,
+                        onReply = onReply,
+                        onFlagTap = onFlagTap,
+                    )
                 }
             }
         }

@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
@@ -898,5 +899,121 @@ class PostCommentsViewModelTest {
         commentReactionAdded.tryEmit(reaction("a", userId = "stranger"))
 
         assertThat(vm.state.value.comments).isEmpty()
+    }
+
+    private fun mentionComment(id: String, username: String, displayName: String?, parentId: String? = null) =
+        ApiPostComment(
+            id = id,
+            content = "hi",
+            parentId = parentId,
+            author = ApiAuthor(id = "u-$id", username = username, displayName = displayName),
+        )
+
+    @Test
+    fun `the mention directory resolves display names from top-level comment authors`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(
+                listOf(
+                    mentionComment("a", "alice", "Alice Wonder"),
+                    mentionComment("b", "bob", "bob"),
+                ),
+            )
+        val vm = viewModel()
+
+        vm.state.test {
+            // The distinct-name author resolves; the vanity name (== handle) contributes nothing.
+            assertThat(awaitItem().mentionDisplayNames).containsExactly("alice", "Alice Wonder")
+        }
+    }
+
+    @Test
+    fun `the mention directory also covers loaded reply authors`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(mentionComment("c1", "alice", "Alice Wonder")))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(mentionComment("r1", "carol", "Carol Q", parentId = "c1")))
+        val vm = viewModel()
+
+        vm.toggleReplies("c1")
+
+        vm.state.test {
+            assertThat(awaitItem().mentionDisplayNames)
+                .containsExactly("alice", "Alice Wonder", "carol", "Carol Q")
+        }
+    }
+
+    private fun translated(id: String, parentId: String? = null) = ApiPostComment(
+        id = id,
+        content = "Bonjour",
+        originalLanguage = "fr",
+        parentId = parentId,
+        translations = mapOf(
+            "en" to ApiPostTranslationEntry(text = "Hello"),
+            "es" to ApiPostTranslationEntry(text = "Hola"),
+        ),
+    )
+
+    private fun contentOf(vm: PostCommentsViewModel, id: String): String? =
+        vm.state.value.comments.firstOrNull { it.id == id }?.content
+
+    @Test
+    fun `onCommentFlagTap switches a comment to the tapped language`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(translated("c1")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "en"))
+        // Default Prisme resolution for an en viewer is the English translation.
+        assertThat(contentOf(vm, "c1")).isEqualTo("Hello")
+
+        vm.onCommentFlagTap("c1", "fr") // switch to the original
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `onCommentFlagTap on the active language reverts to the Prisme default`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(translated("c1")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "en"))
+
+        vm.onCommentFlagTap("c1", "fr")
+        assertThat(contentOf(vm, "c1")).isEqualTo("Bonjour")
+
+        vm.onCommentFlagTap("c1", "fr") // tapping the active language reverts
+        assertThat(contentOf(vm, "c1")).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `onCommentFlagTap switches only the tapped comment`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(translated("c1"), translated("c2")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "en"))
+
+        vm.onCommentFlagTap("c1", "es")
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("Hola")
+        assertThat(contentOf(vm, "c2")).isEqualTo("Hello") // untouched
+    }
+
+    @Test
+    fun `onCommentFlagTap into a content-less language is inert`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(translated("c1")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "en"))
+
+        vm.onCommentFlagTap("c1", "de") // no German translation on this comment
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `onCommentFlagTap ignores a blank or unknown comment id`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(translated("c1")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "en"))
+
+        vm.onCommentFlagTap("", "es")
+        vm.onCommentFlagTap("ghost", "es")
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("Hello")
     }
 }

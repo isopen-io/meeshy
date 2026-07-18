@@ -2,6 +2,56 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-18, `feed-comment-language-switcher`) — reuse the ONE language-strip + flag-tap SSOT for any new translatable surface; a "computed but never rendered" flag is a parity gap hiding in plain sight; the strip only surfaces the viewer's CONFIGURED languages (so tests must use configured codes); and thread a 7th combine input past the 5-arg cap
+Bringing feed comments to the post's Prisme language-switcher parity. Four takeaways.
+**(1) The language strip + flag-tap have ONE SSOT — don't re-implement per surface.** `:sdk-ui`
+`PostLanguageStrip.build(originalLanguage, translations: Map<code,entry>, prefs, showingOriginal, activeCodeOverride)`
++ `LanguageFlagTapResolver.resolve(tappedCode, activeCode, originalLanguage, translations)` already drive the chat
+bubble AND the feed post. A comment carries the **same** `originalLanguage: String?` + `translations:
+Map<String, ApiPostTranslationEntry>?` shape, so a "add a language switcher here too" slice is **zero** new SDK
+code: build the strip via `PostLanguageStrip.build`, resolve the tap via `LanguageFlagTapResolver`, mirror
+`FeedPostBuilder.resolveActiveCode`/`resolveContent` for the per-surface active-code + content. The only per-surface
+work is the override *state* (where you keep the `activeLanguageCode`).
+**(2) A "computed but never rendered" field is a parity gap hiding in plain sight.** `CommentPresentation.isTranslated`
+had been computed by `CommentProjection` for weeks but **nothing in Compose read it** — so comments were
+Prisme-translated silently with no indicator and no way to see the original, while posts had the full strip. When
+scanning for the next slice, grep the Compose layer for a projection field that's set but never consumed — it's often
+a half-finished feature. (`grep isTranslated feature/feed/.../*.kt` showed it built in 2 presentations, rendered only
+in the post + repost, never the comment.)
+**(3) THE TEST TRAP — the strip only surfaces the viewer's CONFIGURED content languages (+ the original), NOT every
+language the content carries.** `MessageLanguageStrip.build` walks `LanguageResolver.preferredContentLanguages(prefs)`
+(system→regional→custom) — a translation into a language the viewer hasn't configured is **not** a chip. So a test that
+overrides to `es` for a `systemLanguage=en`-only viewer finds the content switches to "Hola" (the content resolver is
+content-based) but `languageStrip.single { isActive }` **throws NoSuchElementException** — es isn't in the strip.
+Fix the test to give the viewer that language (`systemLanguage=en, regionalLanguage=es`), the realistic scenario where
+the chip is actually reachable. (The `onCommentFlagTap` handler *does* accept any content-bearing language because
+`LanguageFlagTapResolver` is content-based, but the UI only offers configured-language chips — mirror of the post.)
+**(4) A 7th reactive input past the 5-arg `combine` cap: chain a `to` pair then `.combine`.** The VM already did
+`combine(5 flows){ ProjectionInputs(...) }.combine(composer){ ... }`. Adding `activeLanguages` as a 7th:
+`.combine(composer){ inputs, rt -> inputs to rt }.combine(activeLanguages){ (inputs, rt), langs -> project(inputs, rt,
+langs) }` — destructure the pair in the final lambda. Keeps `project` a pure 3-arg function, no `data class` churn.
+
+## Lesson (2026-07-18, `feed-comment-mention-rendering`) — reuse the ONE rich-text renderer for any new text surface; the display-name map is the only per-surface glue; and watch for pre-existing test-helper name clashes
+Bringing feed comment content to chat-bubble parity (mentions + bold/italic/URL). Three takeaways.
+**(1) Rich text has ONE SSOT on Android — don't reparse.** `:core:model` `MessageTextParser.parse(text, mentionDisplayNames)`
++ `:sdk-ui` `RichMessageText` already render `@mention`/`@Display Name`/bold/italic/strike/underline/`m+`/URL for chat. Any
+new text surface (comment body, and later post body / repost quote) should route through `RichMessageText`, NOT a bespoke
+`Text`. The only per-surface work is the `username → displayName` map: the parser turns `@Display Name` tokens into links only
+when given that map (a bare `@handle` resolves without it). So a "render mentions here too" slice is: build the map + swap
+`Text`→`RichMessageText`. Keeps every surface's mention/markdown behaviour identical by construction.
+**(2) The display-name map is product orchestration → `:feature:*`, not the SDK.** `CommentMentionDirectory` (which
+participants can resolve a mention in a comment thread) sits in `:feature:feed`, exactly like chat's `MentionRoster.displayNames`
+in `:feature:chat`. Filter parity with web `buildMentionDisplayMap` (mention-display.ts): drop a blank handle, an absent/blank
+display name, and a vanity `displayName == handle`. Source it from every comment + **loaded reply** author
+(`thread.comments + replyState.repliesByParent.values.flatten()`), not just the top level.
+**(3) Test-helper name clash.** `PostCommentsViewModelTest` already had a `private fun authored(id, parentId, name)`; my new
+`authored(id, username, displayName, parentId)` overload triggered "Overload resolution ambiguity" at the call sites (default
+args made them ambiguous). Grep the test file for an existing helper name before adding one — I renamed mine to `mentionComment`.
+**Follow-up:** the comment @-mention **autocomplete** is the natural next slice, but its pure SSOT (`ChatMention` /
+`MentionAutocompleteState`) lives in `:feature:chat`. To honour SSOT, promote it to a shared module (a `:feature:mentions` or
+`:core:model`) so chat + comments share ONE controller — the Android mirror of iOS's reusable `MentionComposerController`. Do
+that as its own slice (it edits chat imports — still apps/android, but a distinct concern from the feed wiring).
+
 ## Lesson (2026-07-18, `feed-postdetail-commentcount-badge`) — the post-detail *thread* and its *header badge* are two DIFFERENT ViewModels; wiring the room into one leaves the other frozen; resync to the event's authoritative count, not local arithmetic; and don't `awaitItem()` across an `isRefreshing` overlay flip
 Porting iOS `PostDetailViewModel` `commentAdded`/`commentDeleted` `post.commentCount = data.commentCount`. Four takeaways.
 **(1) The header badge and the thread are owned by SEPARATE Android VMs.** iOS keeps both in one `PostDetailViewModel`, so its

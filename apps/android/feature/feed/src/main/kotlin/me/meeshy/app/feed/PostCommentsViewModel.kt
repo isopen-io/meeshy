@@ -21,6 +21,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
+import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import javax.inject.Inject
 
 /**
@@ -36,6 +37,7 @@ import javax.inject.Inject
 data class PostCommentsUiState(
     val comments: List<CommentPresentation> = emptyList(),
     val replyThreads: Map<String, ReplyThreadUiState> = emptyMap(),
+    val mentionDisplayNames: Map<String, String> = emptyMap(),
     val replyTarget: ReplyTarget? = null,
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
@@ -85,6 +87,9 @@ class PostCommentsViewModel @Inject constructor(
     private val likes = MutableStateFlow(CommentLikeState())
     private val replies = MutableStateFlow(CommentRepliesState())
     private val composer = MutableStateFlow<ReplyTarget?>(null)
+
+    /** Per-comment Prisme language override (comment id → chosen language code), set by a flag tap. */
+    private val activeLanguages = MutableStateFlow<Map<String, String>>(emptyMap())
     private var pendingSeq = 0
 
     private val _state = MutableStateFlow(PostCommentsUiState())
@@ -95,7 +100,9 @@ class PostCommentsViewModel @Inject constructor(
             combine(thread, sessionRepository.currentUser, status, likes, replies) { t, user, st, likeState, replyState ->
                 ProjectionInputs(t, user, st, likeState, replyState)
             }.combine(composer) { inputs, replyTarget ->
-                project(inputs, replyTarget)
+                inputs to replyTarget
+            }.combine(activeLanguages) { (inputs, replyTarget), langs ->
+                project(inputs, replyTarget, langs)
             }.collect { projected -> _state.value = projected }
         }
         observeRealtime()
@@ -277,6 +284,34 @@ class PostCommentsViewModel @Inject constructor(
         composer.value = null
     }
 
+    /**
+     * Tap on a comment's Prisme language-flag chip: switch that comment's displayed language, or
+     * revert to the default resolution when the chip is already active. The override is keyed per
+     * comment id so a switch on one row never disturbs another. Inert for a blank/unknown comment,
+     * a blank post, or a content-less language (a read-only strip never surfaces one). The pure
+     * [LanguageFlagTapResolver] owns the decision — one rule shared with the feed post and chat.
+     */
+    fun onCommentFlagTap(commentId: String, code: String) {
+        if (postId.isBlank() || commentId.isBlank()) return
+        val comment = findComment(commentId) ?: return
+        val preferences: LanguageResolver.ContentLanguagePreferences =
+            sessionRepository.currentUser.value ?: EmptyContentPreferences
+        val result = LanguageFlagTapResolver.resolve(
+            tappedCode = code,
+            activeCode = CommentProjection.resolveActiveCode(comment, preferences, activeLanguages.value[commentId]),
+            originalLanguage = comment.originalLanguage,
+            translations = comment.translations.toTranslationRows(),
+        )
+        when (result) {
+            is LanguageFlagTapResolver.Result.Activate ->
+                activeLanguages.update { it + (commentId to result.code) }
+            LanguageFlagTapResolver.Result.Revert ->
+                activeLanguages.update { it - commentId }
+            is LanguageFlagTapResolver.Result.RequestTranslation -> Unit
+            LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
     private fun sendReply(parentId: String, content: String) {
         val tempId = "pending-${pendingSeq++}"
         val row = optimisticRow(tempId, content).copy(parentId = parentId)
@@ -409,7 +444,11 @@ class PostCommentsViewModel @Inject constructor(
         )
     }
 
-    private fun project(inputs: ProjectionInputs, replyTarget: ReplyTarget?): PostCommentsUiState {
+    private fun project(
+        inputs: ProjectionInputs,
+        replyTarget: ReplyTarget?,
+        activeLanguages: Map<String, String>,
+    ): PostCommentsUiState {
         val thread = inputs.thread
         val st = inputs.status
         val likeState = inputs.likes
@@ -423,6 +462,7 @@ class PostCommentsViewModel @Inject constructor(
                 config.socketUrl,
                 isPending = it.id in thread.pendingIds,
                 likeState = likeState,
+                activeLanguageCode = activeLanguages[it.id],
             )
         }
         val replyThreads = topLevel
@@ -441,16 +481,21 @@ class PostCommentsViewModel @Inject constructor(
                             config.socketUrl,
                             isPending = replyState.isPendingReply(it.id),
                             likeState = likeState,
+                            activeLanguageCode = activeLanguages[it.id],
                         )
                     },
                     isPreview = !expanded && shown.isNotEmpty(),
                     hiddenReplyCount = (all.size - shown.size).coerceAtLeast(0),
                 )
             }
+        val mentionDisplayNames = CommentMentionDirectory.build(
+            thread.comments + replyState.repliesByParent.values.flatten(),
+        )
         val showSkeleton = st.isLoading && !thread.hasLoaded && thread.comments.isEmpty() && st.error == null
         return PostCommentsUiState(
             comments = rows,
             replyThreads = replyThreads,
+            mentionDisplayNames = mentionDisplayNames,
             replyTarget = replyTarget,
             isLoading = st.isLoading,
             isLoadingMore = st.isLoadingMore,

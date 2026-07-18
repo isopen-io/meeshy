@@ -1694,8 +1694,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       open post resyncs the badge to the **server-authoritative** `commentCount` the event carries — clamped
       ≥0 — healing any drift from the thread VM's optimistic arithmetic; a manual refresh drops the live
       overlay for fresh server truth; other posts + a blank route are ignored; mirror of iOS
-      `PostDetailViewModel` `commentAdded`/`commentDeleted` `post.commentCount = data.commentCount`) **done**;
-      mentions, effects/blur, per-comment language switcher still open
+      `PostDetailViewModel` `commentAdded`/`commentDeleted` `post.commentCount = data.commentCount`) + **mention
+      rendering** (slice `feed-comment-mention-rendering`, 2026-07-18 — a comment's content now renders through
+      the **shared** `RichMessageText`/`MessageTextParser` the chat bubble uses, so `@Display Name` / `@handle`
+      tokens resolve to highlighted, tappable mention links [plus bold/italic/URL rich text]; the pure
+      `CommentMentionDirectory` builds the `username → displayName` map from every comment + loaded-reply author,
+      mirroring the web `buildMentionDisplayMap` filter — blank handle / absent-or-blank display name / vanity
+      `displayName == handle` all dropped) **done** + **per-comment language switcher** (slice
+      `feed-comment-language-switcher`, 2026-07-18 — each translated comment now carries a discreet Prisme flag
+      strip [translate glyph + original + configured content-language chips], reusing the **shared**
+      `PostLanguageStrip` + `LanguageFlagTapResolver`; tapping a chip switches *that* comment's displayed
+      language [content + active chip] via a per-comment-keyed override, tapping the active chip reverts to the
+      Prisme default; a content-less/unknown tap is inert; mirror of the post-detail `DetailLanguageStrip`,
+      keyed per comment rather than per post — the `isTranslated` flag was computed but never rendered before)
+      **done**;
+      mention **autocomplete** (composer suggestions), effects/blur still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
