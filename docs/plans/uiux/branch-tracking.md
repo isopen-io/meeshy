@@ -54,6 +54,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Base de départ 143i : `main` HEAD**. Candidats frais VoiceOver-structure : `StarredMessagesView`,
 >   `BookmarksView`, `SupportView`, `UserStatsView`. Toujours vérifier l'absence de contention avec les PR
 >   iOS ouvertes avant de choisir.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 143i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **143i (branche `claude/laughing-thompson-rjwver`, base `main` HEAD `0528a90`)** :
+>   Structure VoiceOver de `StoryExpiredContent` (empty-state « story expirée » depuis une notification).
+>   **3 gaps a11y corrigés** : (1) `actorHeader` — l'avatar `MeeshyAvatar` porte déjà `.accessibilityLabel(name)`
+>   → double lecture du nom ; fix = `.accessibilityHidden(true)` sur l'avatar + `.accessibilityElement(children:
+>   .combine)` sur le `HStack` → 1 élément « <nom>, <temps relatif> ». (2) bulle de commentaire décorative
+>   (`bubble.left.fill`) → `.accessibilityHidden(true)` (sens porté par l'excerpt + titre). (3) `titleBlock`
+>   titre + sous-titre → `.combine` (1 phrase). **2 glyphes hero figés 84i** : emoji réaction (64) + bulle (56),
+>   ≥40pt → gardés `.system(size:)` (scaler un hero 64pt casserait le layout empty-state), annotés en place ;
+>   l'emoji garde son label (= contenu de la réaction). **0 migration `relative`**, 0 logique, 0 clé i18n, 0
+>   test neuf (les 2 smoke tests existants `_ = view.body` couvrent les 2 triggers modifiés). PRs iOS ouvertes
+>   #1966/#1968/#1970 (ThemedBackButton/MyStoriesView/FriendRequestListView) → pas `StoryExpiredContent` → 0
+>   contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `StoryExpiredContent` SOLDÉ** : ne plus reprendre (structure VoiceOver faite ; 2 hero glyphes figés 84i).
+> - **Base de départ 144i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : traîne 2/1 `.system` (`BubbleStandardLayout` 2, `StatsTimelineChart` 2,
+>   `AudioPostComposerView`, `ConversationBackgroundComponents`, `MessageViewsDetailView`), ou **passe
+>   state-of-the-art** au tarissement. Éviter les fichiers des PRs iOS ouvertes (#1966/#1968/#1970).
 >
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
