@@ -1675,9 +1675,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       rolls back on failure) + live personal `post:bookmarked` overlay (absolute count + own-state,
       reconciled against the cache) + accent-tinted bookmark button in the feed card
       (slice `feed-realtime-bookmark-sync`, 2026-07-17)
-- [~] Adaptive multi-image collage layouts (1–5+ media) **done** via `MediaCollage.solve` +
-      `PostImageGrid` (slice `feed-adaptive-collage-layout`, 2026-07-18) ; fullscreen gallery
-      (tap a tile → pager viewer) still pending
+- [x] Adaptive multi-image collage layouts (1–5+ media) **done** via `MediaCollage.solve` +
+      `PostImageGrid` (slice `feed-adaptive-collage-layout`, 2026-07-18). **Fullscreen media gallery
+      done** (slice `feed-media-fullscreen-gallery`, 2026-07-18): tapping any collage tile (or the
+      single image, or the `+N` overflow tile) opens `MeeshyImageViewer` — the `:sdk-ui` fullscreen
+      pager (pinch-zoom/pan/double-tap, ±2 prefetch, save-to-gallery) — positioned on the tapped image
+      and paging across ALL of the post's images at full resolution. Pure `:feature:feed`
+      `FeedMediaGallery.of(post, imageIndex) → FeedGallery(pages, startIndex)` SSOT (mirror of chat's
+      `ConversationMediaGallery`): flattens the post's images to full-res URLs, each page sharing the
+      post text as caption (trim → null when blank) + author + timestamp for the viewer chrome, tapped
+      index clamped into bounds, empty post → nothing opens. `FeedViewModel` holds the ephemeral
+      `imageViewer: FeedGallery?` (open on `openImageViewer`, `null` on `dismissImageViewer`; unknown
+      post / image-less post inert). +16 tests (`FeedMediaGalleryTest` 12, `FeedViewModelTest` +4).
 - [~] Threaded comments: expand threads ("view N replies") + comment likes + **reply composition** +
       **auto-preview replies** (slice `feed-reply-preview`, 2026-07-18 — the first top-level comments'
       replies auto-preload after the page loads and show a 2-reply inline preview with a "View all N replies"
@@ -2800,8 +2809,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Image/video preview screens per context (story/post/message/avatar/banner) with Edit + Use
 - [~] Image viewer — `MeeshyImageViewer` plein écran (pager multi-images, pinch-zoom
       borné 1–4×, pan clampé, double-tap 2.5×, tap-to-dismiss, compteur i/n),
-      ouvert au tap sur la grille d'images d'une bulle ; drag-to-dismiss +
-      save-to-gallery pending
+      ouvert au tap sur la grille d'images d'une bulle **et sur le collage d'un post du feed**
+      (slice `feed-media-fullscreen-gallery`, 2026-07-18 — `FeedMediaGallery` SSOT +
+      `FeedViewModel.openImageViewer/dismissImageViewer`) ; drag-to-dismiss + save-to-gallery pending
 - [ ] Code attachment viewer (~16 languages, syntax highlight, GitHub light/dark, copy)
 - [ ] Document viewer (PDF/presentation/spreadsheet) with share
 - [~] Image/video compression before upload (context-aware quality); save media to "Meeshy" album

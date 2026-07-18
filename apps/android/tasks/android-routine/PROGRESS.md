@@ -1,5 +1,49 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 the **fullscreen media gallery** landed (slice `feed-media-fullscreen-gallery`,
+> feature-parity §Feed → "Fullscreen media gallery" + "Image viewer"). The adaptive collage (previous
+> slice) rendered a post's media as tappable tiles but the tap was **dead** — no way to see an image at
+> full resolution. iOS opens a lightbox pager on tap; Android now reaches parity by **reusing the
+> existing `:sdk-ui` `MeeshyImageViewer`** (the same fullscreen pager chat already uses: pinch-zoom
+> 1–4×, clamped pan, double-tap 2.5×, ±2 neighbour prefetch, save-to-gallery, per-page caption/author/
+> timestamp chrome) — **no new SDK code**. **Ships:** **(1) `:feature:feed` pure `FeedMediaGallery`
+> SSOT** — `of(post: FeedPostPresentation, imageIndex: Int): FeedGallery(pages, startIndex)`, a faithful
+> mirror of chat's `ConversationMediaGallery`: flattens the post's images to **full-resolution** URLs
+> (`image.url`, never the collage thumbnail), each `FeedGalleryPage` sharing the post's text as caption
+> (`trim().ifBlank { null }`), author (`trim`→null) and `createdAtIso` for the viewer chrome; `startIndex`
+> = tapped index **clamped into the post's bounds** (a negative or past-last tap can't escape); a post
+> with no image → empty gallery (`isEmpty` — nothing opens). `FeedGallery` exposes positionally-aligned
+> `imageUrls`/`captions`/`authorNames`/`createdAtIsos`. **(2) `FeedViewModel`** gains the ephemeral
+> `imageViewer: FeedGallery?` in `FeedUiState` (kept in the flow so a background re-emit never tears the
+> open viewer down), `openImageViewer(postId, imageIndex)` (resolves against the projected posts →
+> `takeUnless(isEmpty)`; unknown post id or image-less post is **inert**) and `dismissImageViewer()`.
+> **(3) Compose** — `PostImageGrid`/`CollageTile` + the single-image path become `clickable`
+> (`onClickLabel` = "Open image" for a11y), threading the tapped **cell index** up through `PostCard`'s
+> new `onImageTap: (Int) -> Unit` to `viewModel.openImageViewer(post.id, index)`; `FeedScreen` renders
+> `MeeshyImageViewer` when `state.imageViewer != null`, formatting the per-page timestamps with the same
+> `RelativeTimeFormat`/`isoToEpochMillisOrNull` the feed card already uses, and toasting the
+> save-to-gallery result. **+16 tests** — `FeedMediaGalleryTest` (12: empty→nothing, single@0, order +
+> full-res URLs [not thumbnail], middle-tap start, negative-clamp, past-last-clamp, shared caption,
+> blank-caption→null, author trim + shared, blank/absent author→null, timestamp trim + blank/absent→null,
+> derived-lists-aligned) ; `FeedViewModelTest` (+4: open-at-tapped-index, unknown-post inert, image-less
+> inert, dismiss-closes). **Mutation check (RED proof):** dropping the `startIndex` clamp (`coerceIn` →
+> passthrough) **and** the blank-caption guard (`content.trim().ifBlank{null}` → raw `content`) failed
+> **exactly** 3 tests (negative-clamp, past-last-clamp, blank-caption) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3, `LANG=C.UTF-8` — wrapper 403s on the proxy):**
+> `:feature:feed:testDebugUnitTest` `FeedMediaGalleryTest` 12/12, `FeedViewModelTest` **43/43**;
+> `gradle :app:assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (Compose wiring compiles
+> `:feature:feed`→`:sdk-ui`, all module unit tests green). Reviewer **PASS** (diff `apps/android` only —
+> 8 files, feature/feed + its 4 locale strings; **SDK purity** — the "flatten a post into a gallery"
+> product rule lives in `:feature:feed` [it knows `FeedPostPresentation`], the fullscreen pager stays the
+> opaque `:sdk-ui` building block; **SSOT** — reuses `MeeshyImageViewer`, mirrors `ConversationMediaGallery`,
+> no re-implementation; **Instant-App** — opens synchronously from already-loaded data, viewer prefetches
+> neighbours; **UDF** — immutable `FeedUiState`, pure transitions; **coherence** — accent-tinted tiles
+> unchanged, tap = natural gesture, dismiss → back to the feed, no dead end; no coverage floor lowered,
+> no test weakened). **Next slice:** §Feed still-open — comment **@-mention autocomplete** (promote the
+> pure `ChatMention`/`MentionAutocompleteState` from `:feature:chat` to `:sdk-core` as a shared SSOT
+> first, its own slice); OR the **statuses/moods bar** (§G) / the **unified post composer** (Post/Status/
+> Story tabs); OR pivot back to §Stories/§Calls per the build-order sequencing.
+
 > On 2026-07-18 the **adaptive multi-image collage** landed (slice `feed-adaptive-collage-layout`,
 > feature-parity §Feed → "Adaptive multi-image collage layouts (1–5+ media)"). Until now the feed
 > card's `PostImageGrid` was a **naive** uniform 2-column square grid capped at 4 tiles
