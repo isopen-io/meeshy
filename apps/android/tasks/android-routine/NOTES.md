@@ -2,6 +2,33 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-18, `feed-comment-mention-autocomplete`) — promote a per-feature SSOT to `:sdk-core` by relocating the package, not renaming every call site; give the second surface its own orchestration
+When a second surface needs the same pure behaviour a `:feature:*` already solved, **promote the pure
+state-machine to `:sdk-core`** rather than re-implementing it. Two mechanics that kept this cheap and safe:
+- **Relocation ≠ mass rewrite.** Moving `ChatMention`/`MentionAutocompleteState` from `me.meeshy.app.chat`
+  to `me.meeshy.sdk.mention` only changes *import lines* at each call site (Kotlin usages reference the
+  simple name), so the churn is tiny even when grep shows dozens of "references". I did rename the object
+  `ChatMention`→`MentionComposer` for a surface-agnostic name in the SDK — that turned the object's own
+  `Xxx.` usages, but those are mostly inside the moved file + the moved test. **`git` auto-detects the
+  move as a rename (R077)** when the new file is ≥50% similar, keeping history.
+- **sdk-core is `explicitApi()`** — every top-level/member decl in the promoted file needs `public`
+  (the primary-constructor `val`s of a `public data class` do NOT, matching the existing story files).
+- **The roster stays per-feature.** `MentionComposer` (filter/insert/merge) is content-agnostic → SDK;
+  but *who can be mentioned* is a product rule that knows `ApiPostComment` → the new `CommentMentionRoster`
+  lives in `:feature:feed`, exactly like chat's `MentionRoster` knows `ApiParticipant`. Same grain test as
+  the gallery lesson.
+- **Composer draft must be ViewModel-owned + folded into the projection flow** (not Compose-local
+  `remember`), because autocomplete needs the current text to recompute the panel, and a realtime
+  re-projection (a `comment:added` landing) would otherwise wipe a half-typed draft. Added a `ComposerDraft`
+  flow as a 4th chained `.combine(...)` input (past the 5-arg `combine` cap) and moved the roster derivation
+  into `project()` (cached in a field the synchronous `onDraftChange` reads). This changed `submit(text)` →
+  `submit()`; the existing tests kept their intent via a `compose(text) = { onDraftChange(text); submit() }`
+  test helper — no assertion weakened.
+- **Full-suite flake:** `:sdk-core InterfaceLanguageStoreTest > dataStore_hydrates…` can fail with a
+  `TimeoutCancellationException` under parallel test load; it **passes in isolation** (`--tests
+  '*InterfaceLanguageStoreTest'`) and is unrelated to any mention change. Not a regression — re-run alone
+  to confirm before chasing it.
+
 ## Lesson (2026-07-18, `feed-media-fullscreen-gallery`) — before building a "viewer/lightbox/overlay", grep for an existing one and mirror its open-state SSOT
 When a slice needs a fullscreen media viewer, DON'T write one. `:sdk-ui` already ships
 `MeeshyImageViewer` (pager + pinch-zoom + ±2 prefetch + save-to-gallery), and `:feature:chat` already
