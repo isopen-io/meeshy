@@ -69,6 +69,7 @@ struct ActiveSessionsView: View {
             Spacer()
             ProgressView()
                 .tint(MeeshyColors.indigo500)
+                .accessibilityLabel(String(localized: "sessions.loading.a11y", defaultValue: "Chargement des sessions", bundle: .main))
             Spacer()
         } else if viewModel.sessions.isEmpty {
             Spacer()
@@ -105,6 +106,10 @@ struct ActiveSessionsView: View {
 
     private func sessionRow(_ session: UserSession) -> some View {
         HStack(spacing: 12) {
+            // Figé : glyphe d'appareil dans une vignette de dimension fixe 32×32
+            // (déborderait s'il scalait, doctrine 86i). Décoratif pour VoiceOver —
+            // le type d'appareil est déjà porté par `deviceName` ci-dessous ; le
+            // vert/indigo (courante vs autre) est redondant avec le badge « Actuelle ».
             Image(systemName: session.isCurrent ? "iphone" : "desktopcomputer")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400)
@@ -113,6 +118,7 @@ struct ActiveSessionsView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill((session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400).opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -143,6 +149,10 @@ struct ActiveSessionsView: View {
                         .foregroundColor(theme.textSecondary)
                 }
             }
+            // Regroupe nom d'appareil + badge « Actuelle » + IP + dernière activité en
+            // un seul élément VoiceOver : sans ça, chaque `Text` était un focus distinct
+            // et l'utilisateur balayait 4 fragments épars pour lire une seule session.
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -155,7 +165,13 @@ struct ActiveSessionsView: View {
                         .font(MeeshyFont.relative(20))
                         .foregroundColor(MeeshyColors.error.opacity(0.7))
                 }
-                .accessibilityLabel(String(localized: "sessions_revoke", defaultValue: "Revoquer cette session"))
+                // Libellé spécifique à l'appareil : l'utilisateur VoiceOver sait
+                // QUELLE session il révoque (le glyphe seul est ambigu dans une liste).
+                .accessibilityLabel(String(
+                    localized: "sessions.revoke.a11y",
+                    defaultValue: "Révoquer la session \(session.deviceName ?? String(localized: "sessions_unknown_device", defaultValue: "Appareil inconnu"))",
+                    bundle: .main
+                ))
             }
         }
         .padding(.horizontal, 14)
