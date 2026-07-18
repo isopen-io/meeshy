@@ -189,4 +189,43 @@ class CommentThreadStateTest {
         assertThat(state.comments.map { it.id }).containsExactly("live", "pending-0").inOrder()
         assertThat(state.pendingIds).containsExactly("pending-0")
     }
+
+    @Test
+    fun removed_dropsALiveDeletedTopLevelComment() {
+        val state = CommentThreadState()
+            .appended(listOf(comment("a"), comment("b"), comment("c")), null, false)
+            .removed("b")
+        assertThat(state.comments.map { it.id }).containsExactly("a", "c").inOrder()
+    }
+
+    @Test
+    fun removed_inertForAnUnknownComment() {
+        val base = CommentThreadState().appended(listOf(comment("a")), null, false)
+        assertThat(base.removed("zzz")).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun removed_inertOnAnEmptyThread() {
+        val base = CommentThreadState()
+        assertThat(base.removed("a")).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun removed_clearsThePendingMarkOfADeletedOptimisticRow() {
+        val state = CommentThreadState()
+            .optimistic(comment("pending-0"))
+            .removed("pending-0")
+        assertThat(state.comments).isEmpty()
+        assertThat(state.pendingIds).isEmpty()
+    }
+
+    @Test
+    fun removed_leavesOtherPendingMarksUntouched() {
+        val state = CommentThreadState()
+            .optimistic(comment("pending-0"))
+            .optimistic(comment("pending-1"))
+            .removed("pending-0")
+        assertThat(state.comments.map { it.id }).containsExactly("pending-1")
+        assertThat(state.pendingIds).containsExactly("pending-1")
+    }
 }

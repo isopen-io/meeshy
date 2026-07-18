@@ -2,6 +2,38 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-18, `feed-comment-realtime-delete`) — the container locale is POSIX, which breaks `:sdk-core` tests whose backtick names contain non-ASCII (em-dash); run gradle under `LANG=C.UTF-8`; a live delete is the mirror image of a live add (a `removed` reducer + a second collector), and route a delete by *finding the id* (top-level vs reply) not by trusting the payload to say which
+Porting iOS `PostDetailViewModel.commentDeleted` (live `comment:deleted` for the open post). Four takeaways.
+**(1) THE BIG ONE — a fresh container's default locale is `LC_CTYPE=POSIX` (ASCII), and that makes the Kotlin
+compile daemon throw `java.nio.file.InvalidPathException: Malformed input or input contains unmappable characters`
+when it writes the `.class` file for a `@Test fun \`… — a probe never crashes its surface\`()` whose backtick name
+contains an em-dash (`—`).** `:sdk-core` has such tests (`ActiveCallRepositoryTest`), so **any** run that compiles
+`:sdk-core`'s test sources (not just this slice) dies at `compileDebugUnitTestKotlin` with a stack trace that looks
+like a compiler bug but is a **locale** bug. `gradle.properties` already sets `-Dfile.encoding=UTF-8`, but that does
+**not** cover `sun.jnu.encoding` (the *path/filename* charset), which is derived from `LANG`/`LC_CTYPE` at JVM start.
+**Fix: `export LANG=C.UTF-8 LC_ALL=C.UTF-8 LC_CTYPE=C.UTF-8` before invoking gradle** (`C.utf8` is available per
+`locale -a`), and **stop the already-running daemon first** (`/opt/gradle/bin/gradle --stop`) — a daemon booted under
+POSIX keeps its bad `sun.jnu.encoding`. Do NOT "fix" this by editing `gradle.properties` (shared config) or renaming
+the offending test (not our file / out of scope) — it's purely an invocation-env fix. Prior feed slices never hit it
+because they only compiled `:feature:feed` + `:core:model` (all-ASCII test names); the moment a slice touches
+`:sdk-core` and runs its tests, set the locale. **(2) A live delete is the mirror of the live add from the previous
+slice:** one new socket event (`SocketCommentDeletedData`, same `{postId, commentId, commentCount}` shape iOS uses) +
+a `commentDeleted` `SharedFlow` on `SocialSocketManager` (copy the `commentAdded` wiring exactly) + a pure `removed`
+reducer + a **second** `viewModelScope.launch` in the existing `observeRealtime()`. No new UI — the removal flows
+through the existing projection, same "real not orphan" argument as the add-room. **(3) Route a delete by *finding the
+id*, not by trusting the payload to classify it.** The `comment:deleted` payload is just `{commentId}` — it does NOT
+say "this was a reply under parent X". So `onCommentDeleted` checks `thread.value.comments.any { it.id == id }` first
+(top-level → `removed` + `removedThread`), else asks `CommentRepliesState.parentOfReply(id)` (reply → `removedReply`
++ `bumpReplyCount(parent, -1)`), else no-op. This is why `parentOfReply` is a needed query on the state (mirror of iOS
+iterating `repliesMap` to locate the reply). Keep `removed` distinct from `failed`: `failed(tempId)` requires the id be
+*pending* (optimistic rollback), `removed(id)` works for **any** present row (an authoritative server delete of a
+long-confirmed comment) — reusing `failed` would silently no-op on a real delete because the id isn't pending. **(4)
+The discriminating mutation for a "decrement the parent count" behaviour is flipping the *sign* of the delta**
+(`bumpReplyCount(parentId, -1)` → `+1`), which failed **exactly** the one count-decrement VM test — not dropping the
+call (which would also fail the "vanishes" half and muddy the proof). A pre-existing `InterfaceLanguageStoreTest`
+DataStore test flakes under parallel execution (fails in the full `:sdk-core` run, **passes in isolation**) — verify
+any unexpected red in isolation before blaming your diff.
+
 ## Lesson (2026-07-18, `feed-postdetail-realtime-comments`) — a realtime "room" is just a filtered global flow + pure `received` reducers; gate a live child insert on *visibility*, not existence; no new UI when the projection already renders the state
 Porting iOS `PostDetailViewModel.subscribeToSocket` (live `comment:added` for the open post). Four takeaways. (1) **A per-screen "realtime room" needs no room-join plumbing here — it's `socialSocket.<flow>.collect { if (event.postId != postId) return@collect … }`.** `SocialSocketManager` already decodes `comment:added` into a global `commentAdded: SharedFlow`, and `StoryCommentsViewModel` already consumes it the same way — so the whole slice was a `viewModelScope.launch` that filters by the route `postId` plus two pure reducers. Don't reach for a new socket event or a "join room" emit; the gateway already scopes the broadcast (iOS filters the same global stream). Skip the subscription entirely for a blank route id (`observeRealtime()` early-returns) so a malformed route never listens. (2) **A live *child* (reply) insert must be gated on the parent thread being *visible* (expanded ∨ loaded), not on existence.** `receivedReply` returns the same instance unless `parentId in expandedIds || parentId in loadedIds` — inserting into an unopened thread would build a *phantom partial thread* (one live reply, none of the older ones) that the projection would then render as a misleading preview. The unopened case is covered by bumping the parent's `replyCount` only; the full set loads when the viewer expands. This mirrors iOS inserting into `repliesMap` only `when expandedThreads.contains(parentId)`. The top-level `received` has no such gate — a top-level comment is always visible. (3) **A live server row must dedup by id and must NOT be marked pending.** `received`/`receivedReply` prepend deduped by id (the viewer's own confirmed echo returns the same instance) and never touch `pendingIds`/`pendingReplyIds` — pending is only for *optimistic* local sends awaiting confirmation. A test that a live event `leaves an optimistic pending … untouched` pins that the two mechanisms don't collide. (4) **When the existing projection already renders the state you mutate, the slice ships with zero Compose change and is still "real, not orphan".** The live comment/reply/count flow straight through the existing top-level rows + expanded/preview threads + "View N replies" count — no new UI, no dead end. Discriminating mutation: flip `received` prepend→append (`listOf(comment)+comments` → `comments+listOf(comment)`) → fails **exactly** 3 ordering tests (2 pure + 1 VM). Reuse the `tryEmit(...)` + read `vm.state.value` test pattern from `StoryCommentsViewModelTest` (UnconfinedTestDispatcher makes the collector resume synchronously on emit — no Turbine needed for socket-driven assertions). Mock `SocialSocketManager` with `mockk(relaxed=true)` + `every { socialSocket.commentAdded } returns MutableSharedFlow(extraBufferCapacity=64)`.
 

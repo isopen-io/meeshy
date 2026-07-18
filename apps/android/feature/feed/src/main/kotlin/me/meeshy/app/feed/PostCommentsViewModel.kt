@@ -102,11 +102,12 @@ class PostCommentsViewModel @Inject constructor(
     }
 
     /**
-     * The post-detail realtime room: a live `comment:added` for the open post lands in the thread
-     * without a refresh (Instant-App). A top-level comment prepends; a reply prepends into its
-     * already-visible thread and bumps the parent's reply-count. A blank route [postId] never
-     * subscribes, and events for any other post are ignored. Mirror of iOS
-     * `PostDetailViewModel.subscribeToSocket` (`commentAdded` sink filtered to `postId`).
+     * The post-detail realtime room: a live `comment:added`/`comment:deleted` for the open post
+     * lands in the thread without a refresh (Instant-App). On add, a top-level comment prepends and
+     * a reply prepends into its already-visible thread + bumps the parent's reply-count. On delete,
+     * the row vanishes everywhere and a deleted reply decrements its parent's reply-count. A blank
+     * route [postId] never subscribes, and events for any other post are ignored. Mirror of iOS
+     * `PostDetailViewModel.subscribeToSocket` (`commentAdded`/`commentDeleted` sinks filtered to `postId`).
      */
     private fun observeRealtime() {
         if (postId.isBlank()) return
@@ -114,6 +115,12 @@ class PostCommentsViewModel @Inject constructor(
             socialSocket.commentAdded.collect { event ->
                 if (event.postId != postId) return@collect
                 onCommentAdded(event.comment)
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.commentDeleted.collect { event ->
+                if (event.postId != postId) return@collect
+                onCommentDeleted(event.commentId)
             }
         }
     }
@@ -127,6 +134,23 @@ class PostCommentsViewModel @Inject constructor(
             thread.update { it.bumpReplyCount(parentId, 1) }
         }
         likes.update { it.seeded(listOf(comment), HEART_EMOJI) }
+    }
+
+    /**
+     * A live `comment:deleted` for the open post. A top-level comment is dropped and its reply
+     * thread purged; a reply is dropped from its thread and its parent's reply-count decremented.
+     * An unknown id (an unloaded page, or already gone) is a no-op — fully idempotent with the
+     * client that issued the delete. Mirror of iOS `PostDetailViewModel` `commentDeleted` sink.
+     */
+    private fun onCommentDeleted(commentId: String) {
+        if (thread.value.comments.any { it.id == commentId }) {
+            thread.update { it.removed(commentId) }
+            replies.update { it.removedThread(commentId) }
+            return
+        }
+        val parentId = replies.value.parentOfReply(commentId) ?: return
+        replies.update { it.removedReply(commentId) }
+        thread.update { it.bumpReplyCount(parentId, -1) }
     }
 
     /**

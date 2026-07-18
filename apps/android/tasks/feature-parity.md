@@ -1680,8 +1680,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (slice `feed-postdetail-realtime-comments`, 2026-07-18 — a live `comment:added` for the open post
       lands in the thread without a refresh: a top-level comment prepends, a reply prepends into its
       already-visible thread and bumps the parent's "View N replies" count; mirror of iOS
-      `PostDetailViewModel.subscribeToSocket` `commentAdded` sink filtered to `postId`) **done**; mentions,
-      effects/blur, per-comment language switcher, live `comment:deleted`/`comment:liked` still open
+      `PostDetailViewModel.subscribeToSocket` `commentAdded` sink filtered to `postId`) + **live
+      `comment:deleted`** (slice `feed-comment-realtime-delete`, 2026-07-18 — a comment/reply deleted
+      elsewhere vanishes from the open thread without a refresh: a top-level comment is removed and its
+      reply thread purged, a reply is removed and its parent's "View N replies" count decremented;
+      mirror of iOS `PostDetailViewModel` `commentDeleted` sink) **done**; mentions, effects/blur,
+      per-comment language switcher, live `comment:liked` (emoji reaction-add/remove sync) still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
@@ -1765,8 +1769,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `CommentRepliesState.receivedReply` (only when the thread is expanded-or-loaded so no phantom partial
       thread) + bumps the parent's `replyCount`. +18 tests (6 `CommentThreadStateTest` `received`, 6
       `CommentRepliesStateTest` `receivedReply`, 6 `PostCommentsViewModelTest` realtime). Mutation-proven:
-      flipping `received` prepend→append fails exactly the 3 ordering tests. **Still open:** reply @mentions,
-      live `comment:deleted`/`comment:liked` sync, per-post + comment cache-first.
+      flipping `received` prepend→append fails exactly the 3 ordering tests. **Live `comment:deleted` now
+      landed** (slice `feed-comment-realtime-delete`, 2026-07-18): a new `SocketCommentDeletedData`
+      (`postId`/`commentId`/`commentCount`, mirror of iOS) + `SocialSocketManager.commentDeleted` flow;
+      `PostCommentsViewModel.onCommentDeleted` (filtered to the route `postId`) drops a top-level comment via
+      `CommentThreadState.removed` + purges its thread via `CommentRepliesState.removedThread`, or drops a
+      reply via `removedReply` (parent resolved through `parentOfReply`) + decrements the parent's `replyCount`.
+      +22 tests (1 `SocialSocketManagerTest` decode, 5 `CommentThreadStateTest` `removed`, 10
+      `CommentRepliesStateTest` `parentOfReply`/`removedReply`/`removedThread`, 6 `PostCommentsViewModelTest`
+      realtime-delete). Mutation-proven: flipping the reply-delete decrement `-1`→`+1` fails exactly the
+      count-decrement test. **Still open:** reply @mentions, live `comment:liked` (emoji reaction-add/remove
+      aggregation sync — iOS post-detail uses `comment:reaction-added/removed`, not `comment:liked`), the
+      authoritative post `commentCount` badge resync (owned by `PostDetailViewModel`, a separate VM), per-post
+      + comment cache-first.
       Prior comment thread: +41 tests (6 `CommentPrismeTest`, 9 `CommentProjectionTest`,
       12 `CommentThreadStateTest`, 14 `PostCommentsViewModelTest`).
       +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).

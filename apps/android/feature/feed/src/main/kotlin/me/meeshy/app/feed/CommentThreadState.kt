@@ -70,6 +70,18 @@ data class CommentThreadState(
     }
 
     /**
+     * Remove a top-level comment [id] deleted elsewhere (a live `comment:deleted` for the open
+     * post): drop the row and any pending mark it carried. Unlike [failed] this works for any
+     * present row, not only pending ones. Inert (same instance) when no comment matches [id] —
+     * the deleted id may be a reply (handled by [CommentRepliesState]) or on an unloaded page.
+     * Mirror of iOS `PostDetailViewModel` removing the comment from `comments` on `comment:deleted`.
+     */
+    fun removed(id: String): CommentThreadState {
+        if (comments.none { it.id == id }) return this
+        return copy(comments = comments.filterNot { it.id == id }, pendingIds = pendingIds - id)
+    }
+
+    /**
      * Optimistically shift the [parentId] comment's `replyCount` by [delta] (a null count reads
      * as zero, clamped ≥ 0) so the "View N replies" affordance tracks a just-sent reply. Inert
      * when no comment matches [parentId].

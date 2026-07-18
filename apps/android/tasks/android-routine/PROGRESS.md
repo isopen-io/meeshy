@@ -1,5 +1,52 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 **live `comment:deleted`** landed (slice `feed-comment-realtime-delete`, feature-parity §Feed →
+> "Threaded comments" — expand-threads + likes + reply-composition + auto-preview + realtime-room-`comment:added` +
+> **realtime-room-`comment:deleted`** now done; @mentions/live-`comment:liked`(emoji reaction sync)/per-comment-cache
+> still open). iOS `PostDetailViewModel.subscribeToSocket`'s `commentDeleted` sink (filtered to `postId`) removes the
+> comment from `comments`, clears `repliesMap[id]`/`expandedThreads`, and for a deleted *reply* scans `repliesMap` to
+> remove it + decrement the root parent's `.replies` count (and resyncs `post.commentCount` to the authoritative
+> payload value). Android's post-detail thread became live for `comment:added` last slice but a comment/reply deleted
+> **elsewhere** still lingered until a manual refresh. **Ships the delete half of the room on the existing socket
+> plumbing pattern (a new event, same shape as `commentAdded`):**
+> **(1) `:sdk-core`** — a new `SocketCommentDeletedData(postId, commentId, commentCount)` (line-for-line mirror of iOS
+> `SocketCommentDeletedData`) + a `commentDeleted: SharedFlow` on `SocialSocketManager` + `listen("comment:deleted", …)`
+> (gateway `broadcastCommentDeleted` payload confirmed `{ commentId, postId, commentCount }`). **(2) `:feature:feed`
+> pure core** — `CommentThreadState.removed(id)` drops a top-level row + any pending mark it carried (works for **any**
+> present row, unlike `failed` which needs pending; inert same-instance for an unknown/absent id); `CommentRepliesState`
+> gains `parentOfReply(replyId)` (which thread holds it, null if none), `removedReply(replyId)` (drop from whichever
+> thread holds it + clear its pending mark; inert when no thread holds it), `removedThread(parentId)` (purge a deleted
+> parent's expanded/loading/loaded marks + rows + pending reply ids; inert when the parent has no thread state).
+> **(3) `PostCommentsViewModel`** — `observeRealtime()` gains a second `viewModelScope.launch` collecting
+> `socialSocket.commentDeleted` (ignores other posts, blank route never subscribes); `onCommentDeleted(commentId)`
+> routes: a **top-level** id → `thread.removed` + `replies.removedThread`; else a reply → `replies.removedReply` +
+> `thread.bumpReplyCount(parent, -1)`; an unknown id is a no-op (idempotent with the client that issued the delete).
+> **(4) Compose** — **no new UI**: the removal flows through the existing projection (a dropped top-level row vanishes,
+> a dropped reply vanishes from its thread, the "View N replies" count updates), so the room is real, not orphan code.
+> **+22 tests** (`SocialSocketManagerTest` +1 decode; `CommentThreadStateTest` +5 — removed drop/inert-unknown/
+> inert-empty/clears-pending/leaves-other-pending; `CommentRepliesStateTest` +10 — parentOfReply find/null, removedReply
+> drop/inert-unknown/inert-empty/clears-pending, removedThread purge/clears-pending/leaves-sibling/inert-unknown;
+> `PostCommentsViewModelTest` +6 — live top-level vanishes, other-post ignored, blank-route ignored, unknown-id no-op,
+> deleting-parent-purges-thread, live-reply-vanishes+decrements-count). **Mutation check (RED proof):** flipping the
+> reply-delete decrement `bumpReplyCount(parentId, -1)` → `+1` failed **exactly** 1 test (`a live deleted reply vanishes
+> and decrements its parent's reply count`) — behavioural, not tautological. **Gate (system Gradle 8.14.3 under
+> `LANG=C.UTF-8` — see NOTES for the em-dash-in-test-name locale fix):** `:core:model:testDebugUnitTest`,
+> `:sdk-core:testDebugUnitTest` (744 tests; the 1 `InterfaceLanguageStoreTest` DataStore failure is pre-existing/flaky —
+> **passes in isolation**, unrelated to this diff), `:feature:feed:testDebugUnitTest` (`CommentThreadStateTest` 26,
+> `CommentRepliesStateTest` 49, `PostCommentsViewModelTest` 58, 0 fail) → **BUILD SUCCESSFUL**; `:app:assembleDebug` →
+> **BUILD SUCCESSFUL** (the second `commentDeleted` collector compiles). Reviewer **PASS** (diff `apps/android` only;
+> **SDK purity** — `SocketCommentDeletedData` + `commentDeleted` flow are stateless building blocks in `:sdk-core`, same
+> grain as `commentAdded`/`commentLiked`; pure `removed`/`removedReply`/`removedThread` state + "when to apply a live
+> delete" orchestration in `:feature:feed`; no Compose change; **SSOT** — one `CommentThreadState`/`CommentRepliesState`,
+> reused projection, same socket precedent as the add-room; **Instant-App** — live removal without a refresh; **UDF** +
+> immutable state; coherent — no dead end, the count stays consistent after a reply is deleted; no coverage floor
+> lowered, no test weakened). **Next slice:** §Feed still-open — comment **@mentions**, live **`comment:liked`** (the
+> emoji `comment:reaction-added`/`comment:reaction-removed` aggregation sync iOS post-detail actually uses — needs a new
+> `SocketCommentReactionUpdateEvent` model + heart-emoji filter + a per-comment like-delta overlay), the authoritative
+> post **`commentCount` badge** resync (owned by `PostDetailViewModel`, a separate VM), per-post + comment **cache-first**
+> (a disk cache mirroring iOS `CacheCoordinator.comments`), the **community posts feed** (needs a community entry point
+> first), OR the statuses/moods bar (§G).
+
 > On 2026-07-18 the **post-detail realtime room** landed (slice `feed-postdetail-realtime-comments`,
 > feature-parity §Feed → "Threaded comments" — expand-threads + likes + reply-composition + auto-preview +
 > **realtime room** now done; @mentions/live-`comment:deleted`+`comment:liked`/per-comment-cache still open).

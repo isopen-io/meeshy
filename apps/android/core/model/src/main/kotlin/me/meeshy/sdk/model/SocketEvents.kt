@@ -236,6 +236,13 @@ data class SocketCommentLikedData(
 )
 
 @Serializable
+data class SocketCommentDeletedData(
+    val postId: String,
+    val commentId: String,
+    val commentCount: Int = 0,
+)
+
+@Serializable
 data class SocketStoryCreatedData(
     val story: ApiPost,
     val clientMutationId: String? = null,
