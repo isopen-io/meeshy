@@ -182,6 +182,52 @@ describe('getUserLanguageChoices', () => {
       expect(getUserLanguageChoices(user)).toHaveLength(1);
     });
   });
+
+  // SSOT parity with resolveUserPreferredLanguage / getUserLanguagePreferences:
+  // the emitted `code` is the composed message's originalLanguage and the value the
+  // input-language selector compares against, so it MUST be the Prisme canonical
+  // form ('pt-BR' → 'pt'), never the raw BCP-47 tag ('pt-br').
+  describe('normalized emitted codes (Prisme SSOT parity)', () => {
+    it('normalizes a region-tagged systemLanguage to its canonical code', () => {
+      const choices = getUserLanguageChoices(makeUser({ systemLanguage: 'pt-BR' }));
+      expect(choices[0].code).toBe('pt');
+    });
+
+    it('normalizes a script+region tag on the regional entry', () => {
+      const choices = getUserLanguageChoices(
+        makeUser({ systemLanguage: 'fr', regionalLanguage: 'zh-Hant-HK' }),
+      );
+      expect(choices[1].code).toBe('zh');
+    });
+
+    it('normalizes an underscore-separated custom destination code', () => {
+      const choices = getUserLanguageChoices(
+        makeUser({
+          systemLanguage: 'fr',
+          regionalLanguage: 'en',
+          customDestinationLanguage: 'es_ES',
+        }),
+      );
+      expect(choices[2].code).toBe('es');
+    });
+
+    it('collapses system and regional entries that differ only by region tag', () => {
+      const user = makeUser({ systemLanguage: 'pt-BR', regionalLanguage: 'pt' });
+      expect(getUserLanguageChoices(user)).toHaveLength(1);
+    });
+
+    it('resolves the catalog name for a region-tagged systemLanguage (not the 🇫🇷 fallback)', () => {
+      const choices = getUserLanguageChoices(makeUser({ systemLanguage: 'pt-BR' }));
+      expect(choices[0].description).toBe('Portuguese');
+    });
+
+    it('still falls back to Français when systemLanguage is absent', () => {
+      const choices = getUserLanguageChoices(
+        makeUser({ systemLanguage: undefined as unknown as string }),
+      );
+      expect(choices[0].description).toBe('Français');
+    });
+  });
 });
 
 describe('resolveUserPreferredLanguage', () => {

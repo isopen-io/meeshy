@@ -6,6 +6,7 @@ import type { User } from '@/types';
 import type { LanguageChoice } from '@/types/bubble-stream';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { resolveUserLanguage, resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { getDeviceLocale } from '@/lib/device-locale';
 
 /**
@@ -37,19 +38,31 @@ function findLanguageMeta(code: string | null | undefined) {
 }
 
 export function getUserLanguageChoices(user: User): LanguageChoice[] {
-  // Lookup by the raw (lowercased) preference so an absent systemLanguage keeps
-  // the historical 🇫🇷 « Français » fallback; the emitted code still defaults to 'fr'.
+  // Meta (name/flag) is still looked up by the raw (lowercased) preference so an
+  // absent systemLanguage keeps the historical 🇫🇷 « Français » fallback.
+  // Emitted `code`s are normalized to the Prisme canonical form
+  // (`normalizeLanguageCode`, SSOT parity with resolveUserPreferredLanguage /
+  // getUserLanguagePreferences): a stored `'pt-BR'` becomes `'pt'`, matching
+  // `MessageTranslation.targetLanguage` and the value a composed message is
+  // tagged with. Dedup runs on the normalized form so `'pt-BR'` + `'pt'` collapse.
   const systemRaw = user.systemLanguage?.toLowerCase();
-  const systemCode = systemRaw || 'fr';
-  const regionalCode = user.regionalLanguage?.toLowerCase();
-  const customCode = user.customDestinationLanguage?.toLowerCase();
+  const systemCode = normalizeLanguageCode(user.systemLanguage) || 'fr';
+  const regionalCode = normalizeLanguageCode(user.regionalLanguage);
+  const customCode = normalizeLanguageCode(user.customDestinationLanguage);
 
   const choices: LanguageChoice[] = [
     {
       code: systemCode,
       name: 'Langue système',
-      description: findLanguageMeta(systemRaw)?.name || 'Français',
-      flag: findLanguageMeta(systemRaw)?.flag || '🇫🇷',
+      // Prefer the raw preference, then the normalized code (so a region-tagged
+      // `'pt-BR'` still resolves « Portuguese » 🇵🇹) — but only when a preference
+      // exists, so an absent systemLanguage keeps the historical 🇫🇷 « Français ».
+      description:
+        (systemRaw && (findLanguageMeta(systemRaw)?.name ?? findLanguageMeta(systemCode)?.name)) ||
+        'Français',
+      flag:
+        (systemRaw && (findLanguageMeta(systemRaw)?.flag ?? findLanguageMeta(systemCode)?.flag)) ||
+        '🇫🇷',
       isDefault: true
     }
   ];

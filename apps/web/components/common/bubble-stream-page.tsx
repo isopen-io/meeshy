@@ -153,7 +153,7 @@ export function BubbleStreamPage({
   const [isTyping, setIsTyping] = useState(false);
   const [, setDetectedLanguage] = useState<string>('fr');
   const [userLanguage, setUserLanguage] = useState<string>(resolveUserPreferredLanguage());
-  const [selectedInputLanguage, setSelectedInputLanguage] = useState<string>(user.systemLanguage || 'fr');
+  const [selectedInputLanguage, setSelectedInputLanguage] = useState<string>(resolveUserPreferredLanguage());
   const [activeUsers, setActiveUsers] = useState<User[]>(initialParticipants || []);
 
   // États de chargement
@@ -358,13 +358,17 @@ export function BubbleStreamPage({
     setUserLanguage(newUserLanguage);
   }, [user.systemLanguage, user.regionalLanguage, user.customDestinationLanguage, resolveUserPreferredLanguage]);
 
-  // Validation de la langue sélectionnée
+  // Validation de la langue sélectionnée : retomber sur un code réellement
+  // sélectionnable (le 1er choix = langue système, forme canonique du Prisme).
+  // `user.systemLanguage` brut (ex. 'pt-BR', 'EN') n'appartient plus aux
+  // languageChoices depuis la normalisation des codes émis par
+  // getUserLanguageChoices — le reset doit viser un code garanti présent.
   useEffect(() => {
     const availableLanguageCodes = languageChoices.map(choice => choice.code);
     if (!availableLanguageCodes.includes(selectedInputLanguage)) {
-      setSelectedInputLanguage(user.systemLanguage || 'fr');
+      setSelectedInputLanguage(languageChoices[0]?.code ?? 'fr');
     }
-  }, [languageChoices, selectedInputLanguage, user.systemLanguage]);
+  }, [languageChoices, selectedInputLanguage]);
 
   // Chargement parallèle des messages et utilisateurs
   useEffect(() => {
