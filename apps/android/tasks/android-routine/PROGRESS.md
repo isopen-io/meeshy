@@ -1,5 +1,48 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 the **adaptive multi-image collage** landed (slice `feed-adaptive-collage-layout`,
+> feature-parity §Feed → "Adaptive multi-image collage layouts (1–5+ media)"). Until now the feed
+> card's `PostImageGrid` was a **naive** uniform 2-column square grid capped at 4 tiles
+> (`images.chunked(2)`, a `+N` overlay only on the 4th): a 3-image post rendered as `[A B] / [C _]`
+> with a dangling empty cell, and a 5-image post lost its distinctive shape. iOS
+> (`FeedPostCard+Media.mediaPreview`) instead adapts the layout to the count — 1=single, 2=side-by-side,
+> 3=1-large+2, 4=2×2, 5+=2-then-3 with `+N`. This slice brings the Android feed to that parity by
+> extracting the layout decision into a **pure, content-agnostic SSOT** and leaving the Compose grid a
+> thin reader of it. **Ships:** **(1) `:sdk-ui` pure `MediaCollage.solve(count): CollageLayout`** — a
+> stateless building block (package `me.meeshy.ui.component.media`) mapping a media **count** to a
+> deterministic vertical stack of `CollageRow`s, each a horizontal list of `CollageCell`s carrying an
+> `index`, a `widthWeight`, and an `overflowCount` (>0 only on the final tile past the `MAX_VISIBLE = 5`
+> cap). Shapes: `1`→single full-bleed (real aspect, `isSingle = true`); `2`→two equal tiles;
+> `3`→one large row (height 0.6) over a two-up row (0.4); `4`→row-major 2×2; `5`→two-up over three-up;
+> `5+`→the same five tiles, the last carrying `+N` for the hidden remainder. It knows only the count
+> (no Meeshy singletons, no "when to render" rule → SDK grain), so the **chat-bubble media grid** can
+> reuse it later. **(2) `:feature:feed` `PostImageGrid`** now calls `MediaCollage.solve(images.size)` and
+> renders the rows (each `Modifier.weight(row.heightWeight)`) and cells (`Modifier.weight(cell.widthWeight)`)
+> at a fixed `COLLAGE_HEIGHT = 260.dp`, with the single-image path preserved (real aspect ratio); a new
+> `CollageTile` composable draws the accent-tinted tile + the `+N` overlay when `overflowCount > 0`. The
+> naive `chunked(2)`/`MAX_GRID_IMAGES` grid is gone. **+12 tests** (`MediaCollageTest` — empty, negative,
+> single, 2, 3, 4, 5, 6, 12, index-coverage-sweep [1..20], overflow-only-on-last-past-cap [1..10], and a
+> weights-sum-to-one sweep [1..20]). **Mutation check (RED proof):** neutralising the overflow assignment
+> (`if (index == lastIndex) overflow else 0` → always `0`) failed **exactly** the 3 overflow tests
+> (six-image / many-image / overflow-only-past-cap) — behavioural, not tautological. **Gate (system Gradle
+> 8.14.3 under `LANG=C.UTF-8`):** `:sdk-ui:testDebugUnitTest` `MediaCollageTest` 12/12 green,
+> `:feature:feed:testDebugUnitTest` **374 tests, 0 failures**, `:app:assembleDebug` → **BUILD SUCCESSFUL**
+> (the `MediaCollage`/`Shape`/`fillMaxHeight` imports compile across `:feature:feed`→`:sdk-ui`, no
+> cross-module breakage). Reviewer **PASS** (diff `apps/android` only — 3 files; **SDK purity** — the
+> layout algorithm is a stateless `:sdk-ui` building block taking an opaque count, the "which images / when
+> to render" orchestration stays in `:feature:feed`; **SSOT** — one collage rule, not re-implemented per
+> surface; **Instant-App** — pure synchronous layout, no spinner/network; **coherence** — accent-tinted
+> tiles (`MeeshyPalette.Indigo500` @ 0.08), `MeeshyRadius.md` corners, `MeeshySpacing.xs` gaps, the same
+> `+N` overlay style, no dead end; no coverage floor lowered, no test weakened).
+> **⚠ Process lesson (see NOTES.md):** this run's branch was first cut from a **stale local `main`**
+> (behind `origin/main` by the merged feed slices) — caught before PR by noticing the merged comment
+> test files were missing, then fixed with `git rebase --onto origin/main main <branch>`. **Always branch
+> from `origin/main`, not local `main`.** **Next slice:** §Feed still-open — the **fullscreen media
+> gallery** (tap a collage tile → a `HorizontalPager` viewer with the tapped index; reuse the `:sdk-ui`
+> viewer components) to complete the audit item; OR comment **@-mention autocomplete** (promote the pure
+> `ChatMention`/`MentionAutocompleteState` from `:feature:chat` to `:sdk-core` as a shared SSOT first, its
+> own slice); OR pivot to the **statuses/moods bar** (§G) / the **unified post composer**.
+
 > On 2026-07-18 the **per-comment language switcher** landed (slice `feed-comment-language-switcher`,
 > feature-parity §Feed → "Threaded comments" — the per-comment language switcher was the last open item on the
 > comment rendering line [after expand-threads, likes, replies, auto-preview, the realtime add/delete/reaction/

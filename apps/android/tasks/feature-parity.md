@@ -1650,9 +1650,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
       proxy removed). UI like state now reads the viewer's own `isLikedByMe`.
-- [x] Adaptive multi-image collage layouts (1–4 + overlay « +N ») in the feed card
-      (single full-width with aspect ratio, 2-col grid otherwise) — `FeedPostBuilder`
-      resolves + orders image media and resolves relative URLs against the gateway origin
+- [x] Adaptive multi-image collage layouts (1–5+ media, « +N » overflow) in the feed card
+      — pure `MediaCollage.solve(count)` SSOT in `:sdk-ui` (1=single real-aspect, 2=side-by-side,
+      3=large-over-two-up, 4=row-major 2×2, 5=two-then-three, 5+ with `+N` overflow on the last
+      tile); `PostImageGrid` renders the returned rows/cells (slice `feed-adaptive-collage-layout`,
+      2026-07-18). `FeedPostBuilder` still resolves + orders image media and relative URLs.
+      Shared building block reusable by the chat-bubble media grid.
 - [~] Prisme Linguistique on the feed: post content rendered in the viewer's preferred
       language with a discreet « Traduit » indicator (`ApiPost.displayContent`/`isTranslated`
       port of the message Prisme rules — Map-keyed translations, Rule 1 honoured) ;
@@ -1672,7 +1675,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       rolls back on failure) + live personal `post:bookmarked` overlay (absolute count + own-state,
       reconciled against the cache) + accent-tinted bookmark button in the feed card
       (slice `feed-realtime-bookmark-sync`, 2026-07-17)
-- [ ] Adaptive multi-image collage layouts (1–5+ media) + fullscreen gallery
+- [~] Adaptive multi-image collage layouts (1–5+ media) **done** via `MediaCollage.solve` +
+      `PostImageGrid` (slice `feed-adaptive-collage-layout`, 2026-07-18) ; fullscreen gallery
+      (tap a tile → pager viewer) still pending
 - [~] Threaded comments: expand threads ("view N replies") + comment likes + **reply composition** +
       **auto-preview replies** (slice `feed-reply-preview`, 2026-07-18 — the first top-level comments'
       replies auto-preload after the page loads and show a 2-reply inline preview with a "View all N replies"
