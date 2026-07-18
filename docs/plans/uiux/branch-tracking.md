@@ -31,6 +31,29 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   `StoryExpiredContent`, `StoryViewerContainer`, `BubbleStandardLayout`, `CommunityLinksView`,
 >   `CommunityLinkDetailView`, `ShareLinksView`, `SharePickerView`, `ConversationView+MessageRow`,
 >   `WebRTCVideoView`…), ou **passe state-of-the-art** au tarissement.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 142i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
+> - **142i (terminée, branche `claude/laughing-thompson-f7d2yn`, base `main` HEAD `424bfed`)** :
+>   Accessibilité VoiceOver-**structure** de `FriendRequestListView` (écran « Demandes d'amis »). Surface
+>   fraîche **déjà 100 % Dynamic Type** côté typographie (polices sémantiques `.body/.headline/.subheadline/
+>   .caption*/.footnote`) → **0 conversion de police**. Le déficit était structurel : (1) icône héros d'état
+>   vide `person.2.slash` annoncée comme bruit → `.accessibilityHidden(true)` + gel doctrine (≥40pt) ;
+>   (2) titre d'écran → `.accessibilityAddTraits(.isHeader)` (rotor En-têtes) ; (3) rangée fragmentée en 4
+>   focus → `VStack` textuel `.accessibilityElement(children: .combine)` (nom + pseudo + intention +
+>   ancienneté en une annonce), boutons Accepter/Refuser laissés actionnables ; (4) état vide regroupé
+>   (`children: .combine`). 1 fichier, 0 logique, 0 test/clé i18n neuve. ViewModel non touché. Aucun test ne
+>   référence la vue. PR iOS ouvertes #1966 (140i, `ThemedBackButton`) / #1968 (141i, `MyStoriesView`) →
+>   **0 contention** (fichiers disjoints). #1961 (audit modernisation) touche `ConversationView`/`LoginView`/
+>   `BubbleStandardLayout`/`AudioCarouselView`/… → **0 contention**. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `FriendRequestListView` SOLDÉ** : typographie déjà sémantique + VoiceOver-structure posée. Ne plus reprendre.
+> - **⚠️ Tarissement de la traîne `.font(.system(size:))`** : les surfaces fraîches restantes sont soit déjà
+>   sémantiques (Dynamic Type), soit uniquement des glyphes figés par doctrine (chrome dans cadre de tap
+>   fixe, héros décoratifs ≥40pt, indicateurs d'état géométriques). Ex. vérifiés 142i : `FeedCommentsSheet`
+>   (5/5 déjà figés+commentés), `VoiceProfileWizardView` (4/4 déjà figés+commentés). **La piste bascule sur
+>   la VoiceOver-structure** (regroupement `children: .combine`, `.isHeader`, décor masqué) et les passes
+>   state-of-the-art (HIG, composants natifs, design-system) sur les écrans frais.
+> - **Base de départ 143i : `main` HEAD**. Candidats frais VoiceOver-structure : `StarredMessagesView`,
+>   `BookmarksView`, `SupportView`, `UserStatsView`. Toujours vérifier l'absence de contention avec les PR
+>   iOS ouvertes avant de choisir.
 >
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
