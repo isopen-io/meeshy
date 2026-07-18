@@ -1,5 +1,54 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 **auto-preview replies** landed (slice `feed-reply-preview`, feature-parity §Feed →
+> "Threaded comments" — expand-threads + likes + reply-composition + **auto-preview** now done;
+> mentions/realtime-room/per-comment-cache still open). iOS `PostDetailViewModel.preloadReplyPreviews`
+> (fired non-blocking via `schedulePreloadReplyPreviews` after `loadComments`) preloads the replies of the
+> first `topLevelComments.filter { replies > 0 }.prefix(5)` (cache-first via `CacheCoordinator.comments`,
+> else `loadReplies`) so the first 2 replies show as a preview without a tap. Android had **read-on-tap only**
+> — a comment's replies stayed hidden behind "View N replies" until tapped. **Ships the preview vertical on the
+> existing endpoint (`getCommentReplies`, no new repo method):**
+> **(1) `:feature:feed` pure core** — `CommentRepliesState.previewTargets(candidateIds, limit)` returns the
+> first `limit` fresh parents (dropping already loaded/in-flight; non-positive limit or no candidate ⇒ empty)
+> — **bounded to the first N like iOS `prefix(5)`** so preview loading stays predictable, not fanning out
+> across an unbounded list. `beginLoadAll(ids)` marks every fresh id loading in one immutable step **without
+> expanding** (a preview is *loaded but collapsed*), idempotent for known ids and inert for an empty batch.
+> **(2) projection** — `ReplyThreadUiState` gains `isPreview` + `hiddenReplyCount`; the projection now renders
+> a thread when it is **expanded OR loaded** (previously expanded-only), capping a collapsed preview to
+> `PREVIEW_REPLY_LIMIT = 2`. Consequence (deliberate, iOS-faithful): **collapsing an expanded thread falls
+> back to its 2-reply preview** instead of hiding it — iOS keeps `repliesMap` populated after a collapse, so
+> "Hide replies" drops back to the taste, not to nothing. **(3) `PostCommentsViewModel.preloadReplyPreviews`**
+> runs after each successful `fetch` (initial + loadMore): candidates = top-level comments with
+> `replyCount > 0`, `previewTargets(…, PREVIEW_PRELOAD_LIMIT = 5)`, `beginLoadAll`, then a background
+> `fetchReplies` per target (each its own coroutine — never blocks the comment list; the thread stays
+> collapsed). Idempotent: a loaded/in-flight thread is never refetched, so loadMore's re-run is a no-op.
+> **Cache-first improvement over iOS:** a previewed thread is never refetched when the viewer taps "View all"
+> (the `loadedIds` guard), whereas iOS re-guards per open. **(4) Compose** — preview reply rows rendered above
+> an accent-coherent Indigo "View all N replies" toggle (shown only when `hiddenReplyCount > 0`); expanded
+> path unchanged ("Hide replies" + full list). EN/FR/ES/PT `post_comments_view_all_replies` plural.
+> **+15 tests** (`CommentRepliesStateTest` +10 — `beginLoadAll` mark-fresh/skip-loaded-loading/inert-empty/
+> inert-all-known, `previewTargets` first-N/fewer-than-limit/non-positive/no-candidates/drops-loaded/
+> bounds-before-drop; `PostCommentsViewModelTest` +5 — auto-load-without-tap, no-preview-for-zero-replies,
+> capped-to-first-five, expand-previewed-no-refetch, empty-preload-no-rows) **+1 rewritten** (`a second
+> toggleReplies collapses the thread` → `collapsing an expanded thread falls back to its reply preview`,
+> asserting the new iOS-faithful collapse→preview behaviour more precisely — a behaviour change, not a
+> weakening). **Mutation check (RED proof):** dropping the `.take(limit)` cap in `previewTargets` failed
+> **exactly** 3 tests (`previewTargets returns the first fresh candidates up to the limit`, `previewTargets
+> bounds to the first limit before dropping loaded ones`, `preview preloading is capped to the first five
+> comments with replies`) — behavioural, not tautological. **Gate (system Gradle 8.14.3 — wrapper zip
+> proxy-blocked, see NOTES):** `:feature:feed:testDebugUnitTest` → **BUILD SUCCESSFUL** (294 tests, 0 fail;
+> `CommentRepliesStateTest` 33, `PostCommentsViewModelTest` 46) + `:core:model:testDebugUnitTest` (1555, 0
+> fail); `:app:assembleDebug` → **BUILD SUCCESSFUL** (preview rows + "View all" toggle compile). Reviewer
+> **PASS** (diff `apps/android` only; **SDK purity** — pure `previewTargets`/`beginLoadAll` + "when to
+> preload" orchestration in `:feature:feed`, `getCommentReplies` already in `:sdk-core`, Compose stays dumb;
+> **SSOT** — one `CommentRepliesState`, reused `CommentProjection`/`CommentRow`; **Instant-App** — preview
+> without a tap, background preload, no blocking spinner; **UDF** + immutable state; accent-coherent Indigo
+> "View all" toggle, natural tap, collapse falls back to a coherent preview — no dead end; no coverage floor
+> lowered, one test re-specified for a genuine behaviour change). **Next slice:** §Feed still-open — comment
+> **@mentions**, the post-detail **realtime room** (live `comment:added`/`post:liked` for the open post),
+> per-post + comment **cache-first** (a `CommentThreadState` disk cache mirroring iOS `CacheCoordinator.comments`),
+> the **community posts feed** (needs a community entry point first), OR the statuses/moods bar (§G).
+
 > On 2026-07-18 **reply composition** landed (slice `feed-reply-composition`, feature-parity §Feed →
 > "Threaded comments" — expand-threads + likes + **reply composition** now done; auto-preview/mentions/realtime
 > still open). iOS `PostDetailViewModel.sendReply` posts a reply via `addComment(postId, content, parentId)` where

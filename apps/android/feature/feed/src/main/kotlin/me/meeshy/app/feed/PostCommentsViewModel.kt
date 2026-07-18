@@ -44,11 +44,18 @@ data class PostCommentsUiState(
     val errorMessage: String? = null,
 )
 
-/** The projected reply thread for one expanded top-level comment. */
+/**
+ * The projected reply thread beneath one top-level comment. When [isExpanded] the full loaded
+ * list is shown; when [isPreview] (loaded but collapsed — auto-preloaded, or a manually-collapsed
+ * thread falling back to its taste) only the first replies are shown, with [hiddenReplyCount]
+ * more available behind a "View all" affordance.
+ */
 data class ReplyThreadUiState(
     val isExpanded: Boolean,
     val isLoading: Boolean,
     val replies: List<CommentPresentation>,
+    val isPreview: Boolean = false,
+    val hiddenReplyCount: Int = 0,
 )
 
 /**
@@ -123,6 +130,7 @@ class PostCommentsViewModel @Inject constructor(
                         thread.update { it.appended(page, nextCursor, more) }
                         likes.update { it.seeded(page, HEART_EMOJI) }
                         status.update { it.copy(isLoading = false, isLoadingMore = false, error = null) }
+                        preloadReplyPreviews()
                     }
                     is NetworkResult.Failure ->
                         status.update {
@@ -281,6 +289,24 @@ class PostCommentsViewModel @Inject constructor(
         fetchReplies(commentId)
     }
 
+    /**
+     * Auto-preload the reply previews of the first top-level comments that have replies, so a
+     * taste of each thread shows *without a tap* (Instant-App, mirror of iOS `preloadReplyPreviews`).
+     * Bounded to the first [PREVIEW_PRELOAD_LIMIT] comments-with-replies and idempotent — a thread
+     * already loaded or in flight is never refetched, so re-running after a page load is a no-op.
+     * Fetches run in the background (each [fetchReplies] launches its own coroutine); the thread
+     * stays collapsed until the viewer expands it, so this never blocks the comment list.
+     */
+    private fun preloadReplyPreviews() {
+        val candidates = thread.value.comments
+            .filter { it.parentId.isNullOrBlank() && (it.replyCount ?: 0) > 0 }
+            .map { it.id }
+        val targets = replies.value.previewTargets(candidates, PREVIEW_PRELOAD_LIMIT)
+        if (targets.isEmpty()) return
+        replies.update { it.beginLoadAll(targets) }
+        targets.forEach { fetchReplies(it) }
+    }
+
     private fun fetchReplies(commentId: String) {
         viewModelScope.launch {
             try {
@@ -325,12 +351,15 @@ class PostCommentsViewModel @Inject constructor(
             )
         }
         val replyThreads = topLevel
-            .filter { replyState.isExpanded(it.id) }
+            .filter { replyState.isExpanded(it.id) || replyState.isLoaded(it.id) }
             .associate { comment ->
+                val expanded = replyState.isExpanded(comment.id)
+                val all = replyState.repliesFor(comment.id)
+                val shown = if (expanded) all else all.take(PREVIEW_REPLY_LIMIT)
                 comment.id to ReplyThreadUiState(
-                    isExpanded = true,
+                    isExpanded = expanded,
                     isLoading = replyState.isLoading(comment.id),
-                    replies = replyState.repliesFor(comment.id).map {
+                    replies = shown.map {
                         CommentProjection.build(
                             it,
                             prefs,
@@ -339,6 +368,8 @@ class PostCommentsViewModel @Inject constructor(
                             likeState = likeState,
                         )
                     },
+                    isPreview = !expanded && shown.isNotEmpty(),
+                    hiddenReplyCount = (all.size - shown.size).coerceAtLeast(0),
                 )
             }
         val showSkeleton = st.isLoading && !thread.hasLoaded && thread.comments.isEmpty() && st.error == null
@@ -360,6 +391,12 @@ class PostCommentsViewModel @Inject constructor(
         const val POST_ID_ARG = "postId"
         private const val PAGE_SIZE = 20
         private const val HEART_EMOJI = "❤️"
+
+        /** Replies shown in a collapsed preview before the viewer taps "View all". */
+        private const val PREVIEW_REPLY_LIMIT = 2
+
+        /** Top-level comments whose replies auto-preload (mirror of iOS `prefix(5)`). */
+        private const val PREVIEW_PRELOAD_LIMIT = 5
     }
 }
 

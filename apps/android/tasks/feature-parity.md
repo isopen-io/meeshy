@@ -1673,10 +1673,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       reconciled against the cache) + accent-tinted bookmark button in the feed card
       (slice `feed-realtime-bookmark-sync`, 2026-07-17)
 - [ ] Adaptive multi-image collage layouts (1–5+ media) + fullscreen gallery
-- [~] Threaded comments: expand threads ("view N replies") + comment likes + **reply composition** (slice
-      `feed-reply-composition`, 2026-07-18 — optimistic reply targeting a comment, flat 2-level root-parent
-      resolution, "Replying to @name" chip, optimistic parent reply-count bump) **done**; auto-preview
-      replies, mentions, effects/blur, per-comment language switcher still open
+- [~] Threaded comments: expand threads ("view N replies") + comment likes + **reply composition** +
+      **auto-preview replies** (slice `feed-reply-preview`, 2026-07-18 — the first top-level comments'
+      replies auto-preload after the page loads and show a 2-reply inline preview with a "View all N replies"
+      affordance, no tap needed; mirror of iOS `preloadReplyPreviews`) **done**; mentions, effects/blur,
+      per-comment language switcher, post-detail realtime room still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
@@ -1733,9 +1734,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       accent-coherent Indigo toggle + discreet loading spinner + indented reply column. EN/FR/ES/PT
       (`post_comments_view_replies` plural + `post_comments_hide_replies`). +23 tests (14
       `CommentRepliesStateTest`, +9 `PostCommentsViewModelTest`; mutation-proven: dropping the
-      already-loaded guard fails exactly the 4 no-refetch tests). **Still open:** auto-preview of the first
-      replies, reply composition (replying to a specific comment), mentions, post-detail realtime room,
-      per-post + comment cache-first.
+      already-loaded guard fails exactly the 4 no-refetch tests).
+      **Auto-preview replies now landed** (slice `feed-reply-preview`, 2026-07-18): after a comment page
+      loads, the replies of the first top-level comments with replies **auto-preload in the background** and
+      a 2-reply inline preview shows **without a tap** (mirror of iOS `preloadReplyPreviews`
+      `schedulePreloadReplyPreviews`/`prefix(5)`), with a "View all N replies" affordance to expand the full
+      thread. `:feature:feed` pure — `CommentRepliesState.previewTargets(candidateIds, limit)` (first-`limit`
+      fresh parents, dropping loaded/in-flight — bounded like iOS `prefix(5)`) + `beginLoadAll(ids)` (batch
+      mark-loading without expanding: a preview is *loaded but collapsed*). `ReplyThreadUiState` gains
+      `isPreview` + `hiddenReplyCount`; the projection now also renders **loaded-but-collapsed** threads
+      capped to 2 rows, so **collapsing an expanded thread falls back to its preview** (iOS keeps `repliesMap`
+      populated after a collapse) rather than hiding it outright. `PostCommentsViewModel.preloadReplyPreviews`
+      runs after each successful fetch, idempotent (never refetches a loaded/in-flight thread). Cache-first
+      improvement over iOS: a previewed thread is never refetched when the viewer taps "View all". Compose:
+      preview rows above an accent-coherent Indigo "View all N replies" toggle; EN/FR/ES/PT
+      `post_comments_view_all_replies` plural. +15 tests (+10 `CommentRepliesStateTest` — `beginLoadAll`
+      fresh/skip-loaded-loading/inert-empty/inert-all-known, `previewTargets` first-N/fewer-than-limit/
+      non-positive-limit/no-candidates/drops-loaded/bounds-before-drop; +5 `PostCommentsViewModelTest` —
+      auto-load-without-tap, no-preview-for-zero-replies, capped-to-first-five, expand-previewed-no-refetch,
+      empty-preload-no-rows) + 1 rewritten (`collapsing an expanded thread falls back to its reply preview`).
+      Mutation-proven: dropping the `take(limit)` cap fails exactly the 3 cap tests (`previewTargets`
+      first-N + bounds-before-drop, `capped to the first five`). **Still open:** reply @mentions,
+      post-detail realtime room, per-post + comment cache-first.
       Prior comment thread: +41 tests (6 `CommentPrismeTest`, 9 `CommentProjectionTest`,
       12 `CommentThreadStateTest`, 14 `PostCommentsViewModelTest`).
       +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).

@@ -184,4 +184,75 @@ class CommentRepliesStateTest {
     fun `isPendingReply is false for a fresh state`() {
         assertThat(CommentRepliesState().isPendingReply("temp")).isFalse()
     }
+
+    // --- Preview preloading ---
+
+    @Test
+    fun `beginLoadAll marks every fresh id loading without expanding`() {
+        val s = CommentRepliesState().beginLoadAll(listOf("c1", "c2"))
+        assertThat(s.isLoading("c1")).isTrue()
+        assertThat(s.isLoading("c2")).isTrue()
+        assertThat(s.isExpanded("c1")).isFalse()
+        assertThat(s.isExpanded("c2")).isFalse()
+    }
+
+    @Test
+    fun `beginLoadAll skips ids already loading or loaded`() {
+        val base = CommentRepliesState().beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
+            .beginLoad("c2")!! // c1 loaded, c2 loading
+        val s = base.beginLoadAll(listOf("c1", "c2", "c3"))
+        assertThat(s.isLoading("c3")).isTrue()
+        assertThat(s.isLoaded("c1")).isTrue()
+        assertThat(s.isLoading("c1")).isFalse()
+        assertThat(s.isLoading("c2")).isTrue()
+    }
+
+    @Test
+    fun `beginLoadAll is inert for an empty batch`() {
+        val base = CommentRepliesState().expanded("c1")
+        assertThat(base.beginLoadAll(emptyList())).isEqualTo(base)
+    }
+
+    @Test
+    fun `beginLoadAll is inert when every id is already loaded or loading`() {
+        val base = CommentRepliesState().beginLoad("c1")!!.loaded("c1", emptyList()).beginLoad("c2")!!
+        assertThat(base.beginLoadAll(listOf("c1", "c2"))).isEqualTo(base)
+    }
+
+    @Test
+    fun `previewTargets returns the first fresh candidates up to the limit`() {
+        val s = CommentRepliesState()
+        assertThat(s.previewTargets(listOf("c1", "c2", "c3"), 2)).containsExactly("c1", "c2").inOrder()
+    }
+
+    @Test
+    fun `previewTargets returns all candidates when fewer than the limit`() {
+        val s = CommentRepliesState()
+        assertThat(s.previewTargets(listOf("c1"), 5)).containsExactly("c1")
+    }
+
+    @Test
+    fun `previewTargets is empty for a non-positive limit`() {
+        val s = CommentRepliesState()
+        assertThat(s.previewTargets(listOf("c1", "c2"), 0)).isEmpty()
+        assertThat(s.previewTargets(listOf("c1", "c2"), -1)).isEmpty()
+    }
+
+    @Test
+    fun `previewTargets is empty when there are no candidates`() {
+        assertThat(CommentRepliesState().previewTargets(emptyList(), 5)).isEmpty()
+    }
+
+    @Test
+    fun `previewTargets drops candidates already loaded or in flight`() {
+        val s = CommentRepliesState().beginLoad("c1")!!.loaded("c1", emptyList()).beginLoad("c2")!!
+        assertThat(s.previewTargets(listOf("c1", "c2", "c3"), 5)).containsExactly("c3")
+    }
+
+    @Test
+    fun `previewTargets bounds to the first limit before dropping loaded ones`() {
+        // c1 is loaded; the window is the first 2 (c1, c2), so only c2 survives — c3 is out of the window.
+        val s = CommentRepliesState().beginLoad("c1")!!.loaded("c1", emptyList())
+        assertThat(s.previewTargets(listOf("c1", "c2", "c3"), 2)).containsExactly("c2")
+    }
 }

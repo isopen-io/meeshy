@@ -304,15 +304,21 @@ class PostCommentsViewModelTest {
     }
 
     @Test
-    fun `a second toggleReplies collapses the thread`() = runTest {
+    fun `collapsing an expanded thread falls back to its reply preview`() = runTest {
+        // Collapse no longer hides the thread outright — it drops back to the loaded preview
+        // (iOS keeps `repliesMap` populated after a collapse). "Hide replies" ⇒ show the taste.
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(comment("c1")))
         coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
-            NetworkResult.Success(listOf(reply("r1", "c1")))
+            NetworkResult.Success(listOf(reply("r1", "c1"), reply("r2", "c1"), reply("r3", "c1")))
         val vm = viewModel()
-        vm.toggleReplies("c1")
-        vm.toggleReplies("c1")
+        vm.toggleReplies("c1") // expand + load
+        vm.toggleReplies("c1") // collapse → preview
         vm.state.test {
-            assertThat(awaitItem().replyThreads).doesNotContainKey("c1")
+            val thread = awaitItem().replyThreads.getValue("c1")
+            assertThat(thread.isExpanded).isFalse()
+            assertThat(thread.isPreview).isTrue()
+            assertThat(thread.replies.map { it.id }).containsExactly("r1", "r2").inOrder()
+            assertThat(thread.hiddenReplyCount).isEqualTo(1)
         }
     }
 
@@ -568,5 +574,82 @@ class PostCommentsViewModelTest {
             assertThat(awaitItem().comments.map { it.id }).containsExactly("real", "a").inOrder()
         }
         coVerify(exactly = 1) { repository.addComment("p1", "Top", null, null) }
+    }
+
+    // --- Reply previews (auto-preload) ---
+
+    private fun withReplies(id: String, count: Int) = comment(id).copy(replyCount = count)
+
+    @Test
+    fun `previews auto-load for a comment that has replies without a tap`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(withReplies("c1", 3)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1"), reply("r2", "c1"), reply("r3", "c1")))
+        val vm = viewModel()
+        vm.state.test {
+            val thread = awaitItem().replyThreads.getValue("c1")
+            assertThat(thread.isPreview).isTrue()
+            assertThat(thread.isExpanded).isFalse()
+            assertThat(thread.replies.map { it.id }).containsExactly("r1", "r2").inOrder()
+            assertThat(thread.hiddenReplyCount).isEqualTo(1)
+        }
+        coVerify(exactly = 1) { repository.getCommentReplies("p1", "c1", null, any()) }
+    }
+
+    @Test
+    fun `no preview is loaded for a comment with zero replies`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(withReplies("c1", 0)))
+        val vm = viewModel()
+        vm.state.test {
+            assertThat(awaitItem().replyThreads).doesNotContainKey("c1")
+        }
+        coVerify(exactly = 0) { repository.getCommentReplies(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `preview preloading is capped to the first five comments with replies`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success((1..6).map { withReplies("c$it", 2) })
+        coEvery { repository.getCommentReplies("p1", any(), null, any()) } returns
+            NetworkResult.Success(listOf(reply("x", "p")))
+        val vm = viewModel()
+        vm.state.test {
+            val threads = awaitItem().replyThreads
+            assertThat(threads.keys).containsExactly("c1", "c2", "c3", "c4", "c5")
+        }
+        coVerify(exactly = 0) { repository.getCommentReplies("p1", "c6", null, any()) }
+    }
+
+    @Test
+    fun `expanding a previewed thread shows every reply without refetching`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(withReplies("c1", 3)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(reply("r1", "c1"), reply("r2", "c1"), reply("r3", "c1")))
+        val vm = viewModel()
+        vm.toggleReplies("c1") // preview already loaded → this only expands, no second fetch
+        vm.state.test {
+            val thread = awaitItem().replyThreads.getValue("c1")
+            assertThat(thread.isExpanded).isTrue()
+            assertThat(thread.replies.map { it.id }).containsExactly("r1", "r2", "r3").inOrder()
+        }
+        coVerify(exactly = 1) { repository.getCommentReplies("p1", "c1", null, any()) }
+    }
+
+    @Test
+    fun `a preloaded comment whose replies came back empty shows no preview rows`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(withReplies("c1", 2)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(emptyList())
+        val vm = viewModel()
+        vm.state.test {
+            val thread = awaitItem().replyThreads.getValue("c1")
+            assertThat(thread.isPreview).isFalse()
+            assertThat(thread.replies).isEmpty()
+            assertThat(thread.hiddenReplyCount).isEqualTo(0)
+        }
     }
 }

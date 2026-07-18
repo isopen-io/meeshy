@@ -212,10 +212,14 @@ private fun CommentReplyButton(comment: CommentPresentation, onReply: (String) -
 }
 
 /**
- * The 1-level reply thread beneath a top-level [comment]. Renders nothing when the
- * comment has no replies and is not expanded; otherwise a natural toggle affordance
- * ("View N replies" / "Hide replies") and, when expanded, the indented reply rows with
- * a discreet loading spinner while they fetch. Accent-coherent (Indigo) with the thread.
+ * The 1-level reply thread beneath a top-level [comment]. Three states:
+ * - **preview** (loaded but collapsed — auto-preloaded, or a collapsed thread falling back to its
+ *   taste): shows the first replies inline, then a "View all N replies" affordance when more exist;
+ * - **expanded**: the full indented reply list plus a "Hide replies" toggle;
+ * - **collapsed, not yet loaded**: just a "View N replies" toggle (a discreet spinner while it
+ *   fetches). Renders nothing when the comment has no replies, no preview, and isn't expanded.
+ * Accent-coherent (Indigo) with the thread; the preview means sub-comments are never hidden
+ * behind a mandatory tap.
  */
 @Composable
 private fun ReplyThread(
@@ -226,35 +230,56 @@ private fun ReplyThread(
     onReply: (String) -> Unit,
 ) {
     val isExpanded = thread?.isExpanded == true
-    if (comment.replyCount <= 0 && !isExpanded) return
+    val isPreview = thread?.isPreview == true
+    if (comment.replyCount <= 0 && !isExpanded && !isPreview) return
 
     Column(modifier = Modifier.padding(start = 40.dp, top = MeeshySpacing.xs)) {
-        val label = if (isExpanded) {
-            stringResource(R.string.post_comments_hide_replies)
-        } else {
-            pluralStringResource(R.plurals.post_comments_view_replies, comment.replyCount, comment.replyCount)
+        if (isPreview && thread != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md)) {
+                thread.replies.forEach { reply ->
+                    CommentRow(comment = reply, onToggleLike = onToggleLike, onReply = onReply)
+                }
+            }
+            Spacer(Modifier.height(MeeshySpacing.xs))
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-            modifier = Modifier
-                .clip(RoundedCornerShape(MeeshyRadius.pill))
-                .clickable { onToggleReplies(comment.id) }
-                .semantics { role = Role.Button; contentDescription = label }
-                .padding(vertical = 2.dp, horizontal = 2.dp),
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyPalette.Indigo500,
-            )
-            if (thread?.isLoading == true) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(14.dp),
-                    strokeWidth = 2.dp,
+
+        val showToggle = isExpanded || !isPreview || (thread?.hiddenReplyCount ?: 0) > 0
+        if (showToggle) {
+            val label = when {
+                isExpanded -> stringResource(R.string.post_comments_hide_replies)
+                isPreview -> pluralStringResource(
+                    R.plurals.post_comments_view_all_replies,
+                    comment.replyCount,
+                    comment.replyCount,
+                )
+                else -> pluralStringResource(
+                    R.plurals.post_comments_view_replies,
+                    comment.replyCount,
+                    comment.replyCount,
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MeeshyRadius.pill))
+                    .clickable { onToggleReplies(comment.id) }
+                    .semantics { role = Role.Button; contentDescription = label }
+                    .padding(vertical = 2.dp, horizontal = 2.dp),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MeeshyPalette.Indigo500,
                 )
+                if (thread?.isLoading == true) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MeeshyPalette.Indigo500,
+                    )
+                }
             }
         }
 
