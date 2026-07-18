@@ -15,6 +15,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
@@ -123,6 +124,25 @@ class PostCommentsViewModel @Inject constructor(
                 onCommentDeleted(event.commentId)
             }
         }
+        viewModelScope.launch {
+            socialSocket.commentReactionAdded.collect { event -> onCommentReaction(event, added = true) }
+        }
+        viewModelScope.launch {
+            socialSocket.commentReactionRemoved.collect { event -> onCommentReaction(event, added = false) }
+        }
+    }
+
+    /**
+     * A live `comment:reaction-added`/`comment:reaction-removed` heart for the open post. The viewer's
+     * own reaction (echoed from this or another device) syncs the heart; a third party's moves the count
+     * only. Non-heart emojis and events for any other post are ignored. The change flows through the
+     * existing [CommentProjection] (heart + displayed count), so no new UI is needed. Mirror of iOS
+     * `PostDetailViewModel` `commentReactionAdded`/`commentReactionRemoved` sinks.
+     */
+    private fun onCommentReaction(event: SocketCommentReactionUpdateData, added: Boolean) {
+        if (event.postId != postId || event.emoji != HEART_EMOJI) return
+        val isOwn = event.userId == sessionRepository.currentUser.value?.id
+        likes.update { it.reactionApplied(event.commentId, isOwn = isOwn, added = added) }
     }
 
     private fun onCommentAdded(comment: ApiPostComment) {

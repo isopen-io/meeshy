@@ -2,6 +2,30 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-18, `feed-comment-live-reactions`) — a live "own vs third-party" reaction splits into two disjoint state effects (liked flag vs count delta); mirror iOS's deliberate no-delta-on-own-echo to avoid double-count; the discriminating mutation is the delta *sign*
+Porting iOS `PostDetailViewModel.commentReactionAdded`/`commentReactionRemoved` (live heart on the open post). Four takeaways.
+**(1) The event is NOT `comment:liked` — the post-detail heart uses `comment:reaction-added`/`comment:reaction-removed`.**
+There is an *unrelated* `comment:liked` event (already wired as `SocialSocketManager.commentLiked` → `SocketCommentLikedData`,
+carrying an absolute `likeCount`) that no Android VM consumes; iOS post-detail ignores it and instead subscribes to the
+**reaction** events, whose payload is `{commentId, postId, userId, emoji, action, aggregation{emoji,count,userIds,hasCurrentUser}, timestamp}`
+(confirmed in gateway `CommentReactionHandler.ts` `updateEvent`). Don't reuse `commentLiked`; add the reaction event. **(2) A
+live reaction splits into TWO disjoint effects keyed on `event.userId == currentUser.id`:** the viewer's **own** reaction (echoed
+from this or another device) touches the **liked flag only** (`likedIds` ±id) and NOT the count; a **third party's** touches the
+**count only** (`deltas` ±1) and NOT the liked flag. This maps 1:1 onto the existing `CommentLikeState` (`likedIds`↔iOS
+`commentLikedIds`, `deltas`↔`commentLikeDelta`, `inFlightIds`↔`commentHeartInFlightIds`) — so `reactionApplied(id, isOwn, added)`
+extends the SSOT, no parallel state. **(3) The own case must NOT move the delta — mirror iOS's deliberate choice.** On the same
+device the optimistic `flip` already applied the delta (+1/−1); the own socket echo then only needs to confirm the liked flag
+(idempotent — `if (nextLiked == likedIds) return this`), because bumping the delta again would **double-count**. The cost is a
+rare multi-device staleness (an own reaction from device B lights the heart on device A but doesn't move A's count until refresh)
+— iOS accepts this to protect the common same-device path, and parity says mirror it (noted as a possible future "authoritative
+count from `aggregation.count`" improvement — the event *carries* the absolute count, so a later slice could override rather than
+accumulate). **(4) Filter on BOTH `postId` AND the heart emoji before touching state**, and resolve `isOwn` against
+`sessionRepository.currentUser.value?.id` (an unknown/blank user → third-party path, which is the safe count-only default). The
+discriminating mutation is the **delta sign** (`if (added) 1 else -1` → `-1 else 1`), which failed exactly the 4 count-direction
+tests (2 pure + 2 VM) while the liked-flag/own-idempotence tests stayed green — proof the count direction is genuinely observed.
+No new UI: the heart + count already flow through `CommentProjection` (`isLiked`/`displayCount`), so the slice is "real, not
+orphan" for free (same argument as the add/delete rooms).
+
 ## Lesson (2026-07-18, `feed-comment-realtime-delete`) — the container locale is POSIX, which breaks `:sdk-core` tests whose backtick names contain non-ASCII (em-dash); run gradle under `LANG=C.UTF-8`; a live delete is the mirror image of a live add (a `removed` reducer + a second collector), and route a delete by *finding the id* (top-level vs reply) not by trusting the payload to say which
 Porting iOS `PostDetailViewModel.commentDeleted` (live `comment:deleted` for the open post). Four takeaways.
 **(1) THE BIG ONE — a fresh container's default locale is `LC_CTYPE=POSIX` (ASCII), and that makes the Kotlin

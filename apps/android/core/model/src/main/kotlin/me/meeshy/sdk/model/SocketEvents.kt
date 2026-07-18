@@ -242,6 +242,31 @@ data class SocketCommentDeletedData(
     val commentCount: Int = 0,
 )
 
+/** Server-authoritative aggregation for one emoji on a comment (mirror of iOS `SocketCommentReactionAggregation`). */
+@Serializable
+data class SocketCommentReactionAggregation(
+    val emoji: String = "",
+    val count: Int = 0,
+    val userIds: List<String> = emptyList(),
+    val hasCurrentUser: Boolean = false,
+)
+
+/**
+ * `comment:reaction-added` / `comment:reaction-removed` — a user reacted to (or un-reacted from)
+ * a comment. Mirror of iOS `SocketCommentReactionUpdateEvent`. [aggregation] carries the absolute
+ * post-mutation state for the emoji; [timestamp] is left as the raw ISO string (optional).
+ */
+@Serializable
+data class SocketCommentReactionUpdateData(
+    val commentId: String,
+    val postId: String,
+    val userId: String,
+    val emoji: String,
+    val action: String = "",
+    val aggregation: SocketCommentReactionAggregation? = null,
+    val timestamp: String? = null,
+)
+
 @Serializable
 data class SocketStoryCreatedData(
     val story: ApiPost,

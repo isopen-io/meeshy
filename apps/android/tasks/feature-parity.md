@@ -1684,8 +1684,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `comment:deleted`** (slice `feed-comment-realtime-delete`, 2026-07-18 — a comment/reply deleted
       elsewhere vanishes from the open thread without a refresh: a top-level comment is removed and its
       reply thread purged, a reply is removed and its parent's "View N replies" count decremented;
-      mirror of iOS `PostDetailViewModel` `commentDeleted` sink) **done**; mentions, effects/blur,
-      per-comment language switcher, live `comment:liked` (emoji reaction-add/remove sync) still open
+      mirror of iOS `PostDetailViewModel` `commentDeleted` sink) + **live comment heart reactions**
+      (slice `feed-comment-live-reactions`, 2026-07-18 — a `comment:reaction-added`/`comment:reaction-removed`
+      heart on the open post syncs without a refresh: the viewer's own reaction lights/clears the heart, a
+      third party's moves the displayed count; mirror of iOS `PostDetailViewModel` `commentReactionAdded`/
+      `commentReactionRemoved` sinks) **done**; mentions, effects/blur, per-comment language switcher still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
@@ -1778,10 +1781,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +22 tests (1 `SocialSocketManagerTest` decode, 5 `CommentThreadStateTest` `removed`, 10
       `CommentRepliesStateTest` `parentOfReply`/`removedReply`/`removedThread`, 6 `PostCommentsViewModelTest`
       realtime-delete). Mutation-proven: flipping the reply-delete decrement `-1`→`+1` fails exactly the
-      count-decrement test. **Still open:** reply @mentions, live `comment:liked` (emoji reaction-add/remove
-      aggregation sync — iOS post-detail uses `comment:reaction-added/removed`, not `comment:liked`), the
-      authoritative post `commentCount` badge resync (owned by `PostDetailViewModel`, a separate VM), per-post
-      + comment cache-first.
+      count-decrement test. **Live comment heart reactions now landed** (slice `feed-comment-live-reactions`,
+      2026-07-18): new `SocketCommentReactionUpdateData`/`SocketCommentReactionAggregation` (mirror of iOS
+      `SocketCommentReactionUpdateEvent`) + `SocialSocketManager.commentReactionAdded`/`commentReactionRemoved`
+      flows (`comment:reaction-added`/`comment:reaction-removed`); `CommentLikeState.reactionApplied(id, isOwn,
+      added)` — an own reaction (echoed from this/another device) syncs the liked flag only and leaves the count
+      `deltas` untouched (the optimistic toggle already moved it on this device — touching it on the echo would
+      double-count), a third party's moves the count only (±1, clamped ≥0 at display), never the liked flag;
+      idempotent for the own case. `PostCommentsViewModel.onCommentReaction` (filtered to the route `postId` +
+      heart emoji, `isOwn = userId == currentUser.id`) folds it into the existing `CommentLikeState`, so the heart
+      + displayed count flow through the existing `CommentProjection` — no new UI. Mirror of iOS
+      `PostDetailViewModel` `commentReactionAdded`/`commentReactionRemoved` sinks. +15 tests (8
+      `CommentLikeStateTest` `reactionApplied`, 2 `SocialSocketManagerTest` decode, 6 `PostCommentsViewModelTest`
+      realtime). Mutation-proven: flipping the third-party delta sign (`+1`→`-1`) fails exactly 4 count-direction
+      tests (2 pure + 2 VM). **Still open:** reply @mentions, the authoritative post `commentCount` badge resync
+      (owned by `PostDetailViewModel`, a separate VM), per-post + comment cache-first.
       Prior comment thread: +41 tests (6 `CommentPrismeTest`, 9 `CommentProjectionTest`,
       12 `CommentThreadStateTest`, 14 `PostCommentsViewModelTest`).
       +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).

@@ -102,4 +102,41 @@ class SocialSocketManagerTest {
             expectNoEvents()
         }
     }
+
+    @Test
+    fun `comment reaction-added payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.commentReactionAdded.test {
+            handlers.getValue("comment:reaction-added").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"commentId":"c1","postId":"p1","userId":"u7","emoji":"❤️","action":"add",""" +
+                            """"aggregation":{"emoji":"❤️","count":3,"userIds":["u7"],"hasCurrentUser":true}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.commentId).isEqualTo("c1")
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.userId).isEqualTo("u7")
+            assertThat(event.emoji).isEqualTo("❤️")
+            assertThat(event.aggregation?.count).isEqualTo(3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `comment reaction-removed payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.commentReactionRemoved.test {
+            handlers.getValue("comment:reaction-removed").invoke(
+                arrayOf(JSONObject("""{"commentId":"c2","postId":"p1","userId":"u3","emoji":"❤️","action":"remove"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.commentId).isEqualTo("c2")
+            assertThat(event.userId).isEqualTo("u3")
+            assertThat(event.emoji).isEqualTo("❤️")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

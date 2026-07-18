@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentLikedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
+import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.model.SocketStoryCreatedData
 import me.meeshy.sdk.model.SocketStoryViewedData
 import me.meeshy.sdk.model.SocketStoryReactedData
@@ -38,6 +39,8 @@ class SocialSocketManager @Inject constructor(
     private val _commentAdded = buf<SocketCommentAddedData>()
     private val _commentLiked = buf<SocketCommentLikedData>()
     private val _commentDeleted = buf<SocketCommentDeletedData>()
+    private val _commentReactionAdded = buf<SocketCommentReactionUpdateData>()
+    private val _commentReactionRemoved = buf<SocketCommentReactionUpdateData>()
     private val _storyCreated = buf<SocketStoryCreatedData>()
     private val _storyViewed = buf<SocketStoryViewedData>()
     private val _storyReacted = buf<SocketStoryReactedData>()
@@ -51,6 +54,8 @@ class SocialSocketManager @Inject constructor(
     val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.asSharedFlow()
     val commentLiked: SharedFlow<SocketCommentLikedData> = _commentLiked.asSharedFlow()
     val commentDeleted: SharedFlow<SocketCommentDeletedData> = _commentDeleted.asSharedFlow()
+    val commentReactionAdded: SharedFlow<SocketCommentReactionUpdateData> = _commentReactionAdded.asSharedFlow()
+    val commentReactionRemoved: SharedFlow<SocketCommentReactionUpdateData> = _commentReactionRemoved.asSharedFlow()
     val storyCreated: SharedFlow<SocketStoryCreatedData> = _storyCreated.asSharedFlow()
     val storyViewed: SharedFlow<SocketStoryViewedData> = _storyViewed.asSharedFlow()
     val storyReacted: SharedFlow<SocketStoryReactedData> = _storyReacted.asSharedFlow()
@@ -65,6 +70,8 @@ class SocialSocketManager @Inject constructor(
         listen("comment:added", _commentAdded)
         listen("comment:liked", _commentLiked)
         listen("comment:deleted", _commentDeleted)
+        listen("comment:reaction-added", _commentReactionAdded)
+        listen("comment:reaction-removed", _commentReactionRemoved)
         listen("story:created", _storyCreated)
         listen("story:viewed", _storyViewed)
         listen("story:reacted", _storyReacted)
