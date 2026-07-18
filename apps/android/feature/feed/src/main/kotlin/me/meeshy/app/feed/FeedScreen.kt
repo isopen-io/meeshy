@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -62,6 +63,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -78,6 +80,7 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.bubble.LanguageChip
+import me.meeshy.ui.component.media.MediaCollage
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.theme.MeeshyPalette
@@ -448,12 +451,14 @@ private fun PostLanguageStripRow(
     }
 }
 
-private const val MAX_GRID_IMAGES = 4
+private val COLLAGE_HEIGHT = 260.dp
 
 @Composable
 private fun PostImageGrid(images: List<FeedPostImage>) {
     val shape = RoundedCornerShape(MeeshyRadius.md)
-    if (images.size == 1) {
+    val layout = MediaCollage.solve(images.size)
+    if (layout.isEmpty) return
+    if (layout.isSingle) {
         val image = images.first()
         AsyncImage(
             model = image.url,
@@ -467,45 +472,63 @@ private fun PostImageGrid(images: List<FeedPostImage>) {
         )
         return
     }
-    val visible = images.take(MAX_GRID_IMAGES)
-    val hiddenCount = images.size - visible.size
-    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-        visible.chunked(2).forEachIndexed { rowIndex, row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-                row.forEachIndexed { columnIndex, image ->
-                    val imageIndex = rowIndex * 2 + columnIndex
-                    val isLastCell = hiddenCount > 0 && imageIndex == visible.lastIndex
-                    Box(
+    Column(
+        modifier = Modifier.height(COLLAGE_HEIGHT),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        layout.rows.forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(row.heightWeight),
+            ) {
+                row.cells.forEach { cell ->
+                    CollageTile(
+                        image = images[cell.index],
+                        overflowCount = cell.overflowCount,
+                        shape = shape,
                         modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(1f)
-                            .clip(shape)
-                            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
-                    ) {
-                        AsyncImage(
-                            model = image.thumbnailUrl ?: image.url,
-                            contentDescription = stringResource(R.string.feed_image_description),
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        if (isLastCell) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.45f)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.feed_hidden_images, hiddenCount),
-                                    color = MeeshyPalette.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp,
-                                )
-                            }
-                        }
-                    }
+                            .weight(cell.widthWeight)
+                            .fillMaxHeight(),
+                    )
                 }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollageTile(
+    image: FeedPostImage,
+    overflowCount: Int,
+    shape: Shape,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
+    ) {
+        AsyncImage(
+            model = image.thumbnailUrl ?: image.url,
+            contentDescription = stringResource(R.string.feed_image_description),
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (overflowCount > 0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(R.string.feed_hidden_images, overflowCount),
+                    color = MeeshyPalette.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                )
             }
         }
     }
