@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 the **comment composer @-mention autocomplete** landed (slice `feed-comment-mention-autocomplete`,
+> feature-parity §Feed → "Threaded comments" — the composer autocomplete was the last-open item on the comment
+> composition line, after reply composition, auto-preview, the realtime rooms, mention *rendering* and the
+> per-comment language switcher). Until now the feed comment/reply composer was a plain text box (its draft lived
+> in Compose-local `remember`), while the **chat** composer has had a full @-mention autocomplete for weeks. iOS
+> shares one `MentionComposerController` across both surfaces; Android had the pure logic trapped in `:feature:chat`.
+> This slice reaches parity by **(1) promoting that pure state-machine to `:sdk-core` as a shared SSOT** — the
+> `MentionAutocompleteState` data class + the `MentionComposer` object (renamed from `ChatMention`) + its reducers
+> (`onTextChange`/`applyRemote`/`cleared`/`select`/`reset`) moved to `me.meeshy.sdk.mention` (git-detected rename,
+> `explicitApi()` `public`), and `:feature:chat` (`ChatViewModel`/`ChatScreen`/`ChatViewModelTest`) re-points to it
+> with **zero behaviour change** (its 201 VM tests + the 42 relocated `MentionComposerTest` cases stay green). **(2)
+> A new pure `:feature:feed` `CommentMentionRoster.build(comments, excludeUserId)`** — the feed analogue of chat's
+> `MentionRoster` — builds the candidate list from the thread's authors: blank handle dropped, current user
+> excluded, display name degrading to the handle, a repeated handle deduped case-insensitively (first author wins),
+> encounter order preserved. **(3) `PostCommentsViewModel`** now owns the composer draft + mention panel in a
+> `ComposerDraft` flow folded into the projection as a 4th chained `.combine(...)` (past the 5-arg cap), so a live
+> `comment:added` re-projection never tears the half-typed draft down; new `onDraftChange` (recomputes the panel
+> against the roster cached in `project()`) and `onMentionSelected` (the shared `select` reducer) intents, and
+> `submit()` now reads the folded draft and resets it on send. **(4) Compose** — `CommentComposer` becomes
+> controlled (`draft`/`onDraftChange`) with a `CommentMentionStrip` mirroring chat's `MentionSuggestionStrip`
+> (neutral input-assistance chrome, capped scroll, tap→insert). Local-roster only; the remote-directory merge
+> (`MentionSearch`) is deferred to a later slice to avoid a cross-feature DI coupling. **+17 tests** —
+> `CommentMentionRosterTest` (10: empty, map-fields, absent-author drop, blank-handle drop, handle trim,
+> absent/blank display-name→handle, self-exclude, case-insensitive dedup first-wins, encounter order) +
+> `PostCommentsViewModelTest` (+7: draft-stored-no-panel, at-fragment-opens-with-matches, bare-@-whole-roster,
+> roster-excludes-self, select-inserts+dismisses, submit-clears-draft+panel, realtime-landing-preserves-draft);
+> the 42 `MentionComposerTest` cases relocated intact. **Mutation check (RED proof):** neutralising the
+> `CommentMentionRoster` self-exclude **and** dedup guards failed **exactly** 3 tests (roster self-exclude, roster
+> dedup, VM roster self-exclude) — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8` —
+> wrapper 403s on the proxy):** `:sdk-core`+`:feature:feed`+`:feature:chat` `testDebugUnitTest` — `MentionComposerTest`
+> 42/42, `CommentMentionRosterTest` 10/10, `PostCommentsViewModelTest` 78/78, `ChatViewModelTest` 201/201;
+> `gradle :app:assembleDebug` → **BUILD SUCCESSFUL** (the promoted SSOT compiles across `:sdk-core`→`:feature:chat`/
+> `:feature:feed`, the controlled composer + strip compile). One unrelated flake — `:sdk-core
+> InterfaceLanguageStoreTest` (a DataStore timeout under parallel load) — **passes in isolation** and is not in the
+> diff. Reviewer **PASS** (diff `apps/android` only — 10 files incl. the 2 renames, no production logic elsewhere;
+> **SDK purity** — the stateless mention state-machine is a `:sdk-core` building block, the "who can be mentioned"
+> roster rule stays in `:feature:feed`; **SSOT** — one `MentionComposer` shared by chat + comments, no
+> re-implementation; **Instant-App** — autocomplete resolves synchronously from already-loaded thread authors, no
+> spinner; **UDF** — immutable `ComposerDraft`/`UiState`, pure transitions, draft held in the flow; **coherence** —
+> the comment strip mirrors chat's, neutral chrome reserves the accent for content, dismissal returns to the
+> composer; no coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — the comment composer's
+> **remote directory merge** (inject a `MentionSearch` so `@ab…` enriches the local roster from `/mentions`, the
+> feed counterpart of chat's `chat-mention-remote-merge`); OR the **statuses/moods bar** (§G) / the **unified post
+> composer** (Post/Status/Story tabs); OR pivot back to §Stories/§Calls per the build-order sequencing.
+
 > On 2026-07-18 the **fullscreen media gallery** landed (slice `feed-media-fullscreen-gallery`,
 > feature-parity §Feed → "Fullscreen media gallery" + "Image viewer"). The adaptive collage (previous
 > slice) rendered a post's media as tappable tiles but the tap was **dead** — no way to see an image at

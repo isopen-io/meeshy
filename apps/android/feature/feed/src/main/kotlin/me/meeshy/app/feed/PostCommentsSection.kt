@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -28,13 +31,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -47,11 +48,14 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.RichMessageText
@@ -125,8 +129,12 @@ internal fun PostCommentsSection(
 
         Spacer(Modifier.height(MeeshySpacing.md))
         CommentComposer(
+            draft = state.draft,
+            mention = state.mention,
             isSubmitting = state.isSubmitting,
             replyTarget = state.replyTarget,
+            onDraftChange = viewModel::onDraftChange,
+            onMentionSelected = viewModel::onMentionSelected,
             onSubmit = viewModel::submit,
             onCancelReply = viewModel::cancelReply,
         )
@@ -419,14 +427,18 @@ private fun CommentLikeButton(comment: CommentPresentation, onToggleLike: (Strin
 
 @Composable
 private fun CommentComposer(
+    draft: String,
+    mention: MentionAutocompleteState,
     isSubmitting: Boolean,
     replyTarget: ReplyTarget?,
-    onSubmit: (String) -> Unit,
+    onDraftChange: (String) -> Unit,
+    onMentionSelected: (MentionCandidate) -> Unit,
+    onSubmit: () -> Unit,
     onCancelReply: () -> Unit,
 ) {
-    var draft by remember { mutableStateOf("") }
     val isReply = replyTarget != null
     Column {
+        CommentMentionStrip(mention = mention, onSelect = onMentionSelected)
         if (isReply) {
             ReplyTargetChip(target = replyTarget, onCancelReply = onCancelReply)
             Spacer(Modifier.height(MeeshySpacing.xs))
@@ -434,7 +446,7 @@ private fun CommentComposer(
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = draft,
-                onValueChange = { draft = it },
+                onValueChange = onDraftChange,
                 placeholder = {
                     Text(
                         stringResource(
@@ -453,10 +465,7 @@ private fun CommentComposer(
                 )
             } else {
                 IconButton(
-                    onClick = {
-                        onSubmit(draft)
-                        draft = ""
-                    },
+                    onClick = onSubmit,
                     enabled = draft.isNotBlank(),
                 ) {
                     Icon(
@@ -464,6 +473,58 @@ private fun CommentComposer(
                         contentDescription = stringResource(R.string.post_comments_send),
                         tint = if (draft.isNotBlank()) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary,
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Autocomplete panel above the comment composer while an `@mention` is in progress — the feed
+ * mirror of the chat composer's `MentionSuggestionStrip`. Neutral input-assistance chrome (the
+ * accent tint stays on message-content surfaces); rows are capped and scroll, and a tap inserts
+ * the handle via [onSelect]. Hidden when no mention is active or nothing matches.
+ */
+@Composable
+private fun CommentMentionStrip(
+    mention: MentionAutocompleteState,
+    onSelect: (MentionCandidate) -> Unit,
+) {
+    if (!mention.isActive || mention.suggestions.isEmpty()) return
+    Surface(
+        color = MeeshyTheme.tokens.backgroundSecondary,
+        shape = RoundedCornerShape(MeeshyRadius.md),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
+            items(mention.suggestions, key = { it.id }) { candidate ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(candidate) }
+                        .semantics { role = Role.Button }
+                        .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+                ) {
+                    MeeshyAvatar(name = candidate.displayName, size = 32.dp)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = candidate.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MeeshyTheme.tokens.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "@${candidate.username}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MeeshyTheme.tokens.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
         }

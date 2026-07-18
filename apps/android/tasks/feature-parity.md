@@ -1721,8 +1721,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       language [content + active chip] via a per-comment-keyed override, tapping the active chip reverts to the
       Prisme default; a content-less/unknown tap is inert; mirror of the post-detail `DetailLanguageStrip`,
       keyed per comment rather than per post — the `isTranslated` flag was computed but never rendered before)
-      **done**;
-      mention **autocomplete** (composer suggestions), effects/blur still open
+      **done** + **comment composer @-mention autocomplete** (slice `feed-comment-mention-autocomplete`,
+      2026-07-18 — the comment/reply composer now offers the same @-mention autocomplete the chat composer has:
+      the pure mention state-machine was **promoted from `:feature:chat` to `:sdk-core`** as a shared SSOT
+      [`MentionComposer` + `MentionAutocompleteState` in `me.meeshy.sdk.mention`, renamed from `ChatMention`],
+      so both surfaces share one behaviour; the new pure `CommentMentionRoster` [`:feature:feed`] builds the
+      candidate list from the thread's authors [blank-handle drop, self-exclude, display-name→handle degrade,
+      case-insensitive dedup first-wins, encounter order]; `PostCommentsViewModel` now owns the composer draft
+      + mention panel in a folded flow [`onDraftChange`/`onMentionSelected`, `submit()` reads the draft and
+      resets] so a realtime comment landing never tears the half-typed draft down; `PostCommentsSection`'s
+      `CommentComposer` is now controlled with a `CommentMentionStrip` mirroring chat's `MentionSuggestionStrip`.
+      Local-roster only for now — the remote directory merge [`MentionSearch`] is a later slice) **done**;
+      effects/blur still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen

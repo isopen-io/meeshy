@@ -68,6 +68,12 @@ class PostCommentsViewModelTest {
         return PostCommentsViewModel(repository, session, socialSocket, config, handle)
     }
 
+    /** Type [text] into the composer, then send — the composer now owns its draft (autocomplete). */
+    private fun PostCommentsViewModel.compose(text: String) {
+        onDraftChange(text)
+        submit()
+    }
+
     @Test
     fun `loadInitial populates the comment list`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns
@@ -175,7 +181,7 @@ class PostCommentsViewModelTest {
         coEvery { repository.addComment("p1", "Bonjour", any(), any()) } returns
             NetworkResult.Success(comment("real", content = "Bonjour"))
         val vm = viewModel()
-        vm.submit("  Bonjour  ")
+        vm.compose("  Bonjour  ")
         vm.state.test {
             val s = awaitItem()
             assertThat(s.comments.first().id).isEqualTo("real")
@@ -191,7 +197,7 @@ class PostCommentsViewModelTest {
         coEvery { repository.addComment("p1", any(), any(), any()) } returns
             NetworkResult.Failure(ApiError(message = "nope"))
         val vm = viewModel()
-        vm.submit("hi")
+        vm.compose("hi")
         vm.state.test {
             val s = awaitItem()
             assertThat(s.comments.map { it.id }).containsExactly("a")
@@ -203,14 +209,14 @@ class PostCommentsViewModelTest {
     fun `submit is inert for blank content`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(emptyList())
         val vm = viewModel()
-        vm.submit("   ")
+        vm.compose("   ")
         coVerify(exactly = 0) { repository.addComment(any(), any(), any(), any()) }
     }
 
     @Test
     fun `submit is inert for a blank postId`() = runTest {
         val vm = viewModel(postId = null)
-        vm.submit("hi")
+        vm.compose("hi")
         coVerify(exactly = 0) { repository.addComment(any(), any(), any(), any()) }
     }
 
@@ -515,7 +521,7 @@ class PostCommentsViewModelTest {
             NetworkResult.Success(reply("real", "c1", content = "Salut"))
         val vm = viewModel()
         vm.beginReply("c1")
-        vm.submit("  Salut  ")
+        vm.compose("  Salut  ")
         vm.state.test {
             val s = awaitItem()
             assertThat(s.replyTarget).isNull()
@@ -533,7 +539,7 @@ class PostCommentsViewModelTest {
         coEvery { repository.addComment("p1", "Hey", "c1", any()) } coAnswers { gate.await() }
         val vm = viewModel()
         vm.beginReply("c1")
-        vm.submit("Hey")
+        vm.compose("Hey")
         vm.state.test {
             val pending = awaitItem().replyThreads.getValue("c1").replies.single()
             assertThat(pending.content).isEqualTo("Hey")
@@ -554,7 +560,7 @@ class PostCommentsViewModelTest {
             NetworkResult.Success(reply("real", "c1"))
         val vm = viewModel()
         vm.beginReply("c1")
-        vm.submit("Hey")
+        vm.compose("Hey")
         vm.state.test {
             assertThat(awaitItem().comments.single { it.id == "c1" }.replyCount).isEqualTo(3)
         }
@@ -569,7 +575,7 @@ class PostCommentsViewModelTest {
             NetworkResult.Failure(ApiError(message = "nope"))
         val vm = viewModel()
         vm.beginReply("c1")
-        vm.submit("Hey")
+        vm.compose("Hey")
         vm.state.test {
             val s = awaitItem()
             assertThat(s.replyThreads.getValue("c1").replies).isEmpty()
@@ -584,7 +590,7 @@ class PostCommentsViewModelTest {
         coEvery { repository.addComment("p1", "Top", null, any()) } returns
             NetworkResult.Success(comment("real", content = "Top"))
         val vm = viewModel()
-        vm.submit("Top")
+        vm.compose("Top")
         vm.state.test {
             assertThat(awaitItem().comments.map { it.id }).containsExactly("real", "a").inOrder()
         }
@@ -1015,5 +1021,99 @@ class PostCommentsViewModelTest {
         vm.onCommentFlagTap("ghost", "es")
 
         assertThat(contentOf(vm, "c1")).isEqualTo("Hello")
+    }
+
+    // --- Composer @-mention autocomplete ---
+
+    @Test
+    fun `onDraftChange stores plain text without opening the panel`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1")))
+        val vm = viewModel()
+        vm.onDraftChange("hello world")
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.draft).isEqualTo("hello world")
+            assertThat(s.mention.isActive).isFalse()
+        }
+    }
+
+    @Test
+    fun `typing an at-fragment opens the panel with matching thread authors`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice"), authored("c2", name = "Bob")))
+        val vm = viewModel()
+        vm.onDraftChange("hey @al")
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.mention.isActive).isTrue()
+            assertThat(s.mention.suggestions.map { it.username }).containsExactly("alice")
+        }
+    }
+
+    @Test
+    fun `a bare at shows the whole thread roster`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice"), authored("c2", name = "Bob")))
+        val vm = viewModel()
+        vm.onDraftChange("@")
+        vm.state.test {
+            assertThat(awaitItem().mention.suggestions.map { it.username }).containsExactly("alice", "bob").inOrder()
+        }
+    }
+
+    @Test
+    fun `the roster excludes the current user`() = runTest {
+        val mine = ApiPostComment(id = "c0", content = "hi", author = ApiAuthor(id = "me", username = "me", displayName = "Me"))
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(mine, authored("c1", name = "Alice")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me"))
+        vm.onDraftChange("@")
+        vm.state.test {
+            assertThat(awaitItem().mention.suggestions.map { it.username }).containsExactly("alice")
+        }
+    }
+
+    @Test
+    fun `selecting a candidate inserts the handle and dismisses the panel`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1", name = "Alice")))
+        val vm = viewModel()
+        vm.onDraftChange("hey @al")
+        val candidate = vm.state.value.mention.suggestions.single()
+        vm.onMentionSelected(candidate)
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.draft).isEqualTo("hey @alice ")
+            assertThat(s.mention.isActive).isFalse()
+        }
+    }
+
+    @Test
+    fun `submitting clears the draft and the mention panel`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1", name = "Alice")))
+        coEvery { repository.addComment("p1", "hi @alice", any(), any()) } returns
+            NetworkResult.Success(comment("real", content = "hi @alice"))
+        val vm = viewModel()
+        vm.onDraftChange("hi @al")
+        vm.onMentionSelected(vm.state.value.mention.suggestions.single())
+        vm.submit()
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.draft).isEmpty()
+            assertThat(s.mention.isActive).isFalse()
+        }
+        coVerify(exactly = 1) { repository.addComment("p1", "hi @alice", null, null) }
+    }
+
+    @Test
+    fun `a realtime comment landing preserves the half-typed draft`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns NetworkResult.Success(listOf(authored("c1", name = "Alice")))
+        val vm = viewModel()
+        vm.onDraftChange("hey @al")
+        commentAdded.tryEmit(SocketCommentAddedData(postId = "p1", comment = authored("c2", name = "Bob")))
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.draft).isEqualTo("hey @al")
+            assertThat(s.mention.isActive).isTrue()
+        }
     }
 }
