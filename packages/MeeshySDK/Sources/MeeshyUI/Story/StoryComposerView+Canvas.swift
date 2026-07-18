@@ -184,6 +184,17 @@ extension StoryComposerView {
             // element that does not exist on the new one — close it.
             viewModel.exitTextEditingMode()
         }
+        // Timeline sheet visibility is toggled from multiple entry points
+        // (ComposerControlsLayer tile tap, TopBar overflow menu item, ...).
+        // Rather than patching every call site individually (fragile — a new
+        // entry point could silently miss the reload), react centrally here
+        // whenever `isTimelineVisible` flips to true so the chrome lane always
+        // reflects the live opening/closing effects instead of a stale snapshot.
+        .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, visible in
+            if visible {
+                viewModel.loadCurrentSlideIntoTimeline()
+            }
+        }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
             publishTask?.cancel()
