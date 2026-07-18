@@ -2,6 +2,27 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-18, `feed-adaptive-collage-layout`) — branch from `origin/main`, NOT local `main`; and model an adaptive collage as a pure count→rows solver
+Two takeaways.
+**(1) ALWAYS branch from `origin/main`.** This run's slice branch was first cut with
+`git checkout -b claude/apps/android/<slice> main`, but the container's local `main` (cd93248) was
+**behind** `origin/main` (3f5267e) by the already-merged feed slices — so the branch was missing
+`CommentProjection`, the comment mention/language-switcher work, etc. Symptom that caught it: after
+branching, `find feature/feed/src/test -name '*.kt'` showed only **2** files (should be ~a dozen). Fix:
+`git rebase --onto origin/main main claude/apps/android/<slice>` (moves just the slice commit onto the
+real tip; clean because the slice touched files the newer commits didn't). **Prevention:** start every
+run with `git fetch origin main` and branch with `git checkout -b <slice> origin/main` (or verify
+`git rev-parse main` == `git rev-parse origin/main` first). The prompt's designated branch
+`claude/fervent-darwin-sw6hb1` *did* equal `origin/main`; local `main` did not.
+**(2) An adaptive media collage is a pure `count → CollageLayout` function.** Push every layout decision
+out of the Composable into `:sdk-ui` `MediaCollage.solve(count)` returning rows (each `heightWeight`) of
+cells (each `index` + `widthWeight` + `overflowCount`). Then the Compose grid is a thin reader:
+`layout.rows.forEach { Row(Modifier.weight(row.heightWeight)) { row.cells.forEach { CollageTile(Modifier.weight(cell.widthWeight)) } } }`.
+This makes all 5 shapes + the `+N` overflow branch JVM-testable with zero Robolectric. The solver knows
+ONLY the count (no singletons, no "when to render") → it's an SDK building block, reusable by the
+chat-bubble media grid (`visualMediaGrid`, 1–4+ collage) next. Fixed `COLLAGE_HEIGHT` (260.dp) for the
+grid; single-image keeps its real aspect ratio (`isSingle` flag).
+
 ## Lesson (2026-07-18, `feed-comment-language-switcher`) — reuse the ONE language-strip + flag-tap SSOT for any new translatable surface; a "computed but never rendered" flag is a parity gap hiding in plain sight; the strip only surfaces the viewer's CONFIGURED languages (so tests must use configured codes); and thread a 7th combine input past the 5-arg cap
 Bringing feed comments to the post's Prisme language-switcher parity. Four takeaways.
 **(1) The language strip + flag-tap have ONE SSOT — don't re-implement per surface.** `:sdk-ui`
