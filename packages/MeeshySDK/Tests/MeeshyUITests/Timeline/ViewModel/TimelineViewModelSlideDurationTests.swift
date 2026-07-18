@@ -132,4 +132,39 @@ final class TimelineViewModelSlideDurationTests: XCTestCase {
         XCTAssertEqual(sut.project.slideDuration, 6, accuracy: 0.01,
                        "Window is now 0+6=6 — falls back to the 6s static floor.")
     }
+
+    func test_dragClipMoved_midDrag_suppressesDurationDidAutoAdjust() async {
+        // project.slideDuration already updates live on every drag frame (via
+        // applyClipPosition -> recomputeSlideDuration), but the toast signal
+        // must stay nil while the gesture is still in flight so it doesn't
+        // spam 60 times/sec — it should only surface once, on endClipDrag().
+        let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 4, duration: 6)
+        let sut = await makeSUT(mediaObjects: [media]) // window = 4+6 = 10
+        XCTAssertEqual(sut.project.slideDuration, 10, accuracy: 0.01)
+
+        sut.beginClipDrag(clipId: "m1")
+        sut.dragClipMoved(rawTime: 0, snapCandidates: [])
+
+        XCTAssertEqual(sut.project.slideDuration, 6, accuracy: 0.01,
+                       "project.slideDuration updates live mid-drag...")
+        XCTAssertNil(sut.durationDidAutoAdjust,
+                     "...but the toast must stay suppressed while selection.activeDrag is still non-nil.")
+    }
+
+    func test_endClipDrag_firesDurationDidAutoAdjust_exactlyOnceWithFinalValue() async {
+        // Once the gesture ends, endClipDrag() clears activeDrag THEN calls
+        // recomputeSlideDuration() again — this is the single point where the
+        // suppressed toast fires, carrying the final (from, to) values.
+        let media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.78, startTime: 4, duration: 6)
+        let sut = await makeSUT(mediaObjects: [media]) // window = 4+6 = 10
+
+        sut.beginClipDrag(clipId: "m1")
+        sut.dragClipMoved(rawTime: 0, snapCandidates: [])
+        XCTAssertNil(sut.durationDidAutoAdjust, "Still suppressed mid-drag.")
+
+        sut.endClipDrag()
+
+        XCTAssertEqual(sut.durationDidAutoAdjust?.from ?? -1, 10, accuracy: 0.01)
+        XCTAssertEqual(sut.durationDidAutoAdjust?.to ?? -1, 6, accuracy: 0.01)
+    }
 }

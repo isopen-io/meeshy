@@ -85,6 +85,17 @@ public final class TimelineViewModel: ObservableObject {
     /// fires mid-clip-drag (only once the drag ends) — see
     /// `recomputeSlideDuration()`.
     @Published public var durationDidAutoAdjust: (from: Float, to: Float)?
+
+    /// Snapshot of `project.slideDuration` captured when the active clip drag
+    /// began. Mid-drag frames silently update `project.slideDuration` live (so
+    /// the ruler tracks the edit in real time — see `recomputeSlideDuration()`),
+    /// so by the time the drag ends the live value no longer reflects what was
+    /// on screen when the gesture started. This snapshot is what the
+    /// end-of-drag toast's `from` value is computed against. Cleared after use
+    /// (drag end) or on cancel — never leaks into an unrelated edit's toast
+    /// baseline.
+    private var slideDurationBeforeDrag: Float?
+
     @Published public internal(set) var showOfflineQueuedConfirmation: Bool = false
     /// True between `beginScrub()` and `endScrub()` — flipped by the playhead
     /// gesture so `scrub(to:)` can choose a sub-50ms tolerance during the drag
@@ -221,6 +232,7 @@ public final class TimelineViewModel: ObservableObject {
     public func beginClipDrag(clipId: String) {
         guard let original = clipStartTime(id: clipId) else { return }
         selection.beginDrag(clipId: clipId, originalStartTime: original)
+        slideDurationBeforeDrag = project.slideDuration
     }
 
     public func dragClipMoved(rawTime: Float, snapCandidates: [SnapCandidate]) {
@@ -313,6 +325,7 @@ public final class TimelineViewModel: ObservableObject {
         guard let drag = selection.activeDrag else { return }
         applyClipPosition(clipId: drag.clipId, newStartTime: drag.originalStartTime)
         selection.endDrag()
+        slideDurationBeforeDrag = nil
     }
 
     /// Returns the timeline-clip kind for a given object id.
@@ -377,14 +390,26 @@ public final class TimelineViewModel: ObservableObject {
             audioPlayerObjects: project.audioPlayerObjects,
             textObjects: project.textObjects
         ))
-        guard abs(auto - project.slideDuration) > 0.05 else { return }
-        let old = project.slideDuration
-        project.slideDuration = auto
-        if selection.activeDrag == nil {
-            durationDidAutoAdjust = (from: old, to: auto)
+        let liveValueBeforeThisCall = project.slideDuration
+        if abs(auto - liveValueBeforeThisCall) > 0.05 {
+            project.slideDuration = auto
+            if currentTime > auto {
+                scrub(to: auto, precise: true)
+            }
         }
-        if currentTime > auto {
-            scrub(to: auto, precise: true)
+
+        // Toast decision is separate from the live-value update above: during
+        // a drag, activeDrag is non-nil and we stop here (no toast). Once the
+        // drag has ended, compare the FINAL value against the baseline
+        // captured at drag start (not against `project.slideDuration`, which
+        // this function's own mid-drag calls already advanced) — that's the
+        // only way the true before/after values reach the toast.
+        guard selection.activeDrag == nil else { return }
+
+        let toastBaseline = slideDurationBeforeDrag ?? liveValueBeforeThisCall
+        slideDurationBeforeDrag = nil
+        if abs(auto - toastBaseline) > 0.05 {
+            durationDidAutoAdjust = (from: toastBaseline, to: auto)
         }
     }
 
