@@ -2318,18 +2318,30 @@ public struct TimelineProject: Codable, Sendable {
     public var textObjects: [StoryTextObject]
     public var clipTransitions: [StoryClipTransition]
 
+    /// Read-only snapshot of the slide's inter-slide entry/exit animation,
+    /// captured at `init(from:)` for the Timeline chrome lane to display.
+    /// NOT round-tripped by `apply(to:)` — editing opening/closing stays the
+    /// job of `OpeningEffectChips` above the canvas, same as before this
+    /// property existed. Purely informational here.
+    public var openingEffect: StoryTransitionEffect?
+    public var closingEffect: StoryTransitionEffect?
+
     public init(slideId: String,
                 slideDuration: Float,
                 mediaObjects: [StoryMediaObject] = [],
                 audioPlayerObjects: [StoryAudioPlayerObject] = [],
                 textObjects: [StoryTextObject] = [],
-                clipTransitions: [StoryClipTransition] = []) {
+                clipTransitions: [StoryClipTransition] = [],
+                openingEffect: StoryTransitionEffect? = nil,
+                closingEffect: StoryTransitionEffect? = nil) {
         self.slideId = slideId
         self.slideDuration = slideDuration
         self.mediaObjects = mediaObjects
         self.audioPlayerObjects = audioPlayerObjects
         self.textObjects = textObjects
         self.clipTransitions = clipTransitions
+        self.openingEffect = openingEffect
+        self.closingEffect = closingEffect
     }
 
     public init(from slide: StorySlide) {
@@ -2344,6 +2356,8 @@ public struct TimelineProject: Codable, Sendable {
         self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
         self.textObjects = slide.effects.textObjects
         self.clipTransitions = slide.effects.clipTransitions ?? []
+        self.openingEffect = slide.effects.opening
+        self.closingEffect = slide.effects.closing
     }
 
     public func apply(to slide: inout StorySlide) {
