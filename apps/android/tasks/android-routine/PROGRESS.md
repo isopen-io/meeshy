@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 **live comment heart reactions** landed (slice `feed-comment-live-reactions`, feature-parity §Feed →
+> "Threaded comments" — expand-threads + likes + reply-composition + auto-preview + realtime-room-`comment:added` +
+> realtime-room-`comment:deleted` + **live `comment:reaction-added`/`comment:reaction-removed` heart sync** now done;
+> @mentions/per-comment-language-switcher/per-comment-cache still open). iOS `PostDetailViewModel` subscribes to
+> `socialSocket.commentReactionAdded`/`commentReactionRemoved` filtered to `postId`: for the heart emoji, the viewer's
+> **own** reaction (`event.userId == currentUser.id`) inserts/removes `commentLikedIds` (the heart), a **third party's**
+> bumps `commentLikeDelta[commentId] ±1` (the count). Android's post-detail thread was live for add/delete but a heart
+> reacted **elsewhere** never surfaced — the count/heart stayed frozen until a manual refresh. **Ships the reaction room
+> on the established pattern (a new socket event, same shape as `commentAdded`/`commentDeleted`):**
+> **(1) `:core:model` + `:sdk-core`** — a new `SocketCommentReactionUpdateData(commentId, postId, userId, emoji, action,
+> aggregation?, timestamp?)` + `SocketCommentReactionAggregation(emoji, count, userIds, hasCurrentUser)` (line-for-line
+> mirror of iOS `SocketCommentReactionUpdateEvent`/`SocketCommentReactionAggregation`; the gateway `updateEvent` payload
+> confirmed in `CommentReactionHandler.ts`) + `commentReactionAdded`/`commentReactionRemoved` `SharedFlow`s +
+> `listen("comment:reaction-added"/"comment:reaction-removed", …)` (copy of the `commentAdded` wiring). **(2) `:feature:feed`
+> pure core** — `CommentLikeState.reactionApplied(id, isOwn, added)`: the **own** case syncs `likedIds` only (`added`→set,
+> else clear) and leaves `deltas` untouched (idempotent — an add on an already-liked id / a remove on an unliked id returns
+> **the same instance**), because on this device the optimistic toggle already moved the count and touching it on the echo
+> would double-count; the **third-party** case moves `deltas` only (`added`→+1 else −1), never `likedIds`, and a stray
+> negative is clamped ≥0 by the existing `displayCount`. **(3) `PostCommentsViewModel`** — `observeRealtime()` gains two
+> more `viewModelScope.launch` collecting the two flows; `onCommentReaction(event, added)` early-returns for another post
+> or a **non-heart** emoji, resolves `isOwn = userId == currentUser.value?.id`, and folds `likes.update {
+> it.reactionApplied(...) }`. **(4) Compose** — **no new UI**: the heart (`isLiked`) and the count (`displayCount`) flow
+> through the existing `CommentProjection`, so the room is real, not orphan code. **+15 tests** (`CommentLikeStateTest` +8
+> — own-add-lights/own-remove-clears/own-add-inert/own-remove-inert/third-party-add-bumps/third-party-remove-drops/
+> third-party-doesn't-resurrect-a-removed-like/third-party-remove-clamped; `SocialSocketManagerTest` +2 — reaction-added +
+> reaction-removed decode; `PostCommentsViewModelTest` +6 — own-lights-heart, third-party-bumps-count, third-party-un-reacts-
+> drops-count, other-post-ignored, non-heart-ignored, blank-route-ignored). **Mutation check (RED proof):** flipping the
+> third-party delta sign (`if (added) 1 else -1` → `-1 else 1`) failed **exactly** 4 count-direction tests (2 pure
+> `CommentLikeStateTest` + 2 `PostCommentsViewModelTest`) — behavioural, not tautological. **Gate (system Gradle 8.14.3
+> under `LANG=C.UTF-8` — the `:sdk-core` em-dash-in-test-name locale fix from NOTES):** `:core:model:testDebugUnitTest`,
+> `:feature:feed:testDebugUnitTest`, `:sdk-core:testDebugUnitTest`, `:app:assembleDebug` → all **BUILD SUCCESSFUL** (the two
+> new reaction collectors compile; the aggregate `assembleDebug` proves no cross-module breakage). Reviewer **PASS** (diff
+> `apps/android` only; **SDK purity** — `SocketCommentReactionUpdateData` + flows are stateless building blocks in
+> `:core:model`/`:sdk-core`, same grain as `commentAdded`/`commentDeleted`; pure `reactionApplied` + "when to apply a live
+> reaction" orchestration in `:feature:feed`; no Compose change; **SSOT** — one `CommentLikeState` reused, `deltas` layered
+> on the server base exactly like the optimistic path, `HEART_EMOJI` reused; **Instant-App** — live heart/count without a
+> refresh; **UDF** + immutable state; coherent — no dead end; no coverage floor lowered, no test weakened). **Next slice:**
+> §Feed still-open — comment **@mentions** (autocomplete + render, mirror of iOS), the authoritative post **`commentCount`
+> badge** resync (owned by `PostDetailViewModel`, a separate VM — a live add/delete/reaction should keep the header count
+> honest), per-post + comment **cache-first** (a disk cache mirroring iOS `CacheCoordinator.comments`), OR pivot to the
+> **statuses/moods bar** (§G) / the **unified post composer** (Post/Status/Story tabs).
+
 > On 2026-07-18 **live `comment:deleted`** landed (slice `feed-comment-realtime-delete`, feature-parity §Feed →
 > "Threaded comments" — expand-threads + likes + reply-composition + auto-preview + realtime-room-`comment:added` +
 > **realtime-room-`comment:deleted`** now done; @mentions/live-`comment:liked`(emoji reaction sync)/per-comment-cache

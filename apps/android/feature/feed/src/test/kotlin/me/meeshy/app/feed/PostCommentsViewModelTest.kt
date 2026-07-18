@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
+import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -44,6 +45,8 @@ class PostCommentsViewModelTest {
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
+    private val commentReactionAdded = MutableSharedFlow<SocketCommentReactionUpdateData>(extraBufferCapacity = 64)
+    private val commentReactionRemoved = MutableSharedFlow<SocketCommentReactionUpdateData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun comment(id: String, content: String = "hi", parentId: String? = null) =
@@ -58,6 +61,8 @@ class PostCommentsViewModelTest {
         every { session.currentUser } returns MutableStateFlow(user)
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
+        every { socialSocket.commentReactionAdded } returns commentReactionAdded
+        every { socialSocket.commentReactionRemoved } returns commentReactionRemoved
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
         return PostCommentsViewModel(repository, session, socialSocket, config, handle)
     }
@@ -816,5 +821,82 @@ class PostCommentsViewModelTest {
         val s = vm.state.value
         assertThat(s.replyThreads.getValue("c1").replies.map { it.id }).containsExactly("r2")
         assertThat(s.comments.single { it.id == "c1" }.replyCount).isEqualTo(1)
+    }
+
+    // --- Realtime room: live heart reactions for the open post ---
+
+    private fun reaction(commentId: String, userId: String, postId: String = "p1", emoji: String = "❤️") =
+        SocketCommentReactionUpdateData(commentId = commentId, postId = postId, userId = userId, emoji = emoji)
+
+    @Test
+    fun `an own live heart reaction lights the comment's heart`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a")))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me"))
+        assertThat(vm.state.value.comments.single { it.id == "a" }.isLiked).isFalse()
+
+        commentReactionAdded.tryEmit(reaction("a", userId = "me"))
+
+        assertThat(vm.state.value.comments.single { it.id == "a" }.isLiked).isTrue()
+    }
+
+    @Test
+    fun `a third-party live heart reaction bumps the comment's like count`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a").copy(likeCount = 4)))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me"))
+        assertThat(vm.state.value.comments.single { it.id == "a" }.likeCount).isEqualTo(4)
+
+        commentReactionAdded.tryEmit(reaction("a", userId = "stranger"))
+
+        val row = vm.state.value.comments.single { it.id == "a" }
+        assertThat(row.likeCount).isEqualTo(5)
+        assertThat(row.isLiked).isFalse()
+    }
+
+    @Test
+    fun `a third-party live heart un-reaction drops the comment's like count`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a").copy(likeCount = 4)))
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me"))
+        commentReactionAdded.tryEmit(reaction("a", userId = "stranger"))
+        assertThat(vm.state.value.comments.single { it.id == "a" }.likeCount).isEqualTo(5)
+
+        commentReactionRemoved.tryEmit(reaction("a", userId = "stranger"))
+
+        assertThat(vm.state.value.comments.single { it.id == "a" }.likeCount).isEqualTo(4)
+    }
+
+    @Test
+    fun `a live reaction for a different post is ignored`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a").copy(likeCount = 4)))
+        val vm = viewModel()
+
+        commentReactionAdded.tryEmit(reaction("a", userId = "stranger", postId = "other"))
+
+        assertThat(vm.state.value.comments.single { it.id == "a" }.likeCount).isEqualTo(4)
+    }
+
+    @Test
+    fun `a live non-heart reaction is ignored`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("a").copy(likeCount = 4)))
+        val vm = viewModel()
+
+        commentReactionAdded.tryEmit(reaction("a", userId = "stranger", emoji = "🔥"))
+
+        val row = vm.state.value.comments.single { it.id == "a" }
+        assertThat(row.likeCount).isEqualTo(4)
+        assertThat(row.isLiked).isFalse()
+    }
+
+    @Test
+    fun `a live reaction is ignored when the route postId is blank`() = runTest {
+        val vm = viewModel(postId = null)
+
+        commentReactionAdded.tryEmit(reaction("a", userId = "stranger"))
+
+        assertThat(vm.state.value.comments).isEmpty()
     }
 }

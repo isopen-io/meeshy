@@ -52,6 +52,25 @@ data class CommentLikeState(
         return flip(id).copy(inFlightIds = inFlightIds + id)
     }
 
+    /**
+     * Apply a live heart-reaction socket event for comment [id]. [isOwn] is whether the reacting
+     * user is the viewer: an own reaction only syncs the liked flag ([added] → set, else clear) and
+     * leaves the count [deltas] untouched, because on this device the optimistic toggle already moved
+     * the count and touching it on the echo would double-count (mirror of iOS `commentReactionAdded`/
+     * `commentReactionRemoved` sinks). A third-party reaction moves the count only ([added] → +1, else
+     * −1), never the viewer's liked flag; a stray negative is clamped by [displayCount]. Idempotent for
+     * the own case (an add on an already-liked id, or a remove on an unliked id, returns the same instance).
+     */
+    fun reactionApplied(id: String, isOwn: Boolean, added: Boolean): CommentLikeState {
+        if (isOwn) {
+            val nextLiked = if (added) likedIds + id else likedIds - id
+            if (nextLiked == likedIds) return this
+            return copy(likedIds = nextLiked)
+        }
+        val step = if (added) 1 else -1
+        return copy(deltas = deltas + (id to ((deltas[id] ?: 0) + step)))
+    }
+
     /** Confirm the in-flight toggle for [id] — keep the optimistic result, clear the in-flight mark. */
     fun settle(id: String): CommentLikeState =
         if (id in inFlightIds) copy(inFlightIds = inFlightIds - id) else this

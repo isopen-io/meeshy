@@ -134,4 +134,64 @@ class CommentLikeStateTest {
             .beginToggle("a")!!
         assertThat(unliked.displayCount("a", baseCount = 0)).isEqualTo(0)
     }
+
+    // --- Live heart-reaction socket events (mirror of iOS commentReactionAdded/Removed sinks) ---
+
+    @Test
+    fun `an own live reaction-added lights the heart without moving the count`() {
+        val s = CommentLikeState().reactionApplied("a", isOwn = true, added = true)
+        assertThat(s.isLiked("a")).isTrue()
+        // The count delta is untouched: on this device the optimistic toggle already moved it,
+        // and touching it on the echo would double-count.
+        assertThat(s.displayCount("a", baseCount = 3)).isEqualTo(3)
+    }
+
+    @Test
+    fun `an own live reaction-removed clears the heart without moving the count`() {
+        val liked = CommentLikeState().seeded(listOf(comment("a", reactions = listOf(heart))), heart)
+        val s = liked.reactionApplied("a", isOwn = true, added = false)
+        assertThat(s.isLiked("a")).isFalse()
+        assertThat(s.displayCount("a", baseCount = 3)).isEqualTo(3)
+    }
+
+    @Test
+    fun `an own reaction-added is inert when the comment is already liked`() {
+        val liked = CommentLikeState().seeded(listOf(comment("a", reactions = listOf(heart))), heart)
+        assertThat(liked.reactionApplied("a", isOwn = true, added = true)).isSameInstanceAs(liked)
+    }
+
+    @Test
+    fun `an own reaction-removed is inert when the comment is not liked`() {
+        val s = CommentLikeState()
+        assertThat(s.reactionApplied("a", isOwn = true, added = false)).isSameInstanceAs(s)
+    }
+
+    @Test
+    fun `a third-party reaction-added bumps the displayed count but not the liked flag`() {
+        val s = CommentLikeState().reactionApplied("a", isOwn = false, added = true)
+        assertThat(s.isLiked("a")).isFalse()
+        assertThat(s.displayCount("a", baseCount = 4)).isEqualTo(5)
+    }
+
+    @Test
+    fun `a third-party reaction-removed drops the displayed count`() {
+        val added = CommentLikeState().reactionApplied("a", isOwn = false, added = true)
+        val s = added.reactionApplied("a", isOwn = false, added = false)
+        assertThat(s.displayCount("a", baseCount = 4)).isEqualTo(4)
+    }
+
+    @Test
+    fun `a third-party reaction-added does not resurrect a like the viewer already removed`() {
+        // The viewer had liked 'a' (server-seeded) then unliked it optimistically — liked flag false.
+        val unliked = CommentLikeState().seeded(listOf(comment("a", reactions = listOf(heart))), heart)
+            .beginToggle("a")!!
+        val s = unliked.reactionApplied("a", isOwn = false, added = true)
+        assertThat(s.isLiked("a")).isFalse()
+    }
+
+    @Test
+    fun `a third-party reaction-removed on a fresh comment is clamped at the display`() {
+        val s = CommentLikeState().reactionApplied("a", isOwn = false, added = false)
+        assertThat(s.displayCount("a", baseCount = 0)).isEqualTo(0)
+    }
 }
