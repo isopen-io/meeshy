@@ -74,6 +74,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   state-of-the-art** au tarissement. Éviter les fichiers des PRs iOS ouvertes (#1966/#1968/#1970).
 >
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
+> **POINTEUR AUTORITAIRE iOS (mis à jour 145i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **145i (terminée, branche `claude/laughing-thompson-9mksck`, base `main` HEAD `0cf3b1c`)** :
+>   VoiceOver des **jauges du `ConversationDashboardView`** (`StatRing` ×7 + jauge de santé `ArcGauge`).
+>   Le fichier n'avait **aucun** modificateur d'accessibilité. Chaque bague posait 2 arrêts VoiceOver
+>   (valeur **abrégée** `"1,2k"` + libellé **en capitales**) ; la jauge de santé lisait un « 78 » nu.
+>   Correction : `.accessibilityElement(children: .ignore)` + `.accessibilityLabel(<libellé localisé>)`
+>   + `.accessibilityValue("\(valeur brute)")` → un élément « Messages : 1234 » / « Santé : 78 » par jauge.
+>   **Dynamic Type de ce fichier déjà soldé** (6 exceptions documentées : axes Swift Charts, valeurs en
+>   géométrie fixe). 1 fichier prod + 1 test source-level (`ConversationDashboardViewAccessibilityTests`,
+>   pattern `WebRTCVideoViewAccessibilityTests`, phase 1). 0 logique, 0 changement visuel, 0 clé i18n neuve.
+>   PR iOS ouvertes 140i–144i (#1966/#1968/#1970/#1972/#1974) — aucune ne touche `ConversationDashboardView`
+>   → **0 contention**. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `ConversationDashboardView` gauges VoiceOver SOLDÉ** : ne plus re-flagger `StatRing`/`ArcGauge`.
+> - **Base de départ 146i : `main` HEAD**. Note : 140i–144i sont des PR **en vol non mergées** (track
+>   parallèle) — vérifier leur état avant de reprendre leurs surfaces. Sinon axe VoiceOver sur composants
+>   data-viz/statistiques sans a11y, ou traîne Dynamic Type restante (`StoryViewerView+Content` ⚠️ i18n +
+>   `@State private` cross-file), ou **passe state-of-the-art** au tarissement.
+>
+> **POINTEUR HISTORIQUE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
 >   **2/2** `.font(.system(size:))` → `MeeshyFont.relative` (nom d'affichage 14 semibold ; pseudo 12) → les
