@@ -93,6 +93,25 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `comment added payload carries the authoritative comment count`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.commentAdded.test {
+            handlers.getValue("comment:added").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"postId":"p1","comment":{"id":"c7","content":"Salut"},"commentCount":12}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.comment.id).isEqualTo("c7")
+            assertThat(event.commentCount).isEqualTo(12)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a malformed reaction payload is ignored without emitting`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.storyReacted.test {

@@ -1688,7 +1688,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (slice `feed-comment-live-reactions`, 2026-07-18 — a `comment:reaction-added`/`comment:reaction-removed`
       heart on the open post syncs without a refresh: the viewer's own reaction lights/clears the heart, a
       third party's moves the displayed count; mirror of iOS `PostDetailViewModel` `commentReactionAdded`/
-      `commentReactionRemoved` sinks) **done**; mentions, effects/blur, per-comment language switcher still open
+      `commentReactionRemoved` sinks) + **live header comment-count badge** (slice
+      `feed-postdetail-commentcount-badge`, 2026-07-18 — the header badge, owned by the separate
+      `PostDetailViewModel`, now subscribes to the same room: a live `comment:added`/`comment:deleted` for the
+      open post resyncs the badge to the **server-authoritative** `commentCount` the event carries — clamped
+      ≥0 — healing any drift from the thread VM's optimistic arithmetic; a manual refresh drops the live
+      overlay for fresh server truth; other posts + a blank route are ignored; mirror of iOS
+      `PostDetailViewModel` `commentAdded`/`commentDeleted` `post.commentCount = data.commentCount`) **done**;
+      mentions, effects/blur, per-comment language switcher still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen

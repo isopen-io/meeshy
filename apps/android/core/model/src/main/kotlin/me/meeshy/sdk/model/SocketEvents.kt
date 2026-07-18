@@ -225,6 +225,7 @@ data class SocketPostBookmarkedData(
 data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
+    val commentCount: Int = 0,
 )
 
 @Serializable

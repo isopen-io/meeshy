@@ -2,6 +2,28 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-18, `feed-postdetail-commentcount-badge`) — the post-detail *thread* and its *header badge* are two DIFFERENT ViewModels; wiring the room into one leaves the other frozen; resync to the event's authoritative count, not local arithmetic; and don't `awaitItem()` across an `isRefreshing` overlay flip
+Porting iOS `PostDetailViewModel` `commentAdded`/`commentDeleted` `post.commentCount = data.commentCount`. Four takeaways.
+**(1) The header badge and the thread are owned by SEPARATE Android VMs.** iOS keeps both in one `PostDetailViewModel`, so its
+single `commentAdded`/`commentDeleted` sink updates the thread rows AND `post.commentCount` together. Android split them: the
+thread lives in `PostCommentsViewModel` (which got the realtime room over the last 3 slices), the post *projection* (header +
+counts) in `PostDetailViewModel`. So "the room is done" was only half true — the header badge never subscribed and froze on any
+comment added/deleted elsewhere. When porting a monolithic iOS VM, check whether the Android side split it and wire EACH shard.
+**(2) The added-event was missing a field the gateway ships.** `SocketCommentAddedData` had only `{postId, comment}` but the
+gateway `comment:added` payload carries `commentCount` too (`packages/shared/types/post.ts` `CommentAddedEventData.commentCount`;
+`SocketCommentDeletedData` already had it). Added `commentCount: Int = 0` — default 0 keeps every existing decode back-compatible.
+**(3) Resync to the event's ABSOLUTE count, never re-derive locally.** The payload count is server-authoritative, so overlaying it
+(`liveCommentCount: StateFlow<Int?>`, null → the fetched post's count, clamped ≥0) *heals* any drift from the thread VM's
+optimistic ±1 arithmetic — that's the whole point of iOS assigning rather than incrementing. Clear the overlay on a successful
+fetch so a manual refresh re-establishes fresh server truth over a stale live value. Discriminating mutations: dropping the
+`coerceAtLeast(0)` clamp + flipping the `postId ==` filter to `!=` killed exactly the 5 badge tests, decode test stayed green.
+**(4) Turbine + `UnconfinedTestDispatcher` gotcha — a refresh emits an intermediate `isRefreshing=true` state where a still-present
+live overlay reads the OLD count.** `refresh()` sets `isRefreshing` (emit #1, overlay still applied → old count), then the fetch
+success sets `rawPost` then clears the overlay (emit #2 → new count). A single `awaitItem()` after `refresh()` catches emit #1 and
+sees the *old* count. Fix: don't chase the intermediate — assert on the settled `vm.state.value` after `refresh()` returns (runTest
+with the unconfined dispatcher has drained all continuations by then), or loop `awaitItem()` until the terminal value. Same trap
+will bite any "live overlay + async refresh" VM.
+
 ## Lesson (2026-07-18, `feed-comment-live-reactions`) — a live "own vs third-party" reaction splits into two disjoint state effects (liked flag vs count delta); mirror iOS's deliberate no-delta-on-own-echo to avoid double-count; the discriminating mutation is the delta *sign*
 Porting iOS `PostDetailViewModel.commentReactionAdded`/`commentReactionRemoved` (live heart on the open post). Four takeaways.
 **(1) The event is NOT `comment:liked` — the post-detail heart uses `comment:reaction-added`/`comment:reaction-removed`.**
