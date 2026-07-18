@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 160i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **160i (en cours, branche `claude/laughing-thompson-bb8upc`, base `main` HEAD `5ce47f8`)** :
+>   Passe VoiceOver de `MessageForwardDetailView` (onglet « Transférer » du message detail sheet) —
+>   **mise à parité avec le sibling SSOT `ForwardPickerSheet`**. 7 correctifs a11y, **0 clé i18n neuve**
+>   (réutilisation stricte des clés déjà portées par `ForwardPickerSheet` : `common.clear-search`,
+>   `forward.send-a11y`, `forward.sent`, `forward.sending`) : glyphe recherche décoratif masqué ;
+>   bouton clear labellisé ; rangée conv `.combine` ; bouton envoi / état envoyé / spinner labellisés ;
+>   état vide `.combine` + glyphe masqué. **Dynamic Type déjà correct** (polices sémantiques ;
+>   `.system(size:28)` = illustration d'état vide, figée). 1 fichier, **+8 lignes**, 0 logique, 0 test neuf.
+>   Contention vérifiée : aucune PR iOS ouverte ne cible ce fichier (les PR MessageDetail ouvertes couvrent
+>   Views 144i / Reactions 155i / Sentiment 153i, pas Forward). Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `MessageForwardDetailView` VoiceOver SOLDÉ**. **Note dette** : `MessageDetailSheet.forwardTabContent`
+>   (copie inline legacy ~L1836) porte le même gap — à traiter ou supprimer en faveur de la vue extraite.
+> - **Base de départ 161i : `main` HEAD**. Siblings MessageDetail encore vierges (`sys=1 rel=0 a11y=0`) :
+>   `MessageEditsDetailView`, `MessageTranscriptionDetailView`. Sinon : traîne 2/1 `.system`
+>   (`AudioCarouselView`, `ReelAudioBackdrop`, `VideoLegacySupport`, `MessageEffectModifiers`…), ou
+>   **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).

@@ -25,6 +25,7 @@ struct MessageForwardDetailView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.subheadline)
                     .foregroundColor(theme.textMuted)
+                    .accessibilityHidden(true)
 
                 TextField(String(localized: "forward.search-placeholder", defaultValue: "Rechercher une conversation", bundle: .main), text: $forwardSearchText)
                     .font(.subheadline)
@@ -38,6 +39,7 @@ struct MessageForwardDetailView: View {
                             .font(.subheadline)
                             .foregroundColor(theme.textMuted)
                     }
+                    .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
             .padding(.horizontal, 10)
@@ -102,6 +104,7 @@ struct MessageForwardDetailView: View {
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -116,10 +119,12 @@ struct MessageForwardDetailView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.title2)
                 .foregroundColor(MeeshyColors.success)
+                .accessibilityLabel(String(localized: "forward.sent", defaultValue: "Transféré", bundle: .main))
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
                 .frame(width: 24, height: 24)
+                .accessibilityLabel(String(localized: "forward.sending", defaultValue: "Envoi en cours", bundle: .main))
         } else {
             Button {
                 forwardTo(conv)
@@ -128,6 +133,7 @@ struct MessageForwardDetailView: View {
                     .font(.title2)
                     .foregroundColor(Color(hex: contactColor))
             }
+            .accessibilityLabel(String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), conv.name))
             .disabled(sendingToId != nil)
         }
     }
@@ -137,12 +143,14 @@ struct MessageForwardDetailView: View {
             Image(systemName: icon)
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Network Actions
