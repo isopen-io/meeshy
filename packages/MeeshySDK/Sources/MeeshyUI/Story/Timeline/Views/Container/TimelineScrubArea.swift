@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shared scrub surface for the Quick & Pro timelines: ONE horizontal
+/// Scrub surface of the story timeline: ONE horizontal
 /// scroller hosting the ruler and the track lanes so ticks, clips and the
 /// playhead all share the same time→x mapping and scroll together, with the
 /// draggable `PlayheadView` overlaid across the full lane height.
