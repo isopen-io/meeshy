@@ -2746,6 +2746,36 @@ describe('MessageHandler — branch coverage boosters', () => {
     expect(calls[0][0].senderDisplayName).toBe('Alice Display');
   });
 
+  // SSOT resolveParticipantDisplayName: local displayName blank → account User.displayName
+  // is preferred over the raw username (was skipped by the old `?? user.username` coalescence).
+  it('handleMessageSend: _notifyAgent sender without local displayName uses account displayName (not username)', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+    const data = makeValidSendData();
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+
+    const agentSendEvent: any = jest.fn(async () => {});
+    const agentClient = { sendEvent: agentSendEvent };
+
+    // No local displayName, but the linked account has a real display name.
+    const messagingService = makeMockMessagingService({
+      sender: { id: 'p1', userId: 'user-1', displayName: null, username: 'alice_acct', avatar: null, user: { username: 'alice_acct', displayName: 'Alice Account' } },
+    });
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => []) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, agentClient, messagingService, prisma });
+    await handler.handleMessageSend(socket, data as any, cb);
+
+    const calls: any[] = agentSendEvent.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0][0].senderDisplayName).toBe('Alice Account');
+    expect(calls[0][0].senderUsername).toBe('alice_acct');
+  });
+
   // Cover branch 10 (line 160): validation.error fallback to 'Message invalide'
   it('handleMessageSend: message length error with no error message → fallback to Message invalide', async () => {
     mockValidateMessageLength.mockReturnValue({ isValid: false, error: undefined });

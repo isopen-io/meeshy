@@ -38,6 +38,7 @@ import {
   groupSocketsByLanguage,
 } from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
+import { resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import type {
   MessageRequest,
@@ -314,7 +315,7 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
+          senderDisplayName: resolveParticipantDisplayName(message.sender) ?? message.sender?.user?.username,
           senderUsername: message.sender?.user?.username,
           content: message.content,
           originalLanguage: message.originalLanguage,
@@ -510,7 +511,7 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
+          senderDisplayName: resolveParticipantDisplayName(message.sender) ?? message.sender?.user?.username,
           senderUsername: message.sender?.user?.username,
           content: message.content,
           originalLanguage: message.originalLanguage,
