@@ -596,6 +596,12 @@ private struct StoryUploadOverlay: View {
                 }
             }
         }
+        // While `.uploading`/`.publishing`, this overlay must NOT swallow the
+        // tap/long-press meant for the `MeeshyAvatar` underneath (which opens
+        // "Gérer mes stories" via `onManageStories`) — only `.failed` has a
+        // real gesture to offer here (retry). `allowsHitTesting(false)` makes
+        // the whole overlay click-through so both gestures fall to the avatar.
+        .allowsHitTesting(isFailed)
     }
 }
 

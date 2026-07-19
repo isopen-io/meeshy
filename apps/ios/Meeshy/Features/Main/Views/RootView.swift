@@ -1998,13 +1998,22 @@ private struct PendingSettingsBannerInline: View {
 
 /// Surfaces the count of stories waiting in `StoryPublishQueue` (typically
 /// composed offline). Mirrors `PendingSettingsBannerInline`. Self-hides
-/// when the queue drains. Inlined to avoid a project.pbxproj edit.
+/// when the queue drains, OR when the user swipes it away (up/left/right —
+/// user request 2026-07-19: it had no gesture at all before). A manual
+/// dismiss only holds for the CURRENT `pendingCount` — it reappears the
+/// moment the count changes (a new story queued, or one resolves), so a
+/// swipe never permanently hides a genuinely new situation.
 private struct PendingStoryBannerInline: View {
     @StateObject private var publishService = StoryPublishService.shared
+    @State private var dismissedAtCount: Int?
+
+    private var isVisible: Bool {
+        publishService.pendingCount > 0 && dismissedAtCount != publishService.pendingCount
+    }
 
     var body: some View {
         Group {
-            if publishService.pendingCount > 0 {
+            if isVisible {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "photo.stack")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
@@ -2037,8 +2046,23 @@ private struct PendingStoryBannerInline: View {
                 .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
+                .gesture(
+                    DragGesture(minimumDistance: 15)
+                        .onEnded { value in
+                            guard PendingBannerDismissResolver.shouldDismiss(translation: value.translation) else { return }
+                            dismiss()
+                        }
+                )
+                .accessibilityAction(named: Text(String(localized: "common.dismiss", defaultValue: "Masquer", bundle: .main))) {
+                    dismiss()
+                }
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: publishService.pendingCount)
+    }
+
+    private func dismiss() {
+        dismissedAtCount = publishService.pendingCount
+        HapticFeedback.light()
     }
 }

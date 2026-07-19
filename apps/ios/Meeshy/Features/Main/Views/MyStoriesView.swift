@@ -27,6 +27,11 @@ struct MyStoriesView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
+    /// Surfaces `activeUpload`'s failure history so it can be listed
+    /// alongside published stories with a direct retry — the tray badge
+    /// (`StoryUploadOverlay`) only shows the SINGLE current attempt.
+    @StateObject private var publishService = StoryPublishService.shared
+
     @State private var viewersStory: StoryItem?
     @State private var exportStory: StoryItem?
     @State private var deleteCandidate: StoryItem?
@@ -58,7 +63,11 @@ struct MyStoriesView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if stories.isEmpty {
+                if MyStoriesEmptyStateResolver.shouldShowEmptyState(
+                    hasStories: !stories.isEmpty,
+                    hasActiveUpload: viewModel.activeUpload != nil,
+                    hasFailedItems: !publishService.failedItems.isEmpty
+                ) {
                     EmptyStateView(
                         icon: "rectangle.stack.badge.xmark",
                         title: String(localized: "story.mine.empty.title", defaultValue: "Aucune story envoyée"),
@@ -67,6 +76,29 @@ struct MyStoriesView: View {
                     )
                 } else {
                     List {
+                        if let upload = viewModel.activeUpload {
+                            Section {
+                                ActiveUploadRow(
+                                    upload: upload,
+                                    onRetry: { viewModel.retryUpload() },
+                                    onCancel: { viewModel.cancelUpload() }
+                                )
+                                .listRowBackground(Color.clear)
+                            }
+                        }
+                        if !publishService.failedItems.isEmpty {
+                            Section(header: Text(String(localized: "story.mine.failed.header", defaultValue: "Échecs de publication"))) {
+                                ForEach(publishService.failedItems) { item in
+                                    FailedStoryRow(item: item, onRetry: { retryFailedItem(item) })
+                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                            Button(role: .destructive) { discardFailedItem(item) } label: {
+                                                Label(String(localized: "common.delete", defaultValue: "Supprimer"), systemImage: "trash")
+                                            }
+                                        }
+                                        .listRowBackground(Color.clear)
+                                }
+                            }
+                        }
                         ForEach(stories) { story in
                             MyStoryRow(
                                 story: story,
@@ -103,8 +135,13 @@ struct MyStoriesView: View {
                     Button {
                         onCreateStory()
                     } label: {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "plus")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 32, height: 32)
+                            .adaptiveGlassProminent(in: Circle(), tint: accentColor)
                     }
+                    .buttonStyle(.plain)
                     .accessibilityLabel(String(localized: "story.mine.create", defaultValue: "Créer une story"))
                 }
                 if !stories.isEmpty {
@@ -116,14 +153,29 @@ struct MyStoriesView: View {
                             Text(isSelecting
                                  ? String(localized: "common.cancel", defaultValue: "Annuler")
                                  : String(localized: "story.mine.select", defaultValue: "Sélectionner"))
+                                .font(MeeshyFont.relative(14, weight: .semibold))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .adaptiveGlass(in: Capsule())
                         }
+                        .buttonStyle(.plain)
                         .accessibilityLabel(isSelecting
                             ? String(localized: "story.mine.select.cancel", defaultValue: "Annuler la sélection")
                             : String(localized: "story.mine.select", defaultValue: "Sélectionner"))
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "common.ok", defaultValue: "OK")) { dismiss() }
+                    Button {
+                        dismiss()
+                    } label: {
+                        Text(String(localized: "common.ok", defaultValue: "OK"))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                            .adaptiveGlassProminent(in: Capsule(), tint: accentColor)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -198,11 +250,11 @@ struct MyStoriesView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(Capsule().fill(MeeshyColors.error))
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.error)
         }
+        .buttonStyle(.plain)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
         .accessibilityLabel(String(localized: "story.mine.delete.selected",
                                     defaultValue: "Supprimer (\(selectedStoryIDs.count))"))
         .accessibilityHint(String(localized: "story.mine.delete.selected.hint",
@@ -306,6 +358,25 @@ struct MyStoriesView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Failed publish history actions
+
+    private func retryFailedItem(_ item: StoryPublishQueueItem) {
+        Task {
+            await StoryPublishService.shared.retry(item)
+        }
+    }
+
+    /// Abandons the failed item AND clears its optimistic `pending_<uuid>`
+    /// placeholder from the tray/story groups — otherwise a discarded item
+    /// would leave a dead row behind that never resolves (StoryViewModel only
+    /// removes the placeholder on a SUCCESSFUL reconciliation).
+    private func discardFailedItem(_ item: StoryPublishQueueItem) {
+        Task {
+            await StoryPublishService.shared.discard(item)
+        }
+        viewModel.removeOptimisticStories(tempStoryId: item.tempStoryId)
     }
 }
 
@@ -459,5 +530,125 @@ private struct MyStoryRow: View {
             Text("\(value)").font(MeeshyFont.relative(13, weight: .medium))
         }
         .foregroundColor(.secondary)
+    }
+}
+
+// MARK: - Active Upload Row
+
+/// Same `StoryViewModel.StoryUploadState` the tray's `StoryUploadOverlay`
+/// renders as a circular badge, shown here as a list row so it sits directly
+/// above the failed-items history and the published stories — reachable even
+/// while the badge's own tap is mid-upload (see `StoryUploadOverlay`'s
+/// `.allowsHitTesting(isFailed)`).
+private struct ActiveUploadRow: View {
+    let upload: StoryViewModel.StoryUploadState
+    let onRetry: () -> Void
+    let onCancel: () -> Void
+
+    private var isFailed: Bool {
+        if case .failed = upload.phase { return true }
+        return false
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(uiImage: upload.thumbnailImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(isFailed ? MeeshyColors.error : MeeshyColors.indigo400, lineWidth: 1)
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(isFailed
+                     ? String(localized: "story.mine.upload.failedTitle", defaultValue: "Échec de la publication")
+                     : String(localized: "story.mine.upload.title", defaultValue: "Publication en cours…"))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+                if !isFailed {
+                    Text("\(Int(upload.progress * 100))%")
+                        .font(MeeshyFont.relative(12))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Spacer()
+
+            if isFailed {
+                Button(action: onRetry) {
+                    Label(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main), systemImage: "arrow.clockwise")
+                        .font(MeeshyFont.relative(13, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                Button(role: .destructive, action: onCancel) {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
+            } else {
+                ProgressView()
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Failed Story Row
+
+/// One entry in the permanently-failed publish history
+/// (`StoryPublishService.failedItems`). No rich thumbnail for the MVP — the
+/// local media backing `item` is preserved on disk (so retry can reuse it)
+/// but decoding a preview frame from it is a separate feature; a generic
+/// warning glyph keeps this scoped to the retry/discard behavior requested.
+private struct FailedStoryRow: View {
+    let item: StoryPublishQueueItem
+    let onRetry: () -> Void
+
+    private var relativeTime: String {
+        RelativeDateTimeFormatter().localizedString(for: item.createdAt, relativeTo: Date())
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(MeeshyColors.error.opacity(0.15))
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(MeeshyColors.error)
+            }
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(localized: "story.mine.failed.title", defaultValue: "Story non publiée"))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+                if let lastError = item.lastError {
+                    Text(lastError)
+                        .font(MeeshyFont.relative(12))
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+                Text(relativeTime)
+                    .font(MeeshyFont.relative(11))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Button(action: onRetry) {
+                Label(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main), systemImage: "arrow.clockwise")
+                    .font(MeeshyFont.relative(13, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            String(
+                localized: "story.mine.failed.a11y",
+                defaultValue: "Story non publiée, il y a \(relativeTime). \(item.lastError ?? "")"
+            )
+        )
     }
 }
