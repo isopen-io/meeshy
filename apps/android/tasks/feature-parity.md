@@ -1924,10 +1924,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `myStatus` surfaces only in FRIENDS mode. Cold open → skeleton then first page (no repo status cache yet, same
       as bookmarks — L1 cache is the tracked instant-app follow-up). +29 tests (11 `StatusBarListStateTest`,
       18 `StatusesViewModelTest`; mutation-proven: dropping the FRIENDS-only `myStatus` guard fails exactly the
-      discover test). **Still open:** the Compose `LazyRow` emoji-pill bar + thought-bubble popover + composer.
+      discover test).
+      **Compose `StatusBarView` landed** (slice `status-bar-compose`, 2026-07-19): the `:feature:feed` `LazyRow`
+      emoji-pill rail pinned atop `FeedScreen` (iOS `StatusBarView` parity). The pure `buildStatusBarCells` SSOT
+      decomposes `StatusesUiState` into ordered `StatusBarCell`s — leading own/`MyStatus` or `AddStatus`, an inline
+      `ErrorRetry` chip ONLY on a cold-empty failure (iOS `error != nil && statuses.isEmpty`), the other users'
+      `Pill`s (deduped against the own cell), then a trailing `LoadingMore` spinner; `statusPopoverModel` projects a
+      tapped entry into the thought-bubble popover (emoji + author + text + `via` + `MoodStatusExpiry` countdown).
+      The Composable is thin glue: `loadMoreIfNeeded` on pill scroll-in, `refresh` on the retry chip, own-status
+      accent via `hexColor(avatarColor)`, `Popup` popover. +13 tests (`StatusBarPresentationTest`: 9 cell-builder
+      branches + 4 popover, mutation-proven: dropping the cold-empty `isEmpty()` guard fails exactly the
+      error-not-surfaced-when-populated test). **Still open:** the status **composer** (emoji grid + visibility)
+      wiring `setStatus`/`clearStatus`, and the popover's republish/react actions.
 - [ ] Status composer / republish: emoji grid, 122-char text, visibility (public/friends/except/only)
 - [ ] Mood status create, react, delete; 21h expiry + viewer tracking
-- [ ] Status thought-bubble popover on avatar tap with republish action
+- [~] Status thought-bubble popover on avatar tap with republish action — **view landed** (slice
+      `status-bar-compose`, 2026-07-19): the `Popup` popover renders emoji + author + text + `via` + the
+      `MoodStatusExpiry` countdown on a pill tap (`statusPopoverModel`); the **republish/react** action is still
+      pending (belongs with the composer slice).
 - [ ] Friends / Discover status feeds
 
 ## H. Calls (audio / video)

@@ -2,6 +2,21 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-19, `status-bar-compose`) — decompose an iOS `body` HStack into a pure `List<Cell>` builder, keep the Composable glue
+The reviewer/TDD gate exempts `@Composable` glue but demands ≥90% branch coverage on logic. iOS `StatusBarView.body`
+packs the real decisions (add-vs-my leading cell, `error && statuses.isEmpty` retry chip, `statuses.filter { id !=
+myStatus.id }` dedup, trailing `isLoadingMore` spinner) inline in the view. Port them as a **pure
+`buildStatusBarCells(uiState): List<StatusBarCell>`** (a `sealed interface` of slots) + a `statusPopoverModel`
+projection — then the `LazyRow` is a trivial `when(cell)` render. 13 branch-swept tests cover the builder; the
+Composable carries zero untested logic. This is the same "push decisions out of the Composable" pattern as
+`FeedPostPresentation` — apply it to every screen whose iOS analogue has branchy `body` layout.
+- **Wiring a header above an existing `PullToRefreshBox`:** wrap the Scaffold content in a `Column { StatusBarView();
+  PullToRefreshBox(Modifier.weight(1f)) { … } }` and MOVE the `.padding(padding)` from the box to the Column. When
+  editing brace-heavy Compose, a mid-edit build can report `Expecting '}'` at EOF from the *transient* file state —
+  re-verify brace balance (`grep -c '{'` vs `'}'`) and recompile before diagnosing; the second edit fixed it.
+- **The bar owns its own `StatusesViewModel`** via `hiltViewModel()` inside `StatusBarView` — it is independent of
+  the feed's `FeedViewModel`, so the header is a drop-in with no plumbing through `FeedScreen`.
+
 ## Lesson (2026-07-19, `statuses-viewmodel`) — a HiltViewModel that needs a runtime "mode" uses a settable StateFlow, not assisted injection
 iOS constructs a separate `StatusViewModel` per `Mode` (friends/discover). A `@HiltViewModel` can't take an
 enum ctor param (Hilt has no default to provide → construction fails), and assisted injection is heavy for a
