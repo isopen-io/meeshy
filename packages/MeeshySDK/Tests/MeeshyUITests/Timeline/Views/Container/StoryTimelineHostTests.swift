@@ -4,7 +4,7 @@ import SwiftUI
 @testable import MeeshySDK
 
 @MainActor
-final class TimelineContainerSwitcherTests: XCTestCase {
+final class StoryTimelineHostTests: XCTestCase {
 
     private func makeViewModel() -> TimelineViewModel {
         let engine = MockStoryTimelineEngine()
@@ -17,14 +17,14 @@ final class TimelineContainerSwitcherTests: XCTestCase {
     }
 
     func test_init_doesNotCrash() {
-        let view = TimelineContainerSwitcher(viewModel: makeViewModel())
+        let view = StoryTimelineHost(viewModel: makeViewModel())
         _ = view.body
     }
 
     func test_body_withExportAction_doesNotCrash() {
         // Le bouton export (header, trailing) n'est rendu que quand l'hôte
         // fournit onExport — les hôtes hors composer gardent le header nu.
-        let view = TimelineContainerSwitcher(viewModel: makeViewModel(), onExport: {})
+        let view = StoryTimelineHost(viewModel: makeViewModel(), onExport: {})
         _ = view.body
     }
 

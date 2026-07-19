@@ -218,15 +218,15 @@ final class TimelineInspectorHostRoutingTests: XCTestCase {
     func test_quickView_bodyDoesNotCrash_forEachSelectionKind() {
         let clipVM = makeViewModel(project: projectWithClip(clipId: "clip-1"))
         clipVM.selectClip(id: "clip-1")
-        _ = QuickTimelineView(viewModel: clipVM).body
+        _ = StoryTimelineView(viewModel: clipVM).body
 
         let kfVM = makeViewModel(project: projectWithKeyframe(keyframeId: "kf-1"))
         kfVM.selectClip(id: "kf-1")
-        _ = QuickTimelineView(viewModel: kfVM).body
+        _ = StoryTimelineView(viewModel: kfVM).body
 
         let transVM = makeViewModel(project: projectWithTransition(transitionId: "trans-1"))
         transVM.selectClip(id: "trans-1")
-        _ = QuickTimelineView(viewModel: transVM).body
+        _ = StoryTimelineView(viewModel: transVM).body
     }
 
     /// Host view itself renders standalone for each branch.

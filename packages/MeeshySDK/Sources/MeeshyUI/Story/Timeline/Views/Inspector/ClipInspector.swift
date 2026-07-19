@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Per-clip editor surface. Stateless on its own — receives a snapshot, emits
-/// callbacks for every field commit. The owning container (`QuickTimelineView`
-/// or `ProTimelineView`) wires those callbacks back to `TimelineViewModel`.
+/// callbacks for every field commit. The owning container (`StoryTimelineView`
+/// `TimelineInspectorHost` wires those callbacks back to `TimelineViewModel`.
 ///
 /// ### State sync contract
 /// The inspector holds local `@State` for the slider/toggle values to keep

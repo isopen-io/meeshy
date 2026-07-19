@@ -20,7 +20,7 @@ import MeeshySDK
 // visual regression coverage and silently masks rendering bugs.
 
 @MainActor
-final class QuickTimelineViewSnapshotTests: XCTestCase {
+final class StoryTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Factories
 
@@ -59,7 +59,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
     func test_snapshot_quick_empty() {
         let vm = makeViewModel(project: TimelineProjectFactory.emptyProject())
         SnapshotHelpers.assertLightDarkSnapshot(
-            of: QuickTimelineView(viewModel: vm),
+            of: StoryTimelineView(viewModel: vm),
             named: "quick-empty"
         )
     }
@@ -69,7 +69,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
     func test_snapshot_quick_oneClip() {
         let vm = makeViewModel(project: projectWithSingleClip())
         SnapshotHelpers.assertLightDarkSnapshot(
-            of: QuickTimelineView(viewModel: vm),
+            of: StoryTimelineView(viewModel: vm),
             named: "quick-oneClip"
         )
     }
@@ -98,7 +98,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
         // does not exist on TimelineViewModel.
         vm.beginClipDrag(clipId: "clip-1")
         SnapshotHelpers.assertLightDarkSnapshot(
-            of: QuickTimelineView(viewModel: vm),
+            of: StoryTimelineView(viewModel: vm),
             named: "quick-dragging"
         )
     }
@@ -109,7 +109,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
         let vm = makeViewModel(project: projectWithSingleClip())
         vm.selectClip(id: "clip-1")
         SnapshotHelpers.assertLightDarkSnapshot(
-            of: QuickTimelineView(viewModel: vm),
+            of: StoryTimelineView(viewModel: vm),
             named: "quick-selected"
         )
     }
@@ -122,12 +122,12 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
 private struct QuickTimelineDeployedHarness: View {
     let viewModel: TimelineViewModel
     var body: some View {
-        QuickTimelineView(viewModel: viewModel)
+        StoryTimelineView(viewModel: viewModel)
             .onAppear {
                 // The deployed state is driven by an internal `@State` flag in
-                // QuickTimelineView. We surface a deterministic path by
+                // StoryTimelineView. We surface a deterministic path by
                 // simulating the swipe-up gesture via a notification bridge
-                // exposed for tests. If your build of QuickTimelineView does
+                // exposed for tests. If your build of StoryTimelineView does
                 // not yet emit `.timeline.quick.deployed`, post the equivalent
                 // public toggle (`viewModel.requestQuickDeployed = true`) and
                 // align the test before recording the baseline.

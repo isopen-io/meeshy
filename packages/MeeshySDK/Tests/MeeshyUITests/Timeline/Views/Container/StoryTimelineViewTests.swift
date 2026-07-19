@@ -4,7 +4,7 @@ import SwiftUI
 @testable import MeeshySDK
 
 @MainActor
-final class QuickTimelineViewTests: XCTestCase {
+final class StoryTimelineViewTests: XCTestCase {
 
     private func makeViewModel(project: TimelineProject = TimelineProjectFactory.projectWithVideoClip()) -> TimelineViewModel {
         let engine = MockStoryTimelineEngine()
@@ -16,23 +16,23 @@ final class QuickTimelineViewTests: XCTestCase {
     }
 
     func test_init_doesNotCrash() {
-        let view = QuickTimelineView(viewModel: makeViewModel())
+        let view = StoryTimelineView(viewModel: makeViewModel())
         _ = view.body
     }
 
     func test_compactVisibleTracks_neverExceedsThree() {
         let project = TimelineProjectFactory.projectWithVideoClip()
-        let resolved = QuickTimelineView.resolveCompactTracks(
+        let resolved = StoryTimelineView.resolveCompactTracks(
             project: project,
             selectedClipId: nil,
-            maxCount: QuickTimelineView.compactMaxTracks
+            maxCount: StoryTimelineView.compactMaxTracks
         )
-        XCTAssertLessThanOrEqual(resolved.count, QuickTimelineView.compactMaxTracks)
+        XCTAssertLessThanOrEqual(resolved.count, StoryTimelineView.compactMaxTracks)
     }
 
     func test_compactVisibleTracks_alwaysIncludesSelectedClipTrack() {
         let project = TimelineProjectFactory.projectWithVideoClip()
-        let resolved = QuickTimelineView.resolveCompactTracks(
+        let resolved = StoryTimelineView.resolveCompactTracks(
             project: project,
             selectedClipId: "clip-1",
             maxCount: 1
@@ -42,7 +42,7 @@ final class QuickTimelineViewTests: XCTestCase {
     }
 
     func test_emptyMediaTrack_isNotCounted() {
-        let resolved = QuickTimelineView.resolveCompactTracks(
+        let resolved = StoryTimelineView.resolveCompactTracks(
             project: TimelineProjectFactory.emptyProject(),
             selectedClipId: nil,
             maxCount: 3
@@ -58,20 +58,20 @@ final class QuickTimelineViewTests: XCTestCase {
             StoryAudioPlayerObject(id: "a-1", postMediaId: "a-1",
                                    volume: 1.0, startTime: 0, duration: 5)
         ]
-        let resolved = QuickTimelineView.resolveAllTracks(project: project)
+        let resolved = StoryTimelineView.resolveAllTracks(project: project)
         XCTAssertGreaterThanOrEqual(resolved.count, 2)
     }
 
     func test_deployedFooterCopy_isCollapseLabel() {
-        XCTAssertEqual(QuickTimelineView.footerLabelKey(isExpanded: true),
+        XCTAssertEqual(StoryTimelineView.footerLabelKey(isExpanded: true),
                        "story.timeline.toolbar.collapseTracks")
-        XCTAssertEqual(QuickTimelineView.footerLabelKey(isExpanded: false),
+        XCTAssertEqual(StoryTimelineView.footerLabelKey(isExpanded: false),
                        "story.timeline.toolbar.deployTracks")
     }
 
     func test_previewHeightFraction_compressesWhenExpanded() {
-        XCTAssertGreaterThan(QuickTimelineView.previewHeightFraction(isExpanded: false),
-                             QuickTimelineView.previewHeightFraction(isExpanded: true))
-        XCTAssertEqual(QuickTimelineView.previewHeightFraction(isExpanded: true), 0.30, accuracy: 0.001)
+        XCTAssertGreaterThan(StoryTimelineView.previewHeightFraction(isExpanded: false),
+                             StoryTimelineView.previewHeightFraction(isExpanded: true))
+        XCTAssertEqual(StoryTimelineView.previewHeightFraction(isExpanded: true), 0.30, accuracy: 0.001)
     }
 }

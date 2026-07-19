@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Placeholder shown in `ProTimelineView` (and `QuickTimelineView`) when the
+/// Placeholder shown in `StoryTimelineView` when the
 /// project has no clips on any track. Replaces the previous behaviour where
 /// the `CONTENT / AUDIO / EFFECTS` group headers rendered alone, leaving the
 /// editor looking broken on first open.
-public struct ProTimelineEmptyState: View, Equatable {
+public struct TimelineEmptyState: View, Equatable {
 
     public let isDark: Bool
 

@@ -4,7 +4,7 @@ import SwiftUI
 /// feature set — inspectors, snap, undo/redo). The former Simple/Pro switch
 /// is gone: one surface adapts instead of two competing containers. State
 /// (`selectedClipId`, `currentTime`, `zoomScale`) lives in `TimelineViewModel`.
-public struct TimelineContainerSwitcher: View {
+public struct StoryTimelineHost: View {
 
     @ObservedObject private var viewModel: TimelineViewModel
 
@@ -39,9 +39,9 @@ public struct TimelineContainerSwitcher: View {
     @ViewBuilder
     private var container: some View {
         if let previewSlot {
-            QuickTimelineView(viewModel: viewModel, previewSlot: previewSlot)
+            StoryTimelineView(viewModel: viewModel, previewSlot: previewSlot)
         } else {
-            QuickTimelineView(viewModel: viewModel)
+            StoryTimelineView(viewModel: viewModel)
         }
     }
 

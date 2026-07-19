@@ -96,7 +96,7 @@ final class TimelineInspectorHostIsMutedReactiveTests: XCTestCase {
     func test_transportBar_bodyRendersWhenMuted() {
         let (vm, _) = makeViewModel()
         vm.toggleMute()
-        let view = QuickTimelineView(viewModel: vm)
+        let view = StoryTimelineView(viewModel: vm)
         _ = view.body
     }
 
@@ -148,7 +148,7 @@ final class TimelineInspectorHostIsMutedReactiveTests: XCTestCase {
         let (vm, _) = makeViewModel(project: project)
         vm.toggleMute()
         vm.selectClip(id: "audio-1")
-        let view = QuickTimelineView(viewModel: vm)
+        let view = StoryTimelineView(viewModel: vm)
         _ = view.body
     }
 

@@ -5,7 +5,7 @@ import SwiftUI
 
 /// Mirror of `ProTimelineView_IsMutedReactiveTests` for the quick (portrait)
 /// variant. P0-C fixed the hardcoded `isMuted: false` in the pro timeline but
-/// left QuickTimelineView with the same bug at lines 226 (TransportBar) and
+/// left StoryTimelineView with the same bug at lines 226 (TransportBar) and
 /// 399 (AudioClipBar). The fix reuses `TimelineViewModel.isMuted` and the
 /// public static helper `TimelineInspectorHost.isMutedForAudio(globalMute:audio:)`,
 /// so this suite pins three contracts:
@@ -16,7 +16,7 @@ import SwiftUI
 ///      ProTimelineView semantics (`StoryAudioPlayerObject` has no per-clip
 ///      mute flag).
 @MainActor
-final class QuickTimelineViewIsMutedReactiveTests: XCTestCase {
+final class StoryTimelineViewIsMutedReactiveTests: XCTestCase {
 
     // MARK: - Fixtures
 
@@ -52,7 +52,7 @@ final class QuickTimelineViewIsMutedReactiveTests: XCTestCase {
 
     // MARK: - 1. TransportBar reflects viewModel.isMuted
 
-    /// QuickTimelineView's transport (line 226) must read `viewModel.isMuted`,
+    /// StoryTimelineView's transport (line 226) must read `viewModel.isMuted`,
     /// not a literal `false`. Drives the contract through the public VM
     /// surface so a literal can never silently slip back during refactors —
     /// the body-render smoke at the bottom guards the wiring itself.
@@ -62,7 +62,7 @@ final class QuickTimelineViewIsMutedReactiveTests: XCTestCase {
         vm.toggleMute()
         XCTAssertTrue(vm.isMuted)
 
-        let view = QuickTimelineView(viewModel: vm)
+        let view = StoryTimelineView(viewModel: vm)
         _ = view.body
     }
 
@@ -86,7 +86,7 @@ final class QuickTimelineViewIsMutedReactiveTests: XCTestCase {
         let (vm, _) = makeViewModel(project: project)
         vm.toggleMute()
         vm.selectClip(id: clip.id)
-        let view = QuickTimelineView(viewModel: vm)
+        let view = StoryTimelineView(viewModel: vm)
         _ = view.body
     }
 
@@ -110,7 +110,7 @@ final class QuickTimelineViewIsMutedReactiveTests: XCTestCase {
         )
         let (vm, _) = makeViewModel(project: project)
         vm.selectClip(id: clip.id)
-        let view = QuickTimelineView(viewModel: vm)
+        let view = StoryTimelineView(viewModel: vm)
         _ = view.body
     }
 }

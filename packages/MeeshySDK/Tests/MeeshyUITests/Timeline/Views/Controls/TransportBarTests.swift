@@ -81,7 +81,7 @@ final class TransportBarTests: XCTestCase {
     }
 
     func test_quickTimeline_transportShowsTimeReadout() {
-        XCTAssertTrue(QuickTimelineView.transportShowsTimeReadout,
+        XCTAssertTrue(StoryTimelineView.transportShowsTimeReadout,
                       "Le timer est affiché en Quick — retiré puis redemandé par le user (2026-07-11)")
     }
 

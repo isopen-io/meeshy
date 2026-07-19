@@ -1,9 +1,10 @@
 import SwiftUI
 import MeeshySDK
 
-/// Portrait-first composition of the timeline. Compact state shows max
+/// The single story timeline (ex-Quick design, carrying the full editing
+/// feature set since the Simple/Pro merge). Compact state shows max
 /// 3 tracks; deployed state (toggled by user) shows them all.
-public struct QuickTimelineView: View {
+public struct StoryTimelineView: View {
 
     public static let compactMaxTracks: Int = 3
 
@@ -211,7 +212,7 @@ public struct QuickTimelineView: View {
             scrubRegion
             footerTrigger
         }
-        // Parent TimelineContainerSwitcher already paints the sheet with
+        // Parent StoryTimelineHost already paints the sheet with
         // .ultraThinMaterial. We only add a faint indigo tint here so the
         // editor still feels branded in light mode where the material is
         // close to white.
@@ -270,7 +271,7 @@ public struct QuickTimelineView: View {
     private var scrubRegion: some View {
         let tracks: [CompactTrack] = isExpanded ? hoistedAllTracks : hoistedCompactTracks
         if tracks.isEmpty {
-            ProTimelineEmptyState(isDark: colorScheme == .dark)
+            TimelineEmptyState(isDark: colorScheme == .dark)
                 .padding(.vertical, 28)
                 .padding(.horizontal, 16)
         } else {
@@ -289,7 +290,7 @@ public struct QuickTimelineView: View {
                     currentTime: viewModel.currentTime,
                     isDark: colorScheme == .dark,
                     minLaneWidth: 200,
-                    rulerHeight: 22,               // unified with ProTimelineView
+                    rulerHeight: 22,
                     isPlaying: viewModel.isPlaying,
                     onZoomScaleChanged: { viewModel.zoomScale = $0 },
                     onSlideDurationChanged: { viewModel.setSlideDuration($0) },
