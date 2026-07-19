@@ -18,6 +18,9 @@ public struct TransportBar: View {
     /// nil = masqués — le Pro garde sa toolbar et passe nil ici.
     public let canUndo: Bool?
     public let canRedo: Bool?
+    /// Chip d'aimantation (fusion Simple+Pro : le snap vit dans le transport).
+    /// nil = masqué — les surfaces sans moteur de snap ne l'affichent pas.
+    public let isSnapEnabled: Bool?
     public let onPlayToggle: () -> Void
     public let onMuteToggle: () -> Void
     public let onZoomIn: () -> Void
@@ -25,25 +28,30 @@ public struct TransportBar: View {
     public let onZoomReset: () -> Void
     public let onUndo: () -> Void
     public let onRedo: () -> Void
+    public let onSnapToggle: () -> Void
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,
                 zoomScale: CGFloat, isMuted: Bool,
                 showsTimeReadout: Bool = true,
                 canUndo: Bool? = nil, canRedo: Bool? = nil,
+                isSnapEnabled: Bool? = nil,
                 onPlayToggle: @escaping () -> Void,
                 onMuteToggle: @escaping () -> Void,
                 onZoomIn: @escaping () -> Void,
                 onZoomOut: @escaping () -> Void,
                 onZoomReset: @escaping () -> Void,
                 onUndo: @escaping () -> Void = {},
-                onRedo: @escaping () -> Void = {}) {
+                onRedo: @escaping () -> Void = {},
+                onSnapToggle: @escaping () -> Void = {}) {
         self.isPlaying = isPlaying; self.currentTime = currentTime; self.duration = duration
         self.zoomScale = zoomScale; self.isMuted = isMuted
         self.showsTimeReadout = showsTimeReadout
         self.canUndo = canUndo; self.canRedo = canRedo
+        self.isSnapEnabled = isSnapEnabled
         self.onPlayToggle = onPlayToggle; self.onMuteToggle = onMuteToggle
         self.onZoomIn = onZoomIn; self.onZoomOut = onZoomOut; self.onZoomReset = onZoomReset
         self.onUndo = onUndo; self.onRedo = onRedo
+        self.onSnapToggle = onSnapToggle
     }
 
     public static func formatTime(seconds: Float) -> String {
@@ -91,6 +99,7 @@ public struct TransportBar: View {
             }
             Spacer(minLength: 4)
             undoRedoCluster
+            snapChip
             zoomCluster
             muteButton
         }
@@ -215,6 +224,37 @@ public struct TransportBar: View {
                                            defaultValue: "Rétablir", bundle: .module))
             }
             .foregroundStyle(MeeshyColors.indigo600)
+        }
+    }
+
+    /// Pill d'aimantation — reprend le langage visuel exact du snap toggle de
+    /// l'ancienne TimelineToolbar (point vert quand actif) pour que la fusion
+    /// Simple+Pro ne change pas la sémantique visuelle apprise.
+    @ViewBuilder
+    private var snapChip: some View {
+        if let isSnapEnabled {
+            Button(action: onSnapToggle) {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(isSnapEnabled ? MeeshyColors.success : Color.secondary.opacity(0.4))
+                        .frame(width: 8, height: 8)
+                    Text(String(localized: "story.timeline.toolbar.snap", bundle: .module))
+                        .font(.caption2.weight(.semibold))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(isSnapEnabled
+                                   ? MeeshyColors.indigo500.opacity(0.15)
+                                   : Color.gray.opacity(0.1))
+                )
+                .contentShape(Rectangle().inset(by: -6))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(isSnapEnabled ? MeeshyColors.indigo700 : Color.secondary)
+            .accessibilityLabel(isSnapEnabled
+                ? String(localized: "story.timeline.a11y.snap.on", bundle: .module)
+                : String(localized: "story.timeline.a11y.snap.off", bundle: .module))
         }
     }
 

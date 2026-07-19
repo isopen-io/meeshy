@@ -247,17 +247,19 @@ public struct QuickTimelineView: View {
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
             showsTimeReadout: Self.transportShowsTimeReadout,
-            // Quick n'a pas de TimelineToolbar — l'undo/redo vit dans le
-            // transport (le Pro passe nil et garde sa toolbar dédiée).
+            // Vue unifiée : undo/redo ET snap vivent dans le transport —
+            // il n'y a plus de TimelineToolbar dédiée.
             canUndo: viewModel.canUndo,
             canRedo: viewModel.canRedo,
+            isSnapEnabled: viewModel.isSnapEnabled,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
             onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
             onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
             onZoomReset: { viewModel.zoomScale = 1.0 },
             onUndo: { viewModel.undo() },
-            onRedo: { viewModel.redo() }
+            onRedo: { viewModel.redo() },
+            onSnapToggle: { viewModel.toggleSnap() }
         )
     }
 

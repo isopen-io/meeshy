@@ -95,4 +95,27 @@ final class TransportBarTests: XCTestCase {
         XCTAssertTrue(ProTimelineView.transportShowsTimeReadout,
                       "Le mode Pro conserve le readout temps courant / durée")
     }
+
+    // MARK: - Snap chip (fusion Simple+Pro : le snap vit dans le transport)
+
+    func test_init_withSnapParams_showsSnapChip() {
+        let bar = TransportBar(
+            isPlaying: false, currentTime: 0, duration: 10,
+            zoomScale: 1.0, isMuted: false,
+            isSnapEnabled: true,
+            onPlayToggle: {}, onMuteToggle: {},
+            onZoomIn: {}, onZoomOut: {}, onZoomReset: {},
+            onSnapToggle: {}
+        )
+        XCTAssertEqual(bar.isSnapEnabled, true)
+        _ = bar.body
+    }
+
+    func test_init_withoutSnapParams_hidesSnapChip() {
+        // nil = pas de chip — les surfaces sans moteur de snap (par ex. un
+        // futur éditeur média réutilisant TransportBar) ne l'affichent pas.
+        let bar = makeSUT()
+        XCTAssertNil(bar.isSnapEnabled)
+        _ = bar.body
+    }
 }
