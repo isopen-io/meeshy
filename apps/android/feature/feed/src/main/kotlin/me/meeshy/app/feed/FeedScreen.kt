@@ -149,7 +149,8 @@ fun FeedScreen(
                 .padding(padding),
         ) {
             // The mood-statuses rail sits pinned above the feed (iOS parity: StatusBarView
-            // at the top of FeedView). Its own StatusesViewModel owns the friends feed.
+            // at the top of FeedView), with a Friends/Discover feed toggle above it. Its own
+            // StatusesViewModel drives both feeds (one VM vs iOS's two instances).
             StatusBarView()
             PullToRefreshBox(
                 isRefreshing = state.isSyncing,

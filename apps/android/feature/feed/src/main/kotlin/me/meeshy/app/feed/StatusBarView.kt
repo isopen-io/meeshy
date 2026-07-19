@@ -31,9 +31,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +50,7 @@ import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.MoodStatusExpiry
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -72,13 +77,23 @@ fun StatusBarView(
     var selected by remember { mutableStateOf<StatusEntry?>(null) }
     var composerSeed by remember { mutableStateOf<StatusComposerDraft?>(null) }
 
-    LazyRow(
-        modifier = modifier.height(STATUS_BAR_HEIGHT),
-        contentPadding = PaddingValues(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        items(cells, key = ::cellKey) { cell ->
+    Column(modifier = modifier) {
+        StatusFeedModeToggle(
+            mode = state.mode,
+            onSelect = viewModel::setMode,
+            modifier = Modifier.padding(
+                start = MeeshySpacing.lg,
+                end = MeeshySpacing.lg,
+                top = MeeshySpacing.xs,
+            ),
+        )
+        LazyRow(
+            modifier = Modifier.height(STATUS_BAR_HEIGHT),
+            contentPadding = PaddingValues(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            items(cells, key = ::cellKey) { cell ->
             when (cell) {
                 is StatusBarCell.MyStatus -> StatusPill(
                     emoji = cell.entry.moodEmoji,
@@ -117,6 +132,7 @@ fun StatusBarView(
                     color = MeeshyPalette.Indigo300,
                     modifier = Modifier.size(20.dp),
                 )
+            }
             }
         }
     }
@@ -407,6 +423,68 @@ private fun RepublishAction(onClick: () -> Unit) {
             color = MeeshyPalette.Indigo400,
         )
     }
+}
+
+// MARK: - Feed-mode toggle
+
+/**
+ * The Friends/Discover status-feed toggle — a compact glass segmented control pinned
+ * above the emoji rail. All layout comes from the pure [statusFeedModeTabs] (order +
+ * selection SSOT); this Composable is glue: tapping a segment drives
+ * [StatusesViewModel.setMode], which serves the target feed's cached bar instantly and
+ * is a no-op on the already-active feed. iOS never surfaced this switch (two separate
+ * `StatusViewModel` instances); Android drives both feeds from one VM.
+ */
+@Composable
+private fun StatusFeedModeToggle(
+    mode: StatusFeedMode,
+    onSelect: (StatusFeedMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tabs = remember(mode) { statusFeedModeTabs(mode) }
+    val toggleLabel = stringResource(R.string.status_feed_toggle_label)
+    MeeshyGlassSurface(
+        shape = RoundedCornerShape(MeeshyRadius.pill),
+        modifier = modifier.semantics { contentDescription = toggleLabel },
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(2.dp),
+        ) {
+            tabs.forEach { tab ->
+                StatusFeedModeSegment(tab = tab, onClick = { onSelect(tab.mode) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusFeedModeSegment(tab: StatusFeedModeTab, onClick: () -> Unit) {
+    val label = statusFeedModeLabel(tab.mode)
+    val background = if (tab.isSelected) MeeshyPalette.Indigo500 else Color.Transparent
+    val foreground = if (tab.isSelected) MeeshyPalette.White else MeeshyTheme.tokens.textSecondary
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+        color = foreground,
+        modifier = Modifier
+            .clip(RoundedCornerShape(MeeshyRadius.pill))
+            .background(background)
+            .clickable(onClick = onClick)
+            .semantics {
+                this.role = Role.Tab
+                this.selected = tab.isSelected
+            }
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+    )
+}
+
+@Composable
+private fun statusFeedModeLabel(mode: StatusFeedMode): String = when (mode) {
+    StatusFeedMode.FRIENDS -> stringResource(R.string.status_feed_friends)
+    StatusFeedMode.DISCOVER -> stringResource(R.string.status_feed_discover)
 }
 
 @Composable

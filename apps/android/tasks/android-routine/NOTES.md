@@ -2548,3 +2548,23 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   owns accumulation over `getBookmarksPage`. Shipping the repo without a VM is consistent with how
   `status-mood-core` shipped the mapper without wiring — no orphan code, the public surface is the
   next slice's dependency.
+
+## status-feed-mode-toggle (2026-07-19)
+- **`git checkout <file>` destroys UNCOMMITTED edits — never use it to undo a mutation-proof `sed`.**
+  During the mutation check I `sed`-mutated a production file, ran the test, then `git checkout $f` to
+  restore — but the slice's real edits weren't committed yet, so checkout reverted them to HEAD and wiped
+  the whole slice's production code (the test file still referenced the now-missing symbol → next
+  mutation "failed to compile", a false signal). Correct pattern: `cp $f /tmp/x.bak` before the `sed`,
+  `cp /tmp/x.bak $f` after. Only `git checkout` a file whose slice edits are already committed.
+- **iOS gap = Android opportunity.** iOS's `StatusViewModel` takes `mode` at init and never switches
+  (RootView holds a single `.friends` instance; `.discover` exists in `StatusService` but no UI reaches
+  it). Android's one-VM `setMode` + this toggle is strictly better UX — worth doing even with "no iOS
+  parity to port", because the SDK/VM capability was already built and tested two slices earlier.
+- **Adding a row above a pinned bar:** wrapping `StatusBarView`'s `LazyRow` in a `Column` (toggle + rail)
+  needs no popover-offset change — the `Popup` anchor is emitted as a sibling AFTER the Column, so it
+  still resolves just below the bar (the bar is the Column's last child); `STATUS_BAR_HEIGHT` top-pad
+  stays correct.
+- **Known flake:** `:sdk-core` `MediaDownloadPreferencesStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction`
+  can hit its 15s `withTimeout` under a full parallel `assembleDebug testDebugUnitTest` run (real DataStore file I/O
+  starved by concurrent modules). Passes deterministically in isolation and on a warm re-run of the full gate. Not
+  caused by feed/status slices. If it reddens a gate, re-run — do NOT "fix" by lowering the timeout.
