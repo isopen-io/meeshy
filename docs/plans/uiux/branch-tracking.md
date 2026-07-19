@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 165i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **165i (terminée, branche `claude/laughing-thompson-2v80lm`, base `main` HEAD `efedb69e4`)** :
+>   **Localisation** des 2 chaînes VoiceOver de `SyncPill` (pastille rotative de synchronisation montée
+>   par `ConnectionBanner`). Défaut **manqué par 135i** (qui n'a fait que le Dynamic Type et a conclu à tort
+>   « a11y déjà conforme ») : `accessibilityHint` et `accessibilityText` (cas ≥ 2 signaux) étaient des
+>   **littéraux français codés en dur**, rendus en FR pour tous les locales sous VoiceOver. Corrections
+>   purement substitutives → `String(localized: "sync.a11y.tap_hint", …)` et `String(format:
+>   String(localized: "sync.a11y.active_signal", defaultValue: "%1$d signaux. Actif : %2$@.", …), …)`
+>   (format **positionnel** RTL-safe, conforme au codebase). 1 fichier, 0 logique, 0 changement visuel,
+>   0 test neuf, 2 clés i18n `.a11y` (défaut inline, extraction Xcode). Build iOS impossible en local Linux
+>   → validation CI macOS. Gate = CI `iOS Tests`. PR à venir (GitHub MCP indisponible en run headless).
+> - **⚠️ `SyncPill` i18n + Dynamic Type SOLDÉ** (135i Dynamic Type + 165i i18n VoiceOver) : ne plus reprendre.
+> - **Base de départ 166i : `main` HEAD**. Surfaces jamais analysées repérées (`ConnectionBanner` = pur
+>   orchestrateur, délègue à `SyncPill` → rien à faire ; `CallSignalGlyph`/`CallTypeBadgeView`/`LinkPreviewCard`
+>   déjà conformes). Vérifier via cross-ref `docs/analyses/uiux/` avant de choisir. Reste
+>   `StoryViewerView+Content` (⚠️ i18n + `@State private` cross-file) ; sinon traîne `.system`/a11y résiduelle
+>   ou **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).
