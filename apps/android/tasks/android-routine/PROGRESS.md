@@ -1,5 +1,37 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **Compose `StatusBarView`** landed (slice `status-bar-compose`, feature-parity §G →
+> "Statuses/moods bar" — the emoji-pill rail the previous three §G slices built toward, the Android port of iOS
+> `StatusBarView`). §G already had the model+laws (`status-mood-core`), the SDK transport (`status-repository`),
+> and the UDF ViewModel (`statuses-viewmodel`); this slice ships the **UI** that makes the bar real, pinned atop
+> `FeedScreen`. **(1) pure `buildStatusBarCells(StatusesUiState): List<StatusBarCell>`** (`:feature:feed`) — the
+> SSOT that decomposes the screen state into ordered render slots, mirroring iOS `StatusBarView.body`'s `HStack`:
+> a leading `MyStatus` (own status) or `AddStatus` cell, an inline `ErrorRetry` chip **only** on a cold-empty
+> failure (`errorMessage != null && statuses.isEmpty()` — a background-refresh failure over a populated bar never
+> surfaces, iOS parity), the other users' `Pill`s (deduped against the own cell by id), then a trailing
+> `LoadingMore` spinner. **(2) `statusPopoverModel(entry, nowMillis)`** — projects a tapped entry into the
+> thought-bubble popover model (emoji + author + optional text/`via` + the `MoodStatusExpiry.remaining` countdown,
+> localisation left to Compose). **(3) `StatusBarView` Composable** — thin glue over the two pure functions: a
+> `LazyRow` of glass pills, `loadMoreIfNeeded` fired as pills scroll in, `refresh` on the retry chip, own-status
+> accent tint via `hexColor(avatarColor)`, a `Popup` popover on tap; wired into `FeedScreen` as a pinned header
+> above the `PullToRefreshBox` (its own `StatusesViewModel` via `hiltViewModel`). The add-cell raises `onAddStatus`
+> (currently inert — the composer is the next slice). **+13 tests** — `StatusBarPresentationTest` (9 cell-builder
+> branches: empty→add, own→my-status, own-not-repeated, no-own→all-pills, error-empty→retry, error-populated→no-retry,
+> no-error→no-retry, loading-more→trailing, not-loading→no-trailing; 4 popover: field-map, minutes-remaining,
+> expired, null-time). **Mutation check (RED proof):** dropping the cold-empty `&& statuses.isEmpty()` guard failed
+> **exactly** `an error is not surfaced once the bar already has statuses` — behavioural, not tautological. **Gate
+> (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:feature:feed:testDebugUnitTest` **455/455** (was
+> 442 + 13), `:app:assembleDebug` → **BUILD SUCCESSFUL** (the pinned bar + popover compile app-wide, Hilt binds the
+> bar's `StatusesViewModel`). Reviewer **PASS** (diff `apps/android` only — 3 new + 2 modified feed files + tracking;
+> **SDK purity** — the cell decomposition/popover projection is product presentation in `:feature:feed`, over the
+> `:sdk-core` `StatusRepository`/`orderedForBar` + `:core:model` `MoodStatusExpiry` building blocks; **SSOT** — one
+> cell-builder law, countdown via the existing expiry law, colour via `hexColor`/`DynamicColorGenerator`, no
+> re-implementation; **UDF** — Composable reads the VM's immutable `StateFlow<UiState>`, all decisions pushed into
+> pure functions; **Instant-App** — the bar always shows the leading affordance, no blocking spinner; **coherence** —
+> glass pills + Indigo accent, natural tap→popover gesture, no dead-end [add-cell inert pending its composer slice];
+> no coverage floor lowered, no test weakened). **Next slice:** §G continues — the status **composer** (emoji grid +
+> 122-char text + visibility) wiring `setStatus`/`clearStatus`, then the popover's react/republish action.
+
 > On 2026-07-19 the **`StatusesViewModel`** landed (slice `statuses-viewmodel`, feature-parity §G →
 > "Statuses/moods bar" — the product ViewModel the bar Compose consumes, the Android analogue of iOS
 > `StatusViewModel`). §G previously had the pure model+laws (`status-mood-core`) and the SDK transport
@@ -5609,6 +5641,35 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-19 — slice `status-bar-compose` ✅ impl + local gate green + reviewer PASS → PR + merge
+- **Opened with rule #0:** no open PR on the android track (`claude/apps/android/*`) — the 20 open PRs were the
+  parallel iOS a11y/i18n swarm. `main` carried #2050 (`statuses-viewmodel`, `7c65395`) as its latest android
+  commit. Branched `claude/apps/android/status-bar-compose` off latest `origin/main`.
+- **Slice:** the Compose **`StatusBarView`** — the emoji-pill mood-statuses rail (§G "Statuses/moods bar"), the UI
+  the previous three §G slices (`status-mood-core` model, `status-repository` transport, `statuses-viewmodel` VM)
+  built toward. iOS port of `StatusBarView`, pinned atop `FeedScreen`.
+- **TDD red→green:**
+  - RED: `StatusBarPresentationTest` (13) referenced a non-existent `buildStatusBarCells` / `StatusBarCell` /
+    `statusPopoverModel`.
+  - GREEN: pure `:feature:feed` `StatusBarPresentation.kt` — `buildStatusBarCells(StatusesUiState)` → ordered
+    `StatusBarCell` list (leading own/add, cold-empty-only `ErrorRetry`, other pills deduped vs own, trailing
+    `LoadingMore`) + `statusPopoverModel(entry, now)` (fields + `MoodStatusExpiry.remaining` countdown). Thin
+    `StatusBarView` Composable (`LazyRow` glass pills, `loadMoreIfNeeded`/`refresh`/`Popup` popover), wired into
+    `FeedScreen` as a pinned header with its own `hiltViewModel<StatusesViewModel>`.
+- **Mutation (RED proof):** dropping the cold-empty `&& statuses.isEmpty()` guard failed **exactly** 1 test
+  (`an error is not surfaced once the bar already has statuses`) — behavioural, not tautological.
+- **Gate (system Gradle 8.14.3 `/opt/gradle`, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+  `:feature:feed:testDebugUnitTest` green (455/455, +13); `:app:assembleDebug` → **BUILD SUCCESSFUL in 2m58s**
+  (the pinned bar + popover compile app-wide, Hilt binds the bar's `StatusesViewModel`).
+- **Reviewer: PASS.** Diff `apps/android` only (3 new: `StatusBarPresentation.kt`, `StatusBarView.kt`, its test;
+  2 modified: `FeedScreen.kt` wiring + `strings.xml`; + tracking docs); SDK purity (presentation in `:feature:feed`
+  over `:sdk-core`/`:core:model` building blocks); SSOT (one cell-builder law; countdown via the expiry law; colour
+  via `hexColor`); Instant-App (bar always shows the leading affordance, no blocking spinner); UDF + immutable state
+  (all decisions pushed into pure functions); accent-coherent glass pills + natural tap→popover; no coverage floor
+  lowered, no test weakened. Only gap: the add-cell is inert pending its composer slice (tracked).
+- **Next:** the status **composer** (emoji grid + 122-char text + visibility) wiring `setStatus`/`clearStatus`, then
+  the popover's react/republish action; or an L1 status cache for instant cold-open bar (tracked instant-app §G).
 
 ### 2026-07-18 — slice `feed-comment-mention-rendering` ✅ impl + local gate green + reviewer PASS → PR + merge
 - **Opened with rule #0:** no open PR on the android track (`claude/apps/android/*`) — the 20 open PRs were all
