@@ -175,4 +175,20 @@ class StatusBarPresentationTest {
 
         assertThat(model.remaining).isNull()
     }
+
+    // --- republish affordance -------------------------------------------------
+
+    @Test
+    fun `another user's status popover offers the republish action`() {
+        val model = statusPopoverModel(entry("s1"), nowMillis = 0L, isOwn = false)
+
+        assertThat(model.canRepublish).isTrue()
+    }
+
+    @Test
+    fun `the signed-in user's own status popover hides the republish action`() {
+        val model = statusPopoverModel(entry("mine"), nowMillis = 0L, isOwn = true)
+
+        assertThat(model.canRepublish).isFalse()
+    }
 }

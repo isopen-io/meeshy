@@ -1950,10 +1950,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] Status composer: emoji grid, 122-char text, visibility (public/community/friends/private) — `status-composer`
       (except/only audience picker deferred, tracked above)
 - [ ] Mood status create, react, delete; 21h expiry + viewer tracking
-- [~] Status thought-bubble popover on avatar tap with republish action — **view landed** (slice
-      `status-bar-compose`, 2026-07-19): the `Popup` popover renders emoji + author + text + `via` + the
-      `MoodStatusExpiry` countdown on a pill tap (`statusPopoverModel`); the **republish/react** action is still
-      pending (belongs with the composer slice).
+- [x] Status thought-bubble popover on avatar tap with republish action — **republish landed** (slice
+      `status-popover-republish`, 2026-07-19): the `Popup` popover already rendered emoji + author + text + `via` +
+      `MoodStatusExpiry` countdown (`status-bar-compose`); this slice adds the **Republish** affordance — shown only
+      on OTHER users' pills, hidden on the own MyStatus popover (`statusPopoverModel(entry, now, isOwn)` →
+      `canRepublish = !isOwn`, the caller deriving `isOwn = entry.id == myStatus?.id`, null-safe so DISCOVER's
+      myStatus-less bar makes every pill republishable — parity with iOS `StatusBubbleOverlay`'s `onRepublish != nil`
+      gate). Tapping it opens the composer **pre-seeded** via `StatusComposerDraft.republish(source)` (source
+      emoji/body/attribution/voice-audio pre-filled — port of iOS `initialEmoji/initialText/viaUsername/repostOfId/
+      repostAudioUrl`); the sheet forwards a pure `StatusPublishRequest` to `StatusesViewModel.setStatus`, which now
+      carries `viaUsername` through `StatusRepository.create` → `CreatePostRequest.viaUsername` (the wire field iOS
+      sends). +12 tests (8 `StatusComposerDraftTest`: publish-request map/null-gate, republish seed/clamp/bodyless/
+      blank-emoji/not-a-repost/attribution; 2 `StatusBarPresentationTest`: own hides / other offers republish; 1
+      `StatusRepositoryTest`: create body carries repost attribution; 1 `StatusesViewModelTest`: setStatus forwards
+      `viaUsername`). **The react half is a separate feature** — iOS puts reactions in a picker, NOT this popover;
+      deferred to a follow-up.
+- [ ] Mood status react from the bar popover (reaction picker) — deferred follow-up (`StatusesViewModel.react`
+      already built; needs a picker UI, out of the republish slice's scope)
 - [ ] Friends / Discover status feeds
 
 ## H. Calls (audio / video)

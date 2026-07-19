@@ -59,10 +59,19 @@ data class StatusPopoverModel(
     val content: String?,
     val viaUsername: String?,
     val remaining: MoodStatusExpiry.Remaining?,
+    val canRepublish: Boolean,
 )
 
-/** Project [entry] into its popover model, deriving the countdown at [nowMillis]. */
-fun statusPopoverModel(entry: StatusEntry, nowMillis: Long): StatusPopoverModel =
+/**
+ * Project [entry] into its popover model, deriving the countdown at [nowMillis].
+ * [isOwn] gates the republish action: iOS shows "Republier" only on OTHER users'
+ * statuses (`onRepublish != nil`), never on your own — so `canRepublish = !isOwn`.
+ */
+fun statusPopoverModel(
+    entry: StatusEntry,
+    nowMillis: Long,
+    isOwn: Boolean = false,
+): StatusPopoverModel =
     StatusPopoverModel(
         moodEmoji = entry.moodEmoji,
         username = entry.username,
@@ -73,4 +82,5 @@ fun statusPopoverModel(entry: StatusEntry, nowMillis: Long): StatusPopoverModel 
             expiresAt = entry.expiresAt,
             nowMillis = nowMillis,
         ),
+        canRepublish = !isOwn,
     )

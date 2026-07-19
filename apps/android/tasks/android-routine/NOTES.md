@@ -2,6 +2,22 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-19, `status-popover-republish`) — the iOS "popover republish" lives in `StatusBubbleOverlay`, NOT the read-only `StatusBarView.statusPopover`
+The feature-parity tracker said "popover republish/react action". Two traps: (1) iOS `StatusBarView.statusPopover`
+is **read-only** — the republish button is in a *different* component, `StatusBubbleOverlay` (a conversation-list
+mood bubble), gated `if onRepublish != nil` which the list only wires for **other** users' statuses. So the Android
+parity is: show a "Republish" affordance on a Pill popover, hide it on the own MyStatus popover. Model it purely as
+`statusPopoverModel(entry, now, isOwn)` → `canRepublish = !isOwn`; the caller derives `isOwn = entry.id ==
+myStatus?.id` (null-safe: DISCOVER mode has no myStatus → every pill is republishable, correct). (2) iOS republish
+opens the composer **pre-seeded** (`initialEmoji/initialText/viaUsername/repostOfId/repostAudioUrl`). Port that as a
+`StatusComposerDraft.republish(source)` factory + a `StatusPublishRequest` value the sheet forwards — keeps the
+composer glue dumb and makes the repost attribution unit-testable. The "react" half of the tracker line is a
+separate, larger feature (a reaction picker) and iOS doesn't put it in this popover — deferred.
+- **Adding a trailing param to a mocked method breaks arity-matched MockK stubs.** `StatusRepository.create` grew a
+  6th param (`viaUsername`); every `coEvery/coVerify { repository.create(any() ×5) }` and the positional
+  `create("🔥", null, "PUBLIC", null, null)` verify had to gain the 6th arg. This is required maintenance (the call
+  changed), not test-weakening — the assertions still prove the same behaviour plus the new forwarding.
+
 ## Lesson (2026-07-19, `status-bar-compose`) — decompose an iOS `body` HStack into a pure `List<Cell>` builder, keep the Composable glue
 The reviewer/TDD gate exempts `@Composable` glue but demands ≥90% branch coverage on logic. iOS `StatusBarView.body`
 packs the real decisions (add-vs-my leading cell, `error && statuses.isEmpty` retry chip, `statuses.filter { id !=

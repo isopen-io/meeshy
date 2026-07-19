@@ -1,5 +1,43 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **status popover Republish action** landed (slice `status-popover-republish`, feature-parity §G →
+> "Status thought-bubble popover … with republish action" — the piece the `status-bar-compose` slice left open). The
+> parity source is iOS `StatusBubbleOverlay` (NOT the read-only `StatusBarView.statusPopover`): a "Republier" button
+> gated `onRepublish != nil`, which the conversation list wires only for OTHER users' statuses, opening the composer
+> pre-seeded to republish. **(1)** pure `statusPopoverModel(entry, now, isOwn)` gains `canRepublish = !isOwn` — the
+> caller derives `isOwn = entry.id == myStatus?.id` (null-safe: DISCOVER's myStatus-less bar → every pill
+> republishable, correct). **(2)** `StatusComposerDraft.republish(source)` factory seeds `selectedEmoji` (blank →
+> null, so a mood-less source can't publish), the body (through `withText` so the 122-cap invariant holds),
+> `repostOfId`, `viaUsername = source.username` and `repostAudioUrl` — port of iOS
+> `initialEmoji/initialText/viaUsername/repostOfId/repostAudioUrl`; `isRepublish = repostOfId != null`. **(3)** a pure
+> `StatusPublishRequest` value + `StatusComposerDraft.publishRequest()` (null until an emoji is picked) — the sheet
+> forwards it verbatim, staying dumb glue. **(4)** `StatusComposerSheet` takes an `initialDraft` seed + shows a
+> "Republishing @…" header on a repost, and its `onPublish` now emits the full `StatusPublishRequest`. **(5)**
+> `StatusesViewModel.setStatus` + `StatusRepository.create` + `CreatePostRequest` grew a `viaUsername` param carried
+> to the wire (the field iOS sends). **(6)** `StatusBarView` threads it end-to-end: the popover shows an Indigo
+> Repeat-icon Republish row for others, tapping dismisses it and opens the seeded composer (`composerSeed:
+> StatusComposerDraft?` replaces the old `showComposer: Boolean` — Add opens a fresh draft, Republish a
+> `republish(entry)` one). **+12 tests** — `StatusComposerDraftTest` (+8: publish-request map + no-emoji null-gate;
+> republish seed/clamp-over-long/bodyless-empty/blank-emoji-can't-publish/not-a-repost/attribution-in-request),
+> `StatusBarPresentationTest` (+2: own hides / other offers republish), `StatusRepositoryTest` (+1: create body
+> carries `repostOfId`/`viaUsername`/`audioUrl`), `StatusesViewModelTest` (+1: setStatus forwards `viaUsername`; the
+> two existing `create` stubs/verifies updated 5→6 args — required maintenance, not weakening). **Mutation check
+> (RED proof):** the tests fail to compile without the new production surface (structural RED); behaviourally, forcing
+> `canRepublish = true` fails **exactly** `the signed-in user's own status popover hides the republish action`, and
+> dropping `viaUsername` from the `create` body fails **exactly** `create_republish_carriesRepostAttributionInTheBody`
+> — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:feature:feed:testDebugUnitTest` **480/480** (was 469 + 11), `:sdk-core:testDebugUnitTest` green (StatusRepository
+> 14, was 13 + 1), `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 7
+> production + 4 test + 2 tracking; **SDK purity** — `viaUsername` is a transport wire field in `:core:network`/
+> `:sdk-core`, while the republish seed / publish-request / `canRepublish` gate are product presentation in
+> `:feature:feed`; **SSOT** — one `republish` seed law + one `publishRequest` projection, no re-implementation;
+> **UDF** — the sheet holds a `remember`ed draft, all decisions pushed into pure value types; **Instant-App** — n/a
+> (an action, no data load); **coherence** — Indigo Repeat-icon Republish row + "Republishing @…" header, natural
+> tap→popover→republish→seeded-composer gesture, no dead-end [the popover's former read-only state is now actionable];
+> no coverage floor lowered, no test weakened). **Next slice:** §G continues — the **Friends / Discover feed toggle**
+> UI (drive `StatusesViewModel.setMode`, already built), then the L1 status cache for instant-app parity, then the
+> bar-popover **reaction picker** (`react` is built, needs the picker UI — deferred from this slice).
+
 > On 2026-07-19 the **status composer** landed (slice `status-composer`, feature-parity §G → "Status composer:
 > emoji grid + 122-char text + visibility" — the Android port of iOS `StatusComposerView`, the piece that makes
 > the bar's `AddStatus` cell real). §G already had the model+laws (`status-mood-core`), the SDK transport
