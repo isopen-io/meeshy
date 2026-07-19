@@ -162,6 +162,68 @@ public struct StoryTimelineView: View {
         }
     }
 
+    /// Étiquette de type d'une piste : `TYPE_index` (IMAGE_1, AUDIO_2…), en
+    /// majuscules avec underscore (format demandé). Un `customName` non-nil et
+    /// non-vide l'emporte sur le tag de type. Pure — testée sans monter la vue.
+    public static func typeLabel(kind: CompactTrack.Kind, index: Int,
+                                 customName: String?) -> String {
+        if let customName, !customName.trimmingCharacters(in: .whitespaces).isEmpty {
+            return customName
+        }
+        let tag: String
+        switch kind {
+        case .bgVideo, .video: tag = "VIDEO"
+        case .bgImage, .image: tag = "IMAGE"
+        case .bgAudio, .audio: tag = "AUDIO"
+        case .text:            tag = "TEXT"
+        }
+        return "\(tag)_\(index)"
+    }
+
+    /// Durée totale (secondes) d'une piste = borne de fin max de ses clips, via
+    /// la même règle que les barres (`effectiveClipDuration`) — recalculée à
+    /// chaque rendu depuis `project`, donc suit trim/split/déplacement.
+    static func trackDurationSeconds(track: CompactTrack, project: TimelineProject) -> Float {
+        var maxEnd: Float = 0
+        for id in track.clipIds {
+            if let m = project.mediaObjects.first(where: { $0.id == id }) {
+                let start = Float(m.startTime ?? 0)
+                let dur = TimelineGeometry.effectiveClipDuration(
+                    startTime: start, duration: m.duration.map { Float($0) },
+                    slideDuration: project.slideDuration)
+                maxEnd = max(maxEnd, start + dur)
+            } else if let a = project.audioPlayerObjects.first(where: { $0.id == id }) {
+                let start = a.startTime ?? 0
+                let dur = TimelineGeometry.effectiveClipDuration(
+                    startTime: start, duration: a.duration,
+                    slideDuration: project.slideDuration)
+                maxEnd = max(maxEnd, start + dur)
+            } else if let t = project.textObjects.first(where: { $0.id == id }) {
+                let start = Float(t.startTime ?? 0)
+                let dur = TimelineGeometry.effectiveClipDuration(
+                    startTime: start, duration: t.duration.map { Float($0) },
+                    slideDuration: project.slideDuration)
+                maxEnd = max(maxEnd, start + dur)
+            }
+        }
+        return maxEnd
+    }
+
+    /// Index 1-based extrait de l'id de piste ("image-2" → 2) pour le tag
+    /// `TYPE_index`. `resolveAllTracks` numérote déjà les pistes par kind.
+    static func trackTypeIndex(for track: CompactTrack) -> Int {
+        Int(track.id.split(separator: "-").last.map(String.init) ?? "1") ?? 1
+    }
+
+    /// Nom custom persisté du premier clip de la piste, s'il existe.
+    static func trackCustomName(track: CompactTrack, project: TimelineProject) -> String? {
+        guard let id = track.clipIds.first else { return nil }
+        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.name }
+        if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.name }
+        if let t = project.textObjects.first(where: { $0.id == id }) { return t.name }
+        return nil
+    }
+
     public static func footerLabelKey(isExpanded: Bool) -> String {
         isExpanded ? "story.timeline.toolbar.collapseTracks" : "story.timeline.toolbar.deployTracks"
     }
@@ -304,7 +366,7 @@ public struct StoryTimelineView: View {
                     trackRows(tracks: tracks, laneWidth: laneWidth, geometry: geometry)
                 }
             }
-            .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 40 + 8 + 22 + 18)
+            .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 56 + 8 + 22 + 18)
             .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
         }
     }
@@ -314,6 +376,9 @@ public struct StoryTimelineView: View {
                            geometry: TimelineGeometry) -> some View {
         let rows = VStack(spacing: 4) {
             ForEach(tracks, id: \.id) { track in
+                let clipDuration = Self.trackDurationSeconds(track: track, project: viewModel.project)
+                let index = Self.trackTypeIndex(for: track)
+                let customName = Self.trackCustomName(track: track, project: viewModel.project)
                 TrackBarView(
                     title: track.title,
                     isLocked: false,
@@ -321,19 +386,22 @@ public struct StoryTimelineView: View {
                     tintHex: tint(for: track.kind),
                     isDark: colorScheme == .dark,
                     laneWidth: laneWidth,
-                    laneHeight: 36,
-                    iconName: Self.iconName(for: track.kind)
+                    laneHeight: 52,
+                    iconName: Self.iconName(for: track.kind),
+                    labelColumnWidth: TimelineScrubArea<AnyView>.laneLabelWidth,
+                    durationLabel: TrackBarView<AnyView>.formatTrackDuration(clipDuration),
+                    typeLabel: Self.typeLabel(kind: track.kind, index: index, customName: customName)
                 ) {
                     ZStack(alignment: .leading) {
                         ForEach(track.clipIds, id: \.self) { clipId in
-                            clipBar(for: clipId, geometry: geometry, laneHeight: 36)
+                            clipBar(for: clipId, geometry: geometry, laneHeight: 52)
                         }
                         LaneKeyframeOverlays(
                             markers: KeyframeMarkerResolver.markers(
                                 for: track.clipIds, in: hoistedKeyframeMarkers),
                             selectedId: viewModel.selection.selectedClipId,
                             geometry: geometry,
-                            laneHeight: 36,
+                            laneHeight: 52,
                             onSelect: { viewModel.selectClip(id: $0) }
                         )
                         LaneTransitionOverlays(
@@ -342,7 +410,7 @@ public struct StoryTimelineView: View {
                             selectedId: viewModel.selection.selectedClipId,
                             isDark: colorScheme == .dark,
                             geometry: geometry,
-                            laneHeight: 36,
+                            laneHeight: 52,
                             onSelect: { viewModel.selectClip(id: $0) },
                             onCreate: { junction in
                                 if let id = viewModel.addTransition(
