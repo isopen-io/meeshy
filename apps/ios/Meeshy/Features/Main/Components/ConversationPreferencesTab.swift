@@ -190,6 +190,7 @@ struct ConversationPreferencesTab: View {
                                 .foregroundColor(theme.textMuted)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "conversation.prefs.custom-name.clear.a11y", defaultValue: "Clear custom name", bundle: .main))
                     }
                 }
                 .padding(12)
@@ -222,10 +223,15 @@ struct ConversationPreferencesTab: View {
                         Image(systemName: "chevron.right")
                             .font(MeeshyFont.relative(11, weight: .semibold))
                             .foregroundColor(theme.textMuted)
+                            .accessibilityHidden(true)
                     }
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "conversation.prefs.reaction", defaultValue: "Reaction", bundle: .main))
+            .accessibilityValue((viewModel.prefs.reaction?.isEmpty == false) ? (viewModel.prefs.reaction ?? "") : String(localized: "conversation.prefs.reaction.none", defaultValue: "None", bundle: .main))
+            .accessibilityHint(String(localized: "conversation.prefs.reaction.hint.a11y", defaultValue: "Choose a quick reaction emoji", bundle: .main))
         }
         .sheet(isPresented: $showEmojiPicker) {
             EmojiPickerSheet(
@@ -251,6 +257,7 @@ struct ConversationPreferencesTab: View {
                 .labelsHidden()
                 .tint(MeeshyColors.info)
             }
+            .accessibilityElement(children: .combine)
 
             Divider().padding(.leading, 54).opacity(0.3)
 
@@ -325,6 +332,7 @@ struct ConversationPreferencesTab: View {
                 .labelsHidden()
                 .tint(MeeshyColors.error)
             }
+            .accessibilityElement(children: .combine)
             Divider().padding(.leading, 54).opacity(0.3)
             settingsRow(icon: "at", iconColor: "FF6B6B", title: String(localized: "conversation.prefs.mentions-only", defaultValue: "Mentions seulement", bundle: .main)) {
                 Toggle("", isOn: Binding(
@@ -336,6 +344,7 @@ struct ConversationPreferencesTab: View {
                 .disabled(viewModel.prefs.isMuted ?? false)
             }
             .opacity((viewModel.prefs.isMuted ?? false) ? 0.4 : 1)
+            .accessibilityElement(children: .combine)
         }
     }
 
