@@ -14,8 +14,28 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
-> **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
-> - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
+> **POINTEUR AUTORITAIRE iOS (mis à jour 172i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **172i (en cours, branche `claude/laughing-thompson-wnkqrl`, base `main` HEAD `b158a9b52`)** :
+>   Localisation + pluralisation + Dynamic Type + brand Indigo + VoiceOver de `LoadMoreRepliesCell`
+>   (cellule UIKit « Voir N réponses de plus » du fil de commentaires — `CommentListViewController`,
+>   tap géré par `didSelectItemAt` `case .loadMoreReplies`). Candidat ouvert par 167i. **4 déficits** :
+>   (1) chaîne EN brute non localisée avec **bug de pluriel** `"View \(remaining) more replies"`
+>   (« View 1 more replies ») ; (2) **police figée 13pt mono-ligne** — pas de Dynamic Type, pas de
+>   wrap ; (3) `.systemBlue` au lieu du brand `indigo500` ; (4) **0 accessibilité** sur une rangée
+>   bouton (ni `isAccessibilityElement`, ni trait `.button`, ni label/hint). Fix = pluralisation par
+>   **accord grammatical automatique** Apple (`^[\(remaining) réponse](inflect: true)`, défaut FR
+>   inline, pas d'édit `.xcstrings`) ; Dynamic Type via `UIFontMetrics(forTextStyle: .footnote)
+>   .scaledFont` + `adjustsFontForContentSizeCategory` + `numberOfLines = 0` (contraintes centerY
+>   cassable + top>=/bottom<= → wrap ; cible tactile `36 → 44` HIG) ; brand via
+>   `UIColor(MeeshyColors.indigo500)` (bridge SSOT, 0 hex codé) ; a11y `isAccessibilityElement` +
+>   `.button` + `accessibilityLabel`/`accessibilityHint` localisés. 1 fichier, 0 logique, 0 test.
+>   2 clés i18n neuves `comments.load-more-replies*` en `defaultValue` inline. Aucun test ne
+>   référence la cellule (grep = 0) ; 1 call site inchangé (`configure(parentId:remaining:)`).
+>   Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `LoadMoreRepliesCell` SOLDÉ** : ne plus reprendre. Follow-up ouvert = passe Dynamic Type
+>   coordonnée sur la famille `Cells/` (`ReplyCell`, `TopLevelCommentCell`, `TextPostCell`,
+>   `MediaPostCell` — toujours en `.systemFont(ofSize:)` figé).
+> - **167i (branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
 >   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
 >   conversation, composer post feed, feed root). La carte était déjà 100 % Dynamic Type (pourcentage,
 >   compteur fichiers, octets en `MeeshyFont.relative`). Deux déficits : (1) **1 chaîne FR brute non
