@@ -1892,7 +1892,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (needs an Android story-canvas renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`).
 
 ## G. Statuses / Moods
-- [ ] Statuses/moods bar: emoji pills, popover details, infinite scroll
+> **TTL correction (slice `status-mood-core`, 2026-07-19):** a mood **status expires 1h** after creation
+> (`STATUS_EXPIRY_HOURS = 1`), NOT 21h — the "21h" in the audit is the **STORY** rule. The two are distinct.
+- [~] Statuses/moods bar: emoji pills, popover details, infinite scroll — **model + laws SSOT landed**
+      (slice `status-mood-core`, 2026-07-19): the pure foundation the bar/composer build on. `:core:model`
+      `MoodStatusExpiry` (the 1h expiry law: `effectiveExpiresAtMillis` = explicit `expiresAt` or `createdAt+1h`
+      fallback, `isExpired(now)`, `remaining(now)` → `Remaining(totalSeconds, Tier{EXPIRED/SECONDS/MINUTES})`
+      with the iOS `timeRemaining` label shape, localisation left app-side) + `:sdk-core` `StatusMapper`
+      (`ApiPost.toStatusEntry()` — guard `type=="STATUS"` + non-blank `moodEmoji` + author, avatarColor via
+      `DynamicColorGenerator.colorForName`, via = `viaUsername ?? repostOf.author.username`, **carries
+      `visibility` + `reactionSummary` the iOS converter drops**; `List<ApiPost>.toStatusEntries()` server-order
+      filter; `List<StatusEntry>.orderedForBar(currentUserId)` — own-first then server order, deduped by id).
+      +37 tests (19 `MoodStatusExpiryTest`, 18 `StatusMapperTest`; mutation-proven: `<=`→`<` on the expiry
+      boundary fails exactly 1 test, `own+others`→`others+own` fails exactly the own-first test). **Still open:**
+      the `StatusRepository` (feed/statuses cursor pagination, cache-first SWR, optimistic set/clear/react) +
+      the `StatusesViewModel` + the Compose `LazyRow` pill bar + popover.
 - [ ] Status composer / republish: emoji grid, 122-char text, visibility (public/friends/except/only)
 - [ ] Mood status create, react, delete; 21h expiry + viewer tracking
 - [ ] Status thought-bubble popover on avatar tap with republish action

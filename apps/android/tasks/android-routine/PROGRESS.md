@@ -1,5 +1,46 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **mood-status model + laws SSOT** landed (slice `status-mood-core`, feature-parity §G →
+> "Statuses/moods bar" — the pure foundation for the whole §G area, the Android analogue of how §E bootstrapped
+> with `StoryGrouping` and §H with `CallSoundPolicy`). §G had **zero** Android code; iOS carries mood statuses as
+> `type=="STATUS"` posts with a 1h TTL. **Critical correction baked in:** a status expires **1 hour** after
+> creation (`STATUS_EXPIRY_HOURS = 1`), NOT 21h — the audit's "21h" is the STORY rule (the two were conflated;
+> gateway `PostService.ts` + `schema.prisma` are unambiguous). This slice ships **(1) `:core:model`
+> `MoodStatusExpiry`** — the pure 1h expiry law: `effectiveExpiresAtMillis(createdAt, expiresAt)` = the explicit
+> server `expiresAt` when it parses, else `createdAt + 1h` fallback, else `null` (no reliable timestamp);
+> `isExpired(createdAt, expiresAt, now)` (`null` effective → never expired, we don't hide undatable content);
+> `remaining(...)` → `Remaining(totalSeconds, Tier{EXPIRED/SECONDS/MINUTES})` mirroring iOS `StatusEntry.timeRemaining`
+> (`<=0`→EXPIRED, `<60s`→`"Xs"`, else `"Xmin"`), localisation left app-side like `LiveLocationCountdown`. **(2)
+> `:sdk-core` `StatusMapper`** (next to `StoryGrouping`) — `ApiPost.toStatusEntry()`: guard `type=="STATUS"`
+> (case-insensitive) + non-blank `moodEmoji` + non-null author → else `null`; name = first non-blank of
+> `displayName`/`username` else `"Anonymous"`; `avatarColor = DynamicColorGenerator.colorForName(name)`;
+> `via = viaUsername ?? repostOf?.author?.username`; **carries `visibility` + `reactionSummary` the iOS converter
+> drops** (a parity improvement). `List<ApiPost>.toStatusEntries()` maps + filters non-statuses preserving server
+> order; `List<StatusEntry>.orderedForBar(currentUserId)` = own status first then the rest in server order, deduped
+> by id (first-wins) — the pure bar-projection law (iOS bar is a flat server-order list, NOT grouped-by-user like
+> stories). No wiring/UI/DI — pure SSOT only, the repository + VM + Compose bar are the next §G slices. **+37 tests**
+> — `MoodStatusExpiryTest` (19: explicit-vs-fallback-vs-null effective expiry, blank/unparseable expiry falls back,
+> past/future/exact-now `isExpired`, 1h-fallback expiry, undatable never expired, seconds/minutes/60s-boundary/59s/
+> sub-second/expired `remaining` tiers, fallback-derived remaining, null when undatable), `StatusMapperTest` (18:
+> full-field map, deterministic avatarColor, visibility+reactionSummary carried, case-insensitive type, non-status→
+> null, null-type→null, emoji-less/blank→null, authorless→null, name displayName>username>Anonymous with blank
+> handling, via field-then-repost-then-null, list filter+order, empty, bar own-first/no-own/dedup/empty/null-user).
+> **Mutation check (RED proof):** `<=`→`<` on the `isExpired` boundary failed **exactly** 1 test
+> (`expiry exactly at now is expired`); `own + others`→`others + own` in `orderedForBar` failed **exactly** the
+> `bar ordering puts the current user's status first` test — behavioural, not tautological. **Gate (system Gradle
+> 8.14.3, `LANG=C.UTF-8`):** `:core:model:testDebugUnitTest` **1574/1574**, `:sdk-core:testDebugUnitTest`
+> **807/807**, `gradle :app:assembleDebug` → **BUILD SUCCESSFUL** (75 MB APK). Reviewer **PASS** (diff `apps/android`
+> only — 4 files, no production logic elsewhere; **SDK purity** — the expiry law is a pure `:core:model` value
+> function, the mapper a stateless `:sdk-core` building block [query→entry, depends only on `ApiPost`/`ApiAuthor` +
+> the existing `DynamicColorGenerator`], no "when to fetch" rule; **SSOT** — one expiry law + one mapper, reuses
+> `isoToEpochMillisOrNull`/`DynamicColorGenerator`, mirrors `StoryGrouping`, no re-implementation; **UDF/Instant-App**
+> — n/a yet [no VM/UI], laws are pure + deterministic with injected `now`; **coherence** — avatar colour via the
+> deterministic generator, no hardcoded colour, expiry law shape matches `LiveLocationCountdown`; no coverage floor
+> lowered, no test weakened). **Next slice:** §G continues — the **`StatusRepository`** (`:sdk-core`: `PostApi`
+> `feed/statuses` + `/statuses/discover` endpoints, cursor-paginated `StatusPage` fold reusing the `PostPage`
+> pattern, cache-first SWR stream, optimistic `setStatus`/`clearStatus`/`react` with rollback — consuming
+> `toStatusEntries`/`orderedForBar`); THEN the `StatusesViewModel` + Compose `LazyRow` pill bar + popover.
+
 > On 2026-07-19 the **comment composer remote directory merge** landed (slice `feed-comment-mention-remote-merge`,
 > feature-parity §Feed → "Threaded comments" → the comment composer's autocomplete — the last-open item on the
 > mention line after the local-roster autocomplete shipped 2026-07-18). Until now the feed comment/reply composer's
