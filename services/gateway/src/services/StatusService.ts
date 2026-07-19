@@ -204,7 +204,7 @@ export class StatusService {
     }
 
     this.activityCache.set(userId, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Renouveler le TTL Redis de présence
     this.cache.set(`presence:user:${userId}`, String(now), this.PRESENCE_TTL_SECONDS).catch(() => {});
@@ -246,7 +246,7 @@ export class StatusService {
     }
 
     this.connectionCache.set(userId, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
@@ -286,7 +286,7 @@ export class StatusService {
     }
 
     this.activityCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Renouveler le TTL Redis de présence
     this.cache.set(`presence:anon:${participantId}`, String(now), this.PRESENCE_TTL_SECONDS).catch(() => {});
@@ -330,7 +330,7 @@ export class StatusService {
     }
 
     this.connectionCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.participant.update({
@@ -423,7 +423,7 @@ export class StatusService {
       }
     }
 
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     if (deletedCount > 0) {
       logger.debug(`🧹 Cache cleanup: ${deletedCount} entrées supprimées (taille: ${this.metrics.cacheSize})`);
@@ -484,6 +484,19 @@ export class StatusService {
   }
 
   /**
+   * Taille totale des caches de throttling en mémoire.
+   *
+   * Source unique du calcul de `metrics.cacheSize` : les trois caches
+   * (`activityCache`, `connectionCache`, `onlineEnsureCache`) sont sommés
+   * ensemble partout, y compris dans `resetMetrics`. Centraliser cette somme
+   * évite qu'un site diverge en oubliant un cache (bug historique de
+   * `resetMetrics`, qui omettait `onlineEnsureCache`).
+   */
+  private computeCacheSize(): number {
+    return this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+  }
+
+  /**
    * Obtenir les métriques de performance
    */
   getMetrics(): StatusUpdateMetrics {
@@ -499,7 +512,7 @@ export class StatusService {
       throttledRequests: 0,
       successfulUpdates: 0,
       failedUpdates: 0,
-      cacheSize: this.activityCache.size + this.connectionCache.size,
+      cacheSize: this.computeCacheSize(),
       activityUpdates: 0,
       connectionUpdates: 0
     };
