@@ -105,44 +105,51 @@ struct ActiveSessionsView: View {
 
     private func sessionRow(_ session: UserSession) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: session.isCurrent ? "iphone" : "desktopcomputer")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400)
-                .frame(width: 32, height: 32)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill((session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400).opacity(0.12))
-                )
+            HStack(spacing: 12) {
+                // 82i-style: glyph borné par le badge fixe 32×32 → figé (pas de scale Dynamic Type).
+                // Le type d'appareil est porté par le libellé VoiceOver composé de la rangée, pas par
+                // cette icône (rangée en `children: .ignore`) → info jamais portée par icône/couleur seule.
+                Image(systemName: session.isCurrent ? "iphone" : "desktopcomputer")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill((session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400).opacity(0.12))
+                    )
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(session.deviceName ?? String(localized: "sessions_unknown_device", defaultValue: "Appareil inconnu"))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(session.deviceName ?? String(localized: "sessions_unknown_device", defaultValue: "Appareil inconnu"))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
 
-                    if session.isCurrent {
-                        Text(String(localized: "sessions_current_badge", defaultValue: "Actuelle"))
-                            .font(MeeshyFont.relative(10, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(MeeshyColors.success))
+                        if session.isCurrent {
+                            Text(String(localized: "sessions_current_badge", defaultValue: "Actuelle"))
+                                .font(MeeshyFont.relative(10, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(MeeshyColors.success))
+                        }
+                    }
+
+                    if let ip = session.ipAddress {
+                        Text(ip)
+                            .font(MeeshyFont.relative(12, weight: .regular))
+                            .foregroundColor(theme.textMuted)
+                    }
+
+                    if let lastActive = session.lastActive {
+                        let formatted = lastActive.formatted(.relative(presentation: .named))
+                        Text(String(localized: "sessions_last_active", defaultValue: "Actif") + " " + formatted)
+                            .font(MeeshyFont.relative(11, weight: .regular))
+                            .foregroundColor(theme.textSecondary)
                     }
                 }
-
-                if let ip = session.ipAddress {
-                    Text(ip)
-                        .font(MeeshyFont.relative(12, weight: .regular))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                if let lastActive = session.lastActive {
-                    let formatted = lastActive.formatted(.relative(presentation: .named))
-                    Text(String(localized: "sessions_last_active", defaultValue: "Actif") + " " + formatted)
-                        .font(MeeshyFont.relative(11, weight: .regular))
-                        .foregroundColor(theme.textSecondary)
-                }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(sessionRowAccessibilityLabel(session))
 
             Spacer()
 
@@ -168,6 +175,29 @@ struct ActiveSessionsView: View {
                         .stroke(theme.border(tint: session.isCurrent ? "34D399" : "6366F1"), lineWidth: 1)
                 )
         )
+    }
+
+    // MARK: - Session Row Accessibility
+
+    /// Composed VoiceOver label for a session row: device name, "current" marker,
+    /// IP and last-active — so the row reads as one element and its state is never
+    /// carried by the badge icon/color alone. Reuses the visible-string keys and
+    /// joins locale-aware / RTL via `ListFormatter`.
+    private func sessionRowAccessibilityLabel(_ session: UserSession) -> String {
+        var parts: [String] = [
+            session.deviceName ?? String(localized: "sessions_unknown_device", defaultValue: "Appareil inconnu")
+        ]
+        if session.isCurrent {
+            parts.append(String(localized: "sessions_current_badge", defaultValue: "Actuelle"))
+        }
+        if let ip = session.ipAddress {
+            parts.append(ip)
+        }
+        if let lastActive = session.lastActive {
+            let formatted = lastActive.formatted(.relative(presentation: .named))
+            parts.append(String(localized: "sessions_last_active", defaultValue: "Actif") + " " + formatted)
+        }
+        return ListFormatter.localizedString(byJoining: parts)
     }
 
     // MARK: - Revoke All Button
