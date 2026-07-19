@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **disk L2 status cache** landed (slice `status-bar-l2-cache`, feature-parity §G →
+> "Instant-app status bar — disk L2 cache" — the cold-launch follow-up the `status-bar-l1-cache` slice flagged in its
+> own KDoc). Parity source: iOS `StatusViewModel.loadStatuses` reads from `CacheCoordinator.statuses`, whose disk tier
+> survives a process death; Android's L1 `StatusBarCache` only spans the process, so a cold launch always fell to the
+> skeleton. **(1)** new Room `status_bar_cache` table (`StatusBarCacheEntity` + `StatusBarCacheDao`, DB v10→11 in
+> `:core:database`, registered + Hilt-provided). **(2)** new `StatusBarCacheRepository` (`:sdk-core/status`,
+> `@Singleton`) — the disk (L2) tier, mirroring `ProfileStatsCacheRepository` **exactly**: `cachedBar(mode)` replays the
+> raw feed or `null` (cold / undecodable), `persistBar(mode, statuses)` write-through, `invalidate(mode)`; keyed per
+> mode (`statuses:friends` / `statuses:discover`, iOS `statuses_<mode>`). Row-presence is the sync marker: absent →
+> cold `null`, present `[]` → real synced-empty feed; an undecodable payload is a cache miss (never a crash). It holds
+> no network dep / no product decision — a pure keyed store, so it sits in `:sdk-core` next to `ProfileStatsCacheRepository`.
+> **(3)** `StatusesViewModel` wired L2 into the `CacheResult.Empty` (cold-L1) branch via a new private `DiskCachePlan`
+> (`NONE`/`SEED`/`INVALIDATE`): `SEED` reads the disk bar and paints it instantly before the first network call —
+> guarded by `!listState.hasLoaded` **and** an `activeMode == mode.value` re-check so a mode switch during the suspend
+> read can't paint the wrong feed; the network first page then **replaces** the seed and is written through to **both**
+> tiers; `setStatus`/`clearStatus` write through to L2 on success; `refresh` runs `INVALIDATE` (drops the disk row) then
+> reloads. **Improvement kept:** an *expired* L1 snapshot is still served while it revalidates (SWR, from the L1 slice).
+> **+17 tests** — `StatusBarCacheRepositoryTest` (9, Robolectric in-memory Room, mirroring `ProfileStatsCacheRepositoryTest`:
+> cold-null, round-trip-in-order, per-mode keying, two-feeds-independent, newest-wins, synced-empty≠cold, invalidate-scope,
+> undecodable→null, rich-field round-trip); `StatusesViewModelTest` (+8: cold-launch-disk-seed, cold-disk→skeleton,
+> network-write-through, warm-L1-never-reads-disk, refresh-invalidates+writes-through, publish-write-through,
+> clear-write-through, failed-clear-no-disk-write). **Mutation check (RED proof):** structural RED (tests don't compile
+> without `StatusBarCacheRepository`/the VM's 4th param); behaviourally, flipping the seed's `activeMode == mode.value`
+> guard to `!=` fails **exactly** `a cold launch seeds the bar from the disk cache before the network answers`, and
+> dropping the network write-through fails **exactly** `the first network page is written through to the disk cache` +
+> `refresh invalidates the disk row then writes the fresh page through` (507 tests, 3 failed) — behavioural, not
+> tautological. **Note:** the existing `cold load shows a skeleton` test needed a `coEvery { diskCache.cachedBar(any()) }
+> returns null` default in `setUp` — relaxed mockk hands back an *empty list* (not null) for a nullable `List` return,
+> which the new SEED path would treat as a synced-empty disk and falsely paint (suppressing the skeleton); the stub makes
+> the cold-disk precondition explicit and matches the production repository's `null`. Not a weakening — the assertion is
+> unchanged. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:sdk-core:testDebugUnitTest` **845**
+> green (was 836 + 9), `:feature:feed:testDebugUnitTest` **507** green (`StatusesViewModelTest` 34/34, was 26 + 8),
+> `:core:database:testDebugUnitTest` 27 green, full `assembleDebug` + `testDebugUnitTest` → **BUILD SUCCESSFUL**.
+> Reviewer **PASS** (diff `apps/android` only — 3 production + 3 infra (entity/dao/db+module) + 2 test + tracking;
+> **SDK purity** — `StatusBarCacheRepository` is a pure keyed store in `:sdk-core`, the *when* orchestration stays in the
+> `:feature:feed` VM; **SSOT** — one disk-cache pattern shared with `ProfileStatsCacheRepository`, one keyed table;
+> **UDF** — immutable `StateFlow`, transitions pure, cancellation-safe; **Instant-App** — cold launch now paints from
+> disk before the network, skeleton only on a truly-cold disk; **coherence** — no UI change, pure behaviour; no coverage
+> floor lowered, no test weakened). **Next slice:** §G — localise the `status_*` string family (FR/ES/PT) to close the
+> tracked i18n gap (the whole `status_bar_*` / `status_*` family is default-only today), then the statuses realtime
+> socket wiring (`status:new` / `status:reaction` push into the bar) for live parity with iOS.
+
 > On 2026-07-19 the **Friends / Discover status-feed toggle** landed (slice `status-feed-mode-toggle`,
 > feature-parity §G → "Friends/Discover status-feed toggle" — the UI the `statuses-viewmodel` /
 > `status-bar-l1-cache` slices built `StatusesViewModel.setMode` for but never surfaced). iOS ships **only** the
