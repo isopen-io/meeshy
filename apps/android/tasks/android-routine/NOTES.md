@@ -2,6 +2,16 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-19, `statuses-viewmodel`) — a HiltViewModel that needs a runtime "mode" uses a settable StateFlow, not assisted injection
+iOS constructs a separate `StatusViewModel` per `Mode` (friends/discover). A `@HiltViewModel` can't take an
+enum ctor param (Hilt has no default to provide → construction fails), and assisted injection is heavy for a
+tab toggle. Pattern used: inject only repos, hold `private val mode = MutableStateFlow(FRIENDS)`, expose
+`setMode(newMode)` that is **inert on the active mode** (else reset the list + reload). `combine(...)` folds
+`mode` into the projection so `myStatus` can be gated to FRIENDS. One VM drives both bars — cleaner than two
+instances, Hilt-friendly, fully unit-testable. Reuse this for any tabbed feed VM (e.g. a future discover feed).
+Also: pick `myStatus` by `userId == currentUserId` (via the `orderedForBar` SSOT), never the fragile iOS
+`statuses.first` — it survives a server that doesn't return own-first.
+
 ## Lesson (2026-07-19, `status-mood-core`) — status TTL is **1h**, NOT 21h (the parity tracker conflated the STORY rule)
 The feature-parity line "Story / status (mood) posts with 21h expiry" (audit part-15) **conflates two
 different rules**. The gateway is unambiguous (`services/gateway/src/services/PostService.ts`):

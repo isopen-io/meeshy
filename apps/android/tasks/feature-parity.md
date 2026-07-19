@@ -1914,9 +1914,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `StatusRepositoryTest` (list friends/discover endpoint-select, non-status filter, missing-pagination default,
       failure envelope, transport error; create maps entry/PARSE-guard/transport; delete + react success/failure;
       mutation-proven: `DISCOVER→getStatuses` fails exactly the discover-endpoint test, dropping the create
-      `PARSE` guard fails exactly the non-status test). **Still open:** the `StatusesViewModel` (owns page
-      accumulation + `orderedForBar` + cache-first SWR, like the bookmarks screen) + the Compose `LazyRow` pill
-      bar + popover.
+      `PARSE` guard fails exactly the non-status test).
+      **`StatusesViewModel` landed** (slice `statuses-viewmodel`, 2026-07-19): `:feature:feed` `StatusesViewModel`
+      (UDF `StateFlow<StatusesUiState>`) drives the bar over `StatusRepository.list` — the pure `StatusBarListState`
+      accumulation SSOT (`appended` dedup-by-id + watermark, `created` front-hoist, `removed`, `reacted` count-bump)
+      projected through the `orderedForBar` SSOT (own-first, deduped). `loadInitial` (guarded) / `refresh` /
+      `loadMoreIfNeeded` (tail-threshold 3, silent-fail); `setMode(FRIENDS↔DISCOVER)` resets+reloads (inert on the
+      active tab, mirrors iOS's per-mode instance); optimistic `setStatus`/`clearStatus`/`react` with rollback;
+      `myStatus` surfaces only in FRIENDS mode. Cold open → skeleton then first page (no repo status cache yet, same
+      as bookmarks — L1 cache is the tracked instant-app follow-up). +29 tests (11 `StatusBarListStateTest`,
+      18 `StatusesViewModelTest`; mutation-proven: dropping the FRIENDS-only `myStatus` guard fails exactly the
+      discover test). **Still open:** the Compose `LazyRow` emoji-pill bar + thought-bubble popover + composer.
 - [ ] Status composer / republish: emoji grid, 122-char text, visibility (public/friends/except/only)
 - [ ] Mood status create, react, delete; 21h expiry + viewer tracking
 - [ ] Status thought-bubble popover on avatar tap with republish action
