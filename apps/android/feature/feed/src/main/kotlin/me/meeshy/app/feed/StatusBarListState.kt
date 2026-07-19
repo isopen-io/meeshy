@@ -51,6 +51,18 @@ data class StatusBarListState(
     }
 
     /**
+     * Seed the bar from a cached [statuses] snapshot (cache-first cold paint). Marks the
+     * list [hasLoaded] so the cold-start skeleton stands down and a re-entrant
+     * [StatusesViewModel.loadInitial] is inert, but leaves the pagination watermark cold
+     * (no [cursor]) — the cached head is served instantly and the background network
+     * first page (folded via [appended]) re-establishes pagination and replaces the seed
+     * with the authoritative list. Mirrors iOS seeding `statuses` from
+     * `CacheCoordinator` before the network answers.
+     */
+    fun seeded(statuses: List<StatusEntry>): StatusBarListState =
+        copy(statuses = statuses, cursor = null, hasMore = true, hasLoaded = true)
+
+    /**
      * Optimistically hoist a just-created [entry] to the front, dropping any prior
      * entry carrying the same id so a re-insertion never doubles it. Mirrors iOS
      * `statuses.insert(entry, at: 0)`, made idempotent by the id de-dup. Marks the

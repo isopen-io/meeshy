@@ -18,7 +18,10 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.StatusPage
 import me.meeshy.sdk.status.StatusRepository
@@ -44,6 +47,10 @@ class StatusesViewModelTest {
     private val repository: StatusRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
 
+    private class FakeClock(var now: Long = 0L) : CacheClock {
+        override fun nowMillis(): Long = now
+    }
+
     private fun entry(id: String, userId: String = "u-$id", emoji: String = "😀") =
         StatusEntry(id = id, userId = userId, moodEmoji = emoji)
 
@@ -52,9 +59,12 @@ class StatusesViewModelTest {
 
     private fun user(id: String) = MeeshyUser(id = id, username = "me")
 
-    private fun viewModel(currentUser: MeeshyUser? = null): StatusesViewModel {
+    private fun viewModel(
+        currentUser: MeeshyUser? = null,
+        cache: StatusBarCache = StatusBarCache(FakeClock()),
+    ): StatusesViewModel {
         every { session.currentUser } returns MutableStateFlow(currentUser)
-        return StatusesViewModel(repository, session)
+        return StatusesViewModel(repository, session, cache)
     }
 
     @Test
@@ -344,5 +354,128 @@ class StatusesViewModelTest {
             assertThat(awaitItem().statuses.map { it.id }).containsExactly("x")
         }
         coVerify(exactly = 2) { repository.list(StatusFeedMode.FRIENDS, null, any()) }
+    }
+
+    // MARK: - L1 cache (cache-first, network-second)
+
+    @Test
+    fun `a fresh cached bar is served instantly without any network fetch`() = runTest {
+        val clock = FakeClock(now = 0L)
+        val warm = StatusBarCache(clock)
+        warm.save(StatusFeedMode.FRIENDS, listOf(entry("cached")))
+        clock.now = 30_000L
+
+        val vm = viewModel(cache = warm)
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.statuses.map { it.id }).containsExactly("cached")
+            assertThat(s.showSkeleton).isFalse()
+        }
+        coVerify(exactly = 0) { repository.list(any(), any(), any()) }
+    }
+
+    @Test
+    fun `a stale cached bar paints instantly then the network first page replaces it`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<StatusPage>>()
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } coAnswers { gate.await() }
+        val clock = FakeClock(now = 0L)
+        val warm = StatusBarCache(clock)
+        warm.save(StatusFeedMode.FRIENDS, listOf(entry("cached")))
+        clock.now = 120_000L
+
+        val vm = viewModel(cache = warm)
+
+        vm.state.test {
+            val seeded = awaitItem()
+            assertThat(seeded.statuses.map { it.id }).containsExactly("cached")
+            assertThat(seeded.showSkeleton).isFalse()
+
+            gate.complete(page(entry("net"), hasMore = false))
+            val settled = awaitItem()
+            assertThat(settled.statuses.map { it.id }).containsExactly("net")
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify(exactly = 1) { repository.list(StatusFeedMode.FRIENDS, null, any()) }
+    }
+
+    @Test
+    fun `the first network page is written through to the cache for the next cold paint`() = runTest {
+        val clock = FakeClock(now = 0L)
+        val shared = StatusBarCache(clock)
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), hasMore = false)
+
+        viewModel(cache = shared)
+        val reopened = viewModel(cache = shared)
+
+        reopened.state.test {
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("a")
+        }
+        coVerify(exactly = 1) { repository.list(StatusFeedMode.FRIENDS, null, any()) }
+    }
+
+    @Test
+    fun `switching to an already-cached mode paints it instantly without a fetch`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("f"), hasMore = false)
+        val shared = StatusBarCache(FakeClock())
+        shared.save(StatusFeedMode.DISCOVER, listOf(entry("disc")))
+
+        val vm = viewModel(cache = shared)
+        vm.setMode(StatusFeedMode.DISCOVER)
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.mode).isEqualTo(StatusFeedMode.DISCOVER)
+            assertThat(s.statuses.map { it.id }).containsExactly("disc")
+        }
+        coVerify(exactly = 0) { repository.list(StatusFeedMode.DISCOVER, null, any()) }
+    }
+
+    @Test
+    fun `refresh bypasses a fresh cache and forces a network reload`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("net"), hasMore = false)
+        val warm = StatusBarCache(FakeClock())
+        warm.save(StatusFeedMode.FRIENDS, listOf(entry("cached")))
+
+        val vm = viewModel(cache = warm)
+        vm.refresh()
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("net")
+        }
+        coVerify(exactly = 1) { repository.list(StatusFeedMode.FRIENDS, null, any()) }
+    }
+
+    @Test
+    fun `a published status is written through to the cache`() = runTest {
+        val clock = FakeClock(now = 0L)
+        val shared = StatusBarCache(clock)
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), hasMore = false)
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
+            NetworkResult.Success(entry("new", userId = "me-id", emoji = "🔥"))
+
+        val vm = viewModel(currentUser = user("me-id"), cache = shared)
+        vm.setStatus(emoji = "🔥")
+
+        val cached = (shared.load(StatusFeedMode.FRIENDS) as CacheResult.Fresh).value
+        assertThat(cached.map { it.id }).containsExactly("new", "a").inOrder()
+    }
+
+    @Test
+    fun `clearing the own status is written through to the cache`() = runTest {
+        val shared = StatusBarCache(FakeClock())
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("mine", userId = "me-id"), entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.delete("mine") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"), cache = shared)
+        vm.clearStatus()
+
+        val cached = (shared.load(StatusFeedMode.FRIENDS) as CacheResult.Fresh).value
+        assertThat(cached.map { it.id }).containsExactly("a")
     }
 }

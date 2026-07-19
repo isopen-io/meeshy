@@ -2,6 +2,26 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-19, `status-bar-l1-cache`) — the `cache/` package is git-ignored; force-add new files there
+The root `.gitignore` line `*/**/cache` matches the `me/meeshy/sdk/cache/` **source** package, not just build
+caches. Already-tracked files there (`cacheFirstFlow.kt`, `CachePolicy.kt`, `CacheResult.kt`) stay tracked, but any
+**new** file dropped into that package is silently ignored — `git add -A` skips it even though it compiles and its
+tests run and pass. Symptom: `git diff --cached --stat` is missing the file, yet the build/tests reference it. Fix:
+`git add -f apps/android/sdk-core/src/.../cache/<NewFile>.kt`. Verify after staging with
+`git diff --cached --name-only | grep cache`. (A cleaner long-term fix — narrowing the ignore to `**/build/**cache`
+— would touch the root `.gitignore`, i.e. outside `apps/android`, so it needs its own explicit run.)
+- **Cache-first without reworking pagination:** to add an L1 cache to a VM that already owns cursor pagination +
+  optimistic mutations, DON'T convert it to `cacheFirstFlow` (that observes a Flow and self-revalidates — it fights a
+  manually-paginated VM). Instead add a tiny snapshot store (`StatusBarCache`, like `ProfileStatsCacheRepository`),
+  read it in a `loadFromCacheThenNetwork(mode)` switch (Fresh→serve no-fetch, Stale/Syncing→serve+revalidate,
+  Empty→skeleton+fetch), and write through after the first page + each mutation. Keep the fresh/stale decision in the
+  shared `classifyCache` SSOT so the snapshot cache and the streaming flow can't drift.
+- **Replace-not-merge on the first page:** when a background refresh re-fetches page 1 over a cache-seeded list, the
+  success path must REPLACE (`listState.value = StatusBarListState().appended(page)`), not merge
+  (`listState.update { it.appended(page) }`) — else a server-side-deleted status lingers. This is invisible for the
+  old cold callers (they reset to cold first, so append==replace) but essential once a seed is present. iOS does
+  `statuses = entries` (replace) on the first page for the same reason.
+
 ## Lesson (2026-07-19, `status-popover-republish`) — the iOS "popover republish" lives in `StatusBubbleOverlay`, NOT the read-only `StatusBarView.statusPopover`
 The feature-parity tracker said "popover republish/react action". Two traps: (1) iOS `StatusBarView.statusPopover`
 is **read-only** — the republish button is in a *different* component, `StatusBubbleOverlay` (a conversation-list
