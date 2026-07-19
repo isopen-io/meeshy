@@ -1,5 +1,36 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **status-popover reaction picker** landed (slice `status-popover-reaction-picker`,
+> feature-parity §G → "Mood status react from the bar popover" — the piece the `status-bar-l1-cache` /
+> `status-popover-republish` slices flagged as deferred: `StatusesViewModel.react` (optimistic bump + rollback) and
+> the `StatusBarListState.reacted` reducer were already built and tested; only the picker UI was missing). Parity
+> source: iOS `StatusViewModel.reactToStatus` (optimistic `reactionSummary[emoji]+=1`, rollback on failure). **(1)**
+> new pure `statusReactionChips(reactionSummary): List<StatusReactionChip>` (`:feature:feed` `StatusBarPresentation`)
+> — the SSOT for how a mood's existing reactions read: drops zero/absent counts, orders **count-desc with an emoji
+> tie-break** so the render is stable regardless of the map's iteration order. **(2)** `StatusPopoverModel` gains
+> `reactions` (the chips, surfaced regardless of ownership — they show what others placed) + `canReact = !isOwn`
+> (you don't react to your own mood, coherent with the `canRepublish` gate; existing reactions still display on your
+> own popover). **(3)** `StatusPopover` Composable renders a `ReactionSummaryRow` (Indigo-tinted emoji+count pills)
+> when reactions exist, and a `ReactionPickerRow` (quick-reaction strip from `EmojiCatalog.defaultQuickReactions`,
+> the same SSOT the chat + story pickers use) when `canReact`; tapping an emoji fires `viewModel.react(entry.id,
+> emoji)` and dismisses the popover. **+8 tests** — `StatusBarPresentationTest` (+8): canReact own/other,
+> reactions-from-summary / none-when-null, chips empty-for-null / drop-zero-and-negative / order-desc /
+> tie-break-by-emoji. **Mutation check (RED proof):** structural RED (tests don't compile without `canReact` /
+> `reactions` / `statusReactionChips` / `StatusReactionChip`); behaviourally, replacing the comparator with a plain
+> `sortedBy { count }` fails **exactly** `reaction chips order by descending count` + `reaction chips break count
+> ties by emoji for a stable order` + `popover surfaces the existing reactions from the entry summary` (23 tests, 3
+> failed) — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:feature:feed:testDebugUnitTest` **BUILD SUCCESSFUL** (`StatusBarPresentationTest` 23/23, was 15 + 8),
+> `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 2 production + 1 test +
+> 1 string + 2 tracking; **SDK purity** — `statusReactionChips` is a pure presentation projection in `:feature:feed`,
+> the "when to react" orchestration stays in the VM, the emoji strip reuses the `:core:model` `EmojiCatalog` SSOT;
+> **SSOT** — one chip-ordering law, one quick-reaction catalog; **UDF** — immutable model, pure projection, the VM's
+> `react` already snapshot→optimistic→rollback; **Instant-App** — the optimistic bump is instant, network confirms;
+> **coherence** — Indigo-accent chips, natural tap→popover→emoji gesture, no dead end [the popover's react
+> affordance was the missing action]; no coverage floor lowered, no test weakened). **Next slice:** §G — the
+> **Friends / Discover status feed toggle** UI (drive the already-built `StatusesViewModel.setMode`), then the disk
+> **L2** status cache (Room-backed cold-launch parity across process death, following `ProfileStatsCacheRepository`).
+
 > On 2026-07-19 the **L1 status cache** landed (slice `status-bar-l1-cache`, feature-parity §G → "Instant-app status
 > bar" — the instant-app follow-up the `statuses-viewmodel` slice flagged in its own KDoc). The parity source is iOS
 > `StatusViewModel.loadStatuses`, which reads `CacheCoordinator.shared.statuses.load(for: "statuses_\(mode)")` and

@@ -1982,8 +1982,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tier (cold-launch parity across process death) is the tracked next follow-up.
 - [x] Instant-app status bar (L1 in-memory cache, cache-first paint) — `StatusBarCache` (slice
       `status-bar-l1-cache`, 2026-07-19). Disk L2 tier (cold-launch across process death) is the tracked follow-up.
-- [ ] Mood status react from the bar popover (reaction picker) — deferred follow-up (`StatusesViewModel.react`
-      already built; needs a picker UI, out of the republish slice's scope)
+- [x] Mood status react from the bar popover (reaction picker) — **landed** (slice `status-popover-reaction-picker`,
+      2026-07-19): the popover now shows an existing-reactions summary row (pure `statusReactionChips` — count-desc,
+      emoji tie-break) plus a quick-reaction strip (`EmojiCatalog.defaultQuickReactions`) gated to OTHER users'
+      statuses (`StatusPopoverModel.canReact = !isOwn`); tapping fires the already-built optimistic
+      `StatusesViewModel.react` and dismisses. Own status stays read-only (no react/republish), coherent with the
+      republish gate.
 - [ ] Friends / Discover status feeds
 
 ## H. Calls (audio / video)

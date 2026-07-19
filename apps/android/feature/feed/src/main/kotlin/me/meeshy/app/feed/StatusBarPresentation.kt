@@ -60,12 +60,34 @@ data class StatusPopoverModel(
     val viaUsername: String?,
     val remaining: MoodStatusExpiry.Remaining?,
     val canRepublish: Boolean,
+    val canReact: Boolean,
+    val reactions: List<StatusReactionChip>,
 )
+
+/** One aggregated reaction on a status — an [emoji] and its running [count]. */
+data class StatusReactionChip(val emoji: String, val count: Int)
+
+/**
+ * Aggregate a status `reactionSummary` into display chips: drop the zero/absent
+ * counts, then order by descending [StatusReactionChip.count] with ties broken by
+ * emoji so the render stays stable regardless of the map's iteration order. Pure —
+ * the single source of truth for how a status's existing reactions read in the
+ * popover. A `null` (or all-empty) summary yields an empty list.
+ */
+fun statusReactionChips(reactionSummary: Map<String, Int>?): List<StatusReactionChip> =
+    reactionSummary.orEmpty()
+        .asSequence()
+        .filter { it.value > 0 }
+        .map { StatusReactionChip(emoji = it.key, count = it.value) }
+        .sortedWith(compareByDescending<StatusReactionChip> { it.count }.thenBy { it.emoji })
+        .toList()
 
 /**
  * Project [entry] into its popover model, deriving the countdown at [nowMillis].
- * [isOwn] gates the republish action: iOS shows "Republier" only on OTHER users'
- * statuses (`onRepublish != nil`), never on your own — so `canRepublish = !isOwn`.
+ * [isOwn] gates the two actions to OTHER users' statuses only: iOS shows "Republier"
+ * via `onRepublish != nil`, and reacting to your own mood is not an offered gesture —
+ * so both `canRepublish` and `canReact` are `!isOwn`. The existing [StatusReactionChip]
+ * list is surfaced regardless of ownership (it shows what others placed).
  */
 fun statusPopoverModel(
     entry: StatusEntry,
@@ -83,4 +105,6 @@ fun statusPopoverModel(
             nowMillis = nowMillis,
         ),
         canRepublish = !isOwn,
+        canReact = !isOwn,
+        reactions = statusReactionChips(entry.reactionSummary),
     )
