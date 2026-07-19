@@ -64,21 +64,15 @@ struct StarredMessagesView: View {
         }
     }
 
+    // Native HIG empty state (`ContentUnavailableView` on iOS 17+, faithful
+    // fallback on iOS 16) via the shared design-system wrapper — same treatment
+    // as FeedView / CreateShareLinkView. Centered by the enclosing ZStack.
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "star.circle")
-                .font(.system(size: 56, weight: .regular))
-                .foregroundStyle(MeeshyColors.indigo400)
-                .accessibilityHidden(true)
-            Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
-            Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
-                .font(MeeshyFont.relative(13))
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
+        AdaptiveContentUnavailableView(
+            String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main),
+            systemImage: "star.circle",
+            description: Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
+        )
     }
 
     private func navigate(to snapshot: StarredMessageSnapshot) {

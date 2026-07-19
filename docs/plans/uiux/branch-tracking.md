@@ -31,6 +31,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   `StoryExpiredContent`, `StoryViewerContainer`, `BubbleStandardLayout`, `CommunityLinksView`,
 >   `CommunityLinkDetailView`, `ShareLinksView`, `SharePickerView`, `ConversationView+MessageRow`,
 >   `WebRTCVideoView`…), ou **passe state-of-the-art** au tarissement.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 143i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **143i (terminée, branche `claude/laughing-thompson-rrt0o4`, base `main` HEAD `efedb69e4`)** :
+>   Consolidation design-system — état vide de `StarredMessagesView` (écran « Messages favoris »). Le `VStack`
+>   hand-rollé (icône `star.circle` `.font(.system(size: 56))` + titre/sous-titre `MeeshyFont.relative` +
+>   `padding` manuels + `.accessibilityHidden`) → composant natif-first **`AdaptiveContentUnavailableView`**
+>   (`MeeshyUI/Compatibility/`) qui rend le vrai `ContentUnavailableView` d'Apple sur iOS 17+ et un fallback
+>   fidèle iOS 16. **Déjà adopté par `FeedView`/`CreateShareLinkView`** → parité inter-écrans. Gains : −15
+>   lignes custom, Dynamic Type + VoiceOver + centrage + style large-content gérés nativement, adaptation
+>   multi-version iOS intégrée. Mêmes clés i18n (`starred.messages.empty.title`/`.subtitle`), même icône. 1
+>   fichier, 0 logique, 0 test/clé i18n neuve. `StarredRow`/store/navigation/toolbar non touchés. Aucun test
+>   ne référence la vue. Build local impossible (pas de toolchain Swift/Xcode sur l'env Linux) → validation
+>   par CI macOS. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `StarredMessagesView` état vide SOLDÉ** : composant natif posé. Ne plus reprendre cet état vide.
+> - **Base de départ 144i : `main` HEAD**. Candidat prioritaire : **`BookmarksView`** (même migration état vide
+>   → `AdaptiveContentUnavailableView`, MAIS dans un `ScrollView > LazyVStack` avec `.refreshable` → soin de
+>   centrage vertical requis, iteration dédiée). Sinon `SupportView`/`UserStatsView` (déjà denses en a11y —
+>   vérifier avant reprise). Toujours vérifier l'absence de contention avec les PR iOS ouvertes.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 142i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **142i (terminée, branche `claude/laughing-thompson-f7d2yn`, base `main` HEAD `424bfed`)** :
 >   Accessibilité VoiceOver-**structure** de `FriendRequestListView` (écran « Demandes d'amis »). Surface
