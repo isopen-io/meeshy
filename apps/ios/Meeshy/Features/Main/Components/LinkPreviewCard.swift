@@ -24,6 +24,21 @@ struct LinkPreviewCard: View {
     private var accent: Color { Color(hex: accentColor) }
     private var fallbackHost: String { URL(string: urlString)?.host ?? urlString }
 
+    /// Concise VoiceOver label for the whole card. Prefers the resolved site
+    /// name + title once metadata lands; otherwise falls back to the host so a
+    /// still-resolving or metadata-less card announces "Lien : example.com"
+    /// instead of reading the full URL character group.
+    private var accessibilityLabelText: String {
+        let detail: String
+        if let meta = metadata, meta.hasAnyVisibleField {
+            let parts = [meta.siteName?.nilIfBlank ?? meta.host, meta.title?.nilIfBlank].compactMap { $0 }
+            detail = parts.isEmpty ? fallbackHost : parts.joined(separator: ", ")
+        } else {
+            detail = fallbackHost
+        }
+        return String(format: String(localized: "link-preview.a11y.label", defaultValue: "Lien : %@", bundle: .main), detail)
+    }
+
     var body: some View {
         Button {
             HapticFeedback.light()
@@ -32,6 +47,14 @@ struct LinkPreviewCard: View {
             content
         }
         .buttonStyle(.plain)
+        // A Button folds every child `Text` into its VoiceOver label, so the
+        // skeleton/failed states (which render `Text(urlString)`) made VoiceOver
+        // spell out the entire raw URL. Replace that with a concise link
+        // description + a "this opens Safari" hint, and mark it as a link so the
+        // trait matches the action.
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityHint(String(localized: "link-preview.a11y.hint", defaultValue: "Ouvre le lien dans Safari", bundle: .main))
+        .accessibilityAddTraits(.isLink)
         // Resolve OG metadata into LOCAL state, keyed by url so it runs once per
         // URL (and re-runs only if this recycled cell rebinds to a different
         // message). The store returns cached/known-failed data instantly; a real
