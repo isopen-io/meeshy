@@ -951,7 +951,11 @@ extension StoryComposerView {
                 // CALayer media rendering picks it up on the next rebuild.
                 if kind == .media {
                     if let img = viewModel.loadedImages[oldId] {
-                        viewModel.loadedImages[newId] = img
+                        // `registerLoadedImage` bump la version → le canvas reader se
+                        // rafraîchit et stampe la vignette du clone tout de suite. Un
+                        // simple `loadedImages[newId] = img` laissait le duplicata noir
+                        // (reader périmé, même cause 2026-07-20).
+                        viewModel.registerLoadedImage(img, for: newId)
                     }
                     if let url = viewModel.loadedVideoURLs[oldId] {
                         viewModel.loadedVideoURLs[newId] = url

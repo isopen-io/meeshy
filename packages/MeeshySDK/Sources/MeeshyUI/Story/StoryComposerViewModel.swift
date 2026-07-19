@@ -231,6 +231,23 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// de valeur intra-clé). Cf. `ComposerImageCacheReader.version`.
     @Published var loadedImagesVersion: UInt64 = 0
 
+    /// Enregistre (ou retire, si `image == nil`) le bitmap importé/édité d'un
+    /// média sous sa clé ET **bump `loadedImagesVersion`** dans la foulée.
+    /// Le `StoryComposerCanvasView` ne reconstruit son `ComposerImageCacheReader`
+    /// — donc ne stampe le bitmap sur le canvas — QUE lorsque cette version
+    /// change (cf. `StoryCanvasRepresentable.updateUIView`). Muter `loadedImages`
+    /// directement sans ce bump laisse le reader périmé : un média fraîchement
+    /// ajouté ne s'affiche jamais et le canvas reste noir (bug user 2026-07-20).
+    /// Toute *nouvelle* écriture dans `loadedImages` DOIT passer par ici.
+    func registerLoadedImage(_ image: UIImage?, for id: String) {
+        if let image {
+            loadedImages[id] = image
+        } else {
+            loadedImages.removeValue(forKey: id)
+        }
+        loadedImagesVersion &+= 1
+    }
+
     /// Captions / transcription metadata produced by `MeeshyVideoEditorView`
     /// when the user transcribes a foreground video then taps « Terminer ».
     /// Keyed by `StoryMediaObject.id` (same key space as `loadedVideoURLs`).
