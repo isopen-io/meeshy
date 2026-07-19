@@ -147,6 +147,17 @@ extension StoryComposerView {
                     areFabsVisible = true
                 }
             }
+            // Switching BETWEEN tabs of an already-open tool sheet (the
+            // ComposerToolPanelHost chip row) goes through `selectTool(_:)`,
+            // which changes `activeTool` but never touches `isTimelineVisible`
+            // — so the `isTimelineVisible` trigger below never re-fires when
+            // re-visiting Timeline after changing something (e.g. the opening
+            // effect) on another tab first. Reload here on every genuine
+            // transition INTO `.timeline` so the chrome lane never shows a
+            // stale snapshot.
+            if newTool == .timeline {
+                viewModel.loadCurrentSlideIntoTimeline()
+            }
         }
         .adaptiveOnChange(of: viewModel.isDrawingImmersive) { _, immersive in
             // Bascule liste ⇄ plein écran : le pinceau sélectionné replie le

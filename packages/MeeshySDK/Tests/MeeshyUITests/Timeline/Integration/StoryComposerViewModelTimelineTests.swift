@@ -111,4 +111,51 @@ final class StoryComposerViewModelTimelineTests: XCTestCase {
             "The isTimelineVisible trigger must call viewModel.loadCurrentSlideIntoTimeline() to refresh the chrome lane snapshot when the sheet appears."
         )
     }
+
+    /// `isTimelineVisible` only flips true on the FIRST entry into the
+    /// timeline sheet — switching BETWEEN tabs of an already-open tool sheet
+    /// goes through `viewModel.selectTool(_:)`, which changes `activeTool`
+    /// but never touches `isTimelineVisible`. Confirmed live on-device: after
+    /// picking "Fade" as the opening effect on the Background tab, then
+    /// switching to the Timeline tab (activeTool → .timeline, isTimelineVisible
+    /// already true from the initial FAB tap so it does NOT re-fire), the
+    /// chrome lane still showed a stale snapshot. Without a SECOND trigger
+    /// tied to `activeTool`, that path never refreshes.
+    func test_activeTool_hasReloadTrigger_inCanvasView() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // Integration
+            .deletingLastPathComponent() // Timeline
+            .deletingLastPathComponent() // MeeshyUITests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // MeeshySDK package root
+            .appendingPathComponent("Sources/MeeshyUI/Story/StoryComposerView+Canvas.swift")
+
+        guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+            throw XCTSkip("StoryComposerView+Canvas.swift not reachable from test bundle (\(url.path))")
+        }
+
+        guard source.contains(".adaptiveOnChange(of: viewModel.activeTool)") else {
+            XCTFail("Expected StoryComposerView+Canvas.swift to observe viewModel.activeTool.")
+            return
+        }
+
+        let anchor = "newTool == .timeline"
+        guard let anchorRange = source.range(of: anchor) else {
+            XCTFail("""
+                Expected the existing `viewModel.activeTool` onChange handler in \
+                StoryComposerView+Canvas.swift to branch on `newTool == .timeline`. \
+                Switching tabs within an already-open tool sheet goes through `selectTool(_:)`, \
+                which changes `activeTool` but never touches `isTimelineVisible` — without this \
+                branch, re-visiting the Timeline tab after changing the opening/closing effect on \
+                another tab shows a stale chrome lane.
+                """)
+            return
+        }
+
+        let tail = source[anchorRange.upperBound...].prefix(120)
+        XCTAssertTrue(
+            tail.contains("loadCurrentSlideIntoTimeline()"),
+            "The `newTool == .timeline` branch must call viewModel.loadCurrentSlideIntoTimeline() to refresh the chrome lane snapshot."
+        )
+    }
 }
