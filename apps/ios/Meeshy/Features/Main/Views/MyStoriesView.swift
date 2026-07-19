@@ -27,6 +27,11 @@ struct MyStoriesView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
+    // Réinjectés par le tray sur la sheet (même raison que ses covers : la
+    // sheet interne SharePickerView crasherait sur un env object manquant).
+    @EnvironmentObject private var router: Router
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+
     /// Surfaces `activeUpload`'s failure history so it can be listed
     /// alongside published stories with a direct retry — the tray badge
     /// (`StoryUploadOverlay`) only shows the SINGLE current attempt.
@@ -34,6 +39,8 @@ struct MyStoriesView: View {
 
     @State private var viewersStory: StoryItem?
     @State private var exportStory: StoryItem?
+    @State private var saveStory: StoryItem?
+    @State private var forwardStory: StoryItem?
     @State private var deleteCandidate: StoryItem?
     @State private var isReposting = false
     @StateObject private var exportViewModel = StoryExportShareViewModel()
@@ -106,9 +113,11 @@ struct MyStoriesView: View {
                                 isDark: isDark,
                                 isSelecting: isSelecting,
                                 isSelected: selectedStoryIDs.contains(story.id)
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture { handleRowTap(story) }
+                            ) {
+                                actionMenu(for: story)
+                            } onTap: {
+                                handleRowTap(story)
+                            }
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 if !isSelecting {
                                     Button(role: .destructive) { deleteCandidate = story } label: {
@@ -195,6 +204,24 @@ struct MyStoriesView: View {
         .sheet(item: $exportStory) { story in
             StoryExportShareSheet(story: story, viewModel: exportViewModel)
         }
+        .sheet(item: $saveStory) { story in
+            StoryExportShareSheet(story: story, viewModel: exportViewModel, mode: .saveToPhotos)
+        }
+        .sheet(item: $forwardStory) { story in
+            SharePickerView(
+                sharedContent: .story(
+                    item: story,
+                    authorName: AuthManager.shared.currentUser?.displayName
+                        ?? AuthManager.shared.currentUser?.username ?? ""
+                ),
+                onDismiss: { forwardStory = nil },
+                onShareToConversation: nil
+            )
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
+            .environmentObject(statusViewModel)
+            .presentationDetents([.medium, .large])
+        }
         .alert(
             String(localized: "story.mine.delete.title", defaultValue: "Supprimer la story ?"),
             isPresented: Binding(get: { deleteCandidate != nil }, set: { if !$0 { deleteCandidate = nil } })
@@ -279,6 +306,16 @@ struct MyStoriesView: View {
             exportStory = story
         } label: {
             Label(String(localized: "story.mine.share", defaultValue: "Partager"), systemImage: "square.and.arrow.up")
+        }
+        Button {
+            saveStory = story
+        } label: {
+            Label(String(localized: "story.mine.save", defaultValue: "Enregistrer"), systemImage: "square.and.arrow.down")
+        }
+        Button {
+            forwardStory = story
+        } label: {
+            Label(String(localized: "story.mine.forward", defaultValue: "Transférer"), systemImage: "arrowshape.turn.up.right")
         }
         Button {
             repost(story)
@@ -382,19 +419,26 @@ struct MyStoriesView: View {
 
 // MARK: - Row
 
-private struct MyStoryRow: View {
+private struct MyStoryRow<MenuContent: View>: View {
     let story: StoryItem
     let accentColor: Color
     let isDark: Bool
     let isSelecting: Bool
     let isSelected: Bool
+    let menuContent: () -> MenuContent
+    let onTap: () -> Void
 
-    init(story: StoryItem, accentColor: Color, isDark: Bool, isSelecting: Bool = false, isSelected: Bool = false) {
+    init(story: StoryItem, accentColor: Color, isDark: Bool,
+         isSelecting: Bool = false, isSelected: Bool = false,
+         @ViewBuilder menuContent: @escaping () -> MenuContent,
+         onTap: @escaping () -> Void) {
         self.story = story
         self.accentColor = accentColor
         self.isDark = isDark
         self.isSelecting = isSelecting
         self.isSelected = isSelected
+        self.menuContent = menuContent
+        self.onTap = onTap
     }
 
     /// URL brute (résolue en interne par `CachedAsyncImage` via `MeeshyConfig`).
@@ -404,32 +448,49 @@ private struct MyStoryRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            if isSelecting {
-                selectionCircle
-            }
-            thumbnail
-            VStack(alignment: .leading, spacing: 4) {
-                Text(story.timeAgo)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(isDark ? .white : MeeshyColors.indigo950)
+            // Zone principale = Button « ouvrir » (ou toggle en sélection).
+            // Un `.onTapGesture` posé sur toute la ligne interceptait AUSSI le
+            // tap destiné au Menu « … » (le viewer s'ouvrait à la place du
+            // menu) — le Button borne la zone tappable au contenu, le Menu
+            // reste seul maître de son ellipsis.
+            Button(action: onTap) {
                 HStack(spacing: 12) {
-                    metric(icon: "eye.fill", value: story.viewCount ?? 0)
-                    metric(icon: "heart.fill", value: story.reactionCount)
-                    metric(icon: "bubble.left.fill", value: story.commentCount)
+                    if isSelecting {
+                        selectionCircle
+                    }
+                    thumbnail
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(story.timeAgo)
+                            .font(MeeshyFont.relative(15, weight: .semibold))
+                            .foregroundColor(isDark ? .white : MeeshyColors.indigo950)
+                        HStack(spacing: 12) {
+                            metric(icon: "eye.fill", value: story.viewCount ?? 0)
+                            metric(icon: "heart.fill", value: story.reactionCount)
+                            metric(icon: "bubble.left.fill", value: story.commentCount)
+                        }
+                    }
+                    Spacer()
                 }
+                .contentShape(Rectangle())
             }
-            Spacer()
+            .buttonStyle(.plain)
             if !isSelecting {
-                // Affordance décorative « … » : les actions réelles (Ouvrir,
-                // Partager, Republier, Supprimer) vivent dans le `.contextMenu`
-                // et les `.swipeActions` de la ligne — tous deux exposés à
-                // VoiceOver. Le glyphe reste FIGÉ (déco, non-texte) et masqué :
-                // la ligne compose déjà son propre libellé (children: .ignore).
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.secondary)
-                    .padding(8)
-                    .accessibilityHidden(true)
+                // « … » ouvre le MÊME menu d'actions que le long-press
+                // (Partager, Enregistrer, Transférer, Republier, Supprimer) —
+                // un tap suffit (bug : l'affordance était décorative). VoiceOver
+                // garde ses chemins existants (`.contextMenu` + `.swipeActions`
+                // de la ligne) : le glyphe reste masqué du rotor, la ligne
+                // compose déjà son propre libellé (children: .ignore).
+                Menu {
+                    menuContent()
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(8)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityHidden(true)
             }
         }
         .padding(.vertical, 4)

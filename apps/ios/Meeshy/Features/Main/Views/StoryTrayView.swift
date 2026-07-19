@@ -92,6 +92,11 @@ struct StoryTrayView: View {
                     }
                 }
             )
+            // Réinjection à travers la frontière de sheet : la sheet interne
+            // SharePickerView (« Transférer ») crasherait sur un env object
+            // manquant — même raison que les fullScreenCovers du viewer.
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
@@ -627,6 +632,10 @@ struct PinnedStoryTrailBand: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
+    // Capturés pour réinjection sur la sheet MyStoriesView (sa sheet interne
+    // SharePickerView « Transférer » crasherait sur un env object manquant).
+    @EnvironmentObject private var router: Router
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
     /// Directive user 2026-07-14 : le tap sur son propre anneau ouvre
     /// toujours la liste de gestion, même depuis le band épinglé replié —
@@ -721,6 +730,8 @@ struct PinnedStoryTrailBand: View {
                             }
                         }
                     )
+                    .environmentObject(router)
+                    .environmentObject(conversationListViewModel)
                 }
         }
     }
