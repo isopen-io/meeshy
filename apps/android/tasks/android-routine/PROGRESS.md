@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **L1 status cache** landed (slice `status-bar-l1-cache`, feature-parity §G → "Instant-app status
+> bar" — the instant-app follow-up the `statuses-viewmodel` slice flagged in its own KDoc). The parity source is iOS
+> `StatusViewModel.loadStatuses`, which reads `CacheCoordinator.shared.statuses.load(for: "statuses_\(mode)")` and
+> switches `.fresh`→serve / `.stale`→serve+revalidate / `.expired,.empty`→fetch, saving after every network +
+> mutation. **(1)** new pure `classifyCache(value, ageMillis, policy): CacheResult` (`:sdk-core/cache`) — the SSOT
+> fresh/stale/syncing/empty verdict, extracted from the exact `when`-block that lived inside `cacheFirstFlow`, which
+> now delegates to it (one classifier, no drift). **(2)** `CachePolicy.Statuses` (fresh 60s / keep 24h, mirrors the
+> Stories policy — moods live ~24h). **(3)** `StatusBarCache` (`:sdk-core/status`, `@Singleton`, injects the Hilt
+> `CacheClock`) — an in-memory `ConcurrentHashMap<StatusFeedMode, Snapshot>` = the memory tier of iOS
+> `CacheCoordinator.statuses`, keyed per mode (iOS `statuses_<mode>`); `load` classifies through `classifyCache`,
+> `save` stamps at the clock, `invalidate` drops one mode. It holds no network dep / no product decision — a pure
+> keyed store (grain test: opaque params, agnostic about *when* → SDK, alongside `ProfileStatsCacheRepository`).
+> **(4)** `StatusBarListState.seeded(statuses)` — a cache cold-paint seed (marks `hasLoaded`, leaves pagination cold
+> so the background first page re-establishes it). **(5)** `StatusesViewModel` wired cache-first: `loadInitial` +
+> `setMode` route through a shared `loadFromCacheThenNetwork` (Fresh→serve no-fetch; Stale/Syncing→serve + revalidate;
+> Empty→skeleton + fetch), `fetchFirstPage` now **replaces** listState with the authoritative page (was append onto a
+> caller-reset cold state — same result for the old cold callers, correct replace-not-merge for the new seeded ones)
+> **and writes the page through to the cache**, `setStatus`/`clearStatus` write through on success (iOS
+> `saveCacheSnapshot`), `refresh` invalidates the cache then reloads (iOS `refresh`). **Improvement over iOS:** an
+> *expired* (`Syncing`) snapshot is still served while it revalidates (SWR) — iOS discards expired data. **+23 tests**
+> — `ClassifyCacheTest` (6: null→Empty, fresh/keep boundaries, past-fresh→Stale, past-keep→Syncing, Fresh carries
+> age), `StatusBarCacheTest` (9: unsaved→Empty, fresh-boundary, past-fresh→Stale, past-keep→Syncing, per-mode
+> isolation, invalidate scope, re-save restamp), `StatusesViewModelTest` (+8: fresh-served-no-fetch,
+> stale-paints-then-network-replaces, write-through on fetch/setStatus/clearStatus, mode-switch-instant,
+> refresh-bypasses-fresh-cache; the existing 18 unchanged and still green). **Mutation check (RED proof):** structural
+> RED (the tests don't compile without `classifyCache`/`StatusBarCache`/the VM's 3rd param); behaviourally, reverting
+> `fetchFirstPage` to merge (`listState.update { it.appended }`) instead of replace fails **exactly**
+> `a stale cached bar paints instantly then the network first page replaces it` (26 tests, 1 failed) — behavioural,
+> not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:sdk-core:testDebugUnitTest` **836** green (was 821 + 15: 6 classify + 9 cache), `:feature:feed:testDebugUnitTest`
+> **487** green (was 480 - the CacheFirstFlow refactor kept its 5, +8 VM = 26 in `StatusesViewModelTest`),
+> `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 6 production + 3 test;
+> **SDK purity** — `StatusBarCache`/`classifyCache` are stateless-ish store/pure building blocks in `:sdk-core`, the
+> *when-to-read/write* orchestration stays in the `:feature:feed` VM; **SSOT** — one `classifyCache` used by both the
+> flow and the snapshot cache, one policy; **UDF** — immutable `StateFlow`, transitions pure; **Instant-App** —
+> cache-first, no skeleton when a snapshot exists, SWR on expired; **coherence** — no UI change, pure behaviour; no
+> coverage floor lowered, no test weakened). **Note:** the `cache/` package matches the root `.gitignore`
+> `*/**/cache` rule — new files there need `git add -f` (already-tracked siblings are unaffected); see NOTES.md.
+> **Next slice:** §G — the bar-popover **reaction picker** (`StatusesViewModel.react` is built, needs the picker UI,
+> iOS puts reactions in a picker not the popover), then the disk **L2** status cache (Room-backed, cold-launch parity
+> across process death, following `ProfileStatsCacheRepository`).
+
 > On 2026-07-19 the **status popover Republish action** landed (slice `status-popover-republish`, feature-parity §G →
 > "Status thought-bubble popover … with republish action" — the piece the `status-bar-compose` slice left open). The
 > parity source is iOS `StatusBubbleOverlay` (NOT the read-only `StatusBarView.statusPopover`): a "Republier" button

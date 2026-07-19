@@ -1965,6 +1965,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `StatusRepositoryTest`: create body carries repost attribution; 1 `StatusesViewModelTest`: setStatus forwards
       `viaUsername`). **The react half is a separate feature** — iOS puts reactions in a picker, NOT this popover;
       deferred to a follow-up.
+      **L1 status cache landed** (slice `status-bar-l1-cache`, 2026-07-19): the in-memory `:sdk-core`
+      `StatusBarCache` (keyed per `StatusFeedMode`, iOS `cacheKey = "statuses_<mode>"`) is the Android analogue of
+      the memory tier of iOS `CacheCoordinator.statuses`. `StatusesViewModel` now paints a warm re-entry (or a switch
+      back to an already-loaded feed) instantly from the cache before any network call: `loadInitial`/`setMode` route
+      through a cache-first `loadFromCacheThenNetwork` (Fresh → serve, no fetch; Stale/Syncing → serve + background
+      revalidate; Empty → skeleton + fetch, mirroring iOS `loadStatuses`' switch), the first network page + optimistic
+      `setStatus`/`clearStatus` write through to the cache (iOS `saveCacheSnapshot`), and `refresh` invalidates then
+      reloads (iOS `refresh`). The fresh/stale/expired decision is the new pure `classifyCache` SSOT, now shared by
+      `cacheFirstFlow` too (no re-implementation). **Improvement over iOS:** an *expired* snapshot is still served
+      while it revalidates (stale-while-revalidate) rather than discarded. +23 tests (6 `ClassifyCacheTest` boundary
+      arms, 9 `StatusBarCacheTest`: empty/fresh-boundary/stale/syncing/per-mode isolation/invalidate-scope/re-save
+      restamp, 8 `StatusesViewModelTest`: fresh-served-no-fetch, stale-paints-then-replaces, write-through-on-fetch/
+      setStatus/clearStatus, mode-switch-instant, refresh-bypasses-cache). Mutation-proven: merging (not replacing) the
+      first page fails exactly `a stale cached bar paints instantly then the network first page replaces it`. Disk L2
+      tier (cold-launch parity across process death) is the tracked next follow-up.
+- [x] Instant-app status bar (L1 in-memory cache, cache-first paint) — `StatusBarCache` (slice
+      `status-bar-l1-cache`, 2026-07-19). Disk L2 tier (cold-launch across process death) is the tracked follow-up.
 - [ ] Mood status react from the bar popover (reaction picker) — deferred follow-up (`StatusesViewModel.react`
       already built; needs a picker UI, out of the republish slice's scope)
 - [ ] Friends / Discover status feeds
