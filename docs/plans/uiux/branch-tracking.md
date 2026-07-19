@@ -14,6 +14,23 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **167i (terminée, branche `claude/laughing-thompson-v1pxwv`, base `main` HEAD `efedb69e4`)** :
+>   VoiceOver de l'**état vide de `BookmarksView`** (écran « Favoris »). La liste est composée de
+>   `FeedPostCard` (déjà traité 128i) ; la seule surface propre est `emptyState`. Typographie **déjà
+>   sémantique** (`.body`/`.subheadline`) → 0 conversion Dynamic Type ; le glyphe héros `bookmark`
+>   48pt est gelé (doctrine 84i) et **déjà** `.accessibilityHidden(true)`. Le déficit : titre + sous-titre
+>   posaient **2 arrêts VoiceOver**. Correction : `.accessibilityElement(children: .combine)` sur le
+>   `VStack` → une annonce « Aucun favori, Les posts que vous sauvegardez apparaitront ici ». 1 fichier
+>   prod + 1 test source-level (`BookmarksViewAccessibilityTests`, pattern `CallDetailSheet…` — matche
+>   `Bookmark` → phase 2 mais lecture source pure, inoffensive). 0 logique, 0 changement visuel, 0 clé
+>   i18n neuve. PR iOS en vol 165i/166i (#2028/#2030) et autres → **0 contention** (fichiers disjoints).
+>   Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `BookmarksView` SOLDÉ** : typographie sémantique + état vide groupé VoiceOver + glyphe masqué. Ne plus reprendre.
+> - **Base de départ 168i : `main` HEAD**. Candidats frais VoiceOver-structure : `SupportView`,
+>   `UserStatsView` (états/rangées à grouper), écrans « liste + état vide » restants. Toujours vérifier
+>   l'absence de contention avec les PR iOS ouvertes avant de choisir.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).

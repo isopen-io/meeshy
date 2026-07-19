@@ -99,5 +99,6 @@ struct BookmarksView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(.top, 80)
+        .accessibilityElement(children: .combine)
     }
 }
