@@ -1731,7 +1731,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + mention panel in a folded flow [`onDraftChange`/`onMentionSelected`, `submit()` reads the draft and
       resets] so a realtime comment landing never tears the half-typed draft down; `PostCommentsSection`'s
       `CommentComposer` is now controlled with a `CommentMentionStrip` mirroring chat's `MentionSuggestionStrip`.
-      Local-roster only for now — the remote directory merge [`MentionSearch`] is a later slice) **done**;
+      Local-roster only for now — the remote directory merge [`MentionSearch`] is a later slice) **done** +
+      **comment composer remote directory merge** (slice `feed-comment-mention-remote-merge`, 2026-07-19 — a
+      two-character-or-longer `@fragment` now enriches the thread-local roster with the shared user directory,
+      the feed counterpart of chat's `chat-mention-remote-merge`: the `MentionSearch`/`DirectoryMentionSearch`
+      building block was **promoted from `:feature:chat` to `:sdk-core`** [`me.meeshy.sdk.mention`] as the shared
+      SSOT so both composers query one directory port, chat re-points to it; `PostCommentsViewModel` fires a
+      300 ms-debounced `mentionSearch.search(query)` for the active fragment [`MentionComposer.shouldQueryRemote`
+      gates it, a fresh keystroke or a selection cancels the in-flight lookup], excludes the signed-in user,
+      and folds the results below the local roster via the pure `applyRemote` [local-first, stale-fragment
+      dropped]; a failed lookup degrades to the local roster. +6 `PostCommentsViewModelTest`) **done**;
       effects/blur still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
@@ -1883,10 +1892,98 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (needs an Android story-canvas renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`).
 
 ## G. Statuses / Moods
-- [ ] Statuses/moods bar: emoji pills, popover details, infinite scroll
-- [ ] Status composer / republish: emoji grid, 122-char text, visibility (public/friends/except/only)
+> **TTL correction (slice `status-mood-core`, 2026-07-19):** a mood **status expires 1h** after creation
+> (`STATUS_EXPIRY_HOURS = 1`), NOT 21h — the "21h" in the audit is the **STORY** rule. The two are distinct.
+- [~] Statuses/moods bar: emoji pills, popover details, infinite scroll — **model + laws SSOT landed**
+      (slice `status-mood-core`, 2026-07-19): the pure foundation the bar/composer build on. `:core:model`
+      `MoodStatusExpiry` (the 1h expiry law: `effectiveExpiresAtMillis` = explicit `expiresAt` or `createdAt+1h`
+      fallback, `isExpired(now)`, `remaining(now)` → `Remaining(totalSeconds, Tier{EXPIRED/SECONDS/MINUTES})`
+      with the iOS `timeRemaining` label shape, localisation left app-side) + `:sdk-core` `StatusMapper`
+      (`ApiPost.toStatusEntry()` — guard `type=="STATUS"` + non-blank `moodEmoji` + author, avatarColor via
+      `DynamicColorGenerator.colorForName`, via = `viaUsername ?? repostOf.author.username`, **carries
+      `visibility` + `reactionSummary` the iOS converter drops**; `List<ApiPost>.toStatusEntries()` server-order
+      filter; `List<StatusEntry>.orderedForBar(currentUserId)` — own-first then server order, deduped by id).
+      +37 tests (19 `MoodStatusExpiryTest`, 18 `StatusMapperTest`; mutation-proven: `<=`→`<` on the expiry
+      boundary fails exactly 1 test, `own+others`→`others+own` fails exactly the own-first test).
+      **`StatusRepository` transport landed** (slice `status-repository`, 2026-07-19): `:sdk-core`
+      `StatusRepository` (`PostApi` `getStatuses`/`getStatusesDiscover` endpoints + `likeWithEmoji`/`PostLikeRequest`
+      body) — `StatusFeedMode{FRIENDS,DISCOVER}`, cursor-paginated `list()` folding the page into a `StatusPage`
+      of already-mapped `StatusEntry`s via the `toStatusEntries` SSOT (non-statuses dropped, watermark carried,
+      `foldStatusPage` mirroring `PostRepository.foldPostPage`), `create()` (POST type=STATUS → mapped entry, a
+      non-status response → `PARSE` failure), `delete()`, `react(emoji)` → `POST /posts/:id/like` body. +13
+      `StatusRepositoryTest` (list friends/discover endpoint-select, non-status filter, missing-pagination default,
+      failure envelope, transport error; create maps entry/PARSE-guard/transport; delete + react success/failure;
+      mutation-proven: `DISCOVER→getStatuses` fails exactly the discover-endpoint test, dropping the create
+      `PARSE` guard fails exactly the non-status test).
+      **`StatusesViewModel` landed** (slice `statuses-viewmodel`, 2026-07-19): `:feature:feed` `StatusesViewModel`
+      (UDF `StateFlow<StatusesUiState>`) drives the bar over `StatusRepository.list` — the pure `StatusBarListState`
+      accumulation SSOT (`appended` dedup-by-id + watermark, `created` front-hoist, `removed`, `reacted` count-bump)
+      projected through the `orderedForBar` SSOT (own-first, deduped). `loadInitial` (guarded) / `refresh` /
+      `loadMoreIfNeeded` (tail-threshold 3, silent-fail); `setMode(FRIENDS↔DISCOVER)` resets+reloads (inert on the
+      active tab, mirrors iOS's per-mode instance); optimistic `setStatus`/`clearStatus`/`react` with rollback;
+      `myStatus` surfaces only in FRIENDS mode. Cold open → skeleton then first page (no repo status cache yet, same
+      as bookmarks — L1 cache is the tracked instant-app follow-up). +29 tests (11 `StatusBarListStateTest`,
+      18 `StatusesViewModelTest`; mutation-proven: dropping the FRIENDS-only `myStatus` guard fails exactly the
+      discover test).
+      **Compose `StatusBarView` landed** (slice `status-bar-compose`, 2026-07-19): the `:feature:feed` `LazyRow`
+      emoji-pill rail pinned atop `FeedScreen` (iOS `StatusBarView` parity). The pure `buildStatusBarCells` SSOT
+      decomposes `StatusesUiState` into ordered `StatusBarCell`s — leading own/`MyStatus` or `AddStatus`, an inline
+      `ErrorRetry` chip ONLY on a cold-empty failure (iOS `error != nil && statuses.isEmpty`), the other users'
+      `Pill`s (deduped against the own cell), then a trailing `LoadingMore` spinner; `statusPopoverModel` projects a
+      tapped entry into the thought-bubble popover (emoji + author + text + `via` + `MoodStatusExpiry` countdown).
+      The Composable is thin glue: `loadMoreIfNeeded` on pill scroll-in, `refresh` on the retry chip, own-status
+      accent via `hexColor(avatarColor)`, `Popup` popover. +13 tests (`StatusBarPresentationTest`: 9 cell-builder
+      branches + 4 popover, mutation-proven: dropping the cold-empty `isEmpty()` guard fails exactly the
+      error-not-surfaced-when-populated test). **Still open:** the popover's republish/react actions.
+      **Status composer landed** (slice `status-composer`, 2026-07-19): the `:feature:feed` `StatusComposerSheet`
+      (`ModalBottomSheet`) opened from the bar's `AddStatus` cell (previously inert — now real, no dead-end). The
+      pure `StatusComposerDraft` owns every rule the Composable must not re-implement: the publish gate
+      (`canPublish` = a mood emoji is picked, iOS `disabled(selectedEmoji == nil)`), the 122-char cap (`withText`
+      clamps, iOS `onChange` prefix), the trimmed body actually sent (`trimmedContent`, `null` when blank), the
+      near-limit counter warning (`> 100`), and the emoji toggle (tap the selected one to clear it) + visibility
+      change. Publishes through `StatusesViewModel.setStatus(emoji, content, visibility)`. +14 tests
+      (`StatusComposerDraftTest`, mutation-proven: dropping the `withText` clamp fails exactly the over-limit
+      test; the toggle-deselect guard the emoji-clear test). **Deferred (follow-up §G):** EXCEPT/ONLY visibility
+      needs a per-user audience picker Android lacks — this ships the 4 no-audience cases (PUBLIC/COMMUNITY/
+      FRIENDS/PRIVATE, mirroring `StoryVisibility`); persisting the last-used visibility (iOS `@AppStorage`) and
+      offline-draft recovery (iOS `recoverUnsentStatus`) are also tracked follow-ups.
+- [x] Status composer: emoji grid, 122-char text, visibility (public/community/friends/private) — `status-composer`
+      (except/only audience picker deferred, tracked above)
 - [ ] Mood status create, react, delete; 21h expiry + viewer tracking
-- [ ] Status thought-bubble popover on avatar tap with republish action
+- [x] Status thought-bubble popover on avatar tap with republish action — **republish landed** (slice
+      `status-popover-republish`, 2026-07-19): the `Popup` popover already rendered emoji + author + text + `via` +
+      `MoodStatusExpiry` countdown (`status-bar-compose`); this slice adds the **Republish** affordance — shown only
+      on OTHER users' pills, hidden on the own MyStatus popover (`statusPopoverModel(entry, now, isOwn)` →
+      `canRepublish = !isOwn`, the caller deriving `isOwn = entry.id == myStatus?.id`, null-safe so DISCOVER's
+      myStatus-less bar makes every pill republishable — parity with iOS `StatusBubbleOverlay`'s `onRepublish != nil`
+      gate). Tapping it opens the composer **pre-seeded** via `StatusComposerDraft.republish(source)` (source
+      emoji/body/attribution/voice-audio pre-filled — port of iOS `initialEmoji/initialText/viaUsername/repostOfId/
+      repostAudioUrl`); the sheet forwards a pure `StatusPublishRequest` to `StatusesViewModel.setStatus`, which now
+      carries `viaUsername` through `StatusRepository.create` → `CreatePostRequest.viaUsername` (the wire field iOS
+      sends). +12 tests (8 `StatusComposerDraftTest`: publish-request map/null-gate, republish seed/clamp/bodyless/
+      blank-emoji/not-a-repost/attribution; 2 `StatusBarPresentationTest`: own hides / other offers republish; 1
+      `StatusRepositoryTest`: create body carries repost attribution; 1 `StatusesViewModelTest`: setStatus forwards
+      `viaUsername`). **The react half is a separate feature** — iOS puts reactions in a picker, NOT this popover;
+      deferred to a follow-up.
+      **L1 status cache landed** (slice `status-bar-l1-cache`, 2026-07-19): the in-memory `:sdk-core`
+      `StatusBarCache` (keyed per `StatusFeedMode`, iOS `cacheKey = "statuses_<mode>"`) is the Android analogue of
+      the memory tier of iOS `CacheCoordinator.statuses`. `StatusesViewModel` now paints a warm re-entry (or a switch
+      back to an already-loaded feed) instantly from the cache before any network call: `loadInitial`/`setMode` route
+      through a cache-first `loadFromCacheThenNetwork` (Fresh → serve, no fetch; Stale/Syncing → serve + background
+      revalidate; Empty → skeleton + fetch, mirroring iOS `loadStatuses`' switch), the first network page + optimistic
+      `setStatus`/`clearStatus` write through to the cache (iOS `saveCacheSnapshot`), and `refresh` invalidates then
+      reloads (iOS `refresh`). The fresh/stale/expired decision is the new pure `classifyCache` SSOT, now shared by
+      `cacheFirstFlow` too (no re-implementation). **Improvement over iOS:** an *expired* snapshot is still served
+      while it revalidates (stale-while-revalidate) rather than discarded. +23 tests (6 `ClassifyCacheTest` boundary
+      arms, 9 `StatusBarCacheTest`: empty/fresh-boundary/stale/syncing/per-mode isolation/invalidate-scope/re-save
+      restamp, 8 `StatusesViewModelTest`: fresh-served-no-fetch, stale-paints-then-replaces, write-through-on-fetch/
+      setStatus/clearStatus, mode-switch-instant, refresh-bypasses-cache). Mutation-proven: merging (not replacing) the
+      first page fails exactly `a stale cached bar paints instantly then the network first page replaces it`. Disk L2
+      tier (cold-launch parity across process death) is the tracked next follow-up.
+- [x] Instant-app status bar (L1 in-memory cache, cache-first paint) — `StatusBarCache` (slice
+      `status-bar-l1-cache`, 2026-07-19). Disk L2 tier (cold-launch across process death) is the tracked follow-up.
+- [ ] Mood status react from the bar popover (reaction picker) — deferred follow-up (`StatusesViewModel.react`
+      already built; needs a picker UI, out of the republish slice's scope)
 - [ ] Friends / Discover status feeds
 
 ## H. Calls (audio / video)

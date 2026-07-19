@@ -47,6 +47,7 @@ import { getAuthToken } from '@/utils/token-utils';
 import { conversationsService } from '@/services';
 import { detectLanguage } from '@/utils/language-detection';
 import { getMaxMessageLength } from '@/lib/constants/languages';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 // Types et constantes
 import type { User, Message } from '@meeshy/shared/types';
@@ -153,7 +154,9 @@ export function BubbleStreamPage({
   const [isTyping, setIsTyping] = useState(false);
   const [, setDetectedLanguage] = useState<string>('fr');
   const [userLanguage, setUserLanguage] = useState<string>(resolveUserPreferredLanguage());
-  const [selectedInputLanguage, setSelectedInputLanguage] = useState<string>(user.systemLanguage || 'fr');
+  // Canonical (normalized) system code — must match languageChoices[0].code so the
+  // selection-validation effect below never treats the default as out-of-range.
+  const [selectedInputLanguage, setSelectedInputLanguage] = useState<string>(normalizeLanguageCode(user.systemLanguage) || 'fr');
   const [activeUsers, setActiveUsers] = useState<User[]>(initialParticipants || []);
 
   // États de chargement
@@ -362,9 +365,9 @@ export function BubbleStreamPage({
   useEffect(() => {
     const availableLanguageCodes = languageChoices.map(choice => choice.code);
     if (!availableLanguageCodes.includes(selectedInputLanguage)) {
-      setSelectedInputLanguage(user.systemLanguage || 'fr');
+      setSelectedInputLanguage(languageChoices[0]?.code ?? 'fr');
     }
-  }, [languageChoices, selectedInputLanguage, user.systemLanguage]);
+  }, [languageChoices, selectedInputLanguage]);
 
   // Chargement parallèle des messages et utilisateurs
   useEffect(() => {

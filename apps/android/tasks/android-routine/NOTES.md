@@ -2,6 +2,91 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-19, `status-bar-l1-cache`) — the `cache/` package is git-ignored; force-add new files there
+The root `.gitignore` line `*/**/cache` matches the `me/meeshy/sdk/cache/` **source** package, not just build
+caches. Already-tracked files there (`cacheFirstFlow.kt`, `CachePolicy.kt`, `CacheResult.kt`) stay tracked, but any
+**new** file dropped into that package is silently ignored — `git add -A` skips it even though it compiles and its
+tests run and pass. Symptom: `git diff --cached --stat` is missing the file, yet the build/tests reference it. Fix:
+`git add -f apps/android/sdk-core/src/.../cache/<NewFile>.kt`. Verify after staging with
+`git diff --cached --name-only | grep cache`. (A cleaner long-term fix — narrowing the ignore to `**/build/**cache`
+— would touch the root `.gitignore`, i.e. outside `apps/android`, so it needs its own explicit run.)
+- **Cache-first without reworking pagination:** to add an L1 cache to a VM that already owns cursor pagination +
+  optimistic mutations, DON'T convert it to `cacheFirstFlow` (that observes a Flow and self-revalidates — it fights a
+  manually-paginated VM). Instead add a tiny snapshot store (`StatusBarCache`, like `ProfileStatsCacheRepository`),
+  read it in a `loadFromCacheThenNetwork(mode)` switch (Fresh→serve no-fetch, Stale/Syncing→serve+revalidate,
+  Empty→skeleton+fetch), and write through after the first page + each mutation. Keep the fresh/stale decision in the
+  shared `classifyCache` SSOT so the snapshot cache and the streaming flow can't drift.
+- **Replace-not-merge on the first page:** when a background refresh re-fetches page 1 over a cache-seeded list, the
+  success path must REPLACE (`listState.value = StatusBarListState().appended(page)`), not merge
+  (`listState.update { it.appended(page) }`) — else a server-side-deleted status lingers. This is invisible for the
+  old cold callers (they reset to cold first, so append==replace) but essential once a seed is present. iOS does
+  `statuses = entries` (replace) on the first page for the same reason.
+
+## Lesson (2026-07-19, `status-popover-republish`) — the iOS "popover republish" lives in `StatusBubbleOverlay`, NOT the read-only `StatusBarView.statusPopover`
+The feature-parity tracker said "popover republish/react action". Two traps: (1) iOS `StatusBarView.statusPopover`
+is **read-only** — the republish button is in a *different* component, `StatusBubbleOverlay` (a conversation-list
+mood bubble), gated `if onRepublish != nil` which the list only wires for **other** users' statuses. So the Android
+parity is: show a "Republish" affordance on a Pill popover, hide it on the own MyStatus popover. Model it purely as
+`statusPopoverModel(entry, now, isOwn)` → `canRepublish = !isOwn`; the caller derives `isOwn = entry.id ==
+myStatus?.id` (null-safe: DISCOVER mode has no myStatus → every pill is republishable, correct). (2) iOS republish
+opens the composer **pre-seeded** (`initialEmoji/initialText/viaUsername/repostOfId/repostAudioUrl`). Port that as a
+`StatusComposerDraft.republish(source)` factory + a `StatusPublishRequest` value the sheet forwards — keeps the
+composer glue dumb and makes the repost attribution unit-testable. The "react" half of the tracker line is a
+separate, larger feature (a reaction picker) and iOS doesn't put it in this popover — deferred.
+- **Adding a trailing param to a mocked method breaks arity-matched MockK stubs.** `StatusRepository.create` grew a
+  6th param (`viaUsername`); every `coEvery/coVerify { repository.create(any() ×5) }` and the positional
+  `create("🔥", null, "PUBLIC", null, null)` verify had to gain the 6th arg. This is required maintenance (the call
+  changed), not test-weakening — the assertions still prove the same behaviour plus the new forwarding.
+
+## Lesson (2026-07-19, `status-bar-compose`) — decompose an iOS `body` HStack into a pure `List<Cell>` builder, keep the Composable glue
+The reviewer/TDD gate exempts `@Composable` glue but demands ≥90% branch coverage on logic. iOS `StatusBarView.body`
+packs the real decisions (add-vs-my leading cell, `error && statuses.isEmpty` retry chip, `statuses.filter { id !=
+myStatus.id }` dedup, trailing `isLoadingMore` spinner) inline in the view. Port them as a **pure
+`buildStatusBarCells(uiState): List<StatusBarCell>`** (a `sealed interface` of slots) + a `statusPopoverModel`
+projection — then the `LazyRow` is a trivial `when(cell)` render. 13 branch-swept tests cover the builder; the
+Composable carries zero untested logic. This is the same "push decisions out of the Composable" pattern as
+`FeedPostPresentation` — apply it to every screen whose iOS analogue has branchy `body` layout.
+- **Wiring a header above an existing `PullToRefreshBox`:** wrap the Scaffold content in a `Column { StatusBarView();
+  PullToRefreshBox(Modifier.weight(1f)) { … } }` and MOVE the `.padding(padding)` from the box to the Column. When
+  editing brace-heavy Compose, a mid-edit build can report `Expecting '}'` at EOF from the *transient* file state —
+  re-verify brace balance (`grep -c '{'` vs `'}'`) and recompile before diagnosing; the second edit fixed it.
+- **The bar owns its own `StatusesViewModel`** via `hiltViewModel()` inside `StatusBarView` — it is independent of
+  the feed's `FeedViewModel`, so the header is a drop-in with no plumbing through `FeedScreen`.
+
+## Lesson (2026-07-19, `statuses-viewmodel`) — a HiltViewModel that needs a runtime "mode" uses a settable StateFlow, not assisted injection
+iOS constructs a separate `StatusViewModel` per `Mode` (friends/discover). A `@HiltViewModel` can't take an
+enum ctor param (Hilt has no default to provide → construction fails), and assisted injection is heavy for a
+tab toggle. Pattern used: inject only repos, hold `private val mode = MutableStateFlow(FRIENDS)`, expose
+`setMode(newMode)` that is **inert on the active mode** (else reset the list + reload). `combine(...)` folds
+`mode` into the projection so `myStatus` can be gated to FRIENDS. One VM drives both bars — cleaner than two
+instances, Hilt-friendly, fully unit-testable. Reuse this for any tabbed feed VM (e.g. a future discover feed).
+Also: pick `myStatus` by `userId == currentUserId` (via the `orderedForBar` SSOT), never the fragile iOS
+`statuses.first` — it survives a server that doesn't return own-first.
+
+## Lesson (2026-07-19, `status-mood-core`) — status TTL is **1h**, NOT 21h (the parity tracker conflated the STORY rule)
+The feature-parity line "Story / status (mood) posts with 21h expiry" (audit part-15) **conflates two
+different rules**. The gateway is unambiguous (`services/gateway/src/services/PostService.ts`):
+`STORY_EXPIRY_HOURS = 21`, **`STATUS_EXPIRY_HOURS = 1`**. A mood status expires **one hour** after
+creation; a story lives 21h. Confirmed in `schema.prisma` (`STATUS // Éphémère 1h`) and the PostService
+tests. **Expiry is server-computed and delivered as `expiresAt`** — clients treat it as authoritative
+and only derive `createdAt + 1h` as a fallback if the server ever omits it (mirror of `StoryGrouping`'s
+`effectiveStoryExpiresAt`, but with the 1h constant). `MoodStatusExpiry` (`:core:model`) is the SSOT.
+When I touch §G/§E parity boxes, keep the two TTLs distinct.
+
+Other findings baked into this slice (from the iOS/gateway research):
+- `StatusEntry` + `StatusCreateRequest`/`ReactionRequest`/`StoryViewRequest` were **already ported**
+  (`core/model/.../Story.kt`); the missing pieces were the `toStatusEntry()` mapper + the expiry law.
+- The iOS `toStatusEntry` **drops** `visibility` + `reactionSummary` even though `APIPost` carries them;
+  the Android mapper carries both through (a genuine parity improvement, tested).
+- iOS `author.name` = `displayName ?? username ?? "Anonymous"` (no blank check). Android's `resolvedName`
+  treats a **blank** displayName/username as absent before falling to `"Anonymous"` (more robust).
+- Statuses ride the generic post API: `type == "STATUS"` post, react via `POST /posts/:id/like {emoji}`,
+  feeds at `GET /posts/feed/statuses` (friends) + `/statuses/discover`. The bar is a **flat server-order
+  list** (NOT grouped-by-user like stories); `myStatus` renders first. `orderedForBar` is that pure law.
+- **Bootstrap grain precedent:** a pure `:core:model`/`:sdk-core` SSOT (law + mapper) with full tests is
+  the accepted first slice for a brand-new area — same shape as `call-sound-policy` (§H) and
+  `StoryGrouping` (§E). The repository + bar VM + Compose come in the next §G slices, consuming this SSOT.
+
 ## Lesson (2026-07-18, `feed-comment-mention-autocomplete`) — promote a per-feature SSOT to `:sdk-core` by relocating the package, not renaming every call site; give the second surface its own orchestration
 When a second surface needs the same pure behaviour a `:feature:*` already solved, **promote the pure
 state-machine to `:sdk-core`** rather than re-implementing it. Two mechanics that kept this cheap and safe:
@@ -2442,3 +2527,24 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
 - **Computed properties are serialization-invisible.** `val effects get() = …` inside a `@Serializable data
   class` (custom getter, not a constructor param) is ignored by kotlinx.serialization — same trick as the
   existing `displayContent`/`isTranslated`. Safe way to expose a resolved view over decoded wire fields.
+
+## status-repository (2026-07-19)
+- **CI polling must go through the GitHub MCP tools, not a Monitor `curl` loop.** The agent proxy
+  returns **403** on direct `https://api.github.com/...` (even with `$GITHUB_TOKEN` set — that token
+  is for git-over-http through the proxy, not the REST API). A `Monitor` bash script that curls the
+  Actions API therefore loops on error and never fires. Poll `mcp__github__actions_list`
+  (`list_workflow_runs`, filter by branch) / `mcp__github__pull_request_read` (`get_status`) instead.
+  Foreground `sleep` is blocked; pace re-checks with a `run_in_background` timer that exits, then
+  re-poll via MCP on the completion notification.
+- **`POST /posts/:id/like` accepts an optional `emoji` body** (gateway `interactions.ts`:
+  `LikeSchema.safeParse(body)`, default `❤️`). The Android `PostApi.like(id)` had no body, so a
+  status *react* needed a second same-path Retrofit method `likeWithEmoji(id, PostLikeRequest(emoji))`
+  — two methods on one path is legal (Retrofit keys on the function, not the URL). Kept the plain
+  `like` valid for the existing optimistic post-like path (no ripple into `PostRepository`).
+- **Repository grain = transport + a pure page fold; mapping-to-domain stays the SSOT mapper's job.**
+  `StatusRepository.list` folds via `foldStatusPage` (a verbatim mirror of `PostRepository.foldPostPage`)
+  and reuses `toStatusEntries` — it does NOT re-implement the ApiPost→StatusEntry rule. The bar
+  view-model (next slice) owns accumulation + `orderedForBar` + SWR, exactly like the bookmarks screen
+  owns accumulation over `getBookmarksPage`. Shipping the repo without a VM is consistent with how
+  `status-mood-core` shipped the mapper without wiring — no orphan code, the public surface is the
+  next slice's dependency.
