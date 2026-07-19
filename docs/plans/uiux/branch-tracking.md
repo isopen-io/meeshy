@@ -14,6 +14,23 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 171i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **171i (en cours, branche `claude/laughing-thompson-cxw0zs`, base `main` HEAD `7c65395`)** :
+>   Migration vers **`ShareLink` natif** dans `CommunityLinkDetailView` (écran détail d'un lien de
+>   communauté — vue propriétaire). Le bouton **Partager** de l'`actionsBar` réimplémentait la feuille
+>   de partage à la main (~15 lignes) : `UIActivityViewController` + parcours `UIApplication.shared.
+>   connectedScenes` → top-VC + ancrage popover iPad manuel (crash si oublié). Remplacé par
+>   `ShareLink(item: url)` (iOS 16.0+, plancher app), idiome déjà dominant dans l'app (12+ sites).
+>   Extraction d'un `communityActionButtonLabel` partagé → les 3 tuiles (Copy/Share/Identify) rendent
+>   à l'identique, **0 changement visuel**. Ancrage iPad correct gratuit ; haptique légère ajoutée
+>   au partage (parité Copy/Identify). 1 fichier, 0 logique, 0 clé i18n neuve (`common.share` réutilisé),
+>   0 test (aucun test ne référence la vue). 0 contention (aucune PR iOS ouverte ne touche ce fichier).
+>   Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `CommunityLinkDetailView` chemin de partage SOLDÉ 171i** : ne plus réintroduire de
+>   `UIActivityViewController` manuel. Restent candidats (fichiers distincts, vérifier contention) :
+>   `TrackingLinkDetailView`, `AffiliateView`, `ShareLinkDetailView` (⚠️ PR #2040), `ConversationMediaViews`,
+>   `ConversationListView` — certains légitimement manuels (multi-items / activités custom).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
 >   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
