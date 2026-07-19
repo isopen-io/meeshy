@@ -91,6 +91,7 @@ struct MessageEditsDetailView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Shared Components (copied from MessageDetailSheet)
@@ -100,6 +101,7 @@ struct MessageEditsDetailView: View {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(text)
@@ -122,6 +124,7 @@ struct MessageEditsDetailView: View {
                         Capsule()
                             .fill(accent.opacity(0.12))
                     )
+                    .accessibilityHidden(true)
             }
         }
         .padding(12)
@@ -133,6 +136,7 @@ struct MessageEditsDetailView: View {
                         .stroke(accent.opacity(0.12), lineWidth: 0.5)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
@@ -140,12 +144,14 @@ struct MessageEditsDetailView: View {
             Image(systemName: icon)
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Formatting
