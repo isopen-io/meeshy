@@ -287,10 +287,10 @@ struct StoryRingCell: View {
                     presenceState: presenceManager.presenceState(for: group.id),
                     onMoodTap: statusViewModel.moodTapHandler(for: group.id),
                     contextMenuItems: [
-                        AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
+                        AvatarContextMenuItem(label: String(localized: "story.tray.menu.viewStories", defaultValue: "Voir les stories", bundle: .main), icon: "play.circle.fill") {
                             onViewStory()
                         },
-                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        AvatarContextMenuItem(label: String(localized: "story.tray.menu.viewProfile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
                             onShowProfile()
                         }
                     ]
@@ -387,7 +387,7 @@ private struct MyStoryButton: View {
         // aussitôt (`skipExpiredStoriesIfNeeded`). Cohérent avec le filtre du tray.
         let myGroup = viewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
         let hasMyStory = myGroup != nil
-        let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
+        let userName = currentUser?.displayName ?? currentUser?.username ?? String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main)
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
         let myMoodEmoji = statusViewModel.statusForUser(userId: userId)?.moodEmoji
@@ -416,21 +416,21 @@ private struct MyStoryButton: View {
                     contextMenuItems: {
                         var items: [AvatarContextMenuItem] = []
                         if hasMyStory {
-                            items.append(AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
+                            items.append(AvatarContextMenuItem(label: String(localized: "story.tray.menu.viewMyStory", defaultValue: "Voir ma story", bundle: .main), icon: "play.circle.fill") {
                                 onViewMyStory()
                                 HapticFeedback.medium()
                             })
-                            items.append(AvatarContextMenuItem(label: "Gérer mes stories", icon: "rectangle.stack.fill") {
+                            items.append(AvatarContextMenuItem(label: String(localized: "story.tray.menu.manageStories", defaultValue: "Gérer mes stories", bundle: .main), icon: "rectangle.stack.fill") {
                                 onManageStories?()
                                 HapticFeedback.medium()
                             })
                         }
-                        items.append(AvatarContextMenuItem(label: "Ajouter une story", icon: "plus.circle.fill") {
+                        items.append(AvatarContextMenuItem(label: String(localized: "story.tray.addStory", defaultValue: "Ajouter une story", bundle: .main), icon: "plus.circle.fill") {
                             guard viewModel.activeUpload == nil else { return }
                             viewModel.showStoryComposer = true
                             HapticFeedback.medium()
                         })
-                        items.append(AvatarContextMenuItem(label: "Changer mon mood", icon: "face.smiling.inverse") {
+                        items.append(AvatarContextMenuItem(label: String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main), icon: "face.smiling.inverse") {
                             onAddStatus?()
                             HapticFeedback.medium()
                         })
@@ -544,6 +544,18 @@ private struct StoryUploadOverlay: View {
         return false
     }
 
+    private var progressPercent: Int { Int((upload.progress * 100).rounded()) }
+
+    // Upload state is otherwise conveyed only by the gradient trim geometry
+    // (progress) and a red ring + glyph (failure) — invisible to VoiceOver.
+    // Expose it as a single element with a state-aware label + value so the
+    // 0→100 % progression and the failure are perceivable without color.
+    private var accessibilityLabelText: String {
+        isFailed
+            ? String(localized: "story.tray.upload.a11y.failed", defaultValue: "Échec de la publication de la story", bundle: .main)
+            : String(localized: "story.tray.upload.a11y.uploading", defaultValue: "Publication de la story", bundle: .main)
+    }
+
     var body: some View {
         ZStack {
             Image(uiImage: upload.thumbnailImage)
@@ -596,6 +608,13 @@ private struct StoryUploadOverlay: View {
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityValue(isFailed ? "" : "\(progressPercent)%")
+        .accessibilityAddTraits(isFailed ? .isButton : .updatesFrequently)
+        .accessibilityHint(isFailed
+            ? String(localized: "story.tray.upload.a11y.retryHint", defaultValue: "Toucher deux fois pour réessayer", bundle: .main)
+            : "")
     }
 }
 
