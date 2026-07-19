@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   resolveUserLanguage,
   resolveUserLanguagesOrdered,
+  computeSpokenLanguages,
   generateConversationIdentifier,
   isValidMongoId,
   canEditMessage,
@@ -550,6 +551,71 @@ describe('resolveUserLanguagesOrdered', () => {
     expect(
       resolveUserLanguagesOrdered({}, { deviceLocale: 'ja' })
     ).toEqual(['ja']);
+  });
+});
+
+describe('computeSpokenLanguages', () => {
+  it('collects a member in-app prefs through the normalizing SSOT', () => {
+    expect(
+      computeSpokenLanguages([
+        { type: 'user', user: { systemLanguage: 'fr', regionalLanguage: 'es' } },
+      ])
+    ).toEqual({ spokenLanguages: ['es', 'fr'], languageCount: 2 });
+  });
+
+  it('normalizes region-tagged member prefs so a variant is not double-counted', () => {
+    // 'pt-BR' (verbatim in-app pref from navigator.language / iOS locale) and a
+    // 'pt' anonymous participant are ONE language, not two.
+    expect(
+      computeSpokenLanguages([
+        { type: 'user', user: { systemLanguage: 'pt-BR' } },
+        { type: 'anonymous', language: 'pt' },
+      ])
+    ).toEqual({ spokenLanguages: ['pt'], languageCount: 1 });
+  });
+
+  it('emits catalog-resolvable codes for a single region-tagged member', () => {
+    // Regression: previously leaked raw 'en-us' → no flag/name lookup match.
+    expect(
+      computeSpokenLanguages([
+        { type: 'user', user: { systemLanguage: 'en-US', regionalLanguage: 'fr_FR' } },
+      ])
+    ).toEqual({ spokenLanguages: ['en', 'fr'], languageCount: 2 });
+  });
+
+  it('normalizes anonymous participant language and dedupes across members', () => {
+    expect(
+      computeSpokenLanguages([
+        { type: 'anonymous', language: 'DE' },
+        { type: 'anonymous', language: 'de-AT' },
+        { type: 'user', user: { systemLanguage: 'de' } },
+      ])
+    ).toEqual({ spokenLanguages: ['de'], languageCount: 1 });
+  });
+
+  it('ignores participants with no usable language data', () => {
+    expect(
+      computeSpokenLanguages([
+        { type: 'user', user: null },
+        { type: 'user', user: { systemLanguage: null, regionalLanguage: null } },
+        { type: 'anonymous', language: null },
+        { type: 'anonymous' },
+      ])
+    ).toEqual({ spokenLanguages: [], languageCount: 0 });
+  });
+
+  it('returns a sorted, deduped set across a mixed participant list', () => {
+    expect(
+      computeSpokenLanguages([
+        { type: 'user', user: { systemLanguage: 'fr', customDestinationLanguage: 'en' } },
+        { type: 'anonymous', language: 'es' },
+        { type: 'user', user: { systemLanguage: 'en' } },
+      ])
+    ).toEqual({ spokenLanguages: ['en', 'es', 'fr'], languageCount: 3 });
+  });
+
+  it('returns an empty result for no participants', () => {
+    expect(computeSpokenLanguages([])).toEqual({ spokenLanguages: [], languageCount: 0 });
   });
 });
 

@@ -120,6 +120,51 @@ export function resolveUserLanguagesOrdered(
 }
 
 /**
+ * Forme minimale d'un participant pour l'agrégation des langues parlées.
+ * Miroir du `select` Prisme utilisé par le preview de share-link anonyme.
+ */
+export type SpokenLanguageParticipant = {
+  type: string;
+  language?: string | null;
+  user?: {
+    systemLanguage?: string | null;
+    regionalLanguage?: string | null;
+    customDestinationLanguage?: string | null;
+  } | null;
+};
+
+/**
+ * Agrège l'ensemble dédupliqué des langues parlées par les participants d'une
+ * conversation (stat `spokenLanguages` / `languageCount` du preview share-link).
+ *
+ * SSOT : les préférences in-app d'un membre passent par
+ * {@link resolveUserLanguagesOrdered} (donc {@link normalizeLanguageCode}) —
+ * une préférence sous-taguée (`'pt-BR'`) et sa forme canonique (`'pt'`) comptent
+ * comme UNE seule langue, et le code émis est toujours résoluble par le catalogue
+ * (drapeau/nom). Le fallback anonyme (`participant.language`) est normalisé de la
+ * même manière. Sans cette normalisation, `languageCount` était gonflé et des
+ * codes bruts (`'pt-br'`) fuyaient dans la réponse publique.
+ *
+ * @returns liste triée + comptage, prêts pour la sérialisation API.
+ */
+export function computeSpokenLanguages(
+  participants: readonly SpokenLanguageParticipant[]
+): { spokenLanguages: string[]; languageCount: number } {
+  const languageSet = new Set<string>();
+  for (const p of participants) {
+    if (p.type === 'user' && p.user) {
+      for (const code of resolveUserLanguagesOrdered(p.user)) {
+        languageSet.add(code);
+      }
+    } else if (p.language) {
+      languageSet.add(normalizeLanguageCode(p.language) ?? p.language.toLowerCase());
+    }
+  }
+  const spokenLanguages = Array.from(languageSet).sort();
+  return { spokenLanguages, languageCount: spokenLanguages.length };
+}
+
+/**
  * Génère un identifiant unique pour une conversation
  * Format: mshy_<titre_sanitisé>-YYYYMMDDHHMMSS ou mshy_<unique_id>-YYYYMMDDHHMMSS si pas de titre
  */

@@ -5,6 +5,7 @@ import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { SecuritySanitizer } from '../utils/sanitize';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { computeSpokenLanguages } from '@meeshy/shared/utils/conversation-helpers';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -923,22 +924,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       const totalParticipants = memberCount + anonymousCount;
 
-      const languageSet = new Set<string>();
-
-      allActiveParticipants.forEach(p => {
-        if (p.type === 'user' && p.user) {
-          // Lowercase so 'en'/'EN' from legacy mixed-case rows count once (spokenLanguages stat)
-          if (p.user.systemLanguage) languageSet.add(p.user.systemLanguage.toLowerCase());
-          if (p.user.regionalLanguage) languageSet.add(p.user.regionalLanguage.toLowerCase());
-          if (p.user.customDestinationLanguage) languageSet.add(p.user.customDestinationLanguage.toLowerCase());
-        } else {
-          if (p.language) languageSet.add(p.language.toLowerCase());
-        }
-      });
-
-      // Convertir en tableau et trier
-      const spokenLanguages = Array.from(languageSet).sort();
-      const languageCount = spokenLanguages.length;
+      // SSOT: normalize each member/anonymous language through
+      // computeSpokenLanguages (resolveUserLanguagesOrdered + normalizeLanguageCode)
+      // so region-tagged prefs ('pt-BR') collapse to their canonical, catalog-
+      // resolvable code ('pt') and never inflate languageCount.
+      const { spokenLanguages, languageCount } = computeSpokenLanguages(allActiveParticipants);
 
       return sendSuccess(reply, {
           id: shareLink.id, // ID de la conversationShareLink pour les appels ulterieurs
