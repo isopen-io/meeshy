@@ -43,6 +43,7 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.feed.R
+import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.MoodStatusExpiry
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
@@ -128,6 +129,10 @@ fun StatusBarView(
             onRepublish = {
                 selected = null
                 composerSeed = StatusComposerDraft.republish(entry)
+            },
+            onReact = { emoji ->
+                viewModel.react(entry.id, emoji)
+                selected = null
             },
             onDismiss = { selected = null },
         )
@@ -256,6 +261,7 @@ private fun StatusPopover(
     entry: StatusEntry,
     isOwn: Boolean,
     onRepublish: () -> Unit,
+    onReact: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val now = remember(entry.id) { System.currentTimeMillis() }
@@ -307,10 +313,72 @@ private fun StatusPopover(
                     fontWeight = FontWeight.Medium,
                     color = MeeshyTheme.tokens.textSecondary,
                 )
+                if (model.reactions.isNotEmpty()) {
+                    ReactionSummaryRow(reactions = model.reactions)
+                }
+                if (model.canReact) {
+                    ReactionPickerRow(onReact = onReact)
+                }
                 if (model.canRepublish) {
                     RepublishAction(onClick = onRepublish)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ReactionSummaryRow(reactions: List<StatusReactionChip>) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = MeeshySpacing.xs),
+    ) {
+        reactions.forEach { chip ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier
+                    .background(
+                        color = MeeshyPalette.Indigo500.copy(alpha = 0.10f),
+                        shape = RoundedCornerShape(MeeshyRadius.pill),
+                    )
+                    .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp),
+            ) {
+                Text(text = chip.emoji, style = MaterialTheme.typography.labelMedium)
+                Text(
+                    text = chip.count.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MeeshyTheme.tokens.textSecondary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReactionPickerRow(onReact: (String) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .padding(top = MeeshySpacing.xs)
+            .background(
+                color = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.06f),
+                shape = RoundedCornerShape(MeeshyRadius.pill),
+            )
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+    ) {
+        EmojiCatalog.defaultQuickReactions.forEach { emoji ->
+            val label = stringResource(R.string.status_bar_react, emoji)
+            Text(
+                text = emoji,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .clickable { onReact(emoji) }
+                    .semantics { contentDescription = label },
+            )
         }
     }
 }
