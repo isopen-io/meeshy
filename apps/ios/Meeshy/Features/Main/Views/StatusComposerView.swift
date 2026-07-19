@@ -157,6 +157,7 @@ struct StatusComposerView: View {
                 )
                 .scaleEffect(selectedEmoji == emoji ? 1.1 : 1.0)
         }
+        .accessibilityAddTraits(selectedEmoji == emoji ? .isSelected : [])
     }
 
     // MARK: - Text Input
@@ -251,6 +252,7 @@ struct StatusComposerView: View {
                         HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: vis.icon)
                                 .font(MeeshyFont.relative(11))
+                                .accessibilityHidden(true)
                             Text(showCount ? "\(vis.label) (\(selectedUserIds.count))" : vis.label)
                                 .font(MeeshyFont.relative(12, weight: .medium))
                         }
@@ -264,6 +266,7 @@ struct StatusComposerView: View {
                                     AnyShapeStyle(theme.inputBackground))
                         )
                     }
+                    .accessibilityAddTraits(selectedVisibility == vis ? .isSelected : [])
                 }
             }
             .padding(.horizontal, MeeshySpacing.xs)

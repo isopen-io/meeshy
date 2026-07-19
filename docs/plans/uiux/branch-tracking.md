@@ -14,6 +14,30 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 176i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **Essaim iOS très dense** : PR ouvertes 165i→175i (numéros réutilisés — plusieurs 167i/169i/172i/173i).
+>   Numéro **176i** choisi strictement `>` au plus haut en vol (175i `StarredMessagesView`).
+> - **176i (en cours, branche `claude/laughing-thompson-tkzout`, base `main` HEAD `e7c8686`)** :
+>   VoiceOver de `StatusComposerView` (feuille de publication de mood-status). La vue était déjà 100 %
+>   localisée + Dynamic Type (`MeeshyFont.relative`). Déficit : **les deux surfaces de sélection
+>   portaient l'état sélectionné par couleur/forme seule** (viol. « never rely only on color »).
+>   (1) **Grille d'emoji mood** (`emojiButton`) — sélection = fill indigo + stroke `avatarRingGradient`
+>   + `scaleEffect(1.1)`, **aucun** trait a11y → VoiceOver lisait juste le nom natif de l'emoji, sans
+>   savoir lequel est choisi. (2) **Rail de visibilité** (`visibilityPicker`) — capsule sélectionnée =
+>   `white` sur `brandGradient` vs `textSecondary`/`inputBackground`, **aucun** `.isSelected` → six
+>   boutons identiques à l'oreille. Fix idiomatique Apple, 0 changement visuel/logique :
+>   `.accessibilityAddTraits(selected ? .isSelected : [])` sur chaque bouton (emoji + capsule ;
+>   même forme empty-set que 167i `.updatesFrequently`), + icône SF déco de visibilité
+>   `.accessibilityHidden(true)` (le libellé localisé `vis.label` porte déjà le sens). 1 fichier,
+>   0 logique, 0 test, **0 clé i18n neuve**. Aucun test ne référence la vue (grep = 0). Gate = CI
+>   `iOS Tests`. PR à venir.
+> - **⚠️ `StatusComposerView` VoiceOver sélection SOLDÉ** : ne plus reprendre (traits `.isSelected` posés
+>   sur emoji-grid + rail visibilité ; i18n + Dynamic Type déjà sains).
+> - **Différé 176i+** : `ReportMessageSheet.reportTypeRow` + `MessageReportDetailView.reportTypeRow`
+>   (même gap sélection icône/couleur-only, sans `.isSelected` — follow-ups jumelés) ;
+>   `ConversationEncryptionDetailSheet` ~l.250 (1 littéral EN brut `"Unable to read status: …"` hors
+>   `String(localized:)`).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
 >   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
