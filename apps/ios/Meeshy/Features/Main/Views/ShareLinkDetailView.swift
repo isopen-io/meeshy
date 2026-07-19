@@ -50,6 +50,7 @@ struct ShareLinkDetailView: View {
                     .frame(width: 60, height: 60)
                 Image(systemName: isActive ? "link" : "link.badge.minus").font(.title)
                     .foregroundColor(isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
+                    .accessibilityHidden(true)
             }
             Text(link.displayName).font(.title3.weight(.bold))
                 .foregroundColor(theme.textPrimary)
@@ -70,6 +71,7 @@ struct ShareLinkDetailView: View {
                 .overlay(RoundedRectangle(cornerRadius: 20)
                     .stroke(MeeshyColors.shareAccent.opacity(0.2), lineWidth: 1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var statusBadge: some View {
@@ -90,6 +92,7 @@ struct ShareLinkDetailView: View {
                          color: copiedFeedback ? MeeshyColors.success : MeeshyColors.shareAccent) {
                 UIPasteboard.general.string = link.joinUrl
                 HapticFeedback.success()
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "shareLink.a11y.copied", defaultValue: "Lien copié", bundle: .main))
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                     withAnimation { copiedFeedback = false }
@@ -119,12 +122,15 @@ struct ShareLinkDetailView: View {
                         .frame(width: 48, height: 48)
                     Image(systemName: icon).font(.title3)
                         .foregroundColor(color)
+                        .accessibilityHidden(true)
                 }
                 Text(label).font(.caption2.weight(.medium))
                     .foregroundColor(theme.textSecondary)
             }
         }
         .frame(maxWidth: .infinity)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Stats
@@ -142,6 +148,7 @@ struct ShareLinkDetailView: View {
     private func statCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon).font(.title2).foregroundColor(Color(hex: color))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(value).font(.title2.weight(.bold)).foregroundColor(theme.textPrimary)
                 Text(label).font(.caption).foregroundColor(theme.textSecondary)
@@ -155,6 +162,7 @@ struct ShareLinkDetailView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14)
                     .stroke(Color(hex: color).opacity(0.2), lineWidth: 1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Info section
@@ -184,11 +192,13 @@ struct ShareLinkDetailView: View {
                 .lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text).font(.caption.weight(.semibold))
             .foregroundColor(theme.textSecondary).kerning(0.8)
+            .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Actions
