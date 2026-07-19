@@ -244,6 +244,15 @@ struct CommentsSheetView: View {
         comments.filter { $0.parentId == nil }
     }
 
+    /// Le placeholder « aucun commentaire » ne s'affiche QUE lorsqu'un post n'a
+    /// véritablement aucun commentaire : compteur autoritatif ET rangées
+    /// top-level chargées à zéro. Le garde sur `commentCount == 0` évite un flash
+    /// « aucun commentaire » pendant qu'un post au compteur positif mais dont les
+    /// commentaires ne sont pas encore hydratés (`post.comments` vide) se charge.
+    static func shouldShowEmptyState(commentCount: Int, topLevelCount: Int) -> Bool {
+        commentCount == 0 && topLevelCount == 0
+    }
+
     /// Computes the set of comment ids that the current user has heart-reacted to.
     /// Mirrors `StoryViewerView.computeLikedIds(from:)` so seeding logic is testable.
     static func computeLikedIds(from comments: [APIPostComment]) -> Set<String> {
@@ -330,6 +339,21 @@ struct CommentsSheetView: View {
                                 )
                                 .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
                                 .id("comment-\(comment.id)")
+                            }
+
+                            // Empty state — un post sans aucun commentaire affiche
+                            // un placeholder natif (au lieu d'une zone vide muette),
+                            // invitant l'utilisateur à être le premier à commenter.
+                            if Self.shouldShowEmptyState(
+                                commentCount: commentCount,
+                                topLevelCount: topLevelComments.count
+                            ) {
+                                AdaptiveContentUnavailableView(
+                                    String(localized: "feed.comments.empty.title", defaultValue: "Aucun commentaire", bundle: .main),
+                                    systemImage: "bubble.left.and.bubble.right",
+                                    description: Text(String(localized: "feed.comments.empty.subtitle", defaultValue: "Soyez le premier à commenter cette publication.", bundle: .main))
+                                )
+                                .padding(.top, 48)
                             }
                         }
                         .padding(.horizontal, 16)

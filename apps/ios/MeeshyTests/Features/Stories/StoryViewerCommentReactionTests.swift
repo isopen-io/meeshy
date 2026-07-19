@@ -239,4 +239,31 @@ final class StoryViewerCommentReactionTests: XCTestCase {
             "Une couleur d'auteur déjà claire ne doit pas être modifiée"
         )
     }
+
+    // MARK: - CommentsSheetView.shouldShowEmptyState tests
+    //
+    // Le placeholder « aucun commentaire » ne s'affiche QUE lorsqu'un post n'a
+    // véritablement aucun commentaire — compteur autoritatif ET rangées chargées
+    // à zéro. Le garde sur `commentCount == 0` empêche un flash « aucun
+    // commentaire » pendant qu'un post dont les commentaires ne sont pas encore
+    // hydratés (count > 0 mais liste vide) se charge.
+
+    func test_shouldShowEmptyState_zeroCountAndZeroRows_returnsTrue() {
+        XCTAssertTrue(
+            CommentsSheetView.shouldShowEmptyState(commentCount: 0, topLevelCount: 0)
+        )
+    }
+
+    func test_shouldShowEmptyState_hasRows_returnsFalse() {
+        XCTAssertFalse(
+            CommentsSheetView.shouldShowEmptyState(commentCount: 3, topLevelCount: 3)
+        )
+    }
+
+    func test_shouldShowEmptyState_countPositiveButRowsUnhydrated_returnsFalse() {
+        XCTAssertFalse(
+            CommentsSheetView.shouldShowEmptyState(commentCount: 5, topLevelCount: 0),
+            "Un post au compteur > 0 mais liste non hydratée ne doit pas flasher « aucun commentaire »"
+        )
+    }
 }
