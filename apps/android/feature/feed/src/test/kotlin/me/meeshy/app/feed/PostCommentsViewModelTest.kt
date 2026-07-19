@@ -16,10 +16,12 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
@@ -58,6 +60,7 @@ class PostCommentsViewModelTest {
     private fun viewModel(
         postId: String? = "p1",
         user: MeeshyUser? = MeeshyUser(id = "me", username = "me"),
+        mentionSearch: MentionSearch = FakeMentionSearch(),
     ): PostCommentsViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
         every { socialSocket.commentAdded } returns commentAdded
@@ -65,7 +68,22 @@ class PostCommentsViewModelTest {
         every { socialSocket.commentReactionAdded } returns commentReactionAdded
         every { socialSocket.commentReactionRemoved } returns commentReactionRemoved
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
-        return PostCommentsViewModel(repository, session, socialSocket, config, handle)
+        return PostCommentsViewModel(repository, session, socialSocket, config, mentionSearch, handle)
+    }
+
+    /** Fake directory lookup: records the queries it saw, returns a per-query or default candidate list. */
+    private class FakeMentionSearch(
+        private val byQuery: Map<String, List<MentionCandidate>> = emptyMap(),
+        private val default: List<MentionCandidate> = emptyList(),
+        private val throwOn: Set<String> = emptySet(),
+    ) : MentionSearch {
+        val queries = mutableListOf<String>()
+
+        override suspend fun search(query: String): List<MentionCandidate> {
+            queries += query
+            if (query in throwOn) throw RuntimeException("directory offline")
+            return byQuery[query] ?: default
+        }
     }
 
     /** Type [text] into the composer, then send — the composer now owns its draft (autocomplete). */
@@ -1115,5 +1133,99 @@ class PostCommentsViewModelTest {
             assertThat(s.draft).isEqualTo("hey @al")
             assertThat(s.mention.isActive).isTrue()
         }
+    }
+
+    // --- Composer @-mention: remote directory merge ---
+
+    @Test
+    fun `a two-character at-fragment merges directory results below the local roster`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice")))
+        val remote = FakeMentionSearch(
+            default = listOf(MentionCandidate(id = "u9", username = "alex", displayName = "Alex R")),
+        )
+        val vm = viewModel(mentionSearch = remote)
+        vm.onDraftChange("hey @al")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(vm.state.value.mention.suggestions.map { it.username })
+            .containsExactly("alice", "alex").inOrder()
+        assertThat(remote.queries).containsExactly("al")
+    }
+
+    @Test
+    fun `a single-character at-fragment never fires a directory lookup`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice"), authored("c2", name = "Bob")))
+        val remote = FakeMentionSearch(default = listOf(MentionCandidate(id = "u9", username = "alex")))
+        val vm = viewModel(mentionSearch = remote)
+        vm.onDraftChange("hey @a")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(remote.queries).isEmpty()
+        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("alice")
+    }
+
+    @Test
+    fun `directory results never offer the signed-in user`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice")))
+        val remote = FakeMentionSearch(
+            default = listOf(
+                MentionCandidate(id = "me", username = "myself", displayName = "Me"),
+                MentionCandidate(id = "u9", username = "carol"),
+            ),
+        )
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me"), mentionSearch = remote)
+        vm.onDraftChange("hey @ca")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("carol")
+    }
+
+    @Test
+    fun `a fresh keystroke supersedes the previous directory lookup`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice")))
+        val remote = FakeMentionSearch(
+            byQuery = mapOf(
+                "car" to listOf(MentionCandidate(id = "u9", username = "carol")),
+                "dan" to listOf(MentionCandidate(id = "u10", username = "danny")),
+            ),
+        )
+        val vm = viewModel(mentionSearch = remote)
+        vm.onDraftChange("hey @car")
+        vm.onDraftChange("hey @dan")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("danny")
+        assertThat(remote.queries).containsExactly("dan")
+    }
+
+    @Test
+    fun `selecting a candidate cancels the in-flight directory lookup`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice")))
+        val remote = FakeMentionSearch(default = listOf(MentionCandidate(id = "u9", username = "alex")))
+        val vm = viewModel(mentionSearch = remote)
+        vm.onDraftChange("hey @al")
+        vm.onMentionSelected(vm.state.value.mention.suggestions.first())
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(remote.queries).isEmpty()
+        assertThat(vm.state.value.draft).isEqualTo("hey @alice ")
+    }
+
+    @Test
+    fun `a failed directory lookup degrades to the local roster`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(authored("c1", name = "Alice"), authored("c2", name = "Alan")))
+        val remote = FakeMentionSearch(throwOn = setOf("al"))
+        val vm = viewModel(mentionSearch = remote)
+        vm.onDraftChange("hey @al")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertThat(remote.queries).containsExactly("al")
+        assertThat(vm.state.value.mention.suggestions.map { it.username }).containsExactly("alice", "alan").inOrder()
     }
 }

@@ -1,5 +1,48 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **comment composer remote directory merge** landed (slice `feed-comment-mention-remote-merge`,
+> feature-parity §Feed → "Threaded comments" → the comment composer's autocomplete — the last-open item on the
+> mention line after the local-roster autocomplete shipped 2026-07-18). Until now the feed comment/reply composer's
+> @-mention panel was fed **only** from the thread's own authors (`CommentMentionRoster`), while the **chat**
+> composer has enriched its participant roster with the full user directory (`chat-mention-remote-merge`) for weeks:
+> typing `@bo…` in chat finds "borys" even if he never spoke in the conversation, but in a comment thread it found
+> nobody outside the thread. This slice reaches parity by **(1) promoting the `MentionSearch` directory-lookup port
+> to `:sdk-core` as a shared SSOT** — the `MentionSearch` interface + `DirectoryMentionSearch` impl (maps a
+> `UserRepository.searchUsers` onto `MentionCandidate`s, drops handleless rows, failure→empty) + its Hilt
+> `@Binds` module moved from `:feature:chat` (`me.meeshy.app.chat`) to `:sdk-core` (`me.meeshy.sdk.mention`,
+> git-detected rename), and `:feature:chat` (`ChatViewModel` + `ChatViewModelTest`) re-points to it with **zero
+> behaviour change** (201 chat VM tests stay green). Both composers now query one directory port. **(2)
+> `PostCommentsViewModel`** injects the shared `MentionSearch` and, on every `onDraftChange`, fires a
+> **300 ms-debounced** `maybeSearchRemoteMentions` for the active `@fragment` — the exact mirror of chat's method:
+> `MentionComposer.shouldQueryRemote` gates it to a ≥2-char query (the thread roster already covers a bare `@`
+> or a single letter), a fresh keystroke **or** an `onMentionSelected`/`clearDraft` cancels the in-flight
+> `mentionSearchJob`, the signed-in user is excluded (`filterNot { it.id == currentUserId }`), and the results are
+> folded **below** the local roster via the pure `applyRemote` (local-first order, a stale-fragment response
+> dropped by the `activeQuery` guard). A failed lookup degrades to the local roster (the shared
+> `DirectoryMentionSearch` already maps failure→empty). No new Compose — the existing `CommentMentionStrip` renders
+> the enriched `suggestions`. **+6 tests** — `PostCommentsViewModelTest`: two-char-`@`-merges-directory-below-roster,
+> single-char-never-fires-lookup, directory-never-offers-self, fresh-keystroke-supersedes-previous-lookup
+> (cancellation), selecting-a-candidate-cancels-the-lookup, failed-lookup-degrades-to-local-roster. **Mutation check
+> (RED proof):** neutralising the self-exclusion (`filterNot { it.id == currentUserId }` → `filterNot { false }`)
+> failed **exactly** 1 test (`directory results never offer the signed-in user`) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3, `LANG=C.UTF-8` — wrapper 403s on the proxy):** `:sdk-core:testDebugUnitTest`
+> **789/789**, `:feature:chat:testDebugUnitTest` **704/704** (`ChatViewModelTest` 201/201 — the SSOT re-point is
+> behaviour-neutral), `:feature:feed:testDebugUnitTest` **413/413** (`PostCommentsViewModelTest` **84/84**);
+> `gradle :app:assembleDebug` → **BUILD SUCCESSFUL** (the promoted `MentionSearch` compiles across
+> `:sdk-core`→`:feature:chat`/`:feature:feed`, Hilt binds `DirectoryMentionSearch` app-wide). Reviewer **PASS**
+> (diff `apps/android` only — 6 files incl. the git-detected rename, no production logic elsewhere; **SDK purity** —
+> `MentionSearch`/`DirectoryMentionSearch` is a stateless directory-lookup building block [query→candidates,
+> depends only on `UserRepository`, no "when to search" rule], so it belongs in `:sdk-core`; the "when to fire /
+> debounce / cancel" orchestration stays in the VM; **SSOT** — one directory port shared by chat + comments, no
+> re-implementation, and it reuses the already-promoted `MentionComposer.shouldQueryRemote`/`applyRemote` merge law;
+> **Instant-App** — the local roster serves the panel synchronously, the directory only enriches it after the
+> debounce, and a failure never blanks the panel; **UDF** — immutable `ComposerDraft`/`UiState`, pure `applyRemote`
+> transition, the lookup folded into the draft flow so a realtime comment landing never tears it down; **coherence**
+> — identical behaviour + chrome to the chat composer, neutral input-assistance strip reserves the accent for
+> content; no coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — the **statuses/moods
+> bar** (§G) / the **unified post composer** (Post/Status/Story tabs); OR pivot back to §Stories/§Calls per the
+> build-order sequencing (Auth→Conversations→Chat→Feed→Stories→Calls→rest).
+
 > On 2026-07-18 the **comment composer @-mention autocomplete** landed (slice `feed-comment-mention-autocomplete`,
 > feature-parity §Feed → "Threaded comments" — the composer autocomplete was the last-open item on the comment
 > composition line, after reply composition, auto-preview, the realtime rooms, mention *rendering* and the

@@ -1,4 +1,4 @@
-package me.meeshy.app.chat
+package me.meeshy.sdk.mention
 
 import dagger.Binds
 import dagger.Module
