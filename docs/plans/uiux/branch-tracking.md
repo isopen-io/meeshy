@@ -14,6 +14,35 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 173i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **Essaim iOS dense en vol** : PRs ouvertes jusqu'à **172i** (`CommunityLinkDetailView` 171i #2051,
+>   `MagicLinkView` 172i #2049, `LinkPreviewCard` 170i #2047, `ConversationPreferences` #2045,
+>   `SharePickerView` #2043, `ActiveSessionsView` #2041/2036/2035, `ShareLinkDetailView` #2040,
+>   `MessageEditsDetailView` #2039/2033, `BookmarksView` #2038/2034/2032, `MessageTranscriptionDetailView`
+>   166i #2030, `StatsTimelineChart` 165i #2028…). Numéro **173i** choisi strictement > plus haut en vol.
+> - **173i (en cours, branche `claude/laughing-thompson-qf8epo`, base `main` HEAD `fa11f7d`)** :
+>   Localisation + Dynamic Type + VoiceOver + brand de `LoadMoreRepliesCell` (cellule UIKit
+>   `UICollectionViewCell` « Voir N réponses de plus » en bas d'un fil de commentaires replié —
+>   `CommentListViewController`, layout compositionnel `.estimated(80)` self-sizing, tap →
+>   `onToggleThread`). Dernière surface à littéral brut listée dans le « remaining » de 167i. **4 déficits**
+>   dans une seule rangée interactive : (1) **string EN brute sans pluriel** `"View \(remaining) more
+>   replies"` (+ « View 1 more replies » cassé au singulier) → helper pur `loadMoreLabel(remaining:)` à 2
+>   clés `comments.load-more-replies.one/.other` (défaut EN inline, dev language = `en`, 0 xcstrings) ;
+>   (2) **police 13pt figée** → `UIFontMetrics(.subheadline).scaledFont(for: .systemFont(13,.medium))` +
+>   `adjustsFontForContentSizeCategory` + `numberOfLines = 0` + pins `top ≥`/`bottom ≤` (self-size grandit,
+>   pas de troncature ; floor 36pt & indent `56+40` inchangés) ; (3) **couleur non-brand** `.systemBlue`
+>   → `UIColor(MeeshyColors.indigo500)` (module-visible via `@_exported import MeeshyUI`, `import SwiftUI`
+>   ajouté pour le bridge `UIColor(Color)`) ; (4) **pas d'affordance bouton VoiceOver** →
+>   `isAccessibilityElement = true` + `accessibilityTraits = .button` + `accessibilityLabel` = texte
+>   localisé (reset en `prepareForReuse`). 1 fichier, 0 logique (tap/expand intact), 0 test neuf (grep
+>   `LoadMoreRepliesCell`/`loadMoreLabel` = 0). Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `LoadMoreRepliesCell` Localisation + Dynamic Type + VoiceOver + brand SOLDÉ** : ne plus reprendre.
+> - **Base de départ 174i : `main` HEAD** (resync ; supprimer la branche mergée). **Différé 174i+** :
+>   passe Dynamic Type coordonnée sur la famille de cellules UIKit de commentaires (`ReplyCell`,
+>   `TopLevelCommentCell`, `TextPostCell`, `MediaPostCell` — polices `.systemFont(ofSize:)` figées,
+>   une cellule/itération) ; pluriel CLDR complet via String Catalog plural-variation (langues à
+>   catégories multiples) si besoin ultérieur.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
 >   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
