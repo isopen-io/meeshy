@@ -105,6 +105,10 @@ struct ActiveSessionsView: View {
 
     private func sessionRow(_ session: UserSession) -> some View {
         HStack(spacing: 12) {
+            // Fixed 32×32 tile → glyph stays fixed (doctrine 82i/84i). Icon is a
+            // current-vs-other style marker (not real device type) conveyed by
+            // shape+color only → decorative for VoiceOver; the state is carried
+            // textually by the "Actuelle" badge / composed row label below.
             Image(systemName: session.isCurrent ? "iphone" : "desktopcomputer")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400)
@@ -113,6 +117,7 @@ struct ActiveSessionsView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill((session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400).opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -143,6 +148,11 @@ struct ActiveSessionsView: View {
                         .foregroundColor(theme.textSecondary)
                 }
             }
+            // Group device name + "Actuelle" badge + IP + last-active into one
+            // VoiceOver element so the session reads as a coherent unit instead
+            // of four disjoint fragments. The revoke button stays separate (its
+            // own focusable action).
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
