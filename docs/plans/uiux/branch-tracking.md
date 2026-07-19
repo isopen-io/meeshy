@@ -14,6 +14,27 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 147i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **147i (terminée, branche `claude/laughing-thompson-lknori`, base `main` HEAD `efedb69e4`)** :
+>   A11y VoiceOver de `MessageLanguageDetailView` (explorateur de langues du Prisme Linguistique — vue
+>   « Langue » du `MessageMoreSheet`, SEUL point d'entrée d'exploration des traductions). **Surface
+>   fraîche jamais traitée** (absente des 70 fichiers annotés doctrine ET des 163 traités a11y).
+>   **2 défauts a11y réels corrigés** (boutons icône-seule) : bouton fermer (`xmark.circle.fill`) →
+>   `.accessibilityLabel(common.close)` ; bouton retraduire (`arrow.clockwise`, « Bouton retraduire »
+>   documenté) → `.accessibilityLabel(message-detail.retranslate)`. **4 glyphes décoratifs masqués**
+>   (`text.bubble.fill`, `waveform` ×2 = sens porté par le texte adjacent). **Glyphe de statut de rangée**
+>   (`checkmark`/`chevron`, 2 sites) → `.accessibilityHidden` **+** `.accessibilityAddTraits(.isSelected)`
+>   sur le bouton de rangée (repère de sélection **non-fondé-sur-la-couleur** remplaçant le checkmark
+>   masqué). **Aucune migration Dynamic Type** (styles de texte `.caption`/`.footnote`/`.subheadline` déjà
+>   en place). 1 fichier, 0 logique, 0 test neuf, 1 clé i18n neuve (`message-detail.retranslate`, inline).
+>   0 contention (scan sous-agent). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `MessageLanguageDetailView` a11y SOLDÉ 147i** : ne plus reprendre (2 boutons labellisés, glyphes
+>   décoratifs masqués, sélection portée par `.isSelected`).
+> - **Base de départ 148i : `main` HEAD**. Candidats frais restants (scan 147i) : `VideoLegacySupport`
+>   (bouton fermer plein écran icône-seule), `CrashReportSheet` (ShareLink icône-seule), `TrackingLinkDetailView`
+>   + `ShareLinkDetailView` (siblings non traités de `CommunityLinkDetailView`), `EmailVerificationView`
+>   (heroes décoratifs). Sinon **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).

@@ -85,6 +85,8 @@ struct MessageLanguageDetailView: View {
                 Image(systemName: "text.bubble.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(originalColor)
+                    // Glyphe décoratif — le sens est porté par le libellé « Original • <langue> »
+                    .accessibilityHidden(true)
                 Text(String(format: String(localized: "message-detail.original", defaultValue: "Original \u{2022} %@", bundle: .main), Self.languageName(for: originalLang)))
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
@@ -118,6 +120,8 @@ struct MessageLanguageDetailView: View {
                     Image(systemName: "waveform")
                         .font(.caption2.weight(.medium))
                         .foregroundColor(originalColor.opacity(0.7))
+                        // Glyphe décoratif — la transcription adjacente porte le sens
+                        .accessibilityHidden(true)
                     Text(transcription.text)
                         .font(.footnote)
                         .foregroundColor(theme.textSecondary)
@@ -146,6 +150,8 @@ struct MessageLanguageDetailView: View {
                                 .font(.subheadline)
                                 .foregroundColor(theme.textMuted)
                         }
+                        // Bouton icône seul — sans libellé, VoiceOver lisait « xmark circle fill »
+                        .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                     }
 
                     Text(translated)
@@ -274,16 +280,23 @@ struct MessageLanguageDetailView: View {
                             .font(.caption2.weight(.medium))
                             .foregroundColor(langColor.opacity(0.6))
                     }
+                    // Bouton icône seul — sans libellé, VoiceOver lisait « arrow clockwise »
+                    .accessibilityLabel(String(localized: "message-detail.retranslate", defaultValue: "Retraduire", bundle: .main))
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                        // Affordance décorative — l'état sélectionné est porté par le trait
+                        // `.isSelected` de la rangée (pas seulement par la couleur/le glyphe)
+                        .accessibilityHidden(true)
                 } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
                     HStack(spacing: 3) {
                         Image(systemName: "waveform")
                             .font(.caption2.weight(.medium))
                             .minimumScaleFactor(0.8)
                             .foregroundColor(langColor.opacity(0.6))
+                            // Glyphe décoratif — l'aperçu de transcription adjacent porte le sens
+                            .accessibilityHidden(true)
                         Text(String(audioForLang.transcription.prefix(50)) + (audioForLang.transcription.count > 50 ? "..." : ""))
                             .font(.caption2)
                             .foregroundColor(theme.textMuted)
@@ -294,6 +307,9 @@ struct MessageLanguageDetailView: View {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                        // Affordance décorative — l'état sélectionné est porté par le trait
+                        // `.isSelected` de la rangée (pas seulement par la couleur/le glyphe)
+                        .accessibilityHidden(true)
                 } else {
                     Text(String(localized: "message-detail.translate", defaultValue: "Traduire", bundle: .main))
                         .font(.caption2.weight(.medium))
@@ -313,6 +329,9 @@ struct MessageLanguageDetailView: View {
             )
         }
         .disabled(isTranslating)
+        // La rangée est un bouton unique ; le trait `.isSelected` remplace le glyphe
+        // checkmark (masqué) comme repère de sélection non-fondé-sur-la-couleur pour VoiceOver.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Network Actions
