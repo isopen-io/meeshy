@@ -12,6 +12,10 @@ import type {
   ReactionUpdateEvent
 } from '@meeshy/shared/types';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import {
+  resolveParticipantAvatar,
+  resolveParticipantDisplayName
+} from '@meeshy/shared/utils/participant-helpers';
 
 export interface AddReactionOptions {
   messageId: string;
@@ -209,7 +213,13 @@ export class ReactionService {
     const participants = allParticipantIds.size > 0
       ? await this.prisma.participant.findMany({
           where: { id: { in: Array.from(allParticipantIds) } },
-          select: { id: true, displayName: true, avatar: true, userId: true }
+          select: {
+            id: true,
+            displayName: true,
+            avatar: true,
+            userId: true,
+            user: { select: { displayName: true, avatar: true } }
+          }
         })
       : [];
 
@@ -222,8 +232,8 @@ export class ReactionService {
         const reaction = reactions.find(r => r.emoji === agg.emoji && r.participantId === pid);
         return {
           participantId: pid,
-          username: participant?.displayName ?? 'Anonymous',
-          avatar: participant?.avatar ?? null,
+          username: resolveParticipantDisplayName(participant) ?? 'Anonymous',
+          avatar: resolveParticipantAvatar(participant),
           createdAt: reaction?.createdAt?.toISOString() ?? new Date().toISOString()
         };
       })
