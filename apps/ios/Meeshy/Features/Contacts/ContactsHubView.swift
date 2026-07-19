@@ -99,6 +99,9 @@ struct ContactsHubView: View {
             .padding(.top, 10)
         }
         .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tab.rawValue)\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        // The active tab is signalled visually by indigo tint + underline only.
+        // Surface that selection to VoiceOver so it is not conveyed by colour alone.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func badgeCount(for tab: PeopleTab) -> Int {

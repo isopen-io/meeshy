@@ -109,6 +109,9 @@ struct PeopleDiscoveryView: View {
         }
         .accessibilityLabel(tab.rawValue)
         .accessibilityValue(badge > 0 ? "\(badge)" : "")
+        // The active sub-tab is signalled visually by indigo tint + underline only.
+        // Surface that selection to VoiceOver so it is not conveyed by colour alone.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func subBadge(for tab: DiscoveryTab) -> Int {
