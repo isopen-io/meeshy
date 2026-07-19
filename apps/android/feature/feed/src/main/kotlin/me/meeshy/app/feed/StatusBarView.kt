@@ -57,17 +57,18 @@ import me.meeshy.ui.theme.hexColor
  * [buildStatusBarCells]; this Composable is glue: it renders each [StatusBarCell],
  * fires [StatusesViewModel.loadMoreIfNeeded] as pills scroll into view, and shows a
  * tap-to-view popover ([statusPopoverModel]) over a selected status. Tapping the
- * leading add cell raises [onAddStatus] (the status composer is its own slice).
+ * leading add cell opens the [StatusComposerSheet], which publishes through
+ * [StatusesViewModel.setStatus] (all composer rules live in [StatusComposerDraft]).
  */
 @Composable
 fun StatusBarView(
     modifier: Modifier = Modifier,
     viewModel: StatusesViewModel = hiltViewModel(),
-    onAddStatus: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val cells = remember(state) { buildStatusBarCells(state) }
     var selected by remember { mutableStateOf<StatusEntry?>(null) }
+    var showComposer by remember { mutableStateOf(false) }
 
     LazyRow(
         modifier = modifier.height(STATUS_BAR_HEIGHT),
@@ -89,7 +90,7 @@ fun StatusBarView(
                     onClick = { selected = cell.entry },
                 )
 
-                StatusBarCell.AddStatus -> AddStatusPill(onClick = onAddStatus)
+                StatusBarCell.AddStatus -> AddStatusPill(onClick = { showComposer = true })
 
                 StatusBarCell.ErrorRetry -> ErrorRetryPill(onClick = viewModel::refresh)
 
@@ -120,6 +121,16 @@ fun StatusBarView(
 
     selected?.let { entry ->
         StatusPopover(entry = entry, onDismiss = { selected = null })
+    }
+
+    if (showComposer) {
+        StatusComposerSheet(
+            onPublish = { emoji, content, visibility ->
+                viewModel.setStatus(emoji = emoji, content = content, visibility = visibility)
+                showComposer = false
+            },
+            onDismiss = { showComposer = false },
+        )
     }
 }
 

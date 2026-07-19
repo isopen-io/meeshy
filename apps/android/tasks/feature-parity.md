@@ -1934,9 +1934,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       The Composable is thin glue: `loadMoreIfNeeded` on pill scroll-in, `refresh` on the retry chip, own-status
       accent via `hexColor(avatarColor)`, `Popup` popover. +13 tests (`StatusBarPresentationTest`: 9 cell-builder
       branches + 4 popover, mutation-proven: dropping the cold-empty `isEmpty()` guard fails exactly the
-      error-not-surfaced-when-populated test). **Still open:** the status **composer** (emoji grid + visibility)
-      wiring `setStatus`/`clearStatus`, and the popover's republish/react actions.
-- [ ] Status composer / republish: emoji grid, 122-char text, visibility (public/friends/except/only)
+      error-not-surfaced-when-populated test). **Still open:** the popover's republish/react actions.
+      **Status composer landed** (slice `status-composer`, 2026-07-19): the `:feature:feed` `StatusComposerSheet`
+      (`ModalBottomSheet`) opened from the bar's `AddStatus` cell (previously inert — now real, no dead-end). The
+      pure `StatusComposerDraft` owns every rule the Composable must not re-implement: the publish gate
+      (`canPublish` = a mood emoji is picked, iOS `disabled(selectedEmoji == nil)`), the 122-char cap (`withText`
+      clamps, iOS `onChange` prefix), the trimmed body actually sent (`trimmedContent`, `null` when blank), the
+      near-limit counter warning (`> 100`), and the emoji toggle (tap the selected one to clear it) + visibility
+      change. Publishes through `StatusesViewModel.setStatus(emoji, content, visibility)`. +14 tests
+      (`StatusComposerDraftTest`, mutation-proven: dropping the `withText` clamp fails exactly the over-limit
+      test; the toggle-deselect guard the emoji-clear test). **Deferred (follow-up §G):** EXCEPT/ONLY visibility
+      needs a per-user audience picker Android lacks — this ships the 4 no-audience cases (PUBLIC/COMMUNITY/
+      FRIENDS/PRIVATE, mirroring `StoryVisibility`); persisting the last-used visibility (iOS `@AppStorage`) and
+      offline-draft recovery (iOS `recoverUnsentStatus`) are also tracked follow-ups.
+- [x] Status composer: emoji grid, 122-char text, visibility (public/community/friends/private) — `status-composer`
+      (except/only audience picker deferred, tracked above)
 - [ ] Mood status create, react, delete; 21h expiry + viewer tracking
 - [~] Status thought-bubble popover on avatar tap with republish action — **view landed** (slice
       `status-bar-compose`, 2026-07-19): the `Popup` popover renders emoji + author + text + `via` + the
