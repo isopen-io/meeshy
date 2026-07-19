@@ -1988,7 +1988,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       statuses (`StatusPopoverModel.canReact = !isOwn`); tapping fires the already-built optimistic
       `StatusesViewModel.react` and dismisses. Own status stays read-only (no react/republish), coherent with the
       republish gate.
-- [ ] Friends / Discover status feeds
+- [x] Friends / Discover status feeds — **toggle UI landed** (slice `status-feed-mode-toggle`, 2026-07-19): the
+      compact glass segmented `StatusFeedModeToggle` above the emoji rail drives the already-built
+      `StatusesViewModel.setMode` (which serves the target feed's L1-cached bar instantly, no-op on the active feed).
+      Pure `statusFeedModeTabs(current)` SSOT owns the order (explicit `[FRIENDS, DISCOVER]`, independent of the enum
+      declaration) + selection. iOS ships only the friends feed (two `StatusViewModel` instances, no in-UI switch) —
+      Android drives both from one VM, so this is a switch iOS never surfaced. `myStatus` surfaces only in FRIENDS
+      mode, so DISCOVER coherently swaps the leading cell to Add. +4 `StatusBarPresentationTest` (both-feeds-offered,
+      friends-first order, per-mode selection; mutation-proven: reversing `STATUS_FEED_TAB_ORDER` fails exactly the
+      order test, hard-wiring selection to FRIENDS fails exactly the discover-selection test).
+      **i18n follow-up:** the whole `status_*` string family is default (`values/`) only — FR/ES/PT localisation of
+      the statuses area is a pre-existing gap, tracked here for a dedicated slice.
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)

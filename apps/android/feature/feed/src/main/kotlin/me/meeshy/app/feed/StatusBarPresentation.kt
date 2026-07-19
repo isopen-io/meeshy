@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import me.meeshy.sdk.model.MoodStatusExpiry
 import me.meeshy.sdk.model.StatusEntry
+import me.meeshy.sdk.status.StatusFeedMode
 
 /**
  * One rendered slot in the mood-statuses bar — the pure decomposition of
@@ -81,6 +82,26 @@ fun statusReactionChips(reactionSummary: Map<String, Int>?): List<StatusReaction
         .map { StatusReactionChip(emoji = it.key, count = it.value) }
         .sortedWith(compareByDescending<StatusReactionChip> { it.count }.thenBy { it.emoji })
         .toList()
+
+/** One segment of the status-feed toggle — a [mode] and whether it is [isSelected]. */
+data class StatusFeedModeTab(val mode: StatusFeedMode, val isSelected: Boolean)
+
+/**
+ * The order the toggle segments read in: your own circle first (Friends), then the
+ * wider Discover feed. Owned here — independent of the [StatusFeedMode] declaration
+ * order — so the render order is a deliberate UI decision, not an enum accident.
+ */
+private val STATUS_FEED_TAB_ORDER = listOf(StatusFeedMode.FRIENDS, StatusFeedMode.DISCOVER)
+
+/**
+ * The ordered segments of the Friends/Discover status-feed toggle for [current], with
+ * exactly the [current] segment selected. Pure SSOT so the Compose segmented control
+ * stays glue over [StatusesViewModel.setMode]. iOS surfaces only the friends feed (two
+ * `StatusViewModel` instances, no in-UI switch); Android drives both feeds from one VM,
+ * so this toggle is the switch iOS never gave the user.
+ */
+fun statusFeedModeTabs(current: StatusFeedMode): List<StatusFeedModeTab> =
+    STATUS_FEED_TAB_ORDER.map { StatusFeedModeTab(mode = it, isSelected = it == current) }
 
 /**
  * Project [entry] into its popover model, deriving the countdown at [nowMillis].

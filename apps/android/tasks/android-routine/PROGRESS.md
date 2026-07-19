@@ -1,5 +1,37 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **Friends / Discover status-feed toggle** landed (slice `status-feed-mode-toggle`,
+> feature-parity §G → "Friends/Discover status-feed toggle" — the UI the `statuses-viewmodel` /
+> `status-bar-l1-cache` slices built `StatusesViewModel.setMode` for but never surfaced). iOS ships **only** the
+> friends status feed (two separate `StatusViewModel(mode:)` instances, no in-UI switch); Android drives both feeds
+> from one VM, so this is a switch iOS never gave the user — a SOTA improvement, not a port. **(1)** new pure
+> `statusFeedModeTabs(current): List<StatusFeedModeTab>` (`:feature:feed` `StatusBarPresentation`) — the SSOT for the
+> toggle: an explicit `STATUS_FEED_TAB_ORDER = [FRIENDS, DISCOVER]` (owned here, **independent of the enum
+> declaration order** so the render order is a deliberate UI decision, not an enum accident) mapped to segments with
+> exactly the `current` segment `isSelected`. **(2)** `StatusFeedModeToggle` Composable — a compact glass segmented
+> control pinned above the emoji rail, thin glue over the pure tabs: tapping a segment fires the already-built
+> `viewModel.setMode` (which serves the target feed's L1-cached bar instantly and is a no-op on the active feed —
+> `Role.Tab` + `selected` semantics for a11y, Indigo-filled active segment). `StatusBarView` is now a `Column`
+> (toggle + `LazyRow`); `myStatus` already surfaces only in FRIENDS mode, so switching to DISCOVER coherently swaps
+> the leading cell to Add. **+4 tests** — `StatusBarPresentationTest` (+4): both-feeds-offered, friends-first order,
+> select-friends-on-friends, select-discover-on-discover. **Mutation check (RED proof):** structural RED (tests don't
+> compile without `statusFeedModeTabs`/`StatusFeedModeTab`); behaviourally, reversing `STATUS_FEED_TAB_ORDER` fails
+> **exactly** `feed-mode tabs read friends first then discover`, and hard-wiring `isSelected = it == FRIENDS` fails
+> **exactly** `feed-mode tabs select the discover segment on the discover feed` (27 tests, 1 failed each) —
+> behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:feature:feed:testDebugUnitTest` **491** green (`StatusBarPresentationTest` 27/27, was 23 + 4), `assembleDebug` +
+> full `testDebugUnitTest` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 2 production + 1 test
+> + 1 string + tracking; **SDK purity** — `statusFeedModeTabs` is a pure presentation projection in `:feature:feed`,
+> the "which feed / when to fetch" orchestration stays in `StatusesViewModel.setMode`; **SSOT** — one tab-order +
+> selection law; **UDF** — immutable tabs, pure projection, VM owns the mode `StateFlow`; **Instant-App** — `setMode`
+> already serves the cached bar instantly (no skeleton on a warm switch); **coherence** — Indigo segmented control,
+> natural tap-to-switch gesture, no dead-end [both feeds reachable, leading cell swaps coherently]; no coverage floor
+> lowered, no test weakened). **Note:** the `status_feed_*` strings ship in `values/` only — the whole `status_bar_*`
+> / `status_*` family is default-only today (FR/ES/PT localisation of the statuses area is a pre-existing gap, now
+> tracked as a §G follow-up). **Next slice:** §G — the disk **L2** status cache (Room-backed cold-launch parity
+> across process death, following `ProfileStatsCacheRepository`), then localise the `status_*` string family
+> (FR/ES/PT) to close the tracked i18n gap.
+
 > On 2026-07-19 the **status-popover reaction picker** landed (slice `status-popover-reaction-picker`,
 > feature-parity §G → "Mood status react from the bar popover" — the piece the `status-bar-l1-cache` /
 > `status-popover-republish` slices flagged as deferred: `StatusesViewModel.react` (optimistic bump + rollback) and

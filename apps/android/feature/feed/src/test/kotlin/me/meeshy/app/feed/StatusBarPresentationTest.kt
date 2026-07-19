@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.MoodStatusExpiry
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.Test
 
 /**
@@ -261,5 +262,40 @@ class StatusBarPresentationTest {
             StatusReactionChip("👏", 2),
             StatusReactionChip("🔥", 2),
         ).inOrder()
+    }
+
+    // --- feed-mode toggle -----------------------------------------------------
+
+    @Test
+    fun `feed-mode tabs always offer both feeds`() {
+        val tabs = statusFeedModeTabs(StatusFeedMode.FRIENDS)
+
+        assertThat(tabs.map { it.mode })
+            .containsExactly(StatusFeedMode.FRIENDS, StatusFeedMode.DISCOVER)
+    }
+
+    @Test
+    fun `feed-mode tabs read friends first then discover`() {
+        val tabs = statusFeedModeTabs(StatusFeedMode.DISCOVER)
+
+        assertThat(tabs.map { it.mode })
+            .containsExactly(StatusFeedMode.FRIENDS, StatusFeedMode.DISCOVER)
+            .inOrder()
+    }
+
+    @Test
+    fun `feed-mode tabs select the friends segment on the friends feed`() {
+        val tabs = statusFeedModeTabs(StatusFeedMode.FRIENDS)
+
+        assertThat(tabs.filter { it.isSelected }.map { it.mode })
+            .containsExactly(StatusFeedMode.FRIENDS)
+    }
+
+    @Test
+    fun `feed-mode tabs select the discover segment on the discover feed`() {
+        val tabs = statusFeedModeTabs(StatusFeedMode.DISCOVER)
+
+        assertThat(tabs.filter { it.isSelected }.map { it.mode })
+            .containsExactly(StatusFeedMode.DISCOVER)
     }
 }
