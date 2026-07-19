@@ -1,5 +1,187 @@
 # Progress — state & what to do next
 
+> On 2026-07-18 the **comment composer @-mention autocomplete** landed (slice `feed-comment-mention-autocomplete`,
+> feature-parity §Feed → "Threaded comments" — the composer autocomplete was the last-open item on the comment
+> composition line, after reply composition, auto-preview, the realtime rooms, mention *rendering* and the
+> per-comment language switcher). Until now the feed comment/reply composer was a plain text box (its draft lived
+> in Compose-local `remember`), while the **chat** composer has had a full @-mention autocomplete for weeks. iOS
+> shares one `MentionComposerController` across both surfaces; Android had the pure logic trapped in `:feature:chat`.
+> This slice reaches parity by **(1) promoting that pure state-machine to `:sdk-core` as a shared SSOT** — the
+> `MentionAutocompleteState` data class + the `MentionComposer` object (renamed from `ChatMention`) + its reducers
+> (`onTextChange`/`applyRemote`/`cleared`/`select`/`reset`) moved to `me.meeshy.sdk.mention` (git-detected rename,
+> `explicitApi()` `public`), and `:feature:chat` (`ChatViewModel`/`ChatScreen`/`ChatViewModelTest`) re-points to it
+> with **zero behaviour change** (its 201 VM tests + the 42 relocated `MentionComposerTest` cases stay green). **(2)
+> A new pure `:feature:feed` `CommentMentionRoster.build(comments, excludeUserId)`** — the feed analogue of chat's
+> `MentionRoster` — builds the candidate list from the thread's authors: blank handle dropped, current user
+> excluded, display name degrading to the handle, a repeated handle deduped case-insensitively (first author wins),
+> encounter order preserved. **(3) `PostCommentsViewModel`** now owns the composer draft + mention panel in a
+> `ComposerDraft` flow folded into the projection as a 4th chained `.combine(...)` (past the 5-arg cap), so a live
+> `comment:added` re-projection never tears the half-typed draft down; new `onDraftChange` (recomputes the panel
+> against the roster cached in `project()`) and `onMentionSelected` (the shared `select` reducer) intents, and
+> `submit()` now reads the folded draft and resets it on send. **(4) Compose** — `CommentComposer` becomes
+> controlled (`draft`/`onDraftChange`) with a `CommentMentionStrip` mirroring chat's `MentionSuggestionStrip`
+> (neutral input-assistance chrome, capped scroll, tap→insert). Local-roster only; the remote-directory merge
+> (`MentionSearch`) is deferred to a later slice to avoid a cross-feature DI coupling. **+17 tests** —
+> `CommentMentionRosterTest` (10: empty, map-fields, absent-author drop, blank-handle drop, handle trim,
+> absent/blank display-name→handle, self-exclude, case-insensitive dedup first-wins, encounter order) +
+> `PostCommentsViewModelTest` (+7: draft-stored-no-panel, at-fragment-opens-with-matches, bare-@-whole-roster,
+> roster-excludes-self, select-inserts+dismisses, submit-clears-draft+panel, realtime-landing-preserves-draft);
+> the 42 `MentionComposerTest` cases relocated intact. **Mutation check (RED proof):** neutralising the
+> `CommentMentionRoster` self-exclude **and** dedup guards failed **exactly** 3 tests (roster self-exclude, roster
+> dedup, VM roster self-exclude) — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8` —
+> wrapper 403s on the proxy):** `:sdk-core`+`:feature:feed`+`:feature:chat` `testDebugUnitTest` — `MentionComposerTest`
+> 42/42, `CommentMentionRosterTest` 10/10, `PostCommentsViewModelTest` 78/78, `ChatViewModelTest` 201/201;
+> `gradle :app:assembleDebug` → **BUILD SUCCESSFUL** (the promoted SSOT compiles across `:sdk-core`→`:feature:chat`/
+> `:feature:feed`, the controlled composer + strip compile). One unrelated flake — `:sdk-core
+> InterfaceLanguageStoreTest` (a DataStore timeout under parallel load) — **passes in isolation** and is not in the
+> diff. Reviewer **PASS** (diff `apps/android` only — 10 files incl. the 2 renames, no production logic elsewhere;
+> **SDK purity** — the stateless mention state-machine is a `:sdk-core` building block, the "who can be mentioned"
+> roster rule stays in `:feature:feed`; **SSOT** — one `MentionComposer` shared by chat + comments, no
+> re-implementation; **Instant-App** — autocomplete resolves synchronously from already-loaded thread authors, no
+> spinner; **UDF** — immutable `ComposerDraft`/`UiState`, pure transitions, draft held in the flow; **coherence** —
+> the comment strip mirrors chat's, neutral chrome reserves the accent for content, dismissal returns to the
+> composer; no coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — the comment composer's
+> **remote directory merge** (inject a `MentionSearch` so `@ab…` enriches the local roster from `/mentions`, the
+> feed counterpart of chat's `chat-mention-remote-merge`); OR the **statuses/moods bar** (§G) / the **unified post
+> composer** (Post/Status/Story tabs); OR pivot back to §Stories/§Calls per the build-order sequencing.
+
+> On 2026-07-18 the **fullscreen media gallery** landed (slice `feed-media-fullscreen-gallery`,
+> feature-parity §Feed → "Fullscreen media gallery" + "Image viewer"). The adaptive collage (previous
+> slice) rendered a post's media as tappable tiles but the tap was **dead** — no way to see an image at
+> full resolution. iOS opens a lightbox pager on tap; Android now reaches parity by **reusing the
+> existing `:sdk-ui` `MeeshyImageViewer`** (the same fullscreen pager chat already uses: pinch-zoom
+> 1–4×, clamped pan, double-tap 2.5×, ±2 neighbour prefetch, save-to-gallery, per-page caption/author/
+> timestamp chrome) — **no new SDK code**. **Ships:** **(1) `:feature:feed` pure `FeedMediaGallery`
+> SSOT** — `of(post: FeedPostPresentation, imageIndex: Int): FeedGallery(pages, startIndex)`, a faithful
+> mirror of chat's `ConversationMediaGallery`: flattens the post's images to **full-resolution** URLs
+> (`image.url`, never the collage thumbnail), each `FeedGalleryPage` sharing the post's text as caption
+> (`trim().ifBlank { null }`), author (`trim`→null) and `createdAtIso` for the viewer chrome; `startIndex`
+> = tapped index **clamped into the post's bounds** (a negative or past-last tap can't escape); a post
+> with no image → empty gallery (`isEmpty` — nothing opens). `FeedGallery` exposes positionally-aligned
+> `imageUrls`/`captions`/`authorNames`/`createdAtIsos`. **(2) `FeedViewModel`** gains the ephemeral
+> `imageViewer: FeedGallery?` in `FeedUiState` (kept in the flow so a background re-emit never tears the
+> open viewer down), `openImageViewer(postId, imageIndex)` (resolves against the projected posts →
+> `takeUnless(isEmpty)`; unknown post id or image-less post is **inert**) and `dismissImageViewer()`.
+> **(3) Compose** — `PostImageGrid`/`CollageTile` + the single-image path become `clickable`
+> (`onClickLabel` = "Open image" for a11y), threading the tapped **cell index** up through `PostCard`'s
+> new `onImageTap: (Int) -> Unit` to `viewModel.openImageViewer(post.id, index)`; `FeedScreen` renders
+> `MeeshyImageViewer` when `state.imageViewer != null`, formatting the per-page timestamps with the same
+> `RelativeTimeFormat`/`isoToEpochMillisOrNull` the feed card already uses, and toasting the
+> save-to-gallery result. **+16 tests** — `FeedMediaGalleryTest` (12: empty→nothing, single@0, order +
+> full-res URLs [not thumbnail], middle-tap start, negative-clamp, past-last-clamp, shared caption,
+> blank-caption→null, author trim + shared, blank/absent author→null, timestamp trim + blank/absent→null,
+> derived-lists-aligned) ; `FeedViewModelTest` (+4: open-at-tapped-index, unknown-post inert, image-less
+> inert, dismiss-closes). **Mutation check (RED proof):** dropping the `startIndex` clamp (`coerceIn` →
+> passthrough) **and** the blank-caption guard (`content.trim().ifBlank{null}` → raw `content`) failed
+> **exactly** 3 tests (negative-clamp, past-last-clamp, blank-caption) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3, `LANG=C.UTF-8` — wrapper 403s on the proxy):**
+> `:feature:feed:testDebugUnitTest` `FeedMediaGalleryTest` 12/12, `FeedViewModelTest` **43/43**;
+> `gradle :app:assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (Compose wiring compiles
+> `:feature:feed`→`:sdk-ui`, all module unit tests green). Reviewer **PASS** (diff `apps/android` only —
+> 8 files, feature/feed + its 4 locale strings; **SDK purity** — the "flatten a post into a gallery"
+> product rule lives in `:feature:feed` [it knows `FeedPostPresentation`], the fullscreen pager stays the
+> opaque `:sdk-ui` building block; **SSOT** — reuses `MeeshyImageViewer`, mirrors `ConversationMediaGallery`,
+> no re-implementation; **Instant-App** — opens synchronously from already-loaded data, viewer prefetches
+> neighbours; **UDF** — immutable `FeedUiState`, pure transitions; **coherence** — accent-tinted tiles
+> unchanged, tap = natural gesture, dismiss → back to the feed, no dead end; no coverage floor lowered,
+> no test weakened). **Next slice:** §Feed still-open — comment **@-mention autocomplete** (promote the
+> pure `ChatMention`/`MentionAutocompleteState` from `:feature:chat` to `:sdk-core` as a shared SSOT
+> first, its own slice); OR the **statuses/moods bar** (§G) / the **unified post composer** (Post/Status/
+> Story tabs); OR pivot back to §Stories/§Calls per the build-order sequencing.
+
+> On 2026-07-18 the **adaptive multi-image collage** landed (slice `feed-adaptive-collage-layout`,
+> feature-parity §Feed → "Adaptive multi-image collage layouts (1–5+ media)"). Until now the feed
+> card's `PostImageGrid` was a **naive** uniform 2-column square grid capped at 4 tiles
+> (`images.chunked(2)`, a `+N` overlay only on the 4th): a 3-image post rendered as `[A B] / [C _]`
+> with a dangling empty cell, and a 5-image post lost its distinctive shape. iOS
+> (`FeedPostCard+Media.mediaPreview`) instead adapts the layout to the count — 1=single, 2=side-by-side,
+> 3=1-large+2, 4=2×2, 5+=2-then-3 with `+N`. This slice brings the Android feed to that parity by
+> extracting the layout decision into a **pure, content-agnostic SSOT** and leaving the Compose grid a
+> thin reader of it. **Ships:** **(1) `:sdk-ui` pure `MediaCollage.solve(count): CollageLayout`** — a
+> stateless building block (package `me.meeshy.ui.component.media`) mapping a media **count** to a
+> deterministic vertical stack of `CollageRow`s, each a horizontal list of `CollageCell`s carrying an
+> `index`, a `widthWeight`, and an `overflowCount` (>0 only on the final tile past the `MAX_VISIBLE = 5`
+> cap). Shapes: `1`→single full-bleed (real aspect, `isSingle = true`); `2`→two equal tiles;
+> `3`→one large row (height 0.6) over a two-up row (0.4); `4`→row-major 2×2; `5`→two-up over three-up;
+> `5+`→the same five tiles, the last carrying `+N` for the hidden remainder. It knows only the count
+> (no Meeshy singletons, no "when to render" rule → SDK grain), so the **chat-bubble media grid** can
+> reuse it later. **(2) `:feature:feed` `PostImageGrid`** now calls `MediaCollage.solve(images.size)` and
+> renders the rows (each `Modifier.weight(row.heightWeight)`) and cells (`Modifier.weight(cell.widthWeight)`)
+> at a fixed `COLLAGE_HEIGHT = 260.dp`, with the single-image path preserved (real aspect ratio); a new
+> `CollageTile` composable draws the accent-tinted tile + the `+N` overlay when `overflowCount > 0`. The
+> naive `chunked(2)`/`MAX_GRID_IMAGES` grid is gone. **+12 tests** (`MediaCollageTest` — empty, negative,
+> single, 2, 3, 4, 5, 6, 12, index-coverage-sweep [1..20], overflow-only-on-last-past-cap [1..10], and a
+> weights-sum-to-one sweep [1..20]). **Mutation check (RED proof):** neutralising the overflow assignment
+> (`if (index == lastIndex) overflow else 0` → always `0`) failed **exactly** the 3 overflow tests
+> (six-image / many-image / overflow-only-past-cap) — behavioural, not tautological. **Gate (system Gradle
+> 8.14.3 under `LANG=C.UTF-8`):** `:sdk-ui:testDebugUnitTest` `MediaCollageTest` 12/12 green,
+> `:feature:feed:testDebugUnitTest` **374 tests, 0 failures**, `:app:assembleDebug` → **BUILD SUCCESSFUL**
+> (the `MediaCollage`/`Shape`/`fillMaxHeight` imports compile across `:feature:feed`→`:sdk-ui`, no
+> cross-module breakage). Reviewer **PASS** (diff `apps/android` only — 3 files; **SDK purity** — the
+> layout algorithm is a stateless `:sdk-ui` building block taking an opaque count, the "which images / when
+> to render" orchestration stays in `:feature:feed`; **SSOT** — one collage rule, not re-implemented per
+> surface; **Instant-App** — pure synchronous layout, no spinner/network; **coherence** — accent-tinted
+> tiles (`MeeshyPalette.Indigo500` @ 0.08), `MeeshyRadius.md` corners, `MeeshySpacing.xs` gaps, the same
+> `+N` overlay style, no dead end; no coverage floor lowered, no test weakened).
+> **⚠ Process lesson (see NOTES.md):** this run's branch was first cut from a **stale local `main`**
+> (behind `origin/main` by the merged feed slices) — caught before PR by noticing the merged comment
+> test files were missing, then fixed with `git rebase --onto origin/main main <branch>`. **Always branch
+> from `origin/main`, not local `main`.** **Next slice:** §Feed still-open — the **fullscreen media
+> gallery** (tap a collage tile → a `HorizontalPager` viewer with the tapped index; reuse the `:sdk-ui`
+> viewer components) to complete the audit item; OR comment **@-mention autocomplete** (promote the pure
+> `ChatMention`/`MentionAutocompleteState` from `:feature:chat` to `:sdk-core` as a shared SSOT first, its
+> own slice); OR pivot to the **statuses/moods bar** (§G) / the **unified post composer**.
+
+> On 2026-07-18 the **per-comment language switcher** landed (slice `feed-comment-language-switcher`,
+> feature-parity §Feed → "Threaded comments" — the per-comment language switcher was the last open item on the
+> comment rendering line [after expand-threads, likes, replies, auto-preview, the realtime add/delete/reaction/
+> count rooms, and mention rendering]). Until now a comment's `CommentPresentation.isTranslated` was **computed
+> but never rendered** — a francophone reader saw a Spanish comment auto-translated to French (Prisme rule) but
+> got **no indicator** that a translation was active and **no way** to see the original or explore another
+> language, while the feed **post** has had a full flag strip (`PostLanguageStrip` + `LanguageFlagTapResolver`)
+> for weeks. This slice brings the comment to **parity with the post** by reusing the **same** SSOT strip +
+> flag-tap resolver — no new SDK code. **Ships:** **(1) `:feature:feed` `CommentPresentation`** gains
+> `languageStrip: List<LanguageChip>`; **`CommentProjection.build`** gains an `activeLanguageCode: String? = null`
+> param and — mirroring `FeedPostBuilder` exactly — a `resolveActiveCode(comment, prefs, override)` (the viewer's
+> override when it names a language the comment carries, else the preferred translation, else the original), a
+> content resolver that honours the override (original text when active-is-original, else the matching
+> translation, else the Prisme default), and the strip via `PostLanguageStrip.build(comment.originalLanguage,
+> comment.translations, prefs, showingOriginal = isTranslated && activeIsOriginal, activeCodeOverride =
+> activeCode)`. The strip is **empty** when the comment isn't translated for the viewer (Prisme rule 1 — nothing
+> to explore). **(2) `PostCommentsViewModel`** — a new `activeLanguages: StateFlow<Map<String,String>>`
+> (comment id → chosen code) folded into the projection combine (a 7th input, threaded past the 5-arg `combine`
+> cap via `inputs to replyTarget` then `.combine(activeLanguages)`); `project` passes `activeLanguages[it.id]`
+> into every `CommentProjection.build` (top-level **and** replies), so an override is **keyed per comment** and
+> a switch on one row never disturbs another; `onCommentFlagTap(commentId, code)` finds the comment (top-level or
+> reply), resolves the decision through the **shared** `LanguageFlagTapResolver` (Activate → set the override,
+> Revert → clear it, RequestTranslation/None → inert), and is inert for a blank/unknown comment or content-less
+> language. **(3) Compose** — `PostCommentsSection`'s `CommentRow` renders a compact `CommentLanguageStrip`
+> (a mirror of the post detail's `DetailLanguageStrip`: `FlowRow` translate glyph + accent-tinted flag chips,
+> the active chip showing its native name) beneath the comment content when `languageStrip` is non-empty;
+> tapping a chip → `onCommentFlagTap(comment.id, code)`, threaded through `CommentRow` + `ReplyThread` (preview
+> and expanded reply sites). Accent-coherent (each chip tinted with the language accent, Indigo section).
+> **+10 tests** (`CommentProjectionTest` +5 — empty-strip-when-not-translated, active-preferred-chip,
+> override-switches-content-and-chip, active-original-shows-original, unknown/content-less-override-falls-back;
+> `PostCommentsViewModelTest` +5 — flag-tap-switches, tap-active-reverts, switches-only-tapped-comment,
+> content-less-inert, blank/unknown-id-inert). **Mutation check (RED proof):** making the projection ignore the
+> per-comment override (`activeLanguageCode = null` on the top-level rows) failed **exactly** the 3 VM switching
+> tests (switches / reverts / switches-only-tapped) — behavioural, not tautological. **Gate (system Gradle
+> 8.14.3 under `LANG=C.UTF-8`):** `:feature:feed:testDebugUnitTest` green (all feed suites), `:app:assembleDebug`
+> → **BUILD SUCCESSFUL** (the `CommentLanguageStrip` + `LanguageChip`/`hexColor` imports compile across
+> `:feature:feed`→`:sdk-ui`, no cross-module breakage). Reviewer **PASS** (diff `apps/android` only; **SDK
+> purity** — no new SDK code; the strip/flag-tap SSOT stays in `:sdk-ui` (`PostLanguageStrip`,
+> `LanguageFlagTapResolver`), the "which language a comment resolves to / when to switch" orchestration lives in
+> `:feature:feed` (`CommentProjection`, the VM), exactly like the post; **SSOT** — comment and post language
+> switching now share one strip builder + one flag-tap rule, no re-implementation; **Instant-App** — switch is a
+> pure synchronous re-projection, no spinner/network; **UDF** + immutable `StateFlow`, pure `project`;
+> **coherence** — the comment strip is a compact mirror of the post detail strip, accent-tinted, natural tap
+> gesture, no dead end; no coverage floor lowered, no test weakened). **Next slice:** §Feed still-open — comment
+> **@-mention autocomplete** in the composer (needs the pure `ChatMention`/`MentionAutocompleteState` SSOT
+> promoted from `:feature:chat` to a shared module so chat + comments share ONE controller — mirror of iOS's
+> reusable `MentionComposerController`; do the promotion as its own slice since it edits chat imports), comment
+> **effects/blur**, per-post/comment **cache-first** (a disk cache mirroring iOS `CacheCoordinator.comments`),
+> the **community posts feed**, OR pivot to the **statuses/moods bar** (§G) / the **unified post composer**.
+
 > On 2026-07-18 **feed comment mention rendering** landed (slice `feed-comment-mention-rendering`, feature-parity
 > §Feed → "Threaded comments" — mention **rendering** now done; @-mention **autocomplete** in the composer,
 > effects/blur, per-comment language switcher still open). Until now a comment's content rendered as flat

@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Single track row : sticky leading label (72 pt) + scrollable lane.
-/// Leaf view — primitive `let` parameters only, no @ObservedObject.
+/// Single track row : sticky leading icon-only label (`labelColumnWidth`) +
+/// scrollable lane. Leaf view — primitive `let` parameters only, no @ObservedObject.
 public struct TrackBarView<Content: View>: View {
 
     public let title: String
@@ -45,10 +45,22 @@ public struct TrackBarView<Content: View>: View {
         return title + lockSuffix
     }
 
+    /// Width of the sticky leading column. Icon-only (no text) so the
+    /// scrollable lane — the actual timeline content — gets the width back.
+    /// Was 72pt with a text label; on a 402pt-wide phone that's ~18% of the
+    /// sheet's width spent on a name already shown a second time inside the
+    /// clip bar itself (`VideoClipBar.titleLabel` / `AudioClipBar.titleOverlay`)
+    /// — pure redundancy (user report 2026-07-18: "le timeline doit occuper
+    /// toute l'espace horizontal du sheet").
+    // `static let` stored properties aren't allowed on a generic type
+    // (`TrackBarView<Content>`) — computed `static var` instead, same
+    // constant-folding result for a literal like this.
+    public static var labelColumnWidth: CGFloat { 32 }
+
     public var body: some View {
         HStack(spacing: 0) {
             label
-                .frame(width: 72, height: laneHeight, alignment: .leading)
+                .frame(width: Self.labelColumnWidth, height: laneHeight, alignment: .center)
                 .background(isDark ? Color.black.opacity(0.25) : Color.white.opacity(0.6))
 
             ZStack(alignment: .leading) {
@@ -64,16 +76,19 @@ public struct TrackBarView<Content: View>: View {
     }
 
     private var label: some View {
-        HStack(spacing: 5) {
+        Group {
             if isLocked {
                 Image(systemName: "lock.fill")
                     .font(.caption2)
                     .foregroundStyle(MeeshyColors.warning)
-                    .accessibilityHidden(true)
             } else if let iconName {
                 // Tinted chip wrapping the type icon — picks up the lane tint
                 // so audio (warning), text (indigo400), video/image (indigo500)
-                // each get their own colour cue at a glance.
+                // each get their own colour cue at a glance. The track's full
+                // name is still announced via `accessibilityComposedLabel` on
+                // the row as a whole (VoiceOver) — dropping the on-screen
+                // Text(title) loses nothing there, it was pure duplication of
+                // the name already shown inside the clip bar itself.
                 ZStack {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
                         .fill(Color(hex: tintHex).opacity(isDark ? 0.30 : 0.18))
@@ -82,21 +97,9 @@ public struct TrackBarView<Content: View>: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Color(hex: tintHex))
                 }
-                .accessibilityHidden(true)
             }
-            Text(title)
-                .font(.caption2.weight(isSelected ? .semibold : .regular))
-                .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo900)
-                .lineLimit(1)
-                // 72 pt de colonne − icône 18 pt − paddings : « VIDÉO 1 » ne
-                // tient pas à taille nominale et s'affichait « VID… ». On
-                // resserre puis réduit (plancher 0.7) avant de tronquer.
-                .allowsTightening(true)
-                .minimumScaleFactor(0.7)
-                .truncationMode(.tail)
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
+        .accessibilityHidden(true)
     }
 
     private var laneBackground: some View {

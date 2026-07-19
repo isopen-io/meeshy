@@ -374,76 +374,85 @@ public struct ProTimelineView: View {
                 .padding(.vertical, 24)
         } else {
             let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
-            TimelineScrubArea(
-                totalDuration: viewModel.project.slideDuration,
-                geometry: geometry,
-                currentTime: viewModel.currentTime,
-                isDark: colorScheme == .dark,
-                minLaneWidth: 320,
-                rulerHeight: 22,
-                isPlaying: viewModel.isPlaying,
-                onZoomScaleChanged: { viewModel.zoomScale = $0 },
-                onSlideDurationChanged: { viewModel.setSlideDuration($0) },
-                snapGuideTime: viewModel.selection.activeDrag.flatMap {
-                    $0.snappedTo != nil ? $0.currentStartTime : nil
-                },
-                onScrub: { viewModel.scrub(to: $0) },
-                onScrubBegan: { viewModel.beginScrub() },
-                onScrubEnded: { viewModel.endScrub() }
-            ) { laneWidth in
-                ScrollView(.vertical, showsIndicators: true) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(hoistedTrackGroups, id: \.section) { group in
-                            if !group.tracks.isEmpty {
-                                groupHeader(key: group.titleKey)
-                                ForEach(group.tracks, id: \.id) { track in
-                                    TrackBarView(
-                                        title: track.title,
-                                        isLocked: false,
-                                        isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
-                                        tintHex: tint(for: track.kind),
-                                        isDark: colorScheme == .dark,
-                                        laneWidth: laneWidth,
-                                        laneHeight: 40,
-                                        iconName: QuickTimelineView.iconName(for: track.kind)
-                                    ) {
-                                        ZStack(alignment: .leading) {
-                                            ForEach(track.clipIds, id: \.self) { clipId in
-                                                clipBar(for: clipId, geometry: geometry, laneHeight: 40)
-                                            }
-                                            LaneKeyframeOverlays(
-                                                markers: KeyframeMarkerResolver.markers(
-                                                    for: track.clipIds, in: hoistedKeyframeMarkers),
-                                                selectedId: viewModel.selection.selectedClipId,
-                                                geometry: geometry,
-                                                laneHeight: 40,
-                                                onSelect: { viewModel.selectClip(id: $0) }
-                                            )
-                                            LaneTransitionOverlays(
-                                                junctions: TransitionJunctionResolver.junctions(
-                                                    for: track.clipIds, in: hoistedJunctions),
-                                                selectedId: viewModel.selection.selectedClipId,
-                                                isDark: colorScheme == .dark,
-                                                geometry: geometry,
-                                                laneHeight: 40,
-                                                onSelect: { viewModel.selectClip(id: $0) },
-                                                onCreate: { junction in
-                                                    if let id = viewModel.addTransition(
-                                                        fromClipId: junction.fromClipId,
-                                                        toClipId: junction.toClipId,
-                                                        kind: .crossfade,
-                                                        duration: 0.5) {
-                                                        viewModel.selectClip(id: id)
-                                                    }
+            VStack(spacing: 0) {
+                TransitionChromeLane(
+                    openingEffect: viewModel.project.openingEffect,
+                    closingEffect: viewModel.project.closingEffect,
+                    slideDuration: viewModel.project.slideDuration,
+                    geometry: geometry,
+                    isDark: colorScheme == .dark
+                )
+                TimelineScrubArea(
+                    totalDuration: viewModel.project.slideDuration,
+                    geometry: geometry,
+                    currentTime: viewModel.currentTime,
+                    isDark: colorScheme == .dark,
+                    minLaneWidth: 320,
+                    rulerHeight: 22,
+                    isPlaying: viewModel.isPlaying,
+                    onZoomScaleChanged: { viewModel.zoomScale = $0 },
+                    onSlideDurationChanged: { viewModel.setSlideDuration($0) },
+                    snapGuideTime: viewModel.selection.activeDrag.flatMap {
+                        $0.snappedTo != nil ? $0.currentStartTime : nil
+                    },
+                    onScrub: { viewModel.scrub(to: $0) },
+                    onScrubBegan: { viewModel.beginScrub() },
+                    onScrubEnded: { viewModel.endScrub() }
+                ) { laneWidth in
+                    ScrollView(.vertical, showsIndicators: true) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(hoistedTrackGroups, id: \.section) { group in
+                                if !group.tracks.isEmpty {
+                                    groupHeader(key: group.titleKey)
+                                    ForEach(group.tracks, id: \.id) { track in
+                                        TrackBarView(
+                                            title: track.title,
+                                            isLocked: false,
+                                            isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
+                                            tintHex: tint(for: track.kind),
+                                            isDark: colorScheme == .dark,
+                                            laneWidth: laneWidth,
+                                            laneHeight: 40,
+                                            iconName: QuickTimelineView.iconName(for: track.kind)
+                                        ) {
+                                            ZStack(alignment: .leading) {
+                                                ForEach(track.clipIds, id: \.self) { clipId in
+                                                    clipBar(for: clipId, geometry: geometry, laneHeight: 40)
                                                 }
-                                            )
+                                                LaneKeyframeOverlays(
+                                                    markers: KeyframeMarkerResolver.markers(
+                                                        for: track.clipIds, in: hoistedKeyframeMarkers),
+                                                    selectedId: viewModel.selection.selectedClipId,
+                                                    geometry: geometry,
+                                                    laneHeight: 40,
+                                                    onSelect: { viewModel.selectClip(id: $0) }
+                                                )
+                                                LaneTransitionOverlays(
+                                                    junctions: TransitionJunctionResolver.junctions(
+                                                        for: track.clipIds, in: hoistedJunctions),
+                                                    selectedId: viewModel.selection.selectedClipId,
+                                                    isDark: colorScheme == .dark,
+                                                    geometry: geometry,
+                                                    laneHeight: 40,
+                                                    onSelect: { viewModel.selectClip(id: $0) },
+                                                    onCreate: { junction in
+                                                        if let id = viewModel.addTransition(
+                                                            fromClipId: junction.fromClipId,
+                                                            toClipId: junction.toClipId,
+                                                            kind: .crossfade,
+                                                            duration: 0.5) {
+                                                            viewModel.selectClip(id: id)
+                                                        }
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+                        .padding(.vertical, 8)
                     }
-                    .padding(.vertical, 8)
                 }
             }
         }

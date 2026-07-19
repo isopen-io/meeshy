@@ -267,26 +267,35 @@ public struct QuickTimelineView: View {
                 .padding(.horizontal, 16)
         } else {
             let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
-            TimelineScrubArea(
-                totalDuration: viewModel.project.slideDuration,
-                geometry: geometry,
-                currentTime: viewModel.currentTime,
-                isDark: colorScheme == .dark,
-                minLaneWidth: 200,
-                rulerHeight: 22,               // unified with ProTimelineView
-                isPlaying: viewModel.isPlaying,
-                onZoomScaleChanged: { viewModel.zoomScale = $0 },
-                onSlideDurationChanged: { viewModel.setSlideDuration($0) },
-                snapGuideTime: viewModel.selection.activeDrag.flatMap {
-                    $0.snappedTo != nil ? $0.currentStartTime : nil
-                },
-                onScrub: { viewModel.scrub(to: $0) },
-                onScrubBegan: { viewModel.beginScrub() },
-                onScrubEnded: { viewModel.endScrub() }
-            ) { laneWidth in
-                trackRows(tracks: tracks, laneWidth: laneWidth, geometry: geometry)
+            VStack(spacing: 0) {
+                TransitionChromeLane(
+                    openingEffect: viewModel.project.openingEffect,
+                    closingEffect: viewModel.project.closingEffect,
+                    slideDuration: viewModel.project.slideDuration,
+                    geometry: geometry,
+                    isDark: colorScheme == .dark
+                )
+                TimelineScrubArea(
+                    totalDuration: viewModel.project.slideDuration,
+                    geometry: geometry,
+                    currentTime: viewModel.currentTime,
+                    isDark: colorScheme == .dark,
+                    minLaneWidth: 200,
+                    rulerHeight: 22,               // unified with ProTimelineView
+                    isPlaying: viewModel.isPlaying,
+                    onZoomScaleChanged: { viewModel.zoomScale = $0 },
+                    onSlideDurationChanged: { viewModel.setSlideDuration($0) },
+                    snapGuideTime: viewModel.selection.activeDrag.flatMap {
+                        $0.snappedTo != nil ? $0.currentStartTime : nil
+                    },
+                    onScrub: { viewModel.scrub(to: $0) },
+                    onScrubBegan: { viewModel.beginScrub() },
+                    onScrubEnded: { viewModel.endScrub() }
+                ) { laneWidth in
+                    trackRows(tracks: tracks, laneWidth: laneWidth, geometry: geometry)
+                }
             }
-            .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 40 + 8 + 22)
+            .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 40 + 8 + 22 + 18)
             .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
         }
     }

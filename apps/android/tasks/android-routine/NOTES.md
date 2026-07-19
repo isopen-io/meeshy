@@ -2,6 +2,101 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-18, `feed-comment-mention-autocomplete`) — promote a per-feature SSOT to `:sdk-core` by relocating the package, not renaming every call site; give the second surface its own orchestration
+When a second surface needs the same pure behaviour a `:feature:*` already solved, **promote the pure
+state-machine to `:sdk-core`** rather than re-implementing it. Two mechanics that kept this cheap and safe:
+- **Relocation ≠ mass rewrite.** Moving `ChatMention`/`MentionAutocompleteState` from `me.meeshy.app.chat`
+  to `me.meeshy.sdk.mention` only changes *import lines* at each call site (Kotlin usages reference the
+  simple name), so the churn is tiny even when grep shows dozens of "references". I did rename the object
+  `ChatMention`→`MentionComposer` for a surface-agnostic name in the SDK — that turned the object's own
+  `Xxx.` usages, but those are mostly inside the moved file + the moved test. **`git` auto-detects the
+  move as a rename (R077)** when the new file is ≥50% similar, keeping history.
+- **sdk-core is `explicitApi()`** — every top-level/member decl in the promoted file needs `public`
+  (the primary-constructor `val`s of a `public data class` do NOT, matching the existing story files).
+- **The roster stays per-feature.** `MentionComposer` (filter/insert/merge) is content-agnostic → SDK;
+  but *who can be mentioned* is a product rule that knows `ApiPostComment` → the new `CommentMentionRoster`
+  lives in `:feature:feed`, exactly like chat's `MentionRoster` knows `ApiParticipant`. Same grain test as
+  the gallery lesson.
+- **Composer draft must be ViewModel-owned + folded into the projection flow** (not Compose-local
+  `remember`), because autocomplete needs the current text to recompute the panel, and a realtime
+  re-projection (a `comment:added` landing) would otherwise wipe a half-typed draft. Added a `ComposerDraft`
+  flow as a 4th chained `.combine(...)` input (past the 5-arg `combine` cap) and moved the roster derivation
+  into `project()` (cached in a field the synchronous `onDraftChange` reads). This changed `submit(text)` →
+  `submit()`; the existing tests kept their intent via a `compose(text) = { onDraftChange(text); submit() }`
+  test helper — no assertion weakened.
+- **Full-suite flake:** `:sdk-core InterfaceLanguageStoreTest > dataStore_hydrates…` can fail with a
+  `TimeoutCancellationException` under parallel test load; it **passes in isolation** (`--tests
+  '*InterfaceLanguageStoreTest'`) and is unrelated to any mention change. Not a regression — re-run alone
+  to confirm before chasing it.
+
+## Lesson (2026-07-18, `feed-media-fullscreen-gallery`) — before building a "viewer/lightbox/overlay", grep for an existing one and mirror its open-state SSOT
+When a slice needs a fullscreen media viewer, DON'T write one. `:sdk-ui` already ships
+`MeeshyImageViewer` (pager + pinch-zoom + ±2 prefetch + save-to-gallery), and `:feature:chat` already
+solved "flatten a container's images into pages + resolve the tapped start index" as the pure
+`ConversationMediaGallery.of(...) → ConversationGallery(pages, startIndex)` SSOT, opened via a nullable
+`imageViewer` field in the ViewModel's `UiState` (`openImageViewer`/`dismissImageViewer`). The feed
+gallery is a **1:1 mirror** of that shape (`FeedMediaGallery.of(post, imageIndex) → FeedGallery`), so the
+whole slice was ~2 pure files + 3 wiring edits, no new SDK. The reusable-across-surfaces test: the pure
+flattener stays **per-feature** (it knows `FeedPostPresentation`, a product type — so it can't sink to
+`:sdk-core`), but the *viewer* is the opaque SDK building block. Keep the open-state **ephemeral in the
+flow** (`imageViewer: FeedGallery? = null`) not in local `remember`, so a background re-emit never tears
+a live viewer down — same reason chat keeps it in `UiState`.
+Two more, carried forward: **(a)** `MeeshyImageViewer`'s save-toast strings live in each feature's own
+`res/` — the feed had to add its own `feed_media_saved`/`feed_media_save_failed`/`feed_open_media` across
+all 4 locales (values, -es, -fr, -pt); a per-module `R` doesn't see chat's strings. **(b)** The gradle
+**wrapper** 403s fetching its distribution through the agent proxy — use the **system `gradle` (8.14.3)**
+directly (`gradle :app:assembleDebug testDebugUnitTest`, `LANG=C.UTF-8`), not `./meeshy.sh check`.
+
+## Lesson (2026-07-18, `feed-adaptive-collage-layout`) — branch from `origin/main`, NOT local `main`; and model an adaptive collage as a pure count→rows solver
+Two takeaways.
+**(1) ALWAYS branch from `origin/main`.** This run's slice branch was first cut with
+`git checkout -b claude/apps/android/<slice> main`, but the container's local `main` (cd93248) was
+**behind** `origin/main` (3f5267e) by the already-merged feed slices — so the branch was missing
+`CommentProjection`, the comment mention/language-switcher work, etc. Symptom that caught it: after
+branching, `find feature/feed/src/test -name '*.kt'` showed only **2** files (should be ~a dozen). Fix:
+`git rebase --onto origin/main main claude/apps/android/<slice>` (moves just the slice commit onto the
+real tip; clean because the slice touched files the newer commits didn't). **Prevention:** start every
+run with `git fetch origin main` and branch with `git checkout -b <slice> origin/main` (or verify
+`git rev-parse main` == `git rev-parse origin/main` first). The prompt's designated branch
+`claude/fervent-darwin-sw6hb1` *did* equal `origin/main`; local `main` did not.
+**(2) An adaptive media collage is a pure `count → CollageLayout` function.** Push every layout decision
+out of the Composable into `:sdk-ui` `MediaCollage.solve(count)` returning rows (each `heightWeight`) of
+cells (each `index` + `widthWeight` + `overflowCount`). Then the Compose grid is a thin reader:
+`layout.rows.forEach { Row(Modifier.weight(row.heightWeight)) { row.cells.forEach { CollageTile(Modifier.weight(cell.widthWeight)) } } }`.
+This makes all 5 shapes + the `+N` overflow branch JVM-testable with zero Robolectric. The solver knows
+ONLY the count (no singletons, no "when to render") → it's an SDK building block, reusable by the
+chat-bubble media grid (`visualMediaGrid`, 1–4+ collage) next. Fixed `COLLAGE_HEIGHT` (260.dp) for the
+grid; single-image keeps its real aspect ratio (`isSingle` flag).
+
+## Lesson (2026-07-18, `feed-comment-language-switcher`) — reuse the ONE language-strip + flag-tap SSOT for any new translatable surface; a "computed but never rendered" flag is a parity gap hiding in plain sight; the strip only surfaces the viewer's CONFIGURED languages (so tests must use configured codes); and thread a 7th combine input past the 5-arg cap
+Bringing feed comments to the post's Prisme language-switcher parity. Four takeaways.
+**(1) The language strip + flag-tap have ONE SSOT — don't re-implement per surface.** `:sdk-ui`
+`PostLanguageStrip.build(originalLanguage, translations: Map<code,entry>, prefs, showingOriginal, activeCodeOverride)`
++ `LanguageFlagTapResolver.resolve(tappedCode, activeCode, originalLanguage, translations)` already drive the chat
+bubble AND the feed post. A comment carries the **same** `originalLanguage: String?` + `translations:
+Map<String, ApiPostTranslationEntry>?` shape, so a "add a language switcher here too" slice is **zero** new SDK
+code: build the strip via `PostLanguageStrip.build`, resolve the tap via `LanguageFlagTapResolver`, mirror
+`FeedPostBuilder.resolveActiveCode`/`resolveContent` for the per-surface active-code + content. The only per-surface
+work is the override *state* (where you keep the `activeLanguageCode`).
+**(2) A "computed but never rendered" field is a parity gap hiding in plain sight.** `CommentPresentation.isTranslated`
+had been computed by `CommentProjection` for weeks but **nothing in Compose read it** — so comments were
+Prisme-translated silently with no indicator and no way to see the original, while posts had the full strip. When
+scanning for the next slice, grep the Compose layer for a projection field that's set but never consumed — it's often
+a half-finished feature. (`grep isTranslated feature/feed/.../*.kt` showed it built in 2 presentations, rendered only
+in the post + repost, never the comment.)
+**(3) THE TEST TRAP — the strip only surfaces the viewer's CONFIGURED content languages (+ the original), NOT every
+language the content carries.** `MessageLanguageStrip.build` walks `LanguageResolver.preferredContentLanguages(prefs)`
+(system→regional→custom) — a translation into a language the viewer hasn't configured is **not** a chip. So a test that
+overrides to `es` for a `systemLanguage=en`-only viewer finds the content switches to "Hola" (the content resolver is
+content-based) but `languageStrip.single { isActive }` **throws NoSuchElementException** — es isn't in the strip.
+Fix the test to give the viewer that language (`systemLanguage=en, regionalLanguage=es`), the realistic scenario where
+the chip is actually reachable. (The `onCommentFlagTap` handler *does* accept any content-bearing language because
+`LanguageFlagTapResolver` is content-based, but the UI only offers configured-language chips — mirror of the post.)
+**(4) A 7th reactive input past the 5-arg `combine` cap: chain a `to` pair then `.combine`.** The VM already did
+`combine(5 flows){ ProjectionInputs(...) }.combine(composer){ ... }`. Adding `activeLanguages` as a 7th:
+`.combine(composer){ inputs, rt -> inputs to rt }.combine(activeLanguages){ (inputs, rt), langs -> project(inputs, rt,
+langs) }` — destructure the pair in the final lambda. Keeps `project` a pure 3-arg function, no `data class` churn.
+
 ## Lesson (2026-07-18, `feed-comment-mention-rendering`) — reuse the ONE rich-text renderer for any new text surface; the display-name map is the only per-surface glue; and watch for pre-existing test-helper name clashes
 Bringing feed comment content to chat-bubble parity (mentions + bold/italic/URL). Three takeaways.
 **(1) Rich text has ONE SSOT on Android — don't reparse.** `:core:model` `MessageTextParser.parse(text, mentionDisplayNames)`

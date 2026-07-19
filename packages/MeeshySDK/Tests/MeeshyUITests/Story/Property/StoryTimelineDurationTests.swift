@@ -92,4 +92,23 @@ final class StoryTimelineDurationTests: XCTestCase {
         let s = StorySlide(id: "s1", effects: StoryEffects(timelineDuration: 3.0), duration: 6)
         XCTAssertEqual(TimelineProject(from: s).slideDuration, 3.0, accuracy: 0.001)
     }
+
+    // MARK: - StoryEffects.contentDerivedDuration (extracted static core)
+
+    func test_staticContentDerivedDuration_matchesSlideInstanceMethod() {
+        // The extracted static function must compute the exact same result as
+        // the StorySlide instance method it now delegates to — this is a pure
+        // refactor, not a behavior change (design doc 2026-07-18).
+        let media = [StoryMediaObject(kind: .video, aspectRatio: 1.78, isBackground: false, startTime: 2, duration: 5)]
+        var effects = StoryEffects()
+        effects.mediaObjects = media
+        let s = StorySlide(id: "s1", effects: effects, duration: 6)
+
+        let viaInstance = s.contentDerivedDuration()
+        let viaStatic = StoryEffects.contentDerivedDuration(
+            mediaObjects: media, audioPlayerObjects: nil, textObjects: []
+        )
+        XCTAssertEqual(viaInstance, viaStatic, accuracy: 0.001)
+        XCTAssertEqual(viaStatic, 7.0, accuracy: 0.001) // window = 2 + 5 = 7 > 6s floor
+    }
 }

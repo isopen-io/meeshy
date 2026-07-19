@@ -1012,6 +1012,55 @@ public struct StorySlide: Identifiable, Codable, Sendable {
     }
 }
 
+extension StoryEffects {
+    /// Core "longest data wins" rule, extracted from `StorySlide.contentDerivedDuration()`
+    /// so `TimelineProject` (which carries the same three arrays but isn't a
+    /// `StorySlide`) can call the identical algorithm during live editing —
+    /// see `TimelineViewModel.recomputeSlideDuration()`. Pure function, no
+    /// change in behavior versus the code it replaces (design doc 2026-07-18).
+    public static func contentDerivedDuration(
+        mediaObjects: [StoryMediaObject]?,
+        audioPlayerObjects: [StoryAudioPlayerObject]?,
+        textObjects: [StoryTextObject]
+    ) -> TimeInterval {
+        let bgVideoDur = mediaObjects?
+            .first(where: { $0.isBackground && $0.kind == .video })?
+            .duration
+        let bgAudioDur = audioPlayerObjects?
+            .first(where: { $0.isBackground == true })?
+            .duration
+            .map { Double($0) }
+
+        let totalWords = textObjects.reduce(0) { acc, text in
+            acc + text.text.split(separator: " ").count
+        }
+        let textDur: TimeInterval = {
+            guard totalWords > StorySlide.longTextThresholdWords else {
+                return StorySlide.defaultStaticDuration
+            }
+            let extraWords = totalWords - StorySlide.longTextThresholdWords
+            return StorySlide.defaultStaticDuration
+                + Double(extraWords) * StorySlide.longTextSecondsPerWord
+        }()
+
+        let mediaWindows = (mediaObjects ?? [])
+            .compactMap { media in media.duration.map { (media.startTime ?? 0) + $0 } }
+        let audioWindows = (audioPlayerObjects ?? [])
+            .compactMap { audio in audio.duration.map { Double($0) + Double(audio.startTime ?? 0) } }
+        let longestData = (mediaWindows + audioWindows).max() ?? 0
+
+        let target = max(textDur, StorySlide.defaultStaticDuration, longestData)
+
+        let bgLoopPeriods = [bgVideoDur, bgAudioDur].compactMap { $0 }.filter { $0 > 0.001 }
+        let bgResult: TimeInterval = bgLoopPeriods.reduce(target) { effective, period in
+            let extended = period >= target ? period : (target / period).rounded(.up) * period
+            return max(effective, extended)
+        }
+
+        return max(bgResult, longestData)
+    }
+}
+
 extension StorySlide {
     /// SINGLE SOURCE OF TRUTH pour la durée d'un slide story.
     /// User spec 2026-05-28 : « rassembler les choses dans un seul lieu,
@@ -1063,67 +1112,14 @@ extension StorySlide {
         // Directive user 2026-07-14 : « la timeline prend la durée automatique
         // de la donnée la plus longue (audio, vidéo) » — TOUTES sources : bg ET
         // fg, vidéo ET audio, chacune mesurée par sa FENÊTRE `startTime + duration`.
-
-        // Composante 1 : média de fond à BOUCLER (vidéo prioritaire, sinon
-        // audio de fond). Sa durée naturelle sert de motif de loop pour couvrir
-        // la cible sans étirer une image figée.
-        let bgVideoDur = effects.mediaObjects?
-            .first(where: { $0.isBackground && $0.kind == .video })?
-            .duration
-        let bgAudioDur = effects.audioPlayerObjects?
-            .first(where: { $0.isBackground == true })?
-            .duration
-            .map { Double($0) }
-
-        // Composante 2 : texte long. >30 mots → 6 s + (mots-30)/6 secondes.
-        let totalWords = effects.textObjects.reduce(0) { acc, text in
-            acc + text.text.split(separator: " ").count
-        }
-        let textDur: TimeInterval = {
-            guard totalWords > Self.longTextThresholdWords else {
-                return Self.defaultStaticDuration
-            }
-            let extraWords = totalWords - Self.longTextThresholdWords
-            return Self.defaultStaticDuration
-                + Double(extraWords) * Self.longTextSecondsPerWord
-        }()
-
-        // Composante 3 : la donnée la plus longue, TOUTES sources confondues.
-        // Chaque piste est mesurée par la fin de sa fenêtre (`startTime + duration`)
-        // pour qu'une vidéo/un audio décalé ne soit jamais tronqué. Inclut
-        // désormais l'audio FOREGROUND (voix, musique posée) et le bg audio
-        // complet — auparavant ignorés (seul le 1er bg vidéo/audio comptait).
-        let mediaWindows = (effects.mediaObjects ?? [])
-            .compactMap { media in media.duration.map { (media.startTime ?? 0) + $0 } }
-        let audioWindows = (effects.audioPlayerObjects ?? [])
-            .compactMap { audio in audio.duration.map { Double($0) + Double(audio.startTime ?? 0) } }
-        let longestData = (mediaWindows + audioWindows).max() ?? 0
-
-        // Cible = max(texte, 6 s, donnée la plus longue).
-        let target = max(textDur, Self.defaultStaticDuration, longestData)
-
-        // Background media bouclé pour atteindre la cible (ou sa durée naturelle si
-        // plus longue). TOUTES les périodes de boucle de fond présentes sont
-        // considérées (vidéo ET audio si les deux coexistent) — avant ce fix,
-        // `bgVideoDur ?? bgAudioDur` ignorait totalement la période audio dès
-        // qu'un bg vidéo existait, pouvant laisser l'audio de fond coupé en
-        // plein cycle (directive user : « la répétition ... TOMBE TOUJOURS en
-        // facteur »). Pour chaque période, on arrondit la cible au multiple
-        // supérieur puis on prend le MAX à travers les sources, pour que la
-        // source dont la période exige le plus grand arrondi complète son
-        // dernier cycle. Ceci ne garantit pas un alignement simultané parfait
-        // des DEUX périodes quand elles sont incommensurables (nécessiterait
-        // un calcul type PPCM, hors de portée — risquerait de gonfler la
-        // durée du slide de façon déraisonnable) ; le cas dominant réel (une
-        // seule source de fond bouclée) reste, lui, toujours exact.
-        let bgLoopPeriods = [bgVideoDur, bgAudioDur].compactMap { $0 }.filter { $0 > 0.001 }
-        let bgResult: TimeInterval = bgLoopPeriods.reduce(target) { effective, period in
-            let extended = period >= target ? period : (target / period).rounded(.up) * period
-            return max(effective, extended)
-        }
-
-        // Le résultat couvre au moins la donnée la plus longue.
-        return max(bgResult, longestData)
+        // Core algorithm lives on `StoryEffects.contentDerivedDuration(...)` so
+        // `TimelineProject` (same three arrays, not a `StorySlide`) can call it
+        // too during live editing — see `TimelineViewModel.recomputeSlideDuration()`.
+        StoryEffects.contentDerivedDuration(
+            mediaObjects: effects.mediaObjects,
+            audioPlayerObjects: effects.audioPlayerObjects,
+            textObjects: effects.textObjects
+        )
     }
 
     /// Effective slide duration that completes any background looping video to a full repetition.
@@ -2322,18 +2318,30 @@ public struct TimelineProject: Codable, Sendable {
     public var textObjects: [StoryTextObject]
     public var clipTransitions: [StoryClipTransition]
 
+    /// Read-only snapshot of the slide's inter-slide entry/exit animation,
+    /// captured at `init(from:)` for the Timeline chrome lane to display.
+    /// NOT round-tripped by `apply(to:)` — editing opening/closing stays the
+    /// job of `OpeningEffectChips` above the canvas, same as before this
+    /// property existed. Purely informational here.
+    public var openingEffect: StoryTransitionEffect?
+    public var closingEffect: StoryTransitionEffect?
+
     public init(slideId: String,
                 slideDuration: Float,
                 mediaObjects: [StoryMediaObject] = [],
                 audioPlayerObjects: [StoryAudioPlayerObject] = [],
                 textObjects: [StoryTextObject] = [],
-                clipTransitions: [StoryClipTransition] = []) {
+                clipTransitions: [StoryClipTransition] = [],
+                openingEffect: StoryTransitionEffect? = nil,
+                closingEffect: StoryTransitionEffect? = nil) {
         self.slideId = slideId
         self.slideDuration = slideDuration
         self.mediaObjects = mediaObjects
         self.audioPlayerObjects = audioPlayerObjects
         self.textObjects = textObjects
         self.clipTransitions = clipTransitions
+        self.openingEffect = openingEffect
+        self.closingEffect = closingEffect
     }
 
     public init(from slide: StorySlide) {
@@ -2348,6 +2356,8 @@ public struct TimelineProject: Codable, Sendable {
         self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
         self.textObjects = slide.effects.textObjects
         self.clipTransitions = slide.effects.clipTransitions ?? []
+        self.openingEffect = slide.effects.opening
+        self.closingEffect = slide.effects.closing
     }
 
     public func apply(to slide: inout StorySlide) {

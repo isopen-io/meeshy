@@ -50,6 +50,7 @@ extension TimelineViewModel {
             try cmd.apply(to: &project)
             commandStack.push(.trimClip(cmd))
             scheduleEngineReconfigure()
+            recomputeSlideDuration()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -80,6 +81,7 @@ extension TimelineViewModel {
             try cmd.apply(to: &project)
             commandStack.push(.trimClip(cmd))
             scheduleEngineReconfigure()
+            recomputeSlideDuration()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -97,6 +99,7 @@ extension TimelineViewModel {
             try cmd.apply(to: &project)
             commandStack.push(.addClip(cmd))
             scheduleEngineReconfigure()
+            recomputeSlideDuration()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -111,6 +114,7 @@ extension TimelineViewModel {
             try cmd.apply(to: &project)
             commandStack.push(.addClip(cmd))
             scheduleEngineReconfigure()
+            recomputeSlideDuration()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -286,6 +290,7 @@ extension TimelineViewModel {
             commandStack.push(.deleteClip(cmd))
             if selection.selectedClipId == id { selection.deselect() }
             scheduleEngineReconfigure()
+            recomputeSlideDuration()
         } catch {
             errorMessage = error.localizedDescription
         }

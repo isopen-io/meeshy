@@ -30,6 +30,12 @@ data class FeedUiState(
     val isLoadingMore: Boolean = false,
     /** Count of posts that arrived via `post:created` since the last acknowledge/refresh. */
     val newPostsCount: Int = 0,
+    /**
+     * The fullscreen media gallery currently open (a tap on a post's image tile),
+     * or `null` when the lightbox is dismissed. Ephemeral view state kept in the
+     * flow so a background re-emit never tears the open viewer down.
+     */
+    val imageViewer: FeedGallery? = null,
 )
 
 @HiltViewModel
@@ -192,6 +198,23 @@ class FeedViewModel @Inject constructor(
             is LanguageFlagTapResolver.Result.RequestTranslation -> Unit
             LanguageFlagTapResolver.Result.None -> Unit
         }
+    }
+
+    /**
+     * Open the fullscreen media gallery on the image at [imageIndex] of the post
+     * [postId]. Resolves against the projected posts (the URLs already carry the
+     * media base), so an unknown post id — or one with no image — is inert: the
+     * gallery only opens when there is something to show.
+     */
+    fun openImageViewer(postId: String, imageIndex: Int) {
+        val post = _state.value.posts.firstOrNull { it.id == postId } ?: return
+        val gallery = FeedMediaGallery.of(post, imageIndex)
+        _state.update { it.copy(imageViewer = gallery.takeUnless(FeedGallery::isEmpty)) }
+    }
+
+    /** Dismiss the fullscreen media gallery. */
+    fun dismissImageViewer() {
+        _state.update { it.copy(imageViewer = null) }
     }
 
     /**

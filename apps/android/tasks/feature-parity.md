@@ -1650,9 +1650,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
       proxy removed). UI like state now reads the viewer's own `isLikedByMe`.
-- [x] Adaptive multi-image collage layouts (1–4 + overlay « +N ») in the feed card
-      (single full-width with aspect ratio, 2-col grid otherwise) — `FeedPostBuilder`
-      resolves + orders image media and resolves relative URLs against the gateway origin
+- [x] Adaptive multi-image collage layouts (1–5+ media, « +N » overflow) in the feed card
+      — pure `MediaCollage.solve(count)` SSOT in `:sdk-ui` (1=single real-aspect, 2=side-by-side,
+      3=large-over-two-up, 4=row-major 2×2, 5=two-then-three, 5+ with `+N` overflow on the last
+      tile); `PostImageGrid` renders the returned rows/cells (slice `feed-adaptive-collage-layout`,
+      2026-07-18). `FeedPostBuilder` still resolves + orders image media and relative URLs.
+      Shared building block reusable by the chat-bubble media grid.
 - [~] Prisme Linguistique on the feed: post content rendered in the viewer's preferred
       language with a discreet « Traduit » indicator (`ApiPost.displayContent`/`isTranslated`
       port of the message Prisme rules — Map-keyed translations, Rule 1 honoured) ;
@@ -1672,7 +1675,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       rolls back on failure) + live personal `post:bookmarked` overlay (absolute count + own-state,
       reconciled against the cache) + accent-tinted bookmark button in the feed card
       (slice `feed-realtime-bookmark-sync`, 2026-07-17)
-- [ ] Adaptive multi-image collage layouts (1–5+ media) + fullscreen gallery
+- [x] Adaptive multi-image collage layouts (1–5+ media) **done** via `MediaCollage.solve` +
+      `PostImageGrid` (slice `feed-adaptive-collage-layout`, 2026-07-18). **Fullscreen media gallery
+      done** (slice `feed-media-fullscreen-gallery`, 2026-07-18): tapping any collage tile (or the
+      single image, or the `+N` overflow tile) opens `MeeshyImageViewer` — the `:sdk-ui` fullscreen
+      pager (pinch-zoom/pan/double-tap, ±2 prefetch, save-to-gallery) — positioned on the tapped image
+      and paging across ALL of the post's images at full resolution. Pure `:feature:feed`
+      `FeedMediaGallery.of(post, imageIndex) → FeedGallery(pages, startIndex)` SSOT (mirror of chat's
+      `ConversationMediaGallery`): flattens the post's images to full-res URLs, each page sharing the
+      post text as caption (trim → null when blank) + author + timestamp for the viewer chrome, tapped
+      index clamped into bounds, empty post → nothing opens. `FeedViewModel` holds the ephemeral
+      `imageViewer: FeedGallery?` (open on `openImageViewer`, `null` on `dismissImageViewer`; unknown
+      post / image-less post inert). +16 tests (`FeedMediaGalleryTest` 12, `FeedViewModelTest` +4).
 - [~] Threaded comments: expand threads ("view N replies") + comment likes + **reply composition** +
       **auto-preview replies** (slice `feed-reply-preview`, 2026-07-18 — the first top-level comments'
       replies auto-preload after the page loads and show a 2-reply inline preview with a "View all N replies"
@@ -1700,8 +1714,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tokens resolve to highlighted, tappable mention links [plus bold/italic/URL rich text]; the pure
       `CommentMentionDirectory` builds the `username → displayName` map from every comment + loaded-reply author,
       mirroring the web `buildMentionDisplayMap` filter — blank handle / absent-or-blank display name / vanity
-      `displayName == handle` all dropped) **done**;
-      mention **autocomplete** (composer suggestions), effects/blur, per-comment language switcher still open
+      `displayName == handle` all dropped) **done** + **per-comment language switcher** (slice
+      `feed-comment-language-switcher`, 2026-07-18 — each translated comment now carries a discreet Prisme flag
+      strip [translate glyph + original + configured content-language chips], reusing the **shared**
+      `PostLanguageStrip` + `LanguageFlagTapResolver`; tapping a chip switches *that* comment's displayed
+      language [content + active chip] via a per-comment-keyed override, tapping the active chip reverts to the
+      Prisme default; a content-less/unknown tap is inert; mirror of the post-detail `DetailLanguageStrip`,
+      keyed per comment rather than per post — the `isTranslated` flag was computed but never rendered before)
+      **done** + **comment composer @-mention autocomplete** (slice `feed-comment-mention-autocomplete`,
+      2026-07-18 — the comment/reply composer now offers the same @-mention autocomplete the chat composer has:
+      the pure mention state-machine was **promoted from `:feature:chat` to `:sdk-core`** as a shared SSOT
+      [`MentionComposer` + `MentionAutocompleteState` in `me.meeshy.sdk.mention`, renamed from `ChatMention`],
+      so both surfaces share one behaviour; the new pure `CommentMentionRoster` [`:feature:feed`] builds the
+      candidate list from the thread's authors [blank-handle drop, self-exclude, display-name→handle degrade,
+      case-insensitive dedup first-wins, encounter order]; `PostCommentsViewModel` now owns the composer draft
+      + mention panel in a folded flow [`onDraftChange`/`onMentionSelected`, `submit()` reads the draft and
+      resets] so a realtime comment landing never tears the half-typed draft down; `PostCommentsSection`'s
+      `CommentComposer` is now controlled with a `CommentMentionStrip` mirroring chat's `MentionSuggestionStrip`.
+      Local-roster only for now — the remote directory merge [`MentionSearch`] is a later slice) **done**;
+      effects/blur still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
@@ -2788,8 +2819,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Image/video preview screens per context (story/post/message/avatar/banner) with Edit + Use
 - [~] Image viewer — `MeeshyImageViewer` plein écran (pager multi-images, pinch-zoom
       borné 1–4×, pan clampé, double-tap 2.5×, tap-to-dismiss, compteur i/n),
-      ouvert au tap sur la grille d'images d'une bulle ; drag-to-dismiss +
-      save-to-gallery pending
+      ouvert au tap sur la grille d'images d'une bulle **et sur le collage d'un post du feed**
+      (slice `feed-media-fullscreen-gallery`, 2026-07-18 — `FeedMediaGallery` SSOT +
+      `FeedViewModel.openImageViewer/dismissImageViewer`) ; drag-to-dismiss + save-to-gallery pending
 - [ ] Code attachment viewer (~16 languages, syntax highlight, GitHub light/dark, copy)
 - [ ] Document viewer (PDF/presentation/spreadsheet) with share
 - [~] Image/video compression before upload (context-aware quality); save media to "Meeshy" album
