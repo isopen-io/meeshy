@@ -557,6 +557,19 @@ export class StatusService {
   }
 
   /**
+   * Taille totale des caches de throttling en mémoire.
+   *
+   * Source unique du calcul de `metrics.cacheSize` : les trois caches
+   * (`activityCache`, `connectionCache`, `onlineEnsureCache`) sont sommés
+   * ensemble partout, y compris dans `resetMetrics`. Centraliser cette somme
+   * évite qu'un site diverge en oubliant un cache (bug historique de
+   * `resetMetrics`, qui omettait `onlineEnsureCache`).
+   */
+  private computeCacheSize(): number {
+    return this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+  }
+
+  /**
    * Obtenir les métriques de performance
    */
   getMetrics(): StatusUpdateMetrics {

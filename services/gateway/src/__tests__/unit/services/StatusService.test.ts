@@ -526,6 +526,17 @@ describe('StatusService', () => {
       expect(m.successfulUpdates).toBe(0);
       expect(m.throttledRequests).toBe(0);
     });
+
+    it('recomputes cacheSize across all three throttle caches (incl. onlineEnsureCache)', () => {
+      (service as any).activityCache.set('u1', Date.now());
+      (service as any).connectionCache.set('u2', Date.now());
+      (service as any).onlineEnsureCache.set('u3', Date.now());
+
+      service.resetMetrics();
+
+      // cacheSize must reflect the live size of ALL three caches, not just two.
+      expect(service.getMetrics().cacheSize).toBe(3);
+    });
   });
 
   // ── shutdown ─────────────────────────────────────────────────────────────
