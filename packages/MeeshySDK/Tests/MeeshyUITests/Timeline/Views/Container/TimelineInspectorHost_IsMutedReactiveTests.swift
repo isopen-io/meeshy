@@ -18,7 +18,7 @@ import SwiftUI
 ///   3. `toggleMute()` keeps view-model and engine in lock-step so a single
 ///      tap on the speaker propagates to both the audio path and the icon.
 @MainActor
-final class ProTimelineViewIsMutedReactiveTests: XCTestCase {
+final class TimelineInspectorHostIsMutedReactiveTests: XCTestCase {
 
     // MARK: - Fixtures
 
@@ -107,7 +107,7 @@ final class ProTimelineViewIsMutedReactiveTests: XCTestCase {
     /// the speaker" case.
     func test_audioClipBar_reflectsGlobalMute() {
         let clip = audioClip(volume: 1.0)
-        XCTAssertTrue(ProTimelineView.isMutedForAudio(globalMute: true, audio: clip))
+        XCTAssertTrue(TimelineInspectorHost.isMutedForAudio(globalMute: true, audio: clip))
     }
 
     /// Conversely, a clip with volume zero is shown as muted even when the
@@ -115,7 +115,7 @@ final class ProTimelineViewIsMutedReactiveTests: XCTestCase {
     /// volume 0 is the persistent silenced state we have to honour.
     func test_audioClipBar_reflectsZeroVolume() {
         let clip = audioClip(volume: 0)
-        XCTAssertTrue(ProTimelineView.isMutedForAudio(globalMute: false, audio: clip))
+        XCTAssertTrue(TimelineInspectorHost.isMutedForAudio(globalMute: false, audio: clip))
     }
 
     /// Negative or NaN volume should never happen in practice but the resolver
@@ -123,14 +123,14 @@ final class ProTimelineViewIsMutedReactiveTests: XCTestCase {
     /// silently flipping to "unmuted" on a corrupted clip.
     func test_audioClipBar_reflectsNegativeVolumeAsMuted() {
         let clip = audioClip(volume: -0.01)
-        XCTAssertTrue(ProTimelineView.isMutedForAudio(globalMute: false, audio: clip))
+        XCTAssertTrue(TimelineInspectorHost.isMutedForAudio(globalMute: false, audio: clip))
     }
 
     /// Standard playback path: global off, clip has volume — the bar must
     /// render as unmuted.
     func test_audioClipBar_unmutedWhenGlobalOffAndPositiveVolume() {
         let clip = audioClip(volume: 0.5)
-        XCTAssertFalse(ProTimelineView.isMutedForAudio(globalMute: false, audio: clip))
+        XCTAssertFalse(TimelineInspectorHost.isMutedForAudio(globalMute: false, audio: clip))
     }
 
     /// Body-render smoke test for the audio branch: builds a project with one

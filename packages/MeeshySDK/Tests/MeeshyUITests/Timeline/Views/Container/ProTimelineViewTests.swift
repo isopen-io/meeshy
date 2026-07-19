@@ -32,8 +32,8 @@ final class ProTimelineViewTests: XCTestCase {
 
     func test_inspectorVisible_onlyWhenSelectionExists() {
         let vm = makeViewModel()
-        XCTAssertFalse(ProTimelineView.shouldShowClipInspector(viewModel: vm))
+        XCTAssertFalse(TimelineInspectorHost.shouldShowClipInspector(viewModel: vm))
         vm.selectClip(id: "clip-1")
-        XCTAssertTrue(ProTimelineView.shouldShowClipInspector(viewModel: vm))
+        XCTAssertTrue(TimelineInspectorHost.shouldShowClipInspector(viewModel: vm))
     }
 }

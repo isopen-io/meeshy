@@ -7,7 +7,7 @@ import SwiftUI
 /// variant. P0-C fixed the hardcoded `isMuted: false` in the pro timeline but
 /// left QuickTimelineView with the same bug at lines 226 (TransportBar) and
 /// 399 (AudioClipBar). The fix reuses `TimelineViewModel.isMuted` and the
-/// public static helper `ProTimelineView.isMutedForAudio(globalMute:audio:)`,
+/// public static helper `TimelineInspectorHost.isMutedForAudio(globalMute:audio:)`,
 /// so this suite pins three contracts:
 ///   1. The quick transport bar tracks `viewModel.isMuted` (no literal false).
 ///   2. The quick audio lane bar reflects either the global mute or a clip
@@ -73,7 +73,7 @@ final class QuickTimelineViewIsMutedReactiveTests: XCTestCase {
     /// the pro variant.
     func test_quick_audioClipBar_reflectsMute() {
         let clip = audioClip(volume: 1.0)
-        XCTAssertTrue(ProTimelineView.isMutedForAudio(globalMute: true, audio: clip))
+        XCTAssertTrue(TimelineInspectorHost.isMutedForAudio(globalMute: true, audio: clip))
 
         let project = TimelineProject(
             slideId: "slide-1",
@@ -98,7 +98,7 @@ final class QuickTimelineViewIsMutedReactiveTests: XCTestCase {
     /// active.
     func test_quick_audioClipBar_volume0_isMuted() {
         let clip = audioClip(volume: 0)
-        XCTAssertTrue(ProTimelineView.isMutedForAudio(globalMute: false, audio: clip))
+        XCTAssertTrue(TimelineInspectorHost.isMutedForAudio(globalMute: false, audio: clip))
 
         let project = TimelineProject(
             slideId: "slide-1",

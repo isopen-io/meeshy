@@ -3,16 +3,18 @@ import SwiftUI
 @testable import MeeshyUI
 @testable import MeeshySDK
 
-/// Guards P3 Wave 3 routing: the bottom-leading inspector overlay must
-/// surface the right inspector for the current selection.
+/// Guards the unified-timeline inspector routing: the floating inspector host
+/// (extracted from the former Pro container) must surface the right inspector
+/// for the current selection, and the SINGLE timeline view (Quick design)
+/// must host it — selection in the unified view can no longer be a dead end.
 ///
 /// `selection.selectedClipId` is a shared bus — `KeyframeMarkerView` and
 /// `TransitionBadge` push their own ids through `selectClip(id:)`, so the
-/// overlay can't assume the selected id is a clip. These tests exercise the
+/// host can't assume the selected id is a clip. These tests exercise the
 /// pure resolution helpers + the `SelectionKind` dispatcher so we don't have
 /// to drive SwiftUI gestures.
 @MainActor
-final class ProTimelineViewInspectorOverlayRoutingTests: XCTestCase {
+final class TimelineInspectorHostRoutingTests: XCTestCase {
 
     // MARK: - Fixtures
 
@@ -104,10 +106,10 @@ final class ProTimelineViewInspectorOverlayRoutingTests: XCTestCase {
 
     // MARK: - Dispatcher routing (SelectionKind)
 
-    func test_inspectorOverlay_clipSelection_showsClipInspector() {
+    func test_resolveSelectionKind_clipSelection_returnsClip() {
         let vm = makeViewModel(project: projectWithClip(clipId: "clip-1"))
         vm.selectClip(id: "clip-1")
-        guard case .clip(let snapshot) = ProTimelineView.resolveSelectionKind(viewModel: vm) else {
+        guard case .clip(let snapshot) = TimelineInspectorHost.resolveSelectionKind(viewModel: vm) else {
             XCTFail("Expected .clip selection kind")
             return
         }
@@ -115,11 +117,11 @@ final class ProTimelineViewInspectorOverlayRoutingTests: XCTestCase {
         XCTAssertEqual(snapshot.kind, .video)
     }
 
-    func test_inspectorOverlay_keyframeSelection_showsKeyframeInspector() {
+    func test_resolveSelectionKind_keyframeSelection_returnsKeyframe() {
         let vm = makeViewModel(project: projectWithKeyframe(keyframeId: "kf-1"))
         vm.selectClip(id: "kf-1")
         guard case .keyframe(let snapshot, let clipId) =
-                ProTimelineView.resolveSelectionKind(viewModel: vm) else {
+                TimelineInspectorHost.resolveSelectionKind(viewModel: vm) else {
             XCTFail("Expected .keyframe selection kind")
             return
         }
@@ -127,11 +129,11 @@ final class ProTimelineViewInspectorOverlayRoutingTests: XCTestCase {
         XCTAssertEqual(clipId, "media-1")
     }
 
-    func test_inspectorOverlay_transitionSelection_showsTransitionInspector() {
+    func test_resolveSelectionKind_transitionSelection_returnsTransition() {
         let vm = makeViewModel(project: projectWithTransition(transitionId: "trans-1"))
         vm.selectClip(id: "trans-1")
         guard case .transition(let snapshot) =
-                ProTimelineView.resolveSelectionKind(viewModel: vm) else {
+                TimelineInspectorHost.resolveSelectionKind(viewModel: vm) else {
             XCTFail("Expected .transition selection kind")
             return
         }
@@ -139,15 +141,15 @@ final class ProTimelineViewInspectorOverlayRoutingTests: XCTestCase {
         XCTAssertEqual(snapshot.kind, .crossfade)
     }
 
-    func test_inspectorOverlay_noSelection_returnsNil() {
+    func test_resolveSelectionKind_noSelection_returnsNil() {
         let vm = makeViewModel(project: projectWithClip())
-        XCTAssertNil(ProTimelineView.resolveSelectionKind(viewModel: vm))
+        XCTAssertNil(TimelineInspectorHost.resolveSelectionKind(viewModel: vm))
     }
 
-    func test_inspectorOverlay_unknownId_returnsNil() {
+    func test_resolveSelectionKind_unknownId_returnsNil() {
         let vm = makeViewModel(project: projectWithClip(clipId: "real-clip"))
         vm.selectClip(id: "ghost-id")
-        XCTAssertNil(ProTimelineView.resolveSelectionKind(viewModel: vm))
+        XCTAssertNil(TimelineInspectorHost.resolveSelectionKind(viewModel: vm))
     }
 
     // MARK: - resolveKeyframeSnapshot
@@ -160,13 +162,12 @@ final class ProTimelineViewInspectorOverlayRoutingTests: XCTestCase {
             keyframeRelativeTime: 0.5
         ))
         vm.selectClip(id: "kf-1")
-        guard let resolved = ProTimelineView.resolveKeyframeSnapshot(viewModel: vm) else {
+        guard let resolved = TimelineInspectorHost.resolveKeyframeSnapshot(viewModel: vm) else {
             XCTFail("Expected a keyframe snapshot")
             return
         }
         XCTAssertEqual(resolved.snapshot.id, "kf-1")
         XCTAssertEqual(resolved.clipId, "media-1")
-        // absoluteTime = clipStart (1.0) + relative (0.5) = 1.5
         XCTAssertEqual(resolved.snapshot.absoluteTime, 1.5, accuracy: 0.001)
         XCTAssertEqual(resolved.snapshot.x, 0.4, accuracy: 0.001)
         XCTAssertEqual(resolved.snapshot.y, 0.6, accuracy: 0.001)
@@ -175,11 +176,9 @@ final class ProTimelineViewInspectorOverlayRoutingTests: XCTestCase {
     }
 
     func test_resolveKeyframeSnapshot_clipSelection_returnsNil() {
-        // A clip-id selection must NOT bleed into the keyframe resolver — they
-        // are disjoint id spaces and the overlay needs them routed separately.
         let vm = makeViewModel(project: projectWithClip(clipId: "clip-1"))
         vm.selectClip(id: "clip-1")
-        XCTAssertNil(ProTimelineView.resolveKeyframeSnapshot(viewModel: vm))
+        XCTAssertNil(TimelineInspectorHost.resolveKeyframeSnapshot(viewModel: vm))
     }
 
     // MARK: - resolveTransitionSnapshot
@@ -193,7 +192,7 @@ final class ProTimelineViewInspectorOverlayRoutingTests: XCTestCase {
             duration: 0.75
         ))
         vm.selectClip(id: "trans-1")
-        guard let snapshot = ProTimelineView.resolveTransitionSnapshot(viewModel: vm) else {
+        guard let snapshot = TimelineInspectorHost.resolveTransitionSnapshot(viewModel: vm) else {
             XCTFail("Expected a transition snapshot")
             return
         }
@@ -207,28 +206,37 @@ final class ProTimelineViewInspectorOverlayRoutingTests: XCTestCase {
     func test_resolveTransitionSnapshot_unknownId_returnsNil() {
         let vm = makeViewModel(project: projectWithTransition(transitionId: "trans-1"))
         vm.selectClip(id: "trans-ghost")
-        XCTAssertNil(ProTimelineView.resolveTransitionSnapshot(viewModel: vm))
+        XCTAssertNil(TimelineInspectorHost.resolveTransitionSnapshot(viewModel: vm))
     }
 
-    // MARK: - Body smoke (overlay does not crash for any branch)
+    // MARK: - Unified view hosts the inspector (no more dead-end selection)
 
-    /// End-to-end body smoke: the SelectionKind switch in `inspectorOverlay`
-    /// must compile through every branch. Mirrors the `_ = view.body` pattern
-    /// used in `ProTimelineView_ClipKindTests`.
-    func test_inspectorOverlay_bodyDoesNotCrash_forEachSelectionKind() {
-        // Clip path
+    /// The SINGLE timeline view (Quick design) must evaluate its body without
+    /// crashing for every selection kind — clip, keyframe AND transition —
+    /// because the inspector host now overlays it. Before the merge, selecting
+    /// a transition in the quick view surfaced nothing at all.
+    func test_quickView_bodyDoesNotCrash_forEachSelectionKind() {
         let clipVM = makeViewModel(project: projectWithClip(clipId: "clip-1"))
         clipVM.selectClip(id: "clip-1")
-        _ = ProTimelineView(viewModel: clipVM).body
+        _ = QuickTimelineView(viewModel: clipVM).body
 
-        // Keyframe path
         let kfVM = makeViewModel(project: projectWithKeyframe(keyframeId: "kf-1"))
         kfVM.selectClip(id: "kf-1")
-        _ = ProTimelineView(viewModel: kfVM).body
+        _ = QuickTimelineView(viewModel: kfVM).body
 
-        // Transition path
         let transVM = makeViewModel(project: projectWithTransition(transitionId: "trans-1"))
         transVM.selectClip(id: "trans-1")
-        _ = ProTimelineView(viewModel: transVM).body
+        _ = QuickTimelineView(viewModel: transVM).body
+    }
+
+    /// Host view itself renders standalone for each branch.
+    func test_hostBody_doesNotCrash_forEachSelectionKind() {
+        let clipVM = makeViewModel(project: projectWithClip(clipId: "clip-1"))
+        clipVM.selectClip(id: "clip-1")
+        _ = TimelineInspectorHost(viewModel: clipVM).body
+
+        let transVM = makeViewModel(project: projectWithTransition(transitionId: "trans-1"))
+        transVM.selectClip(id: "trans-1")
+        _ = TimelineInspectorHost(viewModel: transVM).body
     }
 }

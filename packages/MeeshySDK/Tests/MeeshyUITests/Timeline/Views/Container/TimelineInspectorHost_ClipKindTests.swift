@@ -7,11 +7,11 @@ import SwiftUI
 /// `ClipSnapshot.Kind.video`, surfacing the volume slider and the loop toggle
 /// on still images that have no audio track and no playback to wrap around.
 ///
-/// Tests target the pure mapping (`ProTimelineView.resolveClipSnapshot`) and
+/// Tests target the pure mapping (`TimelineInspectorHost.resolveClipSnapshot`) and
 /// the kind→affordance gates on `ClipInspector` so we don't need to drive a
 /// real SwiftUI render tree to assert which controls light up.
 @MainActor
-final class ProTimelineViewClipKindTests: XCTestCase {
+final class TimelineInspectorHostClipKindTests: XCTestCase {
 
     // MARK: - Fixtures
 
@@ -71,13 +71,13 @@ final class ProTimelineViewClipKindTests: XCTestCase {
 
     func test_resolveClipSnapshot_noSelection_returnsNil() {
         let vm = makeViewModel(project: mediaProject(clipId: "c", kind: .image))
-        XCTAssertNil(ProTimelineView.resolveClipSnapshot(viewModel: vm))
+        XCTAssertNil(TimelineInspectorHost.resolveClipSnapshot(viewModel: vm))
     }
 
     func test_resolveClipSnapshot_imageMedia_returnsImageKind() {
         let vm = makeViewModel(project: mediaProject(clipId: "img-1", kind: .image))
         vm.selectClip(id: "img-1")
-        let snapshot = ProTimelineView.resolveClipSnapshot(viewModel: vm)
+        let snapshot = TimelineInspectorHost.resolveClipSnapshot(viewModel: vm)
         XCTAssertNotNil(snapshot)
         XCTAssertEqual(snapshot?.kind, .image)
         XCTAssertEqual(snapshot?.id, "img-1")
@@ -86,7 +86,7 @@ final class ProTimelineViewClipKindTests: XCTestCase {
     func test_resolveClipSnapshot_videoMedia_returnsVideoKind() {
         let vm = makeViewModel(project: mediaProject(clipId: "vid-1", kind: .video))
         vm.selectClip(id: "vid-1")
-        let snapshot = ProTimelineView.resolveClipSnapshot(viewModel: vm)
+        let snapshot = TimelineInspectorHost.resolveClipSnapshot(viewModel: vm)
         XCTAssertEqual(snapshot?.kind, .video)
         XCTAssertEqual(snapshot?.id, "vid-1")
     }
@@ -94,7 +94,7 @@ final class ProTimelineViewClipKindTests: XCTestCase {
     func test_resolveClipSnapshot_audioPlayerObject_returnsAudioKind() {
         let vm = makeViewModel(project: audioProject(clipId: "aud-1"))
         vm.selectClip(id: "aud-1")
-        let snapshot = ProTimelineView.resolveClipSnapshot(viewModel: vm)
+        let snapshot = TimelineInspectorHost.resolveClipSnapshot(viewModel: vm)
         XCTAssertEqual(snapshot?.kind, .audio)
         XCTAssertEqual(snapshot?.id, "aud-1")
     }
@@ -102,7 +102,7 @@ final class ProTimelineViewClipKindTests: XCTestCase {
     func test_resolveClipSnapshot_unknownClipId_returnsNil() {
         let vm = makeViewModel(project: mediaProject(clipId: "img-1", kind: .image))
         vm.selectClip(id: "does-not-exist")
-        XCTAssertNil(ProTimelineView.resolveClipSnapshot(viewModel: vm))
+        XCTAssertNil(TimelineInspectorHost.resolveClipSnapshot(viewModel: vm))
     }
 
     // MARK: - Inspector kind gating

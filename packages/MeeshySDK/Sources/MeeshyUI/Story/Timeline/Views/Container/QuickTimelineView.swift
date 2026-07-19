@@ -221,6 +221,12 @@ public struct QuickTimelineView: View {
                 : MeeshyColors.indigo50.opacity(0.32)
         )
         .gesture(swipeUpExpand)
+        // Full editing surface: selecting a clip, keyframe or transition
+        // floats its inspector over the tracks — same host the Pro layout
+        // used, so selection is never a dead end in the unified timeline.
+        .overlay(alignment: .bottomTrailing) {
+            TimelineInspectorHost(viewModel: viewModel)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.mode.quick", bundle: .module))
     }
@@ -522,7 +528,7 @@ public struct QuickTimelineView: View {
                 startTime: audioStartTime,
                 duration: audioNativeDuration,
                 volume: audio.volume,
-                isMuted: ProTimelineView.isMutedForAudio(globalMute: viewModel.isMuted, audio: audio),
+                isMuted: TimelineInspectorHost.isMutedForAudio(globalMute: viewModel.isMuted, audio: audio),
                 isSelected: viewModel.selection.selectedClipId == audio.id,
                 isLocked: false,
                 isDark: colorScheme == .dark,
