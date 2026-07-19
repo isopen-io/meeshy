@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusBarCacheRepository
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.StatusRepository
 import me.meeshy.sdk.status.orderedForBar
@@ -32,8 +33,10 @@ import javax.inject.Inject
  * back to an already-loaded feed) is served instantly from the in-memory
  * [StatusBarCache] L1 tier before any network call, revalidating in the background
  * unless the snapshot is still fresh (instant-app parity with iOS's
- * `CacheCoordinator.statuses`). A disk L2 tier for cold-launch parity is a tracked
- * follow-up (feature-parity §G).
+ * `CacheCoordinator.statuses`). A **cold launch** (L1 empty after a process death) is
+ * seeded from the Room-backed [StatusBarCacheRepository] L2 tier before the first
+ * network call, then reconciled — every network page and optimistic mutation is
+ * written through to both tiers so the next cold launch paints instantly.
  */
 data class StatusesUiState(
     val statuses: List<StatusEntry> = emptyList(),
@@ -52,6 +55,7 @@ class StatusesViewModel @Inject constructor(
     private val statusRepository: StatusRepository,
     private val sessionRepository: SessionRepository,
     private val statusBarCache: StatusBarCache,
+    private val statusBarCacheRepository: StatusBarCacheRepository,
 ) : ViewModel() {
 
     private val mode = MutableStateFlow(StatusFeedMode.FRIENDS)
@@ -105,8 +109,10 @@ class StatusesViewModel @Inject constructor(
      * instantly with no skeleton, then revalidates in the background unless the snapshot
      * is still [CacheResult.Fresh]. An expired ([CacheResult.Syncing]) snapshot is still
      * served while it revalidates — the stale-while-revalidate improvement over iOS,
-     * which discards expired data. A cold ([CacheResult.Empty]) feed shows the skeleton
-     * and fetches. Mirrors iOS `loadStatuses`' switch over the cache result.
+     * which discards expired data. A cold ([CacheResult.Empty]) feed — the L1 memory tier
+     * is empty after a process death — is seeded from the Room-backed L2 disk cache before
+     * the first network call (cold-launch instant paint) and falls back to the skeleton only
+     * when the disk is cold too. Mirrors iOS `loadStatuses`' switch over the cache result.
      */
     private fun loadFromCacheThenNetwork(targetMode: StatusFeedMode) {
         when (val cached = statusBarCache.load(targetMode)) {
@@ -129,7 +135,7 @@ class StatusesViewModel @Inject constructor(
             CacheResult.Empty -> {
                 listState.value = StatusBarListState()
                 status.update { it.copy(isLoading = true, isRefreshing = false, error = null) }
-                fetchFirstPage()
+                fetchFirstPage(disk = DiskCachePlan.SEED)
             }
         }
     }
@@ -137,23 +143,44 @@ class StatusesViewModel @Inject constructor(
     /**
      * Pull-to-refresh: invalidate the cached bar, reset the accumulation to a cold list
      * and re-fetch the first page (bypassing the cache). Mirrors iOS `refresh()`
-     * (invalidate + reload). The fresh page is written back through [fetchFirstPage].
+     * (invalidate + reload). Both cache tiers are invalidated — the L1 snapshot here and
+     * the L2 disk row inside [fetchFirstPage] — and the fresh page is written back through
+     * both on success.
      */
     fun refresh() {
         statusBarCache.invalidate(mode.value)
         listState.value = StatusBarListState()
         status.update { it.copy(isRefreshing = true, error = null) }
-        fetchFirstPage()
+        fetchFirstPage(disk = DiskCachePlan.INVALIDATE)
     }
 
-    private fun fetchFirstPage() {
+    /**
+     * Fetch the first page for the active mode, running [disk] against the L2 tier first:
+     * [DiskCachePlan.SEED] paints the last-persisted bar instantly on a cold launch (only
+     * while the list is still cold and the mode has not switched underneath the read),
+     * [DiskCachePlan.INVALIDATE] drops the stale disk row before a refresh. On success the
+     * authoritative page replaces the list and is written through to both cache tiers.
+     */
+    private fun fetchFirstPage(disk: DiskCachePlan = DiskCachePlan.NONE) {
         val activeMode = mode.value
         viewModelScope.launch {
             try {
+                when (disk) {
+                    DiskCachePlan.SEED -> {
+                        val seed = statusBarCacheRepository.cachedBar(activeMode)
+                        if (seed != null && activeMode == mode.value && !listState.value.hasLoaded) {
+                            listState.value = StatusBarListState().seeded(seed)
+                            statusBarCache.save(activeMode, seed)
+                        }
+                    }
+                    DiskCachePlan.INVALIDATE -> statusBarCacheRepository.invalidate(activeMode)
+                    DiskCachePlan.NONE -> Unit
+                }
                 when (val result = statusRepository.list(mode = activeMode, cursor = null)) {
                     is NetworkResult.Success -> {
                         listState.value = StatusBarListState().appended(result.data)
                         statusBarCache.save(activeMode, result.data.statuses)
+                        statusBarCacheRepository.persistBar(activeMode, result.data.statuses)
                         status.update { it.copy(isLoading = false, isRefreshing = false) }
                     }
                     is NetworkResult.Failure ->
@@ -229,6 +256,7 @@ class StatusesViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         listState.update { it.created(result.data) }
                         statusBarCache.save(mode.value, listState.value.statuses)
+                        statusBarCacheRepository.persistBar(mode.value, listState.value.statuses)
                     }
                     is NetworkResult.Failure -> status.update { it.copy(error = result.error.message) }
                 }
@@ -257,6 +285,7 @@ class StatusesViewModel @Inject constructor(
                     status.update { it.copy(error = result.error.message) }
                 } else {
                     statusBarCache.save(mode.value, listState.value.statuses)
+                    statusBarCacheRepository.persistBar(mode.value, listState.value.statuses)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -316,6 +345,9 @@ class StatusesViewModel @Inject constructor(
             errorMessage = st.error,
         )
     }
+
+    /** How the first-page fetch should touch the L2 disk tier before/around the network. */
+    private enum class DiskCachePlan { NONE, SEED, INVALIDATE }
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 3

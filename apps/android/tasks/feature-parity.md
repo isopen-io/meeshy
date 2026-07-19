@@ -1981,7 +1981,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       first page fails exactly `a stale cached bar paints instantly then the network first page replaces it`. Disk L2
       tier (cold-launch parity across process death) is the tracked next follow-up.
 - [x] Instant-app status bar (L1 in-memory cache, cache-first paint) — `StatusBarCache` (slice
-      `status-bar-l1-cache`, 2026-07-19). Disk L2 tier (cold-launch across process death) is the tracked follow-up.
+      `status-bar-l1-cache`, 2026-07-19).
+- [x] Instant-app status bar — **disk L2 cache** (cold-launch parity across process death) — **landed** (slice
+      `status-bar-l2-cache`, 2026-07-19): Room-backed `StatusBarCacheRepository` (`:sdk-core/status`) persists the raw
+      feed per `StatusFeedMode` (`statuses:friends` / `statuses:discover`) into a new `status_bar_cache` table (DB
+      v10→11) and replays it, mirroring `ProfileStatsCacheRepository` exactly (row-presence = sync marker: absent →
+      cold `null`, present `[]` → synced-empty; undecodable payload → cache miss, never a crash). `StatusesViewModel`
+      wires it into the `CacheResult.Empty` (cold-L1) branch: seeds the bar from disk before the first network call
+      (only while still cold and the mode has not switched underneath the read), then reconciles — every network first
+      page and optimistic `setStatus`/`clearStatus` is written through to **both** tiers, and `refresh` invalidates the
+      disk row too. The disk tier is a pure keyed store (opaque params, no product decision) so it stays in `:sdk-core`
+      alongside `ProfileStatsCacheRepository`; the *when-to-read/write* orchestration stays in the `:feature:feed` VM.
+      +17 tests (9 `StatusBarCacheRepositoryTest` Robolectric-Room: cold-null, round-trip-in-order, per-mode keying,
+      two-feeds-independent, newest-wins, synced-empty≠cold, invalidate-scope, undecodable→null, rich-field round-trip;
+      8 `StatusesViewModelTest`: cold-launch-disk-seed, cold-disk→skeleton, network-write-through, warm-L1-never-reads-
+      disk, refresh-invalidates+writes-through, publish-write-through, clear-write-through, failed-clear-no-disk-write).
+      Mutation-proven: flipping the seed's mode-equality guard fails exactly `a cold launch seeds the bar from the disk
+      cache before the network answers`; dropping the network write-through fails exactly the two write-through tests.
 - [x] Mood status react from the bar popover (reaction picker) — **landed** (slice `status-popover-reaction-picker`,
       2026-07-19): the popover now shows an existing-reactions summary row (pure `statusReactionChips` — count-desc,
       emoji tie-break) plus a quick-reaction strip (`EmojiCatalog.defaultQuickReactions`) gated to OTHER users'

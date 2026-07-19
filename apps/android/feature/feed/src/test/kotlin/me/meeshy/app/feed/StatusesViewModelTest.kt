@@ -22,6 +22,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusBarCacheRepository
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.StatusPage
 import me.meeshy.sdk.status.StatusRepository
@@ -37,6 +38,9 @@ class StatusesViewModelTest {
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
+        // Cold disk by default (matches the production repository's `null` on a never-cached
+        // feed); relaxed mockk would otherwise hand back an empty list and falsely seed the bar.
+        coEvery { diskCache.cachedBar(any()) } returns null
     }
 
     @After
@@ -46,6 +50,7 @@ class StatusesViewModelTest {
 
     private val repository: StatusRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
+    private val diskCache: StatusBarCacheRepository = mockk(relaxed = true)
 
     private class FakeClock(var now: Long = 0L) : CacheClock {
         override fun nowMillis(): Long = now
@@ -64,7 +69,7 @@ class StatusesViewModelTest {
         cache: StatusBarCache = StatusBarCache(FakeClock()),
     ): StatusesViewModel {
         every { session.currentUser } returns MutableStateFlow(currentUser)
-        return StatusesViewModel(repository, session, cache)
+        return StatusesViewModel(repository, session, cache, diskCache)
     }
 
     @Test
@@ -477,5 +482,136 @@ class StatusesViewModelTest {
 
         val cached = (shared.load(StatusFeedMode.FRIENDS) as CacheResult.Fresh).value
         assertThat(cached.map { it.id }).containsExactly("a")
+    }
+
+    // MARK: - L2 disk cache (cold-launch parity across process death)
+
+    @Test
+    fun `a cold launch seeds the bar from the disk cache before the network answers`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<StatusPage>>()
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } coAnswers { gate.await() }
+        coEvery { diskCache.cachedBar(StatusFeedMode.FRIENDS) } returns listOf(entry("disk-a"), entry("disk-b"))
+
+        val vm = viewModel()
+
+        vm.state.test {
+            val seeded = awaitItem()
+            assertThat(seeded.statuses.map { it.id }).containsExactly("disk-a", "disk-b").inOrder()
+            assertThat(seeded.showSkeleton).isFalse()
+
+            gate.complete(page(entry("net"), hasMore = false))
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("net")
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify(exactly = 1) { repository.list(StatusFeedMode.FRIENDS, null, any()) }
+    }
+
+    @Test
+    fun `a cold launch with a cold disk consults it then shows the skeleton`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<StatusPage>>()
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } coAnswers { gate.await() }
+        coEvery { diskCache.cachedBar(StatusFeedMode.FRIENDS) } returns null
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().showSkeleton).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify(exactly = 1) { diskCache.cachedBar(StatusFeedMode.FRIENDS) }
+    }
+
+    @Test
+    fun `the first network page is written through to the disk cache`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), entry("b"), hasMore = false)
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("a", "b").inOrder()
+        }
+        coVerify(exactly = 1) {
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a", "b") })
+        }
+    }
+
+    @Test
+    fun `a warm L1 cache never touches the disk tier`() = runTest {
+        val clock = FakeClock(now = 0L)
+        val warm = StatusBarCache(clock)
+        warm.save(StatusFeedMode.FRIENDS, listOf(entry("cached")))
+        clock.now = 30_000L
+
+        val vm = viewModel(cache = warm)
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("cached")
+        }
+        coVerify(exactly = 0) { diskCache.cachedBar(any()) }
+    }
+
+    @Test
+    fun `refresh invalidates the disk row then writes the fresh page through`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("net"), hasMore = false)
+        val warm = StatusBarCache(FakeClock())
+        warm.save(StatusFeedMode.FRIENDS, listOf(entry("cached")))
+
+        val vm = viewModel(cache = warm)
+        vm.refresh()
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("net")
+        }
+        coVerify(exactly = 1) { diskCache.invalidate(StatusFeedMode.FRIENDS) }
+        coVerify(exactly = 1) {
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("net") })
+        }
+    }
+
+    @Test
+    fun `a published status is written through to the disk cache`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), hasMore = false)
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
+            NetworkResult.Success(entry("new", userId = "me-id", emoji = "🔥"))
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.setStatus(emoji = "🔥")
+
+        coVerify(exactly = 1) {
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("new", "a") })
+        }
+    }
+
+    @Test
+    fun `clearing the own status is written through to the disk cache`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("mine", userId = "me-id"), entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.delete("mine") } returns NetworkResult.Success(Unit)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.clearStatus()
+
+        coVerify(exactly = 1) {
+            diskCache.persistBar(StatusFeedMode.FRIENDS, match { it.map { e -> e.id } == listOf("a") })
+        }
+    }
+
+    @Test
+    fun `a failed clear rolls back and never writes the removal through to disk`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("mine", userId = "me-id"), entry("a", userId = "other"), hasMore = false)
+        coEvery { repository.delete("mine") } returns
+            NetworkResult.Failure(ApiError("boom"))
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.clearStatus()
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("mine", "a").inOrder()
+        }
+        coVerify(exactly = 0) { diskCache.persistBar(any(), match { it.none { e -> e.id == "mine" } }) }
     }
 }
