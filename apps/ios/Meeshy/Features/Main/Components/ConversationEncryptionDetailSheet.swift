@@ -64,9 +64,14 @@ struct ConversationEncryptionDetailSheet: View {
     private func activeStateSections(mode: E2EAPI.ConversationEncryptionMode, status: E2EAPI.ConversationEncryptionStatus) -> some View {
         Section {
             HStack(spacing: 12) {
+                // Secure state is carried by the "Active encryption" label AND the
+                // green shield — the glyph is redundant reinforcement (never
+                // color-only). Hidden + row combined so VoiceOver reads a single
+                // coherent announcement instead of an anonymous image + fragments.
                 Image(systemName: "lock.shield.fill")
                     .font(.title2)
                     .foregroundColor(MeeshyColors.success)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "conversation.encryption.detail.activeLabel",
                                 defaultValue: "Active encryption",
@@ -78,6 +83,7 @@ struct ConversationEncryptionDetailSheet: View {
                 }
             }
             .padding(.vertical, 4)
+            .accessibilityElement(children: .combine)
         }
 
         Section {
@@ -108,10 +114,15 @@ struct ConversationEncryptionDetailSheet: View {
         }
 
         Section {
-            // Disabled toggle — backend enforces immutability
+            // Disabled toggle — backend enforces immutability. The Toggle uses
+            // `labelsHidden()`, so on its own VoiceOver would announce a nameless
+            // "on, dimmed" control. Combining the row folds the visible label +
+            // toggle value into one element ("Encryption enabled, on"); the lock
+            // glyph is decorative → hidden.
             HStack {
                 Image(systemName: "lock.fill")
                     .foregroundColor(.secondary)
+                    .accessibilityHidden(true)
                 Text(String(localized: "conversation.encryption.detail.toggleEnabled",
                             defaultValue: "Encryption enabled",
                             bundle: .main))
@@ -120,6 +131,7 @@ struct ConversationEncryptionDetailSheet: View {
                     .disabled(true)
                     .labelsHidden()
             }
+            .accessibilityElement(children: .combine)
         } footer: {
             Text(String(localized: "conversation.encryption.detail.immutabilityFooter",
                         defaultValue: "Once enabled, encryption cannot be disabled for this conversation. This protects against security regressions.",
@@ -134,9 +146,14 @@ struct ConversationEncryptionDetailSheet: View {
     private var enableStateSections: some View {
         Section {
             HStack(spacing: 12) {
+                // Insecure state is carried by the "Unencrypted conversation"
+                // label AND the orange open lock — the glyph is redundant
+                // reinforcement (never color-only). Hidden + row combined so
+                // VoiceOver reads one coherent announcement.
                 Image(systemName: "lock.open")
                     .font(.title2)
                     .foregroundColor(MeeshyColors.warning)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "conversation.encryption.detail.inactiveLabel",
                                 defaultValue: "Unencrypted conversation",
@@ -150,6 +167,7 @@ struct ConversationEncryptionDetailSheet: View {
                 }
             }
             .padding(.vertical, 4)
+            .accessibilityElement(children: .combine)
         }
 
         Section {
