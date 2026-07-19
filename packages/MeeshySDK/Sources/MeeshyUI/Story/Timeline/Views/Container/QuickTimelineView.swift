@@ -228,7 +228,7 @@ public struct QuickTimelineView: View {
             TimelineInspectorHost(viewModel: viewModel)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "story.timeline.mode.quick", bundle: .module))
+        .accessibilityLabel(String(localized: "story.timeline.container", defaultValue: "Timeline", bundle: .module))
     }
 
     // MARK: - Sub-views

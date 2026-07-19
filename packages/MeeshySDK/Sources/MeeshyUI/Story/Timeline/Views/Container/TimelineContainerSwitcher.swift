@@ -1,15 +1,12 @@
 import SwiftUI
 
-/// Picks Quick or Pro container based on horizontal size class (rotation /
-/// iPad / split view) but lets the user override via the explicit mode switch
-/// in the transport row. State (`selectedClipId`, `currentTime`, `zoomScale`)
-/// lives in `TimelineViewModel` so a swap never loses anything.
+/// Hosts the single unified timeline (Quick design carrying the full editing
+/// feature set — inspectors, snap, undo/redo). The former Simple/Pro switch
+/// is gone: one surface adapts instead of two competing containers. State
+/// (`selectedClipId`, `currentTime`, `zoomScale`) lives in `TimelineViewModel`.
 public struct TimelineContainerSwitcher: View {
 
     @ObservedObject private var viewModel: TimelineViewModel
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
 
     private let previewSlot: (() -> AnyView)?
     private let onExport: (() -> Void)?
@@ -29,69 +26,33 @@ public struct TimelineContainerSwitcher: View {
         self.previewSlot = nil
     }
 
-    public static func resolveAutoMode(horizontalSizeClass: UserInterfaceSizeClass?,
-                                       currentMode: TimelineMode) -> TimelineMode {
-        switch horizontalSizeClass {
-        case .compact: return .quick
-        case .regular: return .pro
-        case .none:    return currentMode
-        @unknown default: return currentMode
-        }
-    }
-
     public var body: some View {
-        VStack(spacing: 0) {
-            modeSwitcherHeader
-            container
-        }
         // Glass material lives on the sheet itself
         // (`.presentationBackground(.ultraThinMaterial)`); doubling it here
         // would flatten the canvas blur. We leave this container transparent.
-        .animation(reduceMotion ? .none : .spring(response: 0.5, dampingFraction: 0.8), value: viewModel.mode)
-        .adaptiveOnChange(of: horizontalSizeClass) { _, newValue in
-            let resolved = Self.resolveAutoMode(horizontalSizeClass: newValue, currentMode: viewModel.mode)
-            guard resolved != viewModel.mode else { return }
-            viewModel.setMode(resolved)
+        VStack(spacing: 0) {
+            header
+            container
         }
     }
 
     @ViewBuilder
     private var container: some View {
-        switch viewModel.mode {
-        case .quick:
-            if let previewSlot {
-                QuickTimelineView(viewModel: viewModel, previewSlot: previewSlot)
-            } else {
-                QuickTimelineView(viewModel: viewModel)
-            }
-        case .pro:
-            if let previewSlot {
-                ProTimelineView(viewModel: viewModel, previewSlot: previewSlot)
-            } else {
-                ProTimelineView(viewModel: viewModel)
-            }
+        if let previewSlot {
+            QuickTimelineView(viewModel: viewModel, previewSlot: previewSlot)
+        } else {
+            QuickTimelineView(viewModel: viewModel)
         }
     }
 
-    private var modeSwitcherHeader: some View {
+    /// Export en trailing (pattern éditeurs vidéo : action en haut à droite) —
+    /// le transport row est déjà saturé en portrait. La rangée reste même
+    /// sans export pour dégager le drag indicator système (~14pt).
+    private var header: some View {
         HStack {
             Spacer(minLength: 0)
-            TimelineModeSwitcher(
-                mode: viewModel.mode,
-                isDark: colorScheme == .dark,
-                onSelect: { target in
-                    guard target != viewModel.mode else { return }
-                    viewModel.setMode(target)
-                }
-            )
-            .equatable()
-            Spacer(minLength: 0)
+            exportHeaderButton
         }
-        // Export en overlay trailing (pattern éditeurs vidéo : action en haut
-        // à droite) — le transport row de Quick est déjà saturé en portrait.
-        .overlay(alignment: .trailing) { exportHeaderButton }
-        // Top padding clears the system-rendered drag indicator (~14pt above
-        // the sheet content) without crowding the segmented control.
         .padding(.top, 16)
         .padding(.bottom, 10)
         .padding(.horizontal, 12)
@@ -108,7 +69,6 @@ public struct TimelineContainerSwitcher: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(MeeshyColors.indigo600)
-            .padding(.top, 14)   // aligné sur le switcher, sous le drag indicator
             .accessibilityLabel(String(localized: "story.timeline.export.button",
                                        defaultValue: "Exporter en vidéo MP4",
                                        bundle: .module))

@@ -81,17 +81,13 @@ public struct TransportBar: View {
         "\(Int(scale * 100))%"
     }
 
-    public static func modeSwitchLabel(currentMode: TimelineMode) -> String {
-        switch currentMode {
-        case .quick: return "PRO ↗"
-        case .pro:   return "QUICK ↗"
-        }
+    /// Clés a11y du chip snap — même contrat que l'ancienne TimelineToolbar
+    /// pour que VoiceOver annonce l'état, pas juste le libellé.
+    public static func snapAccessibilityKey(isOn: Bool) -> String {
+        isOn ? "story.timeline.a11y.snap.on" : "story.timeline.a11y.snap.off"
     }
 
     public var body: some View {
-        // Mode switching is handled by the dedicated TimelineModeSwitcher
-        // shown above the sheet — keeping it out of the transport row frees
-        // horizontal space and avoids duplicate affordances.
         HStack(spacing: 10) {
             playButton
             if showsTimeReadout {

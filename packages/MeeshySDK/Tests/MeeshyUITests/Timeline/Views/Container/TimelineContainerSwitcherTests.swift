@@ -28,36 +28,4 @@ final class TimelineContainerSwitcherTests: XCTestCase {
         _ = view.body
     }
 
-    func test_resolveMode_compactWidth_returnsQuick() {
-        XCTAssertEqual(
-            TimelineContainerSwitcher.resolveAutoMode(horizontalSizeClass: .compact, currentMode: .pro),
-            .quick
-        )
-    }
-
-    func test_resolveMode_regularWidth_returnsPro() {
-        XCTAssertEqual(
-            TimelineContainerSwitcher.resolveAutoMode(horizontalSizeClass: .regular, currentMode: .quick),
-            .pro
-        )
-    }
-
-    func test_resolveMode_unknownSizeClass_keepsCurrentMode() {
-        XCTAssertEqual(
-            TimelineContainerSwitcher.resolveAutoMode(horizontalSizeClass: nil, currentMode: .pro),
-            .pro
-        )
-    }
-
-    func test_modeSwitch_preservesPlayheadAndZoomAndSelection() async {
-        let vm = makeViewModel()
-        await vm.awaitConfigured()
-        vm.selectClip(id: "clip-1")
-        vm.scrub(to: 1.5)
-        vm.zoomScale = 1.5
-        vm.setMode(.pro)
-        XCTAssertEqual(vm.selection.selectedClipId, "clip-1")
-        XCTAssertEqual(vm.currentTime, 1.5, accuracy: 0.001)
-        XCTAssertEqual(vm.zoomScale, 1.5, accuracy: 0.001)
-    }
 }

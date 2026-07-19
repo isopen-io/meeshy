@@ -42,13 +42,7 @@ final class TransportBarTests: XCTestCase {
         XCTAssertEqual(TransportBar.zoomLabel(scale: 2.0), "200%")
     }
 
-    func test_modeSwitchLabel_quickTowardPro_isPRO() {
-        XCTAssertEqual(TransportBar.modeSwitchLabel(currentMode: .quick), "PRO ↗")
-    }
 
-    func test_modeSwitchLabel_proTowardQuick_isQUICK() {
-        XCTAssertEqual(TransportBar.modeSwitchLabel(currentMode: .pro), "QUICK ↗")
-    }
 
     // MARK: - HIG Hit Target Contract
 
@@ -91,10 +85,6 @@ final class TransportBarTests: XCTestCase {
                       "Le timer est affiché en Quick — retiré puis redemandé par le user (2026-07-11)")
     }
 
-    func test_proTimeline_transportKeepsTimeReadout() {
-        XCTAssertTrue(ProTimelineView.transportShowsTimeReadout,
-                      "Le mode Pro conserve le readout temps courant / durée")
-    }
 
     // MARK: - Snap chip (fusion Simple+Pro : le snap vit dans le transport)
 
