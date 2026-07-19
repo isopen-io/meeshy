@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **`StatusesViewModel`** landed (slice `statuses-viewmodel`, feature-parity §G →
+> "Statuses/moods bar" — the product ViewModel the bar Compose consumes, the Android analogue of iOS
+> `StatusViewModel`). §G previously had the pure model+laws (`status-mood-core`) and the SDK transport
+> (`status-repository`); this slice ships the orchestration that ties them into a UDF screen state. **(1) pure
+> `StatusBarListState`** (`:feature:feed`, `@Immutable`) — the bar-accumulation SSOT mirroring `PostPageListState`:
+> `appended(StatusPage)` (append-dedup-by-id + advance the `nextCursor`/`hasMore` watermark, always `hasLoaded`),
+> `created(entry)` (front-hoist, id-deduped so a re-insert never doubles — iOS `insert(at:0)` made idempotent),
+> `removed(statusId)` (inert-when-absent, returns the same instance), `reacted(statusId, emoji)` (optimistic
+> `summary[emoji]+1`, inert-when-absent), `canLoadMore = hasMore && cursor != null`. **(2) `StatusesViewModel`**
+> (`@HiltViewModel`, ctor-injected `StatusRepository` + `SessionRepository`, no new DI module) — `combine(listState,
+> currentUser, status, mode)` → `StatusesUiState`, the bar projected through the `orderedForBar(currentUserId)` SSOT
+> (own status first, deduped) with `myStatus` surfaced **only in FRIENDS mode** (parity with iOS, which only tracks
+> `myStatus` on its friends instance — but Android picks it by `userId` match, not the fragile `statuses.first`).
+> `loadInitial` (guarded on `isLoading`/`hasLoaded`), `refresh` (reset→reload), `loadMoreIfNeeded(statusId)` (fires
+> within `LOAD_MORE_THRESHOLD=3` of the tail, re-entrancy-guarded, silent-fail), `setMode(FRIENDS↔DISCOVER)` (inert
+> on the active tab, else reset+reload the other feed — one Android VM drives both bars vs iOS's two instances);
+> optimistic `setStatus` (create→front-hoist, error surfaced, nothing to roll back since create is network-confirmed
+> before the insert), `clearStatus` (snapshot→remove own→delete→rollback on failure, inert when no own status),
+> `react` (snapshot→bump→persist→rollback on failure, inert when absent). All `viewModelScope` work rethrows
+> `CancellationException`. **Cold open → skeleton then first page** (no repository status cache yet — same as the
+> bookmarks screen; an L1 SWR cache to serve the bar instantly is the tracked instant-app §G follow-up). No Compose
+> yet — the `LazyRow` emoji-pill bar + thought-bubble popover + composer are the next §G slices. **+29 tests** —
+> `StatusBarListStateTest` (11: append-fold/dedup-boundary/empty-still-loaded, `canLoadMore` both-required,
+> created-hoist/created-replace-same-id, removed-drop/removed-inert-same-instance, reacted-from-empty/reacted-
+> increment/reacted-inert), `StatusesViewModelTest` (18: first-page populate, cold skeleton→settle, failure surfaces
+> +hides skeleton, loadInitial guarded, own-status-first+myStatus, discover-never-myStatus, setMode-active-inert,
+> loadMore append near tail, loadMore inert no-more, setStatus prepend+myStatus, setStatus failure unchanged,
+> clearStatus optimistic-drop+persist, clearStatus rollback, clearStatus inert-no-own, react optimistic+persist,
+> react rollback, react inert-absent, refresh reset+reload). **Mutation check (RED proof):** dropping the
+> FRIENDS-only `myStatus` guard (`if (m == FRIENDS)` → `if (m == FRIENDS || true)`) failed **exactly**
+> `discover mode never surfaces a myStatus` — behavioural, not tautological. **Gate (system Gradle 8.14.3,
+> `LANG=C.UTF-8` — wrapper 403s on the proxy):** `:feature:feed:testDebugUnitTest` **442/442** (was 413 + 29),
+> `gradle :app:assembleDebug` → **BUILD SUCCESSFUL** (the VM + pure state compile app-wide, Hilt binds
+> `StatusesViewModel` via constructor injection). Reviewer **PASS** (diff `apps/android` only — 4 files, no
+> production logic elsewhere; **SDK purity** — the accumulation/optimism/"when to fetch" orchestration belongs in
+> `:feature:feed`, consuming the `:sdk-core` `StatusRepository`/`orderedForBar` building blocks; **SSOT** — one
+> accumulation law mirroring `PostPageListState`, bar ordering via the existing `orderedForBar`, no
+> re-implementation; **UDF** — `ViewModel` + immutable `StateFlow<UiState>`, all transitions pure on the value type;
+> **Instant-App** — skeleton only on cold empty, no blocking spinner where data exists [cache follow-up tracked];
+> **coherence** — avatar colour flows through the SSOT mapper's `DynamicColorGenerator`, no hardcoded colour;
+> no coverage floor lowered, no test weakened). **Next slice:** §G continues — the Compose **`StatusBarView`**
+> (`:feature:feed`: `LazyRow` of emoji pills coloured by `StatusEntry.avatarColor`, own-status "add/edit" leading
+> cell, `loadMoreIfNeeded` on scroll, tap → thought-bubble popover), THEN the status composer (emoji grid +
+> visibility) wiring `setStatus`/`clearStatus`.
+
 > On 2026-07-19 the **`StatusRepository` transport layer** landed (slice `status-repository`, feature-parity §G →
 > "Statuses/moods bar" — the SDK read/write path built directly on the `status-mood-core` SSOT [`StatusMapper`],
 > the Android analogue of iOS `StatusService`). §G previously had only the pure model + mapper; this slice ships
