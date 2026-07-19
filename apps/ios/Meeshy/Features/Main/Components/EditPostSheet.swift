@@ -236,6 +236,12 @@ struct EditPostSheet: View {
             }
             .buttonStyle(.plain)
             .disabled(isSaving)
+            // VoiceOver reads the row as one control naming the selected content
+            // language as its value ("Langue du contenu, Français" / "…, Auto"),
+            // instead of concatenating globe + label + flag + chevron.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "feed.post.edit.language", defaultValue: "Langue du contenu", bundle: .main))
+            .accessibilityValue(selectedLanguageInfo?.name ?? String(localized: "feed.post.edit.language.auto", defaultValue: "Auto", bundle: .main))
 
             if showTypePicker {
                 Picker(String(localized: "feed.post.edit.type", defaultValue: "Type", bundle: .main), selection: $selectedType) {

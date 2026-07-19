@@ -1378,6 +1378,9 @@ struct FeedView: View {
                         )
                     }
                     .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
+                    // VoiceOver announces the currently-selected publish language as the
+                    // control's value (stateful selector) — "Langue du post, Français".
+                    .accessibilityValue(composerLanguageDisplayName)
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)

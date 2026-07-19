@@ -825,6 +825,11 @@ struct FeedComposerSheet: View {
                                 )
                         )
                     }
+                    // VoiceOver: name the control and announce the selected publish
+                    // language as its value — "Langue du post, Français" — instead of
+                    // letting the globe glyph + language text fragment the reading.
+                    .accessibilityLabel(String(localized: "Langue du post", defaultValue: "Langue du post"))
+                    .accessibilityValue(composerLanguageDisplayName)
                 }
                 .padding(16)
                 .background(theme.backgroundSecondary)
