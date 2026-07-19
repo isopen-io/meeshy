@@ -1,5 +1,45 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **`StatusRepository` transport layer** landed (slice `status-repository`, feature-parity §G →
+> "Statuses/moods bar" — the SDK read/write path built directly on the `status-mood-core` SSOT [`StatusMapper`],
+> the Android analogue of iOS `StatusService`). §G previously had only the pure model + mapper; this slice ships
+> the repository the (next) `StatusesViewModel` consumes. **(1) `:core:network` `PostApi`** gained
+> `getStatuses` (`GET /posts/feed/statuses`) + `getStatusesDiscover` (`GET /posts/feed/statuses/discover`) —
+> the two `StatusService.Mode` endpoints — and a `likeWithEmoji(id, PostLikeRequest(emoji))` variant on the
+> `POST /posts/:id/like` path (the gateway reads an optional `emoji` from the body, defaulting to `❤️`; the plain
+> `like` stays valid). **(2) `:sdk-core` `StatusRepository`** — `@Singleton` on constructor-injected `PostApi`
+> (Hilt-provided, no new DI module): `enum StatusFeedMode { FRIENDS, DISCOVER }`; `data class StatusPage(statuses:
+> List<StatusEntry>, nextCursor, hasMore)`; `list(mode, cursor, limit)` folds the raw list envelope through
+> `foldStatusPage` (mirroring `PostRepository.foldPostPage`) and maps posts to `StatusEntry`s via the
+> `toStatusEntries` SSOT so **non-statuses are dropped and the watermark is carried** — the parity improvement over
+> iOS, which paginates raw `APIPost`s and maps at the call site; `create(moodEmoji, content, visibility, audioUrl,
+> repostOfId)` POSTs `type="STATUS"` and folds the created post into a `StatusEntry` through the same mapper (a
+> response the mapper can't read as a status → a `PARSE` `NetworkResult.Failure`, never a silent success);
+> `delete(statusId)` → `DELETE /posts/:id`; `react(statusId, emoji)` → the emoji `like` body. **No cache/SWR
+> stream and no VM/UI yet** — the bar view-model owns page accumulation + `orderedForBar` + cache-first SWR (the
+> established "screen owns accumulation" pattern from `getBookmarksPage`/`getUserPostsPage`), and is the next §G
+> slice. **+13 tests** — `StatusRepositoryTest`: list friends/discover **endpoint-selection** (coVerify the right
+> endpoint, the other never called), non-status **filter**, missing-pagination **`hasMore=false` default**,
+> failure-envelope → typed `Failure`, transport `IOException` → `NETWORK`; create **maps entry + captures the
+> `type=STATUS`/`moodEmoji`/`visibility` body**, non-status response → **`PARSE`**, transport → `NETWORK`; delete
+> + react success + failure passthrough. **Mutation check (RED proof):** `DISCOVER → getStatuses` (endpoint
+> mis-selection) failed **exactly** `list_discover_usesDiscoverEndpoint`; neutralising the create `PARSE` guard
+> (`?: Failure(PARSE)` → silent `Success(dummy)`) failed **exactly** `create_nonStatusResponse_becomesParseFailure`
+> — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8` — wrapper 403s on the proxy):**
+> `:sdk-core:testDebugUnitTest` **820/820** (was 807 + 13), `:core:network:testDebugUnitTest` green,
+> `gradle :app:assembleDebug` → **BUILD SUCCESSFUL** (the new endpoints + repository compile app-wide, Hilt binds
+> `StatusRepository` via constructor injection). Reviewer **PASS** (diff `apps/android` only — 4 files, no
+> production logic elsewhere; **SDK purity** — `StatusRepository` is a stateless transport building block over
+> `PostApi` [list/create/delete/react + a pure page fold], no "when to fetch/auto-refresh" rule, so it belongs in
+> `:sdk-core`; the accumulation/SWR/optimism orchestration stays for the VM; **SSOT** — one page-fold law mirroring
+> `foldPostPage`, reuses the `toStatusEntries` mapper + `apiCall`/`rawApiCall`/`ApiError`, no re-implementation;
+> **Instant-App/UDF** — n/a yet [no VM/UI]; the mapper + fold are pure; **coherence** — avatar colour flows through
+> the SSOT mapper's `DynamicColorGenerator`, no hardcoded colour, endpoints mirror iOS `StatusService.Mode`; no
+> coverage floor lowered, no test weakened). **Next slice:** §G continues — the **`StatusesViewModel`**
+> (`:feature:feed` or a new `:feature:status`: cache-first SWR over `StatusRepository.list`, page accumulation +
+> `orderedForBar(currentUserId)`, optimistic `create`/`delete`/`react` with rollback), THEN the Compose `LazyRow`
+> emoji-pill bar + thought-bubble popover.
+
 > On 2026-07-19 the **mood-status model + laws SSOT** landed (slice `status-mood-core`, feature-parity §G →
 > "Statuses/moods bar" — the pure foundation for the whole §G area, the Android analogue of how §E bootstrapped
 > with `StoryGrouping` and §H with `CallSoundPolicy`). §G had **zero** Android code; iOS carries mood statuses as

@@ -2466,3 +2466,24 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
 - **Computed properties are serialization-invisible.** `val effects get() = …` inside a `@Serializable data
   class` (custom getter, not a constructor param) is ignored by kotlinx.serialization — same trick as the
   existing `displayContent`/`isTranslated`. Safe way to expose a resolved view over decoded wire fields.
+
+## status-repository (2026-07-19)
+- **CI polling must go through the GitHub MCP tools, not a Monitor `curl` loop.** The agent proxy
+  returns **403** on direct `https://api.github.com/...` (even with `$GITHUB_TOKEN` set — that token
+  is for git-over-http through the proxy, not the REST API). A `Monitor` bash script that curls the
+  Actions API therefore loops on error and never fires. Poll `mcp__github__actions_list`
+  (`list_workflow_runs`, filter by branch) / `mcp__github__pull_request_read` (`get_status`) instead.
+  Foreground `sleep` is blocked; pace re-checks with a `run_in_background` timer that exits, then
+  re-poll via MCP on the completion notification.
+- **`POST /posts/:id/like` accepts an optional `emoji` body** (gateway `interactions.ts`:
+  `LikeSchema.safeParse(body)`, default `❤️`). The Android `PostApi.like(id)` had no body, so a
+  status *react* needed a second same-path Retrofit method `likeWithEmoji(id, PostLikeRequest(emoji))`
+  — two methods on one path is legal (Retrofit keys on the function, not the URL). Kept the plain
+  `like` valid for the existing optimistic post-like path (no ripple into `PostRepository`).
+- **Repository grain = transport + a pure page fold; mapping-to-domain stays the SSOT mapper's job.**
+  `StatusRepository.list` folds via `foldStatusPage` (a verbatim mirror of `PostRepository.foldPostPage`)
+  and reuses `toStatusEntries` — it does NOT re-implement the ApiPost→StatusEntry rule. The bar
+  view-model (next slice) owns accumulation + `orderedForBar` + SWR, exactly like the bookmarks screen
+  owns accumulation over `getBookmarksPage`. Shipping the repo without a VM is consistent with how
+  `status-mood-core` shipped the mapper without wiring — no orphan code, the public surface is the
+  next slice's dependency.

@@ -1904,9 +1904,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `visibility` + `reactionSummary` the iOS converter drops**; `List<ApiPost>.toStatusEntries()` server-order
       filter; `List<StatusEntry>.orderedForBar(currentUserId)` — own-first then server order, deduped by id).
       +37 tests (19 `MoodStatusExpiryTest`, 18 `StatusMapperTest`; mutation-proven: `<=`→`<` on the expiry
-      boundary fails exactly 1 test, `own+others`→`others+own` fails exactly the own-first test). **Still open:**
-      the `StatusRepository` (feed/statuses cursor pagination, cache-first SWR, optimistic set/clear/react) +
-      the `StatusesViewModel` + the Compose `LazyRow` pill bar + popover.
+      boundary fails exactly 1 test, `own+others`→`others+own` fails exactly the own-first test).
+      **`StatusRepository` transport landed** (slice `status-repository`, 2026-07-19): `:sdk-core`
+      `StatusRepository` (`PostApi` `getStatuses`/`getStatusesDiscover` endpoints + `likeWithEmoji`/`PostLikeRequest`
+      body) — `StatusFeedMode{FRIENDS,DISCOVER}`, cursor-paginated `list()` folding the page into a `StatusPage`
+      of already-mapped `StatusEntry`s via the `toStatusEntries` SSOT (non-statuses dropped, watermark carried,
+      `foldStatusPage` mirroring `PostRepository.foldPostPage`), `create()` (POST type=STATUS → mapped entry, a
+      non-status response → `PARSE` failure), `delete()`, `react(emoji)` → `POST /posts/:id/like` body. +13
+      `StatusRepositoryTest` (list friends/discover endpoint-select, non-status filter, missing-pagination default,
+      failure envelope, transport error; create maps entry/PARSE-guard/transport; delete + react success/failure;
+      mutation-proven: `DISCOVER→getStatuses` fails exactly the discover-endpoint test, dropping the create
+      `PARSE` guard fails exactly the non-status test). **Still open:** the `StatusesViewModel` (owns page
+      accumulation + `orderedForBar` + cache-first SWR, like the bookmarks screen) + the Compose `LazyRow` pill
+      bar + popover.
 - [ ] Status composer / republish: emoji grid, 122-char text, visibility (public/friends/except/only)
 - [ ] Mood status create, react, delete; 21h expiry + viewer tracking
 - [ ] Status thought-bubble popover on avatar tap with republish action
