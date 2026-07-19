@@ -1731,7 +1731,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + mention panel in a folded flow [`onDraftChange`/`onMentionSelected`, `submit()` reads the draft and
       resets] so a realtime comment landing never tears the half-typed draft down; `PostCommentsSection`'s
       `CommentComposer` is now controlled with a `CommentMentionStrip` mirroring chat's `MentionSuggestionStrip`.
-      Local-roster only for now — the remote directory merge [`MentionSearch`] is a later slice) **done**;
+      Local-roster only for now — the remote directory merge [`MentionSearch`] is a later slice) **done** +
+      **comment composer remote directory merge** (slice `feed-comment-mention-remote-merge`, 2026-07-19 — a
+      two-character-or-longer `@fragment` now enriches the thread-local roster with the shared user directory,
+      the feed counterpart of chat's `chat-mention-remote-merge`: the `MentionSearch`/`DirectoryMentionSearch`
+      building block was **promoted from `:feature:chat` to `:sdk-core`** [`me.meeshy.sdk.mention`] as the shared
+      SSOT so both composers query one directory port, chat re-points to it; `PostCommentsViewModel` fires a
+      300 ms-debounced `mentionSearch.search(query)` for the active fragment [`MentionComposer.shouldQueryRemote`
+      gates it, a fresh keystroke or a selection cancels the in-flight lookup], excludes the signed-in user,
+      and folds the results below the local roster via the pure `applyRemote` [local-first, stale-fragment
+      dropped]; a failed lookup degrades to the local roster. +6 `PostCommentsViewModelTest`) **done**;
       effects/blur still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
