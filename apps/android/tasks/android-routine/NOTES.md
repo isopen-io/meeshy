@@ -2,6 +2,26 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-19, `status-bar-l2-cache`) — relaxed mockk returns `emptyList()`, not `null`, for a nullable `List` return
+A `mockk(relaxed = true)` whose suspend fun returns `List<T>?` hands back an **empty list**, not `null`, by default —
+mockk builds a non-null default for known collection types. This bit a *pre-existing* test the moment a new cold-cache
+branch (`cachedBar(mode): List<StatusEntry>?` → seed if non-null) started consulting that mock: the empty-list default
+looked like a synced-empty disk and falsely seeded the bar (`hasLoaded = true`), suppressing the skeleton that the old
+test asserted. Fix: give the mock the production default explicitly in `setUp` — `coEvery { diskCache.cachedBar(any()) }
+returns null` — so "cold disk" means `null` exactly as the real repository returns. General rule: when a ViewModel
+gains a new nullable-collection dependency, set its cold/absent default explicitly rather than trusting `relaxed`, and
+re-run the *whole* module's tests (not just the new ones) — a relaxed default can change the behaviour of tests that
+never mention the new collaborator.
+
+## Lesson (2026-07-19, `status-bar-l2-cache`) — source-edit mutation testing must keep the code compiling
+Proving a test is behavioural by hand-mutating the production source only works if the mutation still **compiles** —
+otherwise gradle fails at `compileDebugKotlin` and you learn nothing. First attempt replaced a null-guard condition with
+`if (false)`, which killed the Kotlin smart-cast that made the guarded value non-null → argument-type-mismatch, build
+failed before any test ran. Prefer mutations that preserve types and control flow: flip a boolean guard's operator
+(`==` → `!=`), delete a whole statement (a write-through call), or swap a comparator — never neuter a condition in a way
+that drops a smart-cast. Restore from a `.bak` copy immediately after, and confirm with `grep` that the original lines
+are back before committing.
+
 ## Lesson (2026-07-19, `status-bar-l1-cache`) — the `cache/` package is git-ignored; force-add new files there
 The root `.gitignore` line `*/**/cache` matches the `me/meeshy/sdk/cache/` **source** package, not just build
 caches. Already-tracked files there (`cacheFirstFlow.kt`, `CachePolicy.kt`, `CacheResult.kt`) stay tracked, but any
@@ -2548,3 +2568,23 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   owns accumulation over `getBookmarksPage`. Shipping the repo without a VM is consistent with how
   `status-mood-core` shipped the mapper without wiring — no orphan code, the public surface is the
   next slice's dependency.
+
+## status-feed-mode-toggle (2026-07-19)
+- **`git checkout <file>` destroys UNCOMMITTED edits — never use it to undo a mutation-proof `sed`.**
+  During the mutation check I `sed`-mutated a production file, ran the test, then `git checkout $f` to
+  restore — but the slice's real edits weren't committed yet, so checkout reverted them to HEAD and wiped
+  the whole slice's production code (the test file still referenced the now-missing symbol → next
+  mutation "failed to compile", a false signal). Correct pattern: `cp $f /tmp/x.bak` before the `sed`,
+  `cp /tmp/x.bak $f` after. Only `git checkout` a file whose slice edits are already committed.
+- **iOS gap = Android opportunity.** iOS's `StatusViewModel` takes `mode` at init and never switches
+  (RootView holds a single `.friends` instance; `.discover` exists in `StatusService` but no UI reaches
+  it). Android's one-VM `setMode` + this toggle is strictly better UX — worth doing even with "no iOS
+  parity to port", because the SDK/VM capability was already built and tested two slices earlier.
+- **Adding a row above a pinned bar:** wrapping `StatusBarView`'s `LazyRow` in a `Column` (toggle + rail)
+  needs no popover-offset change — the `Popup` anchor is emitted as a sibling AFTER the Column, so it
+  still resolves just below the bar (the bar is the Column's last child); `STATUS_BAR_HEIGHT` top-pad
+  stays correct.
+- **Known flake:** `:sdk-core` `MediaDownloadPreferencesStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction`
+  can hit its 15s `withTimeout` under a full parallel `assembleDebug testDebugUnitTest` run (real DataStore file I/O
+  starved by concurrent modules). Passes deterministically in isolation and on a warm re-run of the full gate. Not
+  caused by feed/status slices. If it reddens a gate, re-run — do NOT "fix" by lowering the timeout.

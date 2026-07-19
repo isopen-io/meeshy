@@ -1,5 +1,110 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **disk L2 status cache** landed (slice `status-bar-l2-cache`, feature-parity §G →
+> "Instant-app status bar — disk L2 cache" — the cold-launch follow-up the `status-bar-l1-cache` slice flagged in its
+> own KDoc). Parity source: iOS `StatusViewModel.loadStatuses` reads from `CacheCoordinator.statuses`, whose disk tier
+> survives a process death; Android's L1 `StatusBarCache` only spans the process, so a cold launch always fell to the
+> skeleton. **(1)** new Room `status_bar_cache` table (`StatusBarCacheEntity` + `StatusBarCacheDao`, DB v10→11 in
+> `:core:database`, registered + Hilt-provided). **(2)** new `StatusBarCacheRepository` (`:sdk-core/status`,
+> `@Singleton`) — the disk (L2) tier, mirroring `ProfileStatsCacheRepository` **exactly**: `cachedBar(mode)` replays the
+> raw feed or `null` (cold / undecodable), `persistBar(mode, statuses)` write-through, `invalidate(mode)`; keyed per
+> mode (`statuses:friends` / `statuses:discover`, iOS `statuses_<mode>`). Row-presence is the sync marker: absent →
+> cold `null`, present `[]` → real synced-empty feed; an undecodable payload is a cache miss (never a crash). It holds
+> no network dep / no product decision — a pure keyed store, so it sits in `:sdk-core` next to `ProfileStatsCacheRepository`.
+> **(3)** `StatusesViewModel` wired L2 into the `CacheResult.Empty` (cold-L1) branch via a new private `DiskCachePlan`
+> (`NONE`/`SEED`/`INVALIDATE`): `SEED` reads the disk bar and paints it instantly before the first network call —
+> guarded by `!listState.hasLoaded` **and** an `activeMode == mode.value` re-check so a mode switch during the suspend
+> read can't paint the wrong feed; the network first page then **replaces** the seed and is written through to **both**
+> tiers; `setStatus`/`clearStatus` write through to L2 on success; `refresh` runs `INVALIDATE` (drops the disk row) then
+> reloads. **Improvement kept:** an *expired* L1 snapshot is still served while it revalidates (SWR, from the L1 slice).
+> **+17 tests** — `StatusBarCacheRepositoryTest` (9, Robolectric in-memory Room, mirroring `ProfileStatsCacheRepositoryTest`:
+> cold-null, round-trip-in-order, per-mode keying, two-feeds-independent, newest-wins, synced-empty≠cold, invalidate-scope,
+> undecodable→null, rich-field round-trip); `StatusesViewModelTest` (+8: cold-launch-disk-seed, cold-disk→skeleton,
+> network-write-through, warm-L1-never-reads-disk, refresh-invalidates+writes-through, publish-write-through,
+> clear-write-through, failed-clear-no-disk-write). **Mutation check (RED proof):** structural RED (tests don't compile
+> without `StatusBarCacheRepository`/the VM's 4th param); behaviourally, flipping the seed's `activeMode == mode.value`
+> guard to `!=` fails **exactly** `a cold launch seeds the bar from the disk cache before the network answers`, and
+> dropping the network write-through fails **exactly** `the first network page is written through to the disk cache` +
+> `refresh invalidates the disk row then writes the fresh page through` (507 tests, 3 failed) — behavioural, not
+> tautological. **Note:** the existing `cold load shows a skeleton` test needed a `coEvery { diskCache.cachedBar(any()) }
+> returns null` default in `setUp` — relaxed mockk hands back an *empty list* (not null) for a nullable `List` return,
+> which the new SEED path would treat as a synced-empty disk and falsely paint (suppressing the skeleton); the stub makes
+> the cold-disk precondition explicit and matches the production repository's `null`. Not a weakening — the assertion is
+> unchanged. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:sdk-core:testDebugUnitTest` **845**
+> green (was 836 + 9), `:feature:feed:testDebugUnitTest` **507** green (`StatusesViewModelTest` 34/34, was 26 + 8),
+> `:core:database:testDebugUnitTest` 27 green, full `assembleDebug` + `testDebugUnitTest` → **BUILD SUCCESSFUL**.
+> Reviewer **PASS** (diff `apps/android` only — 3 production + 3 infra (entity/dao/db+module) + 2 test + tracking;
+> **SDK purity** — `StatusBarCacheRepository` is a pure keyed store in `:sdk-core`, the *when* orchestration stays in the
+> `:feature:feed` VM; **SSOT** — one disk-cache pattern shared with `ProfileStatsCacheRepository`, one keyed table;
+> **UDF** — immutable `StateFlow`, transitions pure, cancellation-safe; **Instant-App** — cold launch now paints from
+> disk before the network, skeleton only on a truly-cold disk; **coherence** — no UI change, pure behaviour; no coverage
+> floor lowered, no test weakened). **Next slice:** §G — localise the `status_*` string family (FR/ES/PT) to close the
+> tracked i18n gap (the whole `status_bar_*` / `status_*` family is default-only today), then the statuses realtime
+> socket wiring (`status:new` / `status:reaction` push into the bar) for live parity with iOS.
+
+> On 2026-07-19 the **Friends / Discover status-feed toggle** landed (slice `status-feed-mode-toggle`,
+> feature-parity §G → "Friends/Discover status-feed toggle" — the UI the `statuses-viewmodel` /
+> `status-bar-l1-cache` slices built `StatusesViewModel.setMode` for but never surfaced). iOS ships **only** the
+> friends status feed (two separate `StatusViewModel(mode:)` instances, no in-UI switch); Android drives both feeds
+> from one VM, so this is a switch iOS never gave the user — a SOTA improvement, not a port. **(1)** new pure
+> `statusFeedModeTabs(current): List<StatusFeedModeTab>` (`:feature:feed` `StatusBarPresentation`) — the SSOT for the
+> toggle: an explicit `STATUS_FEED_TAB_ORDER = [FRIENDS, DISCOVER]` (owned here, **independent of the enum
+> declaration order** so the render order is a deliberate UI decision, not an enum accident) mapped to segments with
+> exactly the `current` segment `isSelected`. **(2)** `StatusFeedModeToggle` Composable — a compact glass segmented
+> control pinned above the emoji rail, thin glue over the pure tabs: tapping a segment fires the already-built
+> `viewModel.setMode` (which serves the target feed's L1-cached bar instantly and is a no-op on the active feed —
+> `Role.Tab` + `selected` semantics for a11y, Indigo-filled active segment). `StatusBarView` is now a `Column`
+> (toggle + `LazyRow`); `myStatus` already surfaces only in FRIENDS mode, so switching to DISCOVER coherently swaps
+> the leading cell to Add. **+4 tests** — `StatusBarPresentationTest` (+4): both-feeds-offered, friends-first order,
+> select-friends-on-friends, select-discover-on-discover. **Mutation check (RED proof):** structural RED (tests don't
+> compile without `statusFeedModeTabs`/`StatusFeedModeTab`); behaviourally, reversing `STATUS_FEED_TAB_ORDER` fails
+> **exactly** `feed-mode tabs read friends first then discover`, and hard-wiring `isSelected = it == FRIENDS` fails
+> **exactly** `feed-mode tabs select the discover segment on the discover feed` (27 tests, 1 failed each) —
+> behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:feature:feed:testDebugUnitTest` **491** green (`StatusBarPresentationTest` 27/27, was 23 + 4), `assembleDebug` +
+> full `testDebugUnitTest` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 2 production + 1 test
+> + 1 string + tracking; **SDK purity** — `statusFeedModeTabs` is a pure presentation projection in `:feature:feed`,
+> the "which feed / when to fetch" orchestration stays in `StatusesViewModel.setMode`; **SSOT** — one tab-order +
+> selection law; **UDF** — immutable tabs, pure projection, VM owns the mode `StateFlow`; **Instant-App** — `setMode`
+> already serves the cached bar instantly (no skeleton on a warm switch); **coherence** — Indigo segmented control,
+> natural tap-to-switch gesture, no dead-end [both feeds reachable, leading cell swaps coherently]; no coverage floor
+> lowered, no test weakened). **Note:** the `status_feed_*` strings ship in `values/` only — the whole `status_bar_*`
+> / `status_*` family is default-only today (FR/ES/PT localisation of the statuses area is a pre-existing gap, now
+> tracked as a §G follow-up). **Next slice:** §G — the disk **L2** status cache (Room-backed cold-launch parity
+> across process death, following `ProfileStatsCacheRepository`), then localise the `status_*` string family
+> (FR/ES/PT) to close the tracked i18n gap.
+
+> On 2026-07-19 the **status-popover reaction picker** landed (slice `status-popover-reaction-picker`,
+> feature-parity §G → "Mood status react from the bar popover" — the piece the `status-bar-l1-cache` /
+> `status-popover-republish` slices flagged as deferred: `StatusesViewModel.react` (optimistic bump + rollback) and
+> the `StatusBarListState.reacted` reducer were already built and tested; only the picker UI was missing). Parity
+> source: iOS `StatusViewModel.reactToStatus` (optimistic `reactionSummary[emoji]+=1`, rollback on failure). **(1)**
+> new pure `statusReactionChips(reactionSummary): List<StatusReactionChip>` (`:feature:feed` `StatusBarPresentation`)
+> — the SSOT for how a mood's existing reactions read: drops zero/absent counts, orders **count-desc with an emoji
+> tie-break** so the render is stable regardless of the map's iteration order. **(2)** `StatusPopoverModel` gains
+> `reactions` (the chips, surfaced regardless of ownership — they show what others placed) + `canReact = !isOwn`
+> (you don't react to your own mood, coherent with the `canRepublish` gate; existing reactions still display on your
+> own popover). **(3)** `StatusPopover` Composable renders a `ReactionSummaryRow` (Indigo-tinted emoji+count pills)
+> when reactions exist, and a `ReactionPickerRow` (quick-reaction strip from `EmojiCatalog.defaultQuickReactions`,
+> the same SSOT the chat + story pickers use) when `canReact`; tapping an emoji fires `viewModel.react(entry.id,
+> emoji)` and dismisses the popover. **+8 tests** — `StatusBarPresentationTest` (+8): canReact own/other,
+> reactions-from-summary / none-when-null, chips empty-for-null / drop-zero-and-negative / order-desc /
+> tie-break-by-emoji. **Mutation check (RED proof):** structural RED (tests don't compile without `canReact` /
+> `reactions` / `statusReactionChips` / `StatusReactionChip`); behaviourally, replacing the comparator with a plain
+> `sortedBy { count }` fails **exactly** `reaction chips order by descending count` + `reaction chips break count
+> ties by emoji for a stable order` + `popover surfaces the existing reactions from the entry summary` (23 tests, 3
+> failed) — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:feature:feed:testDebugUnitTest` **BUILD SUCCESSFUL** (`StatusBarPresentationTest` 23/23, was 15 + 8),
+> `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 2 production + 1 test +
+> 1 string + 2 tracking; **SDK purity** — `statusReactionChips` is a pure presentation projection in `:feature:feed`,
+> the "when to react" orchestration stays in the VM, the emoji strip reuses the `:core:model` `EmojiCatalog` SSOT;
+> **SSOT** — one chip-ordering law, one quick-reaction catalog; **UDF** — immutable model, pure projection, the VM's
+> `react` already snapshot→optimistic→rollback; **Instant-App** — the optimistic bump is instant, network confirms;
+> **coherence** — Indigo-accent chips, natural tap→popover→emoji gesture, no dead end [the popover's react
+> affordance was the missing action]; no coverage floor lowered, no test weakened). **Next slice:** §G — the
+> **Friends / Discover status feed toggle** UI (drive the already-built `StatusesViewModel.setMode`), then the disk
+> **L2** status cache (Room-backed cold-launch parity across process death, following `ProfileStatsCacheRepository`).
+
 > On 2026-07-19 the **L1 status cache** landed (slice `status-bar-l1-cache`, feature-parity §G → "Instant-app status
 > bar" — the instant-app follow-up the `statuses-viewmodel` slice flagged in its own KDoc). The parity source is iOS
 > `StatusViewModel.loadStatuses`, which reads `CacheCoordinator.shared.statuses.load(for: "statuses_\(mode)")` and
