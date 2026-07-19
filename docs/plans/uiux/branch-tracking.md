@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 176i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **176i (en cours, branche `claude/laughing-thompson-t9pko7`, base `main` HEAD `70001b9`)** :
+>   i18n + Dynamic Type + Indigo + VoiceOver de `LoadMoreRepliesCell` (rangée « View N more replies »
+>   tappable en bas d'un fil de commentaires déplié — `CommentListViewController`). Cellule UIKit avec
+>   4 déficits (candidat listé fin 167i) : (1) **string EN brute non localisée + bug de pluriel**
+>   `"View \(remaining) more replies"` (« View 1 more replies ») ; (2) **0 Dynamic Type** (`.systemFont(ofSize:13)`,
+>   1 ligne) ; (3) **couleur hors-marque** `.systemBlue` ; (4) **0 structure a11y** (pas d'élément, pas de
+>   trait `.button`, min-height 36pt < cible HIG 44). Fix : `String(localized:defaultValue:bundle:)` avec
+>   Automatic Grammar Agreement `^[…](inflect: true)` (accord singulier/pluriel runtime, langue de dev `en`,
+>   pas de `.stringsdict` ni d'édit `.xcstrings`) ; `.preferredFont(forTextStyle:.subheadline)` +
+>   `adjustsFontForContentSizeCategory` + `numberOfLines=0` + ré-ancrage top/bottom (self-sizing `.estimated(80)`)
+>   + min-height 44 ; `UIColor` dynamique indigo500/indigo400 ; `isAccessibilityElement` + `.button` +
+>   `accessibilityLabel`/`Hint`. 1 fichier, 0 logique (contrat `configure(parentId:remaining:)` + `onToggleThread`
+>   inchangés), 0 test. 2 clés i18n neuves `comments.load-more-replies(.hint)` inline. Aucun test ne référence
+>   la cellule (grep = 0). Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `LoadMoreRepliesCell` i18n + Dynamic Type + Indigo + VoiceOver SOLDÉ** : ne plus reprendre. Suite
+>   possible : `ReplyCell`/`TopLevelCommentCell` (mêmes `.systemFont(ofSize:)` figés, sans Dynamic Type).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
 >   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
