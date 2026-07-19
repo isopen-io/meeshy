@@ -2,6 +2,30 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-19, `status-mood-core`) — status TTL is **1h**, NOT 21h (the parity tracker conflated the STORY rule)
+The feature-parity line "Story / status (mood) posts with 21h expiry" (audit part-15) **conflates two
+different rules**. The gateway is unambiguous (`services/gateway/src/services/PostService.ts`):
+`STORY_EXPIRY_HOURS = 21`, **`STATUS_EXPIRY_HOURS = 1`**. A mood status expires **one hour** after
+creation; a story lives 21h. Confirmed in `schema.prisma` (`STATUS // Éphémère 1h`) and the PostService
+tests. **Expiry is server-computed and delivered as `expiresAt`** — clients treat it as authoritative
+and only derive `createdAt + 1h` as a fallback if the server ever omits it (mirror of `StoryGrouping`'s
+`effectiveStoryExpiresAt`, but with the 1h constant). `MoodStatusExpiry` (`:core:model`) is the SSOT.
+When I touch §G/§E parity boxes, keep the two TTLs distinct.
+
+Other findings baked into this slice (from the iOS/gateway research):
+- `StatusEntry` + `StatusCreateRequest`/`ReactionRequest`/`StoryViewRequest` were **already ported**
+  (`core/model/.../Story.kt`); the missing pieces were the `toStatusEntry()` mapper + the expiry law.
+- The iOS `toStatusEntry` **drops** `visibility` + `reactionSummary` even though `APIPost` carries them;
+  the Android mapper carries both through (a genuine parity improvement, tested).
+- iOS `author.name` = `displayName ?? username ?? "Anonymous"` (no blank check). Android's `resolvedName`
+  treats a **blank** displayName/username as absent before falling to `"Anonymous"` (more robust).
+- Statuses ride the generic post API: `type == "STATUS"` post, react via `POST /posts/:id/like {emoji}`,
+  feeds at `GET /posts/feed/statuses` (friends) + `/statuses/discover`. The bar is a **flat server-order
+  list** (NOT grouped-by-user like stories); `myStatus` renders first. `orderedForBar` is that pure law.
+- **Bootstrap grain precedent:** a pure `:core:model`/`:sdk-core` SSOT (law + mapper) with full tests is
+  the accepted first slice for a brand-new area — same shape as `call-sound-policy` (§H) and
+  `StoryGrouping` (§E). The repository + bar VM + Compose come in the next §G slices, consuming this SSOT.
+
 ## Lesson (2026-07-18, `feed-comment-mention-autocomplete`) — promote a per-feature SSOT to `:sdk-core` by relocating the package, not renaming every call site; give the second surface its own orchestration
 When a second surface needs the same pure behaviour a `:feature:*` already solved, **promote the pure
 state-machine to `:sdk-core`** rather than re-implementing it. Two mechanics that kept this cheap and safe:
