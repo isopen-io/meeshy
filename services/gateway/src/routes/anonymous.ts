@@ -262,11 +262,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Acces non autorise depuis votre region');
       }
 
-      // Verifier langues autorisees (case-insensitive : body.language est normalise
-      // lowercase, allowedLanguages peut avoir ete configure en casse mixte)
+      // Verifier langues autorisees. `body.language` est deja normalise (schema,
+      // ligne ~27) ; chaque entree `allowedLanguages` passe par la meme SSOT pour
+      // qu'un lien configure avec un sous-tag region ('en-US') ou une casse mixte
+      // ('EN') autorise bien un participant normalise en 'en'.
       if (
         shareLink.allowedLanguages.length > 0 &&
-        !shareLink.allowedLanguages.some((l) => l.toLowerCase() === body.language)
+        !shareLink.allowedLanguages.some(
+          (l) => (normalizeLanguageCode(l) ?? l.toLowerCase()) === body.language
+        )
       ) {
         return sendForbidden(reply, 'Langue non autorisee pour ce lien');
       }
@@ -925,14 +929,21 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       const languageSet = new Set<string>();
 
+      // Canonicalise via the Prisme SSOT so region-subtagged prefs ('pt-BR' from
+      // iOS Locale.current / web Accept-Language) collapse onto their base code
+      // ('pt') and count once — parity with MessageTranslationService and the
+      // anonymous-join write boundary. `?? .toLowerCase()` keeps unknown/legacy
+      // codes visible instead of dropping them from the stat.
+      const addLang = (value: string) =>
+        languageSet.add(normalizeLanguageCode(value) ?? value.toLowerCase());
+
       allActiveParticipants.forEach(p => {
         if (p.type === 'user' && p.user) {
-          // Lowercase so 'en'/'EN' from legacy mixed-case rows count once (spokenLanguages stat)
-          if (p.user.systemLanguage) languageSet.add(p.user.systemLanguage.toLowerCase());
-          if (p.user.regionalLanguage) languageSet.add(p.user.regionalLanguage.toLowerCase());
-          if (p.user.customDestinationLanguage) languageSet.add(p.user.customDestinationLanguage.toLowerCase());
+          if (p.user.systemLanguage) addLang(p.user.systemLanguage);
+          if (p.user.regionalLanguage) addLang(p.user.regionalLanguage);
+          if (p.user.customDestinationLanguage) addLang(p.user.customDestinationLanguage);
         } else {
-          if (p.language) languageSet.add(p.language.toLowerCase());
+          if (p.language) addLang(p.language);
         }
       });
 

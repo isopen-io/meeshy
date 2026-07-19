@@ -134,6 +134,12 @@ describe('POST /anonymous/join/:linkId', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('allows a normalized language against a region-subtagged allowedLanguages entry', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, allowedLanguages: ['EN-US'] });
+    const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'en-US' } });
+    expect(res.statusCode).not.toBe(403);
+  });
+
   it('returns 403 when link requires account', async () => {
     (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, requireAccount: true });
     const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
@@ -264,5 +270,37 @@ describe('GET /anonymous/link/:identifier', () => {
     const res = await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+  });
+
+  it('collapses region-subtagged prefs onto their base code in spokenLanguages', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
+    });
+    (app as any).prisma.participant.findMany.mockResolvedValueOnce([
+      { type: 'user', language: null, user: { systemLanguage: 'pt-BR', regionalLanguage: 'EN', customDestinationLanguage: null } },
+      { type: 'user', language: null, user: { systemLanguage: 'pt', regionalLanguage: null, customDestinationLanguage: null } },
+      { type: 'anonymous', language: 'en-US', user: null },
+    ]);
+    const res = await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
+    expect(res.statusCode).toBe(200);
+    const { spokenLanguages, languageCount } = res.json().data.stats;
+    expect(spokenLanguages).toEqual(['en', 'pt']);
+    expect(languageCount).toBe(2);
+  });
+
+  it('keeps unknown/legacy language codes visible in spokenLanguages', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
+    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { id: CONV_ID, title: 'Conv', description: null, type: 'group', createdAt: new Date() },
+    });
+    (app as any).prisma.participant.findMany.mockResolvedValueOnce([
+      { type: 'anonymous', language: 'ZZ', user: null },
+    ]);
+    const res = await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.stats.spokenLanguages).toEqual(['zz']);
   });
 });
