@@ -88,16 +88,36 @@ public struct TransportBar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 10) {
+        // Vue unifiée (Simple/Pro fusionnés) : la rangée porte désormais 7
+        // grappes (lecture, temps, undo/redo, snap, zoom×3, son) — sa largeur
+        // intrinsèque (~470 pt avec le readout, ~390 pt sans) dépasse la
+        // portrait des iPhone étroits (16 non-Pro 393 pt, SE 375 pt), ce qui
+        // rognait la lecture à gauche et le son à droite (rangée centrée qui
+        // déborde symétriquement). `ViewThatFits` choisit le PREMIER candidat
+        // qui TIENT dans la largeur proposée, du plus riche au plus compact :
+        //  1. lecteur de temps + libellé zoom `100%` (iPad / large / paysage) ;
+        //  2. temps retiré (~115 pt, déjà jugé redondant avec la règle + le
+        //     playhead, cf. `showsTimeReadout`), libellé zoom conservé (16 Pro) ;
+        //  3-4. libellé zoom `100%` retiré aussi (le zoom reste réglable via
+        //     − / + et le pincement) + espacement resserré, pour que les 6
+        //     boutons fonctionnels tiennent jusqu'au SE (375 pt). Aucun bouton
+        //     fonctionnel (lecture, undo/redo, snap, zoom ±, son) n'est jamais
+        //     retiré — seuls les DEUX libellés informatifs (temps, zoom%) le sont.
+        //
+        // La lecture est ÉPINGLÉE à gauche, hors du `ViewThatFits` : le cluster
+        // droit est mesuré SANS `Spacer` glouton (un Spacer ferait croire à
+        // `ViewThatFits` que chaque candidat remplit toute la largeur, sabotant
+        // la sélection). Le cluster gagne son alignement droit via
+        // `.frame(maxWidth: .infinity, alignment: .trailing)`, pas via un Spacer.
+        HStack(spacing: 0) {
             playButton
-            if showsTimeReadout {
-                timeReadout
+            ViewThatFits(in: .horizontal) {
+                trailingCluster(showTime: showsTimeReadout, showZoomLabel: true, spacing: 10)
+                trailingCluster(showTime: false, showZoomLabel: true, spacing: 10)
+                trailingCluster(showTime: false, showZoomLabel: false, spacing: 8)
+                trailingCluster(showTime: false, showZoomLabel: false, spacing: 4)
             }
-            Spacer(minLength: 4)
-            undoRedoCluster
-            snapChip
-            zoomCluster
-            muteButton
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -108,6 +128,22 @@ public struct TransportBar: View {
         .keyboardShortcut(" ", modifiers: [])
         // ← / → — step backward / forward by 1 frame (handled via the scrub callback)
         .background(keyboardShortcutOverlay)
+    }
+
+    /// Grappes de droite (temps? + undo/redo + snap + zoom + son), SANS Spacer
+    /// ni bouton lecture, pour que `ViewThatFits` en mesure la vraie largeur
+    /// intrinsèque. Paramétrée par la présence des libellés informatifs (temps,
+    /// zoom%) et l'espacement, du plus riche au plus compact.
+    private func trailingCluster(showTime: Bool, showZoomLabel: Bool, spacing: CGFloat) -> some View {
+        HStack(spacing: spacing) {
+            if showTime {
+                timeReadout
+            }
+            undoRedoCluster
+            snapChip
+            zoomCluster(showLabel: showZoomLabel)
+            muteButton
+        }
     }
 
     /// iOS 26+: the parent band (`ComposerBottomBand`) is now real Liquid
@@ -254,7 +290,12 @@ public struct TransportBar: View {
         }
     }
 
-    private var zoomCluster: some View {
+    /// - Parameter showLabel: sur les iPhone les plus étroits (tier compact de
+    ///   `ViewThatFits`) le libellé `100%` — informatif + raccourci reset — se
+    ///   retire pour que les 6 grappes fonctionnelles tiennent sans rogner ;
+    ///   le zoom reste réglable via − / + et le pincement. Toujours affiché
+    ///   dès qu'il y a la place (16 Pro, iPad, paysage).
+    private func zoomCluster(showLabel: Bool) -> some View {
         HStack(spacing: 6) {
             Button(action: onZoomOut) {
                 Image(systemName: "minus.magnifyingglass")
@@ -264,14 +305,16 @@ public struct TransportBar: View {
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "story.timeline.transport.zoomOut", bundle: .module))
 
-            Button(action: onZoomReset) {
-                Text(Self.zoomLabel(scale: zoomScale))
-                    .font(.caption2.weight(.semibold))
-                    .frame(minWidth: 36, minHeight: 30)
-                    .contentShape(Rectangle().inset(by: -7))
+            if showLabel {
+                Button(action: onZoomReset) {
+                    Text(Self.zoomLabel(scale: zoomScale))
+                        .font(.caption2.weight(.semibold))
+                        .frame(minWidth: 36, minHeight: 30)
+                        .contentShape(Rectangle().inset(by: -7))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "story.timeline.transport.zoomReset", bundle: .module))
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "story.timeline.transport.zoomReset", bundle: .module))
 
             Button(action: onZoomIn) {
                 Image(systemName: "plus.magnifyingglass")
