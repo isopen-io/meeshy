@@ -154,6 +154,10 @@ struct AddParticipantSheet: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
+                // Collapse the shimmer placeholders into one spoken element so VoiceOver
+                // announces the loading state once instead of stopping on 3 empty rows.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "participants.add.searching", defaultValue: "Recherche en cours", bundle: .main))
             } else if searchQuery.count < 2 {
                 searchPrompt
             } else if searchResults.isEmpty {
@@ -191,6 +195,11 @@ struct AddParticipantSheet: View {
                 avatarURL: user.avatar,
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt)
             )
+            // Presentational avatar — MeeshyAvatar carries its own .accessibilityLabel(name),
+            // which the adjacent name/username block already reads. Hide it so VoiceOver
+            // announces the name once, not twice (doctrine 143i). Safe: this avatar has no
+            // mood tap / context menu, so hiding removes no action.
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.name)

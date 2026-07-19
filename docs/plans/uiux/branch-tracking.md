@@ -14,6 +14,30 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 144i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **144i (branche `claude/laughing-thompson-ich12b`, base `main` HEAD `efedb69e4`)** :
+>   VoiceOver-**structure** de `AddParticipantSheet` (feuille « Ajouter un membre »). **Pool Dynamic Type
+>   TARI** : tous les `.font(.system(size:))` restants du tree `apps/ios/Meeshy` sont des glyphes
+>   chrome/décoratifs gelés + annotés (doctrine 82i/84i/86i/87i) — **aucun site texte à migrer**. On passe
+>   « state-of-the-art ». **2 gaps corrigés** : (1) `userRow` lisait le nom **2×** — `MeeshyAvatar` porte
+>   son `.accessibilityLabel(name)` (`MeeshyAvatar.swift:378/381`) redondant avec le bloc nom/@pseudo déjà
+>   `.combine` → `.accessibilityHidden(true)` sur l'avatar (présentationnel, sans mood tap/menu → 0 action
+>   perdue ; doctrine 143i). (2) Squelette de chargement (3 `searchSkeletonRow` shimmer) →
+>   `.accessibilityElement(children: .ignore)` + `.accessibilityLabel("Recherche en cours")` : une annonce
+>   au lieu de 3 arrêts VoiceOver vides. **1 clé i18n inline** `participants.add.searching` (defaultValue
+>   only, cohérent avec les `participants.add.*` non catalogués → 0 édition `.xcstrings`). 1 fichier, 0
+>   logique, 0 test neuf (`searchResults` est `@State private` → non peuplable en test ; smoke `_ = body`
+>   ne couvrirait que l'état vide). Modifiers additifs → rendu voyant strictement identique. Gate = CI
+>   `ios-tests`. PR à venir.
+> - **⚠️ `AddParticipantSheet` VoiceOver-structure SOLDÉ** : ne plus reprendre (avatar `userRow` masqué,
+>   squelette regroupé).
+> - **Base de départ 145i : `main` HEAD**. Pool `.system(size:)` tari → continuer le pass VoiceOver
+>   state-of-the-art : propager le fix « avatar présentationnel → `.accessibilityHidden(true)` » aux autres
+>   user-rows qui double-lisent le nom quand l'avatar est **non interactif** (ex. `MemberManagementSection.
+>   memberRow`) ; garder l'avatar exposé quand il est interactif (`ForwardPickerSheet` mood tap). Reste
+>   `StoryViewerView+Content` parké (⚠️ i18n + `@State private` cross-file). Éviter les fichiers des PRs iOS
+>   ouvertes.
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).
