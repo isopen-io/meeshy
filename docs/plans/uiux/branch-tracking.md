@@ -14,6 +14,23 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 165i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **165i (terminée, branche `claude/laughing-thompson-j1xn2r`, base `main` HEAD `efedb69`)** :
+>   Passe VoiceOver de `EditProfileView` (écran d'édition du profil). **Dynamic Type déjà soldé** (2 glyphes
+>   décoratifs figés : badge caméra 30×30, héros succès 48pt — restent figés). 3 corrections a11y, 0 logique :
+>   (1) `readOnlyRow` (Email/Tél/Username) → icône `.accessibilityHidden` + `accessibilityElement(children:
+>   .combine)` + label « <titre> : <valeur> » (`profile.edit.readonly.a11y`) → 1 balayage au lieu de 3 ;
+>   (2) compteur bio → `.accessibilityLabel` « N caractères sur M » (`profile.edit.bio.count.a11y`) → plus de
+>   lecture « slash », la fraction porte la limite (pas la seule couleur rouge) ; (3) overlay succès → héros
+>   `checkmark.circle.fill` (48) `.accessibilityHidden(true)` + `combine` + `.isStaticText` → parle « Profil
+>   mis à jour ». 1 fichier, 0 logique, 2 clés i18n auto-extraites. `EditProfileViewModelTests` teste le
+>   ViewModel (pas la View) → 0 régression. 0 PR sur ce fichier → 0 contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `EditProfileView` SOLDÉ** : VoiceOver (3 fixes) + Dynamic Type (2 glyphes figés) épuisés — ne plus reprendre.
+> - **Base de départ 166i : `main` HEAD**. Traîne 2/1 `.system` restante (`ContextActionMenu`,
+>   `ConversationBackgroundComponents`, `BubbleStandardLayout`, `GlobalSearchView`, `LocationPickerView`,
+>   `CommunityLinksView`, `OnboardingStepViews` post-annotation…), ou **passe VoiceOver state-of-the-art**
+>   sur une surface fraîche (`ForwardPickerSheet`, `MagicLinkView`, `FeedCommentsSheet`, `StoryTrayView`).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).

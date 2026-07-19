@@ -214,6 +214,12 @@ struct EditProfileView: View {
                                 ? MeeshyColors.error
                                 : theme.textMuted
                         )
+                        .accessibilityLabel(
+                            String(
+                                format: String(localized: "profile.edit.bio.count.a11y", defaultValue: "%1$d caractères sur %2$d", bundle: .main),
+                                viewModel.bio.count, viewModel.bioMaxLength
+                            )
+                        )
                 }
             }
 
@@ -314,10 +320,11 @@ struct EditProfileView: View {
 
     private var successOverlay: some View {
         VStack(spacing: 12) {
-            // Fixed glyph: 48pt hero confirmation icon — kept fixed to preserve visual hierarchy of the success overlay.
+            // Fixed glyph: 48pt hero confirmation icon — kept fixed to preserve visual hierarchy of the success overlay ; the adjacent text carries the meaning for VoiceOver.
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
+                .accessibilityHidden(true)
 
             Text(String(localized: "profile.edit.success", defaultValue: "Profil mis a jour", bundle: .main))
                 .font(MeeshyFont.relative(16, weight: .semibold))
@@ -332,6 +339,8 @@ struct EditProfileView: View {
                         .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isStaticText)
         .transition(.scale.combined(with: .opacity))
     }
 
@@ -390,6 +399,7 @@ struct EditProfileView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(hex: color).opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             Text(title)
                 .font(MeeshyFont.relative(14, weight: .medium))
@@ -404,5 +414,12 @@ struct EditProfileView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            String(
+                format: String(localized: "profile.edit.readonly.a11y", defaultValue: "%1$@ : %2$@", bundle: .main),
+                title, value
+            )
+        )
     }
 }
