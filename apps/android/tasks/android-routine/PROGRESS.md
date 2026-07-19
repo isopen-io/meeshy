@@ -1,5 +1,42 @@
 # Progress — state & what to do next
 
+> On 2026-07-19 the **status composer** landed (slice `status-composer`, feature-parity §G → "Status composer:
+> emoji grid + 122-char text + visibility" — the Android port of iOS `StatusComposerView`, the piece that makes
+> the bar's `AddStatus` cell real). §G already had the model+laws (`status-mood-core`), the SDK transport
+> (`status-repository`), the UDF ViewModel (`statuses-viewmodel`, whose `setStatus` this slice finally drives), and
+> the Compose bar (`status-bar-compose`). **(1) pure `StatusComposerDraft`** (`:feature:feed`) — the SSOT that owns
+> every rule the Composable must not re-implement: the **publish gate** `canPublish` (a mood emoji must be picked —
+> iOS `disabled(selectedEmoji == nil)`; text is optional), the **122-char cap** (`withText` clamps to
+> `MAX_CHARS=122`, mirroring iOS's `onChange` prefix so the draft never holds an over-long body), the **body
+> actually sent** `trimmedContent` (whitespace-stripped, `null` when blank — iOS `statusText.isEmpty ? nil`), the
+> **near-limit** counter warning (`> NEAR_LIMIT=100`, iOS's error-colour threshold), the emoji **toggle**
+> (tap the selected one → clear it, iOS `if selectedEmoji == emoji { nil }`), and `withVisibility`. Carries the
+> `MOOD_OPTIONS` emoji SSOT (mirrors iOS `StatusViewModel.moodOptions`) + a `StatusVisibility(wire)` enum. **(2)
+> `StatusComposerSheet` Composable** — thin glue over the draft (`remember`): a 5-column emoji grid, a
+> visibility-pill row, a 122-char `OutlinedTextField` with a live counter that turns `Error`-red past 100, and a
+> `Publish` action disabled until `canPublish`; on publish calls `onPublish(emoji, trimmedContent, visibility.wire)`.
+> **(3)** wired into `StatusBarView`: the `AddStatus` cell (previously **inert** — the tracked dead-end) now opens
+> the sheet, which publishes through `StatusesViewModel.setStatus`. Removed the now-unused `onAddStatus` param (no
+> orphan). **+14 tests** — `StatusComposerDraftTest` (publish gate: fresh→can't, select→can, toggle-clear→can't,
+> toggle-different→replace; text cap: within→verbatim+remaining, at-limit→0, over-limit→clamped; body:
+> trim-strips, blank/empty→null; counter: near-limit boundary 100/101, hidden-until-typed; visibility: default
+> public, wire value; mood options: no duplicates). **Mutation check (RED proof):** dropping the `withText` clamp
+> (`value.take(MAX_CHARS)` → `value`) failed **exactly** `text over the limit is clamped to the maximum`; making
+> `toggleEmoji` always assign (drop the `== emoji` guard) failed **exactly** `toggling the selected emoji clears
+> it and disables publishing` — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:feature:feed:testDebugUnitTest` **469/469** (was 455 + 14), `:app:assembleDebug` →
+> **BUILD SUCCESSFUL** (the sheet + draft compile app-wide, the bar drives `setStatus`). Reviewer **PASS** (diff
+> `apps/android` only — 2 new + 2 modified feed files + 1 strings + tracking; **SDK purity** — the composer draft's
+> mood options / publish gate / char cap are product presentation in `:feature:feed`, over the existing
+> `StatusesViewModel.setStatus` orchestration; **SSOT** — one publish-gate law, `MOOD_OPTIONS` mirrors iOS, colours
+> via `MeeshyPalette`/theme tokens, no re-implementation; **UDF** — the sheet holds a `remember`ed immutable draft,
+> all decisions pushed into the pure value type; **Instant-App** — n/a (a composer, no data load); **coherence** —
+> Indigo accent on the selected emoji + active pill + publish CTA, glass sheet, natural tap→sheet gesture, no
+> dead-end [the add cell is now real, its former inert state closed]; no coverage floor lowered, no test weakened).
+> **Next slice:** §G continues — the popover's **republish/react** action (`StatusesViewModel.react` is already
+> built + the composer takes `repostOfId`/`viaUsername` on iOS), then the friends/discover **feed toggle** UI, then
+> the L1 status cache for instant-app parity.
+
 > On 2026-07-19 the **Compose `StatusBarView`** landed (slice `status-bar-compose`, feature-parity §G →
 > "Statuses/moods bar" — the emoji-pill rail the previous three §G slices built toward, the Android port of iOS
 > `StatusBarView`). §G already had the model+laws (`status-mood-core`), the SDK transport (`status-repository`),
