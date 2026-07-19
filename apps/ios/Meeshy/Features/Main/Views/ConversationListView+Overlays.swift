@@ -1006,6 +1006,14 @@ struct ConversationListHeaderOverlay: View {
                     }
 
                     if let onNotificationsTap {
+                        // Le compteur d'alertes non lues (pastille rouge) portait
+                        // l'information par la seule couleur/badge — muet pour
+                        // VoiceOver. Exposé en `accessibilityValue` (pluriel géré).
+                        let unreadA11yValue: String = iPadNotificationCount <= 0
+                            ? ""
+                            : (iPadNotificationCount == 1
+                                ? String(localized: "conversation.list.notifications.unread.one.a11y", defaultValue: "1 non lue", bundle: .main)
+                                : String(format: String(localized: "conversation.list.notifications.unread.other.a11y", defaultValue: "%d non lues", bundle: .main), iPadNotificationCount))
                         Button {
                             HapticFeedback.light()
                             onNotificationsTap()
@@ -1026,6 +1034,7 @@ struct ConversationListHeaderOverlay: View {
                             }
                         }
                         .accessibilityLabel(String(localized: "conversation.list.notifications", defaultValue: "Notifications", bundle: .main))
+                        .accessibilityValue(unreadA11yValue)
                     }
 
                     if let onSettingsTap {
