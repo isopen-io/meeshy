@@ -248,6 +248,25 @@ export function canEditMessage(
 }
 
 /**
+ * Résout le nom d'affichage d'un membre selon la priorité CANONIQUE du produit
+ * (SSOT `getUserDisplayName`, web) : `displayName` → `firstName lastName` →
+ * `username` → repli. Une chaîne blanche est traitée comme absente.
+ *
+ * Avant iter 181, `generateDefaultConversationTitle` plaçait `username` AVANT
+ * `firstName lastName`, affichant `@jdoe123` là où le reste de l'app (et le
+ * snapshot gateway `MessagingService`) affiche « John Doe ».
+ */
+const resolveMemberName = (
+  m: { displayName?: string; username?: string; firstName?: string; lastName?: string }
+): string => {
+  const fullName = [m.firstName, m.lastName]
+    .filter((p): p is string => !!p && p.trim().length > 0)
+    .map(p => p.trim())
+    .join(' ');
+  return m.displayName?.trim() || fullName || m.username?.trim() || 'Unknown User';
+};
+
+/**
  * Génère un titre par défaut pour une conversation sans titre
  */
 export function generateDefaultConversationTitle(
@@ -255,37 +274,22 @@ export function generateDefaultConversationTitle(
   currentUserId: string
 ): string {
   const otherMembers = members.filter((m) => m.id !== currentUserId);
-  
+
   if (otherMembers.length === 0) {
     return 'Conversation';
   }
-  
+
   if (otherMembers.length === 1) {
     const member = otherMembers[0];
-    if (member) {
-      const fullName = [member.firstName, member.lastName]
-        .filter((p): p is string => !!p && p.trim().length > 0)
-        .map(p => p.trim())
-        .join(' ');
-      return member.displayName?.trim() || member.username?.trim() || fullName || 'Unknown User';
-    }
-    return 'Unknown User';
+    return member ? resolveMemberName(member) : 'Unknown User';
   }
-  
-  const resolveName = (m: { displayName?: string; username?: string; firstName?: string; lastName?: string }): string => {
-    const fullName = [m.firstName, m.lastName]
-      .filter((p): p is string => !!p && p.trim().length > 0)
-      .map(p => p.trim())
-      .join(' ');
-    return m.displayName?.trim() || m.username?.trim() || fullName || 'Unknown User';
-  };
 
   if (otherMembers.length === 2) {
-    return otherMembers.map(resolveName).join(', ');
+    return otherMembers.map(resolveMemberName).join(', ');
   }
 
   // 3+ membres
-  const firstTwo = otherMembers.slice(0, 2).map(resolveName);
+  const firstTwo = otherMembers.slice(0, 2).map(resolveMemberName);
   return `${firstTwo.join(', ')} and ${otherMembers.length - 2} other(s)`;
 }
 

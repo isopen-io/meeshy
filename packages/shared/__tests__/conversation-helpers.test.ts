@@ -336,6 +336,43 @@ describe('generateDefaultConversationTitle', () => {
     ];
     expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('Alice, Bob');
   });
+
+  // Priorité canonique du nom d'affichage (SSOT `getUserDisplayName`) :
+  // displayName > firstName+lastName > username. `generateDefaultConversationTitle`
+  // faisait passer `username` AVANT `firstName+lastName`, affichant `@jdoe123`
+  // là où le reste de l'app affiche « John Doe ».
+  it('should prefer firstName + lastName over username for a single member', () => {
+    const members = [
+      { id: 'user1', username: 'currentUser' },
+      { id: 'user2', firstName: 'John', lastName: 'Doe', username: 'jdoe123' },
+    ];
+    expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('John Doe');
+  });
+
+  it('should prefer firstName + lastName over username for multiple members', () => {
+    const members = [
+      { id: 'user1', username: 'currentUser' },
+      { id: 'user2', firstName: 'John', lastName: 'Doe', username: 'jdoe123' },
+      { id: 'user3', firstName: 'Jane', lastName: 'Roe', username: 'jroe456' },
+    ];
+    expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('John Doe, Jane Roe');
+  });
+
+  it('should keep displayName as the highest priority over firstName/lastName and username', () => {
+    const members = [
+      { id: 'user1', username: 'currentUser' },
+      { id: 'user2', displayName: 'Johnny', firstName: 'John', lastName: 'Doe', username: 'jdoe123' },
+    ];
+    expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('Johnny');
+  });
+
+  it('should fall back to username when firstName/lastName are blank', () => {
+    const members = [
+      { id: 'user1', username: 'currentUser' },
+      { id: 'user2', firstName: '   ', lastName: '   ', username: 'jdoe123' },
+    ];
+    expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('jdoe123');
+  });
 });
 
 describe('getRequiredLanguages', () => {
