@@ -77,7 +77,11 @@ struct BubbleExpandableText: View, Equatable {
                 // 3. `.textSelection(.disabled)` explicite sur le bouton pour
                 //    qu'un tap imprécis ne déclenche pas le mode sélection.
                 Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    // Vrai libellé interactif : `MeeshyFont.relative` le fait scaler
+                    // sous Dynamic Type. Pas figé — le cadre porte `minHeight: 24`
+                    // (un plancher HIG, pas une dimension fixe), donc la rangée
+                    // grandit avec le texte (doctrine 139i).
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(textColor.opacity(0.6))
                     // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
                     // creusait ~16pt de vide au-dessus ET en dessous du libellé
