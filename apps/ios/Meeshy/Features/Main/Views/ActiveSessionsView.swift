@@ -52,6 +52,7 @@ struct ActiveSessionsView: View {
             Text(String(localized: "sessions_title", defaultValue: "Sessions actives"))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -105,6 +106,9 @@ struct ActiveSessionsView: View {
 
     private func sessionRow(_ session: UserSession) -> some View {
         HStack(spacing: 12) {
+            // Glyphe de type d'appareil dans un badge de dimension fixe 32×32 : figé
+            // (déborderait s'il scalait, doctrine 82i) ; décoratif — le type d'appareil
+            // est déjà porté par le nom de session, donc masqué à VoiceOver.
             Image(systemName: session.isCurrent ? "iphone" : "desktopcomputer")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400)
@@ -113,6 +117,7 @@ struct ActiveSessionsView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill((session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400).opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -143,6 +148,10 @@ struct ActiveSessionsView: View {
                         .foregroundColor(theme.textSecondary)
                 }
             }
+            // Bloc d'infos de session lu comme UN seul élément VoiceOver (nom + badge
+            // « Actuelle » + IP + dernière activité), le bouton révoquer restant un
+            // élément actionnable distinct.
+            .accessibilityElement(children: .combine)
 
             Spacer()
 

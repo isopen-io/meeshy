@@ -1824,3 +1824,27 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Base de départ 164i : `main` HEAD** (resync). **Différé 164i+** (surfaces fraîches non soldées) : `BubbleFailedRetryBar` (déjà mûr — a11y complète, seul glyphe déco figé, **écarter**), `BookmarksView` (1 `.system`), `ActiveSessionsView` (a11y maigre), `AudioFullscreenView`, `FeedCommentsSheet`, `ReelAudioBackdrop`, `SharePickerView`, `GlobalSearchView`.
 
 | 163i | claude/laughing-thompson-rqaav8 (iOS Dynamic Type + VoiceOver `AudioCarouselView` : 1/1 `.font(.system(size:12,.bold,.monospaced))` du compteur `n / N` → `MeeshyFont.relative` (capsule padding flexible, pas de gel) ; VoiceOver = indicateur (points ≤ 7 & compteur > 7) enveloppé en `accessibilityElement(children: .ignore)` + label « Piste X sur Y » (`bubble.audio.carousel.position`) — position plus portée par couleur seule ; logique paging/lecture non touchée, palette intacte ; 1 fichier, 0 logique/0 test neuf, 1 clé i18n ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
+---
+
+> **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS (suffixe `i`).
+> - **167i (terminée, branche `claude/laughing-thompson-807l9l`, base `main` HEAD `efedb69e4`)** :
+>   VoiceOver de `ActiveSessionsView` (écran sécurité : liste des sessions actives, révocation). **3 lacunes
+>   a11y réelles comblées** — (1) icône de type d'appareil (`iphone`/`desktopcomputer`, unique `.system` du
+>   fichier, badge fixe 32×32) → `.accessibilityHidden(true)` + commentaire de gel (doctrine 82i : glyphe
+>   borné, scaler déborderait ; décoratif car le type est porté par le nom de session) — VoiceOver ne lit
+>   plus « iphone » ; (2) bloc d'infos de session (nom + badge « Actuelle » + IP + dernière activité) →
+>   `.accessibilityElement(children: .combine)` = **un** résumé VoiceOver au lieu de 4–5 fragments, le bouton
+>   révoquer restant un élément actionnable distinct ; (3) titre custom « Sessions actives » →
+>   `.accessibilityAddTraits(.isHeader)` (navigable au rotor). Logique de chargement/révocation non touchée ;
+>   palette tokenisée 0 swap. 1 fichier, 0 logique / 0 test neuf / 0 clé i18n neuve. Gate = CI `iOS Tests`.
+> - **NE PAS re-flagger** `ActiveSessionsView` (VoiceOver soldé 167i ; icône d'appareil figée+masquée à dessein).
+> - **Écarter (déjà mûrs, vérifiés run 167i)** : `AudioFullscreenView` (6 `.system` = tous des gels justifiés
+>   & commentés + labellisés — chrome 36×36, transport row, play 64×64, translate 26×26 — soldé 103i),
+>   `GlobalSearchView` (2 `.system` = micro-badges de comptage figés & commentés), `BookmarksView` (hero
+>   d'état vide 48pt décoratif+`.accessibilityHidden`, textes sémantiques — déjà mûr).
+> - **Base de départ 168i : `main` HEAD** (resync). **Différé 168i+** (surfaces fraîches à vérifier) :
+>   `ReelAudioBackdrop` (1 `.system`), `FeedCommentsSheet`, `SharePickerView`, ou passe state-of-the-art au
+>   tarissement.
+
+| 167i | claude/laughing-thompson-807l9l (iOS VoiceOver `ActiveSessionsView` : icône type d'appareil (unique `.system`, badge fixe 32×32) → `.accessibilityHidden` + commentaire gel 82i ; bloc d'infos session → `.accessibilityElement(children: .combine)` (résumé unique, bouton révoquer distinct) ; titre custom → `.accessibilityAddTraits(.isHeader)` ; 1 fichier, 0 logique/0 test/0 clé i18n ; gate = CI iOS Tests) | ⏳ | ⏳ |
