@@ -93,6 +93,8 @@ struct ReportMessageSheet: View {
                     .font(.callout)
                     .foregroundColor(isSelected ? accent : theme.textSecondary)
                     .frame(width: 24)
+                    // Decorative — the reason label/description carry the meaning.
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(type.label)
@@ -111,6 +113,8 @@ struct ReportMessageSheet: View {
                         .font(.title3)
                         .foregroundColor(accent)
                         .transition(.scale.combined(with: .opacity))
+                        // Selection is announced via the row's .isSelected trait.
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 14)
@@ -124,6 +128,10 @@ struct ReportMessageSheet: View {
                     )
             )
         }
+        // VoiceOver announces "Selected" for the active reason — selection was
+        // conveyed only by the checkmark glyph + accent colour before (violates
+        // "never rely on colour alone"). The row already reads label + description.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

@@ -14,6 +14,36 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 165i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **165i (terminée, branche `claude/laughing-thompson-ek97fy`, base `main` HEAD `efedb69`)** :
+>   Accessibilité VoiceOver du **sélecteur de motif de signalement** — composant `reportTypeRow`
+>   partagé par `ReportMessageSheet` **et** `MessageReportDetailView` (2 fichiers, défaut identique).
+>   L'**état sélectionné** d'un motif était porté **uniquement** par la coche `checkmark.circle.fill`
+>   + la couleur accent (violation « never rely on colour alone »). Fix : trait
+>   `.accessibilityAddTraits(isSelected ? .isSelected : [])` sur la rangée → VoiceOver annonce
+>   « Sélectionné » ; icône de motif + checkmark passés `.accessibilityHidden(true)`. Typographie
+>   déjà sémantique (0 Dynamic Type). **2 fichiers, 0 logique, 0 test/clé i18n neuve, 0 changement
+>   visuel.** Guard test `test_report_requestsConfirmation_beforeSubmit` intact (n'assert que sur
+>   la confirmation/`onReport`). 0 commit iOS récent sur `main` → 0 contention. Gate = CI `iOS Tests`.
+> - **⚠️ Sélecteur de motif de signalement SOLDÉ** (VoiceOver) : ne plus reprendre. **Dette notée** :
+>   `reportTypeRow` dupliqué entre les 2 surfaces → candidat d'unification `ReportReasonRow` (refactor
+>   structurel, hors périmètre a11y).
+> - **Base de départ 166i : `main` HEAD**. Le lot Dynamic Type `.system` est **tari** (traîne = glyphes
+>   décoratifs/cadres fixes déjà figés & annotés). Poursuivre sur la **sémantique VoiceOver** des états
+>   portés par icône/couleur seule. **Cibles vérifiées (audit 165i, labels manquants sur icônes nues)** :
+>   (a) `ThreadView` — **bouton d'envoi `paperplane.fill` sans `.accessibilityLabel`** (l.208-225,
+>   action primaire de l'écran non labellisée ; le bouton retour l.51 en a un) + titre « Discussion »
+>   l.55 sans `.isHeader` → **TOP PICK 166i** ; (b) `ContactsListTab` (l.122) + (c) `DiscoverTab`
+>   (l.295) — bouton effacer-recherche `xmark.circle.fill` sans label (le pattern identique de
+>   `NewConversationView`/`EmojiPickerSheet`/`SharePickerView` porte déjà `common.clearSearch`) →
+>   lot « barres de recherche contacts » batchable. Sinon : **passe state-of-the-art** (hexes inline
+>   vs tokens).
+>   **Déjà soldés (audit 165i, ne pas reprendre)** : CommunityLinksView, LinksHubView, LinkPreviewCard,
+>   StarredMessagesView, LanguagePickerSheet, EmojiPickerSheet, SharePickerView, EditPostSheet,
+>   NewConversationView, VoiceProfile{Manage,Wizard}View, iPadRootView+Panels, ReportUserView,
+>   ConversationMediaGalleryView, PostTranslationSheet, UserStatsView, MediaDownloadSettingsView,
+>   PrivacySettingsView, AboutView, DeleteAccountView, MagicLinkView, SupportView, CallsTab.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).
