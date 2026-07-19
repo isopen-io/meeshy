@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -68,7 +69,7 @@ fun StatusBarView(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val cells = remember(state) { buildStatusBarCells(state) }
     var selected by remember { mutableStateOf<StatusEntry?>(null) }
-    var showComposer by remember { mutableStateOf(false) }
+    var composerSeed by remember { mutableStateOf<StatusComposerDraft?>(null) }
 
     LazyRow(
         modifier = modifier.height(STATUS_BAR_HEIGHT),
@@ -90,7 +91,7 @@ fun StatusBarView(
                     onClick = { selected = cell.entry },
                 )
 
-                StatusBarCell.AddStatus -> AddStatusPill(onClick = { showComposer = true })
+                StatusBarCell.AddStatus -> AddStatusPill(onClick = { composerSeed = StatusComposerDraft() })
 
                 StatusBarCell.ErrorRetry -> ErrorRetryPill(onClick = viewModel::refresh)
 
@@ -120,16 +121,33 @@ fun StatusBarView(
     }
 
     selected?.let { entry ->
-        StatusPopover(entry = entry, onDismiss = { selected = null })
+        val isOwn = entry.id == state.myStatus?.id
+        StatusPopover(
+            entry = entry,
+            isOwn = isOwn,
+            onRepublish = {
+                selected = null
+                composerSeed = StatusComposerDraft.republish(entry)
+            },
+            onDismiss = { selected = null },
+        )
     }
 
-    if (showComposer) {
+    composerSeed?.let { seed ->
         StatusComposerSheet(
-            onPublish = { emoji, content, visibility ->
-                viewModel.setStatus(emoji = emoji, content = content, visibility = visibility)
-                showComposer = false
+            initialDraft = seed,
+            onPublish = { request ->
+                viewModel.setStatus(
+                    emoji = request.emoji,
+                    content = request.content,
+                    visibility = request.visibility,
+                    audioUrl = request.audioUrl,
+                    repostOfId = request.repostOfId,
+                    viaUsername = request.viaUsername,
+                )
+                composerSeed = null
             },
-            onDismiss = { showComposer = false },
+            onDismiss = { composerSeed = null },
         )
     }
 }
@@ -234,9 +252,14 @@ private fun ErrorRetryPill(onClick: () -> Unit) {
 // MARK: - Popover
 
 @Composable
-private fun StatusPopover(entry: StatusEntry, onDismiss: () -> Unit) {
+private fun StatusPopover(
+    entry: StatusEntry,
+    isOwn: Boolean,
+    onRepublish: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val now = remember(entry.id) { System.currentTimeMillis() }
-    val model = remember(entry, now) { statusPopoverModel(entry, now) }
+    val model = remember(entry, now, isOwn) { statusPopoverModel(entry, now, isOwn) }
     Popup(
         alignment = Alignment.TopCenter,
         onDismissRequest = onDismiss,
@@ -246,15 +269,18 @@ private fun StatusPopover(entry: StatusEntry, onDismiss: () -> Unit) {
             shape = RoundedCornerShape(MeeshyRadius.lg),
             modifier = Modifier
                 .padding(top = STATUS_BAR_HEIGHT)
-                .widthIn(min = 160.dp, max = 260.dp)
-                .clickable(onClick = onDismiss),
+                .widthIn(min = 160.dp, max = 260.dp),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
                 modifier = Modifier.padding(MeeshySpacing.lg),
             ) {
-                Text(text = model.moodEmoji, style = MaterialTheme.typography.headlineMedium)
+                Text(
+                    text = model.moodEmoji,
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.clickable(onClick = onDismiss),
+                )
                 Text(
                     text = model.username,
                     style = MaterialTheme.typography.titleSmall,
@@ -281,8 +307,37 @@ private fun StatusPopover(entry: StatusEntry, onDismiss: () -> Unit) {
                     fontWeight = FontWeight.Medium,
                     color = MeeshyTheme.tokens.textSecondary,
                 )
+                if (model.canRepublish) {
+                    RepublishAction(onClick = onRepublish)
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun RepublishAction(onClick: () -> Unit) {
+    val label = stringResource(R.string.status_bar_republish)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        modifier = Modifier
+            .padding(top = MeeshySpacing.xs)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = label },
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Repeat,
+            contentDescription = null,
+            tint = MeeshyPalette.Indigo400,
+            modifier = Modifier.size(14.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Medium,
+            color = MeeshyPalette.Indigo400,
+        )
     }
 }
 

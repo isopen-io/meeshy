@@ -189,7 +189,7 @@ class StatusesViewModelTest {
     fun `setStatus prepends the created status to the bar`() = runTest {
         coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
             page(entry("a"), hasMore = false)
-        coEvery { repository.create(any(), any(), any(), any(), any()) } returns
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
             NetworkResult.Success(entry("new", userId = "me-id", emoji = "🔥"))
 
         val vm = viewModel(currentUser = user("me-id"))
@@ -200,14 +200,38 @@ class StatusesViewModelTest {
             assertThat(s.statuses.map { it.id }).containsExactly("new", "a").inOrder()
             assertThat(s.myStatus?.id).isEqualTo("new")
         }
-        coVerify(exactly = 1) { repository.create("🔥", null, "PUBLIC", null, null) }
+        coVerify(exactly = 1) { repository.create("🔥", null, "PUBLIC", null, null, null) }
+    }
+
+    @Test
+    fun `setStatus forwards the repost attribution when republishing`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), hasMore = false)
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
+            NetworkResult.Success(entry("re", userId = "me-id", emoji = "🎉"))
+
+        val vm = viewModel(currentUser = user("me-id"))
+        vm.setStatus(
+            emoji = "🎉",
+            content = "party time",
+            audioUrl = "https://cdn/mood.m4a",
+            repostOfId = "src-1",
+            viaUsername = "alice",
+        )
+
+        vm.state.test {
+            assertThat(awaitItem().statuses.map { it.id }).containsExactly("re", "a").inOrder()
+        }
+        coVerify(exactly = 1) {
+            repository.create("🎉", "party time", "PUBLIC", "https://cdn/mood.m4a", "src-1", "alice")
+        }
     }
 
     @Test
     fun `setStatus failure surfaces the error and leaves the bar unchanged`() = runTest {
         coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
             page(entry("a"), hasMore = false)
-        coEvery { repository.create(any(), any(), any(), any(), any()) } returns
+        coEvery { repository.create(any(), any(), any(), any(), any(), any()) } returns
             NetworkResult.Failure(ApiError("nope"))
 
         val vm = viewModel()

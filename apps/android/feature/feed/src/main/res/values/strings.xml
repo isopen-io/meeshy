@@ -68,7 +68,9 @@
     <string name="status_bar_retry">Retry loading statuses</string>
     <string name="status_bar_via">via @%1$s</string>
     <string name="status_bar_expired">Expired</string>
+    <string name="status_bar_republish">Republish</string>
     <string name="status_composer_title">Status</string>
+    <string name="status_composer_republishing">Republishing @%1$s</string>
     <string name="status_composer_mood_question">How are you feeling?</string>
     <string name="status_composer_placeholder">How are you doing?</string>
     <string name="status_composer_publish">Publish</string>

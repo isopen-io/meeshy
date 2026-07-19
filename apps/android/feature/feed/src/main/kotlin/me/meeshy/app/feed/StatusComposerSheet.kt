@@ -48,16 +48,19 @@ import me.meeshy.ui.theme.MeeshyTheme
  * char cap, trimmed body, emoji toggle) lives in the pure [StatusComposerDraft];
  * this Composable holds one in `remember` and stays coverage-exempt glue.
  *
- * [onPublish] receives the values the ViewModel's `setStatus` expects — the picked
- * emoji, the trimmed body (`null` when blank), and the visibility wire string.
+ * [initialDraft] seeds the composer — a fresh [StatusComposerDraft] for a new mood,
+ * or [StatusComposerDraft.republish] to republish another user's status (emoji/body/
+ * attribution pre-filled). [onPublish] receives the full [StatusPublishRequest] the
+ * ViewModel's `setStatus` expects, carrying any republish attribution.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatusComposerSheet(
-    onPublish: (emoji: String, content: String?, visibility: String) -> Unit,
+    onPublish: (StatusPublishRequest) -> Unit,
     onDismiss: () -> Unit,
+    initialDraft: StatusComposerDraft = StatusComposerDraft(),
 ) {
-    var draft by remember { mutableStateOf(StatusComposerDraft()) }
+    var draft by remember { mutableStateOf(initialDraft) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -73,11 +76,17 @@ fun StatusComposerSheet(
             Header(
                 canPublish = draft.canPublish,
                 onClose = onDismiss,
-                onPublish = {
-                    val emoji = draft.selectedEmoji ?: return@Header
-                    onPublish(emoji, draft.trimmedContent, draft.visibility.wire)
-                },
+                onPublish = { draft.publishRequest()?.let(onPublish) },
             )
+
+            draft.viaUsername?.takeIf { draft.isRepublish }?.let { via ->
+                Text(
+                    text = stringResource(R.string.status_composer_republishing, via),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MeeshyPalette.Indigo400,
+                )
+            }
 
             Text(
                 text = stringResource(R.string.status_composer_mood_question),

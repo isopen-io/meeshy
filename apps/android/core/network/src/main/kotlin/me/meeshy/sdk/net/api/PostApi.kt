@@ -27,6 +27,7 @@ data class CreatePostRequest(
     val originalLanguage: String? = null,
     val mobileTranscription: MobileTranscriptionPayload? = null,
     val repostOfId: String? = null,
+    val viaUsername: String? = null,
 )
 
 /** Mobile transcription payload — port of MobileTranscriptionPayload (ServiceModels.swift). */

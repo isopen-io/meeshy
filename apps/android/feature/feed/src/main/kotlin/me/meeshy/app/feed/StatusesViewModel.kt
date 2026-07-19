@@ -170,6 +170,7 @@ class StatusesViewModel @Inject constructor(
         visibility: String = "PUBLIC",
         audioUrl: String? = null,
         repostOfId: String? = null,
+        viaUsername: String? = null,
     ) {
         status.update { it.copy(error = null) }
         viewModelScope.launch {
@@ -180,6 +181,7 @@ class StatusesViewModel @Inject constructor(
                     visibility = visibility,
                     audioUrl = audioUrl,
                     repostOfId = repostOfId,
+                    viaUsername = viaUsername,
                 )
                 when (result) {
                     is NetworkResult.Success -> listState.update { it.created(result.data) }
