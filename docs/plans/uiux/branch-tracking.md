@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
+>   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
+>   conversation, composer post feed, feed root). La carte était déjà 100 % Dynamic Type (pourcentage,
+>   compteur fichiers, octets en `MeeshyFont.relative`). Deux déficits : (1) **1 chaîne FR brute non
+>   localisée** `"\(completedFiles)/\(totalFiles) fichiers"` (seule string du fichier hors idiome
+>   `String(localized:defaultValue:bundle:)`) → `filesCountLabel` (clé `upload.progress.files-count`,
+>   défaut FR inline) ; (2) **0 accessibilité sur un indicateur de progression** — lecture VoiceOver
+>   fragmentée (flèche déco + nom fichier + `42%` + `2/5 fichiers` + octets), progression portée
+>   **uniquement** par la largeur du remplissage dégradé. Fix = split label/valeur idiomatique (comme
+>   159i) : `.accessibilityElement(children: .ignore)` + `.accessibilityLabel` (« Envoi des fichiers »,
+>   stable) + `.accessibilityValue` (phrase pleine : « 42 %, 2 fichiers sur 5 envoyés, IMG.jpg ») +
+>   `.accessibilityAddTraits(isUploading ? .updatesFrequently : [])` (ré-annonce tant que < 100 %).
+>   1 fichier, 0 logique, 0 test. 3 clés i18n neuves `upload.progress.*` en `defaultValue` inline
+>   (pas d'édit `.xcstrings`). Aucun test ne référence la vue (grep = 0) ; 3 call sites inchangés.
+>   Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `UploadProgressBar` Localisation + VoiceOver structure SOLDÉ** : ne plus reprendre (Dynamic Type
+>   déjà sémantique, split label/valeur posé, glyphe flèche figé volontaire borné à la hauteur de rangée).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).
