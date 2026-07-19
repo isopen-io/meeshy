@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **167i (terminée, branche `claude/laughing-thompson-6l6vkb`, base `main` HEAD `efedb69e4`)** :
+>   adoption du composant natif d'état vide dans `BookmarksView` (écran Favoris). L'état vide
+>   était une `VStack` faite main (glyphe `bookmark` figé `.system(size: 48)` + 2 `Text` en
+>   `theme.text*`) → **`AdaptiveContentUnavailableView`** (atome de compat SDK : vrai
+>   `ContentUnavailableView` système sur iOS 17+, repli fidèle iOS 16), même idiome que
+>   `FeedView` (#909) et `CreateShareLinkView` (#576). Gains : Dynamic Type complet (glyphe +
+>   texte scalent ensemble, l'icône 48pt ne scalait pas), regroupement VoiceOver natif,
+>   couleurs `.secondary` sémantiques, **design system réutilisé** (−12 lignes dupliquées).
+>   Clés `bookmarks.empty.title/subtitle` **réutilisées** → 0 clé i18n neuve. `import MeeshyUI`
+>   explicite (parité `FeedView`/165i). 1 fichier Swift, 0 logique, 0 test neuf. `theme` reste
+>   utilisé (`backgroundGradient`). **0 contention** (PR iOS ouvertes 144i–166i sur d'autres
+>   surfaces). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `BookmarksView` SOLDÉ (état vide)** : ne plus reprendre — composant natif adopté.
+> - **Piste design-system ouverte** : ~20 fichiers gardent un état vide hand-rolled (`private var
+>   emptyState`) alors que seuls `FeedView`, `CreateShareLinkView` et désormais `BookmarksView`
+>   utilisent `AdaptiveContentUnavailableView`. Cible d'itérations futures (une surface/itération,
+>   croiser `list_pull_requests`) : migrer chaque état vide restant vers l'atome natif.
+> - **Base de départ 168i : `main` HEAD** (toujours resync ; supprimer la branche mergée).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).

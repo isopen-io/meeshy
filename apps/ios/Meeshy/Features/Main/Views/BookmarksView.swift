@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct BookmarksView: View {
     @StateObject private var viewModel = BookmarksViewModel()
@@ -84,20 +85,17 @@ struct BookmarksView: View {
         }
     }
 
+    // Empty state via the native `ContentUnavailableView` (iOS 17+) through the
+    // SDK compat atom — same idiom as FeedView / CreateShareLinkView. Gives free
+    // Dynamic Type scaling (the old hand-rolled 48pt glyph was frozen), native
+    // VoiceOver grouping and HIG-consistent layout, while reusing the existing
+    // `bookmarks.empty.*` localization keys (0 new i18n keys).
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bookmark")
-                .font(.system(size: 48))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-            Text(String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main))
-                .font(.body.weight(.semibold))
-                .foregroundColor(theme.textSecondary)
-            Text(String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts que vous sauvegardez apparaitront ici", bundle: .main))
-                .font(.subheadline)
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-        }
+        AdaptiveContentUnavailableView(
+            String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main),
+            systemImage: "bookmark",
+            description: Text(String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts que vous sauvegardez apparaitront ici", bundle: .main))
+        )
         .padding(.top, 80)
     }
 }
