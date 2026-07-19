@@ -86,6 +86,8 @@ struct BookmarksView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
+            // Figé : icône héros décorative d'état vide (≥40pt) — déjà masquée à
+            // VoiceOver, le sens est porté par le titre + sous-titre ci-dessous.
             Image(systemName: "bookmark")
                 .font(.system(size: 48))
                 .foregroundColor(theme.textMuted)
@@ -99,5 +101,7 @@ struct BookmarksView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(.top, 80)
+        // Titre + sous-titre lus comme une seule annonce VoiceOver (icône masquée).
+        .accessibilityElement(children: .combine)
     }
 }

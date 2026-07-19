@@ -14,6 +14,29 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 161i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **161i (terminée, branche `claude/laughing-thompson-f7d2yn`, base `main` HEAD)** :
+>   Dernier reliquat a11y-structure de `BookmarksView` (écran « Favoris »). État vide `VStack` →
+>   `.accessibilityElement(children: .combine)` (titre + sous-titre en une annonce) + commentaire de gel
+>   doctrine sur l'icône héros 48pt (déjà `.accessibilityHidden`). Typographie déjà Dynamic Type, en-tête
+>   natif `.navigationTitle`, rangées `FeedPostCard` (128i). 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   Aucun test ne référence la vue. Gate = CI `iOS Tests`. PR à venir.
+>   *(Numéro 161i choisi pour éviter la collision : les blocs 143i→160i sont déjà pris par des sessions
+>   parallèles ; mon 142i `FriendRequestListView` est MERGÉ #1970.)*
+> - **⚠️ `BookmarksView` SOLDÉ**.
+> - **⚠️⚠️ TARISSEMENT DU FILON a11y-structure sur écrans isolés** : vérifié 161i, les candidats restants
+>   sont **déjà state-of-the-art** — `StarredMessagesView` (rangée `combine`+`isButton`+`hint`+`action`,
+>   toolbar labellisée), `SupportView`/`UserStatsView` (glyphes déjà figés-commentés + masqués). Le double
+>   filon (Dynamic Type + a11y-structure par écran) est **quasi épuisé**.
+> - **PIVOT recommandé → passes state-of-the-art plus larges** :
+>   1. **Design-system** : extraire un `EmptyStateView` réutilisable (icône + titre + sous-titre + CTA
+>      optionnel) — le pattern d'état vide est dupliqué à l'identique dans `BookmarksView`,
+>      `FriendRequestListView`, `StarredMessagesView`, etc. Fort ROI (dédup + cohérence + a11y centralisée).
+>      Envisager `ContentUnavailableView` natif (iOS 17+) avec fallback iOS 16.
+>   2. **Composants natifs** : swipe actions, `ShareLink`, `.searchable`, `.refreshable` là où custom.
+>   3. **HIG** : hiérarchie d'actions, touch targets, cohérence de toolbar.
+>   Toujours vérifier l'absence de contention avec les PR iOS ouvertes avant de choisir la surface.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).
