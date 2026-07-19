@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **167i (en cours, branche `claude/laughing-thompson-bb8upc`, base `main` HEAD `019762584`)** :
+>   i18n + VoiceOver de `MessageEditsDetailView` (onglet « Historique d'édition » du message detail sheet).
+>   **Défaut i18n corrigé** : 6 littéraux français en dur → `String(localized:defaultValue:)` (namespace
+>   `edits.*`, 8 clés neuves). **Rendu FR inchangé** (defaultValue == littéral d'origine, ASCII-exact, 0 diff
+>   base-locale). Pluralisation sans stringsdict → helper `revisionCountLabel` sélectionne
+>   `edits.history.detail.one/.other` par count (style `forward.members-count`). VoiceOver : icône bannière
+>   décorative + glyphe état vide + badge count redondant masqués ; `.combine` sur bannière, chaque rangée
+>   révision, état vide. Dynamic Type déjà correct (polices sémantiques). 1 fichier, 0 logique, 0 test neuf.
+>   Contention vérifiée : aucune PR ouverte ne cible ce fichier (166i = `MessageTranscriptionDetailView`
+>   PR #2030, autre fichier). Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `MessageEditsDetailView` i18n+VoiceOver SOLDÉ**. Note dette : copies inline legacy de
+>   `MessageDetailSheet` (editsTabContent…) possiblement même gap de strings dures — sweep candidat.
+> - **160i (✅ MERGÉE PR #2011, merge commit `2e790d4b1`)** : VoiceOver parity de `MessageForwardDetailView`
+>   (réutilisation SSOT `ForwardPickerSheet`, 0 clé neuve).
+> - **Base de départ 168i : `main` HEAD**. Siblings MessageDetail : `MessageTranscriptionDetailView` pris
+>   (166i #2030). Sinon traîne 1 `.system` untouched (`AudioCarouselView`, `ReelAudioBackdrop`,
+>   `VideoLegacySupport`, `MessageEffectModifiers`…), ou **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
 > - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
 >   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).

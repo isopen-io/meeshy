@@ -21,8 +21,12 @@ struct MessageEditsDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             timelineBanner(
                 icon: "pencil.and.list.clipboard",
-                text: revisions.isEmpty ? "Aucune modification" : "Historique",
-                detail: revisions.isEmpty ? "Ce message n'a pas ete modifie" : "\(revisions.count) version\(revisions.count > 1 ? "s" : "") precedente\(revisions.count > 1 ? "s" : "")",
+                text: revisions.isEmpty
+                    ? String(localized: "edits.empty.title", defaultValue: "Aucune modification", bundle: .main)
+                    : String(localized: "edits.history.title", defaultValue: "Historique", bundle: .main),
+                detail: revisions.isEmpty
+                    ? String(localized: "edits.empty.detail", defaultValue: "Ce message n'a pas ete modifie", bundle: .main)
+                    : revisionCountLabel(revisions.count),
                 count: revisions.isEmpty ? nil : "\(revisions.count)",
                 accent: accent
             )
@@ -30,7 +34,7 @@ struct MessageEditsDetailView: View {
             if revisions.isEmpty {
                 emptyStateView(
                     icon: "pencil.slash",
-                    text: "L'historique des modifications apparait ici",
+                    text: String(localized: "edits.empty.placeholder", defaultValue: "L'historique des modifications apparait ici", bundle: .main),
                     accent: accent
                 )
             } else {
@@ -38,7 +42,7 @@ struct MessageEditsDetailView: View {
                 // sees the "as-is" content as the anchor, then the
                 // chronological revisions below it.
                 editRevisionRow(
-                    header: "Actuel",
+                    header: String(localized: "edits.current", defaultValue: "Actuel", bundle: .main),
                     content: message.content,
                     timestamp: message.editedAt ?? message.updatedAt,
                     accent: accent,
@@ -47,7 +51,7 @@ struct MessageEditsDetailView: View {
 
                 ForEach(Array(revisions.enumerated()), id: \.element.id) { index, revision in
                     editRevisionRow(
-                        header: "Version \(revisions.count - index)",
+                        header: String(format: String(localized: "edits.version", defaultValue: "Version %d", bundle: .main), revisions.count - index),
                         content: revision.content,
                         timestamp: revision.editedAt,
                         accent: accent,
@@ -57,6 +61,14 @@ struct MessageEditsDetailView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Localized "N version(s) précédente(s)" summary — singular/plural key
+    /// chosen by count (the app has no stringsdict; it selects keys inline).
+    private func revisionCountLabel(_ count: Int) -> String {
+        count > 1
+            ? String(format: String(localized: "edits.history.detail.other", defaultValue: "%d versions precedentes", bundle: .main), count)
+            : String(format: String(localized: "edits.history.detail.one", defaultValue: "%d version precedente", bundle: .main), count)
     }
 
     // MARK: - Rows
@@ -91,6 +103,7 @@ struct MessageEditsDetailView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Shared Components (copied from MessageDetailSheet)
@@ -100,6 +113,7 @@ struct MessageEditsDetailView: View {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(text)
@@ -122,6 +136,7 @@ struct MessageEditsDetailView: View {
                         Capsule()
                             .fill(accent.opacity(0.12))
                     )
+                    .accessibilityHidden(true)
             }
         }
         .padding(12)
@@ -133,6 +148,7 @@ struct MessageEditsDetailView: View {
                         .stroke(accent.opacity(0.12), lineWidth: 0.5)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
@@ -140,12 +156,14 @@ struct MessageEditsDetailView: View {
             Image(systemName: icon)
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Formatting
