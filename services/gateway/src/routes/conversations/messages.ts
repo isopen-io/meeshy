@@ -15,7 +15,7 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
-import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
+import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -1175,7 +1175,7 @@ export function registerMessagesRoutes(
             username: message.sender.user?.username ?? message.sender.username ?? null,
             // T16 — firstName/lastName were serialized but read by no client and
             // are no longer fetched (messageSenderUserSelect trims them).
-            displayName: message.sender.displayName ?? message.sender.user?.displayName ?? null,
+            displayName: resolveParticipantDisplayName(message.sender),
             avatar: resolveParticipantAvatar(message.sender),
             isOnline: senderPresenceVis.get(message.sender.userId ?? '')?.showOnline === false
               ? false
@@ -1211,7 +1211,7 @@ export function registerMessagesRoutes(
             sender: replySender ? {
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,
-              displayName: replySender.displayName ?? replySender.user?.displayName ?? null,
+              displayName: resolveParticipantDisplayName(replySender),
               avatar: resolveParticipantAvatar(replySender),
             } : null,
           };
@@ -1276,7 +1276,7 @@ export function registerMessagesRoutes(
                 sender: original.sender ? {
                   ...original.sender,
                   username: (original.sender as any).user?.username ?? (original.sender as any).username ?? null,
-                  displayName: (original.sender as any).displayName ?? (original.sender as any).user?.displayName ?? null,
+                  displayName: resolveParticipantDisplayName(original.sender as any),
                   avatar: resolveParticipantAvatar(original.sender as any),
                 } : null,
                 attachments: original.attachments
@@ -2317,7 +2317,7 @@ export function registerMessagesRoutes(
           sender: sender ? {
             id: sender.id,
             userId: sender.userId,
-            displayName: sender.displayName ?? sender.user?.displayName ?? null,
+            displayName: resolveParticipantDisplayName(sender),
             avatar: resolveParticipantAvatar(sender),
             type: sender.type,
             username: sender.user?.username ?? null,
@@ -2633,7 +2633,7 @@ export function registerMessagesRoutes(
           sender: sender ? {
             id: sender.id,
             userId: sender.userId,
-            displayName: sender.displayName ?? sender.user?.displayName ?? null,
+            displayName: resolveParticipantDisplayName(sender),
             avatar: resolveParticipantAvatar(sender),
             username: sender.user?.username ?? null,
             isOnline: searchPresenceVis.get(sender.userId ?? '')?.showOnline === false

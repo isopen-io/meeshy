@@ -824,8 +824,9 @@ struct MessageViewsDetailView: View {
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 28, weight: .light))
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
@@ -837,8 +838,9 @@ struct MessageViewsDetailView: View {
     private func retryableErrorView(accent: Color) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.slash")
-                .font(.system(size: 28, weight: .light))
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)

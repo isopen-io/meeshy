@@ -1,5 +1,5 @@
 # Configuration d'environnement
-python-dotenv==1.1.1
+python-dotenv==1.2.2
 
 # Framework web
 fastapi==0.139.0
@@ -57,7 +57,7 @@ transformers==5.13.1
 redis==8.0.1
 asyncpg==0.30.0
 aiosqlite==0.20.0
-dnspython==2.7.0
+dnspython==2.8.0
 
 # Détection de langue et analyse de texte
 langdetect==1.0.9

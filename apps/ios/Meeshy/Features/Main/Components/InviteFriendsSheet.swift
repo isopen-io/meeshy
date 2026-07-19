@@ -130,6 +130,7 @@ struct InviteFriendsSheet: View {
                     Image(systemName: conversationIcon)
                         .font(.system(size: 18, weight: .semibold)) // glyph in fixed 44pt avatar circle — kept fixed to avoid clipping at large Dynamic Type
                         .foregroundColor(Color(hex: conversation.accentColor))
+                        .accessibilityHidden(true) // decorative avatar glyph — the conversation name carries the meaning
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -144,6 +145,7 @@ struct InviteFriendsSheet: View {
                             .foregroundColor(theme.textSecondary)
                         Text("·")
                             .foregroundColor(theme.textMuted)
+                            .accessibilityHidden(true) // decorative separator — not announced to VoiceOver
                         Text(conversation.type.displayName)
                             .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textSecondary)
@@ -152,6 +154,7 @@ struct InviteFriendsSheet: View {
 
                 Spacer()
             }
+            .accessibilityElement(children: .combine) // header reads as one label: name, member count, type
 
             // Editable invite message
             VStack(alignment: .leading, spacing: 4) {
@@ -270,6 +273,39 @@ struct InviteFriendsSheet: View {
             Spacer()
         }
         .padding(.horizontal, 4)
+        // The permission glyphs convey state by icon + color only — invisible to VoiceOver.
+        // Collapse the row into one spoken summary of the expiration + enabled permissions.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(optionsSummaryAccessibilityLabel)
+    }
+
+    private var optionsSummaryAccessibilityLabel: String {
+        var permissions: [String] = []
+        if allowMessages { permissions.append(String(localized: "invite.perm.messages", defaultValue: "Messages", bundle: .main)) }
+        if allowImages { permissions.append(String(localized: "invite.perm.images", defaultValue: "Images", bundle: .main)) }
+        if allowFiles { permissions.append(String(localized: "invite.perm.files", defaultValue: "Fichiers", bundle: .main)) }
+        if allowHistory { permissions.append(String(localized: "invite.perm.history", defaultValue: "Historique", bundle: .main)) }
+
+        let expiration = String(
+            localized: "invite.a11y.summary.expiration",
+            defaultValue: "Expiration : \(expirationOption.label)",
+            bundle: .main
+        )
+
+        guard !permissions.isEmpty else {
+            return String(
+                localized: "invite.a11y.summary.noPermissions",
+                defaultValue: "\(expiration). Aucun contenu autorisé",
+                bundle: .main
+            )
+        }
+
+        let list = ListFormatter.localizedString(byJoining: permissions)
+        return String(
+            localized: "invite.a11y.summary.permissions",
+            defaultValue: "\(expiration). Contenus autorisés : \(list)",
+            bundle: .main
+        )
     }
 
     // MARK: - Share Button

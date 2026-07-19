@@ -43,27 +43,27 @@ public struct JoinLinkPreviewView: View {
             )
             .frame(height: 160)
 
-            HStack(alignment: .bottom, spacing: 14) {
+            HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
                 conversationAvatar
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(linkInfo.conversation.title ?? String(localized: "joinFlow.preview.defaultTitle", defaultValue: "Conversation", bundle: .module))
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(2)
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xs + 2) {
                         Image(systemName: conversationTypeIcon)
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(MeeshyFont.relative(11, weight: .semibold))
                             .foregroundColor(accent)
                         Text(conversationTypeLabel)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.bottom, MeeshySpacing.lg)
         }
     }
 
@@ -80,57 +80,57 @@ public struct JoinLinkPreviewView: View {
                 .frame(width: 60, height: 60)
 
             Text(avatarInitials)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
-        .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 8, x: 0, y: 4)
+        .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, x: 0, y: 4)
     }
 
     // MARK: - Details
 
     private var conversationDetails: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             if let name = linkInfo.name, !name.isEmpty {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "link")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(accent)
                     Text(name)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
             }
 
             if let desc = linkInfo.description, !desc.isEmpty {
                 Text(desc)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(4)
             }
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xs + 2) {
                 Image(systemName: "person.fill")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
                 Text("Invite par \(linkInfo.creator.name)")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textSecondary)
             }
 
             if let expiresAt = linkInfo.expiresAt {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xs + 2) {
                     Image(systemName: "clock")
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(MeeshyColors.warning)
                     Text("Expire \(relativeDate(expiresAt))")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(MeeshyColors.warning)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.lg)
     }
 
     // MARK: - Stats
@@ -163,27 +163,27 @@ public struct JoinLinkPreviewView: View {
                 label: String(localized: "joinFlow.preview.members", defaultValue: "Membres", bundle: .module)
             )
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
         )
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.xl)
     }
 
     private func statItem(icon: String, value: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(accent)
                 Text(value)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(18, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
             }
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -192,12 +192,12 @@ public struct JoinLinkPreviewView: View {
     // MARK: - Requirements
 
     private var requirementsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if linkInfo.requireAccount || linkInfo.requireNickname || linkInfo.requireEmail || linkInfo.requireBirthday {
                 Text(String(localized: "joinFlow.preview.requiredInfo", defaultValue: "Informations requises", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textMuted)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, MeeshySpacing.xs)
 
                 if linkInfo.requireAccount {
                     requirementBadge(icon: "person.crop.circle", text: String(localized: "joinFlow.preview.accountRequired", defaultValue: "Compte requis", bundle: .module), color: "FF6B6B")
@@ -214,34 +214,34 @@ public struct JoinLinkPreviewView: View {
             }
 
             if !linkInfo.allowedLanguages.isEmpty {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xs + 2) {
                     Image(systemName: "globe")
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
                     Text("Langues: \(linkInfo.allowedLanguages.joined(separator: ", "))")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.xl)
     }
 
     private func requirementBadge(icon: String, text: String, color: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(text)
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(Color(hex: color).opacity(isDark ? 0.12 : 0.08))
         )
     }
@@ -249,39 +249,39 @@ public struct JoinLinkPreviewView: View {
     // MARK: - Join Button
 
     private var joinButton: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             if linkInfo.requireAccount {
                 Text(String(localized: "joinFlow.preview.accountRequiredMessage", defaultValue: "Un compte Meeshy est requis pour rejoindre cette conversation", bundle: .module))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, MeeshySpacing.xl)
             } else {
                 Button(action: onJoin) {
-                    HStack(spacing: 10) {
+                    HStack(spacing: MeeshySpacing.sm + 2) {
                         Image(systemName: "arrow.right.circle.fill")
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(18))
                         Text(String(localized: "joinFlow.preview.joinButton", defaultValue: "Rejoindre la conversation", bundle: .module))
-                            .font(.system(size: 16, weight: .bold))
+                            .font(MeeshyFont.relative(16, weight: .bold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, MeeshySpacing.lg)
                     .background(MeeshyColors.brandGradient)
-                    .cornerRadius(16)
-                    .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 12, x: 0, y: 6)
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                    .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.strong.radius, x: 0, y: 6)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
             }
 
             if let maxUses = linkInfo.maxUses {
                 Text("\(linkInfo.currentUses)/\(maxUses) utilisations")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
         }
-        .padding(.top, 28)
-        .padding(.bottom, 32)
+        .padding(.top, MeeshySpacing.xxl + MeeshySpacing.xs)
+        .padding(.bottom, MeeshySpacing.xxxl)
     }
 
     // MARK: - Helpers

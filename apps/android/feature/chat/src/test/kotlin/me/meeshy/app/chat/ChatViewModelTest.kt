@@ -49,6 +49,7 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessagePinnedEvent

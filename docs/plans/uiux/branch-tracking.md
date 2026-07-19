@@ -14,7 +14,210 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
+> - **140i (terminée, branche `claude/laughing-thompson-gx78op`, base `main` HEAD)** :
+>   Dynamic Type de `ThemedBackButton` (`ConversationHelperViews` — bouton retour de conversation).
+>   **1 migré** `.font(.system(size:))` → `MeeshyFont.relative` (chevron.left 16 bold ; slot fixe 40×40
+>   généreux → scale sans clip). **1 figé** commenté **82i/GlobalSearchView** : badge unread 12 bold rounded
+>   (pill compacte `.fixedSize`+`minWidth:22` → scaler casse la capsule et la pousse hors de la pastille
+>   glass). Le libellé ligne 204 était **déjà** `relative`. A11y déjà en place (`Button` labellisé
+>   `a11y.back`/`a11y.back.with_unread` ; badge `.accessibilityHidden(true)`). Logique retour/unread non
+>   touchée. 1 fichier, 0 logique, 0 test/clé i18n neuve. Piste iOS : 0 PR sur ce fichier → 0 contention
+>   (#1961 `modernization-and-quality-audit` = piste distincte). Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ThemedBackButton` Dynamic Type SOLDÉ** : ne plus reprendre le badge unread figé (pill compacte).
+> - **Base de départ 141i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : traîne 2/1 `.system` (`ContextActionMenu`, `SecurityVerificationView`,
+>   `StatsTimelineChart`, `AudioPostComposerView`, `ConversationBackgroundComponents`, `MessageViewsDetailView`,
+>   `StoryExpiredContent`, `StoryViewerContainer`, `BubbleStandardLayout`, `CommunityLinksView`,
+>   `CommunityLinkDetailView`, `ShareLinksView`, `SharePickerView`, `ConversationView+MessageRow`,
+>   `WebRTCVideoView`…), ou **passe state-of-the-art** au tarissement.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 142i, 2026-07-15)** — piste iOS indépendante (suffixe `i`).
+> - **142i (terminée, branche `claude/laughing-thompson-f7d2yn`, base `main` HEAD `424bfed`)** :
+>   Accessibilité VoiceOver-**structure** de `FriendRequestListView` (écran « Demandes d'amis »). Surface
+>   fraîche **déjà 100 % Dynamic Type** côté typographie (polices sémantiques `.body/.headline/.subheadline/
+>   .caption*/.footnote`) → **0 conversion de police**. Le déficit était structurel : (1) icône héros d'état
+>   vide `person.2.slash` annoncée comme bruit → `.accessibilityHidden(true)` + gel doctrine (≥40pt) ;
+>   (2) titre d'écran → `.accessibilityAddTraits(.isHeader)` (rotor En-têtes) ; (3) rangée fragmentée en 4
+>   focus → `VStack` textuel `.accessibilityElement(children: .combine)` (nom + pseudo + intention +
+>   ancienneté en une annonce), boutons Accepter/Refuser laissés actionnables ; (4) état vide regroupé
+>   (`children: .combine`). 1 fichier, 0 logique, 0 test/clé i18n neuve. ViewModel non touché. Aucun test ne
+>   référence la vue. PR iOS ouvertes #1966 (140i, `ThemedBackButton`) / #1968 (141i, `MyStoriesView`) →
+>   **0 contention** (fichiers disjoints). #1961 (audit modernisation) touche `ConversationView`/`LoginView`/
+>   `BubbleStandardLayout`/`AudioCarouselView`/… → **0 contention**. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `FriendRequestListView` SOLDÉ** : typographie déjà sémantique + VoiceOver-structure posée. Ne plus reprendre.
+> - **⚠️ Tarissement de la traîne `.font(.system(size:))`** : les surfaces fraîches restantes sont soit déjà
+>   sémantiques (Dynamic Type), soit uniquement des glyphes figés par doctrine (chrome dans cadre de tap
+>   fixe, héros décoratifs ≥40pt, indicateurs d'état géométriques). Ex. vérifiés 142i : `FeedCommentsSheet`
+>   (5/5 déjà figés+commentés), `VoiceProfileWizardView` (4/4 déjà figés+commentés). **La piste bascule sur
+>   la VoiceOver-structure** (regroupement `children: .combine`, `.isHeader`, décor masqué) et les passes
+>   state-of-the-art (HIG, composants natifs, design-system) sur les écrans frais.
+> - **Base de départ 143i : `main` HEAD**. Candidats frais VoiceOver-structure : `StarredMessagesView`,
+>   `BookmarksView`, `SupportView`, `UserStatsView`. Toujours vérifier l'absence de contention avec les PR
+>   iOS ouvertes avant de choisir.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 143i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **143i (branche `claude/laughing-thompson-rjwver`, base `main` HEAD `0528a90`)** :
+>   Structure VoiceOver de `StoryExpiredContent` (empty-state « story expirée » depuis une notification).
+>   **3 gaps a11y corrigés** : (1) `actorHeader` — l'avatar `MeeshyAvatar` porte déjà `.accessibilityLabel(name)`
+>   → double lecture du nom ; fix = `.accessibilityHidden(true)` sur l'avatar + `.accessibilityElement(children:
+>   .combine)` sur le `HStack` → 1 élément « <nom>, <temps relatif> ». (2) bulle de commentaire décorative
+>   (`bubble.left.fill`) → `.accessibilityHidden(true)` (sens porté par l'excerpt + titre). (3) `titleBlock`
+>   titre + sous-titre → `.combine` (1 phrase). **2 glyphes hero figés 84i** : emoji réaction (64) + bulle (56),
+>   ≥40pt → gardés `.system(size:)` (scaler un hero 64pt casserait le layout empty-state), annotés en place ;
+>   l'emoji garde son label (= contenu de la réaction). **0 migration `relative`**, 0 logique, 0 clé i18n, 0
+>   test neuf (les 2 smoke tests existants `_ = view.body` couvrent les 2 triggers modifiés). PRs iOS ouvertes
+>   #1966/#1968/#1970 (ThemedBackButton/MyStoriesView/FriendRequestListView) → pas `StoryExpiredContent` → 0
+>   contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `StoryExpiredContent` SOLDÉ** : ne plus reprendre (structure VoiceOver faite ; 2 hero glyphes figés 84i).
+> - **Base de départ 144i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : traîne 2/1 `.system` (`BubbleStandardLayout` 2, `StatsTimelineChart` 2,
+>   `AudioPostComposerView`, `ConversationBackgroundComponents`, `MessageViewsDetailView`), ou **passe
+>   state-of-the-art** au tarissement. Éviter les fichiers des PRs iOS ouvertes (#1966/#1968/#1970).
+> **POINTEUR AUTORITAIRE iOS (mis à jour 146i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **146i (terminée, branche `claude/laughing-thompson-5b696g`, base `main` HEAD `bd86317`)** :
+>   A11y VoiceOver + Dynamic Type de `VoiceProfileManageView` (écran de gestion du profil vocal). **Défaut
+>   a11y réel corrigé** : le bouton de fermeture du header (`xmark.circle.fill` 28) n'avait **aucun
+>   `.accessibilityLabel`** → ajout de `common.close` (« Fermer »). Héros `person.wave.2.fill` (64) →
+>   `.accessibilityHidden(true)` (décoratif ≥40pt, doctrine 84i, figé). Glyphe de statut (`statusIcon` 28)
+>   → `MeeshyFont.relative(28)` (scale avec le libellé adjacent) **+** `.accessibilityHidden(true)` (sens
+>   porté par le libellé texte → évite l'annonce redondante du symbole). Carte de statut →
+>   `.accessibilityElement(children: .combine)` (1 arrêt VoiceOver au lieu de 4, aligné sur les toggles du
+>   même fichier). 2 `.system` restants **assumés figés** (close 82i/87i, héros 84i) — annotés + traités
+>   VoiceOver. Statuts distingués par forme du symbole + libellé (pas couleur seule). 1 fichier, 0 logique,
+>   0 test/clé i18n neuve (`common.close` réutilisée). 0 contention : #1961 « Modernize » (get_files
+>   vérifié) + 6 PR a11y ouvertes ne touchent pas ce fichier. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `VoiceProfileManageView` SOLDÉ 146i** : ne plus reprendre (close + héros figés annotés & masqués).
+> - **Base de départ 147i : `main` HEAD**. Candidats frais restants (glyphes SF non traités VoiceOver) :
+>   `AddParticipantSheet`, `IncomingCallView`, `VoiceProfileWizardView`, `InviteFriendsSheet` (déjà annoté),
+>   ou traîne 2/1 `.system`. Sinon **passe state-of-the-art** au tarissement.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 154i, 2026-07-17)** — piste iOS indépendante (suffixe `i`).
+> - **154i (terminée, branche `claude/laughing-thompson-jpq5us`, base `main` HEAD post-#1995)** :
+>   passe VoiceOver + sélection de contenu de `AudioPostComposerView` (composer d'enregistrement
+>   audio + transcription on-device). Surface **fraîche** : jamais auditée a11y (les iters 44/45 n'ont
+>   flaggé que ses 2 washes hex sombres = décision design). Typo **déjà sémantique** (0 `.system(size:)`
+>   à migrer). **5 correctifs additifs** : (1) chip de langue = `.accessibilityLabel(nom complet localisé)`
+>   + `.accessibilityAddTraits(.isSelected)` — la sélection n'était portée que par la couleur (fond
+>   gradient), invisible VoiceOver ; helper `fullDisplayName` calqué sur l'idiome existant du même fichier
+>   (0 clé i18n). (2) `centerContent` décoratif (waveform/sceau/micro/spinner) → `.accessibilityHidden(true)`
+>   (état parlé porté par `durationLabel`). (3) 4 glyphes SF inline décoratifs (globe/text.bubble/triangle
+>   erreur/filtre) → `.accessibilityHidden`. (4) bouton « Plus » ambigu → `.accessibilityLabel("Plus de langues")`
+>   (1 `String(localized:defaultValue:)` inline, 0 xcstrings). (5) texte de transcription = `.textSelection(.enabled)`
+>   (contenu utilisateur copiable, thème 74i/86i/98i). 1 fichier, 0 logique / 0 test / 0 clé xcstrings neuve.
+>   Gate = CI `ios-tests` (env Linux, pas de build Xcode local). PR à venir.
+> - **Numéro 154i** = strictement > plus haut en vol (153i = #1994 `MessageDetailSentimentTab`) pour éviter la collision.
+> - **⚠️ `AudioPostComposerView` VoiceOver/sélection SOLDÉ** : ne plus reprendre (chip `.isSelected`, glyphes déco
+>   masqués, transcription sélectionnable, label « Plus de langues »). Washes sombres = décision design, ne pas convertir.
+> - **Base de départ 155i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private` cross-file),
+>   traîne 2/1 `.system` (`BubbleStandardLayout` — prudent Zero-re-render, `WebRTCVideoView`…), ou passe state-of-the-art.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 158i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **158i (terminée, branche `claude/laughing-thompson-akjplz`, base `main` HEAD `f489355`)** :
+>   Passe **accessibilité VoiceOver** de `SecurityVerificationView` (écran de vérification E2E). Les polices
+>   étaient **déjà** en `MeeshyFont.relative` (aucun `.system` résiduel → mention « traîne `.system` » de ce
+>   fichier **PÉRIMÉE**) ; la lacune réelle était l'a11y. Corrections **purement additives** : 2 glyphes
+>   décoratifs (`lock.shield.fill` 64pt, `hourglass.circle` 40pt) → `.accessibilityHidden(true)` (doctrine
+>   74i/86i) ; QR code → `.accessibilityLabel` (`security.verify.qr.a11y`) ; safety number →
+>   `.accessibilityElement(children:.combine)` + label **épelé chiffre-par-chiffre** (helper pur
+>   `spelledSafetyNumber`) pour comparaison à voix haute ; 2 titres → `.isHeader`. 1 fichier, 0 logique
+>   métier, 0 mutation d'état, 0 test neuf, 1 clé i18n (défaut inline). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `SecurityVerificationView` a11y + Dynamic Type SOLDÉ** : ne plus reprendre (polices déjà `relative`,
+>   VoiceOver complet).
+> - **Base de départ 159i : `main` HEAD**. NB : nombreuses PR iOS ouvertes (140i–157i, branches
+>   `claude/laughing-thompson-*`) non mergées — les ré-inspecter avant de choisir une surface pour éviter la
+>   contention. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private` cross-file) ; sinon traîne
+>   `.system`/a11y (`ContextActionMenu`, `ConversationBackgroundComponents`, `BubbleStandardLayout`,
+>   `WebRTCVideoView`…) ou **passe state-of-the-art**.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 159i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **159i (en cours, branche `claude/laughing-thompson-chfipj`, base `main` HEAD `f489355`)** :
+>   VoiceOver grouping de `AttachmentLoadingTile` (tuile de préparation d'attachement — composer/feed/story).
+>   La tuile lisait ses morceaux en éléments a11y séparés (caption kind + caption d'étape terse + spinner) ;
+>   regroupée en **un seul élément** : `.accessibilityElement(children: .ignore)` + `.accessibilityLabel`
+>   (kind : Photo/Video/Audio/File/Location, stable) + `.accessibilityValue` (étape en phrase pleine :
+>   « Chargement en cours », « Compression en cours », « Génération de l'aperçu », « Finalisation », « Prêt »,
+>   « Échec du chargement — … ») + `.accessibilityAddTraits(isPreparing ? .updatesFrequently : [])`
+>   (ré-annonce à chaque étape). **Cancel exposé en action de rotor** (`.accessibilityActions`) → ne dépend
+>   plus du bouton coin 18pt (< 44pt HIG). Refactor support : `kindLabel` extrait de `label` (réutilisé
+>   caption + a11y). **0 gel touché** (glyphes bornés doctrine 86i inchangés). 1 fichier, 0 logique, 0 test.
+>   6 clés i18n neuves `attachment.loading.a11y-*` en `defaultValue` inline (pas d'édit `.xcstrings`).
+>   Composant **non revendiqué** par les PR ouvertes #1966–#2008 → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `AttachmentLoadingTile` VoiceOver structure SOLDÉ** : ne plus rouvrir les glyphes figés (86i).
+> - **Note track** : la traîne 140i–158i (PR #1966–#2008) est encore **ouverte, non mergée** (20 PR iOS
+>   empilées). 159i repart de `main` HEAD (`f489355`) et cible un composant hors de cette pile.
+> - **Base de départ 160i : `main` HEAD**. Traîne `.font(.system(size:))` restante :
+>   `ConversationView+Composer`, `CallView`, `FeedView`, `ReelsPlayerView`, `ConversationMediaGalleryView`,
+>   `AudioFullscreenView`, `StoryTrayView`, `FeedCommentsSheet` — ou passe VoiceOver/state-of-the-art.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 160i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **160i (en cours, branche `claude/laughing-thompson-bb8upc`, base `main` HEAD `5ce47f8`)** :
+>   Passe VoiceOver de `MessageForwardDetailView` (onglet « Transférer » du message detail sheet) —
+>   **mise à parité avec le sibling SSOT `ForwardPickerSheet`**. 7 correctifs a11y, **0 clé i18n neuve**
+>   (réutilisation stricte des clés déjà portées par `ForwardPickerSheet` : `common.clear-search`,
+>   `forward.send-a11y`, `forward.sent`, `forward.sending`) : glyphe recherche décoratif masqué ;
+>   bouton clear labellisé ; rangée conv `.combine` ; bouton envoi / état envoyé / spinner labellisés ;
+>   état vide `.combine` + glyphe masqué. **Dynamic Type déjà correct** (polices sémantiques ;
+>   `.system(size:28)` = illustration d'état vide, figée). 1 fichier, **+8 lignes**, 0 logique, 0 test neuf.
+>   Contention vérifiée : aucune PR iOS ouverte ne cible ce fichier (les PR MessageDetail ouvertes couvrent
+>   Views 144i / Reactions 155i / Sentiment 153i, pas Forward). Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `MessageForwardDetailView` VoiceOver SOLDÉ**. **Note dette** : `MessageDetailSheet.forwardTabContent`
+>   (copie inline legacy ~L1836) porte le même gap — à traiter ou supprimer en faveur de la vue extraite.
+> - **Base de départ 161i : `main` HEAD**. Siblings MessageDetail encore vierges (`sys=1 rel=0 a11y=0`) :
+>   `MessageEditsDetailView`, `MessageTranscriptionDetailView`. Sinon : traîne 2/1 `.system`
+>   (`AudioCarouselView`, `ReelAudioBackdrop`, `VideoLegacySupport`, `MessageEffectModifiers`…), ou
+>   **passe state-of-the-art** au tarissement.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
+> - **140i (terminée, branche `claude/laughing-thompson-4bs06w`, base `main` HEAD `aee4798`)** :
+>   Dynamic Type + a11y de `MessageViewsDetailView` (sous-vues état vide + erreur de la feuille de détail
+>   des vues d'un message). **2/2** `.font(.system(size: 28, weight: .light))` → `MeeshyFont.relative` (icônes
+>   illustratives d'état vide + `wifi.slash` d'erreur ; 28 → `.title` textStyle → scalent **en phase** avec le
+>   `.footnote` sous elles, corrige la proportion cassée à Dynamic Type élevé). **+ `.accessibilityHidden(true)`**
+>   sur les 2 icônes décoratives → VoiceOver ne lit que le libellé porteur de sens. Les 7 autres fonts du fichier
+>   utilisent déjà `.system(.caption*, design: .monospaced)` = déjà scalables → intactes. `import MeeshyUI` déjà
+>   présent → 0 import ajouté. 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 PR iOS ouverte → 0 contention.
+>   Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `MessageViewsDetailView` Dynamic Type + a11y SOLDÉ** : ne plus reprendre (2 → `relative` + icônes masquées ;
+>   reste déjà scalable).
+> - **Base de départ 141i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon traîne : `ConversationBackgroundComponents` (2 glyphes 16pt bornés cercles fixes → gel 86i),
+>   `StoryExpiredContent` (2 hero 64/56pt → gel 84i), `StatsTimelineChart` (2 labels d'axe Charts 9pt → migrables
+>   avec prudence), `ContextActionMenu`, `SecurityVerificationView`, `BubbleStandardLayout`, ou **passe
+>   state-of-the-art** (hexes inline vs tokens) au tarissement.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 147i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **147i (terminée, branche `claude/laughing-thompson-fakfjr`, base `main` HEAD `63cb684`)** :
+>   Dynamic Type + VoiceOver de `StatsTimelineChart` (graphe d'activité Swift `Charts` dans `UserStatsView`).
+>   **2/2** `.font(.system(size: 9))` d'axe → `MeeshyFont.relative(9)` (`import MeeshyUI` ajouté) → libellés
+>   d'axe scalables. **VoiceOver enrichi** : `.accessibilityElement(children: .ignore)` +
+>   `.accessibilityValue(Self.accessibilitySummary(for: timeline))` → le graphe annonce désormais ses
+>   **données** (total / pic / dernier jour) via helper pur `accessibilitySummary(for:)` (empty-state géré,
+>   aucun compte fabriqué). **2 clés i18n neuves × 5 langues** (`stats.timeline.chart.a11y.summary` +
+>   `.empty`, insertion chirurgicale 70 lignes, 0 reformatage `xcstrings`). 1 fichier prod + 1 test
+>   (`StatsTimelineChartAccessibilityTests` : helper + scan source). 0 logique, 0 `@Published`. Piste iOS
+>   passée en lots **a11y VoiceOver + Dynamic Type** (140i→146i, PRs #1966→#1978, toutes distinctes) → **0
+>   contention**. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `StatsTimelineChart` Dynamic Type + VoiceOver SOLDÉ** : ne plus reprendre (axes `relative`, valeur
+>   a11y data-driven, empty-state).
+> - **Base de départ 148i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : traîne 2/1 `.system` (`ContextActionMenu`, `SecurityVerificationView`,
+>   `AudioPostComposerView`, `ConversationBackgroundComponents`, `StoryViewerContainer`, `BubbleStandardLayout`,
+>   `WebRTCVideoView`…), lots **a11y VoiceOver** sur surfaces data (graphes/listes), ou **passe
+>   state-of-the-art** au tarissement. ⚠️ Éviter surfaces des PRs iOS ouvertes #1966→#1978.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
+> **POINTEUR AUTORITAIRE iOS (mis à jour 145i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **145i (terminée, branche `claude/laughing-thompson-9mksck`, base `main` HEAD `0cf3b1c`)** :
+>   VoiceOver des **jauges du `ConversationDashboardView`** (`StatRing` ×7 + jauge de santé `ArcGauge`).
+>   Le fichier n'avait **aucun** modificateur d'accessibilité. Chaque bague posait 2 arrêts VoiceOver
+>   (valeur **abrégée** `"1,2k"` + libellé **en capitales**) ; la jauge de santé lisait un « 78 » nu.
+>   Correction : `.accessibilityElement(children: .ignore)` + `.accessibilityLabel(<libellé localisé>)`
+>   + `.accessibilityValue("\(valeur brute)")` → un élément « Messages : 1234 » / « Santé : 78 » par jauge.
+>   **Dynamic Type de ce fichier déjà soldé** (6 exceptions documentées : axes Swift Charts, valeurs en
+>   géométrie fixe). 1 fichier prod + 1 test source-level (`ConversationDashboardViewAccessibilityTests`,
+>   pattern `WebRTCVideoViewAccessibilityTests`, phase 1). 0 logique, 0 changement visuel, 0 clé i18n neuve.
+>   PR iOS ouvertes 140i–144i (#1966/#1968/#1970/#1972/#1974) — aucune ne touche `ConversationDashboardView`
+>   → **0 contention**. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `ConversationDashboardView` gauges VoiceOver SOLDÉ** : ne plus re-flagger `StatRing`/`ArcGauge`.
+> - **Base de départ 146i : `main` HEAD**. Note : 140i–144i sont des PR **en vol non mergées** (track
+>   parallèle) — vérifier leur état avant de reprendre leurs surfaces. Sinon axe VoiceOver sur composants
+>   data-viz/statistiques sans a11y, ou traîne Dynamic Type restante (`StoryViewerView+Content` ⚠️ i18n +
+>   `@State private` cross-file), ou **passe state-of-the-art** au tarissement.
+>
+> **POINTEUR HISTORIQUE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
 >   **2/2** `.font(.system(size:))` → `MeeshyFont.relative` (nom d'affichage 14 semibold ; pseudo 12) → les
@@ -1553,3 +1756,71 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Base de départ 107i : `main` HEAD**. **Différé 107i+** : `ReelsPlayerView` (7), `StoryTrayView` (9), `FeedPostCard+Media` (13), `StoryViewerView+Canvas` (13), `ConversationAnimatedBackground` (12), `OnboardingAnimations` (17), `ConversationView+MessageRow` (16) ; `ConversationView+Composer` (22, prudent), `StoryViewerView+Content` (31, ⚠️ i18n #1174).
 
 | 106i | claude/upbeat-euler-6r2un5 (iOS Dynamic Type + VoiceOver `AudioEffectsPanel` : 9/9 `.font(.system(size:))` → `MeeshyFont.relative` (weight + `.rounded`/`.monospacedDigit()` préservés, aucun figé) ; VoiceOver = `.isHeader` titre + `.accessibilityHidden` ×3 glyphes + `.isSelected` conditionnel chip d'effet actif & bouton son actif ; sliders déjà labellisés ; palette tokenisée + Glass adopté 0 swap, i18n 0 clé neuve ; 1 fichier sweep pur, 0 logique/0 test neuf, parité 55i/74i/86i/93i/104i/105i ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
+---
+
+> **POINTEUR iOS AUTORITAIRE (mis à jour 148i, 2026-07-16)** — piste iOS (suffixe `i`).
+> - **Essaim en vol au run 148i** : PR ouvertes 140i→147i (#1966 `ThemedBackButton`, #1968 `MyStoriesView`, #1970 `FriendRequestListView`, #1972 `StoryExpiredContent`, #1974 `MessageViewsDetailView`, #1976 `ConversationDashboard`, #1978 `VoiceProfileManageView`, #1980 `StatsTimelineChart`). Numéro **148i** choisi strictement > 147i.
+> - **148i (terminée, branche `claude/laughing-thompson-ogqlku`, base `main` HEAD `e19c523`)** : a11y VoiceOver des overlays d'état du **`StoryViewerContainer`** (loading + not-found error state). **2 lacunes VoiceOver réelles comblées** : (1) la croix de fermeture `xmark` icône-only (partagée par les 2 overlays) n'avait **aucun** `.accessibilityLabel` → `.accessibilityLabel(common.close)` (clé existante réutilisée, **0 clé neuve**) ; (2) le glyphe hero d'erreur `exclamationmark.circle` 38pt n'était pas masqué → `.accessibilityHidden(true)`. Les **2 `.font(.system(size:))`** restent **figées + commentées** (doctrine 82i cadre tap 32×32 ; doctrine 84i/86i hero erreur décoratif) — aucune police visible modifiée, snapshots inchangés. Reste du texte déjà sémantique (`.subheadline`/`.headline`/`.footnote`) → Dynamic Type déjà couvert. 1 fichier, 0 logique / 0 clé i18n neuve / 0 test neuf. Gate = CI `iOS Tests`.
+> - **NE PLUS re-flagger** `StoryViewerContainer` (a11y soldée 148i ; 2 glyphes figés à dessein, croix labellisée). **Écarter** `FeedView` (7, tous glyphes figés doctrine 82i/86i) et `IncomingCallView` (3, glyphes en cadres fixes, a11y déjà complète) — déjà mûrs.
+> - **Base de départ 149i : `main` HEAD**. **Différé 149i+** : `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationAnimatedBackground` (12, décoratif), `ConversationBackgroundComponents` (2), `BubbleStandardLayout` (2, ⚠️ Zero-re-render leaf).
+
+| 148i | claude/laughing-thompson-ogqlku (iOS a11y VoiceOver `StoryViewerContainer` : 2 lacunes comblées = croix `xmark` icône-only labellisée `common.close` (clé réutilisée, 0 neuve) + hero erreur `exclamationmark.circle` 38pt `.accessibilityHidden` ; 2 `.font(.system(size:))` figées commentées doctrine 82i croix 32×32 + 84i/86i hero erreur, 0 police visible changée ; reste texte déjà sémantique ; 1 fichier, 0 logique/0 clé neuve/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
+> **POINTEUR iOS AUTORITAIRE (mis à jour 149i, 2026-07-16)** — piste iOS (suffixe `i`).
+> - **Essaim en vol au run 149i** : PR ouvertes 140i→148i (#1966 `ThemedBackButton`, #1968 `MyStoriesView`, #1970 `FriendRequestListView`, #1972 `StoryExpiredContent`, #1974 `MessageViewsDetailView`, #1976 `ConversationDashboard`, #1978 `VoiceProfileManageView`, #1980 `StatsTimelineChart`, #1982 `StoryViewerContainer`). Numéro **149i** choisi strictement > 148i.
+> - **149i (terminée, branche `claude/laughing-thompson-uj2nmm`, base `main` HEAD `ab6df74`)** : a11y de l'écran sensible **`ChangePasswordView`** (changement de mot de passe). **3 lacunes a11y réelles comblées** : (1) la **checklist de validation** (`≥8 caractères`, correspondance) signalait l'état rempli/non-rempli par la **couleur du glyphe SEULE** (`checkmark.circle.fill` vert vs `circle` gris) → icône `.accessibilityHidden(true)` + rangée `.accessibilityElement(children: .combine)` + `.accessibilityAddTraits(met ? .isSelected : [])` (état annoncé « sélectionné », localisé par iOS, **0 clé neuve**, corrige WCAG 1.4.1) ; (2) le héros de succès `checkmark.shield.fill` 48pt exposé → `.accessibilityHidden(true)` + gel commenté (doctrine 84i/87i) + overlay `.accessibilityElement(children: .combine)` (confirmation transitoire lue d'un bloc) ; (3) `sectionHeader` (×2) + titre d'écran sans trait → `.isHeader` (+ `.combine`) en **parité avec le `sectionHeader` identique de `DeleteAccountView`** ; bouton retour → `.accessibilityLabel(common.back)` explicite (parité). L'unique `.font(.system(size: 48))` reste **figé** (héros décoratif ≥40pt) — aucune police visible modifiée, snapshots inchangés. Reste du texte déjà sémantique (`.subheadline`/`.headline`/`.caption`/`.footnote`/`.callout`) → Dynamic Type déjà couvert. 1 fichier, 0 logique / 0 clé i18n neuve / 0 test neuf. Gate = CI `iOS Tests`.
+> - **NE PLUS re-flagger** `ChangePasswordView` (a11y soldée 149i ; héros 48pt figé à dessein, checklist/rotor comblés).
+> - **Base de départ 150i : `main` HEAD**. **Candidat naturel 150i** : `OnboardingStepViews.reqRow` (**même gap couleur-seule** que 149i sur la checklist mdp d'inscription). **Différé 150i+** : `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationAnimatedBackground` (12, décoratif), `ConversationBackgroundComponents` (2, décoratif fixe), `BubbleStandardLayout` (2, ⚠️ Zero-re-render leaf).
+
+| 149i | claude/laughing-thompson-uj2nmm (iOS a11y `ChangePasswordView` : 3 lacunes comblées = checklist validation couleur-seule → icône `.accessibilityHidden` + rangée `.combine` + `.isSelected` conditionnel (état localisé iOS, 0 clé neuve, WCAG 1.4.1) ; héros succès `checkmark.shield.fill` 48pt `.accessibilityHidden` + gel commenté 84i/87i + overlay `.combine` ; `sectionHeader` ×2 + titre `.isHeader` parité `DeleteAccountView` + retour `.accessibilityLabel(common.back)` ; unique `.system(size:48)` figé, 0 police visible changée ; reste texte déjà sémantique ; 1 fichier, 0 logique/0 clé neuve/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
+> **POINTEUR iOS AUTORITAIRE (mis à jour 152i, 2026-07-17)** — piste iOS (suffixe `i`).
+> - **Essaim en vol au run 152i** : PR ouvertes 140i→151i (`ThemedBackButton`, `MyStoriesView`, `FriendRequestListView`, `StoryExpiredContent`, `MessageViewsDetailView`, `ConversationDashboard`, `VoiceProfileManageView`, `StatsTimelineChart`, `StoryViewerContainer`, `ChangePasswordView`, `DeleteAccountView`, `EditProfileView`). Numéro **152i** choisi strictement > 151i (#1988).
+> - **152i (terminée, branche `claude/laughing-thompson-ir2m79`, base `main` HEAD `dda190e`)** : audit Dynamic Type + a11y de `IncomingCallView` (écran d'appel entrant). Surface **fraîche**, 0 doc antérieur, 0 contention. **3/3 `.font(.system(size:))` FIGÉS** + commentaires doctrine 82i (initiale avatar cercle fixe 110×110 décorative + déjà `accessibilityHidden` via ring parent ; `phone.down.fill` & `video/phone.fill` cercles de bouton fixes 70×70, Buttons déjà labellisés/hint). **Aucune migration `relative`** : les vrais libellés texte utilisent déjà des polices sémantiques scalables (`.title`/`.callout`/`.caption2`). **Nettoyage** : suppression de la propriété morte `theme` (référée seulement dans un commentaire). a11y (labels/hints/screenChanged), palette (tokenisée + `.white` fixe intentionnel), reduceMotion → inchangés. 1 fichier, 0 logique/0 test neuf/0 clé i18n/0 swap. Gate = CI `iOS Tests`.
+> - **NE PAS re-flagger** `IncomingCallView` (soldé 152i ; 3 glyphes figés à dessein, code mort `theme` supprimé).
+> - **Base de départ 153i : `main` HEAD** (resync ; supprimer branche mergée). **Différé 153i+** : `ConversationAnimatedBackground` (12, décoratif), `FeedView` (7, revoir 123i), `ReelsPlayerView` (6), `StoryTrayView` (5) ; gros lots critiques en dernier `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationView+Composer` (13, prudent), `OnboardingAnimations` (16, décoratif).
+
+| 152i | claude/laughing-thompson-ir2m79 (iOS Dynamic Type freeze + cleanup `IncomingCallView` : 3/3 `.font(.system(size:))` figés commentés doctrine 82i (initiale avatar 110×110 décorative + `accessibilityHidden` parent ; 2 glyphes boutons 70×70 labellisés) ; 0 migration `relative` (libellés déjà sémantiques `.title`/`.callout`/`.caption2`) ; suppression propriété morte `theme` (comment-only) ; a11y/palette/reduceMotion inchangés ; 1 fichier, 0 logique/0 test neuf/0 clé/0 swap ; gate = CI iOS Tests) | ⏳ | ⏳ |
+> **POINTEUR iOS AUTORITAIRE (mis à jour 155i, 2026-07-17)** — piste iOS (suffixe `i`).
+> - **Contexte** : essaim d'agents dense — PR ouvertes iOS de 140i (#1966 `ThemedBackButton`) à 154i
+>   (#1996 `AudioPostComposerView`). `MyStoriesView` = **déjà pris** par 141i (#1968) — NE PAS toucher.
+>   Numéro **155i** choisi strictement > 154i pour éviter toute collision de nom de doc.
+> - **155i (terminée, branche `claude/laughing-thompson-uxgpnp`, base `main` HEAD `12a8160`)** :
+>   VoiceOver de `MessageReactionsDetailView` (onglet « Réactions » du détail message — capsules de
+>   filtre par emoji + liste des réacteurs + état vide). **Jumeau structurel** de `MessageViewsDetailView`
+>   (144i). **Surface fraîche** (0 analyse antérieure, 0 PR ouverte). Typographie **déjà 100 %
+>   sémantique** → **aucune migration Dynamic Type** ; itération **purement VoiceOver**. 3 lacunes
+>   réelles comblées : (a) capsule de filtre `.accessibilityAddTraits(isSelected ? [.isSelected] : [])`
+>   — l'état sélectionné n'était signalé que par la couleur (fix HIG) ; (b) rangée réacteur
+>   `.accessibilityElement(children: .combine)` + `MeeshyAvatar` `.accessibilityHidden(true)` (1 arrêt
+>   VoiceOver « nom, emoji, quand » au lieu de 4, avatar dé-dupliqué) ; (c) état vide `combine` +
+>   glyphe `face.smiling` masqué. Glyphe 28pt d'état vide conservé identique au jumeau (cohérence).
+>   1 fichier, 0 logique / 0 réseau / 0 clé i18n / 0 test neuf. Gate = CI `iOS Tests`.
+> - **NE PAS re-flagger** `MessageReactionsDetailView` (VoiceOver soldé 155i ; fonts déjà sémantiques).
+> - **Base de départ 156i : `main` HEAD**. **Différé 156i+** : reste de la famille `Message*DetailView`
+>   non traitée (`MessageEditsDetailView`, `MessageTranscriptionDetailView`, `MessageForwardDetailView`
+>   — fonts déjà sémantiques, vérifier VoiceOver rows/état-vide) ; gros lots critiques en dernier
+>   `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationView+Composer` (22, prudent).
+>   **Vérifier `list_pull_requests` avant de choisir** (essaim iOS ≥140i en vol).
+
+| 155i | claude/laughing-thompson-uxgpnp (iOS VoiceOver `MessageReactionsDetailView` — jumeau de `MessageViewsDetailView` 144i : capsule filtre `.accessibilityAddTraits(.isSelected)` conditionnel (état auparavant couleur-only, fix HIG) ; rangée réacteur `.accessibilityElement(children: .combine)` + avatar `.accessibilityHidden` (1 arrêt au lieu de 4) ; état vide `combine` + glyphe `face.smiling` masqué ; fonts déjà sémantiques 0 migration Dynamic Type ; 1 fichier, 0 logique/0 réseau/0 clé/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
+> **POINTEUR iOS AUTORITAIRE (mis à jour 162i, 2026-07-18)** — piste iOS (suffixe `i`).
+> - **Contexte** : peloton `laughing-thompson` dense (161i `MyStoriesView` #2013 en vol ; iterations a11y 140i→161i). **162i** > plus haut en vol.
+> - **162i (terminée, branche `claude/laughing-thompson-geeyz4`, base `main` HEAD `b706076`)** : Dynamic Type + a11y de **`StoryViewerView+Content`** — **la plus large surface restée non migrée** (31 `.system(size:)`, 0 `relative` avant), différée depuis 100i+ (« lot critique, ⚠️ i18n #1174 »). La collision #1174 visait des éditions `.xcstrings` → **ce sweep est police-pure, 0 clé i18n** → risque nul. **25/31 `.font(.system(size:))` → `MeeshyFont.relative(...)`** (weight préservé) : feuille « Vues » (viewerRow), overlay commentaires (bandeau expiré, bouton « Voir N réponses », état vide texte), `StoryCommentRowView` (auteur, séparateurs `·`, horodatage, corps 13.5, like, Répondre, drapeau langue). **6/31 figés commentés** : `play.circle.fill` 56 (déco ≥40, déjà hidden) + héros état-vide `bubble…` 28 (**+ `accessibilityHidden(true)` comblé**) + monogramme 13 cercle fixe 32×32 (82i) + 2 glyphes rail `StoryActionButton` 20 cadre 46×46 (82i) + label rail 10 colonne fixe 56 `minimumScaleFactor(0.7)` (82i). 1 fichier, 0 logique / 0 clé i18n / 0 test neuf. Tests liés (`StoryViewerCommentReactionTests`, `ScenePhasePauseGuard`) n'assertent que `legibleAuthorColor`/scenePhase → 0 régression. Gate = CI `iOS Tests`.
+> - **⚠️ NE PLUS re-flagger** `StoryViewerView+Content` (Dynamic Type soldé 162i ; 6 `.system(size:)` figés à dessein — voir liste). Strings hardcodées résiduelles (« Masquer », « Voir N réponses ») = lot i18n dédié hors-scope.
+> - **Base de départ 163i : `main` HEAD** (resync ; supprimer la branche mergée). **Différé 163i+** : `OnboardingAnimations` (16, décoratif), `ConversationView+Composer` (13, prudent), `CallView` (11, déjà audité P0/P1/P2), `ReelsPlayerView` (6), `StoryViewerView+Sidebar` (4), `StoryViewerView+Canvas` (3). Low-hanging Dynamic Type globalement épuisé — envisager pivots : i18n strings hardcodées, adoption composants natifs, dédup design-system.
+
+| 162i | claude/laughing-thompson-geeyz4 (iOS Dynamic Type + a11y `StoryViewerView+Content` : 25/31 `.font(.system(size:))` → `MeeshyFont.relative` (weight préservé — viewerRow, overlay commentaires, StoryCommentRowView corps/like/Répondre/drapeaux) ; 6 figés commentés = play.circle 56 déco + héros état-vide 28 (+`accessibilityHidden`) + monogramme 13 cercle 32×32 + 2 glyphes rail 20 cadre 46×46 + label rail 10 colonne 56, doctrine 82i/84i/86i ; 1 fichier, 0 logique/0 clé i18n/0 test neuf ; tests liés assertent seulement legibleAuthorColor ; gate = CI iOS Tests) | ⏳ | ⏳ |
+> **POINTEUR iOS AUTORITAIRE (mis à jour 164i, 2026-07-18)** — piste iOS (suffixe `i`).
+> - **Dernière itération iOS en vol : `163i`** (`AudioCarouselView`, PR #2018). Essaim iOS dense (140i→163i ouvertes). Numéro **164i** choisi strictement > plus haut en vol.
+> - **164i (terminée, branche `claude/laughing-thompson-rn6mfv`, base `main` HEAD `7ad6e3e`)** : VoiceOver du **résumé d'options** de `InviteFriendsSheet` (feuille de partage de lien). La rangée de permissions actives (Messages/Images/Fichiers/Historique) était rendue par des **`Image` SF Symbol nues + couleur `success`**, sans libellé → information portée **par icône/couleur seule**, muette pour VoiceOver (viol. « never rely only on color »). Fix : `optionsSummary` → `.accessibilityElement(children: .ignore)` + `.accessibilityLabel(optionsSummaryAccessibilityLabel)` (helper composé : expiration + liste des permissions en clair via `ListFormatter.localizedString(byJoining:)` locale-aware/RTL, réutilise les clés `invite.perm.*` existantes, cas vide géré). En-tête de conversation groupé `.accessibilityElement(children: .combine)` + `.accessibilityHidden` sur glyphe avatar déco & séparateur « · ». **3 clés `.a11y` neuves** (`invite.a11y.summary.expiration/permissions/noPermissions`, code-only via `defaultValue`, 0 xcstrings, parité 100i/104i). 1 fichier, 0 logique / 0 changement visuel / 0 test neuf. Dynamic Type déjà soldé 76i (4 glyphes fixes figés inchangés). Gate = CI `iOS Tests`.
+> - **⚠️ NE PLUS re-flagger** `InviteFriendsSheet` : Dynamic Type soldé 76i, VoiceOver soldé 164i. Les 4 `.system(size:)` (toolbar close, avatar 44pt, tuiles 32pt) sont figés à dessein.
+> - **Base de départ 165i : `main` HEAD** (toujours resync ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 165i+** : grandes surfaces Dynamic Type restantes (une/itération, vérifier collision essaim via `list_pull_requests`) — `ConversationView+Composer` (13, prudent), `FeedView` (7), `ConversationListView+Overlays` (5), `FeedCommentsSheet` (5), `ConversationPreferencesTab` (4) ; VoiceOver « info par couleur seule » à traquer sur d'autres résumés d'état (badges/pastilles sans label).
+
+| 164i | claude/laughing-thompson-rn6mfv (iOS VoiceOver `InviteFriendsSheet` : résumé d'options — permissions icône+couleur → `.accessibilityElement(children: .ignore)` + label composé `optionsSummaryAccessibilityLabel` (expiration + permissions en clair via `ListFormatter`, clés `invite.perm.*` réutilisées, cas vide géré) ; en-tête `.combine` + `.accessibilityHidden` glyphe avatar & séparateur ; 3 clés `.a11y` neuves code-only 0 xcstrings ; Dynamic Type déjà soldé 76i, 4 glyphes fixes inchangés ; 1 fichier, 0 logique/0 visuel/0 test neuf ; gate = CI `iOS Tests`) | ⏳ | ⏳ |
+> **POINTEUR iOS AUTORITAIRE (mis à jour 163i, 2026-07-18)** — piste iOS (suffixe `i`).
+> - **163i (terminée, branche `claude/laughing-thompson-rqaav8`, base `main` HEAD `12bf80a`)** : Dynamic Type + VoiceOver de `AudioCarouselView` (indicateur de page du carrousel multi-pistes audio). **1/1** `.font(.system(size:))` du compteur `n / N` (variante > 7 pistes) → `MeeshyFont.relative(12, weight: .bold, design: .monospaced)` (weight + `.monospaced` préservés ; capsule à padding flexible sans largeur fixe → **pas de gel**). **VoiceOver** : les deux variantes de l'indicateur (points ≤ 7 **et** compteur) enveloppées dans un `Group` unique portant `.accessibilityElement(children: .ignore)` + `.accessibilityLabel` → **« Piste X sur Y »** (clé `bubble.audio.carousel.position`, auto-extraite String Catalog) — la position n'est **plus** portée par la seule couleur/taille des points. Logique paging/debounce/footer/hauteur adaptative **non touchée** ; palette intacte. 1 fichier, 0 logique / 0 test neuf, 1 clé i18n neuve. Gate = CI `iOS Tests`.
+> - **NE PAS re-flagger** `AudioCarouselView` (Dynamic Type + VoiceOver soldés 163i).
+> - **Base de départ 164i : `main` HEAD** (resync). **Différé 164i+** (surfaces fraîches non soldées) : `BubbleFailedRetryBar` (déjà mûr — a11y complète, seul glyphe déco figé, **écarter**), `BookmarksView` (1 `.system`), `ActiveSessionsView` (a11y maigre), `AudioFullscreenView`, `FeedCommentsSheet`, `ReelAudioBackdrop`, `SharePickerView`, `GlobalSearchView`.
+
+| 163i | claude/laughing-thompson-rqaav8 (iOS Dynamic Type + VoiceOver `AudioCarouselView` : 1/1 `.font(.system(size:12,.bold,.monospaced))` du compteur `n / N` → `MeeshyFont.relative` (capsule padding flexible, pas de gel) ; VoiceOver = indicateur (points ≤ 7 & compteur > 7) enveloppé en `accessibilityElement(children: .ignore)` + label « Piste X sur Y » (`bubble.audio.carousel.position`) — position plus portée par couleur seule ; logique paging/lecture non touchée, palette intacte ; 1 fichier, 0 logique/0 test neuf, 1 clé i18n ; gate = CI iOS Tests) | ⏳ | ⏳ |

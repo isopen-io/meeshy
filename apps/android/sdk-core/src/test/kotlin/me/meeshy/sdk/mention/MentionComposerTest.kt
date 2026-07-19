@@ -1,10 +1,10 @@
-package me.meeshy.app.chat
+package me.meeshy.sdk.mention
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.MentionCandidate
 import org.junit.Test
 
-class ChatMentionTest {
+class MentionComposerTest {
 
     private fun candidate(username: String, displayName: String = username) =
         MentionCandidate(id = "u-$username", username = username, displayName = displayName)
@@ -19,99 +19,99 @@ class ChatMentionTest {
 
     @Test
     fun `extractQuery is null when there is no at sign`() {
-        assertThat(ChatMention.extractQuery("hello there")).isNull()
+        assertThat(MentionComposer.extractQuery("hello there")).isNull()
     }
 
     @Test
     fun `extractQuery returns the trailing fragment after the last at sign`() {
-        assertThat(ChatMention.extractQuery("hey @bo")).isEqualTo("bo")
+        assertThat(MentionComposer.extractQuery("hey @bo")).isEqualTo("bo")
     }
 
     @Test
     fun `extractQuery returns an empty string for a bare at sign`() {
-        assertThat(ChatMention.extractQuery("hey @")).isEqualTo("")
+        assertThat(MentionComposer.extractQuery("hey @")).isEqualTo("")
     }
 
     @Test
     fun `extractQuery is null when a space follows the last at sign`() {
-        assertThat(ChatMention.extractQuery("hey @bob smith")).isNull()
+        assertThat(MentionComposer.extractQuery("hey @bob smith")).isNull()
     }
 
     @Test
     fun `extractQuery is null when the mention was already completed with a trailing space`() {
-        assertThat(ChatMention.extractQuery("hey @bob ")).isNull()
+        assertThat(MentionComposer.extractQuery("hey @bob ")).isNull()
     }
 
     @Test
     fun `extractQuery uses the fragment past the last at sign when several are present`() {
-        assertThat(ChatMention.extractQuery("@bob hi @al")).isEqualTo("al")
+        assertThat(MentionComposer.extractQuery("@bob hi @al")).isEqualTo("al")
     }
 
     @Test
     fun `extractQuery treats an at sign glued to a word as a mention`() {
-        assertThat(ChatMention.extractQuery("a@b")).isEqualTo("b")
+        assertThat(MentionComposer.extractQuery("a@b")).isEqualTo("b")
     }
 
     // --- filterCandidates ---
 
     @Test
     fun `filterCandidates returns every candidate for a blank query`() {
-        assertThat(ChatMention.filterCandidates(roster, "")).isEqualTo(roster)
+        assertThat(MentionComposer.filterCandidates(roster, "")).isEqualTo(roster)
     }
 
     @Test
     fun `filterCandidates returns every candidate for a whitespace-only query`() {
-        assertThat(ChatMention.filterCandidates(roster, "   ")).isEqualTo(roster)
+        assertThat(MentionComposer.filterCandidates(roster, "   ")).isEqualTo(roster)
     }
 
     @Test
     fun `filterCandidates matches the username case-insensitively`() {
-        assertThat(ChatMention.filterCandidates(roster, "BO").map { it.username })
+        assertThat(MentionComposer.filterCandidates(roster, "BO").map { it.username })
             .containsExactly("bob", "bobby").inOrder()
     }
 
     @Test
     fun `filterCandidates matches the display name`() {
-        assertThat(ChatMention.filterCandidates(roster, "smith").map { it.username })
+        assertThat(MentionComposer.filterCandidates(roster, "smith").map { it.username })
             .containsExactly("alice")
     }
 
     @Test
     fun `filterCandidates returns empty when nothing matches`() {
-        assertThat(ChatMention.filterCandidates(roster, "zzz")).isEmpty()
+        assertThat(MentionComposer.filterCandidates(roster, "zzz")).isEmpty()
     }
 
     @Test
     fun `filterCandidates on an empty roster is empty`() {
-        assertThat(ChatMention.filterCandidates(emptyList(), "bob")).isEmpty()
+        assertThat(MentionComposer.filterCandidates(emptyList(), "bob")).isEmpty()
     }
 
     // --- insertMention ---
 
     @Test
     fun `insertMention replaces the trailing fragment with the handle plus a space`() {
-        assertThat(ChatMention.insertMention(candidate("bob"), "hey @bo")).isEqualTo("hey @bob ")
+        assertThat(MentionComposer.insertMention(candidate("bob"), "hey @bo")).isEqualTo("hey @bob ")
     }
 
     @Test
     fun `insertMention expands a bare at sign into the handle`() {
-        assertThat(ChatMention.insertMention(candidate("bob"), "@")).isEqualTo("@bob ")
+        assertThat(MentionComposer.insertMention(candidate("bob"), "@")).isEqualTo("@bob ")
     }
 
     @Test
     fun `insertMention leaves text without an at sign unchanged`() {
-        assertThat(ChatMention.insertMention(candidate("bob"), "no mention")).isEqualTo("no mention")
+        assertThat(MentionComposer.insertMention(candidate("bob"), "no mention")).isEqualTo("no mention")
     }
 
     @Test
     fun `insertMention is inert when a space already follows the last at sign`() {
-        assertThat(ChatMention.insertMention(candidate("bob"), "hey @done text"))
+        assertThat(MentionComposer.insertMention(candidate("bob"), "hey @done text"))
             .isEqualTo("hey @done text")
     }
 
     @Test
     fun `insertMention preserves text before the mention`() {
-        assertThat(ChatMention.insertMention(candidate("alice"), "cc @bob and @al"))
+        assertThat(MentionComposer.insertMention(candidate("alice"), "cc @bob and @al"))
             .isEqualTo("cc @bob and @alice ")
     }
 
@@ -203,82 +203,82 @@ class ChatMentionTest {
 
     @Test
     fun `shouldQueryRemote is false for a query shorter than two characters`() {
-        assertThat(ChatMention.shouldQueryRemote("a")).isFalse()
+        assertThat(MentionComposer.shouldQueryRemote("a")).isFalse()
     }
 
     @Test
     fun `shouldQueryRemote is false for an empty query`() {
-        assertThat(ChatMention.shouldQueryRemote("")).isFalse()
+        assertThat(MentionComposer.shouldQueryRemote("")).isFalse()
     }
 
     @Test
     fun `shouldQueryRemote ignores surrounding whitespace when measuring length`() {
-        assertThat(ChatMention.shouldQueryRemote("  a  ")).isFalse()
+        assertThat(MentionComposer.shouldQueryRemote("  a  ")).isFalse()
     }
 
     @Test
     fun `shouldQueryRemote is true from two significant characters`() {
-        assertThat(ChatMention.shouldQueryRemote("ab")).isTrue()
+        assertThat(MentionComposer.shouldQueryRemote("ab")).isTrue()
     }
 
     @Test
     fun `shouldQueryRemote trims before measuring a longer query`() {
-        assertThat(ChatMention.shouldQueryRemote("  ali  ")).isTrue()
+        assertThat(MentionComposer.shouldQueryRemote("  ali  ")).isTrue()
     }
 
     // --- mergeSuggestions ---
 
     @Test
     fun `mergeSuggestions keeps locals untouched when there are no remote results`() {
-        assertThat(ChatMention.mergeSuggestions(roster, emptyList())).isEqualTo(roster)
+        assertThat(MentionComposer.mergeSuggestions(roster, emptyList())).isEqualTo(roster)
     }
 
     @Test
     fun `mergeSuggestions returns the deduped remote when there are no locals`() {
         val remote = listOf(candidate("carol"), candidate("dave"))
-        assertThat(ChatMention.mergeSuggestions(emptyList(), remote).map { it.username })
+        assertThat(MentionComposer.mergeSuggestions(emptyList(), remote).map { it.username })
             .containsExactly("carol", "dave").inOrder()
     }
 
     @Test
     fun `mergeSuggestions appends remote candidates after the locals in order`() {
         val remote = listOf(candidate("carol"), candidate("dave"))
-        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+        assertThat(MentionComposer.mergeSuggestions(roster, remote).map { it.username })
             .containsExactly("bob", "alice", "bobby", "carol", "dave").inOrder()
     }
 
     @Test
     fun `mergeSuggestions drops a remote candidate already present locally`() {
         val remote = listOf(candidate("carol"), candidate("alice", "Alice Remote"))
-        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+        assertThat(MentionComposer.mergeSuggestions(roster, remote).map { it.username })
             .containsExactly("bob", "alice", "bobby", "carol").inOrder()
     }
 
     @Test
     fun `mergeSuggestions dedups against locals case-insensitively`() {
         val remote = listOf(candidate("ALICE", "Alice Caps"))
-        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+        assertThat(MentionComposer.mergeSuggestions(roster, remote).map { it.username })
             .containsExactly("bob", "alice", "bobby").inOrder()
     }
 
     @Test
     fun `mergeSuggestions collapses duplicates within the remote results`() {
         val remote = listOf(candidate("carol"), candidate("Carol", "Carol Two"))
-        assertThat(ChatMention.mergeSuggestions(emptyList(), remote).map { it.displayName })
+        assertThat(MentionComposer.mergeSuggestions(emptyList(), remote).map { it.displayName })
             .containsExactly("carol").inOrder()
     }
 
     @Test
     fun `mergeSuggestions drops remote candidates with a blank handle`() {
         val remote = listOf(candidate("", "Nameless"), candidate("carol"))
-        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+        assertThat(MentionComposer.mergeSuggestions(roster, remote).map { it.username })
             .containsExactly("bob", "alice", "bobby", "carol").inOrder()
     }
 
     @Test
     fun `mergeSuggestions dedups a remote handle that only differs by surrounding whitespace`() {
         val remote = listOf(candidate(" alice ", "Alice Padded"), candidate("carol"))
-        assertThat(ChatMention.mergeSuggestions(roster, remote).map { it.username })
+        assertThat(MentionComposer.mergeSuggestions(roster, remote).map { it.username })
             .containsExactly("bob", "alice", "bobby", "carol").inOrder()
     }
 

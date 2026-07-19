@@ -757,7 +757,7 @@ struct ConversationView: View {
 
                 if let messageId = router.pendingHighlightMessageId, !messageId.isEmpty {
                     router.pendingHighlightMessageId = nil
-                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    try? await Task.sleep(for: .milliseconds(300))
                     guard !Task.isCancelled else { return }
                     if viewModel.messages.contains(where: { $0.id == messageId }) {
                         scrollState.scrollToMessageId = messageId
@@ -765,7 +765,7 @@ struct ConversationView: View {
                     } else {
                         await viewModel.loadMessagesAround(messageId: messageId)
                         if Task.isCancelled { return }
-                        try? await Task.sleep(nanoseconds: 100_000_000)
+                        try? await Task.sleep(for: .milliseconds(100))
                         guard !Task.isCancelled else { return }
                         scrollState.scrollToMessageId = messageId
                         scrollState.scrollToMessageTrigger += 1
@@ -776,7 +776,7 @@ struct ConversationView: View {
                 // active directement la barre de recherche in-conversation.
                 if router.pendingOpenSearch {
                     router.pendingOpenSearch = false
-                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    try? await Task.sleep(for: .milliseconds(250))
                     guard !Task.isCancelled else { return }
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         headerState.showSearch = true
@@ -974,7 +974,7 @@ struct ConversationView: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, MeeshySpacing.md + 2)
-        .padding(.top, 96)
+        .padding(.top, 96) // Precise alignment with background gradient transition
         .padding(.bottom, composerHeight + MeeshySpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .ignore)
@@ -1248,8 +1248,8 @@ struct ConversationView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
                         .background(.ultraThinMaterial)
                         .transition(.move(edge: .top).combined(with: .opacity))
                         Spacer()
@@ -1279,7 +1279,7 @@ struct ConversationView: View {
             .accessibilityHidden(true)
 
             if !scrollState.isNearBottom || viewModel.isSearchingQuotedMessage {
-                VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, 16).padding(.bottom, composerHeight + 8) } }
+                VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerHeight + MeeshySpacing.sm) } }
                     .zIndex(60)
                     .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
@@ -1368,7 +1368,7 @@ struct ConversationView: View {
                     .accessibilityLabel(String(localized: "conversation.view.mention", bundle: .main))
                     if candidate.id != viewModel.mentionSuggestions.last?.id {
                         Divider()
-                            .padding(.leading, 58)
+                            .padding(.leading, 58) // Aligned with avatar center
                     }
                 }
             }
@@ -1443,8 +1443,8 @@ struct ConversationView: View {
             }
             .accessibilityLabel(String(localized: "conversation.view.close", bundle: .main))
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.md)
     }
 
     /// Type-erased to break the deep opaque-type chain that crashes the
@@ -1589,10 +1589,10 @@ struct ConversationView: View {
     @ViewBuilder
     private var expandedHeaderBackground: some View {
         if composerState.showOptions {
-            RoundedRectangle(cornerRadius: 22)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2)
                         .stroke(
                             LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)], startPoint: .leading, endPoint: .trailing),
                             lineWidth: 1

@@ -12,6 +12,9 @@
     <string name="feed_bookmark">Salvar</string>
     <string name="feed_unbookmark">Remover salvo</string>
     <string name="feed_hidden_images">+%1$d</string>
+    <string name="feed_open_media">Abrir imagem</string>
+    <string name="feed_media_saved">Guardado na galeria</string>
+    <string name="feed_media_save_failed">Falha ao guardar na galeria</string>
     <string name="feed_pinned">Fixado</string>
     <string name="feed_edited">Editado</string>
     <string name="feed_reel">Reel</string>
