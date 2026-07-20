@@ -33,6 +33,7 @@ export const NotificationPreferenceSchema = z.object({
   storyReactionEnabled: z.boolean().default(true),
   commentReplyEnabled: z.boolean().default(true),
   commentLikeEnabled: z.boolean().default(true),
+  friendContentEnabled: z.boolean().default(true),
 
   // Do Not Disturb
   dndEnabled: z.boolean().default(false),
@@ -76,6 +77,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   storyReactionEnabled: true,
   commentReplyEnabled: true,
   commentLikeEnabled: true,
+  friendContentEnabled: true,
   dndEnabled: false,
   dndStartTime: '22:00',
   dndEndTime: '08:00',
