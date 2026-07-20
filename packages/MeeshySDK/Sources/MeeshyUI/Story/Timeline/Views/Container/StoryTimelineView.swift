@@ -43,54 +43,84 @@ public struct StoryTimelineView: View {
         public enum Kind: Equatable {
             case video, audio, text, image
             case bgVideo, bgAudio, bgImage
+
+            /// Vrai pour les pistes de la section FOND — dérivé du flag
+            /// `isBackground` RÉEL des objets, jamais d'une position d'index.
+            public var isBackgroundSection: Bool {
+                switch self {
+                case .bgVideo, .bgAudio, .bgImage: return true
+                case .video, .audio, .text, .image: return false
+                }
+            }
         }
         public var isEmpty: Bool { clipIds.isEmpty }
         public func containsClipId(_ id: String) -> Bool { clipIds.contains(id) }
     }
 
+    /// Partition sectionnée du projet (retour user 2026-07-20 : « placer les
+    /// pistes par section : BG → IMAGE/SON/VIDÉO puis FG → IMAGES/SONS/
+    /// VIDÉOS/TEXTE puis le listing »). Le fond est déterminé par le flag
+    /// `isBackground` de CHAQUE objet — l'ancien « premier de chaque type =
+    /// bg » étiquetait fond des clips qui n'en étaient pas.
+    private struct SectionedProject {
+        let bgImages: [StoryMediaObject]
+        let bgAudios: [StoryAudioPlayerObject]
+        let bgVideos: [StoryMediaObject]
+        let fgImages: [StoryMediaObject]
+        let fgAudios: [StoryAudioPlayerObject]
+        let fgVideos: [StoryMediaObject]
+        let texts: [StoryTextObject]
+
+        init(project: TimelineProject) {
+            let isVideo: (StoryMediaObject) -> Bool = { $0.mediaType == StoryMediaKind.video.rawValue }
+            let isImage: (StoryMediaObject) -> Bool = { $0.mediaType == StoryMediaKind.image.rawValue }
+            bgImages = project.mediaObjects.filter { $0.isBackground && isImage($0) }
+            bgAudios = project.audioPlayerObjects.filter { $0.isBackground ?? false }
+            bgVideos = project.mediaObjects.filter { $0.isBackground && isVideo($0) }
+            fgImages = project.mediaObjects.filter { !$0.isBackground && isImage($0) }
+            fgAudios = project.audioPlayerObjects.filter { !($0.isBackground ?? false) }
+            fgVideos = project.mediaObjects.filter { !$0.isBackground && isVideo($0) }
+            texts = project.textObjects
+        }
+    }
+
+    private static func sectionTitle(formatKey: String, index: Int) -> String {
+        String(format: String(localized: String.LocalizationValue(formatKey), bundle: .module), index)
+    }
+
+    /// Strip compact : mêmes SECTIONS que la vue déployée (FOND d'abord,
+    /// AVANT-PLAN ensuite), mais groupées en une lane par catégorie.
     public static func resolveCompactTracks(project: TimelineProject,
                                             selectedClipId: String?,
                                             maxCount: Int) -> [CompactTrack] {
+        let sections = SectionedProject(project: project)
         var allTracks: [CompactTrack] = []
-        // Split media by underlying kind so the compact strip labels images
-        // as "Image" and videos as "Vidéo" — collapsing both under a single
-        // "Vidéo" track was the bug surfaced when a slide had only photos.
-        let videoClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.video.rawValue }
-        let imageClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.image.rawValue }
-        if !videoClips.isEmpty {
+        func appendGrouped(_ ids: [String], id: String, formatKey: String, kind: CompactTrack.Kind) {
+            guard !ids.isEmpty else { return }
             allTracks.append(CompactTrack(
-                id: "video-1",
-                title: String(format: String(localized: "story.timeline.track.section.video", bundle: .module), 1),
-                kind: .bgVideo,
-                clipIds: videoClips.map { $0.id }
+                id: id,
+                title: sectionTitle(formatKey: formatKey, index: 1),
+                kind: kind,
+                clipIds: ids
             ))
         }
-        if !imageClips.isEmpty {
-            allTracks.append(CompactTrack(
-                id: "image-1",
-                title: String(format: String(localized: "story.timeline.track.section.image", bundle: .module), 1),
-                kind: .bgImage,
-                clipIds: imageClips.map { $0.id }
-            ))
-        }
-        let audioClips = project.audioPlayerObjects
-        if !audioClips.isEmpty {
-            allTracks.append(CompactTrack(
-                id: "audio-1",
-                title: String(format: String(localized: "story.timeline.track.section.audio", bundle: .module), 1),
-                kind: .audio,
-                clipIds: audioClips.map { $0.id }
-            ))
-        }
-        let textClips = project.textObjects
-        if !textClips.isEmpty {
-            allTracks.append(CompactTrack(
-                id: "text-1",
-                title: String(format: String(localized: "story.timeline.track.section.text", bundle: .module), 1),
-                kind: .text,
-                clipIds: textClips.map { $0.id }
-            ))
-        }
+        // Section FOND — IMAGE / SON / VIDÉO.
+        appendGrouped(sections.bgImages.map(\.id), id: "bg-image-1",
+                      formatKey: "story.timeline.track.section.image", kind: .bgImage)
+        appendGrouped(sections.bgAudios.map(\.id), id: "bg-audio-1",
+                      formatKey: "story.timeline.track.section.audio", kind: .bgAudio)
+        appendGrouped(sections.bgVideos.map(\.id), id: "bg-video-1",
+                      formatKey: "story.timeline.track.section.video", kind: .bgVideo)
+        // Section AVANT-PLAN — IMAGES / SONS / VIDÉOS / TEXTES.
+        appendGrouped(sections.fgImages.map(\.id), id: "image-1",
+                      formatKey: "story.timeline.track.section.image", kind: .image)
+        appendGrouped(sections.fgAudios.map(\.id), id: "audio-1",
+                      formatKey: "story.timeline.track.section.audio", kind: .audio)
+        appendGrouped(sections.fgVideos.map(\.id), id: "video-1",
+                      formatKey: "story.timeline.track.section.video", kind: .video)
+        appendGrouped(sections.texts.map(\.id), id: "text-1",
+                      formatKey: "story.timeline.track.section.text", kind: .text)
+
         let nonEmpty = allTracks.filter { !$0.isEmpty }
         var picked: [CompactTrack] = []
         if let selectedId = selectedClipId,
@@ -104,46 +134,40 @@ public struct StoryTimelineView: View {
         return picked
     }
 
+    /// Vue déployée : une lane par clip, ordonnée par sections — FOND
+    /// (image/son/vidéo) puis AVANT-PLAN (images/sons/vidéos/textes). La
+    /// numérotation FG ne compte QUE les clips foreground de chaque kind
+    /// (une vidéo de fond ne consomme pas « VIDEO_1 »).
     public static func resolveAllTracks(project: TimelineProject) -> [CompactTrack] {
+        let sections = SectionedProject(project: project)
         var tracks: [CompactTrack] = []
-        // Group by media kind first so per-kind numbering ("Image 1", "Image 2",
-        // "Vidéo 1") matches what the user dropped onto the slide. Pre-fix this
-        // method lumped every non-audio media into the "Vidéo" bucket, so adding
-        // two photos surfaced as "Vidéo 1, Vidéo 2".
-        let videoClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.video.rawValue }
-        let imageClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.image.rawValue }
-        for (index, clip) in videoClips.enumerated() {
-            tracks.append(CompactTrack(
-                id: "video-\(index + 1)",
-                title: String(format: String(localized: "story.timeline.track.section.video", bundle: .module), index + 1),
-                kind: index == 0 ? .bgVideo : .video,
-                clipIds: [clip.id]
-            ))
+        func appendEach<T>(_ objects: [T], idPrefix: String, formatKey: String,
+                           kind: CompactTrack.Kind, clipId: (T) -> String) {
+            for (index, object) in objects.enumerated() {
+                tracks.append(CompactTrack(
+                    id: "\(idPrefix)-\(index + 1)",
+                    title: sectionTitle(formatKey: formatKey, index: index + 1),
+                    kind: kind,
+                    clipIds: [clipId(object)]
+                ))
+            }
         }
-        for (index, clip) in imageClips.enumerated() {
-            tracks.append(CompactTrack(
-                id: "image-\(index + 1)",
-                title: String(format: String(localized: "story.timeline.track.section.image", bundle: .module), index + 1),
-                kind: index == 0 ? .bgImage : .image,
-                clipIds: [clip.id]
-            ))
-        }
-        for (index, audio) in project.audioPlayerObjects.enumerated() {
-            tracks.append(CompactTrack(
-                id: "audio-\(index + 1)",
-                title: String(format: String(localized: "story.timeline.track.section.audio", bundle: .module), index + 1),
-                kind: index == 0 ? .bgAudio : .audio,
-                clipIds: [audio.id]
-            ))
-        }
-        for (index, text) in project.textObjects.enumerated() {
-            tracks.append(CompactTrack(
-                id: "text-\(index + 1)",
-                title: String(format: String(localized: "story.timeline.track.section.text", bundle: .module), index + 1),
-                kind: .text,
-                clipIds: [text.id]
-            ))
-        }
+        // Section FOND — IMAGE / SON / VIDÉO.
+        appendEach(sections.bgImages, idPrefix: "bg-image",
+                   formatKey: "story.timeline.track.section.image", kind: .bgImage, clipId: \.id)
+        appendEach(sections.bgAudios, idPrefix: "bg-audio",
+                   formatKey: "story.timeline.track.section.audio", kind: .bgAudio, clipId: \.id)
+        appendEach(sections.bgVideos, idPrefix: "bg-video",
+                   formatKey: "story.timeline.track.section.video", kind: .bgVideo, clipId: \.id)
+        // Section AVANT-PLAN — IMAGES / SONS / VIDÉOS / TEXTES.
+        appendEach(sections.fgImages, idPrefix: "image",
+                   formatKey: "story.timeline.track.section.image", kind: .image, clipId: \.id)
+        appendEach(sections.fgAudios, idPrefix: "audio",
+                   formatKey: "story.timeline.track.section.audio", kind: .audio, clipId: \.id)
+        appendEach(sections.fgVideos, idPrefix: "video",
+                   formatKey: "story.timeline.track.section.video", kind: .video, clipId: \.id)
+        appendEach(sections.texts, idPrefix: "text",
+                   formatKey: "story.timeline.track.section.text", kind: .text, clipId: \.id)
         return tracks.filter { !$0.isEmpty }
     }
 
@@ -168,22 +192,25 @@ public struct StoryTimelineView: View {
         }
     }
 
-    /// Étiquette de type d'une piste : `TYPE_index` (IMAGE_1, AUDIO_2…), en
-    /// majuscules avec underscore (format demandé). Un `customName` non-nil et
-    /// non-vide l'emporte sur le tag de type. Pure — testée sans monter la vue.
+    /// Étiquette de type d'une piste : `TYPE_index` (IMAGE_1, AUDIO_2…) pour
+    /// l'avant-plan, `BG_TYPE` SANS index pour la section FOND (le fond est
+    /// unique par nature — l'index n'apporte que du bruit). Majuscules avec
+    /// underscore (format demandé). Un `customName` non-nil et non-vide
+    /// l'emporte sur le tag de type. Pure — testée sans monter la vue.
     public static func typeLabel(kind: CompactTrack.Kind, index: Int,
                                  customName: String?) -> String {
         if let customName, !customName.trimmingCharacters(in: .whitespaces).isEmpty {
             return customName
         }
-        let tag: String
         switch kind {
-        case .bgVideo, .video: tag = "VIDEO"
-        case .bgImage, .image: tag = "IMAGE"
-        case .bgAudio, .audio: tag = "AUDIO"
-        case .text:            tag = "TEXT"
+        case .bgVideo: return "BG_VIDEO"
+        case .bgImage: return "BG_IMAGE"
+        case .bgAudio: return "BG_AUDIO"
+        case .video:   return "VIDEO_\(index)"
+        case .image:   return "IMAGE_\(index)"
+        case .audio:   return "AUDIO_\(index)"
+        case .text:    return "TEXT_\(index)"
         }
-        return "\(tag)_\(index)"
     }
 
     /// Durée totale (secondes) d'une piste = borne de fin max de ses clips, via
