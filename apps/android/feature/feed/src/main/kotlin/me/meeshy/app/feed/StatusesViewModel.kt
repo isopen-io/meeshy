@@ -89,7 +89,8 @@ class StatusesViewModel @Inject constructor(
      * hoisted to the front (de-duplicated by id, so the viewer's own echo — the gateway
      * emits no client mutation id for statuses — is inert since [setStatus] already
      * inserted it); a `status:updated` replaces the entry in place; a `status:deleted`
-     * drops it; a `status:reacted` bumps the reaction count, **skipping the reactor's
+     * drops it; a `status:reacted` bumps the reaction count and a `status:unreacted`
+     * decrements it (clamped, spent bucket dropped) — both **skipping the acting user's
      * own echo** ([react] already applied it optimistically). A payload that does not
      * map to a mood status (a non-`STATUS` post) is ignored. Deltas fold straight into
      * [listState]; the next network [fetchFirstPage] reconciles the authoritative page.
@@ -118,6 +119,13 @@ class StatusesViewModel @Inject constructor(
             socialSocket.statusReacted.collect { payload ->
                 if (payload.userId != currentUserId()) {
                     listState.update { it.reacted(payload.statusId, payload.emoji) }
+                }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.statusUnreacted.collect { payload ->
+                if (payload.userId != currentUserId()) {
+                    listState.update { it.unreacted(payload.statusId, payload.emoji) }
                 }
             }
         }

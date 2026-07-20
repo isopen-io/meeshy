@@ -330,3 +330,17 @@ data class SocketStoryUnreactedData(
     val userId: String,
     val emoji: String,
 )
+
+/**
+ * `status:unreacted` — a user removed their reaction from a mood status. Same shape as
+ * [SocketStatusReactedData] (mirror of the shared `StatusUnreactedEventData`): it carries
+ * no aggregate count, so the bar decrements the emoji by one (clamped ≥0, dropping the
+ * spent bucket), skipping the un-reactor's own echo (guarded in the ViewModel). A SOTA
+ * symmetry the iOS bar handlers lack — the gateway emits it on every reaction removal.
+ */
+@Serializable
+data class SocketStatusUnreactedData(
+    val statusId: String,
+    val userId: String,
+    val emoji: String,
+)

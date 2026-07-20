@@ -1,5 +1,41 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **statuses realtime `status:unreacted` wiring** landed (slice `status-unreacted-socket`,
+> feature-parity §G → "Statuses realtime `status:unreacted`" — the symmetric-inverse follow-up the
+> `status-realtime-socket` slice flagged as Next). Parity source: the gateway's canonical `SERVER_EVENTS`
+> `status:unreacted` (shared `StatusUnreactedEventData{statusId,userId,emoji}`, emitted on every reaction removal). A
+> **SOTA symmetry the iOS `StatusViewModel` bar handlers lack** — iOS folds `status:reacted` into the bar but never a
+> removal. **(1)** new `@Serializable` `:core:model` DTO `SocketStatusUnreactedData{statusId,userId,emoji}` (same shape
+> as `SocketStatusReactedData`, mirror of the shared type). **(2)** `SocialSocketManager` gains the `statusUnreacted`
+> `SharedFlow` + `listen("status:unreacted", …)` in `attach()` (same `buf()`/`asSharedFlow()`/`listen` harness).
+> **(3)** a new pure `StatusBarListState.unreacted(statusId, emoji)` reducer — the inverse of `reacted`: drop one
+> reaction, **clamped ≥0 and removing the spent bucket at zero** (so no empty entry renders), **inert (same instance)**
+> when the status is absent OR carries no such reaction (a redundant/foreign unreact never churns state nor drives a
+> count negative). **(4)** `StatusesViewModel.subscribeToSocketEvents()` folds the delta into the live `listState`
+> **skipping the un-reactor's own echo** (`payload.userId != currentUserId()`, symmetric to `reacted` — the viewer's
+> own removal is already applied optimistically). **+8 tests** — `StatusBarListStateTest` (+5: decrement,
+> remove-bucket-at-zero, inert-absent-id, inert-no-such-reaction, inert-no-reactions), `SocialSocketManagerTest` (+1:
+> `status:unreacted` JSON decode via the captured-handler harness), `StatusesViewModelTest` (+2: other-user-decrements
+> after two reacts, own-echo-ignored). **Mutation check (RED proof):** neutralising the own-echo guard (`if (true)`)
+> fails **exactly** `a status unreacted echo of the viewer's own unreaction is ignored` (44 tests, 1 failed, no
+> collateral) — behavioural, not tautological; the reducer's inert-instance tests (`isSameInstanceAs`) prove the two
+> no-op guards structurally. **Note (compile fix):** the reducer's `entry.reactionSummary?.get(...)` then
+> `.toMutableMap()` tripped a cross-module smart-cast error (`reactionSummary` is a public API property in `:core:model`)
+> — resolved by binding `val summary = entry.reactionSummary ?: return this` once, then reading through the local (no
+> behaviour change). **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through the proxy; `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model` compile green, `:sdk-core:testDebugUnitTest` green (`SocialSocketManagerTest`
+> 13/13, was 12 + 1), `:feature:feed:testDebugUnitTest` green (`StatusBarListStateTest` 18/18 was 13 + 5,
+> `StatusesViewModelTest` 44/44 was 42 + 2), full `:app:assembleDebug` + the three test modules → **BUILD SUCCESSFUL**.
+> Reviewer **PASS** (diff `apps/android` only — 1 DTO + 1 flow + 1 reducer + 1 VM fold (4 production) + 3 test +
+> tracking; **SDK purity** — DTO + event bus are stateless building blocks in `:core:model`/`:sdk-core`, the fold
+> orchestration stays in the `:feature:feed` VM; **SSOT** — reuses the `reacted`/own-echo-guard pattern, one reducer,
+> one guard; **UDF** — immutable `StatusBarListState`, transitions pure, collector on `viewModelScope`
+> (cancellation-safe); **coherence** — the bar now reflects reaction removals live, a strict superset of iOS; no
+> coverage floor lowered, no test weakened). **Next slice:** §H — Calls WebRTC core is the next build-order area's
+> highest-value unchecked box (1:1 audio/video, ICE/STUN — the pure signalling/negotiation state machine first), OR the
+> tracked Kover 90% coverage-gate infra follow-up. Statuses are now feature-complete for realtime (created/updated/
+> deleted/reacted/unreacted) + L1/L2 cache + i18n + composer + popover parity.
+
 > On 2026-07-20 the **statuses realtime socket wiring** landed (slice `status-realtime-socket`, feature-parity §G →
 > "Statuses realtime socket wiring" — the live-bar follow-up the `status-strings-i18n` slice flagged as Next). Parity
 > source: iOS `StatusViewModel.subscribeToSocketEvents` (handlers for `status:created` / `status:updated` /
