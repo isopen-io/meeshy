@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 186i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **186i (branche `claude/laughing-thompson-0lonrh`, base `main` HEAD `64f943d`)** :
+>   Consolidation palette de marque de `DataStorageView` (Réglages → Stockage / cache media).
+>   Exécute la moitié `DataStorageView` du pointeur « siblings restants » laissé par 180i (#2142).
+>   3 hexes bruts hors-marque éradiqués → tokens `MeeshyColors` existants (swaps `String`→`String`
+>   type-identiques, 0 changement de call-site) : (1) `accentColor = "E67E22"` (carotte Flat-UI,
+>   pilotait back / en-tête section « Cache media » / icône `folder.fill` / surface+bordure) →
+>   `MeeshyColors.brandPrimaryHex` (`6366F1`, indigo500 — même cible que la paire Affiliate 180i) ;
+>   (2) icône destructive `fieldIcon("trash.fill", color: "EF4444")` (Tailwind red-500) →
+>   `MeeshyColors.errorHex` (`F87171`) → l'**icône** matche enfin son **label** voisin qui utilisait
+>   déjà `MeeshyColors.error` (fin du mismatch two-red dans un seul contrôle) ; (3) `"6B7280"` ×2
+>   (en-tête + surface section « Actions ») → `MeeshyColors.neutral500Hex` (valeur identique, 0 pixel).
+>   `MeeshyColors` déjà référencé (l.134) + `import MeeshyUI` déjà présent → 0 import neuf. 1 fichier,
+>   4 lignes, 0 logique, 0 clé i18n, 0 test. `grep '"[0-9A-Fa-f]{6}"'` → 0 hex brut restant.
+>   `search_pull_requests … DataStorageView` → 0 → aucune contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `DataStorageView` palette SOLDÉ 186i** : carotte `E67E22` éradiquée, trash icon réaligné sur
+>   `error`, gris bruts → `neutral500Hex`. 0 hex brut. Sibling legacy restant du pointeur 180i :
+>   `TermsOfServiceView` (`45B7D1` cyan ; dict légal bilingue = pass i18n dédié).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 182i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **182i (en cours, branche `claude/laughing-thompson-i5vrp1`, base `main` HEAD `5f44f0c`)** :
 >   Dynamic Type + VoiceOver de `ReplyCell` (rangée de réponse indentée dans un fil de commentaires
