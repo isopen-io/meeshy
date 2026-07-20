@@ -70,6 +70,7 @@ struct ShareLinksView: View {
             Text(String(localized: "share.links.title", defaultValue: "Liens de partage", bundle: .main))
                 .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -150,25 +151,20 @@ struct ShareLinksView: View {
         }
     }
 
+    // Empty state deferred to the shared design-system `EmptyStateView`
+    // (canonical icon+title+subtitle, combined VoiceOver label + spring appear)
+    // instead of a hand-rolled VStack — same structure the peer settings screen
+    // `BlockedUsersView` already reuses. `compact` keeps it sized for this
+    // in-scroll section; the brand accent (shareAccentHex) is preserved.
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            // Decorative empty-state hero glyph (≥40pt) — its meaning is carried
-            // by the title below; kept fixed + hidden from VoiceOver (doctrine 84i/86i).
-            Image(systemName: "link.badge.plus")
-                .font(.system(size: 40))
-                .foregroundColor(MeeshyColors.shareAccent.opacity(0.6))
-                .accessibilityHidden(true)
-            Text(String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main))
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
-            Text(String(localized: "share.links.empty.subtitle", defaultValue: "Créez un lien pour inviter des personnes dans une conversation", bundle: .main))
-                .font(.footnote)
-                .foregroundColor(theme.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(40)
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
+        EmptyStateView(
+            icon: "link.badge.plus",
+            title: String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main),
+            subtitle: String(localized: "share.links.empty.subtitle", defaultValue: "Créez un lien pour inviter des personnes dans une conversation", bundle: .main),
+            accentColor: MeeshyColors.shareAccentHex,
+            compact: true
+        )
+        .padding(.vertical, 24)
     }
 
     private func shareLinkRow(_ link: MyShareLink) -> some View {

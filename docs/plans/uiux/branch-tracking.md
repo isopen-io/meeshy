@@ -14,6 +14,14 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 178i, 2026-07-20)** — piste iOS (suffixe `i`).
+> - **Essaim iOS dense** : PRs 165i→177i en vol (#2028…#2076). Numéro **178i** choisi strictement > plus haut en vol (177i `ReportMessageSheet` #2076).
+> - **178i (terminée, branche `claude/laughing-thompson-nbspy1`, base `main` HEAD `d5038c5`)** : dédup design-system + a11y de **`ShareLinksView`** (écran « Liens de partage »). Deux constats auto-contenus : **(A)** l'`emptyState` était un `VStack` fait-main (icône `.system(size: 40)` + 2 `Text` + `children: .combine`) réimplémentant le composant canonique `MeeshyUI.EmptyStateView` (déjà consommé par 13 sites, dont l'écran-réglages pair `BookmarksView`/`BlockedUsersView`) → remplacé par `EmptyStateView(icon: "link.badge.plus", title:, subtitle:, accentColor: MeeshyColors.shareAccentHex, compact: true)` en **réutilisant les clés i18n existantes** (`share.links.empty.title/.subtitle`, 0 clé neuve) ; accent de marque (indigo400) préservé, label VoiceOver combiné + animation spring hérités, glyphe hors arbre a11y (pas de régression). **(B)** le titre d'en-tête custom « Liens de partage » n'avait **pas** `.accessibilityAddTraits(.isHeader)` (non atteignable via rotor « En-têtes ») alors que les 5 frères le posent (`CommunityLinksView`/`TrackingLinksView`/`AffiliateView`/`UserStatsView`/`SupportView`) → trait ajouté. 1 fichier, 14 ins / 18 del (net −4), 0 logique / 0 réseau / **0 clé i18n neuve** / 0 test neuf. Gate = CI `iOS Tests` (build iOS non runnable en local Linux).
+> - **⚠️ NE PLUS re-flagger** `ShareLinksView` : empty state dédup/natif soldé 178i, `.isHeader` posé, Dynamic Type déjà OK (fonts relatives), glyphes décoratifs figés à dessein (badge rangée 40×40, doctrine 86i).
+> - **Base de départ 179i : `main` HEAD** (toujours resync ; supprimer la branche mergée). **Piste 179i+** : même dédup empty-state fait-main sur les frères `CommunityLinksView` (l.110-121) et `TrackingLinksView` (l.138-152) — vérifier collision essaim via `list_pull_requests`.
+
+| 178i | claude/laughing-thompson-nbspy1 (iOS dédup design-system + a11y `ShareLinksView` : (A) `emptyState` `VStack` fait-main (icône `.system(size:40)` + 2 Text) → `EmptyStateView(compact: true)` réutilisant clés i18n `share.links.empty.title/.subtitle`, accent `shareAccentHex` préservé, VoiceOver combiné + spring hérités ; (B) titre d'en-tête + `.accessibilityAddTraits(.isHeader)` aligné sur 5 frères ; 1 fichier, net −4 lignes, 0 logique/0 clé i18n neuve/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un
