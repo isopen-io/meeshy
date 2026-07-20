@@ -146,6 +146,7 @@ struct MessageLanguageDetailView: View {
                                 .font(.subheadline)
                                 .foregroundColor(theme.textMuted)
                         }
+                        .accessibilityLabel(String(localized: "message-detail.a11y.close-translation", defaultValue: "Fermer la traduction", bundle: .main))
                     }
 
                     Text(translated)
@@ -274,6 +275,7 @@ struct MessageLanguageDetailView: View {
                             .font(.caption2.weight(.medium))
                             .foregroundColor(langColor.opacity(0.6))
                     }
+                    .accessibilityLabel(String(localized: "message-detail.a11y.retranslate", defaultValue: "Retraduire", bundle: .main))
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.caption.weight(.medium))
@@ -313,6 +315,7 @@ struct MessageLanguageDetailView: View {
             )
         }
         .disabled(isTranslating)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Network Actions

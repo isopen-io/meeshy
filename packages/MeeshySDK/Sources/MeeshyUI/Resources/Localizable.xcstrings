@@ -23577,6 +23577,23 @@
         }
       }
     },
+    "story.timeline.ops.extend" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Extend the timeline by 10 seconds"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prolonger la timeline de 10 secondes"
+          }
+        }
+      }
+    },
     "story.timeline.section.audio" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -23925,6 +23942,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "AUDIO %lld"
+          }
+        }
+      }
+    },
+    "story.timeline.track.section.bg.a11y" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fond"
           }
         }
       }

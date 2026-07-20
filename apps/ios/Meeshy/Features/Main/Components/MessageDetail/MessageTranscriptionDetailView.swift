@@ -118,9 +118,6 @@ struct MessageTranscriptionDetailView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
-            // VoiceOver reads the banner as one element (language, confidence, duration)
-            // instead of four fragments; the leading waveform glyph carries no label.
-            .accessibilityElement(children: .combine)
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
