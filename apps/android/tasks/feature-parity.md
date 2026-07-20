@@ -892,12 +892,60 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       send, stop+send gated by `canSend`) replaces the input row while recording. **Pending follow-up:**
       real `MediaRecorder`/`AudioRecord` capture feeding `meter()`, and the voice-attachment send pipeline
       (VM + upload) — the pill drives the *session* today, not yet the audio bytes.
-- [ ] Attachment ladder (emoji, file, location, camera, photo library, voice)
-- [ ] Large-paste detection → clipboard-content attachment
+- [◐] Attachment ladder (emoji, file, location, camera, photo library, voice) — **file + photo-library picker done**
+      (slice `chat-attachment-file-picker`, 2026-07-16): the composer now carries an attach button
+      (`Icons.Filled.AttachFile`) launching the system document/photo picker (`GetContent("*/*")`); the pick is
+      read into memory (`readPickedAttachment` — ContentResolver byte read + `OpenableColumns.DISPLAY_NAME`
+      query + declared content-type, `null`-safe on a revoked grant), its MIME resolved via the new pure
+      `MimeTypeResolver` SSOT (iOS `MimeTypeResolver.swift` port — declared type first, filename extension as
+      fallback), typed via pure `AttachmentMessageType.forMime` (reusing `MediaKindClassifier`), and sent through
+      the **same** durable upload→graft→send chain the clipboard path uses (`ChatViewModel.sendFileAttachment`).
+      Any composer text rides along as the body and clears. **Pending:** in-app camera capture, an emoji-ladder
+      tray grouping the entries, voice (socket audio pipeline), and per-pick upload-progress. **Location** ships
+      separately (see live-location rows).
+- [x] Large-paste detection → clipboard-content attachment — **detection + preview + send done**
+      (slice `chat-clipboard-content-send`, 2026-07-16): the captured paste is now delivered as a real
+      `text/plain` attachment through the durable upload→graft→send chain (see "Send with attachments"
+      below). `ChatViewModel.send` folds a captured `ClipboardContent` into a `MediaUploadItem`
+      (`clipboard-content.txt`, bytes = the full paste), enqueues it via `MediaUploadQueue`, and calls
+      `sendOptimistic(messageType="file", attachmentUploadCmids=[uploadCmid], attachments=[…])`; the
+      `SEND_MESSAGE` row gates on the upload and carries its cmid as a placeholder `attachmentId` until
+      `MessageMediaWriteBack` grafts the real gateway id in. `canSend` is true with a blank draft when a
+      clip is captured, and the composer shows Send (not the voice Mic) in that state. **Surpasses iOS**,
+      which previews the clipboard chip but never sends it. +9 tests (VM 4, plus repository/graft — see
+      below). **Detection + preview** shipped earlier (slice `chat-large-paste-detection`): pure
+      `:feature:chat` `LargePasteDetector`
+      (port of iOS `UniversalComposerBar.handleClipboardCheck` — fires when the composer text grows
+      past `MIN_TOTAL_LENGTH=2000` **and** jumps by more than `MIN_GROWTH=250` chars in one edit;
+      surpasses iOS by replacing its obfuscated `delta = 2·growth` formula with the readable growth
+      threshold) + pure clock-injected `ClipboardContent` value type (`of(text, nowMillis)` →
+      id/charCount/200-char `truncatedPreview`; surpasses iOS by injecting the clock instead of two
+      `Date()` reads and using full structural equality instead of id-only `==`). `ChatViewModel`:
+      `onDraftChange` folds a captured paste into `ChatUiState.clipboardContent` + clears the draft
+      (so the huge paste is never persisted as a draft nor emits typing), `removeClipboardContent`
+      discards it; `ChatComposer` shows an accent-tinted `ClipboardContentPreview` chip (doc glyph,
+      truncated body, char count, remove button — parité iOS `clipboardContentPreview`), en/fr/es/pt.
+      +24 tests (detector 13, model 8, ViewModel 3), mutation-checked (growth boundary `>`→`>=` fails
+      exactly the boundary test). **Pending:** sending the captured content as a real clipboard_content
+      attachment (gated on the not-yet-built attachment send pipeline).
 - [ ] In-app camera: photo capture + video recording (flash, front/back toggle)
 - [ ] Live sentiment + language detection ("smart context zone") with language pill/picker override
-- [◐] @-mention autocomplete (debounced API + local merge) — local roster done
-      (`chat-mention-autocomplete` 2026-07-06): pure `:feature:chat` `ChatMention` SSOT (port of iOS
+- [✅] @-mention autocomplete (debounced API + local merge) — **local roster + remote merge done**
+      (remote merge `chat-mention-remote-merge` 2026-07-16): the local roster's `ChatMention` SSOT gained the two
+      remaining pure pieces from iOS `MentionComposerController` — `shouldQueryRemote` (only fire once the trimmed
+      `@fragment` reaches 2 significant chars; a bare `@`/single letter is served entirely from the roster) and
+      `mergeSuggestions` (port of `mergeAPISuggestions`: locals keep order and win every collision; a remote row
+      is appended only when its handle — trimmed, case-insensitive — is neither blank, already local, nor a
+      duplicate of an earlier remote row) — plus a staleness-guarded `MentionAutocompleteState.applyRemote(query,
+      remote)` reducer that folds the results in **only** while `query == activeQuery` (a slow response for a stale
+      fragment is dropped, returning the same instance — the pure equivalent of iOS's `Task.isCancelled`).
+      Protocol-injected `MentionSearch` (iOS `MentionServiceProviding` parity) with a `DirectoryMentionSearch`
+      impl over `UserRepository.searchUsers` (failure → empty, roster still serves). `ChatViewModel` fires a
+      300 ms-debounced lookup on `onDraftChange` (each keystroke cancels the previous in-flight `Job`), excludes
+      the signed-in user, and applies via `applyRemote`; cancelled on paste-capture and on select. +20 tests
+      (5 gate, 8 merge, 3 applyRemote, 4 VM: merge-below-roster, single-char-no-fetch, self-excluded, fresh-query-
+      supersedes). Mutation (drop the dedup/blank guard) failed exactly the 6 dedup/blank/merge tests.
+      (local roster `chat-mention-autocomplete` 2026-07-06): pure `:feature:chat` `ChatMention` SSOT (port of iOS
       `MentionComposerController` pure logic) — `extractQuery` (trailing `@fragment`, bare `@` → full roster,
       space → inactive), `filterCandidates` (trimmed case-insensitive over username **or** display name, blank →
       all), `insertMention` (rewrite trailing fragment → `@username `, inert without an active fragment); plus a
@@ -922,7 +970,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `onDraftChange` and re-arms `replyingToMessageId` on open; the durable store round-trips the reference. +16
       tests. **Pending:** the language/effects/blur/ephemeral fields (those composer features are not yet built on
       Android — no state to persist).
-- [ ] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress
+- [◐] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress —
+      **REST attachment chain + first real path (clipboard content) done** (slice `chat-clipboard-content-send`,
+      2026-07-16). The durable upload→send chain now carries message attachments, mirroring the proven story
+      publish chain: `MessageRepository.sendOptimistic` gained `messageType` / `attachmentUploadCmids` /
+      `attachments` params (defaulted → text-only sends byte-identical), threading placeholder ids into
+      `SendMessageRequest.attachmentIds` + the optimistic `ApiMessage.attachments` and gating the `SEND_MESSAGE`
+      outbox row on the uploads via `dependsOn`. New pure `:sdk-core` `MessageMediaWriteBack.graft` (exact analog
+      of `PublishMediaWriteBack`, over `attachmentIds`) + a pure `OutboxPayloadGrafts.firstOf` combinator wire both
+      write-backs into the `OutboxDrainer`, so a delivered upload's real gateway id reaches a queued chat send
+      **or** a story publish (each graft owns one payload shape, declines the other). First live producer: the
+      captured clipboard content (REST, `text/plain`, `messageType="file"`). **Pending:** audio over socket
+      (`message:send-with-attachments` — the audio pipeline is socket-only per gateway), a file/photo/camera picker
+      to source other attachment types, real TUS-resumable uploads (today: plain multipart `POST /attachments/upload`),
+      and an upload-progress indicator. +36 tests (graft 10, combinator 4, repository 4, VM 4 + existing send/story
+      chains regression-green), mutation-checked (dropping the identity guard fails exactly the identical-swap test).
+      **File/photo picker source done** (slice `chat-attachment-file-picker`, 2026-07-16): a system
+      document/photo picker now sources image/video/document attachments over this same REST chain — the picked
+      bytes are read from the content Uri, the MIME resolved via the new pure `MimeTypeResolver` SSOT and typed
+      via `AttachmentMessageType.forMime`, then delivered through `ChatViewModel.sendFileAttachment` (mirror of
+      the clipboard path). +34 tests (MimeTypeResolver 20, AttachmentMessageType 8 — 28 pure — plus 6 VM
+      behavioural), mutation-checked (dropping the octet-stream guard in `resolve` fails exactly the 2
+      octet-stream deferral tests). **Still pending:** audio over socket, in-app camera, TUS-resumable, progress.
 - [◐] In-conversation message search (translation-match aware) + jump-to-result — core+wiring done
       (`chat-search-highlight-wiring` 2026-07-06): pure `:feature:chat` `ChatSearch` SSOT over the opaque
       `SearchableMessage` — `matchIds` (trimmed/case-insensitive `contains` across **every** text of a message,
@@ -982,9 +1051,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `pruneExpired`, surpassing iOS by pruning lapsed sessions the moment the clock passes their deadline) +
       the `:sdk-ui` `LiveLocationBadge` (pulsing green dot, accent glyph, name, live self-terminating countdown,
       optional Stop) and `LiveLocationDurationPicker` capsule chips, both accent-coherent, EN/FR/ES/PT strings,
-      +42 tests. **Still pending:** the socket start/update/stop wiring feeding the reducer + fullscreen map /
-      directions (needs a Maps SDK dependency).
-- [ ] OpenGraph link-preview cards + in-app browser; tracker-param stripping
+      +42 tests. Socket start/update/stop wiring **done** (`chat-live-location-socket-fold` 2026-07-16):
+      the pure `:core:model` `LiveLocationEventFold` folds the `location:live-started/updated/stopped`
+      wire events (already-modelled `Location.kt` DTOs) into the `LiveLocationSessions` reducer — resolving
+      each ISO date through the shared `isoToEpochMillisOrNull` and applying iOS's exact fallbacks
+      (`expiresAt ?? now + durationMinutes·60`, `startedAt ?? now`, `timestamp ?? now`, non-positive window →
+      `now`) — a faithful port of the three `ConversationSocketHandler` sinks, with the reducer's inert/no-op
+      contracts preserved. `MessageSocketManager` gains the three `liveLocation*` `SharedFlow`s + `listen`
+      registrations; `ChatViewModel` collects them (conversation-scoped) into `ChatUiState.liveLocations` and
+      exposes `liveLocationBadges`; `ChatScreen` renders a self-terminating accent-coherent `LiveLocationBadge`
+      above the message list per active session. +17 tests (fold 13 incl. now-vs-startedAt boundary mutation-checked,
+      VM 4). **Still pending:** fullscreen map / directions (needs a Maps SDK dependency).
+- [x] OpenGraph link-preview cards + in-app browser; tracker-param stripping
     - [x] **Pure link-preview core + tracker stripping** (`:sdk-core` `me.meeshy.sdk.link`): `LinkPreviewParser`
       (`firstUrl` http/https/`www.` detection with trailing-punctuation + balanced-paren trimming and scheme
       lowercasing; `canonicalize` strips utm_*/fbclid/gclid case-insensitively + drops empty query/fragment;
@@ -1006,8 +1084,38 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       campaign-tagged variants, cancellation-safe. Wired real: `ChatScreen` requests per bubble and projects the
       collected cache into `LinkPreview.stateFor`, so a link now progresses `Loading`→`Card`/`BareLink`. Mirrors
       iOS `LinkPreviewStore.requestMetadata`; SSOT that iOS scatters across `cache`/`negativeCache`/`pendingKeys`.
-    - [ ] **Remaining:** in-app browser (Chrome Custom Tabs); rich-card image loading in `RichLinkCard`.
-- [ ] Report message (typed reasons + detail); per-conversation animated themed background
+    - [x] **In-app browser routing + rich-card image band** (slice `chat-in-app-browser-routing`,
+      2026-07-16, +30 tests): the pure `LinkOpenPolicy.targetFor` (`:sdk-core`) — one decision mapping a
+      raw URL to `LinkOpenTarget.InAppBrowser` (http/https, host-validated, scheme-lowercased),
+      `External` (well-formed non-web schemes — mailto/tel/geo/`meeshy://` deep links/reverse-dns — handed
+      to the OS), or `Unsupported` (blank, hostless-web, or a **blocked** dangerous scheme
+      javascript/data/file/about/blob/vbscript/content). **Surpasses** iOS's `SFSafariViewController`
+      (which silently no-ops on non-http and would run a `javascript:`/`data:` payload): dangerous schemes
+      are refused, non-web schemes reach their real handler, and a scheme-less bare host is promoted to
+      https. Plus the pure `LinkMetadata.renderableImageUrl` (og:image only when http/https) reused by the
+      card. Wired real (exempt glue): `openChatLink` maps each arm to a Chrome **Custom Tab** (accent-tinted
+      toolbar) / `ACTION_VIEW` / no-op, each `runCatching`-guarded; `ChatScreen.onOpenUrl` routes through it;
+      `RichLinkCard` gained a Coil `AsyncImage` hero band gated by `renderableImageUrl`. +30 tests
+      (LinkOpenPolicy 26, LinkMetadata 4); mutation-checked (dropping the blocked-scheme guard killed
+      exactly the 3 dangerous-scheme tests). SSOT for URL-open routing that iOS leaves implicit in
+      `URL(string:)` + `SafariView`.
+- [~] Report message (typed reasons + detail) **shipped** (slice `chat-report-message`, 2026-07-16,
+      +36 tests); per-conversation animated themed background still open.
+    - [x] **Report a message** — long-press → **Report** (offered *only* on an incoming, still-present
+      message: a genuine improvement over iOS, which appends `.report` unconditionally, even on your
+      own message). The pure `ReportReason` SSOT (`:core:model`) gained the two message-only reasons
+      `VIOLENCE`/`HATE_SPEECH` + a `messageOrdered` list (parity with iOS `ReportMessageSheet.ReportType`:
+      spam, inappropriate, harassment, violence, hate_speech, impersonation, other), while the narrower
+      user-report `ordered` list stays untouched. `ReportRequestBuilder.forMessage` + `ReportRepository.
+      reportMessage` mirror the user path (session-gated, inert `null` off-session). The submit lifecycle
+      is a pure `ReportMessageForm` reducer modelling one `ReportSubmitStatus` enum (Idle/Submitting/
+      Submitted/Error) — cleaner than iOS's three `@State` booleans — with a double-submit guard and an
+      "editing clears a prior error" rule. Wired real (exempt glue): `MessageActionMenu.Report`,
+      `ChatViewModel.openReport/selectReportReason/onReportDetailsChange/submitReport/dismissReport`, a
+      `ReportMessageSheet` bottom sheet (accent-tinted radio reasons + capped details field + toast on
+      success) in en/fr/es/pt. +36 tests (ReportReason 3, ReportRequestBuilder 4, ReportRepository 4,
+      MessageActionMenu 5, ReportMessageForm 11, ChatViewModel 7, plus the updated basic-menu order);
+      mutation-checked (dropping the `!isOutgoing` gate killed exactly the 3 outgoing-message tests).
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
 - [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
 - [ ] Member moderation: promote/demote, expel, ban, add member
@@ -1499,18 +1607,55 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Accessibility for canvas elements (labels, custom delete/duplicate/reorder actions)
 
 ## F. Feed & Posts
-- [~] Social feed: cache-first SWR list + pull-to-refresh + cursor-paginated infinite
+- [x] Social feed: cache-first SWR list + pull-to-refresh + cursor-paginated infinite
       scroll done (`PostRepository.feedStream`/`loadMore`/`feedHasMore`, skeleton on cold
       cache, silent background revalidation, 5-from-tail prefetch + footer spinner,
-      dedupe-append, history pages do not bump the freshness watermark) ; new-posts banner
-      + realtime-head merge pending
+      dedupe-append, history pages do not bump the freshness watermark) ; **new-posts banner
+      + realtime-head merge done** (slice `feed-new-posts-banner`, 2026-07-16): pure
+      `:feature:feed` `FeedRealtimeReducer`/`FeedRealtimeHead` SSOT — a socket `post:created`
+      buffers above the cache feed (newest-first) and bumps a `newPostsCount`, ignoring a
+      blank id, a post already in the cache feed (iOS `!posts.contains` guard), or an
+      already-buffered echo; `acknowledge` clears the count but keeps the posts at head;
+      `reconcile` drops buffered posts the cache refresh has surfaced (no double-render);
+      `clear` on pull-to-refresh. `FeedViewModel` injects `SocialSocketManager`, folds
+      `postCreated` through the reducer, prepends the (cache-disjoint) realtime head to the
+      projection, and survives a background feed re-emission — the Android analogue of iOS
+      `mergePreservingRealtimeHead`. `FeedScreen` shows a floating accent "N new posts" pill
+      (`ArrowUpward`, plurals en/fr/es/pt) that scrolls to top + acknowledges. +21 tests
+      (14 reducer, 7 VM). Mutation-proof: dropping the `loadedIds` guard fails exactly 2 tests.
+      **Live `post:deleted` removal done** (slice `feed-realtime-post-deleted`, 2026-07-16):
+      the previously-unconsumed `SocialSocketManager.postDeleted` stream now folds through a
+      pure `FeedRealtimeReducer.remove` — a deleted id is *tombstoned* (`FeedRealtimeHead.removedIds`)
+      so the feed hides it from both the realtime head and the cache-projected list; a buffered
+      still-unseen arrival is dropped from the head and the banner count decremented (floored at 0,
+      never claiming a gone post); `reconcile` releases a tombstone once a refresh drops the post
+      from the cache; `accept` clears a tombstone if the post is re-created; `clear` (pull-to-refresh)
+      drops all tombstones. The Android analogue of iOS FeedViewModel removing the post from its
+      in-memory array — but pure/unit-testable and race-proof (a lagging stale re-emission that still
+      carries the deleted post keeps it hidden). +15 tests (10 reducer, 5 VM). Mutation-proof:
+      dropping the tombstone add fails exactly 7 discriminating tests, the other 61 stay green.
+      **Live `post:liked`/`post:unliked` count sync done** (slice `feed-realtime-like-sync`, 2026-07-17):
+      the previously-unconsumed `SocialSocketManager.postLiked`/`postUnliked` streams now fold through a
+      pure `FeedRealtimeReducer.like` into a `FeedRealtimeHead.likes` *overlay* (`LikeOverlay(count, mine)`):
+      the gateway's ABSOLUTE `likesCount` overrides the (possibly stale) cache count, while the viewer's
+      own `isLiked` flips **only** when the event carries the viewer's own userId (`mine` true/false) —
+      another user's like moves the count but preserves the viewer's own state (`mine` null → defer, prior
+      own-state preserved). `reconcileLikes` releases an overlay once a refresh's cache count/own-state
+      catches up (never reverting a live count to a stale cache value); `clear` (pull-to-refresh) drops all
+      overlays. Surpasses iOS: the count/own-state law is a pure, unit-testable overlay — and it fixes the
+      iOS `FeedSocketHandler` bug where *any* user's like flips the viewer's own `isLikedByMe` (Android
+      gates it on userId in one place). +23 tests (15 reducer, 8 VM). Mutation-proof: dropping the prior-`mine`
+      preservation fails exactly the discriminating "another user preserves a prior viewer-own like" test.
 - [x] Post reactions (heart like) — **optimistic** toggle via `PostRepository.toggleLike`
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
       proxy removed). UI like state now reads the viewer's own `isLikedByMe`.
-- [x] Adaptive multi-image collage layouts (1–4 + overlay « +N ») in the feed card
-      (single full-width with aspect ratio, 2-col grid otherwise) — `FeedPostBuilder`
-      resolves + orders image media and resolves relative URLs against the gateway origin
+- [x] Adaptive multi-image collage layouts (1–5+ media, « +N » overflow) in the feed card
+      — pure `MediaCollage.solve(count)` SSOT in `:sdk-ui` (1=single real-aspect, 2=side-by-side,
+      3=large-over-two-up, 4=row-major 2×2, 5=two-then-three, 5+ with `+N` overflow on the last
+      tile); `PostImageGrid` renders the returned rows/cells (slice `feed-adaptive-collage-layout`,
+      2026-07-18). `FeedPostBuilder` still resolves + orders image media and relative URLs.
+      Shared building block reusable by the chat-bubble media grid.
 - [~] Prisme Linguistique on the feed: post content rendered in the viewer's preferred
       language with a discreet « Traduit » indicator (`ApiPost.displayContent`/`isTranslated`
       port of the message Prisme rules — Map-keyed translations, Rule 1 honoured) ;
@@ -1518,30 +1663,401 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)
-- [~] Social feed: cursor-paginated post list + infinite scroll done (see above) ;
-      new-posts banner pending
+- [x] Social feed: cursor-paginated post list + infinite scroll done (see above) ;
+      new-posts banner + realtime-head merge done (slice `feed-new-posts-banner`, 2026-07-16)
 - [ ] Feed overlay shell with draggable floating buttons + radial menu ladder
 - [ ] Create post (text, photos/videos, camera, files, location, audio+transcription, visibility, language)
 - [ ] Unified post composer (Post / Status / Story tabs)
 - [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
-- [ ] Post reactions (heart like) — optimistic + live socket sync; bookmark / un-bookmark
-- [ ] Adaptive multi-image collage layouts (1–5+ media) + fullscreen gallery
-- [ ] Threaded comments: auto-preview replies, expand threads ("view N more"), comment likes,
-      mentions, effects/blur, per-comment language switcher
+- [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
+      count sync **done** (slice `feed-realtime-like-sync`, 2026-07-17)
+- [x] Bookmark / un-bookmark — optimistic `toggleBookmark` (flips `isBookmarkedByMe` + count,
+      rolls back on failure) + live personal `post:bookmarked` overlay (absolute count + own-state,
+      reconciled against the cache) + accent-tinted bookmark button in the feed card
+      (slice `feed-realtime-bookmark-sync`, 2026-07-17)
+- [x] Adaptive multi-image collage layouts (1–5+ media) **done** via `MediaCollage.solve` +
+      `PostImageGrid` (slice `feed-adaptive-collage-layout`, 2026-07-18). **Fullscreen media gallery
+      done** (slice `feed-media-fullscreen-gallery`, 2026-07-18): tapping any collage tile (or the
+      single image, or the `+N` overflow tile) opens `MeeshyImageViewer` — the `:sdk-ui` fullscreen
+      pager (pinch-zoom/pan/double-tap, ±2 prefetch, save-to-gallery) — positioned on the tapped image
+      and paging across ALL of the post's images at full resolution. Pure `:feature:feed`
+      `FeedMediaGallery.of(post, imageIndex) → FeedGallery(pages, startIndex)` SSOT (mirror of chat's
+      `ConversationMediaGallery`): flattens the post's images to full-res URLs, each page sharing the
+      post text as caption (trim → null when blank) + author + timestamp for the viewer chrome, tapped
+      index clamped into bounds, empty post → nothing opens. `FeedViewModel` holds the ephemeral
+      `imageViewer: FeedGallery?` (open on `openImageViewer`, `null` on `dismissImageViewer`; unknown
+      post / image-less post inert). +16 tests (`FeedMediaGalleryTest` 12, `FeedViewModelTest` +4).
+- [~] Threaded comments: expand threads ("view N replies") + comment likes + **reply composition** +
+      **auto-preview replies** (slice `feed-reply-preview`, 2026-07-18 — the first top-level comments'
+      replies auto-preload after the page loads and show a 2-reply inline preview with a "View all N replies"
+      affordance, no tap needed; mirror of iOS `preloadReplyPreviews`) + **post-detail realtime room**
+      (slice `feed-postdetail-realtime-comments`, 2026-07-18 — a live `comment:added` for the open post
+      lands in the thread without a refresh: a top-level comment prepends, a reply prepends into its
+      already-visible thread and bumps the parent's "View N replies" count; mirror of iOS
+      `PostDetailViewModel.subscribeToSocket` `commentAdded` sink filtered to `postId`) + **live
+      `comment:deleted`** (slice `feed-comment-realtime-delete`, 2026-07-18 — a comment/reply deleted
+      elsewhere vanishes from the open thread without a refresh: a top-level comment is removed and its
+      reply thread purged, a reply is removed and its parent's "View N replies" count decremented;
+      mirror of iOS `PostDetailViewModel` `commentDeleted` sink) + **live comment heart reactions**
+      (slice `feed-comment-live-reactions`, 2026-07-18 — a `comment:reaction-added`/`comment:reaction-removed`
+      heart on the open post syncs without a refresh: the viewer's own reaction lights/clears the heart, a
+      third party's moves the displayed count; mirror of iOS `PostDetailViewModel` `commentReactionAdded`/
+      `commentReactionRemoved` sinks) + **live header comment-count badge** (slice
+      `feed-postdetail-commentcount-badge`, 2026-07-18 — the header badge, owned by the separate
+      `PostDetailViewModel`, now subscribes to the same room: a live `comment:added`/`comment:deleted` for the
+      open post resyncs the badge to the **server-authoritative** `commentCount` the event carries — clamped
+      ≥0 — healing any drift from the thread VM's optimistic arithmetic; a manual refresh drops the live
+      overlay for fresh server truth; other posts + a blank route are ignored; mirror of iOS
+      `PostDetailViewModel` `commentAdded`/`commentDeleted` `post.commentCount = data.commentCount`) + **mention
+      rendering** (slice `feed-comment-mention-rendering`, 2026-07-18 — a comment's content now renders through
+      the **shared** `RichMessageText`/`MessageTextParser` the chat bubble uses, so `@Display Name` / `@handle`
+      tokens resolve to highlighted, tappable mention links [plus bold/italic/URL rich text]; the pure
+      `CommentMentionDirectory` builds the `username → displayName` map from every comment + loaded-reply author,
+      mirroring the web `buildMentionDisplayMap` filter — blank handle / absent-or-blank display name / vanity
+      `displayName == handle` all dropped) **done** + **per-comment language switcher** (slice
+      `feed-comment-language-switcher`, 2026-07-18 — each translated comment now carries a discreet Prisme flag
+      strip [translate glyph + original + configured content-language chips], reusing the **shared**
+      `PostLanguageStrip` + `LanguageFlagTapResolver`; tapping a chip switches *that* comment's displayed
+      language [content + active chip] via a per-comment-keyed override, tapping the active chip reverts to the
+      Prisme default; a content-less/unknown tap is inert; mirror of the post-detail `DetailLanguageStrip`,
+      keyed per comment rather than per post — the `isTranslated` flag was computed but never rendered before)
+      **done** + **comment composer @-mention autocomplete** (slice `feed-comment-mention-autocomplete`,
+      2026-07-18 — the comment/reply composer now offers the same @-mention autocomplete the chat composer has:
+      the pure mention state-machine was **promoted from `:feature:chat` to `:sdk-core`** as a shared SSOT
+      [`MentionComposer` + `MentionAutocompleteState` in `me.meeshy.sdk.mention`, renamed from `ChatMention`],
+      so both surfaces share one behaviour; the new pure `CommentMentionRoster` [`:feature:feed`] builds the
+      candidate list from the thread's authors [blank-handle drop, self-exclude, display-name→handle degrade,
+      case-insensitive dedup first-wins, encounter order]; `PostCommentsViewModel` now owns the composer draft
+      + mention panel in a folded flow [`onDraftChange`/`onMentionSelected`, `submit()` reads the draft and
+      resets] so a realtime comment landing never tears the half-typed draft down; `PostCommentsSection`'s
+      `CommentComposer` is now controlled with a `CommentMentionStrip` mirroring chat's `MentionSuggestionStrip`.
+      Local-roster only for now — the remote directory merge [`MentionSearch`] is a later slice) **done** +
+      **comment composer remote directory merge** (slice `feed-comment-mention-remote-merge`, 2026-07-19 — a
+      two-character-or-longer `@fragment` now enriches the thread-local roster with the shared user directory,
+      the feed counterpart of chat's `chat-mention-remote-merge`: the `MentionSearch`/`DirectoryMentionSearch`
+      building block was **promoted from `:feature:chat` to `:sdk-core`** [`me.meeshy.sdk.mention`] as the shared
+      SSOT so both composers query one directory port, chat re-points to it; `PostCommentsViewModel` fires a
+      300 ms-debounced `mentionSearch.search(query)` for the active fragment [`MentionComposer.shouldQueryRemote`
+      gates it, a fresh keystroke or a selection cancels the in-flight lookup], excludes the signed-in user,
+      and folds the results below the local roster via the pure `applyRemote` [local-first, stale-fragment
+      dropped]; a failed lookup degrades to the local roster. +6 `PostCommentsViewModelTest`) **done**;
+      effects/blur still open
 - [ ] Post / comment pin-unpin; repost / quote-repost / share; report
 - [ ] Post view + dwell-time tracking; batched impression tracking
-- [ ] Feed post detail with text/media/repost, translation flags, threaded comments
-- [ ] User-profile posts feed + community posts feed
-- [ ] Bookmarked posts feed (saved posts) with infinite scroll
+- [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
+      done** (slice `feed-post-detail-screen`, 2026-07-17): tapping a **non-reel** feed post (previously a
+      dead-end — the card only routed reels) now opens a full-screen `PostDetailScreen`. `PostDetailViewModel`
+      reads the route `postId` (`SavedStateHandle`), fetches via the existing `PostRepository.getPost(id)`,
+      projects through the **shared** `FeedPostBuilder` (Prisme parity with the feed), and drives a working
+      per-post language switch (the flag strip) via the shared `LanguageFlagTapResolver` + `FeedPostBuilder.
+      resolveActiveCode` — one flag-tap rule with the feed and chat. Cold open shows a skeleton (no per-post
+      cache yet); a blank id → coherent not-found; a fetch failure → error state + snackbar; pull-to-refresh;
+      read-only engagement counts (likes/comments/reposts/bookmarks). Wired from all three feed surfaces
+      (feed, saved, user-posts) so no non-reel tap dead-ends anywhere; reels still route to the reels player;
+      back returns to the source. **SSOT refactor:** collapsed the three duplicate `toTranslationRows` copies
+      (FeedViewModel, FeedPostBuilder, and the new VM) into one shared internal `PostTranslationRows.kt`.
+      **Threaded comments now landed** (slice `feed-post-detail-comments`, 2026-07-17): the post-detail
+      screen renders a full comment thread beneath the post, on the **existing** `PostRepository.getComments`/
+      `addComment`. `core:model` — `ApiPostComment.displayContent`/`isTranslated` (Prisme law reused from
+      `ApiPost` — a comment is prism-translated like any content). `:feature:feed` pure — `CommentThreadState`
+      (immutable accumulation SSOT: `appended` de-dups by id + advances the last-id cursor watermark,
+      `optimistic` prepends a just-sent row, `confirmed` swaps it for the server row, `failed` rolls it back;
+      `canLoadMore = hasMore && cursor non-blank`) + `CommentProjection` (author/avatar/Prisme content/reply
+      awareness/pending flag). `PostCommentsViewModel` reads the route `postId`, cursor-pages by the last
+      comment's id, and **sends optimistically** (Instant-App feedback: the row appears instantly, dimmed,
+      then confirmed or removed). Compose `PostCommentsSection` (accent-coherent Indigo, avatar+name+reply
+      badge+relative time+Prisme content, composer with send/spinner, "show more"). **SSOT:** collapsed the
+      three duplicate `resolveMediaUrl` copies in the feed module into one shared `resolveFeedMediaUrl`
+      (`FeedMediaUrl.kt`; FeedPostBuilder/RepostEmbed migrated, their tests unchanged & green). EN/FR/ES/PT.
+      **Comment likes now landed** (slice `feed-comment-likes`, 2026-07-17): each comment carries a heart
+      like affordance with an **optimistic toggle**, on the **existing** `PostRepository.likeComment`/
+      `unlikeComment`. `:feature:feed` pure — `CommentLikeState` (immutable optimistic-like SSOT: `likedIds`
+      + per-comment count `deltas` + `inFlightIds` guard; `seeded` marks likes from the server
+      `currentUserReactions` heart, additive across pages and never resurrecting a locally-toggled like;
+      `beginToggle` flips + guards a double-tap re-entrantly (`null` = skip network), `settle` keeps the
+      optimistic result, `rollback` reverts on failure; `displayCount` clamps ≥0). Mirror of iOS
+      `PostDetailViewModel.toggleCommentLike`. `CommentProjection` now projects `isLiked` + the optimistic
+      count; `PostCommentsViewModel.toggleLike` guards blank post/comment ids, calls like/unlike, and rolls
+      back on `Failure`/exception (cancellation-safe). Compose: accent-coherent heart (filled + `Error` red
+      when liked, `FavoriteBorder` + secondary otherwise — exact parity with the feed-post like) reusing the
+      shared `feed_like`/`feed_unlike` strings (no new strings). +25 tests (15 `CommentLikeStateTest`,
+      +3 `CommentProjectionTest`, +7 `PostCommentsViewModelTest`; mutation-proven: dropping the in-flight
+      guard fails only the double-tap guard test).
+      **Comment replies (1-level) now landed** (slice `feed-comment-replies`, 2026-07-17): each top-level
+      comment with `replyCount > 0` shows a natural "View N replies" affordance that expands into indented
+      reply rows, on the **existing** `PostRepository.getCommentReplies`. `:feature:feed` pure —
+      `CommentRepliesState` (immutable per-parent SSOT: `expandedIds`/`loadingIds`/`loadedIds`/
+      `repliesByParent`; `expanded`/`collapsed` idempotent, `beginLoad` returns `null` when already loading
+      **or already loaded** so a collapse-then-re-expand never refetches — cache-first Instant-App;
+      `loaded` stores rows + marks loaded + clears loading; `failed` clears loading **and collapses** the
+      thread exactly as iOS `PostDetailViewModel` does on error). `PostCommentsViewModel.toggleReplies`
+      guards blank post/comment ids, expands + fetches once, seeds reply-row likes from
+      `currentUserReactions`, and is cancellation-safe. The projection now **filters the top-level list to
+      `parentId == null`** (mirror of iOS `topLevelComments`) so a reply mixed into the page never renders
+      twice; reply rows reuse `CommentProjection`/`CommentRow` so likes work on replies too. Compose:
+      accent-coherent Indigo toggle + discreet loading spinner + indented reply column. EN/FR/ES/PT
+      (`post_comments_view_replies` plural + `post_comments_hide_replies`). +23 tests (14
+      `CommentRepliesStateTest`, +9 `PostCommentsViewModelTest`; mutation-proven: dropping the
+      already-loaded guard fails exactly the 4 no-refetch tests).
+      **Auto-preview replies now landed** (slice `feed-reply-preview`, 2026-07-18): after a comment page
+      loads, the replies of the first top-level comments with replies **auto-preload in the background** and
+      a 2-reply inline preview shows **without a tap** (mirror of iOS `preloadReplyPreviews`
+      `schedulePreloadReplyPreviews`/`prefix(5)`), with a "View all N replies" affordance to expand the full
+      thread. `:feature:feed` pure — `CommentRepliesState.previewTargets(candidateIds, limit)` (first-`limit`
+      fresh parents, dropping loaded/in-flight — bounded like iOS `prefix(5)`) + `beginLoadAll(ids)` (batch
+      mark-loading without expanding: a preview is *loaded but collapsed*). `ReplyThreadUiState` gains
+      `isPreview` + `hiddenReplyCount`; the projection now also renders **loaded-but-collapsed** threads
+      capped to 2 rows, so **collapsing an expanded thread falls back to its preview** (iOS keeps `repliesMap`
+      populated after a collapse) rather than hiding it outright. `PostCommentsViewModel.preloadReplyPreviews`
+      runs after each successful fetch, idempotent (never refetches a loaded/in-flight thread). Cache-first
+      improvement over iOS: a previewed thread is never refetched when the viewer taps "View all". Compose:
+      preview rows above an accent-coherent Indigo "View all N replies" toggle; EN/FR/ES/PT
+      `post_comments_view_all_replies` plural. +15 tests (+10 `CommentRepliesStateTest` — `beginLoadAll`
+      fresh/skip-loaded-loading/inert-empty/inert-all-known, `previewTargets` first-N/fewer-than-limit/
+      non-positive-limit/no-candidates/drops-loaded/bounds-before-drop; +5 `PostCommentsViewModelTest` —
+      auto-load-without-tap, no-preview-for-zero-replies, capped-to-first-five, expand-previewed-no-refetch,
+      empty-preload-no-rows) + 1 rewritten (`collapsing an expanded thread falls back to its reply preview`).
+      Mutation-proven: dropping the `take(limit)` cap fails exactly the 3 cap tests (`previewTargets`
+      first-N + bounds-before-drop, `capped to the first five`). **Post-detail realtime room now landed**
+      (slice `feed-postdetail-realtime-comments`, 2026-07-18): `PostCommentsViewModel` subscribes to
+      `SocialSocketManager.commentAdded` filtered to the route `postId`; a live top-level comment prepends
+      via `CommentThreadState.received` (deduped, not marked pending), a live reply prepends via
+      `CommentRepliesState.receivedReply` (only when the thread is expanded-or-loaded so no phantom partial
+      thread) + bumps the parent's `replyCount`. +18 tests (6 `CommentThreadStateTest` `received`, 6
+      `CommentRepliesStateTest` `receivedReply`, 6 `PostCommentsViewModelTest` realtime). Mutation-proven:
+      flipping `received` prepend→append fails exactly the 3 ordering tests. **Live `comment:deleted` now
+      landed** (slice `feed-comment-realtime-delete`, 2026-07-18): a new `SocketCommentDeletedData`
+      (`postId`/`commentId`/`commentCount`, mirror of iOS) + `SocialSocketManager.commentDeleted` flow;
+      `PostCommentsViewModel.onCommentDeleted` (filtered to the route `postId`) drops a top-level comment via
+      `CommentThreadState.removed` + purges its thread via `CommentRepliesState.removedThread`, or drops a
+      reply via `removedReply` (parent resolved through `parentOfReply`) + decrements the parent's `replyCount`.
+      +22 tests (1 `SocialSocketManagerTest` decode, 5 `CommentThreadStateTest` `removed`, 10
+      `CommentRepliesStateTest` `parentOfReply`/`removedReply`/`removedThread`, 6 `PostCommentsViewModelTest`
+      realtime-delete). Mutation-proven: flipping the reply-delete decrement `-1`→`+1` fails exactly the
+      count-decrement test. **Live comment heart reactions now landed** (slice `feed-comment-live-reactions`,
+      2026-07-18): new `SocketCommentReactionUpdateData`/`SocketCommentReactionAggregation` (mirror of iOS
+      `SocketCommentReactionUpdateEvent`) + `SocialSocketManager.commentReactionAdded`/`commentReactionRemoved`
+      flows (`comment:reaction-added`/`comment:reaction-removed`); `CommentLikeState.reactionApplied(id, isOwn,
+      added)` — an own reaction (echoed from this/another device) syncs the liked flag only and leaves the count
+      `deltas` untouched (the optimistic toggle already moved it on this device — touching it on the echo would
+      double-count), a third party's moves the count only (±1, clamped ≥0 at display), never the liked flag;
+      idempotent for the own case. `PostCommentsViewModel.onCommentReaction` (filtered to the route `postId` +
+      heart emoji, `isOwn = userId == currentUser.id`) folds it into the existing `CommentLikeState`, so the heart
+      + displayed count flow through the existing `CommentProjection` — no new UI. Mirror of iOS
+      `PostDetailViewModel` `commentReactionAdded`/`commentReactionRemoved` sinks. +15 tests (8
+      `CommentLikeStateTest` `reactionApplied`, 2 `SocialSocketManagerTest` decode, 6 `PostCommentsViewModelTest`
+      realtime). Mutation-proven: flipping the third-party delta sign (`+1`→`-1`) fails exactly 4 count-direction
+      tests (2 pure + 2 VM). **Still open:** reply @mentions, the authoritative post `commentCount` badge resync
+      (owned by `PostDetailViewModel`, a separate VM), per-post + comment cache-first.
+      Prior comment thread: +41 tests (6 `CommentPrismeTest`, 9 `CommentProjectionTest`,
+      12 `CommentThreadStateTest`, 14 `PostCommentsViewModelTest`).
+      +12 `PostDetailViewModelTest` (mutation-proven: skeleton + revert branches).
+      **Repost embed cell now landed** (slice `feed-repost-embed-cell`, 2026-07-17): a reposted/quoted
+      post rendered as an accent-coherent quote block inside the feed card AND the post detail (and the
+      saved / user-posts surfaces, for cross-surface coherence). Pure `RepostEmbedBuilder` projects
+      `ApiPost.repostOf` → `RepostEmbedPresentation` (Prisme content via the shared, now-promoted
+      `preferredEntry` law extended onto `ApiRepostOf` in `core:model`; author, avatar/media URL
+      resolution, first-media preview + "+N" surplus, quote-vs-repost flag, story/reel kind badge).
+      The embed's tap target is the ORIGINAL reposted post's id (never the outer card) — mirrors iOS
+      `FeedPostCard.repostTapTargetId`; tapping opens its detail. Full story-/reel-canvas embed
+      (iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`) deferred — no Android story-canvas renderer
+      yet, so those render the same quote block + discreet kind badge. +22 tests (14
+      `RepostEmbedBuilderTest`, +2 `FeedPostBuilderTest` wiring, 6 `RepostPrismeTest`; mutation-proven
+      on the media-surplus branch).
+- [~] User-profile posts feed **done** (slice `feed-user-posts-screen`, 2026-07-17): cursor-paginated
+      list of a user's authored posts. Generalised the saved-posts pattern into one SSOT — the page DTO
+      (`PostPage`, with `BookmarkPage` now a typealias), the pure accumulation law (`PostPageListState`,
+      `BookmarksListState` now a typealias) and the `foldPage` adapter are all shared. `sdk-core`:
+      `PostRepository.getUserPostsPage(userId,cursor,limit)` (via `rawApiCall`, carries the
+      `nextCursor`/`hasMore` watermark the plain `getUserPosts` drops; `success:false`/dataless → `Failure`
+      through the single `foldPostPage` law). `UserPostsViewModel` (route `userId` via `SavedStateHandle`,
+      cursor paging, skeleton-on-cold, pull-to-refresh, 5-from-tail infinite scroll, blank-id never hits the
+      network) projects through the shared `FeedPostBuilder` (Prisme parity with the feed). `UserPostsScreen`
+      reuses the feed card projection (read-only, no un-bookmark). Reached from a new profile **Publications**
+      row (`onViewPosts` → `Routes.USER_POSTS = profile/{userId}/posts`); back returns to the profile, a reel
+      taps to the reels player (no dead end). **community posts feed still pending** (the `getCommunityPosts`
+      call + this cursor-list + `FeedPostBuilder` pattern can be reused). +16 tests (11 `UserPostsViewModelTest`,
+      +5 `PostRepositoryTest`).
+- [x] Bookmarked posts feed (saved posts) with infinite scroll — pure `BookmarksListState`
+      (dedup-append cursor pagination + optimistic `removed` + `canLoadMore` law) driving
+      `BookmarksViewModel` (cursor paging, optimistic un-bookmark with rollback, skeleton-on-cold,
+      pull-to-refresh); `PostRepository.getBookmarksPage` carries the pagination watermark; reached
+      from the feed top-bar bookmark action → `Routes.SAVED_POSTS` (slice `feed-bookmarks-screen`, 2026-07-17)
 - [ ] Post-detail room real-time subscriptions
-- [ ] Story repost-embed cell in the feed
+- [~] Repost / quote embed cell in the feed — the reposted/quoted post rendered as an
+      accent-coherent quote block (author, Prisme content, first-media preview + "+N", quote/repost
+      + story/reel kind badge) inside the feed card, post detail, saved and user-posts surfaces; tap
+      opens the ORIGINAL post's detail. Pure `RepostEmbedBuilder` + shared `ApiRepostOf` Prisme law
+      (slice `feed-repost-embed-cell`, 2026-07-17). **Still open:** the full story-/reel-canvas embed
+      (needs an Android story-canvas renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`).
 
 ## G. Statuses / Moods
-- [ ] Statuses/moods bar: emoji pills, popover details, infinite scroll
-- [ ] Status composer / republish: emoji grid, 122-char text, visibility (public/friends/except/only)
+> **TTL correction (slice `status-mood-core`, 2026-07-19):** a mood **status expires 1h** after creation
+> (`STATUS_EXPIRY_HOURS = 1`), NOT 21h — the "21h" in the audit is the **STORY** rule. The two are distinct.
+- [~] Statuses/moods bar: emoji pills, popover details, infinite scroll — **model + laws SSOT landed**
+      (slice `status-mood-core`, 2026-07-19): the pure foundation the bar/composer build on. `:core:model`
+      `MoodStatusExpiry` (the 1h expiry law: `effectiveExpiresAtMillis` = explicit `expiresAt` or `createdAt+1h`
+      fallback, `isExpired(now)`, `remaining(now)` → `Remaining(totalSeconds, Tier{EXPIRED/SECONDS/MINUTES})`
+      with the iOS `timeRemaining` label shape, localisation left app-side) + `:sdk-core` `StatusMapper`
+      (`ApiPost.toStatusEntry()` — guard `type=="STATUS"` + non-blank `moodEmoji` + author, avatarColor via
+      `DynamicColorGenerator.colorForName`, via = `viaUsername ?? repostOf.author.username`, **carries
+      `visibility` + `reactionSummary` the iOS converter drops**; `List<ApiPost>.toStatusEntries()` server-order
+      filter; `List<StatusEntry>.orderedForBar(currentUserId)` — own-first then server order, deduped by id).
+      +37 tests (19 `MoodStatusExpiryTest`, 18 `StatusMapperTest`; mutation-proven: `<=`→`<` on the expiry
+      boundary fails exactly 1 test, `own+others`→`others+own` fails exactly the own-first test).
+      **`StatusRepository` transport landed** (slice `status-repository`, 2026-07-19): `:sdk-core`
+      `StatusRepository` (`PostApi` `getStatuses`/`getStatusesDiscover` endpoints + `likeWithEmoji`/`PostLikeRequest`
+      body) — `StatusFeedMode{FRIENDS,DISCOVER}`, cursor-paginated `list()` folding the page into a `StatusPage`
+      of already-mapped `StatusEntry`s via the `toStatusEntries` SSOT (non-statuses dropped, watermark carried,
+      `foldStatusPage` mirroring `PostRepository.foldPostPage`), `create()` (POST type=STATUS → mapped entry, a
+      non-status response → `PARSE` failure), `delete()`, `react(emoji)` → `POST /posts/:id/like` body. +13
+      `StatusRepositoryTest` (list friends/discover endpoint-select, non-status filter, missing-pagination default,
+      failure envelope, transport error; create maps entry/PARSE-guard/transport; delete + react success/failure;
+      mutation-proven: `DISCOVER→getStatuses` fails exactly the discover-endpoint test, dropping the create
+      `PARSE` guard fails exactly the non-status test).
+      **`StatusesViewModel` landed** (slice `statuses-viewmodel`, 2026-07-19): `:feature:feed` `StatusesViewModel`
+      (UDF `StateFlow<StatusesUiState>`) drives the bar over `StatusRepository.list` — the pure `StatusBarListState`
+      accumulation SSOT (`appended` dedup-by-id + watermark, `created` front-hoist, `removed`, `reacted` count-bump)
+      projected through the `orderedForBar` SSOT (own-first, deduped). `loadInitial` (guarded) / `refresh` /
+      `loadMoreIfNeeded` (tail-threshold 3, silent-fail); `setMode(FRIENDS↔DISCOVER)` resets+reloads (inert on the
+      active tab, mirrors iOS's per-mode instance); optimistic `setStatus`/`clearStatus`/`react` with rollback;
+      `myStatus` surfaces only in FRIENDS mode. Cold open → skeleton then first page (no repo status cache yet, same
+      as bookmarks — L1 cache is the tracked instant-app follow-up). +29 tests (11 `StatusBarListStateTest`,
+      18 `StatusesViewModelTest`; mutation-proven: dropping the FRIENDS-only `myStatus` guard fails exactly the
+      discover test).
+      **Compose `StatusBarView` landed** (slice `status-bar-compose`, 2026-07-19): the `:feature:feed` `LazyRow`
+      emoji-pill rail pinned atop `FeedScreen` (iOS `StatusBarView` parity). The pure `buildStatusBarCells` SSOT
+      decomposes `StatusesUiState` into ordered `StatusBarCell`s — leading own/`MyStatus` or `AddStatus`, an inline
+      `ErrorRetry` chip ONLY on a cold-empty failure (iOS `error != nil && statuses.isEmpty`), the other users'
+      `Pill`s (deduped against the own cell), then a trailing `LoadingMore` spinner; `statusPopoverModel` projects a
+      tapped entry into the thought-bubble popover (emoji + author + text + `via` + `MoodStatusExpiry` countdown).
+      The Composable is thin glue: `loadMoreIfNeeded` on pill scroll-in, `refresh` on the retry chip, own-status
+      accent via `hexColor(avatarColor)`, `Popup` popover. +13 tests (`StatusBarPresentationTest`: 9 cell-builder
+      branches + 4 popover, mutation-proven: dropping the cold-empty `isEmpty()` guard fails exactly the
+      error-not-surfaced-when-populated test). **Still open:** the popover's republish/react actions.
+      **Status composer landed** (slice `status-composer`, 2026-07-19): the `:feature:feed` `StatusComposerSheet`
+      (`ModalBottomSheet`) opened from the bar's `AddStatus` cell (previously inert — now real, no dead-end). The
+      pure `StatusComposerDraft` owns every rule the Composable must not re-implement: the publish gate
+      (`canPublish` = a mood emoji is picked, iOS `disabled(selectedEmoji == nil)`), the 122-char cap (`withText`
+      clamps, iOS `onChange` prefix), the trimmed body actually sent (`trimmedContent`, `null` when blank), the
+      near-limit counter warning (`> 100`), and the emoji toggle (tap the selected one to clear it) + visibility
+      change. Publishes through `StatusesViewModel.setStatus(emoji, content, visibility)`. +14 tests
+      (`StatusComposerDraftTest`, mutation-proven: dropping the `withText` clamp fails exactly the over-limit
+      test; the toggle-deselect guard the emoji-clear test). **Deferred (follow-up §G):** EXCEPT/ONLY visibility
+      needs a per-user audience picker Android lacks — this ships the 4 no-audience cases (PUBLIC/COMMUNITY/
+      FRIENDS/PRIVATE, mirroring `StoryVisibility`); persisting the last-used visibility (iOS `@AppStorage`) and
+      offline-draft recovery (iOS `recoverUnsentStatus`) are also tracked follow-ups.
+- [x] Status composer: emoji grid, 122-char text, visibility (public/community/friends/private) — `status-composer`
+      (except/only audience picker deferred, tracked above)
 - [ ] Mood status create, react, delete; 21h expiry + viewer tracking
-- [ ] Status thought-bubble popover on avatar tap with republish action
-- [ ] Friends / Discover status feeds
+- [x] Status thought-bubble popover on avatar tap with republish action — **republish landed** (slice
+      `status-popover-republish`, 2026-07-19): the `Popup` popover already rendered emoji + author + text + `via` +
+      `MoodStatusExpiry` countdown (`status-bar-compose`); this slice adds the **Republish** affordance — shown only
+      on OTHER users' pills, hidden on the own MyStatus popover (`statusPopoverModel(entry, now, isOwn)` →
+      `canRepublish = !isOwn`, the caller deriving `isOwn = entry.id == myStatus?.id`, null-safe so DISCOVER's
+      myStatus-less bar makes every pill republishable — parity with iOS `StatusBubbleOverlay`'s `onRepublish != nil`
+      gate). Tapping it opens the composer **pre-seeded** via `StatusComposerDraft.republish(source)` (source
+      emoji/body/attribution/voice-audio pre-filled — port of iOS `initialEmoji/initialText/viaUsername/repostOfId/
+      repostAudioUrl`); the sheet forwards a pure `StatusPublishRequest` to `StatusesViewModel.setStatus`, which now
+      carries `viaUsername` through `StatusRepository.create` → `CreatePostRequest.viaUsername` (the wire field iOS
+      sends). +12 tests (8 `StatusComposerDraftTest`: publish-request map/null-gate, republish seed/clamp/bodyless/
+      blank-emoji/not-a-repost/attribution; 2 `StatusBarPresentationTest`: own hides / other offers republish; 1
+      `StatusRepositoryTest`: create body carries repost attribution; 1 `StatusesViewModelTest`: setStatus forwards
+      `viaUsername`). **The react half is a separate feature** — iOS puts reactions in a picker, NOT this popover;
+      deferred to a follow-up.
+      **L1 status cache landed** (slice `status-bar-l1-cache`, 2026-07-19): the in-memory `:sdk-core`
+      `StatusBarCache` (keyed per `StatusFeedMode`, iOS `cacheKey = "statuses_<mode>"`) is the Android analogue of
+      the memory tier of iOS `CacheCoordinator.statuses`. `StatusesViewModel` now paints a warm re-entry (or a switch
+      back to an already-loaded feed) instantly from the cache before any network call: `loadInitial`/`setMode` route
+      through a cache-first `loadFromCacheThenNetwork` (Fresh → serve, no fetch; Stale/Syncing → serve + background
+      revalidate; Empty → skeleton + fetch, mirroring iOS `loadStatuses`' switch), the first network page + optimistic
+      `setStatus`/`clearStatus` write through to the cache (iOS `saveCacheSnapshot`), and `refresh` invalidates then
+      reloads (iOS `refresh`). The fresh/stale/expired decision is the new pure `classifyCache` SSOT, now shared by
+      `cacheFirstFlow` too (no re-implementation). **Improvement over iOS:** an *expired* snapshot is still served
+      while it revalidates (stale-while-revalidate) rather than discarded. +23 tests (6 `ClassifyCacheTest` boundary
+      arms, 9 `StatusBarCacheTest`: empty/fresh-boundary/stale/syncing/per-mode isolation/invalidate-scope/re-save
+      restamp, 8 `StatusesViewModelTest`: fresh-served-no-fetch, stale-paints-then-replaces, write-through-on-fetch/
+      setStatus/clearStatus, mode-switch-instant, refresh-bypasses-cache). Mutation-proven: merging (not replacing) the
+      first page fails exactly `a stale cached bar paints instantly then the network first page replaces it`. Disk L2
+      tier (cold-launch parity across process death) is the tracked next follow-up.
+- [x] Instant-app status bar (L1 in-memory cache, cache-first paint) — `StatusBarCache` (slice
+      `status-bar-l1-cache`, 2026-07-19).
+- [x] Instant-app status bar — **disk L2 cache** (cold-launch parity across process death) — **landed** (slice
+      `status-bar-l2-cache`, 2026-07-19): Room-backed `StatusBarCacheRepository` (`:sdk-core/status`) persists the raw
+      feed per `StatusFeedMode` (`statuses:friends` / `statuses:discover`) into a new `status_bar_cache` table (DB
+      v10→11) and replays it, mirroring `ProfileStatsCacheRepository` exactly (row-presence = sync marker: absent →
+      cold `null`, present `[]` → synced-empty; undecodable payload → cache miss, never a crash). `StatusesViewModel`
+      wires it into the `CacheResult.Empty` (cold-L1) branch: seeds the bar from disk before the first network call
+      (only while still cold and the mode has not switched underneath the read), then reconciles — every network first
+      page and optimistic `setStatus`/`clearStatus` is written through to **both** tiers, and `refresh` invalidates the
+      disk row too. The disk tier is a pure keyed store (opaque params, no product decision) so it stays in `:sdk-core`
+      alongside `ProfileStatsCacheRepository`; the *when-to-read/write* orchestration stays in the `:feature:feed` VM.
+      +17 tests (9 `StatusBarCacheRepositoryTest` Robolectric-Room: cold-null, round-trip-in-order, per-mode keying,
+      two-feeds-independent, newest-wins, synced-empty≠cold, invalidate-scope, undecodable→null, rich-field round-trip;
+      8 `StatusesViewModelTest`: cold-launch-disk-seed, cold-disk→skeleton, network-write-through, warm-L1-never-reads-
+      disk, refresh-invalidates+writes-through, publish-write-through, clear-write-through, failed-clear-no-disk-write).
+      Mutation-proven: flipping the seed's mode-equality guard fails exactly `a cold launch seeds the bar from the disk
+      cache before the network answers`; dropping the network write-through fails exactly the two write-through tests.
+- [x] Mood status react from the bar popover (reaction picker) — **landed** (slice `status-popover-reaction-picker`,
+      2026-07-19): the popover now shows an existing-reactions summary row (pure `statusReactionChips` — count-desc,
+      emoji tie-break) plus a quick-reaction strip (`EmojiCatalog.defaultQuickReactions`) gated to OTHER users'
+      statuses (`StatusPopoverModel.canReact = !isOwn`); tapping fires the already-built optimistic
+      `StatusesViewModel.react` and dismisses. Own status stays read-only (no react/republish), coherent with the
+      republish gate.
+- [x] Friends / Discover status feeds — **toggle UI landed** (slice `status-feed-mode-toggle`, 2026-07-19): the
+      compact glass segmented `StatusFeedModeToggle` above the emoji rail drives the already-built
+      `StatusesViewModel.setMode` (which serves the target feed's L1-cached bar instantly, no-op on the active feed).
+      Pure `statusFeedModeTabs(current)` SSOT owns the order (explicit `[FRIENDS, DISCOVER]`, independent of the enum
+      declaration) + selection. iOS ships only the friends feed (two `StatusViewModel` instances, no in-UI switch) —
+      Android drives both from one VM, so this is a switch iOS never surfaced. `myStatus` surfaces only in FRIENDS
+      mode, so DISCOVER coherently swaps the leading cell to Add. +4 `StatusBarPresentationTest` (both-feeds-offered,
+      friends-first order, per-mode selection; mutation-proven: reversing `STATUS_FEED_TAB_ORDER` fails exactly the
+      order test, hard-wiring selection to FRIENDS fails exactly the discover-selection test).
+- [x] Statuses area **i18n (FR/ES/PT)** — **landed** (slice `status-strings-i18n`, 2026-07-20): the whole 26-key
+      `status_*` family (`status_bar_*` / `status_feed_*` / `status_composer_*`) was `values/`-only; now fully
+      localised in FR/ES/PT with format-specifier parity preserved (`%1$s`, `%1$d/%2$d`, …). Guarded by a new
+      full-module `FeedStringLocalizationParityTest` (2 tests): (1) every base `<string>` key is translated in every
+      shipped locale — no silent English fallthrough; (2) each translation keeps the base's positional format
+      specifiers — a drifted/dropped arg is a runtime crash, so this is correctness not cosmetics. The guard is
+      deliberately full-module so any future feed key added without its FR/ES/PT siblings turns red before it ships.
+      Mutation-proven RED: pre-translation the parity test failed with exactly the 26 missing `status_*` keys per
+      locale. Pure resource/parity slice — no product logic touched.
+- [x] Statuses **realtime socket wiring** (live bar updates) — **landed** (slice `status-realtime-socket`,
+      2026-07-20): full parity with iOS `StatusViewModel.subscribeToSocketEvents`. The social event bus gains four
+      status flows — `SocialSocketManager` now `listen`s `status:created` / `status:updated` / `status:deleted` /
+      `status:reacted` (canonical `SERVER_EVENTS` names — the prompt's `status:new`/`status:reaction` are informal
+      labels), each decoding a new `@Serializable` `:core:model` DTO (`SocketStatusCreatedData{status: ApiPost}`,
+      `SocketStatusUpdatedData`, `SocketStatusDeletedData{statusId,authorId}`, `SocketStatusReactedData{statusId,
+      userId,emoji}` — mirrors of the iOS structs). `StatusesViewModel` folds the deltas straight into the live
+      `StatusBarListState`: a friend's `status:created` hoists via `created` (mapped through `toStatusEntry`,
+      **de-duplicated + not re-hoisted if already present** — iOS `if !contains`); `status:updated` replaces in
+      place via the new pure `StatusBarListState.updated` reducer (inert when absent); `status:deleted` drops via
+      `removed`; `status:reacted` bumps via `reacted`, **skipping the reactor's own echo** (`payload.userId !=
+      currentUserId()`, since `react` already applied it optimistically). A non-`STATUS` payload (`toStatusEntry` →
+      null) is ignored. Deltas fold into `listState` only; the next network `fetchFirstPage` reconciles the
+      authoritative page (matches iOS's in-memory mutation — the cache tiers are reconciled by fetch/publish, not by
+      each socket delta). +15 tests (2 `StatusBarListStateTest`: `updated` in-place/inert; 4 `SocialSocketManagerTest`:
+      created/updated/deleted/reacted decode; 9 `StatusesViewModelTest`: created-hoist, created-echo-in-place,
+      non-status-ignored, updated-in-place, updated-absent-inert, deleted-drop, reacted-other-bumps, reacted-own-echo-
+      ignored). Mutation-proven RED: neutralising the own-echo guard fails **exactly** `a status reacted echo of the
+      viewer's own reaction is ignored`; neutralising the created present-guard fails **exactly** `a status created
+      echo of an already-present status leaves it in place` (2 of 42 fail, no collateral). SDK purity: the DTOs +
+      event bus are stateless building blocks in `:core:model` / `:sdk-core`; the "which delta does what to the bar"
+      orchestration stays in the `:feature:feed` VM.
+- [x] Statuses **realtime `status:unreacted`** (live bar reaction-removal) — **landed** (slice `status-unreacted-socket`,
+      2026-07-20): the symmetric inverse of the `status:reacted` handler, decoding the gateway's `status:unreacted`
+      (canonical `SERVER_EVENTS`, shared `StatusUnreactedEventData`). A **SOTA symmetry the iOS `StatusViewModel` bar
+      handlers lack** — iOS never folds reaction-removal into the bar. `SocialSocketManager` now `listen`s
+      `status:unreacted` into a new `statusUnreacted` `SharedFlow` decoding `SocketStatusUnreactedData{statusId,userId,
+      emoji}` (same shape as `SocketStatusReactedData`). A new pure `StatusBarListState.unreacted(statusId, emoji)`
+      reducer drops one reaction, **clamped ≥0 and removing the spent bucket** when it hits zero (so no empty entry
+      renders), inert (same instance) when the status is absent **or** carries no such reaction. `StatusesViewModel`
+      folds the delta into the live bar **skipping the un-reactor's own echo** (`payload.userId != currentUserId()`,
+      symmetric to `reacted`). +8 tests (5 `StatusBarListStateTest`: decrement, remove-bucket-at-zero, inert-absent-id,
+      inert-no-such-reaction, inert-no-reactions; 1 `SocialSocketManagerTest`: `status:unreacted` decode; 2
+      `StatusesViewModelTest`: other-user-decrements, own-echo-ignored). Mutation-proven RED: neutralising the own-echo
+      guard (`if (true)`) fails **exactly** `a status unreacted echo of the viewer's own unreaction is ignored`.
+      SDK purity: DTO + flow in `:core:model`/`:sdk-core`, the fold orchestration in the `:feature:feed` VM.
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)
@@ -1644,7 +2160,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
-- [ ] Camera-covered ("dark frame") detection during video calls
+- [~] Camera-covered ("dark frame") detection during video calls — **pure detection
+      core landed** (slice `call-dark-frame-detection`): the `core:model`
+      `DarkFramePolicy` is the SSOT camera-covered detector — a total, side-effect-free
+      reducer (`reduce(DarkFrameState, averageBrightness) → DarkFrameDecision`) ported
+      from iOS `DarkFrameDetector`, with **count-based hysteresis**: the cover latches
+      only after `consecutiveThreshold` (30, iOS default) consecutive frames whose
+      average luma is **strictly below** `darkThreshold` (15.0f, iOS default), so a
+      single dim frame never trips it, and clears the instant a bright frame returns
+      (iOS's responsive restore). It emits `Covered`/`Uncovered` **exactly once** per
+      stretch (idempotent while covered) and, a strict SOTA upgrade on iOS's unbounded
+      `Int`, **clamps the streak counter** at the threshold so `DarkFrameState` is O(1)
+      over a multi-hour covered stream (never overflows). The framework-agnostic other
+      half, pure `FrameLuminance.averageOfYPlane(...)`, ports the iOS Y-plane luma
+      averaging (sub-sampled, `rowStride`-aware so row padding is skipped, unsigned-byte
+      correct) and returns `null` on degenerate geometry rather than a fake pitch-black
+      reading. +24 behavioural tests (13 policy, 11 sampler). Mutation (RED proof):
+      removing the streak clamp fails **exactly** the bounded-counter test (13, 1 failed,
+      no collateral). **Pending:** the WebRTC `VideoProcessor`/`VideoSink` actuator seam
+      (read the captured frame's I420 Y plane → `FrameLuminance` → `DarkFramePolicy`) +
+      the in-call "camera may be covered" UI hint.
 - [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
       (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
       iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
@@ -2473,8 +3008,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Image/video preview screens per context (story/post/message/avatar/banner) with Edit + Use
 - [~] Image viewer — `MeeshyImageViewer` plein écran (pager multi-images, pinch-zoom
       borné 1–4×, pan clampé, double-tap 2.5×, tap-to-dismiss, compteur i/n),
-      ouvert au tap sur la grille d'images d'une bulle ; drag-to-dismiss +
-      save-to-gallery pending
+      ouvert au tap sur la grille d'images d'une bulle **et sur le collage d'un post du feed**
+      (slice `feed-media-fullscreen-gallery`, 2026-07-18 — `FeedMediaGallery` SSOT +
+      `FeedViewModel.openImageViewer/dismissImageViewer`) ; drag-to-dismiss + save-to-gallery pending
 - [ ] Code attachment viewer (~16 languages, syntax highlight, GitHub light/dark, copy)
 - [ ] Document viewer (PDF/presentation/spreadsheet) with share
 - [~] Image/video compression before upload (context-aware quality); save media to "Meeshy" album

@@ -4,7 +4,61 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Chat) — slice `chat-overlay-preview-bubble` ✅
+## This loop (Phase: Feed/Statuses) — slice `status-unreacted-socket` ✅
+Realtime `status:unreacted` — the symmetric inverse of the `status:reacted` handler, folding the gateway's canonical
+reaction-removal event into the live mood-statuses bar (a SOTA symmetry iOS's `StatusViewModel` bar handlers lack).
+`:core:model` `SocketStatusUnreactedData{statusId,userId,emoji}`; `:sdk-core` `SocialSocketManager.statusUnreacted`
+flow + `listen("status:unreacted")`; `:feature:feed` pure `StatusBarListState.unreacted` reducer (decrement, clamp ≥0,
+drop spent bucket, inert on absent/no-such-reaction) + `StatusesViewModel` fold skipping the un-reactor's own echo.
++8 tests, mutation-proven own-echo guard. `:app:assembleDebug` + touched test modules green. Diff = `apps/android`
+only. Reviewer PASS. Next: §H Calls WebRTC core, or the tracked Kover 90% coverage-gate infra.
+
+## Prior loop (Phase: Chat) — slice `chat-mention-remote-merge` ✅
+**@-mention autocomplete — debounced remote directory merge.** Completes §Chat "@-mention autocomplete (debounced
+API + local merge)" (local roster shipped 2026-07-06; this is the online half). Extends the existing pure
+`:feature:chat` `ChatMention` SSOT with `shouldQueryRemote` (≥2 trimmed chars) + `mergeSuggestions` (local-first
+dedup: locals win, remote appended when its handle — trimmed, case-insensitive — is non-blank, not local, not a
+remote dup), plus a staleness-guarded `MentionAutocompleteState.applyRemote(query, remote)` reducer (folds only while
+`query == activeQuery` — the pure equivalent of iOS's `Task.isCancelled`). Protocol-injected `MentionSearch` +
+`DirectoryMentionSearch` over `UserRepository.searchUsers` (`@Binds` module; failure → empty, roster still serves).
+`ChatViewModel` fires a 300 ms-debounced lookup on `onDraftChange` (each keystroke cancels the previous `Job`),
+excludes self, applies via `applyRemote`; cancelled on paste-capture + select. Panel binding unchanged (merged rows
+render below the roster — SSOT). +20 tests (5 gate, 8 merge, 3 applyRemote, 4 VM), mutation-checked (dropping the
+dedup/blank guard fails exactly the 6 dedup/blank/merge cases). `:feature:chat:testDebugUnitTest` green; full
+`assembleDebug testDebugUnitTest` APK assembles + all touched modules green (lone failure = documented `:sdk-core`
+DataStore flake, green in isolation). Diff = `apps/android` only. Reviewer PASS. Next: audio-over-socket send
+(`message:send-with-attachments` + voice-pill bytes), a file/photo picker over the REST attachment chain, the
+conversation info sheet, or advance to §Feed.
+
+## Prior loop (Phase: Chat) — slice `chat-live-location-socket-fold` ✅
+**Live-location socket start/update/stop wiring.** Feeds the previously-unfed `LiveLocationSessions` reducer from
+the socket. Ships `:core:model` pure `LiveLocationEventFold` (`started`/`updated`/`stopped` fold the already-modelled
+`Location.kt` wire DTOs into the reducer, resolving ISO dates via the shared `isoToEpochMillisOrNull` and applying
+iOS's exact fallbacks — `expiresAt ?? now+duration·60`, `startedAt ?? now`, `timestamp ?? now`, non-positive
+window→`now` — with `now` threaded in for purity, surpassing iOS's internal `Date()`). Wired real (exempt glue):
+`MessageSocketManager` gains three `liveLocation*` flows + `location:live-*` listeners; `ChatViewModel` collects
+them (conversation-scoped) into `ChatUiState.liveLocations` and exposes `liveLocationBadges`; `ChatScreen` renders a
+self-terminating accent-coherent `LiveLocationBadge` per active session. +17 tests (fold 13, VM 4), mutation-checked
+(anchoring the expiry fallback on `startedAt` vs `now` fails exactly the boundary test — `now` set 10 min past
+`startedAt`). Full `assembleDebug testDebugUnitTest` green (UTF-8-daemon recipe), APK produced, diff = `apps/android`
+only. Reviewer PASS. Next: in-app browser (Chrome Custom Tabs) + rich-card image loading, or the fullscreen
+map/directions for live location (needs Maps SDK), or the attachment send pipeline.
+
+## Prior loop (Phase: Chat) — slice `chat-large-paste-detection` ✅
+**Large-paste detection → clipboard-content preview.** Advances the §Chat "Large-paste detection →
+clipboard-content attachment" line to detection+preview done. Ships `:feature:chat` pure `LargePasteDetector`
+(fires when composer text grows past 2000 chars **and** jumps >250 chars in one edit — readable port of iOS
+`handleClipboardCheck`'s `delta = 2·growth` heuristic) + clock-injected `ClipboardContent` value type
+(`of(text, nowMillis)` → id / charCount / 200-char truncated preview; surpasses iOS's twin `Date()` reads +
+id-only equality). Wired real (exempt glue): `ChatViewModel.onDraftChange` folds a captured paste into
+`ChatUiState.clipboardContent` + clears the draft; `removeClipboardContent` discards it; `ChatComposer` shows an
+accent-tinted `ClipboardContentPreview` chip (en/fr/es/pt). +24 tests (detector 13, model 8, VM 3), mutation-checked
+(growth boundary `>`→`>=` fails exactly the boundary test). Full `assembleDebug testDebugUnitTest` green (UTF-8-daemon
+recipe, 5m14s), APK produced, diff = `apps/android/feature/chat` only. Reviewer PASS. Next: send the captured content
+as a real clipboard_content attachment (gated on the attachment send pipeline), or live-location socket wiring, or
+the in-app browser / rich-card image loading link-preview follow-ups.
+
+## Prior loop (Phase: Chat) — slice `chat-overlay-preview-bubble` ✅
 **Floating preview-bubble overlay layout law — pure SSOT + real lifted hero.** Completes the §Chat "Long-press
 overlay menu" line (all four parts now done: quick-reactions + action-grid + drag-to-detail + preview bubble). Ships
 `:feature:chat` `MessageOverlayLayout.compute(...)` — a faithful port of the iOS `MessageOverlayMenu` "native-lean"

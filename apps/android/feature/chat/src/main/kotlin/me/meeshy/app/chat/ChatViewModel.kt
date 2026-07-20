@@ -31,12 +31,27 @@ import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
+import me.meeshy.sdk.model.AttachmentMessageType
+import me.meeshy.sdk.model.MimeTypeResolver
 import me.meeshy.sdk.model.call.ActiveCallSession
+import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EmojiCatalog
+import me.meeshy.sdk.model.LiveLocationEventFold
+import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.mention.MentionComposer
+import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.mention.applyRemote
+import me.meeshy.sdk.mention.onTextChange
+import me.meeshy.sdk.mention.reset
+import me.meeshy.sdk.mention.select
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MessageEditability
@@ -52,7 +67,10 @@ import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.reaction.EmojiUsageStore
+import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
+import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.theme.accentHex
@@ -99,14 +117,27 @@ data class ChatUiState(
     val explorerMessageId: String? = null,
     val translatingLanguages: Set<String> = emptySet(),
     val languageExplorer: MessageLanguageExplorer? = null,
+    /** The open report-a-message sheet, or `null` when it is closed. Drives [ReportMessageForm]. */
+    val reportForm: ReportMessageForm? = null,
     /** The composer's armed message effects — the selection the effects picker edits
      * and [ChatViewModel.send] stamps onto the outgoing message. Empty = a plain send. */
     val pendingEffects: MessageEffects = MessageEffects(),
     /** Whether the effects-picker bottom sheet is presented. */
     val isEffectsPickerOpen: Boolean = false,
+    /** A large paste captured into a clipboard-content attachment, previewed above the
+     * composer until sent or removed. Null when no paste has been captured. */
+    val clipboardContent: ClipboardContent? = null,
+    /** Live-location sessions broadcast by conversation participants, folded from the
+     * `location:live-*` socket events (see [LiveLocationEventFold]). Drives the badges
+     * surfaced above the message list. */
+    val liveLocations: LiveLocationSessions = LiveLocationSessions.EMPTY,
 ) {
-    val canSend: Boolean get() = draft.isNotBlank()
+    val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
     val isEditing: Boolean get() = editingMessageId != null
+
+    /** The live-location sessions to render as badges, in registry order. The badge
+     * self-terminates on expiry, so the raw session list is safe to surface directly. */
+    val liveLocationBadges: List<ActiveLiveLocation> get() = liveLocations.sessions.values.toList()
 
     /** True when at least one effect is armed — drives the composer's active-effects accent. */
     val hasPendingEffects: Boolean get() = pendingEffects.hasAnyEffect
@@ -178,6 +209,9 @@ class ChatViewModel @Inject constructor(
     private val clock: CacheClock,
     private val draftStore: ConversationDraftStore,
     private val activeCallRepository: ActiveCallRepository,
+    private val reportRepository: ReportRepository,
+    private val mediaUploadQueue: MediaUploadQueue,
+    private val mentionSearch: MentionSearch,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -215,6 +249,7 @@ class ChatViewModel @Inject constructor(
     private var typingIdleJob: Job? = null
     private var lastPersistedDraft: ConversationDraft? = null
     private var draftPersistJob: Job? = null
+    private var mentionSearchJob: Job? = null
 
     /**
      * sourceMessageId -> target conversation currently being forwarded to.
@@ -488,6 +523,30 @@ class ChatViewModel @Inject constructor(
                     }
                 }
             }
+            launch {
+                messageSocketManager.liveLocationStarted.collect { event ->
+                    if (event.conversationId != conversationId) return@collect
+                    _state.update {
+                        it.copy(liveLocations = LiveLocationEventFold.started(it.liveLocations, event, clock.nowMillis()))
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.liveLocationUpdated.collect { event ->
+                    if (event.conversationId != conversationId) return@collect
+                    _state.update {
+                        it.copy(liveLocations = LiveLocationEventFold.updated(it.liveLocations, event, clock.nowMillis()))
+                    }
+                }
+            }
+            launch {
+                messageSocketManager.liveLocationStopped.collect { event ->
+                    if (event.conversationId != conversationId) return@collect
+                    _state.update {
+                        it.copy(liveLocations = LiveLocationEventFold.stopped(it.liveLocations, event))
+                    }
+                }
+            }
         }
     }
 
@@ -536,13 +595,37 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onDraftChange(value: String) {
+        val detection = LargePasteDetector.detect(
+            previous = _state.value.draft,
+            current = value,
+            nowMillis = clock.nowMillis(),
+        )
+        if (detection is PasteDetection.Captured) {
+            _state.update {
+                it.copy(
+                    draft = "",
+                    clipboardContent = detection.content,
+                    mention = it.mention.onTextChange("", mentionRoster),
+                )
+            }
+            mentionSearchJob?.cancel()
+            stopTypingEmission()
+            persistDraft("", _state.value.replyingToMessageId)
+            return
+        }
         _state.update { it.copy(draft = value, mention = it.mention.onTextChange(value, mentionRoster)) }
+        maybeSearchRemoteMentions(_state.value.mention.activeQuery)
         if (value.isBlank()) {
             stopTypingEmission()
         } else {
             startTypingEmission()
         }
         persistDraft(value, _state.value.replyingToMessageId)
+    }
+
+    /** Discards a captured large-paste attachment (the preview chip's remove button). */
+    fun removeClipboardContent() {
+        _state.update { it.copy(clipboardContent = null) }
     }
 
     /**
@@ -589,9 +672,36 @@ class ChatViewModel @Inject constructor(
      * `@fragment`), record it as a draft mention, and dismiss the suggestion panel.
      */
     fun onMentionSelected(candidate: MentionCandidate) {
+        mentionSearchJob?.cancel()
         _state.update { current ->
             val (newDraft, newMention) = current.mention.select(candidate, current.draft)
             current.copy(draft = newDraft, mention = newMention)
+        }
+    }
+
+    /**
+     * Fires a debounced directory lookup for the active `@fragment` and folds the
+     * results into the panel below the local roster. Mirrors iOS
+     * `MentionComposerController`: nothing runs for a dismissed panel or a query under
+     * two significant characters (the roster already covers those); a fresh keystroke
+     * cancels the previous in-flight lookup (300 ms debounce). The self-exclusion and
+     * local-first dedup live in the pure [MentionAutocompleteState.applyRemote] merge,
+     * which also drops a slow response whose fragment is already stale.
+     */
+    private fun maybeSearchRemoteMentions(query: String?) {
+        mentionSearchJob?.cancel()
+        if (query == null || !MentionComposer.shouldQueryRemote(query)) return
+        val currentUserId = sessionRepository.currentUser.value?.id
+        mentionSearchJob = viewModelScope.launch {
+            delay(MENTION_SEARCH_DEBOUNCE_MS)
+            val remote = try {
+                mentionSearch.search(query.trim())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return@launch
+            }.filterNot { it.id == currentUserId }
+            _state.update { it.copy(mention = it.mention.applyRemote(query, remote)) }
         }
     }
 
@@ -635,7 +745,8 @@ class ChatViewModel @Inject constructor(
 
     fun send() {
         val text = _state.value.draft.trim()
-        if (text.isEmpty()) return
+        val clipboard = _state.value.clipboardContent
+        if (text.isEmpty() && clipboard == null) return
         stopTypingEmission()
         val editingId = _state.value.editingMessageId
         if (editingId != null) {
@@ -648,6 +759,7 @@ class ChatViewModel @Inject constructor(
         _state.update {
             it.copy(
                 draft = "",
+                clipboardContent = null,
                 replyingToMessageId = null,
                 mention = it.mention.reset(),
                 pendingEffects = MessageEffects(),
@@ -657,6 +769,116 @@ class ChatViewModel @Inject constructor(
         persistDraft("", replyToId = null)
         viewModelScope.launch {
             try {
+                if (clipboard != null) {
+                    sendClipboardContent(text, clipboard, user, replyToId, effects)
+                } else {
+                    messageRepository.sendOptimistic(
+                        conversationId = conversationId,
+                        content = text,
+                        originalLanguage = ComposeLanguageDetector.detect(
+                            text,
+                            fallback = LanguageResolver.resolveUserLanguage(user),
+                        ),
+                        sender = user,
+                        replyToId = replyToId,
+                        effects = effects,
+                    )
+                }
+                workManager.enqueue(OutboxFlushWorker.buildRequest())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
+    /**
+     * Delivers a captured large paste as a real `text/plain` attachment through the
+     * durable upload→send chain: the bytes are queued for upload, the send is
+     * enqueued gated on that upload and carrying its cmid as a placeholder
+     * attachment id, and the drainer grafts the real gateway id in once the upload
+     * lands ([me.meeshy.sdk.conversation.MessageMediaWriteBack]). Surpasses iOS,
+     * which previews the clipboard chip but never sends it.
+     */
+    private suspend fun sendClipboardContent(
+        text: String,
+        clipboard: ClipboardContent,
+        user: MeeshyUser,
+        replyToId: String?,
+        effects: MessageEffects,
+    ) {
+        val bytes = clipboard.text.toByteArray(Charsets.UTF_8)
+        val uploadCmid = mediaUploadQueue.enqueue(
+            MediaUploadItem(
+                bytes = bytes,
+                fileName = CLIPBOARD_ATTACHMENT_NAME,
+                mimeType = CLIPBOARD_ATTACHMENT_MIME,
+            ),
+        )
+        messageRepository.sendOptimistic(
+            conversationId = conversationId,
+            content = text,
+            originalLanguage = ComposeLanguageDetector.detect(
+                text.ifBlank { clipboard.text },
+                fallback = LanguageResolver.resolveUserLanguage(user),
+            ),
+            sender = user,
+            replyToId = replyToId,
+            effects = effects,
+            messageType = "file",
+            attachmentUploadCmids = listOf(uploadCmid),
+            attachments = listOf(
+                ApiMessageAttachment(
+                    id = uploadCmid,
+                    fileName = CLIPBOARD_ATTACHMENT_NAME,
+                    originalName = CLIPBOARD_ATTACHMENT_NAME,
+                    mimeType = CLIPBOARD_ATTACHMENT_MIME,
+                    fileSize = bytes.size,
+                ),
+            ),
+        )
+    }
+
+    /**
+     * Sends a file picked from the system document/photo picker through the same
+     * durable upload→graft→send chain the clipboard path already uses: the bytes
+     * are queued for upload, the send is enqueued gated on that upload and carrying
+     * its cmid as a placeholder attachment id, and the drainer grafts the real
+     * gateway id in once the upload lands. The message's coarse `messageType`
+     * (image/video/audio/file) is inferred from the resolved MIME via
+     * [AttachmentMessageType]; any text already in the composer rides along as the
+     * body and is cleared, mirroring [sendClipboardContent].
+     *
+     * A blank pick ([bytes] empty) or a signed-out session is inert. Note: audio
+     * picked here is delivered over REST like any other file — the socket audio
+     * pipeline (transcription/translation) is a separate slice; this path never
+     * triggers it.
+     */
+    fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) {
+        if (bytes.isEmpty()) return
+        val user = sessionRepository.currentUser.value ?: return
+        val text = _state.value.draft.trim()
+        val replyToId = _state.value.replyingToMessageId
+        val effects = _state.value.pendingEffects
+        stopTypingEmission()
+        _state.update {
+            it.copy(
+                draft = "",
+                replyingToMessageId = null,
+                mention = it.mention.reset(),
+                pendingEffects = MessageEffects(),
+                isEffectsPickerOpen = false,
+            )
+        }
+        persistDraft("", replyToId = null)
+        viewModelScope.launch {
+            try {
+                val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
+                val mime = MimeTypeResolver.resolve(declaredMimeType, safeName)
+                val uploadCmid = mediaUploadQueue.enqueue(
+                    MediaUploadItem(bytes = bytes, fileName = safeName, mimeType = mime),
+                )
                 messageRepository.sendOptimistic(
                     conversationId = conversationId,
                     content = text,
@@ -667,6 +889,17 @@ class ChatViewModel @Inject constructor(
                     sender = user,
                     replyToId = replyToId,
                     effects = effects,
+                    messageType = AttachmentMessageType.forMime(mime),
+                    attachmentUploadCmids = listOf(uploadCmid),
+                    attachments = listOf(
+                        ApiMessageAttachment(
+                            id = uploadCmid,
+                            fileName = safeName,
+                            originalName = safeName,
+                            mimeType = mime,
+                            fileSize = bytes.size,
+                        ),
+                    ),
                 )
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
             } catch (e: CancellationException) {
@@ -1063,6 +1296,46 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Open the report-a-message sheet for [messageId] (long-press → "Report"), closing the action
+     * sheet first so a single sheet is on screen. Only offered for others' messages by the pure
+     * [MessageActionMenu], so no self-report reaches here.
+     */
+    fun openReport(messageId: String) {
+        _state.update { it.copy(reportForm = ReportMessageForm(messageId = messageId), actionMessageId = null) }
+    }
+
+    fun selectReportReason(reason: ReportReason) {
+        _state.update { it.copy(reportForm = it.reportForm?.withReason(reason)) }
+    }
+
+    fun onReportDetailsChange(value: String) {
+        _state.update { it.copy(reportForm = it.reportForm?.withDetails(value)) }
+    }
+
+    /**
+     * File the report. A submission in flight or already succeeded short-circuits a re-tap
+     * ([ReportMessageForm.canSubmit]), so a double tap never fires two reports. An inert repository
+     * result (no session) or a network failure both surface [ReportMessageForm.hasError] and clear
+     * the submitting flag, so the user can retry.
+     */
+    fun submitReport() {
+        val form = _state.value.reportForm ?: return
+        if (!form.canSubmit) return
+        _state.update { it.copy(reportForm = it.reportForm?.submitting()) }
+        viewModelScope.launch {
+            val result = reportRepository.reportMessage(form.messageId, form.selectedReason, form.details)
+            _state.update { current ->
+                val open = current.reportForm ?: return@update current
+                current.copy(reportForm = if (result is NetworkResult.Success) open.submitted() else open.failed())
+            }
+        }
+    }
+
+    fun dismissReport() {
+        _state.update { it.copy(reportForm = null) }
+    }
+
+    /**
      * Retranslate a language from the explorer — force a fresh translation even when
      * that language already has content (unlike [onFlagTap], which would merely
      * switch to the existing text). A refresh that returns identical text is an inert
@@ -1358,6 +1631,10 @@ class ChatViewModel @Inject constructor(
         private const val TYPING_TIMEOUT_MS = 5_000L
         private const val TYPING_REEMIT_MS = 3_000L
         private const val TYPING_IDLE_MS = 3_000L
+        private const val MENTION_SEARCH_DEBOUNCE_MS = 300L
+        private const val CLIPBOARD_ATTACHMENT_NAME = "clipboard-content.txt"
+        private const val CLIPBOARD_ATTACHMENT_MIME = "text/plain"
+        private const val DEFAULT_ATTACHMENT_NAME = "attachment"
     }
 }
 

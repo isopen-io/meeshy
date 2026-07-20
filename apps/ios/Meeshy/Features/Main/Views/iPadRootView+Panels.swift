@@ -277,5 +277,19 @@ struct iPadResizableHandle: View {
                 }
         )
         .ignoresSafeArea()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "root.ipad.resizable_handle.label", defaultValue: "Séparateur de colonnes", bundle: .main))
+        .accessibilityValue(String(format: String(localized: "root.ipad.resizable_handle.value_format", defaultValue: "%d pour cent", bundle: .main), Int(ratio * 100)))
+        .accessibilityHint(String(localized: "root.ipad.resizable_handle.hint", defaultValue: "Ajuste la largeur de la colonne de gauche de 30 à 50 pour cent", bundle: .main))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                ratio = min(maxRatio, ratio + 0.02)
+            case .decrement:
+                ratio = max(minRatio, ratio - 0.02)
+            @unknown default:
+                break
+            }
+        }
     }
 }

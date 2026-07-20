@@ -75,9 +75,26 @@ public final class TimelineViewModel: ObservableObject {
     @Published public private(set) var canRedo: Bool = false
     @Published public internal(set) var isSnapEnabled: Bool = true
     @Published public var selection: ClipSelectionState = .init()
-    @Published public var mode: TimelineMode = .quick
     @Published public var zoomScale: CGFloat = 1.0
     @Published public var errorMessage: String?
+    /// One-shot signal that `project.slideDuration` was just auto-recomputed
+    /// to a NEW value by a content-mutating edit (trim/split/delete/add/move).
+    /// `nil` after the consuming view presents its toast. Never fires when
+    /// the recomputed value matches what was already on screen, and never
+    /// fires mid-clip-drag (only once the drag ends) — see
+    /// `recomputeSlideDuration()`.
+    @Published public var durationDidAutoAdjust: (from: Float, to: Float)?
+
+    /// Snapshot of `project.slideDuration` captured when the active clip drag
+    /// began. Mid-drag frames silently update `project.slideDuration` live (so
+    /// the ruler tracks the edit in real time — see `recomputeSlideDuration()`),
+    /// so by the time the drag ends the live value no longer reflects what was
+    /// on screen when the gesture started. This snapshot is what the
+    /// end-of-drag toast's `from` value is computed against. Cleared after use
+    /// (drag end) or on cancel — never leaks into an unrelated edit's toast
+    /// baseline.
+    private var slideDurationBeforeDrag: Float?
+
     @Published public internal(set) var showOfflineQueuedConfirmation: Bool = false
     /// True between `beginScrub()` and `endScrub()` — flipped by the playhead
     /// gesture so `scrub(to:)` can choose a sub-50ms tolerance during the drag
@@ -214,6 +231,7 @@ public final class TimelineViewModel: ObservableObject {
     public func beginClipDrag(clipId: String) {
         guard let original = clipStartTime(id: clipId) else { return }
         selection.beginDrag(clipId: clipId, originalStartTime: original)
+        slideDurationBeforeDrag = project.slideDuration
     }
 
     public func dragClipMoved(rawTime: Float, snapCandidates: [SnapCandidate]) {
@@ -280,6 +298,7 @@ public final class TimelineViewModel: ObservableObject {
         let unchanged = abs(drag.currentStartTime - drag.originalStartTime) < 0.0005
         guard !unchanged else {
             selection.endDrag()
+            slideDurationBeforeDrag = nil
             return
         }
 
@@ -291,6 +310,11 @@ public final class TimelineViewModel: ObservableObject {
         )
         commandStack.push(.moveClip(cmd))
         selection.endDrag()
+        // AFTER endDrag(): recomputeSlideDuration()'s toast is suppressed
+        // while selection.activeDrag is non-nil (every drag frame already
+        // called it via applyClipPosition) — this call, with the drag now
+        // cleared, is what actually surfaces the final value's toast.
+        recomputeSlideDuration()
     }
 
     /// Cancels an in-flight clip drag, restoring the clip's startTime to the value
@@ -301,6 +325,7 @@ public final class TimelineViewModel: ObservableObject {
         guard let drag = selection.activeDrag else { return }
         applyClipPosition(clipId: drag.clipId, newStartTime: drag.originalStartTime)
         selection.endDrag()
+        slideDurationBeforeDrag = nil
     }
 
     /// Returns the timeline-clip kind for a given object id.
@@ -333,35 +358,59 @@ public final class TimelineViewModel: ObservableObject {
     private func applyClipPosition(clipId: String, newStartTime: Float) {
         if let i = project.mediaObjects.firstIndex(where: { $0.id == clipId }) {
             project.mediaObjects[i].startTime = Double(newStartTime)
-            extendSlideDurationIfNeeded(
-                elementEnd: newStartTime + Float(project.mediaObjects[i].duration ?? 0)
-            )
+            recomputeSlideDuration()
             return
         }
         if let i = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) {
             project.audioPlayerObjects[i].startTime = newStartTime
-            extendSlideDurationIfNeeded(
-                elementEnd: newStartTime + (project.audioPlayerObjects[i].duration ?? 0)
-            )
+            recomputeSlideDuration()
             return
         }
         if let i = project.textObjects.firstIndex(where: { $0.id == clipId }) {
             project.textObjects[i].startTime = Double(newStartTime)
-            extendSlideDurationIfNeeded(
-                elementEnd: newStartTime + Float(project.textObjects[i].duration ?? 0)
-            )
+            recomputeSlideDuration()
         }
     }
 
-    /// Auto-extends the working `project.slideDuration` when an element is
-    /// dragged past the current playable range. Without this, the playhead
-    /// (which clamps at `slideDuration`) couldn't reach the element's tail
-    /// after the drop and the ruler / clip lane wouldn't visualise it. The
-    /// computed total duration handles persistence — this is the live in-edit
-    /// equivalent so the editor follows the user's intent in real time.
-    private func extendSlideDurationIfNeeded(elementEnd: Float) {
-        guard elementEnd.isFinite, elementEnd > project.slideDuration else { return }
-        project.slideDuration = elementEnd
+    /// Recomputes `project.slideDuration` from the current content using the
+    /// same "longest data wins" rule as `StorySlide.computedTotalDuration()`
+    /// (via `StoryEffects.contentDerivedDuration`), so the ruler/track length
+    /// always matches what will actually play — never left stale after a
+    /// trim/split/delete/add/move (design doc 2026-07-18). Fires
+    /// `durationDidAutoAdjust` only when the value actually changes, so a
+    /// no-op edit doesn't spam a toast.
+    ///
+    /// Called on every frame of a clip drag via `applyClipPosition` — the
+    /// toast is suppressed while `selection.activeDrag` is non-nil so it
+    /// doesn't fire 60 times/sec mid-gesture; `endClipDrag()` calls this
+    /// again once the drag ends so the final value still gets its toast.
+    func recomputeSlideDuration() {
+        let auto = Float(StoryEffects.contentDerivedDuration(
+            mediaObjects: project.mediaObjects,
+            audioPlayerObjects: project.audioPlayerObjects,
+            textObjects: project.textObjects
+        ))
+        let liveValueBeforeThisCall = project.slideDuration
+        if abs(auto - liveValueBeforeThisCall) > 0.05 {
+            project.slideDuration = auto
+            if currentTime > auto {
+                scrub(to: auto, precise: true)
+            }
+        }
+
+        // Toast decision is separate from the live-value update above: during
+        // a drag, activeDrag is non-nil and we stop here (no toast). Once the
+        // drag has ended, compare the FINAL value against the baseline
+        // captured at drag start (not against `project.slideDuration`, which
+        // this function's own mid-drag calls already advanced) — that's the
+        // only way the true before/after values reach the toast.
+        guard selection.activeDrag == nil else { return }
+
+        let toastBaseline = slideDurationBeforeDrag ?? liveValueBeforeThisCall
+        slideDurationBeforeDrag = nil
+        if abs(auto - toastBaseline) > 0.05 {
+            durationDidAutoAdjust = (from: toastBaseline, to: auto)
+        }
     }
 
     private func mapSnapKind(_ kind: SnapCandidate.Kind?) -> ClipSelectionState.ActiveDrag.SnappedKind? {
@@ -477,6 +526,7 @@ public final class TimelineViewModel: ObservableObject {
             try cmd.apply(to: &project)
             commandStack.push(.splitClip(cmd))
             scheduleEngineReconfigure()
+            recomputeSlideDuration()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -542,11 +592,7 @@ public final class TimelineViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Mode + snap toggles
-
-    public func setMode(_ newMode: TimelineMode) {
-        mode = newMode
-    }
+    // MARK: - Snap toggle
 
     public func toggleSnap() {
         isSnapEnabled.toggle()

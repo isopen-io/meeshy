@@ -12,6 +12,7 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.json.Json
+import me.meeshy.sdk.conversation.MessageMediaWriteBack
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendRepository
@@ -102,7 +103,14 @@ class OutboxFlushWorker @AssistedInject constructor(
                     else -> Unit
                 }
             },
-            graftProducedId = PublishMediaWriteBack::graft,
+            // A delivered upload's real id must reach both dependent shapes: a
+            // still-queued chat send (attachmentIds) and a story publish (mediaIds).
+            // Each graft owns one payload shape and declines the other, so order is
+            // immaterial (see OutboxPayloadGrafts).
+            graftProducedId = OutboxPayloadGrafts.firstOf(
+                MessageMediaWriteBack::graft,
+                PublishMediaWriteBack::graft,
+            ),
         )
 
         // Derived from the kind→lane SSOT so a registered sender can never be

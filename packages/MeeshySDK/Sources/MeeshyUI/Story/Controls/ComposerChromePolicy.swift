@@ -13,12 +13,14 @@ public nonisolated enum ComposerChromePolicy {
         bandHidden: Bool,
         isTextEditing: Bool,
         isDrawingActive: Bool,
-        isViewportZoomed: Bool
+        isViewportZoomed: Bool,
+        isTimelineVisible: Bool = false
     ) -> Bool {
         fabsVisible
             && bandHidden
             && !isTextEditing
             && !isDrawingActive
             && !isViewportZoomed
+            && !isTimelineVisible
     }
 }

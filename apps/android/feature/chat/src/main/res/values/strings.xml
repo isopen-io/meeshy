@@ -10,6 +10,7 @@
     <string name="chat_send">Send</string>
     <string name="chat_record_voice">Record voice message</string>
     <string name="chat_effects_open">Message effects</string>
+    <string name="chat_attach_file">Attach file</string>
     <string name="chat_effects_title">Message effects</string>
     <string name="chat_effects_done">Done</string>
     <string name="chat_effects_section_behavior">Behavior</string>
@@ -119,4 +120,23 @@
     <string name="chat_media_skip_back">Skip back 5 seconds</string>
     <string name="chat_media_skip_forward">Skip forward 5 seconds</string>
     <string name="chat_media_playback_speed">Playback speed</string>
+    <string name="chat_clipboard_title">Clipboard content</string>
+    <string name="chat_clipboard_char_count">%1$d characters</string>
+    <string name="chat_clipboard_remove">Remove clipboard content</string>
+
+    <!-- Report a message -->
+    <string name="chat_action_report">Report</string>
+    <string name="report_message_title">Why are you reporting this message?</string>
+    <string name="report_message_details_header">Details (optional)</string>
+    <string name="report_message_details_placeholder">Describe the issue…</string>
+    <string name="report_message_submit">Send report</string>
+    <string name="report_message_error">Couldn’t send the report. Try again.</string>
+    <string name="report_message_sent">Report sent</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_inappropriate">Inappropriate content</string>
+    <string name="report_reason_harassment">Harassment</string>
+    <string name="report_reason_violence">Violence</string>
+    <string name="report_reason_hate_speech">Hate speech</string>
+    <string name="report_reason_impersonation">Impersonation</string>
+    <string name="report_reason_other">Other</string>
 </resources>

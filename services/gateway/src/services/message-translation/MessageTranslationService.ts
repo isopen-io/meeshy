@@ -27,7 +27,7 @@ import { isBlankTranscriptionText } from '../../utils/transcription';
 import { isUrlOnly } from '../../utils/url-content';
 import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
-import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveUserLanguagesOrdered, generateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
@@ -304,7 +304,7 @@ export class MessageTranslationService extends EventEmitter {
       });
 
       if (!existingConversation) {
-        const conversationIdentifier = this._generateConversationIdentifier(`Conversation ${messageData.conversationId}`);
+        const conversationIdentifier = generateConversationIdentifier(`Conversation ${messageData.conversationId}`);
 
         await this.prisma.conversation.create({
           data: {
@@ -340,32 +340,6 @@ export class MessageTranslationService extends EventEmitter {
       logger.error(`❌ Erreur sauvegarde message: ${error}`);
       throw error;
     }
-  }
-
-  private _generateConversationIdentifier(title?: string): string {
-    const now = new Date();
-    const timestamp = now.getFullYear().toString() +
-      (now.getMonth() + 1).toString().padStart(2, '0') +
-      now.getDate().toString().padStart(2, '0') +
-      now.getHours().toString().padStart(2, '0') +
-      now.getMinutes().toString().padStart(2, '0') +
-      now.getSeconds().toString().padStart(2, '0');
-
-    if (title) {
-      const sanitizedTitle = title
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '')
-        .replace(/\s+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
-
-      if (sanitizedTitle.length > 0) {
-        return `mshy_${sanitizedTitle}-${timestamp}`;
-      }
-    }
-
-    const uniqueId = Math.random().toString(36).slice(2, 10);
-    return `mshy_${uniqueId}-${timestamp}`;
   }
 
   getStats(): TranslationServiceStats {

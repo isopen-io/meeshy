@@ -24,6 +24,7 @@ import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.TranslateRequest
 import me.meeshy.sdk.net.api.TranslateResponse
 import me.meeshy.sdk.net.api.TranslationApi
+import me.meeshy.sdk.outbox.OutboxDependencyKey
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -363,6 +364,70 @@ class MessageRepositoryTest {
         )
 
         assertThat(cachedApiMessage(cmid).effects.has(MessageEffectFlags.BLURRED)).isTrue()
+    }
+
+    @Test
+    fun `sendOptimistic without attachments carries null attachmentIds and no dependency`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val row = outbox.deliverable("message:c1").single { it.cmid == cmid }
+        assertThat(OutboxDependencyKey.decode(row.dependsOn)).isEmpty()
+        assertThat(sentRequest("message:c1").attachmentIds).isNull()
+        assertThat(cachedApiMessage(cmid).messageType).isEqualTo("text")
+    }
+
+    @Test
+    fun `sendOptimistic with an upload carries the placeholder id and gates on the upload`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            "c1", "", "fr", sender,
+            messageType = "file",
+            attachmentUploadCmids = listOf("upload-cmid"),
+            attachments = listOf(
+                ApiMessageAttachment(id = "upload-cmid", fileName = "paste.txt", mimeType = "text/plain"),
+            ),
+        )
+
+        val row = outbox.deliverable("message:c1").single { it.cmid == cmid }
+        assertThat(OutboxDependencyKey.decode(row.dependsOn)).containsExactly("upload-cmid")
+        val request = sentRequest("message:c1")
+        assertThat(request.attachmentIds).containsExactly("upload-cmid")
+        assertThat(request.messageType).isEqualTo("file")
+    }
+
+    @Test
+    fun `sendOptimistic shows the attachment on the SENDING bubble instantly`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            "c1", "", "fr", sender,
+            messageType = "file",
+            attachmentUploadCmids = listOf("upload-cmid"),
+            attachments = listOf(
+                ApiMessageAttachment(id = "upload-cmid", fileName = "paste.txt", mimeType = "text/plain"),
+            ),
+        )
+
+        val bubble = cachedApiMessage(cmid)
+        assertThat(bubble.messageType).isEqualTo("file")
+        assertThat(bubble.attachments.map { it.fileName }).containsExactly("paste.txt")
+    }
+
+    @Test
+    fun `sendOptimistic dedupes blank upload cmids out of the dependency and payload`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            "c1", "hi", "fr", sender,
+            attachmentUploadCmids = listOf("  ", "u1", "u1"),
+        )
+
+        val row = outbox.deliverable("message:c1").single { it.cmid == cmid }
+        assertThat(OutboxDependencyKey.decode(row.dependsOn)).containsExactly("u1")
+        assertThat(sentRequest("message:c1").attachmentIds).containsExactly("u1")
     }
 
     @Test

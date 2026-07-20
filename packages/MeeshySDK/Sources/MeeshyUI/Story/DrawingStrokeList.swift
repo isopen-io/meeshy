@@ -15,7 +15,9 @@ struct DrawingStrokeList: View {
     var body: some View {
         if !viewModel.drawingStrokes.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text("\(viewModel.drawingStrokes.count) trait\(viewModel.drawingStrokes.count > 1 ? "s" : "")")
+                Text(String(localized: "story.drawEdit.strokeList.count",
+                            defaultValue: "\(viewModel.drawingStrokes.count) trait(s)",
+                            bundle: .module))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 ScrollView(.vertical, showsIndicators: false) {
@@ -44,9 +46,9 @@ struct DrawingStrokeList: View {
                 miniature(stroke)
                 colorButton(stroke, expanded: expanded)
                 toolButton("scribble.variable", tool: .smoothing, stroke: stroke, expanded: expanded,
-                           label: "Style du trait")
+                           label: String(localized: "story.drawEdit.strokeList.style", defaultValue: "Style du trait", bundle: .module))
                 toolButton("lineweight", tool: .thickness, stroke: stroke, expanded: expanded,
-                           label: "Épaisseur du trait")
+                           label: String(localized: "story.drawEdit.tool.thickness", defaultValue: "Épaisseur du trait", bundle: .module))
                 Spacer(minLength: 0)
                 trashButton(stroke)
             }
@@ -97,7 +99,7 @@ struct DrawingStrokeList: View {
                 .scaleEffect(expanded == .color ? 1.12 : 1.0)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Couleur du trait")
+        .accessibilityLabel(String(localized: "story.drawEdit.tool.color", defaultValue: "Couleur du trait", bundle: .module))
     }
 
     private func toolButton(_ symbol: String, tool: DrawingEditTool,
@@ -132,7 +134,7 @@ struct DrawingStrokeList: View {
                 .background(Circle().fill(MeeshyColors.error.opacity(0.12)))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Supprimer le trait")
+        .accessibilityLabel(String(localized: "story.drawEdit.strokeList.delete", defaultValue: "Supprimer le trait", bundle: .module))
     }
 
     // MARK: - Selection / expansion

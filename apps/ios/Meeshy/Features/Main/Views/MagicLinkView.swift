@@ -109,8 +109,9 @@ struct MagicLinkView: View {
             // Email field
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "envelope.fill")
-                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .foregroundColor(MeeshyColors.indigo400.opacity(0.7))
                     .frame(width: 20)
+                    .accessibilityHidden(true)
                 TextField(String(localized: "auth.magiclink.email.placeholder", defaultValue: "nom@exemple.com", bundle: .main), text: $email)
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
@@ -120,6 +121,8 @@ struct MagicLinkView: View {
                     .foregroundColor(theme.textPrimary)
                     .submitLabel(.send)
                     .onSubmit { sendMagicLink() }
+                    .accessibilityLabel(String(localized: "auth.magiclink.email.a11yLabel",
+                                               defaultValue: "Adresse email", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + 2)
@@ -130,7 +133,7 @@ struct MagicLinkView: View {
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
                                 isEmailFocused
-                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    ? MeeshyColors.indigo400.opacity(0.6)
                                     : theme.inputBorder.opacity(0.3),
                                 lineWidth: 1
                             )
@@ -214,14 +217,17 @@ struct MagicLinkView: View {
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Un lien de connexion a ete envoye a", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
+            VStack(spacing: MeeshySpacing.xs) {
+                Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Un lien de connexion a ete envoye a", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                    .foregroundColor(theme.textMuted)
+                    .multilineTextAlignment(.center)
 
-            Text(email)
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo400)
+                Text(email)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundColor(MeeshyColors.indigo400)
+            }
+            .accessibilityElement(children: .combine)
 
             if linkExpired {
                 Text(String(localized: "auth.magiclink.expired", defaultValue: "Lien expire, renvoyez-en un nouveau", bundle: .main))
@@ -241,6 +247,9 @@ struct MagicLinkView: View {
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold).monospacedDigit())
                         .foregroundColor(MeeshyColors.indigo600)
                         .padding(.top, MeeshySpacing.sm)
+                        .accessibilityLabel(String(localized: "auth.magiclink.countdown.a11yLabel",
+                                                   defaultValue: "Le lien expire dans", bundle: .main))
+                        .accessibilityValue(formattedCountdown)
                 }
             }
 

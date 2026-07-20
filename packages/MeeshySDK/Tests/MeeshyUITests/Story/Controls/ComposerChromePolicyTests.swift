@@ -9,14 +9,16 @@ struct ComposerChromePolicyTests {
         bandHidden: Bool = true,
         isTextEditing: Bool = false,
         isDrawingActive: Bool = false,
-        isViewportZoomed: Bool = false
+        isViewportZoomed: Bool = false,
+        isTimelineVisible: Bool = false
     ) -> Bool {
         ComposerChromePolicy.fullChromeVisible(
             fabsVisible: fabsVisible,
             bandHidden: bandHidden,
             isTextEditing: isTextEditing,
             isDrawingActive: isDrawingActive,
-            isViewportZoomed: isViewportZoomed
+            isViewportZoomed: isViewportZoomed,
+            isTimelineVisible: isTimelineVisible
         )
     }
 
@@ -48,5 +50,10 @@ struct ComposerChromePolicyTests {
     @Test("FABs masqués par l'utilisateur (swipe-down) → chrome caché")
     func userHiddenFabsHideChrome() {
         #expect(!visible(fabsVisible: false))
+    }
+
+    @Test("timeline visible → chrome caché (header + historyColumn ne doivent pas flotter sur la sheet)")
+    func timelineVisibleHidesChrome() {
+        #expect(!visible(isTimelineVisible: true))
     }
 }

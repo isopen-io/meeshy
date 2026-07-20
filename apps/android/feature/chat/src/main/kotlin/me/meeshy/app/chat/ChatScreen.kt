@@ -1,6 +1,12 @@
 package me.meeshy.app.chat
 
+import android.content.ContentResolver
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -65,6 +71,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -113,6 +121,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -150,6 +159,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
@@ -161,6 +171,7 @@ import me.meeshy.sdk.model.MessagePinToggle
 import me.meeshy.sdk.model.PinAction
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.EmojiFullPicker
+import me.meeshy.ui.component.location.LiveLocationBadge
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.MeeshySkeletonBox
@@ -204,6 +215,7 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val uriHandler = LocalUriHandler.current
+    val linkContext = LocalContext.current
     // Async OpenGraph link previews: one screen-scoped store dedupes fetches across bubbles and
     // dies with the screen (its cache is discarded on logout/leave — nothing leaks to the next
     // user). Each bubble projects a pure outcome from this collected cache.
@@ -378,12 +390,15 @@ fun ChatScreen(
                     isEditing = state.isEditing,
                     replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
                     hasEffects = state.hasPendingEffects,
+                    clipboardContent = state.clipboardContent,
                     accentColor = accentColor,
                     onDraftChange = viewModel::onDraftChange,
                     onSend = viewModel::send,
                     onOpenEffects = viewModel::openEffectsPicker,
                     onCancelEdit = viewModel::cancelEdit,
                     onCancelReply = viewModel::cancelReply,
+                    onRemoveClipboard = viewModel::removeClipboardContent,
+                    onPickFile = viewModel::sendFileAttachment,
                 )
             }
         },
@@ -405,6 +420,16 @@ fun ChatScreen(
                             accentColor = accentColor,
                             onClick = viewModel::onPinnedBannerTap,
                             onOpenList = viewModel::openPinnedSheet,
+                        )
+                    }
+                    state.liveLocationBadges.forEach { session ->
+                        LiveLocationBadge(
+                            username = session.username,
+                            expiresAtMillis = session.expiresAtMillis,
+                            accentColor = state.accentColorHex,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
                         )
                     }
                     Box(modifier = Modifier.weight(1f)) {
@@ -491,7 +516,9 @@ fun ChatScreen(
                                         ),
                                         isOutgoing = bubble.isOutgoing,
                                         accentColor = accentColor,
-                                        onOpenUrl = { url -> runCatching { uriHandler.openUri(url) } },
+                                        onOpenUrl = { url ->
+                                            openChatLink(linkContext, url, accentColor.toArgb())
+                                        },
                                     )
                                     replyThreads.threadFor(bubble.messageId)?.let { thread ->
                                         ReplyCountPill(
@@ -627,7 +654,19 @@ fun ChatScreen(
             onStar = { viewModel.toggleStar(actionTarget.messageId) },
             onToggleOriginal = { viewModel.toggleShowOriginal(actionTarget.messageId) },
             onExploreLanguages = { viewModel.openLanguageExplorer(actionTarget.messageId) },
+            onReport = { viewModel.openReport(actionTarget.messageId) },
             onDismiss = viewModel::dismissMessageActions,
+        )
+    }
+
+    state.reportForm?.let { form ->
+        ReportMessageSheet(
+            form = form,
+            accentColor = accentColor,
+            onSelectReason = viewModel::selectReportReason,
+            onDetailsChange = viewModel::onReportDetailsChange,
+            onSubmit = viewModel::submitReport,
+            onDismiss = viewModel::dismissReport,
         )
     }
 
@@ -1703,6 +1742,7 @@ private fun MessageActionsSheet(
     onStar: () -> Unit,
     onToggleOriginal: () -> Unit,
     onExploreLanguages: () -> Unit,
+    onReport: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val clipboard = LocalClipboardManager.current
@@ -1850,6 +1890,12 @@ private fun MessageActionsSheet(
                         label = stringResource(R.string.chat_action_delete_for_me),
                         tint = MeeshyPalette.Error,
                         onClick = onDeleteForMe,
+                    )
+                    MessageAction.Report -> SheetAction(
+                        icon = Icons.Outlined.Flag,
+                        label = stringResource(R.string.chat_action_report),
+                        tint = MeeshyPalette.Error,
+                        onClick = onReport,
                     )
                 }
             }
@@ -2180,6 +2226,37 @@ private fun MentionSuggestionStrip(
     }
 }
 
+/** The bytes + display name + declared content-type read back from a picked content Uri. */
+private data class PickedAttachment(
+    val bytes: ByteArray,
+    val fileName: String,
+    val mimeType: String?,
+)
+
+/**
+ * Reads a document/photo the user picked from the system picker into memory,
+ * resolving its display name and the platform's declared content-type. Returns
+ * `null` when the stream cannot be opened (a revoked grant / deleted document) so
+ * the composer silently ignores the pick rather than crashing. The byte read and
+ * cursor query are the Android-framework glue behind the pure send pipeline.
+ */
+private fun readPickedAttachment(context: Context, uri: Uri): PickedAttachment? {
+    val resolver = context.contentResolver
+    val bytes = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }
+        .getOrNull() ?: return null
+    val fileName = queryDisplayName(resolver, uri) ?: uri.lastPathSegment ?: "attachment"
+    return PickedAttachment(bytes = bytes, fileName = fileName, mimeType = resolver.getType(uri))
+}
+
+private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
+    runCatching {
+        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0) cursor.getString(index) else null
+        }
+    }.getOrNull()
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatComposer(
@@ -2188,13 +2265,23 @@ private fun ChatComposer(
     isEditing: Boolean,
     replyingToLabel: String?,
     hasEffects: Boolean,
+    clipboardContent: ClipboardContent?,
     accentColor: Color,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onOpenEffects: () -> Unit,
     onCancelEdit: () -> Unit,
     onCancelReply: () -> Unit,
+    onRemoveClipboard: () -> Unit,
+    onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
 ) {
+    val context = LocalContext.current
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        val picked = uri?.let { readPickedAttachment(context, it) } ?: return@rememberLauncherForActivityResult
+        onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+    }
     Surface(color = MeeshyTheme.tokens.backgroundPrimary) {
         Column(
             modifier = Modifier
@@ -2266,6 +2353,14 @@ private fun ChatComposer(
                     }
                 }
             }
+            if (clipboardContent != null) {
+                ClipboardContentPreview(
+                    clip = clipboardContent,
+                    accentColor = accentColor,
+                    onRemove = onRemoveClipboard,
+                    modifier = Modifier.padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.xs),
+                )
+            }
             var recording by remember { mutableStateOf(VoiceRecordingSession.idle()) }
             LaunchedEffect(recording.isRecording) {
                 while (recording.isRecording) {
@@ -2290,6 +2385,13 @@ private fun ChatComposer(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (!isEditing) {
+                        IconButton(onClick = { filePicker.launch("*/*") }) {
+                            Icon(
+                                imageVector = Icons.Filled.AttachFile,
+                                contentDescription = stringResource(R.string.chat_attach_file),
+                                tint = MeeshyTheme.tokens.textSecondary,
+                            )
+                        }
                         IconButton(onClick = onOpenEffects) {
                             Icon(
                                 imageVector = Icons.Filled.AutoAwesome,
@@ -2305,7 +2407,7 @@ private fun ChatComposer(
                         placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
                         maxLines = 4,
                     )
-                    if (!isEditing && draft.isBlank()) {
+                    if (!isEditing && draft.isBlank() && clipboardContent == null) {
                         IconButton(onClick = { recording = recording.start() }) {
                             Icon(
                                 imageVector = Icons.Filled.Mic,
@@ -2323,6 +2425,69 @@ private fun ChatComposer(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Preview chip for a large paste captured into a clipboard-content attachment —
+ * the thin, coverage-exempt Compose glue over the pure [ClipboardContent] (parité
+ * iOS `clipboardContentPreview`: doc glyph, title, truncated body, char count, and
+ * an accent-tinted remove button).
+ */
+@Composable
+private fun ClipboardContentPreview(
+    clip: ClipboardContent,
+    accentColor: Color,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(MeeshyRadius.md))
+            .background(MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.5f))
+            .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Description,
+            contentDescription = null,
+            tint = accentColor,
+            modifier = Modifier.size(20.dp),
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = MeeshySpacing.sm),
+        ) {
+            Text(
+                text = stringResource(R.string.chat_clipboard_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = MeeshyTheme.tokens.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = clip.truncatedPreview,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.chat_clipboard_char_count, clip.charCount),
+                style = MaterialTheme.typography.labelSmall,
+                color = accentColor,
+            )
+        }
+        IconButton(onClick = onRemove) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = stringResource(R.string.chat_clipboard_remove),
+                tint = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

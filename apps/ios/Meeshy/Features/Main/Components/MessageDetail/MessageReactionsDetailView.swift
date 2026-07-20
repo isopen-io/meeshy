@@ -98,6 +98,10 @@ struct MessageReactionsDetailView: View {
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
+        // Selected filter is otherwise signalled by color alone — expose it to
+        // VoiceOver via the trait so the active emoji filter is not lost to
+        // non-sighted users (HIG: never rely on color to convey state).
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
@@ -108,6 +112,9 @@ struct MessageReactionsDetailView: View {
                 accentColor: contactColor,
                 avatarURL: item.avatar
             )
+            // Avatar duplicates the username text below — hide it so the
+            // combined row reads once (name, emoji, when) instead of twice.
+            .accessibilityHidden(true)
 
             Text(item.username)
                 .font(.subheadline.weight(.medium))
@@ -126,19 +133,24 @@ struct MessageReactionsDetailView: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
+        // Group avatar + name + emoji + timestamp into one VoiceOver stop
+        // ("Alice, 😀, il y a 2 h") rather than four separate swipes.
+        .accessibilityElement(children: .combine)
     }
 
     private var emptyReactionsView: some View {
         VStack(spacing: 8) {
             Image(systemName: "face.smiling")
-                .font(.system(size: 28, weight: .light))
+                .font(.system(size: 28, weight: .light)) // decorative empty-state glyph (parity with MessageViewsDetailView)
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(String(localized: "message-detail.reactions.empty", defaultValue: "Aucune reaction", bundle: .main))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Network Actions

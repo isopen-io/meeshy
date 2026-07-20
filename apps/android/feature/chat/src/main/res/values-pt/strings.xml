@@ -10,6 +10,7 @@
     <string name="chat_send">Enviar</string>
     <string name="chat_record_voice">Gravar mensagem de voz</string>
     <string name="chat_effects_open">Efeitos da mensagem</string>
+    <string name="chat_attach_file">Anexar arquivo</string>
     <string name="chat_effects_title">Efeitos da mensagem</string>
     <string name="chat_effects_done">Concluído</string>
     <string name="chat_effects_section_behavior">Comportamento</string>
@@ -119,4 +120,23 @@
     <string name="chat_media_skip_back">Recuar 5 segundos</string>
     <string name="chat_media_skip_forward">Avançar 5 segundos</string>
     <string name="chat_media_playback_speed">Velocidade de reprodução</string>
+    <string name="chat_clipboard_title">Conteúdo da área de transferência</string>
+    <string name="chat_clipboard_char_count">%1$d caracteres</string>
+    <string name="chat_clipboard_remove">Remover conteúdo da área de transferência</string>
+
+    <!-- Report a message -->
+    <string name="chat_action_report">Denunciar</string>
+    <string name="report_message_title">Por que você está denunciando esta mensagem?</string>
+    <string name="report_message_details_header">Detalhes (opcional)</string>
+    <string name="report_message_details_placeholder">Descreva o problema…</string>
+    <string name="report_message_submit">Enviar denúncia</string>
+    <string name="report_message_error">Não foi possível enviar a denúncia. Tente novamente.</string>
+    <string name="report_message_sent">Denúncia enviada</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_inappropriate">Conteúdo impróprio</string>
+    <string name="report_reason_harassment">Assédio</string>
+    <string name="report_reason_violence">Violência</string>
+    <string name="report_reason_hate_speech">Discurso de ódio</string>
+    <string name="report_reason_impersonation">Falsidade ideológica</string>
+    <string name="report_reason_other">Outro</string>
 </resources>

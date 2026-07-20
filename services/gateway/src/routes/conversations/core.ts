@@ -4,7 +4,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
-import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
+import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
   generateDefaultConversationTitle
@@ -619,7 +619,7 @@ export function registerCoreRoutes(
                 username: sender.user?.username ?? sender.username ?? null,
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
-                displayName: sender.displayName ?? sender.user?.displayName ?? null,
+                displayName: resolveParticipantDisplayName(sender),
                 avatar: resolveParticipantAvatar(sender),
                 isOnline: senderVis?.showOnline === false
                   ? false

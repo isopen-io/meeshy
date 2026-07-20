@@ -10,6 +10,7 @@
     <string name="chat_send">Envoyer</string>
     <string name="chat_record_voice">Enregistrer un message vocal</string>
     <string name="chat_effects_open">Effets du message</string>
+    <string name="chat_attach_file">Joindre un fichier</string>
     <string name="chat_effects_title">Effets du message</string>
     <string name="chat_effects_done">OK</string>
     <string name="chat_effects_section_behavior">Comportement</string>
@@ -119,4 +120,23 @@
     <string name="chat_media_skip_back">Reculer de 5 secondes</string>
     <string name="chat_media_skip_forward">Avancer de 5 secondes</string>
     <string name="chat_media_playback_speed">Vitesse de lecture</string>
+    <string name="chat_clipboard_title">Contenu du presse-papier</string>
+    <string name="chat_clipboard_char_count">%1$d caractères</string>
+    <string name="chat_clipboard_remove">Retirer le contenu du presse-papier</string>
+
+    <!-- Report a message -->
+    <string name="chat_action_report">Signaler</string>
+    <string name="report_message_title">Pourquoi signalez-vous ce message ?</string>
+    <string name="report_message_details_header">Détails (facultatif)</string>
+    <string name="report_message_details_placeholder">Décrivez le problème…</string>
+    <string name="report_message_submit">Envoyer le signalement</string>
+    <string name="report_message_error">Échec de l’envoi du signalement. Réessayez.</string>
+    <string name="report_message_sent">Signalement envoyé</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_reason_inappropriate">Contenu inapproprié</string>
+    <string name="report_reason_harassment">Harcèlement</string>
+    <string name="report_reason_violence">Violence</string>
+    <string name="report_reason_hate_speech">Discours haineux</string>
+    <string name="report_reason_impersonation">Usurpation d’identité</string>
+    <string name="report_reason_other">Autre</string>
 </resources>

@@ -72,3 +72,25 @@ final class MyStoriesBulkDeleteGuardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Menu « … » / export destination (fix 2026-07-19)
+
+/// Le menu « … » des lignes My Stories offre « Enregistrer » : même pipeline
+/// d'export MP4 que « Partager », mais la share sheet système ne doit JAMAIS
+/// se présenter en mode `.saveToPhotos` (la vidéo part dans Photos via
+/// `PhotoLibraryManager`). `resolveActivityURL` est la garde pure de ce choix.
+@MainActor
+final class StoryExportShareSheetModeTests: XCTestCase {
+
+    func test_resolveActivityURL_shareMode_passesURLThrough() {
+        let url = URL(string: "file:///tmp/story.mp4")!
+        XCTAssertEqual(StoryExportShareSheet.resolveActivityURL(mode: .share, sharedURL: url), url)
+        XCTAssertNil(StoryExportShareSheet.resolveActivityURL(mode: .share, sharedURL: nil))
+    }
+
+    func test_resolveActivityURL_saveToPhotos_neverPresentsShareSheet() {
+        let url = URL(string: "file:///tmp/story.mp4")!
+        XCTAssertNil(StoryExportShareSheet.resolveActivityURL(mode: .saveToPhotos, sharedURL: url),
+                     "En mode Enregistrer, l'URL exportée est consommée par la sauvegarde Photos — pas de share sheet.")
+    }
+}

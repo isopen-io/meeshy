@@ -30,14 +30,14 @@ public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
 
     var accessibilityLabel: String {
         switch self {
-        case .style:      return "Style de texte"
-        case .weight:     return "Graisse du texte"
-        case .color:      return "Couleur du texte"
-        case .size:       return "Taille du texte"
-        case .align:      return "Alignement du texte"
-        case .background: return "Fond du texte"
-        case .frame:      return "Cadrage du texte"
-        case .border:     return "Contour du texte"
+        case .style:      return String(localized: "story.textEdit.tool.style", defaultValue: "Style de texte", bundle: .module)
+        case .weight:     return String(localized: "story.textEdit.tool.weight", defaultValue: "Graisse du texte", bundle: .module)
+        case .color:      return String(localized: "story.textEdit.tool.color", defaultValue: "Couleur du texte", bundle: .module)
+        case .size:       return String(localized: "story.textEdit.tool.size", defaultValue: "Taille du texte", bundle: .module)
+        case .align:      return String(localized: "story.textEdit.tool.align", defaultValue: "Alignement du texte", bundle: .module)
+        case .background: return String(localized: "story.textEdit.tool.background", defaultValue: "Fond du texte", bundle: .module)
+        case .frame:      return String(localized: "story.textEdit.tool.frame", defaultValue: "Cadrage du texte", bundle: .module)
+        case .border:     return String(localized: "story.textEdit.tool.border", defaultValue: "Contour du texte", bundle: .module)
         }
     }
 }
