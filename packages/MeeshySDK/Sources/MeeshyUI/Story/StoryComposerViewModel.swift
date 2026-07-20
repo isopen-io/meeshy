@@ -183,14 +183,33 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// (selectedImage) ET les `mediaObjects` modernes `isBackground == true`
     /// (chip Background) — ce dernier échappait au calcul et laissait le
     /// chrome en `.light` (pastel aléatoire) sur un letterbox blur sombre,
-    /// boutons inexploitables (captures user 2026-07-20). Même règle que le
-    /// reader (`hasVisualBackgroundMedia` → `.dark`).
+    /// boutons inexploitables (captures user 2026-07-20). Un média de fond
+    /// suit la luminance RÉELLE de son bitmap (2e vague de captures : capture
+    /// d'écran BLANCHE en Background → chrome blanc invisible avec un `.dark`
+    /// forfaitaire) ; sans bitmap mesurable, convention viewer → `.dark`.
     var canvasChromeScheme: ColorScheme {
         CanvasChromeScheme.scheme(
             background: backgroundColor,
-            hasMediaBackground: hasBackgroundImage || currentEffects.hasVisualBackgroundMedia
+            hasMediaBackground: hasBackgroundImage || currentEffects.hasVisualBackgroundMedia,
+            mediaLuminance: backgroundMediaLuminance
         )
     }
+
+    /// Luminance WCAG moyenne du bitmap de fond effectivement affiché
+    /// (`currentSlideBackgroundImage` : média moderne d'abord, legacy
+    /// ensuite). Cache mono-entrée par IDENTITÉ d'image — le bitmap ne change
+    /// que quand l'utilisateur change de fond, et `canvasChromeScheme` est
+    /// relu à chaque évaluation de body. `nil` = pas de bitmap (fond couleur,
+    /// vidéo sans thumbnail chargée) → le scheme retombe sur `.dark`.
+    var backgroundMediaLuminance: Double? {
+        guard let image = currentSlideBackgroundImage else { return nil }
+        let key = ObjectIdentifier(image)
+        if let cached = backgroundLuminanceCache, cached.key == key { return cached.value }
+        let value = CanvasChromeScheme.averageRelativeLuminance(of: image)
+        backgroundLuminanceCache = (key, value)
+        return value
+    }
+    private var backgroundLuminanceCache: (key: ObjectIdentifier, value: Double?)?
 
     /// Format `effects.background` : hex SANS « # » ou `gradient:HEX1:HEX2`
     /// (cf. le restore SyncRestore qui re-préfixe le hex nu).

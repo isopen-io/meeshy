@@ -262,7 +262,11 @@ public struct TimelineInspectorHost: View {
             },
             onEndAdjusted: { [viewModel] delta in
                 viewModel.trimClipEnd(id: clipId, deltaTimeSeconds: delta)
-            }
+            },
+            onStartTrimmed: { [viewModel] delta in
+                viewModel.trimClipStart(id: clipId, deltaTimeSeconds: delta)
+            },
+            slideDuration: viewModel.project.slideDuration
         )
         .padding(12)
         .transition(.opacity)
