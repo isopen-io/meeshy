@@ -1,6 +1,41 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
+    "brand.signature.version.a11y" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy Version %1$@, Build %2$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy version %1$@, build %2$@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy versión %1$@, compilación %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy version %1$@, build %2$@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy versão %1$@, build %2$@"
+          }
+        }
+      }
+    },
     "feed.post.stat.comments" : {
       "extractionState" : "manual",
       "localizations" : {
