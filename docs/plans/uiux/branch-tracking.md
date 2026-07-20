@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **179i (branche `claude/laughing-thompson-yfiky7`, base `main` HEAD `70dd5695`, 169i mergé)** :
+>   Structure VoiceOver de `MessageTranscriptionDetailView` (onglet Transcription = transcription
+>   Whisper + traductions audio TTS, contenu central du Prisme Linguistique). Fichier de 354 lignes
+>   **sans aucun modificateur d'accessibilité**. 7 déficits comblés : (1) **bandeau langue/confiance/durée**
+>   → 1 élément labellisé « Transcription en {langue}, confiance {N} %, {durée parlée} » (icône masquée) ;
+>   (2) **segments mot-à-mot** `FlowLayout` → `.accessibilityHidden(true)` (redondants avec le texte plein
+>   déjà lu, coloration locuteur purement visuelle) ; (3) **compteur locuteurs** / (4) **cartes pièce jointe**
+>   / (6) **en-tête « Traductions audio »** → `.combine` + icônes masquées ; (5) **bouton Transcrire** →
+>   label + `.accessibilityValue` d'état de chargement ; (7) **lignes traduction audio** → 1 élément labellisé
+>   « {langue}, voix clonée, {durée parlée}, {transcription} ». **Durée parlée** via `DateComponentsFormatter`
+>   natif locale-aware (« 12 secondes »/« 12 seconds »/« 12 Sekunden ») remplaçant le « 0:12 » ambigu — 0 chaîne.
+>   1 fichier Swift (+57), 4 clés i18n neuves (`a11y.transcription.{in-language,confidence,in-progress}`,
+>   `a11y.audio.cloned-voice`) × 5 locales, insérées sans reformater le xcstrings (0 suppression). 0 logique,
+>   0 couleur/police modifiée. Aucun test ne référence la vue (privée, présentée par `MessageDetailSheet`).
+>   Gate = CI « iOS Tests ». PR à venir.
+> - **⚠️ `MessageTranscriptionDetailView` VoiceOver structure SOLDÉ** : bandeau/lignes audio labellisés,
+>   segments mot-à-mot masqués (anti double-lecture), icônes décoratives masquées, bouton Transcrire à état.
+>   Ne plus reprendre (contenu texte déjà sémantique + Dynamic Type).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 172i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **172i (en cours, branche `claude/laughing-thompson-ks1h8d`, base `main` HEAD `612872b`)** :
 >   Alignement marque Indigo + structure VoiceOver de `MagicLinkView` (connexion par lien magique).
