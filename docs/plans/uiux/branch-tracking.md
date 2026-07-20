@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **179i (en cours, branche `claude/laughing-thompson-k9l43k`, base `main` HEAD `fc38a0b`)** :
+>   Consolidation palette de marque + en-têtes VoiceOver de `MediaDownloadSettingsView`
+>   (Réglages → « Téléchargement auto »). Écran déjà 100 % i18n + Dynamic Type, rangées de
+>   politique déjà `.isSelected`. 2 déficits : (1) **palette hors-marque incohérente** — 2 des 4
+>   pastilles de type média utilisaient déjà des tokens (`brandPrimaryHex`, `indigo600Hex`), les
+>   2 autres du hex brut « Flat-UI » (`F39C12` orange, `E74C3C` rouge), l'accent d'écran une
+>   orange carotte (`E67E22`), et un gris brut `6B7280` (== `neutral500Hex`). Fix : échelle Indigo
+>   cohérente (images 500 · audio 600 · traductions 400 · video 300) + accent d'écran →
+>   `brandPrimaryHex` (comme tous les autres écrans Réglages) + `6B7280`×2 → `neutral500Hex`
+>   (même hex exact, 0 changement visuel). Pas de token warning/error pour des pastilles décoratives.
+>   (2) **en-têtes de section non exposés** → `sectionHeader` : icône décorative masquée, enfants
+>   combinés, `.accessibilityLabel` en casse naturelle, trait `.isHeader` (5 sections navigables au
+>   rotor). 1 fichier, 0 logique, 0 clé i18n neuve, 0 test. Swaps `String`→`String` (hex → token
+>   existant). Aucun test ne référence la vue, aucune PR iOS ouverte ne la touche. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `MediaDownloadSettingsView` palette + en-têtes SOLDÉ 179i** : plus de hex brut hors-marque.
+>   Restent (constante `accentColor` isolée par fichier, migrer plus tard) : `AffiliateCreateView`+
+>   `AffiliateView` (`2ECC71` vert — migrer la **paire ensemble**), `DataStorageView` (`E67E22` +
+>   `EF4444`), `TermsOfServiceView` (`45B7D1` cyan).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 165i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
 > - **165i (terminée, branche `claude/laughing-thompson-wnteas`, base `main` HEAD `b36ffd7`)** :
 >   Dynamic Type + VoiceOver de `StatsTimelineChart` (graphique d'activité Swift Charts, écran stats).
