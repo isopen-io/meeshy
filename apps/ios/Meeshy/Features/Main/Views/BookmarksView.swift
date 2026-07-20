@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct BookmarksView: View {
     @StateObject private var viewModel = BookmarksViewModel()
@@ -85,19 +86,11 @@ struct BookmarksView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "bookmark")
-                .font(.system(size: 48))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-            Text(String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main))
-                .font(.body.weight(.semibold))
-                .foregroundColor(theme.textSecondary)
-            Text(String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts que vous sauvegardez apparaitront ici", bundle: .main))
-                .font(.subheadline)
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
-        }
+        EmptyStateView(
+            icon: "bookmark",
+            title: String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main),
+            subtitle: String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts que vous sauvegardez apparaitront ici", bundle: .main)
+        )
         .padding(.top, 80)
     }
 }
