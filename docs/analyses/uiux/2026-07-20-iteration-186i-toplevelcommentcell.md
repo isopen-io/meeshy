@@ -96,6 +96,30 @@ String` are already non-optional. The two post cells (`TextPostCell`,
 `MediaPostCell`) assign the coalesced name to a `String?` label and were never
 affected. This restores the iOS build for the whole swarm.
 
+### Second CI repair — `PostStatAccessibility` inflection (pre-existing, #2119)
+
+Once the build compiled, **7 latent test failures** surfaced in
+`PostStatAccessibilityTests` — all of the form
+`"^[5 like](inflect: true)" is not equal to "5 likes"`. Root cause (pre-existing,
+introduced by the merged **#2119 / 179i**, hidden behind the red build): the
+like/comment/repost VoiceOver labels used inline Automatic Grammar Agreement
+markup `^[\(count) like](inflect: true)` as a `String(localized:defaultValue:)`
+default, with a code comment asserting "no `.stringsdict` required." That is
+incorrect — the `^[…](inflect: true)` markup is only resolved when the string is
+a **String Catalog entry processed at build time**; as a raw inline default it
+is returned **literally**, so real VoiceOver users heard
+`"^[5 like](inflect: true)"` instead of `"5 likes"` (a genuine a11y regression,
+not just a test artifact). Grep confirmed `feed.post.stat.{likes,comments,
+reposts}` are **not** in `Localizable.xcstrings`.
+Fix: replace the inflection markup with an explicit `one` / `other` key split
+(`feed.post.stat.likes.one` / `.other`, etc.) via `String(localized:
+defaultValue:)` — the exact reliable pattern used by `comments.reply.a11yLabel`
+(182i) and `comments.comment.a11yLabel` (this iteration). Returns the correct
+plural at runtime, satisfies all 11 tests, and stays fully localizable
+(translators override `…one` / `…other` per language). This is out of the 186i
+scope but was folded in because it (a) blocked the whole swarm's CI and (b) is a
+small, verifiable, root-cause fix.
+
 ## Completion
 
 **RESOLVED** — `TopLevelCommentCell` Dynamic Type + i18n + VoiceOver + reuse
