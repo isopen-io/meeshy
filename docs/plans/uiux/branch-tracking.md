@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 180i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **180i (en cours, branche `claude/laughing-thompson-k9l43k`, base `main` HEAD post-#2125/#2130)** :
+>   Consolidation palette de marque de la **paire Parrainage** `AffiliateView` + `AffiliateCreateView`
+>   (exécute le pointeur « migrer la paire ensemble » laissé par 179i). Les deux vues partageaient
+>   la **même** constante hors-marque `private let accentColor = "2ECC71"` (émeraude Flat-UI) qui pilote
+>   tout l'accent d'écran (Cancel/Create, tints TextField, back/`+`, 3 stat cards, en-tête section,
+>   surfaces token-row, état vide, bouton Copier). Fix : `accentColor = MeeshyColors.brandPrimaryHex`
+>   (`6366F1`, indigo500) dans les 2 fichiers — swap `String`→`String` type-identique, 0 changement de
+>   call-site (déjà consommé par `Color(hex:)` + `ThemeManager.surfaceGradient/border(tint:)`). En bonus
+>   cohérence : l'icône **Partager** de la token-row (`AffiliateView` l.267) mésusait le token sémantique
+>   `MeeshyColors.success` (vert = succès) pour une action neutre coincée entre Copier (accent) et
+>   Supprimer (error rouge) → réalignée sur `Color(hex: accentColor)` (indigo, comme Copier). `success`
+>   vert reste réservé au stat « Inscrits » (l.228, correct). `MeeshyColors` déjà référencé dans les 2
+>   fichiers (`.error`/`.success`) → 0 import neuf. 2 fichiers, 3 lignes, 0 logique, 0 clé i18n, 0 test.
+>   `search_pull_requests … Affiliate` → 0 → aucune contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `AffiliateView`/`AffiliateCreateView` palette SOLDÉ 180i** : émeraude `2ECC71` éradiquée, Partager
+>   réaligné. Non repris (hors périmètre couleur) : hero état-vide `.system(size:36)` (doctrine ≥36pt figé),
+>   share manuel `UIActivityViewController` (candidat `ShareLink`), error `Text` non annoncé (pass a11y dédié).
+>   Frères legacy restants : `DataStorageView` (`E67E22`+`EF4444`), `TermsOfServiceView` (`45B7D1` cyan).
+> - **✅ 179i MERGÉ (#2125)** : `MediaDownloadSettingsView` palette + en-têtes VoiceOver — dans `main`.
 > **POINTEUR iOS AUTORITAIRE (mis à jour 183i, 2026-07-20)** — piste iOS (suffixe `i`).
 > - **Essaim iOS saturé** : PR ouvertes de 169i à **182i** (#2133 `ReplyCell`). Candidats du pointeur 177i déjà multi-dupliqués — `PeopleDiscoveryView` (#2114/#2115/#2129), `CrashReportSheet` (#2105/#2108/#2110/#2120/#2127), `VideoFullscreenPlayer` (#2106/#2109/#2116). Numéro **183i** choisi strictement > 182i (plus haut en vol).
 > - **183i (terminée, branche `claude/laughing-thompson-uxy2f5`, base `main` HEAD `0b4875b`)** : action VoiceOver « Copier le lien » de **`CommunityLinksView`** (liste des communautés administrées). Écran **vierge** (seul `CommunityLinkDetailView` traité en 171i ; les notes d'autres PR le citent comme twin déjà poli). Défaut réel : le `Button` de copie (`doc.on.doc`) est **imbriqué dans le `NavigationLink`** de la rangée → le lien absorbe tout son label comme **un seul élément VoiceOver** → le bouton (et son `.accessibilityLabel`) **n'est jamais atteignable** ⇒ un utilisateur VoiceOver **ne peut pas copier le lien d'invitation** d'une communauté. Fix (voie native Apple pour action secondaire sur rangée navigable, précédent `ConversationListView+Rows`/`RootView`) : (a) helper `copyJoinLink(_:)` SSOT ; (b) `Button` visible conservé pour le tactile mais `.accessibilityHidden(true)` ; (c) rangée `.accessibilityElement(children: .combine)` (annonce « {nom}, {n} membres · {id} », trait lien via `NavigationLink`) + `.accessibilityHint` (destination) + `.accessibilityAction(named: "Copier le lien")` ré-exposant la copie via le rotor Actions. **0 visuel / 0 logique / 0 test neuf** ; polices déjà `MeeshyFont.relative` (Dynamic Type OK). Réutilise `common.copyLink` ; **1 clé neuve inline** `community.links.row.open.a11y` (0 xcstrings). 1 fichier. Gate = CI `iOS Tests`.

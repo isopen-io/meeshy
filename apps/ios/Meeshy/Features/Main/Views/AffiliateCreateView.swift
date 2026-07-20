@@ -15,7 +15,7 @@ struct AffiliateCreateView: View {
 
     var onCreate: ((AffiliateToken) -> Void)?
 
-    private let accentColor = "2ECC71"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         NavigationStack {
