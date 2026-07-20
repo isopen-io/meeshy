@@ -863,14 +863,7 @@ export class NotificationService {
           // threadId groups by conversation on iOS; category selects the
           // action set (the NSE only fills these for legacy payloads).
           const pushCategory = pushCategoryForNotificationType(params.type);
-          this.pushService.sendToUser({
-            userId: params.userId,
-            // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
-            // delivered to PushKit, otherwise iOS shows a fake CallKit incoming call
-            // for every message/friend-request/conversation-creation. Real call
-            // pushes are dispatched separately from CallEventsHandler with types: ['voip'].
-            types: ['apns', 'fcm'],
-            payload: {
+          const pushPayload = {
               title: pushTitle,
               // Subtitle carries the conversation name for group/global chats
               // — survives iOS Communication Notification rewriting that would
@@ -921,8 +914,37 @@ export class NotificationService {
                   : ''),
                 encryptedContent: params.context.encryptedContent || '',
                 notificationLocKey: params.context.notificationLocKey || '',
+                // GW5 — persistance NSE : timestamp serveur + type du message,
+                // clés absentes (pas de '') quand la notification ne porte pas
+                // de message.
+                ...(params.context.messageCreatedAt ? { createdAt: params.context.messageCreatedAt } : {}),
+                ...(params.context.messageType ? { messageType: params.context.messageType } : {}),
+                ...(params.context.translatedContent ? {
+                  translatedContent: params.context.translatedContent,
+                  translatedLanguage: params.context.translatedLanguage || '',
+                } : {}),
               },
-            },
+            };
+
+          // GW5 — budget APNs 4KB (rejet silencieux PayloadTooLarge sinon, et
+          // handleFailedToken compterait un strike sur un token sain) : la
+          // traduction Prisme est le PREMIER champ sacrifié quand le payload
+          // (encryptedContent volumineux) dépasse la marge de sécurité.
+          const APNS_SAFE_PAYLOAD_BYTES = 3800;
+          const { translatedContent: _tc, translatedLanguage: _tl, ...dataWithoutTranslation } = pushPayload.data;
+          const fitsApnsBudget = Buffer.byteLength(JSON.stringify(pushPayload), 'utf8') <= APNS_SAFE_PAYLOAD_BYTES;
+          const boundedPayload = fitsApnsBudget || !('translatedContent' in pushPayload.data)
+            ? pushPayload
+            : { ...pushPayload, data: dataWithoutTranslation };
+
+          this.pushService.sendToUser({
+            userId: params.userId,
+            // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
+            // delivered to PushKit, otherwise iOS shows a fake CallKit incoming call
+            // for every message/friend-request/conversation-creation. Real call
+            // pushes are dispatched separately from CallEventsHandler with types: ['voip'].
+            types: ['apns', 'fcm'],
+            payload: boundedPayload,
           }).catch(err => {
             notificationLogger.error('Push notification failed', { error: err, userId: params.userId });
           });
@@ -1140,9 +1162,12 @@ export class NotificationService {
     // expire in that window we MUST NOT leak the original content via the
     // banner. Refetch the live state right before the fan-out and bail when
     // the message is no longer eligible.
+    // GW5 — the same refetch feeds the NSE persistence fields: authoritative
+    // createdAt/messageType plus any translation already produced by the
+    // pipeline at fan-out time (Message.translations JSON, keyed by language).
     const liveMessage = await this.prisma.message.findUnique({
       where: { id: params.messageId },
-      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true },
+      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true },
     });
     if (!liveMessage) {
       notificationLogger.info('Skipping message notification (message vanished)', {
@@ -1186,6 +1211,19 @@ export class NotificationService {
 
     const recipientLang = await this.resolveRecipientLang(params.recipientUserId);
 
+    // GW5 — Prisme : sélectionner la traduction qui matche EXACTEMENT la
+    // langue résolue du destinataire (même résolution que le framing). Pas de
+    // fallback translations.first : aucune correspondance = le contenu est
+    // déjà dans la langue du destinataire. Les traductions chiffrées ne sont
+    // jamais poussées (la NSE déchiffre encryptedContent, pas les traductions).
+    const translationsJson = liveMessage.translations as Record<string, { text?: unknown; isEncrypted?: unknown }> | null | undefined;
+    const matchedTranslation = translationsJson
+      ? Object.entries(translationsJson).find(([lang, t]) =>
+          lang.toLowerCase() === recipientLang.toLowerCase()
+          && typeof t?.text === 'string'
+          && !t.isEncrypted)
+      : undefined;
+
     const content = buildMessageNotificationBodyI18n(recipientLang, {
       messagePreview: params.messagePreview,
       attachments: params.attachments,
@@ -1226,6 +1264,13 @@ export class NotificationService {
           : undefined,
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
+        // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
+        messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
+        messageType: liveMessage.messageType ?? undefined,
+        ...(matchedTranslation ? {
+          translatedContent: (matchedTranslation[1].text as string).substring(0, 200),
+          translatedLanguage: matchedTranslation[0],
+        } : {}),
       },
 
       metadata: {

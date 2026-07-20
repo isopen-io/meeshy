@@ -615,6 +615,154 @@ describe('NotificationService — message push title/body', () => {
       expect(payload.threadId).toBeUndefined();
     });
   });
+
+  // GW5 — payload enrichment for NSE persistence: createdAt + messageType
+  // always for messages, plus the Prism-resolved translation for the
+  // recipient when one already exists in DB at fan-out time. APNs 4KB
+  // budget: the translation is the FIRST field dropped when oversized.
+  describe('GW5 — data carries createdAt/messageType and Prism translation', () => {
+    const MSG_CREATED_AT = new Date('2026-07-20T09:30:00.000Z');
+
+    function mockLiveMessage(overrides: Record<string, unknown> = {}) {
+      (prisma.message.findUnique as jest.Mock).mockResolvedValue({
+        deletedAt: null,
+        expiresAt: null,
+        isViewOnce: false,
+        viewOnceCount: 0,
+        createdAt: MSG_CREATED_AT,
+        messageType: 'text',
+        translations: null,
+        ...overrides,
+      });
+    }
+
+    function mockRecipientLanguage(systemLanguage: string) {
+      (prisma.user.findUnique as jest.Mock).mockImplementation(({ where }: any) => {
+        if (where.id === RECIPIENT_ID) {
+          return Promise.resolve({
+            systemLanguage,
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          });
+        }
+        return Promise.resolve({ username: 'alice', displayName: 'Alice Martin', avatar: null });
+      });
+    }
+
+    async function sendMessageNotification(extra: Record<string, unknown> = {}) {
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Bonjour tout le monde',
+        ...extra,
+      });
+    }
+
+    beforeEach(() => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        title: 'Chat', type: 'direct',
+      });
+      mockRecipientLanguage('en');
+    });
+
+    it('test_messagePush_dataCarriesCreatedAtIsoAndMessageType', async () => {
+      mockLiveMessage({ messageType: 'audio' });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data.createdAt).toBe('2026-07-20T09:30:00.000Z');
+      expect(data.messageType).toBe('audio');
+    });
+
+    it('test_messagePush_translationMatchingPrismLanguage_isIncluded', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'Hello everyone', translationModel: 'medium', createdAt: MSG_CREATED_AT },
+          de: { text: 'Hallo zusammen', translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data.translatedContent).toBe('Hello everyone');
+      expect(data.translatedLanguage).toBe('en');
+    });
+
+    it('test_messagePush_noMatchingTranslation_fieldsAbsent', async () => {
+      mockLiveMessage({
+        translations: {
+          de: { text: 'Hallo zusammen', translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data).not.toHaveProperty('translatedContent');
+      expect(data).not.toHaveProperty('translatedLanguage');
+    });
+
+    it('test_messagePush_encryptedTranslation_isNeverPushed', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'ciphertextbase64', translationModel: 'medium', isEncrypted: true, createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data).not.toHaveProperty('translatedContent');
+    });
+
+    it('test_messagePush_translationTruncatedTo200Chars', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'x'.repeat(300), translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification();
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data.translatedContent).toHaveLength(200);
+    });
+
+    it('test_messagePush_normalPayloadStaysUnderApns4KBBudget', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'Hello everyone', translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification({ encryptedContent: 'shortciphertext' });
+
+      const payload = lastPushPayload();
+      expect(Buffer.byteLength(JSON.stringify(payload), 'utf8')).toBeLessThan(4096);
+      expect((payload.data ?? {}).translatedContent).toBe('Hello everyone');
+    });
+
+    it('test_messagePush_oversizedByEncryptedContent_dropsTranslationFirst', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'y'.repeat(300), translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      await sendMessageNotification({ encryptedContent: 'z'.repeat(3800) });
+
+      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      expect(data).not.toHaveProperty('translatedContent');
+      expect(data).not.toHaveProperty('translatedLanguage');
+      expect(data.encryptedContent).toBe('z'.repeat(3800));
+      expect(data.createdAt).toBe('2026-07-20T09:30:00.000Z');
+    });
+  });
 });
 
 // ─── GW4 — pure type → category mapping ──────────────────────────────────────
