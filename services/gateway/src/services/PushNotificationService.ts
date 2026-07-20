@@ -157,7 +157,7 @@ const CALL_PUSH_TTL_MS = 60_000;
 
 export class PushNotificationService {
   private prisma: PrismaClient;
-  private firebaseAdmin: any = null;
+  private firebaseMessaging: any = null;
   // Two APNs Provider instances: one for sandbox (debug builds, aps-environment=development),
   // one for production (TestFlight/App Store, aps-environment=production). The token's
   // apnsEnvironment field decides which one is used. Same Apple p8 key works for both —
@@ -219,7 +219,8 @@ export class PushNotificationService {
     // Initialize Firebase Admin SDK
     if (config.fcmEnabled && config.firebaseCredentialsPath) {
       try {
-        const admin = await import('firebase-admin');
+        const { getApps, initializeApp, cert } = await import('firebase-admin/app');
+        const { getMessaging } = await import('firebase-admin/messaging');
         const fs = await import('fs');
         const path = await import('path');
 
@@ -228,13 +229,13 @@ export class PushNotificationService {
         if (fs.existsSync(credentialsPath) && fs.statSync(credentialsPath).isFile()) {
           const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
 
-          if (!admin.apps.length) {
-            admin.initializeApp({
-              credential: admin.credential.cert(serviceAccount),
+          if (!getApps().length) {
+            initializeApp({
+              credential: cert(serviceAccount),
             });
           }
 
-          this.firebaseAdmin = admin;
+          this.firebaseMessaging = getMessaging();
           pushLogger.info('Firebase Admin SDK initialized');
         } else {
           const reason = fs.existsSync(credentialsPath) ? 'path is a directory, not a file' : 'file not found';
@@ -454,7 +455,7 @@ export class PushNotificationService {
     tokenRecord: { id: string; token: string; platform: string },
     payload: PushNotificationPayload
   ): Promise<PushResult> {
-    if (!this.firebaseAdmin) {
+    if (!this.firebaseMessaging) {
       return { success: false, tokenId: tokenRecord.id, error: 'Firebase not initialized' };
     }
 
@@ -625,7 +626,7 @@ export class PushNotificationService {
   private async sendFcmWithRetry(message: unknown, corr: Record<string, unknown>): Promise<unknown> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await this.firebaseAdmin!.messaging().send(message);
+        return await this.firebaseMessaging!.send(message);
       } catch (error: any) {
         const code = error?.code || error?.errorInfo?.code;
         if (!isTransientFcmErrorCode(code) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
