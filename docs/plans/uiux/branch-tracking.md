@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 178i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **178i (branche `claude/laughing-thompson-170gcd`, base `main` HEAD `45ebd238`, PR #2118)** :
+>   Structure VoiceOver de `BlockedUsersView` (Réglages → Confidentialité → « Utilisateurs bloqués »),
+>   application verbatim du patron 168i `ActiveSessionsView` (écran frère). Écran déjà 100 % localisé /
+>   Dynamic Type, avec alerte de confirmation + `.accessibilityLabel` sur le bouton Débloquer. 3 déficits
+>   a11y purs : (1) **titre d'écran sans `.isHeader`** → hors rotor en-têtes → `.accessibilityAddTraits(.isHeader)` ;
+>   (2) **bloc identité fragmenté + nom doublé** — `MeeshyAvatar` porte son propre `.accessibilityLabel(name)`,
+>   donc VoiceOver lisait le nom 2× puis `@username` séparément → HStack interne `.accessibilityElement(children: .combine)`
+>   + avatar `.accessibilityHidden(true)` → un seul arrêt « <nom>, @<username> », bouton Débloquer sibling actionnable ;
+>   (3) **skeletons de chargement focusables** → `.accessibilityHidden(true)`. 1 fichier, 0 logique, 0 clé i18n, 0 test.
+>   Aucun test ne référence la vue. Gate = CI `iOS Tests`. PR #2118 ouverte.
+> - **⚠️ `BlockedUsersView` structure VoiceOver SOLDÉ** : titre en-tête, bloc identité combiné + avatar masqué,
+>   skeletons hors rotor. Restes hors périmètre a11y : header custom (vs toolbar native), double affordance
+>   Débloquer capsule/swipe aux teintes divergentes. Ne plus reprendre l'a11y de cette vue.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 172i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **172i (en cours, branche `claude/laughing-thompson-ks1h8d`, base `main` HEAD `612872b`)** :
 >   Alignement marque Indigo + structure VoiceOver de `MagicLinkView` (connexion par lien magique).
