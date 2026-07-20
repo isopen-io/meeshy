@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **rolling live-transcript accumulator core** landed (slice `call-transcript-buffer`,
+> feature-parity §H → advances "Live in-call transcription overlay" `[~]` by delivering the SSOT rolling
+> transcript the overlay renders — the missing accumulation layer between the already-landed caption transport
+> (`DataChannelCodec` → `Caption(segment)`) / STT and the display resolver (`CallCaptionResolver`). Parity source:
+> iOS `CallTranscriptionService.appendSegment` (`apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.swift`).
+> One pure, immutable `:core:model` core, fully TDD-covered. **`LiveTranscript` + `CallTranscriptSegment`** is the
+> total, side-effect-free accumulator: `append(segment, retentionLimit=50)` (1) first drops that speaker's
+> *in-progress* (non-final) line — `filterNot { speakerId == && !isFinal }` — so at most one interim line per speaker
+> is ever live (the recognizer's partial guess is replaced as it refines) while **every finalized line survives**;
+> (2) bounds the buffer to the `retentionLimit` most-recently-*appended* segments (insertion-order suffix, exact iOS
+> parity value 50) so a marathon call stays O(1); and `ordered` (3) projects the retained set sorted by wall-clock
+> `capturedAtMs` via a **stable** sort — ASR start-time is buffer-relative and resets on recognizer rotation, so only
+> capture time gives a stable cross-speaker order, and equal timestamps keep insertion order. `captionLines(mode)`
+> reuses the already-landed `CallCaptionResolver` SSOT for the Prisme projection (Translated → translation-or-original
+> fallback, Original → own words, Off → none, blank → no line), and `CallTranscriptSegment.toCaptionSegment()` bridges
+> the two shapes without a parallel resolver. **SOTA note:** iOS keeps two mutable arrays (`allSegments`/`segments`) plus
+> a 2000-entry `persistedSegments` inside a stateful service; Android is a single immutable data class whose every
+> transition returns a new value — trivially testable, no hidden state. **+21 behavioural tests** — `LiveTranscriptTest`
+> (empty append; interim-replaces-interim same speaker; interims coexist across speakers; final kept when a later
+> interim arrives; interim replaced by its final; two finals both retained; ordered-by-capture-time regardless of
+> append order; equal-timestamp stable insertion order; retention cap by insertion order; retention evicts
+> earliest-appended even when it holds the latest timestamp; default-limit-is-50; caption lines empty while Off;
+> Translated shows translation / falls back to original; Original shows own words; blank-text retained but no line;
+> caption lines follow capture-time order; append is pure / original unchanged; toCaptionSegment carries Prisme
+> fields). **Mutation check (RED proof):** neutralising the finality gate (`… && !isFinal` → `… `, so a new segment
+> evicts the speaker's finalized lines too) fails **exactly** the four finals-must-survive tests (`final kept when a
+> later interim arrives`, `two finals both retained`, and the two ordering tests that append multiple finals for one
+> speaker — 19 run, 4 failed, no collateral on retention/projection/purity) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through the proxy; `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (the new suite 21/21) + full `:app:assembleDebug`
+> → **BUILD SUCCESSFUL** (8m20s). Reviewer **PASS** (diff `apps/android` only — 1 new production file + 1 test +
+> tracking; **SDK purity** — a data class + a pure immutable reducer in `:core:model`, zero framework deps; the STT
+> actuator + `WebRtcEngine` data-channel seam + overlay UI stay app-side, pending; **SSOT** — one accumulator,
+> reuses `CallCaptionResolver` rather than a parallel projection, mirrors the iOS append rule exactly; **UDF** —
+> immutable `LiveTranscript`, every transition pure; **Prisme** — the caption projection carries the translation
+> without ever collapsing to a first-translation fallback; no coverage floor lowered, no test weakened).
+> **Next slice:** the app-side `WebRtcEngine` data-channel seam (`RTCDataChannel` open/observe/send feeding
+> `DataChannelCodec.decode` → `Bye` ends the call, `Caption` folds into `LiveTranscript` on a `CallViewModel`
+> captions state) + the accent-coherent overlay UI + captions button; OR the app-side Android `SpeechRecognizer`
+> STT actuator that emits local `CallTranscriptSegment`s into `LiveTranscript`; OR the tracked Kover 90%
+> coverage-gate infra follow-up.
+
 > On 2026-07-20 the **call-reliability decision core** landed (slice `call-reliability-policy`, feature-parity §H →
 > advances "Call reconnection on network change (ICE restart)" from `[ ]` → `[~]`; the build-order Calls area's next
 > high-value pure slice, closing the reconnection story at the *policy* layer). Parity source: iOS
