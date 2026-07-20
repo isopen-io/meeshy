@@ -32,6 +32,17 @@ struct ConversationDashboardView: View {
         case week = "7j"
         case month = "30j"
         case all = "Tout"
+
+        var label: String {
+            switch self {
+            case .week:
+                return String(localized: "dashboard.period.week", defaultValue: "7j", bundle: .main)
+            case .month:
+                return String(localized: "dashboard.period.month", defaultValue: "30j", bundle: .main)
+            case .all:
+                return String(localized: "dashboard.period.all", defaultValue: "Tout", bundle: .main)
+            }
+        }
     }
 
     // MARK: - Body
@@ -393,7 +404,7 @@ struct ConversationDashboardView: View {
                     }
                     HapticFeedback.light()
                 } label: {
-                    Text(period.rawValue)
+                    Text(period.label)
                         .font(MeeshyFont.relative(11, weight: isSelected ? .bold : .medium))
                         .foregroundColor(isSelected ? .white : theme.textMuted)
                         .padding(.horizontal, 10)
@@ -402,6 +413,7 @@ struct ConversationDashboardView: View {
                             Capsule().fill(isSelected ? accent : Color.clear)
                         )
                 }
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
         .padding(3)

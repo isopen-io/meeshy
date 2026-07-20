@@ -55,4 +55,39 @@ final class ConversationDashboardViewAccessibilityTests: XCTestCase {
             "The health gauge must announce the score as its accessibility value."
         )
     }
+
+    func test_periodPicker_localizesLabels_notHardcodedRawValue() throws {
+        let source = try dashboardSource()
+        XCTAssertTrue(
+            source.contains("Text(period.label)"),
+            "The period picker must render the localized ChartPeriod.label, not the " +
+            "hardcoded French rawValue (\"7j\"/\"30j\"/\"Tout\")."
+        )
+        XCTAssertFalse(
+            source.contains("Text(period.rawValue)"),
+            "The period picker must not display period.rawValue directly — those raw " +
+            "strings are hardcoded French and bypass localization."
+        )
+        for key in ["dashboard.period.week", "dashboard.period.month", "dashboard.period.all"] {
+            XCTAssertTrue(
+                source.contains(key),
+                "ChartPeriod.label must resolve \(key) via String(localized:) so the " +
+                "period abbreviations follow the string catalog."
+            )
+        }
+    }
+
+    func test_periodPicker_exposesSelectedStateToVoiceOver() throws {
+        let source = try dashboardSource()
+        guard let range = source.range(of: "private var periodPicker") else {
+            XCTFail("ConversationDashboardView.swift must define the periodPicker"); return
+        }
+        let body = String(source[range.lowerBound...].prefix(1200))
+        XCTAssertTrue(
+            body.contains(".accessibilityAddTraits(isSelected ? [.isSelected] : [])"),
+            "Each period pill must carry the .isSelected trait when active; otherwise the " +
+            "selection is signalled by colour/weight only (WCAG 1.4.1) and VoiceOver reads " +
+            "every period identically."
+        )
+    }
 }
