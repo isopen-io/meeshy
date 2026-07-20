@@ -145,6 +145,11 @@ struct ContactsListTab: View {
         let name = user.name
         let color = DynamicColorGenerator.colorForName(name)
         let isOnline = user.isOnline ?? false
+        let presence = PresenceManager.shared.resolvedState(
+            userId: user.id,
+            isOnline: user.isOnline,
+            lastActiveAt: user.lastActiveAt
+        )
 
         return Button {
             router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
@@ -156,7 +161,7 @@ struct ContactsListTab: View {
                     accentColor: color,
                     avatarURL: user.avatar,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
-                    presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                    presenceState: presence,
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
@@ -192,7 +197,9 @@ struct ContactsListTab: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name), \(isOnline ? String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main) : String(localized: "contacts.list.offline.lower", defaultValue: "hors ligne", bundle: .main))")
+        // Règle 1/3/5 : VoiceOver annonce l'état de présence quand un dot est
+        // affiché (online/away/idle) — offline (pas de dot) reste muet.
+        .accessibilityLabel(presence.showsIndicator ? "\(name), \(presence.localizedLabel)" : name)
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.filteredFriends.count)
     }
 

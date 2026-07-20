@@ -1771,16 +1771,20 @@ private struct StoryGroupIntroOverlay: View {
         .padding(.horizontal, 32)
     }
 
+    // Règle 1/3/5 : au-delà de 5 min d'inactivité (offline), AUCUN badge —
+    // pas de dot gris « Hors ligne » sur l'intro de groupe.
     @ViewBuilder
     private var presenceBadge: some View {
         let state = presence?.state ?? .offline
-        HStack(spacing: 6) {
-            Circle()
-                .fill(state.dotColor)
-                .frame(width: 9, height: 9)
-            Text(presenceLabel(state))
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.white.opacity(0.85))
+        if state.showsIndicator {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(state.dotColor)
+                    .frame(width: 9, height: 9)
+                Text(presenceLabel(state))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.85))
+            }
         }
     }
 
@@ -1788,8 +1792,8 @@ private struct StoryGroupIntroOverlay: View {
         switch state {
         case .online:
             return String(localized: "story.groupIntro.online", defaultValue: "En ligne")
-        case .recent:
-            return String(localized: "story.groupIntro.recent", defaultValue: "Actif·ve récemment")
+        case .idle:
+            return String(localized: "story.groupIntro.idle", defaultValue: "Inactif·ve")
         case .away:
             return String(localized: "story.groupIntro.away", defaultValue: "Absent·e")
         case .offline:
@@ -1800,8 +1804,10 @@ private struct StoryGroupIntroOverlay: View {
     private var accessibilitySummary: String {
         var parts = [intro.displayName ?? intro.username]
         // Même règle que le badge visuel : le statut de présence n'est
-        // annoncé à VoiceOver que pour un ami.
-        if isFriend { parts.append(presenceLabel(presence?.state ?? .offline)) }
+        // annoncé à VoiceOver que pour un ami ET quand un indicateur est
+        // affiché (online/away/idle) — offline reste muet.
+        let state = presence?.state ?? .offline
+        if isFriend, state.showsIndicator { parts.append(presenceLabel(state)) }
         if let message = intro.moodMessage { parts.append(message) }
         return parts.joined(separator: ", ")
     }
