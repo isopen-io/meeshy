@@ -451,6 +451,8 @@
 		NRST0001000100010001001 /* NavigationStateRestorationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NRST0001000100010001000 /* NavigationStateRestorationTests.swift */; };
 		NSE0SDK0000000001 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = NSE0SDK0000000002 /* MeeshySDK */; };
 		NSEDC002 /* NSEDecryptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDC001 /* NSEDecryptor.swift */; };
+		NSEDC003 /* NSEDecryptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDC001 /* NSEDecryptor.swift */; };
+		NSEDT002 /* NSEDecryptorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDT001 /* NSEDecryptorTests.swift */; };
 		NSEDS002 /* NSEDataSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDS001 /* NSEDataSync.swift */; };
 		NSEPC002 /* NSEPendingMessageConsumer.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEPC001 /* NSEPendingMessageConsumer.swift */; };
 		NTFY0001000100010001001 /* NotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTFY0001000100010001000 /* NotificationTests.swift */; };
@@ -1051,6 +1053,7 @@
 		NRST0001000100010001000 /* NavigationStateRestorationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateRestorationTests.swift; sourceTree = "<group>"; };
 		NSEDC001 /* NSEDecryptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDecryptor.swift; sourceTree = "<group>"; };
 		NSEDS001 /* NSEDataSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDataSync.swift; sourceTree = "<group>"; };
+		NSEDT001 /* NSEDecryptorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDecryptorTests.swift; sourceTree = "<group>"; };
 		NSEPC001 /* NSEPendingMessageConsumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEPendingMessageConsumer.swift; sourceTree = "<group>"; };
 		NTFY0001000100010001000 /* NotificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationTests.swift; sourceTree = "<group>"; };
 		NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
@@ -2131,6 +2134,7 @@
 				F96C9A03A8540DCCEB3528A8 /* AuthServiceTests.swift */,
 				NTFY0001000100010001000 /* NotificationTests.swift */,
 				NPHT003 /* NotificationPayloadHelpersTests.swift */,
+				NSEDT001 /* NSEDecryptorTests.swift */,
 				1C90BB2C475926F97226B943 /* ConversationLockManagerTests.swift */,
 				A0340CB5A3610F80C0D53F08 /* MediaCompressorTests.swift */,
 				OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */,
@@ -2818,6 +2822,8 @@
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,
 				NPHT002 /* NotificationPayloadHelpers.swift in Sources */,
 				NPHT004 /* NotificationPayloadHelpersTests.swift in Sources */,
+				NSEDC003 /* NSEDecryptor.swift in Sources */,
+				NSEDT002 /* NSEDecryptorTests.swift in Sources */,
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
 				OAA0000000000002F02 /* OptimisticAttachmentAdopterTests.swift in Sources */,
