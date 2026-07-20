@@ -252,7 +252,7 @@ struct CreateShareLinkView: View {
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textPrimary)
                             if maxUsesEnabled {
-                                Text(String(localized: "share.link.create.max_uses", defaultValue: "\(maxUsesValue) utilisation\(maxUsesValue > 1 ? "s" : "") maximum", bundle: .main))
+                                Text(String(localized: "share.link.create.max_uses", defaultValue: "^[\(maxUsesValue) utilisation](inflect: true) maximum", bundle: .main))
                                     .font(.caption)
                                     .foregroundColor(accent)
                             } else {

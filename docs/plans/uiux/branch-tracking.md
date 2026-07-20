@@ -14,6 +14,29 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 185i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Contexte** : essaim `laughing-thompson` très dense — PR iOS en vol de 178i à **184i**
+>   (`StatusComposerView` #2135). Numéro **185i** choisi strictement > plus haut en vol (184i).
+> - **185i (terminée, branche `claude/laughing-thompson-b6yoql`, base `main` HEAD `230f47c`)** :
+>   pluralisation native i18n de **`CreateShareLinkView`** (sheet de création d'un lien de partage,
+>   section « Limites »). Écran explicitement différé par le pointeur 178i, **aucune analyse
+>   préexistante**, 0 PR essaim ne le touche. Écran déjà très propre (100 % `String(localized:)`,
+>   tokens couleur, `Picker(.menu)`, `AdaptiveContentUnavailableView`, `Stepper` natifs). **1 seul
+>   déficit réel** : ligne 255, le libellé max-utilisations gravait la règle plurielle française
+>   **dans la chaîne interpolée** (`"\(maxUsesValue) utilisation\(maxUsesValue > 1 ? "s" : "") maximum"`)
+>   → intraduisible (langues à N formes plurielles), et **dernier** site `? "s" : ""` du fichier.
+>   Fix = **idiome natif 176i** (accord grammatical automatique Foundation) :
+>   `"^[\(maxUsesValue) utilisation](inflect: true) maximum"` — « maximum » reste hors balisage
+>   (invariant) → **0 changement visuel FR**, clé enfin pluralisable par les traducteurs. Clé
+>   `share.link.create.max_uses` code-only (absente des 3 `.xcstrings`) → **0 édit catalogue**.
+>   1 fichier, 1 ligne, 0 logique / 0 réseau / 0 clé i18n neuve / 0 test neuf (grep `MeeshyTests/` = 0).
+>   Gate = CI `iOS Tests` (`inflect:` parsé au runtime → 0 risque compile). PR à venir.
+> - **⚠️ NE PLUS re-flagger** `CreateShareLinkView` pour la pluralisation : dernier `? "s" : ""`
+>   soldé 185i. **Différé 186i+** : label deux-étages du `Stepper` (l. 279-284, « 1 utilisations » —
+>   typographie délibérée, hors scope) ; `AudioFullscreenView`, `FeedCommentsSheet` (non audités,
+>   vérifier collision essaim via `list_pull_requests`).
+> - **Base de départ 186i : `main` HEAD** (resync ; supprimer la branche mergée).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 178i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **Contexte** : essaim `laughing-thompson` très dense — PR ouvertes iOS de 140i à **177i**
 >   (`ReportMessageSheet` #2076). Numéro **178i** choisi strictement > plus haut en vol (177i).
