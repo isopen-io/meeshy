@@ -97,16 +97,16 @@ final class TopLevelCommentCell: UICollectionViewCell {
     }
 
     func configure(with record: CommentRecord) {
-        let name = record.authorDisplayName ?? record.authorUsername
+        let name = record.authorDisplayName ?? record.authorUsername ?? ""
         let content = record.content
         let time = RelativeTimeFormatter.shortString(for: record.createdAt)
         nameLabel.text = name
         contentLabel.text = content
         timestampLabel.text = time
-        contentLabel.accessibilityLabel = Self.accessibilityLabel(name: name, content: content, time: time)
+        contentLabel.accessibilityLabel = Self.composedAccessibilityLabel(name: name, content: content, time: time)
     }
 
-    static func accessibilityLabel(name: String, content: String, time: String) -> String {
+    static func composedAccessibilityLabel(name: String, content: String, time: String) -> String {
         String(
             localized: "comments.comment.a11yLabel",
             defaultValue: "\(name), comment. \(content). \(time)",
