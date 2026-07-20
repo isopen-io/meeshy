@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 182i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **182i (en cours, branche `claude/laughing-thompson-k9l43k`, base `main` HEAD post-#2142)** :
+>   Consolidation palette de marque de `DataStorageView` (Réglages → Stockage / cache média).
+>   Suite du track Réglages (179i #2125 MediaDownloadSettingsView, 180i #2142 paire Affiliate).
+>   3 déficits : (1) **accent hors-marque** `accentColor = "E67E22"` (orange carotte) pilotant tout
+>   l'accent d'écran (Back, en-tête section Cache, folder icon, surface) → `MeeshyColors.brandPrimaryHex`
+>   (indigo500, comme tous les autres écrans Réglages) ; (2) **incohérence rouge du contrôle destructif** —
+>   icône `trash.fill` en `"EF4444"` (red-500) alors que son libellé adjacent utilise `MeeshyColors.error`
+>   (`F87171`, red-400) → **deux rouges différents** sur le même bouton « Vider le cache » → icône passée à
+>   `MeeshyColors.errorHex` (un seul rouge sémantique) ; (3) **gris brut ×2** `"6B7280"` (en-tête + tint
+>   section Actions) == `neutral500Hex` → `MeeshyColors.neutral500Hex` (même hex exact, 0 changement visuel,
+>   la section Actions reste délibérément neutre-gris, distincte du Cache indigo). Swaps `String`→`String`.
+>   `MeeshyColors` déjà importé (`import MeeshyUI`). 1 fichier, 4 lignes, 0 logique, 0 clé i18n, 0 test.
+>   `search_pull_requests … DataStorage` → 0 → aucune contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `DataStorageView` palette SOLDÉ 182i** : orange `E67E22` + rouge brut `EF4444` + gris `6B7280`
+>   éradiqués, contrôle destructif unifié sur `error`. Frère legacy restant : `TermsOfServiceView`
+>   (`45B7D1` cyan ; son dict légal bilingue = pass i18n séparé).
+> - **✅ 180i MERGÉ (#2142)** : paire Affiliate palette Indigo — dans `main`.
 > **POINTEUR iOS AUTORITAIRE (mis à jour 186i, 2026-07-20)** — piste iOS (suffixe `i`).
 > - **Contexte** : essaim `laughing-thompson` dense — PR iOS ouvertes jusqu'à **185i** (#2140 `FriendRequestListView`, #2139 `RequestsTab`, #2137 `MessageLanguageDetailView`). Numéro **186i** choisi strictement > plus haut en vol (vérifié via `list_pull_requests`). Base = `main` HEAD `f80d5fb` (resync ; PR 180i `TrackingLinkDetailView` ShareLink mergée #2121, branche réinitialisée depuis `main`).
 > - **186i (terminée, branche `claude/laughing-thompson-is8ph7`, base `main` HEAD `f80d5fb`)** : état sélectionné VoiceOver des **2 sélecteurs à choix unique de `AudioFullscreenView`** (lecteur audio plein écran). L'a11y icône-seule de cette surface était soldée 104i (labels close/download/±10/play/translate + Dynamic Type glyphe état vide), qui avait différé `seekBar` + `authorInfoRow`. **Défaut distinct restant** : `speedRow` (vitesse `0.8×`…`2.25×`) et `languagePill` (langue écoutée, Prisme) signalaient la sélection par la **couleur seule** — aucun `.accessibilityAddTraits(.isSelected)` → VoiceOver lisait chaque capsule/pill à l'identique, active ou non (violation HIG « jamais la couleur seule pour un état », même classe que 178i/184i/185i). Fix miroir du sibling prouvé `CallsTab.chip` (`CallsTab.swift:60`) : `speedRow` → `.accessibilityLabel(speed.label)` (annonce « 1.5× ») + `.accessibilityAddTraits(player.speed == speed ? [.isSelected] : [])` ; `languagePill` → `.accessibilityAddTraits(isSelected ? [.isSelected] : [])` (libellé déjà porté par le `Text` intérieur). 1 fichier, 0 logique / 0 visuel / 0 clé i18n neuve (`PlaybackSpeed.label` SDK réutilisé) / 0 test neuf. Aucune suite ne cible `AudioFullscreenView` → 0 régression. Gate = CI `iOS Tests`.
