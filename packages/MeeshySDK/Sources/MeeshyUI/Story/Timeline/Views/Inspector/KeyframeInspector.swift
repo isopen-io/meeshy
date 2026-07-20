@@ -50,6 +50,9 @@ public struct KeyframeInspector: View {
     public let onOpacityChanged: (CGFloat) -> Void
     public let onEasingChanged: (Easing) -> Void
     public let onDelete: () -> Void
+    /// Ferme l'inspecteur (désélection) — même affordance que ClipInspector /
+    /// TransitionInspector.
+    public let onClose: () -> Void
 
     @State private var posX: CGFloat
     @State private var posY: CGFloat
@@ -63,7 +66,8 @@ public struct KeyframeInspector: View {
                 onScaleChanged: @escaping (CGFloat) -> Void,
                 onOpacityChanged: @escaping (CGFloat) -> Void,
                 onEasingChanged: @escaping (Easing) -> Void,
-                onDelete: @escaping () -> Void) {
+                onDelete: @escaping () -> Void,
+                onClose: @escaping () -> Void = {}) {
         self.keyframe = keyframe
         self.isAdvancedEnabled = isAdvancedEnabled
         self.onPositionChanged = onPositionChanged
@@ -71,6 +75,7 @@ public struct KeyframeInspector: View {
         self.onOpacityChanged = onOpacityChanged
         self.onEasingChanged = onEasingChanged
         self.onDelete = onDelete
+        self.onClose = onClose
         _posX = State(initialValue: keyframe.x)
         _posY = State(initialValue: keyframe.y)
         _scale = State(initialValue: keyframe.scale)
@@ -83,7 +88,7 @@ public struct KeyframeInspector: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             header
             positionSliders
             scaleSlider
@@ -91,7 +96,14 @@ public struct KeyframeInspector: View {
             easingPicker
             deleteButton
         }
-        .padding(18)
+        .padding(14)
+        // Même composition que ClipInspector/TransitionInspector : matériau
+        // sous le contenu (jamais glassEffect, le verre ne peut pas
+        // échantillonner du verre — artefacts iOS 26).
+        .background(
+            RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial)
+        )
+        .frame(maxWidth: 360, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(format: String(localized: "story.timeline.a11y.keyframe", bundle: .module),
                                    String(format: "%.2fs", keyframe.absoluteTime)))
@@ -105,6 +117,14 @@ public struct KeyframeInspector: View {
             Text(String(format: "%.2fs", keyframe.absoluteTime))
                 .font(.system(.headline, design: .monospaced))
             Spacer(minLength: 0)
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle().inset(by: -8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "story.timeline.inspector.close", bundle: .module))
         }
     }
 

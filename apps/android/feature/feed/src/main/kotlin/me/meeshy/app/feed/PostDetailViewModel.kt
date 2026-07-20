@@ -18,6 +18,7 @@ import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import javax.inject.Inject
 
@@ -29,7 +30,11 @@ import javax.inject.Inject
  *
  * There is no per-post cache yet, so a cold open shows a skeleton until the fetch answers;
  * a blank id (a malformed route) is surfaced as not-found rather than an endless spinner.
- * Threaded comments and the post-detail realtime room are deliberately out of this slice.
+ *
+ * The comment thread itself lives in [PostCommentsViewModel]; this VM only owns the header,
+ * whose comment-count badge is kept honest by the same realtime room — a live
+ * `comment:added`/`comment:deleted` for this post resyncs the badge to the server-authoritative
+ * count the event carries (mirror of iOS `PostDetailViewModel` `commentAdded`/`commentDeleted`).
  */
 data class PostDetailUiState(
     val post: FeedPostPresentation? = null,
@@ -44,6 +49,7 @@ data class PostDetailUiState(
 class PostDetailViewModel @Inject constructor(
     private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
+    private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -54,16 +60,45 @@ class PostDetailViewModel @Inject constructor(
     private val activeCode = MutableStateFlow<String?>(null)
     private val status = MutableStateFlow(PostDetailStatus())
 
+    /**
+     * The server-authoritative comment count carried by the most recent live room event, or `null`
+     * when the badge should reflect the fetched post's own count. A successful fetch clears it so
+     * fresh server truth always wins over a stale live overlay.
+     */
+    private val liveCommentCount = MutableStateFlow<Int?>(null)
+
     private val _state = MutableStateFlow(PostDetailUiState())
     val state: StateFlow<PostDetailUiState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
-            combine(rawPost, sessionRepository.currentUser, activeCode, status) { post, user, active, st ->
-                project(post, user, active, st)
+            combine(rawPost, sessionRepository.currentUser, activeCode, status, liveCommentCount) {
+                post, user, active, st, liveCount ->
+                project(post, user, active, st, liveCount)
             }.collect { projected -> _state.value = projected }
         }
+        observeRealtime()
         loadInitial()
+    }
+
+    /**
+     * The header's slice of the post-detail realtime room: a live `comment:added`/`comment:deleted`
+     * for this post resyncs the comment-count badge to the authoritative count the event carries
+     * (healing any drift from the thread VM's optimistic arithmetic). A blank route [postId] never
+     * subscribes, and events for any other post are ignored. Mirror of iOS `PostDetailViewModel`.
+     */
+    private fun observeRealtime() {
+        if (postId.isBlank()) return
+        viewModelScope.launch {
+            socialSocket.commentAdded.collect { event ->
+                if (event.postId == postId) liveCommentCount.value = event.commentCount
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.commentDeleted.collect { event ->
+                if (event.postId == postId) liveCommentCount.value = event.commentCount
+            }
+        }
     }
 
     /**
@@ -94,6 +129,7 @@ class PostDetailViewModel @Inject constructor(
                 when (val result = postRepository.getPost(postId)) {
                     is NetworkResult.Success -> {
                         rawPost.value = result.data
+                        liveCommentCount.value = null
                         status.update {
                             it.copy(isLoading = false, isRefreshing = false, hasLoaded = true, error = null)
                         }
@@ -140,10 +176,14 @@ class PostDetailViewModel @Inject constructor(
         user: MeeshyUser?,
         active: String?,
         st: PostDetailStatus,
+        liveCount: Int?,
     ): PostDetailUiState {
         val prefs: LanguageResolver.ContentLanguagePreferences = user ?: EmptyContentPreferences
         val projected = post?.let {
             FeedPostBuilder.build(it, prefs, config.socketUrl, activeLanguageCode = active)
+        }?.let { presentation ->
+            if (liveCount == null) presentation
+            else presentation.copy(commentCount = liveCount.coerceAtLeast(0))
         }
         val showSkeleton = st.isLoading && post == null && !st.notFound && st.error == null
         return PostDetailUiState(

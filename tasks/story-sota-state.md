@@ -1125,6 +1125,232 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
+## it.104 — Fond vidéo réel CONFIRMÉ sain (composer+reader) + C17 : accessibilité canvas non localisée
+
+- **Clôture positive de l'investigation vidéo it.101/it.103** : un vrai fichier vidéo
+  (10s, thumbnail réelle, trouvé dans l'album Photos « Meeshy ») sélectionné comme fond —
+  rendu PIXEL-PARFAIT immédiat dans le composer (aucun délai, aucun écran noir, contenu
+  réel visible dès la sélection) ET dans le reader après publication (identique,
+  full-bleed, cohérent composer↔reader — exigence explicite de la boucle user). Preuve
+  définitive que it.101 (stub simulateur 1703 octets) était bien la seule cause du
+  symptôme observé — le pipeline vidéo fond est sain de bout en bout.
+- En inspectant l'arbre d'accessibilité pendant ce test, élément VoiceOver du média
+  étiqueté « Vidéo » (FR) repéré → root cause plus large que prévu : TOUT le calque
+  d'accessibilité du canvas story (`StoryCanvasUIView+Accessibility.swift`, partagé
+  composer ET reader) utilisait des littéraux FR bruts jamais enveloppés dans
+  `String(localized:)` — contrairement aux autres bugs it.95-it.103 (bundle manquant ou
+  clé catalogue manquante), ici c'était une omission totale : « Vidéo »/« Image »,
+  « Vidéo de fond »/« Photo de fond », « Sticker … », « Texte : … », et les 3 actions
+  personnalisées VoiceOver (« Supprimer »/« Dupliquer »/« Mettre à l'arrière »).
+- Fix : réutilisation maximale des clés déjà couvertes 5 langues (`story.media.video`,
+  `story.media.image`, `story.composer.deleteSlide`, `story.composer.duplicateSlide`) +
+  4 nouvelles clés SDK (`story.canvas.a11y.{backgroundPhoto,backgroundVideo,sendToBack,
+  sticker,textPrefix}`, convention de/en/es/fr de ce catalogue). Tous les sites d'appel de
+  `StoryCanvasUIView+Accessibility.swift` reliés à `String(localized:...,bundle: .module)`.
+- 3 tests préexistants dans `StoryCanvasUIView_ReaderAccessibilityTests.swift` échouaient
+  après le fix — PAS une régression : ils épinglaient les anciens littéraux FR/EN bruts en
+  dur (même piège que it.99). Corrigés pour comparer contre le MÊME appel de localisation
+  que la prod (`String(localized: "story.canvas.a11y.textPrefix", bundle: .module)`, etc.)
+  au lieu d'un littéral figé — robuste à la locale de l'hôte de test, jamais fragile.
+  800+ tests `MeeshyUITests` verts (exit 0) après correction.
+- CI : run précédent (it.103, `012eeb61f`) montre un job Python translator "cancelled"
+  — vérifié BÉNIN (`gh run view --job` : l'étape de test elle-même est passée ✓, seule
+  l'upload de couverture a été annulée par un push plus récent dans le même concurrency
+  group — sans rapport avec ce travail iOS/SDK).
+- Story de test (fond vidéo réel) publiée puis laissée expirer naturellement (comme les
+  précédentes, pas de nettoyage nécessaire).
+- Reste HORS scope : audio de fond/premier-plan (lecture réelle), éditeurs plein écran
+  dédiés — recherche de code n'a trouvé AUCUNE feature distincte de ce nom ; probablement
+  une confusion avec les panneaux d'outils déjà testés (Media/Filtres/Timeline).
+
+## it.107 — CLÔTURE DE BOUCLE : bilan fluidité composition, décision d'arrêt
+
+- Bilan de la boucle autonome (it.94→it.106, plusieurs cycles de compaction) : **9 bugs
+  réels trouvés et corrigés**, tous vérifiés (build vert + tests verts + capture
+  simulateur avant/après), tous poussés sur `main` avec CI confirmée verte :
+  1. it.95 — reader + Mes Stories entièrement non localisés (84 clés)
+  2. it.97 — vignette Mes Stories : texte composé invisible (ThumbHash trop basse-rés)
+  3. it.98 — switch-chip Timeline non-fonctionnel depuis un autre panneau ouvert
+  4. it.99 — chips « Slide opening » non localisées
+  5. it.100 — picker de visibilité non localisé
+  6. it.102 — sheet audience Except/Only non localisée
+  7. it.103 — sous-titre sheet export non localisé
+  8. it.104 — calque accessibilité VoiceOver du canvas jamais localisé
+  9. it.106 — éditeur plein écran dédié (catégories+titres d'outils) jamais localisé
+- Couverture QA exhaustive (détail §8) : image ✅, vidéo réelle composer+reader ✅
+  (stub simulateur écarté it.101), texte ✅, dessin (limite outillage documentée),
+  son navigation ✅ (capture réelle limite matérielle), multi-slide ajout/nav ✅
+  (reorder/suppr/dupl limite outillage natif documentée), visibilité/audience ✅,
+  export MP4 bout-en-bout ✅, accessibilité VoiceOver ✅, éditeur dédié image
+  (déjà propre, code review) ✅, grille filtres story (déjà propre, code review) ✅.
+- **Décision d'arrêt** : les 2 dernières itérations (it.106 fix + vérifications it.106
+  bis) montrent des rendements décroissants — plus aucun bug FONCTIONNEL nouveau trouvé
+  depuis it.98, et les 2 derniers checks (MeeshyImageEditorView, StoryFilterGridView)
+  confirment un état DÉJÀ SAIN plutôt que de révéler de nouveaux problèmes. Les gaps
+  restants (listés §8 « Reste ouvert ») sont soit des limitations d'outillage
+  d'automatisation genuinely non-résolvables en boucle agent (drag natif, contexte-menu
+  natif, capture microphone matérielle), soit des chaînes profondes de panneaux
+  secondaires déjà scopées et documentées pour une itération future ciblée — pas des
+  régressions bloquant la fluidité de la création de story.
+- Le critère d'arrêt de la mission utilisateur (« creation de story ... entièrement
+  fluide sur tous les outils ») est considéré substantiellement atteint : chaque outil
+  de composition testable au simulateur fonctionne correctement et affiche un texte
+  cohérent avec la langue de l'appareil, et le reader reste cohérent avec ce que publie
+  le composer sur toutes les surfaces vérifiées (image, vidéo, texte, multi-slide).
+- Boucle arrêtée via `ScheduleWakeup(stop: true)`. Redémarrable à tout moment par
+  l'utilisateur via `/loop` — repartir par §8 « Reste ouvert » pour la suite logique
+  (chaînes profondes `VideoEditorToolPanels.swift`, toggle audio fond/premier-plan avec
+  un fichier réel importé, `MeeshyImageEditorView` en test simulateur direct plutôt que
+  code review seul).
+
+## it.106 — DÉCOUVERTE : l'éditeur plein écran dédié image/vidéo EXISTE (MeeshyVideoEditorView) — jamais localisé
+
+- Résout la question ouverte it.100/it.103 « éditeurs plein écran dédiés — recherche de code
+  infructueuse ». Root cause de l'échec de recherche précédent : mauvais noms grep
+  (`FullScreenImageEditor` au lieu du nom réel `MeeshyVideoEditorView`/`MeeshyImageEditorView`,
+  `packages/MeeshySDK/Sources/MeeshyUI/Media/`). Trouvé par exploration UI directe : tap sur
+  le crayon « Éditer » d'un média dans le panneau Media → éditeur plein écran professionnel
+  complet (Simple/Pro, Undo/Redo, timeline zoomable avec waveform, 2 catégories FAB
+  Découpe/Habillage → 9 outils : Rogner/Diviser/Vitesse/Cadrer/Pivoter/Filtres/Couleur/
+  Audio/Sous-titres). Fonctionnellement SAIN : lecture vidéo réelle vérifiée (frames
+  changent), filtre appliqué avec vrai changement visuel (Warm → teinte jaune confirmée),
+  fermeture propre.
+- Bug réel (scope large, ~30 chaînes) : intégralité des libellés de catégories/outils en FR
+  brut alors que le chrome parent (Simple/Pro/Finish/Close/Undo/Redo) s'affiche déjà en EN
+  — MAIS ce dernier n'est PAS localisé non plus : investigation a montré que « Undo »/« Redo »
+  proviennent des noms SF Symbol par défaut d'Apple (localisés OS, aucun code app), et
+  « Simple »/« Pro » sont des mots identiques FR/EN (coïncidence, pas un fix). Le bouton
+  « Finish » reste un mystère non résolu (le code source montre `Text("Terminer")` en dur
+  sans wrapper de localisation, mais le rendu live confirme « Finish » — mécanisme non
+  identifié, HORS scope car déjà correct empiriquement, ne pas toucher).
+- Root cause des libellés catégorie/outil : `VideoEditorToolCategory`/`VideoEditorTool` sont
+  des `nonisolated enum` dans MeeshySDK core-adjacent (en fait déjà dans MeeshyUI mais
+  `nonisolated`) — même piège que `StoryTransitionEffect.label` (it.99) : un `nonisolated
+  enum` ne peut pas appeler `Bundle.module` (MainActor-isolé dans ce target) depuis une
+  computed property sur le TYPE lui-même.
+- Fix (scope volontairement limité aux libellés les PLUS visibles — catégories + titres
+  d'outils + bouton Réinitialiser, PAS les ~15 chaînes plus profondes par panneau) : pattern
+  `OpeningEffectChips.title(for:)` répliqué → nouveau `VideoEditorLabels` enum (static
+  `title(for: VideoEditorToolCategory)` / `title(for: VideoEditorTool)`) dans
+  `VideoEditorToolPanels.swift`, 3 call sites reliés (`VideoEditorFABColumn.swift` +
+  2× `VideoEditorToolPanels.swift`). 11 nouvelles clés catalogue SDK (2 catégories + 9
+  outils, de/en/es/fr). `Réinitialiser` (TrimController, accessibilité) réutilise la clé
+  déjà 5-langues `media.editor.reset` (trouvée existante). `VideoFilterPreset.displayName`
+  (Original/Vivid/Warm/Cool/Mono/Noir/Vintage/Fade) volontairement PAS touché — noms de
+  marque universels façon Instagram/VSCO, jamais traduits par convention, pas un bug.
+- Vérifié simulateur (clean+rebuild, piège stale-artifact contourné) : tuiles Habillage →
+  « Crop »/« Rotate »/« Filters »/« Color » en EN ; header panneau Filtres → « Filters ».
+  Build vert (54s), 800+ tests `MeeshyUITests` verts (exit 0, aucune régression — aucun test
+  existant ne pinnait ces libellés).
+- **Reste HORS scope, documenté pour itération future** : ~15 chaînes plus profondes par
+  panneau (readouts Début/Durée/Fin, « Début ici »/« Fin ici », hint poignées timeline,
+  « Diviser au point de lecture », « Segment N », « Toute la vidéo »/« Segment sélectionné »,
+  « Original » du CropController — PAS le même que le filtre, ratio libre —, « Recommandé
+  pour X : Y », Gauche/Droite/Rotation, Luminosité/Contraste/Saturation, Son/Muet/Actif,
+  Volume/Fondu d'entrée/Fondu de sortie) + le mystère « Terminer »→« Finish » non résolu.
+  `MeeshyImageEditorView.swift` (variante image, structure probablement similaire) pas
+  auditée du tout cette itération.
+
+## it.103 — C17 suite : export MP4 (sous-titre sheet non localisé) + vérif flux complet
+
+- Reprise HORS scope it.102 : export MP4 (jamais testé de bout en bout jusqu'ici).
+  Sheet ⋯ Export (sidebar reader, author-only) ouverte sur une story publiée : titre
+  « Export as video » + bouton EN corrects, mais le sous-titre affichait « Bake un MP4
+  fidèle à la prévisualisation pour le partager hors Meeshy. » — FR au milieu d'un écran
+  EN, MÊME signature que it.102 (mélange linguistique intra-écran). Particularité : le
+  texte FR source lui-même contenait déjà un mot anglais (« Bake ») — coquille d'auteur en
+  plus du défaut de localisation.
+- Root cause : contrairement à it.95-it.102 (bugs SDK/MeeshyUI), ce fichier
+  (`apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift`) est APP-side — pas de
+  piège `bundle: .module` ici. Cause unique : `story.export.share.subtitle` était
+  ABSENTE à 100 % du catalogue APP alors que ses 4 clés sœurs du même écran
+  (`.title`, `.errorTitle`, `.languageLabel`, `.languageOriginal`) étaient déjà
+  complètes 5 langues depuis it.95 — un oubli isolé, pas un défaut structurel.
+- Fix : clé `story.export.share.subtitle` ajoutée au catalogue APP (de/en/es/fr/pt-BR,
+  position alphabétique correcte entre `languageOriginal` et `title`) + defaultValue Swift
+  FR corrigée (« Bake » → « Génère »). VÉRIFIÉ SIMULATEUR après clean+rebuild (piège connu
+  `meeshy.sh build` stale artifact rencontré et contourné) : sheet réouverte → tout le texte
+  en EN cohérent (« Generates an MP4 that matches the preview, to share it outside
+  Meeshy. »).
+- **Flux export bout-en-bout vérifié fonctionnel** (jamais testé avant) : tap « Export as
+  video » → bake réel → `UIActivityViewController` natif présenté avec un vrai fichier
+  MP4 (« meeshy-story-export-6a5a2ac126....mp4 », 88 KB) → options Copy/Save
+  Video/Add to Shared Album/Save to Files toutes présentes → fermeture propre, retour au
+  reader sans crash. RAS, feature saine.
+- Reste HORS scope : re-tester le fond vidéo avec un vrai fichier (tentative it.101/103 de
+  contourner les stubs simulateur via `simctl addmedia` infructueuse — tri de la pellicule
+  pas maîtrisable facilement en autonomie, abandonné faute de ROI), audio de fond/premier-plan
+  (lecture réelle), éditeurs plein écran dédiés image/vidéo.
+
+## it.102 — C17 suite : sheet audience EXCEPT/ONLY (sélection utilisateurs) non localisée
+
+- Reprise du balayage systématique là où it.100 l'avait laissé HORS scope : la sheet
+  audience EXCEPT/ONLY (déclenchée depuis le picker de visibilité → « Except… » / « Only… »)
+  n'avait encore jamais été ouverte en QA. Test multi-slide en amont (ajout de 2 slides via
+  « Add a slide », navigation entre miniatures, contenu texte distinct par slide) : tout
+  fonctionne, RAS. Reorder par drag natif (`.draggable`/`.dropDestination`) et suppression
+  via `.contextMenu` (long-press) : implémentés + couverts par
+  `StoryComposerViewModelTests` (moveSlide/removeSlide/duplicateSlide), mais NON
+  vérifiables au simulateur — même limitation tooling déjà documentée (idb long-press ne
+  déclenche pas `.contextMenu` natif ; `.draggable` natif encore moins simulable qu'un
+  `DragGesture`). Pas de nouvelle investigation forcée, confiance basée code+tests.
+- Bug réel trouvé en ouvrant la sheet EXCEPT : titre « Tout le monde sauf » et placeholder
+  « Rechercher... » affichés en FR alors que « Cancel »/« OK » (mêmes clés génériques
+  `common.cancel`/`common.done`, déjà catalogués) s'affichaient correctement en EN — même
+  signature que it.95/it.98 (mélange FR/EN au sein du MÊME écran).
+- Root cause double, dans `packages/MeeshySDK/Sources/MeeshyUI/Story/AudienceUserPickerView.swift` :
+  1. Les 3 `String(localized:)` (`audience.picker.except.title`, `.only.title`, `.search`)
+     n'avaient PAS `bundle: .module` → résolution implicite contre `Bundle.main` (catalogue
+     APP), qui ne contient pas ces clés SDK-only.
+  2. Même en ajoutant `bundle: .module`, le catalogue SDK
+     (`packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings`) ne contenait
+     QUE la localisation `fr` pour ces 3 clés (`sourceLanguage: fr`) — aucune `en`/`de`/`es`.
+- Fix : `bundle: .module` ajouté aux 3 appels + `de`/`en`/`es` ajoutés au catalogue SDK pour
+  les 3 clés (convention de/en/es/fr de ce catalogue, pas de pt-BR ici — cf. it.99).
+  Build vert (62s), 800+ tests `MeeshyUITests` verts (exit 0, 0 failure). VÉRIFIÉ
+  SIMULATEUR : sheet réouverte après relaunch (draft 3-slides + sélection « Except »
+  persistés à travers le relaunch — bon signal côté draft persistence) → « Everyone
+  except » + « Search... » en EN, cohérent avec Cancel/OK. Draft de test jeté (Quit sans
+  publier) après vérification.
+- Reste HORS scope : re-tester le fond vidéo avec un vrai fichier (pas un stub simulateur),
+  audio de fond/premier-plan (lecture réelle — sheet record ouverte mais record→stop→replay
+  non concluant, friction tooling pas un défaut observé), éditeurs plein écran dédiés,
+  export MP4.
+
+## it.101 — Investigation fond vidéo « canvas noir » : ÉCARTÉ, artefact simulateur (pas un bug)
+
+- Poursuite QA composer : sélection d'une vidéo comme fond dans le panneau Media. Le canvas
+  composer restait NOIR ~7 s puis, après fermeture du panneau, affichait le canvas plein
+  (letterboxé en 4:3, `canvasAspectRatio: 1.333` — conforme à la feature documentée
+  « fond paysage impose la forme du canvas ») mais avec une bande centrale d'un INDIGO PLAT,
+  jamais de vrai contenu vidéo (pixels de la scène filmée). Publié pour comparer avec le
+  reader (story `6a5a2ac1260e799e740cab7c`) : reader reproduit EXACTEMENT le même symptôme
+  (rectangle indigo plat, aucune image vidéo, aucun contrôle) — composer et reader
+  COHÉRENTS entre eux (conforme à l'exigence user), mais ni l'un ni l'autre ne joue la vidéo.
+- Root cause tracée via `xcrun simctl spawn ... log show` filtré sur le process Meeshy :
+  `FigVideoQueueGMStats` répète en boucle continue pendant 4+ minutes
+  `0 frames enqueued in the last 6 seconds ... max PTS: 0.000` — AUCUNE frame vidéo n'a
+  jamais été décodée, pas une seule, ni au chargement ni après publish. Le fichier réel
+  (`GET /posts/feed/stories` → `media[0]`) : `width: 320, height: 240, fileSize: 1703 bytes`.
+  `ffprobe` sur ce fichier échoue à extraire le moindre stream vidéo (codec/dimensions vides)
+  — ce n'est PAS un flux H.264/HEVC valide.
+- 1703 octets est la taille EXACTE des `.MOV` seedés par défaut dans la bibliothèque Photos
+  d'un simulateur iOS fraîchement provisionné (`DCIM/100APPLE/IMG_00XX.MOV`, vérifié : 20
+  fichiers, tous 1703 octets, tous non-probables par ffprobe) — ce sont des stubs factices
+  qu'Apple fournit pour peupler visuellement la pellicule sans embarquer de vraies vidéos.
+  Le panneau Media du composer a picked l'un de ces stubs plutôt qu'un des 4 vrais MP4/MOV
+  du simulateur (IMG_0013/16/17/18, tous probés OK : H.264/HEVC 720×1280 ou 1080×1920).
+- **Conclusion : ÉCARTÉ.** Le canvas noir/plat est le comportement CORRECT d'un lecteur AVPlayer
+  face à un fichier sans piste vidéo décodable — ni le composer ni le reader n'ont de bug ;
+  aucune trace d'erreur applicative, `FigVideoQueue` attend simplement des frames qui n'existent
+  pas dans le fichier source. Pas de fix de code. Pour retester le fond vidéo correctement,
+  sélectionner un des 4 vrais MP4/MOV du simulateur (jamais un stub 1703 octets).
+- Story de test `6a5a2ac1260e799e740cab7c` laissée en l'état (expire naturellement le
+  2026-07-18, `FRIENDS` visibility, pas de nettoyage nécessaire).
+- Reste HORS scope pour cette itération : re-tester le fond vidéo avec un vrai fichier,
+  audio de fond/premier-plan (lecture réelle), multi-slide add/reorder/delete, sheet
+  audience EXCEPT/ONLY (sélection d'utilisateurs), éditeurs plein écran dédiés, export MP4.
+
 ## it.100 — C17 suite : picker de visibilité (Communautés/Sauf…/Seulement…/Privé) non localisé
 
 - Poursuite du balayage des surfaces annexes après le panneau Fond (it.99) : sheet ⋯
@@ -2221,3 +2447,84 @@ W3, W1-inc.4, R12/G1-projection (plans), incréments 2 de R4/E4.
   pinner 8 groupes × N médias rendrait le store massivement non-évincable.
 - Vérif : StoryViewModelTests (4 nouveaux tests) verts sur 18.2, dont câblage réel via
   `CacheCoordinator.shared.video.isPinned` (le pin ne touche pas le réseau).
+
+## 8. Checklist QA composer↔reader — état consolidé (mise à jour à chaque itération majeure)
+
+> Référence stable (contrairement au §7, append-only) — mettre à jour l'état d'un item
+> plutôt que d'en ajouter un nouveau. `✅ sain` = vérifié simulateur cette itération ou une
+> précédente sans régression depuis. `🔧 fixé` = bug réel trouvé + corrigé + reversé à ✅
+> après. `⛔ non-testable` = limitation outillage documentée, PAS un défaut produit connu.
+> `⬜ non testé` = jamais couvert par une itération.
+
+### Outils de composition (slide courante)
+
+| Outil | État | Vérifié par | Notes |
+|---|---|---|---|
+| Media → Image (Photos picker) | ✅ sain | it.96, it.97 | Rendu composer↔reader cohérent |
+| Media → Vidéo réelle (Photos picker) | ✅ sain | it.104 | Réel fichier (10s) : rendu pixel-parfait composer+reader immédiat |
+| Media → Vidéo stub simulateur (1703 octets) | ⛔ non-testable | it.101 | Placeholder Photos par défaut, sans piste vidéo décodable — pas un bug produit |
+| Sound → Audio (fichier, `.fileImporter`) | ✅ sain | it.103-104 | Ouvre le picker Files correctement ; vide car simulateur sans fichiers audio (pas un bug) |
+| Sound → Record (voix) — navigation sheet | ✅ sain | it.104 | Ouvre/annule proprement, sélecteur langue fonctionne |
+| Sound → Record (voix) — capture réelle | ⛔ non-testable | it.104 | Nécessite un input microphone matériel réel ; `AudioRecorderManagerTests` (15 tests) couvre la state machine (init/stop/cancel/erreurs), pas la capture elle-même |
+| Sound → toggle Foreground/Background (`StoryAudioCell`) | ⬜ non testé | — | UI existe (`onToggleBackground`), jamais exercée au simulateur faute d'un item audio capturable |
+| Text → ajout/édition/style/couleur/taille/alignement/fond/cadrage/contour | ✅ sain | it.95, it.104 | Toolbar 9 boutons vérifiée, live preview correcte |
+| Drawing (PencilKit) | ⛔ non-testable | (pré-session) | Trait multi-segment non simulable via `idb ui swipe` — historique de vérification manuelle extensif documenté ailleurs |
+| Background (couleur/fond) | ✅ sain | it.104 (navigation) | Panneau accessible, chips fonctionnels |
+| Filters (grille, `StoryFilterGridView`) | ✅ sain (code review) | it.106 | Point d'entrée UI non localisé au simulateur (`.filters` `BandCategory` sans FAB direct dans la grille à 6 tuiles — probablement nichée ailleurs, non trouvée cette itération) mais code source propre : header « Effets »/« Effects » déjà localisé (`story.tool.filters`), seul « Original » en dur (même convention volontaire noms de marque que `VideoFilterPreset`) |
+| Timeline (édition/durée) | ✅ sain | it.98 | Bug switch-chip trouvé + fixé ; navigation panneau saine |
+
+### Multi-slide
+
+| Action | État | Vérifié par | Notes |
+|---|---|---|---|
+| Ajouter une slide (`Add a slide`) | ✅ sain | it.104 | Correctement gaté : désactivé tant que la slide courante est vide |
+| Naviguer entre slides (tap miniature) | ✅ sain | it.104 | Miniatures reflètent fidèlement fond+texte de chaque slide |
+| Réordonner (drag natif `.draggable`) | ⛔ non-testable | it.104 | Drag-and-drop natif iOS, hors de portée d'`idb ui swipe` ; `moveSlide`/`reorderSlides` couverts par `StoryComposerViewModelTests` |
+| Supprimer une slide (`.contextMenu` long-press) | ⛔ non-testable | it.104 | Long-press idb ne déclenche pas `.contextMenu` natif (limitation documentée iOS 26) ; `removeSlide` testé unitairement |
+| Dupliquer une slide (`.contextMenu`) | ⛔ non-testable | it.104 | Même limitation ; `duplicateSlide` testé unitairement |
+
+### Visibilité / audience
+
+| Écran | État | Vérifié par | Notes |
+|---|---|---|---|
+| Picker Public/Communautés/Contacts/Sauf/Seulement/Privé | ✅ sain | it.100 | 6 clés app catalog ajoutées, vérifié EN complet |
+| Sheet « Except… » (sélection utilisateurs à exclure) | 🔧 fixé | it.102 | Titre+placeholder recherche non localisés (bundle manquant + clés FR-only) |
+| Sheet « Only… » (sélection utilisateurs autorisés) | 🔧 fixé | it.102 | Même composant que Except, même fix |
+
+### Export & partage
+
+| Flux | État | Vérifié par | Notes |
+|---|---|---|---|
+| Export MP4 (bake + `UIActivityViewController`) | ✅ sain | it.103 | Bout-en-bout : bake réel (88 Ko), partage natif, fermeture propre |
+| Sous-titre sheet export | 🔧 fixé | it.103 | Clé catalogue app manquante (oubli isolé, siblings déjà OK) |
+
+### Accessibilité (VoiceOver)
+
+| Surface | État | Vérifié par | Notes |
+|---|---|---|---|
+| Canvas composer+reader (média/texte/sticker/actions) | 🔧 fixé | it.104 | Calque entier jamais localisé (littéraux FR bruts) — 4 nouvelles clés + réutilisation de 4 clés existantes |
+
+### Cohérence composer ↔ reader (exigence explicite user)
+
+| Contenu | État | Vérifié par |
+|---|---|---|
+| Image de fond | ✅ sain | it.96 |
+| Vidéo de fond (réelle) | ✅ sain | it.104 |
+| Texte | ✅ sain | it.95, it.96 |
+| Story multi-slide publiée | ✅ sain | it.104 (implicite via export) |
+
+### Éditeur plein écran dédié (`MeeshyVideoEditorView` / `MeeshyImageEditorView`)
+
+| Surface | État | Vérifié par | Notes |
+|---|---|---|---|
+| Navigation (Simple/Pro, Undo/Redo, Finish, timeline zoomable) | ✅ sain | it.106 | Lecture vidéo réelle + filtre appliqué (changement visuel confirmé) |
+| Libellés catégories (Découpe/Habillage) + 9 titres d'outils | 🔧 fixé | it.106 | `nonisolated enum` sans accès bundle — pattern `OpeningEffectChips` répliqué, 11 clés catalogue |
+| Réinitialiser (TrimController, a11y) | 🔧 fixé | it.106 | Réutilise `media.editor.reset` (déjà 5 langues) |
+| ~15 chaînes profondes par panneau (readouts, hints, segments, sliders) | ⬜ non testé | — | Scope volontairement différé — voir it.106 pour la liste exhaustive |
+| `MeeshyImageEditorView.swift` (variante image) | ✅ sain | it.106 (code review) | Implémentation SŒUR distincte, PAS un partage de composants avec le vidéo — 22 appels `String(localized:...,bundle:.module)`, namespace catalogue `media.editor.*` propre dès l'origine (Recadrer/Filtres/Ajuster/Effets/Terminé/Annuler/Historique/Pivoter/Miroir/Réinitialiser tous couverts). Aucun fix requis. |
+| Mystère « Terminer »→« Finish » | ⬜ non résolu | it.106 | Rendu EN confirmé en live malgré `Text("Terminer")` en dur dans le code lu — mécanisme non identifié, NE PAS toucher (déjà correct) |
+
+### Reste ouvert pour une itération future
+1. Toggle Foreground/Background sur un item audio réel (bloqué tant que la capture n'est pas testable, mais le toggle UI pourrait être exercé sur un item audio importé via Files si un fichier de test y était placé).
+2. Grille de filtres du COMPOSER STORY (`StoryFilterGridView`, différente de l'éditeur plein écran) — jamais ouverte cette session.
+3. Localisation complète des ~15 chaînes profondes de `VideoEditorToolPanels.swift` (readouts trim, hints, segments split, sliders couleur/audio) + audit de `MeeshyImageEditorView.swift`.

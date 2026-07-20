@@ -139,6 +139,16 @@ extension StoryComposerViewModel {
         let slide = currentSlide
         var project = TimelineProject(from: slide)
 
+        // The opening/closing transition-effect chips write ONLY to this VM's
+        // own `openingEffect`/`closingEffect` (same source the live canvas
+        // preview reads) — NOT synchronously through to `slide.effects.opening`/
+        // `.closing` (that only happens via the decoupled granularCanvasSync).
+        // `TimelineProject(from: slide)` above therefore just read the stale/
+        // unsynced slide side of that split. Override with the live VM values
+        // so the chrome lane reflects what the user actually just picked.
+        project.openingEffect = openingEffect
+        project.closingEffect = closingEffect
+
         // Surface a static background image (stored separately in slideImages)
         // as a locked synthetic clip on the timeline so the user can see what
         // is playing under their composition. Stripped on commit so the actual

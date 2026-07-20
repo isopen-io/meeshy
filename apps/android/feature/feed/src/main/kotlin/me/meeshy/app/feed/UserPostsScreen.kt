@@ -142,6 +142,7 @@ fun UserPostsScreen(
                             UserPostCard(
                                 post = post,
                                 onClick = { if (post.isReel) onPostClick(post.id) else onOpenPost(post.id) },
+                                onOpenPost = onOpenPost,
                             )
                         }
                         if (state.isLoadingMore) {
@@ -171,6 +172,7 @@ fun UserPostsScreen(
 private fun UserPostCard(
     post: FeedPostPresentation,
     onClick: () -> Unit,
+    onOpenPost: (String) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
@@ -227,6 +229,11 @@ private fun UserPostCard(
                         .clip(RoundedCornerShape(MeeshyRadius.md))
                         .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
                 )
+            }
+
+            post.repostEmbed?.let { embed ->
+                Spacer(Modifier.height(MeeshySpacing.md))
+                RepostEmbedCell(embed = embed, onOpen = onOpenPost)
             }
 
             if (post.isReel) {

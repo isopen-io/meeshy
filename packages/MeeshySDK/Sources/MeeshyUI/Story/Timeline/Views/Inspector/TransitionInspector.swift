@@ -21,6 +21,14 @@ public struct TransitionInspector: View {
 
     public static let durationRange: ClosedRange<Float> = 0.1...2.0
 
+    /// Selectable kinds in the picker. Dissolve is intentionally excluded —
+    /// it renders identically to crossfade everywhere it's actually played
+    /// (see `ReaderTransitionResolver.liveRenderableTransition`), so offering
+    /// it as a distinct option was a false promise (design doc 2026-07-18).
+    /// `.dissolve` itself stays in the `StoryTransitionKind` enum for Codable
+    /// back-compat with already-published stories.
+    public static let availableKinds: [StoryTransitionKind] = [.crossfade]
+
     public let transition: TransitionSnapshot
     public let isAdvancedEnabled: Bool
     public let onKindChanged: (StoryTransitionKind) -> Void
@@ -66,14 +74,21 @@ public struct TransitionInspector: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             header
             kindPicker
             durationSlider
             easingPicker
             deleteButton
         }
-        .padding(18)
+        .padding(14)
+        // Même composition que ClipInspector/KeyframeInspector : matériau
+        // sous le contenu (jamais glassEffect, le verre ne peut pas
+        // échantillonner du verre — artefacts iOS 26).
+        .background(
+            RoundedRectangle(cornerRadius: 14).fill(.ultraThinMaterial)
+        )
+        .frame(maxWidth: 360, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.a11y.transition", bundle: .module))
     }
@@ -101,19 +116,23 @@ public struct TransitionInspector: View {
         }
     }
 
+    /// No longer a picker — `.crossfade` is the only rendered kind, so there's
+    /// nothing to choose between (see `availableKinds`). A legacy `.dissolve`
+    /// transition silently normalizes to `.crossfade` the moment its inspector
+    /// is opened (`onAppear` below), matching what it already looks like
+    /// everywhere it plays.
     private var kindPicker: some View {
-        Picker(selection: Binding(
-            get: { kind },
-            set: { newValue in kind = newValue; onKindChanged(newValue) }
-        )) {
+        HStack(spacing: 6) {
             Text(String(localized: "story.timeline.transition.crossfade", bundle: .module))
-                .tag(StoryTransitionKind.crossfade)
-            Text(String(localized: "story.timeline.transition.dissolve", bundle: .module))
-                .tag(StoryTransitionKind.dissolve)
-        } label: {
-            Text("Kind")
+                .font(.subheadline.weight(.semibold))
+            Spacer(minLength: 0)
         }
-        .pickerStyle(.segmented)
+        .onAppear {
+            if kind != .crossfade {
+                kind = .crossfade
+                onKindChanged(.crossfade)
+            }
+        }
     }
 
     private var durationSlider: some View {

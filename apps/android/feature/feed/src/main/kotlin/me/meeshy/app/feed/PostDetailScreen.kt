@@ -87,6 +87,7 @@ import java.util.Locale
 @Composable
 fun PostDetailScreen(
     onBack: () -> Unit = {},
+    onOpenPost: (String) -> Unit = {},
     viewModel: PostDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -140,6 +141,7 @@ fun PostDetailScreen(
                     else -> PostDetailContent(
                         post = state.post!!,
                         onFlagTap = viewModel::onFlagTap,
+                        onOpenPost = onOpenPost,
                     )
                 }
             }
@@ -151,6 +153,7 @@ fun PostDetailScreen(
 private fun PostDetailContent(
     post: FeedPostPresentation,
     onFlagTap: (String) -> Unit,
+    onOpenPost: (String) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Column(
@@ -233,6 +236,11 @@ private fun PostDetailContent(
                     )
                 }
 
+                post.repostEmbed?.let { embed ->
+                    Spacer(Modifier.height(MeeshySpacing.md))
+                    RepostEmbedCell(embed = embed, onOpen = onOpenPost)
+                }
+
                 if (post.isReel) {
                     Spacer(Modifier.height(MeeshySpacing.md))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -255,6 +263,9 @@ private fun PostDetailContent(
                 DetailStatsRow(post = post)
             }
         }
+
+        Spacer(Modifier.height(MeeshySpacing.lg))
+        PostCommentsSection()
     }
 }
 
@@ -398,7 +409,7 @@ private fun PostDetailSkeleton() {
 }
 
 @Composable
-private fun detailRelativeTime(iso: String): String {
+internal fun detailRelativeTime(iso: String): String {
     val strings = rememberRelativeTimeStrings()
     val epochMillis = isoToEpochMillisOrNull(iso) ?: return shortDateTimeLabel(iso)
     return RelativeTimeFormat.short(

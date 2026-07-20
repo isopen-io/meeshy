@@ -60,8 +60,8 @@ struct TextEditFloatingBubbles: View {
                 HapticFeedback.medium()
                 onDismiss()
             }
-            .accessibilityLabel("Terminer l'édition du texte")
-            .accessibilityHint("Ferme l'éditeur et masque le clavier")
+            .accessibilityLabel(String(localized: "story.textEdit.finish", defaultValue: "Terminer l'édition du texte", bundle: .module))
+            .accessibilityHint(String(localized: "story.textEdit.finish.hint", defaultValue: "Ferme l'éditeur et masque le clavier", bundle: .module))
             .accessibilityAddTraits(.isButton)
     }
 }

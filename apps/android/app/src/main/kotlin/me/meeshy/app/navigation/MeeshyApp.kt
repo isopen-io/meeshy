@@ -366,7 +366,10 @@ fun MeeshyApp(
                     navArgument(PostDetailViewModel.POST_ID_ARG) { type = NavType.StringType },
                 ),
             ) {
-                PostDetailScreen(onBack = { navController.popBackStack() })
+                PostDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+                )
             }
             composable(Routes.CALLS) {
                 CallHistoryScreen(

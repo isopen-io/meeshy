@@ -46,6 +46,7 @@ data class FeedPostPresentation(
     val isPinned: Boolean,
     val isEdited: Boolean,
     val isReel: Boolean,
+    val repostEmbed: RepostEmbedPresentation?,
 )
 
 object FeedPostBuilder {
@@ -73,8 +74,8 @@ object FeedPostBuilder {
             .map { media ->
                 FeedPostImage(
                     id = media.id,
-                    url = resolveMediaUrl(media.fileUrl!!, mediaBaseUrl),
-                    thumbnailUrl = media.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    url = resolveFeedMediaUrl(media.fileUrl!!, mediaBaseUrl),
+                    thumbnailUrl = media.thumbnailUrl?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
                     width = media.width,
                     height = media.height,
                 )
@@ -88,7 +89,7 @@ object FeedPostBuilder {
             authorName = (post.author?.displayName ?: post.author?.username)
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = post.author?.avatar
-                ?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             createdAtIso = post.createdAt,
             content = resolveContent(post, preferences, activeCode, activeIsOriginal),
             isTranslated = isTranslated,
@@ -110,6 +111,7 @@ object FeedPostBuilder {
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,
             isReel = post.type.equals("reel", ignoreCase = true),
+            repostEmbed = RepostEmbedBuilder.build(post.repostOf, preferences, mediaBaseUrl),
         )
     }
 
@@ -157,10 +159,4 @@ object FeedPostBuilder {
 
     private val ApiPostMedia.isImage: Boolean
         get() = mimeType?.startsWith("image/") == true
-
-    private fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
-        url.startsWith("http") -> url
-        mediaBaseUrl == null -> url
-        else -> mediaBaseUrl.trimEnd('/') + (if (url.startsWith("/")) url else "/$url")
-    }
 }

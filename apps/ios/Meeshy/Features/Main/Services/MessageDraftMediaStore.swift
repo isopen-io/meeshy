@@ -35,7 +35,11 @@ enum MessageDraftMediaStore {
         conversationId: String
     ) -> [DraftAttachmentRef] {
         let dir = directory(userId: userId, conversationId: conversationId)
-        try? FileManager.default.removeItem(at: dir)
+        do {
+            try FileManager.default.removeItem(at: dir)
+        } catch {
+            // Ignore failure to remove non-existent directory
+        }
         guard !attachments.isEmpty else { return [] }
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -100,9 +104,13 @@ enum MessageDraftMediaStore {
     /// Purge le dossier draft de la conversation — à l'envoi réussi et au
     /// clear explicite du brouillon.
     static func purge(userId: String, conversationId: String) {
-        try? FileManager.default.removeItem(
-            at: directory(userId: userId, conversationId: conversationId)
-        )
+        do {
+            try FileManager.default.removeItem(
+                at: directory(userId: userId, conversationId: conversationId)
+            )
+        } catch {
+            // Ignore purge failure (best-effort)
+        }
     }
 
     private static func sanitize(_ component: String) -> String {

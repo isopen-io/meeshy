@@ -12,9 +12,17 @@
     <string name="feed_bookmark">Guardar</string>
     <string name="feed_unbookmark">Quitar de guardados</string>
     <string name="feed_hidden_images">+%1$d</string>
+    <string name="feed_open_media">Abrir imagen</string>
+    <string name="feed_media_saved">Guardado en la galería</string>
+    <string name="feed_media_save_failed">No se pudo guardar en la galería</string>
     <string name="feed_pinned">Fijado</string>
     <string name="feed_edited">Editado</string>
     <string name="feed_reel">Reel</string>
+    <string name="feed_repost_reposted">Republicado</string>
+    <string name="feed_repost_quoted">Citado</string>
+    <string name="feed_repost_story">Historia</string>
+    <string name="feed_repost_open">Abrir la publicación republicada</string>
+    <string name="feed_repost_more_media">+%1$d</string>
     <string name="bookmarks_title">Guardados</string>
     <string name="bookmarks_empty">Aún no hay publicaciones guardadas</string>
     <string name="bookmarks_back">Atrás</string>
@@ -26,8 +34,56 @@
     <string name="post_detail_back">Atrás</string>
     <string name="post_detail_not_found">Esta publicación ya no está disponible</string>
     <string name="post_detail_empty">No se pudo cargar esta publicación</string>
+    <string name="post_comments_title">Comentarios</string>
+    <string name="post_comments_empty">Aún no hay comentarios. ¡Sé el primero!</string>
+    <string name="post_comments_load_more">Ver más comentarios</string>
+    <string name="post_comments_input_hint">Añadir un comentario…</string>
+    <string name="post_comments_send">Enviar</string>
+    <string name="post_comments_sending">Enviando…</string>
+    <string name="post_comments_reply_badge">Respuesta</string>
+    <string name="post_comments_reply_action">Responder</string>
+    <string name="post_comments_replying_to">Respondiendo a %1$s</string>
+    <string name="post_comments_replying_to_generic">Respondiendo…</string>
+    <string name="post_comments_cancel_reply">Cancelar respuesta</string>
+    <string name="post_comments_reply_hint">Añadir una respuesta…</string>
+    <string name="post_comments_hide_replies">Ocultar respuestas</string>
+    <plurals name="post_comments_view_replies">
+        <item quantity="one">Ver %1$d respuesta</item>
+        <item quantity="other">Ver %1$d respuestas</item>
+    </plurals>
+    <plurals name="post_comments_view_all_replies">
+        <item quantity="one">Ver la %1$d respuesta</item>
+        <item quantity="other">Ver las %1$d respuestas</item>
+    </plurals>
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d publicación nueva</item>
         <item quantity="other">%1$d publicaciones nuevas</item>
     </plurals>
+    <!-- Mood status bar (Prisme: ES) -->
+    <string name="status_bar_me">Yo</string>
+    <string name="status_bar_add">Estado</string>
+    <string name="status_bar_add_label">Añadir un estado</string>
+    <string name="status_bar_my_status_label">Mi estado %1$s</string>
+    <string name="status_bar_status_label">%1$s %2$s</string>
+    <string name="status_bar_load_error">Error de carga</string>
+    <string name="status_bar_retry">Reintentar cargar los estados</string>
+    <string name="status_bar_via">vía @%1$s</string>
+    <string name="status_bar_expired">Caducado</string>
+    <string name="status_bar_republish">Volver a publicar</string>
+    <string name="status_bar_react">Reaccionar con %1$s</string>
+    <string name="status_feed_friends">Amigos</string>
+    <string name="status_feed_discover">Descubrir</string>
+    <string name="status_feed_toggle_label">Feed de estados</string>
+    <string name="status_composer_title">Estado</string>
+    <string name="status_composer_republishing">Volviendo a publicar @%1$s</string>
+    <string name="status_composer_mood_question">¿Cómo te sientes?</string>
+    <string name="status_composer_placeholder">¿Cómo estás?</string>
+    <string name="status_composer_publish">Publicar</string>
+    <string name="status_composer_close">Cerrar</string>
+    <string name="status_composer_counter">%1$d/%2$d</string>
+    <string name="status_composer_mood_label">Estado de ánimo %1$s</string>
+    <string name="status_composer_visibility_public">Público</string>
+    <string name="status_composer_visibility_community">Comunidades</string>
+    <string name="status_composer_visibility_friends">Contactos</string>
+    <string name="status_composer_visibility_private">Privado</string>
 </resources>

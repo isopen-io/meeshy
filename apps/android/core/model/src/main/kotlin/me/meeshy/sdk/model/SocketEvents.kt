@@ -225,6 +225,7 @@ data class SocketPostBookmarkedData(
 data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
+    val commentCount: Int = 0,
 )
 
 @Serializable
@@ -233,6 +234,38 @@ data class SocketCommentLikedData(
     val commentId: String,
     val userId: String,
     val likesCount: Int = 0,
+)
+
+@Serializable
+data class SocketCommentDeletedData(
+    val postId: String,
+    val commentId: String,
+    val commentCount: Int = 0,
+)
+
+/** Server-authoritative aggregation for one emoji on a comment (mirror of iOS `SocketCommentReactionAggregation`). */
+@Serializable
+data class SocketCommentReactionAggregation(
+    val emoji: String = "",
+    val count: Int = 0,
+    val userIds: List<String> = emptyList(),
+    val hasCurrentUser: Boolean = false,
+)
+
+/**
+ * `comment:reaction-added` / `comment:reaction-removed` — a user reacted to (or un-reacted from)
+ * a comment. Mirror of iOS `SocketCommentReactionUpdateEvent`. [aggregation] carries the absolute
+ * post-mutation state for the emoji; [timestamp] is left as the raw ISO string (optional).
+ */
+@Serializable
+data class SocketCommentReactionUpdateData(
+    val commentId: String,
+    val postId: String,
+    val userId: String,
+    val emoji: String,
+    val action: String = "",
+    val aggregation: SocketCommentReactionAggregation? = null,
+    val timestamp: String? = null,
 )
 
 @Serializable
@@ -255,9 +288,59 @@ data class SocketStoryReactedData(
     val emoji: String,
 )
 
+/**
+ * `status:created` — a friend published a mood status. The created post is nested
+ * under [status] (mirror of iOS `SocketStatusCreatedData`); the gateway does not echo
+ * a [clientMutationId] for statuses, so an own-status echo is de-duplicated by id.
+ */
+@Serializable
+data class SocketStatusCreatedData(
+    val status: ApiPost,
+    val clientMutationId: String? = null,
+)
+
+/** `status:updated` — a mood status was edited; [status] carries the full new post. */
+@Serializable
+data class SocketStatusUpdatedData(
+    val status: ApiPost,
+)
+
+/** `status:deleted` — a mood status was removed. Mirror of iOS `SocketStatusDeletedData`. */
+@Serializable
+data class SocketStatusDeletedData(
+    val statusId: String,
+    val authorId: String = "",
+)
+
+/**
+ * `status:reacted` — a user reacted to a mood status. Carries no aggregate count
+ * (mirror of iOS `SocketStatusReactedData`), so the bar increments by one, skipping
+ * the reactor's own echo (guarded in the ViewModel).
+ */
+@Serializable
+data class SocketStatusReactedData(
+    val statusId: String,
+    val userId: String,
+    val emoji: String,
+)
+
 @Serializable
 data class SocketStoryUnreactedData(
     val storyId: String,
+    val userId: String,
+    val emoji: String,
+)
+
+/**
+ * `status:unreacted` — a user removed their reaction from a mood status. Same shape as
+ * [SocketStatusReactedData] (mirror of the shared `StatusUnreactedEventData`): it carries
+ * no aggregate count, so the bar decrements the emoji by one (clamped ≥0, dropping the
+ * spent bucket), skipping the un-reactor's own echo (guarded in the ViewModel). A SOTA
+ * symmetry the iOS bar handlers lack — the gateway emits it on every reaction removal.
+ */
+@Serializable
+data class SocketStatusUnreactedData(
+    val statusId: String,
     val userId: String,
     val emoji: String,
 )

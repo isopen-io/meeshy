@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.ApiRepostOf
 import org.junit.Test
 
 class FeedPostBuilderTest {
@@ -220,5 +221,29 @@ class FeedPostBuilderTest {
         // Prefs target a language the post does not carry → no preferred translation.
         val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), Prefs(systemLanguage = "de"), override = null)
         assertThat(code).isEqualTo("fr")
+    }
+
+    // --- Repost embed wiring (a reposted/quoted post rendered inside the card) ---
+
+    @Test
+    fun build_plainPostHasNoRepostEmbed() {
+        assertThat(FeedPostBuilder.build(post(), Prefs(), null).repostEmbed).isNull()
+    }
+
+    @Test
+    fun build_repostPostCarriesEmbedProjectedFromRepostOf() {
+        val p = post().copy(
+            repostOf = ApiRepostOf(
+                id = "orig-1",
+                type = "POST",
+                content = "Hola",
+                author = ApiAuthor(id = "u9", username = "orig", displayName = "Origen"),
+            ),
+        )
+        val embed = FeedPostBuilder.build(p, Prefs(), null).repostEmbed
+        assertThat(embed).isNotNull()
+        assertThat(embed?.id).isEqualTo("orig-1")
+        assertThat(embed?.authorName).isEqualTo("Origen")
+        assertThat(embed?.content).isEqualTo("Hola")
     }
 }
