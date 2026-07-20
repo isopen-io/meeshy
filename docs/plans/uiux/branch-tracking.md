@@ -14,6 +14,22 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 151i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **151i (terminée, branche `claude/laughing-thompson-xp2i27`, base `main` HEAD `cd93248`)** :
+>   Structure **VoiceOver** de `EditProfileView` (écran d'édition de profil, 408 lignes). Dynamic Type déjà
+>   soldé (19 `relative`, 3 gels 82i/84i) → **non retouché**. Ajouts a11y **sans logique, 0 clé i18n neuve**
+>   (réutilise strings localisées via `children: .combine`) : titre + `sectionHeader` → `.isHeader` ;
+>   `readOnlyRow` + rangée upload → `children: .combine` ; `editableField`/`bioField` → icône+titre
+>   décoratifs masqués, `TextField` labellisé ; overlay succès → checkmark masqué + combiné. `accessibility`
+>   1 → 17. **Aucune PR ouverte ne touchait `EditProfileView` → 0 contention.** Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `EditProfileView` VoiceOver de base SOLDÉ** : ne plus re-flagger (titre/en-têtes headers, rangées
+>   combinées, champs labellisés, décoratifs masqués).
+> - **Contexte fleet (2026-07-16)** : 11 PR iOS a11y ouvertes 140i–150i (`ThemedBackButton`, `MyStoriesView`,
+>   `FriendRequestListView`, `StoryExpiredContent`, `MessageViewsDetailView`, `ConversationDashboard`,
+>   `VoiceProfileManageView`, `StatsTimelineChart`, `StoryViewerContainer`, `ChangePasswordView`,
+>   `DeleteAccountView`) — les éviter. La piste a basculé du Dynamic Type pur vers la **structure VoiceOver**.
+> - **Base de départ 152i : `main` HEAD**. Candidats a11y non contestés à faible couverture : `SharePickerView`
+>   (8), `CommunityLinkDetailView` (8), `ShareLinksView` (10). Vérifier l'absence de contention avant de commencer.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **179i (branche `claude/laughing-thompson-yfiky7`, base `main` HEAD `70dd5695`, 169i mergé)** :
 >   Structure VoiceOver de `MessageTranscriptionDetailView` (onglet Transcription = transcription
