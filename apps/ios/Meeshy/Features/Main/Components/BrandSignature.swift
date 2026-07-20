@@ -17,6 +17,15 @@ struct BrandSignature: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
+    private var accessibilityDescription: String {
+        let versionLine = String(
+            format: String(localized: "splash.version.a11y", defaultValue: "Meeshy version %@, build %@", bundle: .main),
+            appVersion, buildNumber
+        )
+        let credit = String(localized: "splash.madeWithLove", bundle: .main)
+        return "\(versionLine). \(credit)"
+    }
+
     var body: some View {
         VStack(spacing: 6) {
             Text("Meeshy \(appVersion) · \(buildNumber)")
@@ -40,6 +49,6 @@ struct BrandSignature: View {
                 .accessibilityHidden(true)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO."))
+        .accessibilityLabel(accessibilityDescription)
     }
 }
