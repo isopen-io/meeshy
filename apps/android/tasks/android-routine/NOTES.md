@@ -2,6 +2,55 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-20, `status-unreacted-socket`) — cross-module nullable property blocks Kotlin smart-cast
+A reducer that reads a nullable property twice — `val current = entry.reactionSummary?.get(emoji) ?: return this` then
+`entry.reactionSummary.toMutableMap()` — fails to compile with **`Smart cast to 'Map<...>' is impossible, because
+'reactionSummary' is a public API property declared in different module`**. `StatusEntry.reactionSummary` lives in
+`:core:model`; a `:feature:feed` reducer cannot smart-cast a public property owned by another module (the compiler can't
+prove no other thread nulled it between reads). Fix: **bind it to a local `val` once** — `val summary =
+entry.reactionSummary ?: return this` — then read every subsequent access through the local. Same trap will hit any
+`:feature:*` code that null-checks-then-dereferences a `:core:model`/`:sdk-core` public `var`/`val`. Prefer a single
+local binding over repeated `?.`/`!!`. (The existing `reacted` reducer sidesteps it by dereferencing exactly once:
+`(entry.reactionSummary ?: emptyMap()).toMutableMap()`.)
+
+## Lesson (2026-07-20, `status-strings-i18n`) — `ThemeStoreTest` DataStore flake under parallel `check`; and TDD for a pure-resource i18n slice
+Two things worth remembering:
+1. **Flaky, not a regression.** A full-repo `assembleDebug testDebugUnitTest` occasionally fails **one** test:
+   `:sdk-core` `ThemeStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction` with
+   `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 5000 ms` (it `first()`-collects a
+   DataStore-backed `StateFlow` whose async hydration can exceed 5 s when all modules run in parallel on a loaded box).
+   It **passes green in isolation**: `:sdk-core:testDebugUnitTest --tests "me.meeshy.sdk.theme.ThemeStoreTest"` →
+   BUILD SUCCESSFUL. Do **not** "fix" it inside an unrelated slice (it would touch `:sdk-core`, breaking the
+   `apps/android`-scoped diff rule). If it keeps recurring, its own slice should raise the `withTimeout`/`advanceUntilIdle`
+   handling. When a `check` failure lands in a module your diff never touched, re-run that test alone before assuming a break.
+2. **How to TDD a pure-resource (localisation) slice without a tautology.** Don't assert `getString == "literal"` (that
+   just restates the resource). Instead write a **locale-parity guard** that parses the module's own
+   `res/values*/strings.xml` and asserts (a) every base `<string>` key exists in every shipped locale and (b) format
+   specifiers match. It goes RED on exactly the missing keys, GREEN once translated, and durably guards every future key —
+   behavioural, mutation-proven, and non-tautological. Keep the guard **full-module** so it catches the next gap too.
+   Gotcha: kotlinc choked on a KDoc `/** … */` block containing `` `%1$s` `` + em-dashes/ellipses in this test file —
+   rewrote it as plain `//` ASCII comments and it compiled. Prefer `//` comments in resource-parsing test helpers.
+
+## Lesson (2026-07-19, `status-bar-l2-cache`) — relaxed mockk returns `emptyList()`, not `null`, for a nullable `List` return
+A `mockk(relaxed = true)` whose suspend fun returns `List<T>?` hands back an **empty list**, not `null`, by default —
+mockk builds a non-null default for known collection types. This bit a *pre-existing* test the moment a new cold-cache
+branch (`cachedBar(mode): List<StatusEntry>?` → seed if non-null) started consulting that mock: the empty-list default
+looked like a synced-empty disk and falsely seeded the bar (`hasLoaded = true`), suppressing the skeleton that the old
+test asserted. Fix: give the mock the production default explicitly in `setUp` — `coEvery { diskCache.cachedBar(any()) }
+returns null` — so "cold disk" means `null` exactly as the real repository returns. General rule: when a ViewModel
+gains a new nullable-collection dependency, set its cold/absent default explicitly rather than trusting `relaxed`, and
+re-run the *whole* module's tests (not just the new ones) — a relaxed default can change the behaviour of tests that
+never mention the new collaborator.
+
+## Lesson (2026-07-19, `status-bar-l2-cache`) — source-edit mutation testing must keep the code compiling
+Proving a test is behavioural by hand-mutating the production source only works if the mutation still **compiles** —
+otherwise gradle fails at `compileDebugKotlin` and you learn nothing. First attempt replaced a null-guard condition with
+`if (false)`, which killed the Kotlin smart-cast that made the guarded value non-null → argument-type-mismatch, build
+failed before any test ran. Prefer mutations that preserve types and control flow: flip a boolean guard's operator
+(`==` → `!=`), delete a whole statement (a write-through call), or swap a comparator — never neuter a condition in a way
+that drops a smart-cast. Restore from a `.bak` copy immediately after, and confirm with `grep` that the original lines
+are back before committing.
+
 ## Lesson (2026-07-19, `status-bar-l1-cache`) — the `cache/` package is git-ignored; force-add new files there
 The root `.gitignore` line `*/**/cache` matches the `me/meeshy/sdk/cache/` **source** package, not just build
 caches. Already-tracked files there (`cacheFirstFlow.kt`, `CachePolicy.kt`, `CacheResult.kt`) stay tracked, but any

@@ -1981,7 +1981,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       first page fails exactly `a stale cached bar paints instantly then the network first page replaces it`. Disk L2
       tier (cold-launch parity across process death) is the tracked next follow-up.
 - [x] Instant-app status bar (L1 in-memory cache, cache-first paint) — `StatusBarCache` (slice
-      `status-bar-l1-cache`, 2026-07-19). Disk L2 tier (cold-launch across process death) is the tracked follow-up.
+      `status-bar-l1-cache`, 2026-07-19).
+- [x] Instant-app status bar — **disk L2 cache** (cold-launch parity across process death) — **landed** (slice
+      `status-bar-l2-cache`, 2026-07-19): Room-backed `StatusBarCacheRepository` (`:sdk-core/status`) persists the raw
+      feed per `StatusFeedMode` (`statuses:friends` / `statuses:discover`) into a new `status_bar_cache` table (DB
+      v10→11) and replays it, mirroring `ProfileStatsCacheRepository` exactly (row-presence = sync marker: absent →
+      cold `null`, present `[]` → synced-empty; undecodable payload → cache miss, never a crash). `StatusesViewModel`
+      wires it into the `CacheResult.Empty` (cold-L1) branch: seeds the bar from disk before the first network call
+      (only while still cold and the mode has not switched underneath the read), then reconciles — every network first
+      page and optimistic `setStatus`/`clearStatus` is written through to **both** tiers, and `refresh` invalidates the
+      disk row too. The disk tier is a pure keyed store (opaque params, no product decision) so it stays in `:sdk-core`
+      alongside `ProfileStatsCacheRepository`; the *when-to-read/write* orchestration stays in the `:feature:feed` VM.
+      +17 tests (9 `StatusBarCacheRepositoryTest` Robolectric-Room: cold-null, round-trip-in-order, per-mode keying,
+      two-feeds-independent, newest-wins, synced-empty≠cold, invalidate-scope, undecodable→null, rich-field round-trip;
+      8 `StatusesViewModelTest`: cold-launch-disk-seed, cold-disk→skeleton, network-write-through, warm-L1-never-reads-
+      disk, refresh-invalidates+writes-through, publish-write-through, clear-write-through, failed-clear-no-disk-write).
+      Mutation-proven: flipping the seed's mode-equality guard fails exactly `a cold launch seeds the bar from the disk
+      cache before the network answers`; dropping the network write-through fails exactly the two write-through tests.
 - [x] Mood status react from the bar popover (reaction picker) — **landed** (slice `status-popover-reaction-picker`,
       2026-07-19): the popover now shows an existing-reactions summary row (pure `statusReactionChips` — count-desc,
       emoji tie-break) plus a quick-reaction strip (`EmojiCatalog.defaultQuickReactions`) gated to OTHER users'
@@ -1997,8 +2013,51 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       mode, so DISCOVER coherently swaps the leading cell to Add. +4 `StatusBarPresentationTest` (both-feeds-offered,
       friends-first order, per-mode selection; mutation-proven: reversing `STATUS_FEED_TAB_ORDER` fails exactly the
       order test, hard-wiring selection to FRIENDS fails exactly the discover-selection test).
-      **i18n follow-up:** the whole `status_*` string family is default (`values/`) only — FR/ES/PT localisation of
-      the statuses area is a pre-existing gap, tracked here for a dedicated slice.
+- [x] Statuses area **i18n (FR/ES/PT)** — **landed** (slice `status-strings-i18n`, 2026-07-20): the whole 26-key
+      `status_*` family (`status_bar_*` / `status_feed_*` / `status_composer_*`) was `values/`-only; now fully
+      localised in FR/ES/PT with format-specifier parity preserved (`%1$s`, `%1$d/%2$d`, …). Guarded by a new
+      full-module `FeedStringLocalizationParityTest` (2 tests): (1) every base `<string>` key is translated in every
+      shipped locale — no silent English fallthrough; (2) each translation keeps the base's positional format
+      specifiers — a drifted/dropped arg is a runtime crash, so this is correctness not cosmetics. The guard is
+      deliberately full-module so any future feed key added without its FR/ES/PT siblings turns red before it ships.
+      Mutation-proven RED: pre-translation the parity test failed with exactly the 26 missing `status_*` keys per
+      locale. Pure resource/parity slice — no product logic touched.
+- [x] Statuses **realtime socket wiring** (live bar updates) — **landed** (slice `status-realtime-socket`,
+      2026-07-20): full parity with iOS `StatusViewModel.subscribeToSocketEvents`. The social event bus gains four
+      status flows — `SocialSocketManager` now `listen`s `status:created` / `status:updated` / `status:deleted` /
+      `status:reacted` (canonical `SERVER_EVENTS` names — the prompt's `status:new`/`status:reaction` are informal
+      labels), each decoding a new `@Serializable` `:core:model` DTO (`SocketStatusCreatedData{status: ApiPost}`,
+      `SocketStatusUpdatedData`, `SocketStatusDeletedData{statusId,authorId}`, `SocketStatusReactedData{statusId,
+      userId,emoji}` — mirrors of the iOS structs). `StatusesViewModel` folds the deltas straight into the live
+      `StatusBarListState`: a friend's `status:created` hoists via `created` (mapped through `toStatusEntry`,
+      **de-duplicated + not re-hoisted if already present** — iOS `if !contains`); `status:updated` replaces in
+      place via the new pure `StatusBarListState.updated` reducer (inert when absent); `status:deleted` drops via
+      `removed`; `status:reacted` bumps via `reacted`, **skipping the reactor's own echo** (`payload.userId !=
+      currentUserId()`, since `react` already applied it optimistically). A non-`STATUS` payload (`toStatusEntry` →
+      null) is ignored. Deltas fold into `listState` only; the next network `fetchFirstPage` reconciles the
+      authoritative page (matches iOS's in-memory mutation — the cache tiers are reconciled by fetch/publish, not by
+      each socket delta). +15 tests (2 `StatusBarListStateTest`: `updated` in-place/inert; 4 `SocialSocketManagerTest`:
+      created/updated/deleted/reacted decode; 9 `StatusesViewModelTest`: created-hoist, created-echo-in-place,
+      non-status-ignored, updated-in-place, updated-absent-inert, deleted-drop, reacted-other-bumps, reacted-own-echo-
+      ignored). Mutation-proven RED: neutralising the own-echo guard fails **exactly** `a status reacted echo of the
+      viewer's own reaction is ignored`; neutralising the created present-guard fails **exactly** `a status created
+      echo of an already-present status leaves it in place` (2 of 42 fail, no collateral). SDK purity: the DTOs +
+      event bus are stateless building blocks in `:core:model` / `:sdk-core`; the "which delta does what to the bar"
+      orchestration stays in the `:feature:feed` VM.
+- [x] Statuses **realtime `status:unreacted`** (live bar reaction-removal) — **landed** (slice `status-unreacted-socket`,
+      2026-07-20): the symmetric inverse of the `status:reacted` handler, decoding the gateway's `status:unreacted`
+      (canonical `SERVER_EVENTS`, shared `StatusUnreactedEventData`). A **SOTA symmetry the iOS `StatusViewModel` bar
+      handlers lack** — iOS never folds reaction-removal into the bar. `SocialSocketManager` now `listen`s
+      `status:unreacted` into a new `statusUnreacted` `SharedFlow` decoding `SocketStatusUnreactedData{statusId,userId,
+      emoji}` (same shape as `SocketStatusReactedData`). A new pure `StatusBarListState.unreacted(statusId, emoji)`
+      reducer drops one reaction, **clamped ≥0 and removing the spent bucket** when it hits zero (so no empty entry
+      renders), inert (same instance) when the status is absent **or** carries no such reaction. `StatusesViewModel`
+      folds the delta into the live bar **skipping the un-reactor's own echo** (`payload.userId != currentUserId()`,
+      symmetric to `reacted`). +8 tests (5 `StatusBarListStateTest`: decrement, remove-bucket-at-zero, inert-absent-id,
+      inert-no-such-reaction, inert-no-reactions; 1 `SocialSocketManagerTest`: `status:unreacted` decode; 2
+      `StatusesViewModelTest`: other-user-decrements, own-echo-ignored). Mutation-proven RED: neutralising the own-echo
+      guard (`if (true)`) fails **exactly** `a status unreacted echo of the viewer's own unreaction is ignored`.
+      SDK purity: DTO + flow in `:core:model`/`:sdk-core`, the fold orchestration in the `:feature:feed` VM.
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)

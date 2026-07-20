@@ -83,6 +83,19 @@ data class StatusBarListState(
         else copy(statuses = statuses.filterNot { it.id == statusId })
 
     /**
+     * Replace the status carrying [entry]'s id **in place**, preserving its position
+     * (a realtime `status:updated` delta). Inert — returns the same instance — when no
+     * status carries that id, so an update for a status not in this feed never churns
+     * state nor smuggles a foreign entry in. Mirrors iOS `statuses[index] = entry`
+     * guarded by `firstIndex(where:)`.
+     */
+    fun updated(entry: StatusEntry): StatusBarListState {
+        val index = statuses.indexOfFirst { it.id == entry.id }
+        if (index < 0) return this
+        return copy(statuses = statuses.toMutableList().also { it[index] = entry })
+    }
+
+    /**
      * Optimistically bump the [emoji] reaction count on the status with [statusId] by
      * one (mirrors iOS `summary[emoji, default: 0] += 1`). Inert when no status carries
      * that id.
@@ -95,6 +108,26 @@ data class StatusBarListState(
         summary[emoji] = (summary[emoji] ?: 0) + 1
         val next = statuses.toMutableList().also { it[index] = entry.copy(reactionSummary = summary) }
         return copy(statuses = next)
+    }
+
+    /**
+     * Drop one [emoji] reaction on the status with [statusId] (a realtime `status:unreacted`
+     * delta), the inverse of [reacted]. The count is clamped at zero and the bucket removed
+     * when it reaches it, so a spent emoji leaves no empty entry to render. Inert — returns
+     * the same instance — when no status carries that id **or** the status has no such
+     * reaction, so a redundant or foreign unreact never churns state nor drives a count
+     * negative.
+     */
+    fun unreacted(statusId: String, emoji: String): StatusBarListState {
+        val index = statuses.indexOfFirst { it.id == statusId }
+        if (index < 0) return this
+        val entry = statuses[index]
+        val summary = entry.reactionSummary ?: return this
+        val current = summary[emoji] ?: return this
+        val next = summary.toMutableMap()
+        if (current <= 1) next.remove(emoji) else next[emoji] = current - 1
+        val updated = statuses.toMutableList().also { it[index] = entry.copy(reactionSummary = next) }
+        return copy(statuses = updated)
     }
 
     companion object {
