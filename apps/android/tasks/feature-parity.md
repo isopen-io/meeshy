@@ -2013,8 +2013,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       mode, so DISCOVER coherently swaps the leading cell to Add. +4 `StatusBarPresentationTest` (both-feeds-offered,
       friends-first order, per-mode selection; mutation-proven: reversing `STATUS_FEED_TAB_ORDER` fails exactly the
       order test, hard-wiring selection to FRIENDS fails exactly the discover-selection test).
-      **i18n follow-up:** the whole `status_*` string family is default (`values/`) only — FR/ES/PT localisation of
-      the statuses area is a pre-existing gap, tracked here for a dedicated slice.
+- [x] Statuses area **i18n (FR/ES/PT)** — **landed** (slice `status-strings-i18n`, 2026-07-20): the whole 26-key
+      `status_*` family (`status_bar_*` / `status_feed_*` / `status_composer_*`) was `values/`-only; now fully
+      localised in FR/ES/PT with format-specifier parity preserved (`%1$s`, `%1$d/%2$d`, …). Guarded by a new
+      full-module `FeedStringLocalizationParityTest` (2 tests): (1) every base `<string>` key is translated in every
+      shipped locale — no silent English fallthrough; (2) each translation keeps the base's positional format
+      specifiers — a drifted/dropped arg is a runtime crash, so this is correctness not cosmetics. The guard is
+      deliberately full-module so any future feed key added without its FR/ES/PT siblings turns red before it ships.
+      Mutation-proven RED: pre-translation the parity test failed with exactly the 26 missing `status_*` keys per
+      locale. Pure resource/parity slice — no product logic touched.
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)

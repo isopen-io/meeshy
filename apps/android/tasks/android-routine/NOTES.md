@@ -2,6 +2,24 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-20, `status-strings-i18n`) — `ThemeStoreTest` DataStore flake under parallel `check`; and TDD for a pure-resource i18n slice
+Two things worth remembering:
+1. **Flaky, not a regression.** A full-repo `assembleDebug testDebugUnitTest` occasionally fails **one** test:
+   `:sdk-core` `ThemeStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction` with
+   `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 5000 ms` (it `first()`-collects a
+   DataStore-backed `StateFlow` whose async hydration can exceed 5 s when all modules run in parallel on a loaded box).
+   It **passes green in isolation**: `:sdk-core:testDebugUnitTest --tests "me.meeshy.sdk.theme.ThemeStoreTest"` →
+   BUILD SUCCESSFUL. Do **not** "fix" it inside an unrelated slice (it would touch `:sdk-core`, breaking the
+   `apps/android`-scoped diff rule). If it keeps recurring, its own slice should raise the `withTimeout`/`advanceUntilIdle`
+   handling. When a `check` failure lands in a module your diff never touched, re-run that test alone before assuming a break.
+2. **How to TDD a pure-resource (localisation) slice without a tautology.** Don't assert `getString == "literal"` (that
+   just restates the resource). Instead write a **locale-parity guard** that parses the module's own
+   `res/values*/strings.xml` and asserts (a) every base `<string>` key exists in every shipped locale and (b) format
+   specifiers match. It goes RED on exactly the missing keys, GREEN once translated, and durably guards every future key —
+   behavioural, mutation-proven, and non-tautological. Keep the guard **full-module** so it catches the next gap too.
+   Gotcha: kotlinc choked on a KDoc `/** … */` block containing `` `%1$s` `` + em-dashes/ellipses in this test file —
+   rewrote it as plain `//` ASCII comments and it compiled. Prefer `//` comments in resource-parsing test helpers.
+
 ## Lesson (2026-07-19, `status-bar-l2-cache`) — relaxed mockk returns `emptyList()`, not `null`, for a nullable `List` return
 A `mockk(relaxed = true)` whose suspend fun returns `List<T>?` hands back an **empty list**, not `null`, by default —
 mockk builds a non-null default for known collection types. This bit a *pre-existing* test the moment a new cold-cache
