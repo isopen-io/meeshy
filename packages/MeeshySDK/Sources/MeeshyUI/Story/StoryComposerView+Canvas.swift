@@ -327,12 +327,10 @@ extension StoryComposerView {
     /// Scheme épinglé sur le chrome posé sur le canvas (header, bulles,
     /// FABs) : suit la luminance du FOND de la slide, pas le thème de l'app
     /// — icônes claires sur fond sombre, sombres sur fond clair (capture
-    /// user 2026-07-11 : indigo950 illisible sur bleu nuit).
+    /// user 2026-07-11 : indigo950 illisible sur bleu nuit). Délègue au VM,
+    /// source unique partagée avec `ComposerControlsLayer`.
     var canvasChromeScheme: ColorScheme {
-        CanvasChromeScheme.scheme(
-            background: viewModel.backgroundColor,
-            hasMediaBackground: viewModel.hasBackgroundImage
-        )
+        viewModel.canvasChromeScheme
     }
 
     var isComposerEmpty: Bool {

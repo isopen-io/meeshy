@@ -177,6 +177,21 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         }
     }
 
+    /// Scheme épinglé sur le chrome posé SUR le canvas (header, FABs, bulles,
+    /// history) : suit le fond RÉEL de la slide, jamais le thème de l'app.
+    /// Couvre les DEUX chemins média : legacy `hasBackgroundImage`
+    /// (selectedImage) ET les `mediaObjects` modernes `isBackground == true`
+    /// (chip Background) — ce dernier échappait au calcul et laissait le
+    /// chrome en `.light` (pastel aléatoire) sur un letterbox blur sombre,
+    /// boutons inexploitables (captures user 2026-07-20). Même règle que le
+    /// reader (`hasVisualBackgroundMedia` → `.dark`).
+    var canvasChromeScheme: ColorScheme {
+        CanvasChromeScheme.scheme(
+            background: backgroundColor,
+            hasMediaBackground: hasBackgroundImage || currentEffects.hasVisualBackgroundMedia
+        )
+    }
+
     /// Format `effects.background` : hex SANS « # » ou `gradient:HEX1:HEX2`
     /// (cf. le restore SyncRestore qui re-préfixe le hex nu).
     func applyBackgroundColorToCurrentSlide() {
