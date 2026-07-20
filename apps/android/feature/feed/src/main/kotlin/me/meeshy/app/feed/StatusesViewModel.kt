@@ -10,13 +10,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
+import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusBarCacheRepository
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.StatusRepository
 import me.meeshy.sdk.status.orderedForBar
+import me.meeshy.sdk.status.toStatusEntry
 import javax.inject.Inject
 
 /**
@@ -26,10 +31,14 @@ import javax.inject.Inject
  * deduped), and publishes/clears/reacts optimistically with rollback on failure.
  *
  * The list is the pure [StatusBarListState]; this ViewModel is the orchestration
- * layer (when to fetch, when to roll back, which mode). There is no repository-level
- * status cache yet, so a cold open shows a skeleton then the first page — a follow-up
- * will add an L1 cache to serve the bar instantly (instant-app parity with iOS's
- * `CacheCoordinator.statuses`, tracked in feature-parity §G).
+ * layer (when to fetch, when to roll back, which mode). A warm re-entry (or a switch
+ * back to an already-loaded feed) is served instantly from the in-memory
+ * [StatusBarCache] L1 tier before any network call, revalidating in the background
+ * unless the snapshot is still fresh (instant-app parity with iOS's
+ * `CacheCoordinator.statuses`). A **cold launch** (L1 empty after a process death) is
+ * seeded from the Room-backed [StatusBarCacheRepository] L2 tier before the first
+ * network call, then reconciled — every network page and optimistic mutation is
+ * written through to both tiers so the next cold launch paints instantly.
  */
 data class StatusesUiState(
     val statuses: List<StatusEntry> = emptyList(),
@@ -47,6 +56,9 @@ data class StatusesUiState(
 class StatusesViewModel @Inject constructor(
     private val statusRepository: StatusRepository,
     private val sessionRepository: SessionRepository,
+    private val statusBarCache: StatusBarCache,
+    private val statusBarCacheRepository: StatusBarCacheRepository,
+    private val socialSocket: SocialSocketManager,
 ) : ViewModel() {
 
     private val mode = MutableStateFlow(StatusFeedMode.FRIENDS)
@@ -67,51 +79,167 @@ class StatusesViewModel @Inject constructor(
                 project(list, user, st, m)
             }.collect { projected -> _state.value = projected }
         }
+        subscribeToSocketEvents()
         loadInitial()
     }
 
     /**
-     * First page. Guarded so a re-entrant call (e.g. an `onAppear` re-fire) while a
-     * load is in flight or after the list has already loaded is a no-op — [refresh]
-     * is the way to force a reload.
+     * Fold realtime social-socket deltas into the live bar — parity with iOS
+     * `StatusViewModel.subscribeToSocketEvents`. A `status:created` from a friend is
+     * hoisted to the front (de-duplicated by id, so the viewer's own echo — the gateway
+     * emits no client mutation id for statuses — is inert since [setStatus] already
+     * inserted it); a `status:updated` replaces the entry in place; a `status:deleted`
+     * drops it; a `status:reacted` bumps the reaction count and a `status:unreacted`
+     * decrements it (clamped, spent bucket dropped) — both **skipping the acting user's
+     * own echo** ([react] already applied it optimistically). A payload that does not
+     * map to a mood status (a non-`STATUS` post) is ignored. Deltas fold straight into
+     * [listState]; the next network [fetchFirstPage] reconciles the authoritative page.
      */
-    fun loadInitial() {
-        if (status.value.isLoading || listState.value.hasLoaded) return
-        status.update { it.copy(isLoading = true, error = null) }
-        fetchFirstPage()
+    private fun subscribeToSocketEvents() {
+        viewModelScope.launch {
+            socialSocket.statusCreated.collect { payload ->
+                val entry = payload.status.toStatusEntry() ?: return@collect
+                if (listState.value.statuses.none { it.id == entry.id }) {
+                    listState.update { it.created(entry) }
+                }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.statusUpdated.collect { payload ->
+                val entry = payload.status.toStatusEntry() ?: return@collect
+                listState.update { it.updated(entry) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.statusDeleted.collect { payload ->
+                listState.update { it.removed(payload.statusId) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.statusReacted.collect { payload ->
+                if (payload.userId != currentUserId()) {
+                    listState.update { it.reacted(payload.statusId, payload.emoji) }
+                }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.statusUnreacted.collect { payload ->
+                if (payload.userId != currentUserId()) {
+                    listState.update { it.unreacted(payload.statusId, payload.emoji) }
+                }
+            }
+        }
     }
 
     /**
-     * Switch feed ([StatusFeedMode.FRIENDS] ↔ [StatusFeedMode.DISCOVER]): reset the
-     * accumulation to cold and load the new feed's first page. A no-op when already
-     * on [newMode], so re-selecting the active tab never re-fetches. Mirrors iOS's
-     * per-mode `StatusViewModel` instance — one Android VM drives both bars.
+     * The signed-in user's id, or null for an anonymous session — used to drop the
+     * viewer's own `status:reacted` echo (already applied optimistically by [react]).
+     * Mirrors the iOS `payload.userId != currentUser?.id` guard.
+     */
+    private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
+
+    /**
+     * First page. Guarded so a re-entrant call (e.g. an `onAppear` re-fire) while a
+     * load is in flight or after the list has already loaded is a no-op — [refresh]
+     * is the way to force a reload. Cache-first: a warm [StatusBarCache] snapshot paints
+     * the bar instantly before any network call.
+     */
+    fun loadInitial() {
+        if (status.value.isLoading || listState.value.hasLoaded) return
+        loadFromCacheThenNetwork(mode.value)
+    }
+
+    /**
+     * Switch feed ([StatusFeedMode.FRIENDS] ↔ [StatusFeedMode.DISCOVER]): serve the new
+     * feed's cached bar instantly if present, then revalidate; a cold feed shows the
+     * skeleton and fetches. A no-op when already on [newMode], so re-selecting the active
+     * tab never re-fetches. Mirrors iOS's per-mode `StatusViewModel` instance (each with
+     * its own `statuses_<mode>` cache) — one Android VM drives both bars.
      */
     fun setMode(newMode: StatusFeedMode) {
         if (mode.value == newMode) return
         mode.value = newMode
-        listState.value = StatusBarListState()
-        status.update { it.copy(isLoading = true, isRefreshing = false, error = null) }
-        fetchFirstPage()
+        loadFromCacheThenNetwork(newMode)
     }
 
     /**
-     * Pull-to-refresh: reset the accumulation to a cold list and re-fetch the first
-     * page. Mirrors iOS `refresh()` (invalidate + reload).
+     * Cache-first cold paint for [targetMode] (ARCHITECTURE.md §4). Seeds the bar from
+     * the L1 snapshot so a warm re-entry (or a switch to an already-loaded feed) paints
+     * instantly with no skeleton, then revalidates in the background unless the snapshot
+     * is still [CacheResult.Fresh]. An expired ([CacheResult.Syncing]) snapshot is still
+     * served while it revalidates — the stale-while-revalidate improvement over iOS,
+     * which discards expired data. A cold ([CacheResult.Empty]) feed — the L1 memory tier
+     * is empty after a process death — is seeded from the Room-backed L2 disk cache before
+     * the first network call (cold-launch instant paint) and falls back to the skeleton only
+     * when the disk is cold too. Mirrors iOS `loadStatuses`' switch over the cache result.
      */
-    fun refresh() {
-        listState.value = StatusBarListState()
-        status.update { it.copy(isRefreshing = true, error = null) }
-        fetchFirstPage()
+    private fun loadFromCacheThenNetwork(targetMode: StatusFeedMode) {
+        when (val cached = statusBarCache.load(targetMode)) {
+            is CacheResult.Fresh -> {
+                listState.value = StatusBarListState().seeded(cached.value)
+                status.update { it.copy(isLoading = false, isRefreshing = false, error = null) }
+            }
+            is CacheResult.Stale -> {
+                listState.value = StatusBarListState().seeded(cached.value)
+                status.update { it.copy(isLoading = true, isRefreshing = false, error = null) }
+                fetchFirstPage()
+            }
+            is CacheResult.Syncing -> {
+                listState.value = cached.value
+                    ?.let { StatusBarListState().seeded(it) }
+                    ?: StatusBarListState()
+                status.update { it.copy(isLoading = true, isRefreshing = false, error = null) }
+                fetchFirstPage()
+            }
+            CacheResult.Empty -> {
+                listState.value = StatusBarListState()
+                status.update { it.copy(isLoading = true, isRefreshing = false, error = null) }
+                fetchFirstPage(disk = DiskCachePlan.SEED)
+            }
+        }
     }
 
-    private fun fetchFirstPage() {
+    /**
+     * Pull-to-refresh: invalidate the cached bar, reset the accumulation to a cold list
+     * and re-fetch the first page (bypassing the cache). Mirrors iOS `refresh()`
+     * (invalidate + reload). Both cache tiers are invalidated — the L1 snapshot here and
+     * the L2 disk row inside [fetchFirstPage] — and the fresh page is written back through
+     * both on success.
+     */
+    fun refresh() {
+        statusBarCache.invalidate(mode.value)
+        listState.value = StatusBarListState()
+        status.update { it.copy(isRefreshing = true, error = null) }
+        fetchFirstPage(disk = DiskCachePlan.INVALIDATE)
+    }
+
+    /**
+     * Fetch the first page for the active mode, running [disk] against the L2 tier first:
+     * [DiskCachePlan.SEED] paints the last-persisted bar instantly on a cold launch (only
+     * while the list is still cold and the mode has not switched underneath the read),
+     * [DiskCachePlan.INVALIDATE] drops the stale disk row before a refresh. On success the
+     * authoritative page replaces the list and is written through to both cache tiers.
+     */
+    private fun fetchFirstPage(disk: DiskCachePlan = DiskCachePlan.NONE) {
         val activeMode = mode.value
         viewModelScope.launch {
             try {
+                when (disk) {
+                    DiskCachePlan.SEED -> {
+                        val seed = statusBarCacheRepository.cachedBar(activeMode)
+                        if (seed != null && activeMode == mode.value && !listState.value.hasLoaded) {
+                            listState.value = StatusBarListState().seeded(seed)
+                            statusBarCache.save(activeMode, seed)
+                        }
+                    }
+                    DiskCachePlan.INVALIDATE -> statusBarCacheRepository.invalidate(activeMode)
+                    DiskCachePlan.NONE -> Unit
+                }
                 when (val result = statusRepository.list(mode = activeMode, cursor = null)) {
                     is NetworkResult.Success -> {
-                        listState.update { it.appended(result.data) }
+                        listState.value = StatusBarListState().appended(result.data)
+                        statusBarCache.save(activeMode, result.data.statuses)
+                        statusBarCacheRepository.persistBar(activeMode, result.data.statuses)
                         status.update { it.copy(isLoading = false, isRefreshing = false) }
                     }
                     is NetworkResult.Failure ->
@@ -184,7 +312,11 @@ class StatusesViewModel @Inject constructor(
                     viaUsername = viaUsername,
                 )
                 when (result) {
-                    is NetworkResult.Success -> listState.update { it.created(result.data) }
+                    is NetworkResult.Success -> {
+                        listState.update { it.created(result.data) }
+                        statusBarCache.save(mode.value, listState.value.statuses)
+                        statusBarCacheRepository.persistBar(mode.value, listState.value.statuses)
+                    }
                     is NetworkResult.Failure -> status.update { it.copy(error = result.error.message) }
                 }
             } catch (e: CancellationException) {
@@ -210,6 +342,9 @@ class StatusesViewModel @Inject constructor(
                 if (result is NetworkResult.Failure) {
                     listState.value = snapshot
                     status.update { it.copy(error = result.error.message) }
+                } else {
+                    statusBarCache.save(mode.value, listState.value.statuses)
+                    statusBarCacheRepository.persistBar(mode.value, listState.value.statuses)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -269,6 +404,9 @@ class StatusesViewModel @Inject constructor(
             errorMessage = st.error,
         )
     }
+
+    /** How the first-page fetch should touch the L2 disk tier before/around the network. */
+    private enum class DiskCachePlan { NONE, SEED, INVALIDATE }
 
     private companion object {
         const val LOAD_MORE_THRESHOLD = 3

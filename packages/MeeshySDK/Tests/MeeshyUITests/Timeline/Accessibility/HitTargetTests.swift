@@ -6,7 +6,7 @@ import SwiftUI
 /// Task 61 — Interactive hit targets meet 44x44pt minimum (Apple HIG).
 /// Runtime UIKit hit-test inspection requires an actual view hierarchy.
 /// We skip the runtime check and verify the structural contract in the source:
-/// every Button in TransportBar and TimelineToolbar uses `.frame(width:, height:)`
+/// every Button in TransportBar uses `.frame(width:, height:)`
 /// with values >= 44pt (or 30pt inside a 44pt-minimum container row).
 @MainActor
 final class HitTargetTests: XCTestCase {
