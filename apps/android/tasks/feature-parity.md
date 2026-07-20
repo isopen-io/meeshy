@@ -2209,7 +2209,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       decoded caption is **always forced `isLocal = false`** (a wire `isLocal` claim can never
       make a received caption render as "you"). +30 behavioural tests. Mutation (RED proof):
       neutralising the blank-translation→null drop fails **exactly** the blank-translation test
-      (1 failed, no collateral). **Pending:** the app-side `EdgeTranscription` STT actuator
+      (1 failed, no collateral). **Rolling transcript accumulator core landed** (slice
+      `call-transcript-buffer`): the pure, immutable `core:model` `LiveTranscript` +
+      `CallTranscriptSegment` is the SSOT rolling transcript the overlay renders, a faithful
+      port of iOS `CallTranscriptionService.appendSegment` (`CallTranscriptionService.swift`):
+      `append(segment)` first drops that speaker's in-progress (non-final) line so at most one
+      interim line per speaker is ever live while finalized lines survive, bounds the buffer to
+      `retentionLimit` most-recently-*appended* segments (insertion-order suffix, iOS parity
+      value 50) so a marathon call stays O(1), and `ordered` projects the retained set sorted by
+      wall-clock `capturedAtMs` (a stable sort — ASR start-time is buffer-relative and resets on
+      recognizer rotation). `captionLines(mode)` reuses the `CallCaptionResolver` SSOT for the
+      Prisme projection. +21 behavioural tests. Mutation (RED proof): neutralising the finality
+      gate (dropping `!isFinal` so a new segment evicts the speaker's finalized lines too) fails
+      **exactly** the four finals-must-survive tests, no collateral. **Pending:** the app-side
+      `EdgeTranscription` STT actuator
       (Android `SpeechRecognizer`), the `WebRtcEngine` data-channel seam that feeds
       `DataChannelCodec` and routes `Bye`/`Caption`, and the accent-coherent overlay UI +
       captions button that consume these cores.
