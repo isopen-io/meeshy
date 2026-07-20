@@ -17,6 +17,17 @@ struct BrandSignature: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
+    /// Localized VoiceOver label for the whole signature. Spells out "version"/"build"
+    /// and the credit with the WORD "love" (not the ❤️ emoji, which VoiceOver would
+    /// read as "red heart") so the reading stays natural in every language.
+    private var accessibilityLabelText: Text {
+        Text(String(
+            localized: "splash.signature.a11yLabel",
+            defaultValue: "Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO.",
+            bundle: .main
+        ))
+    }
+
     var body: some View {
         VStack(spacing: 6) {
             Text("Meeshy \(appVersion) · \(buildNumber)")
@@ -40,6 +51,6 @@ struct BrandSignature: View {
                 .accessibilityHidden(true)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO."))
+        .accessibilityLabel(accessibilityLabelText)
     }
 }
