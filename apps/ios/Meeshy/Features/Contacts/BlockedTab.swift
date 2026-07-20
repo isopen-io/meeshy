@@ -21,6 +21,8 @@ struct BlockedTab: View {
                     ProgressView().tint(MeeshyColors.indigo500)
                     Spacer()
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "blocked.users.loading.a11y", defaultValue: "Chargement en cours", bundle: .main))
             } else if viewModel.blockedUsers.isEmpty {
                 emptyState
             } else {
@@ -71,6 +73,7 @@ struct BlockedTab: View {
                 accentColor: color,
                 avatarURL: user.avatar
             )
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(user.name)
@@ -82,6 +85,7 @@ struct BlockedTab: View {
                     .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -101,7 +105,6 @@ struct BlockedTab: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
         .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.blockedUsers.count)
     }
 
