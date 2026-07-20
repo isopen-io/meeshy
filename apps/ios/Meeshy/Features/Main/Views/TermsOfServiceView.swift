@@ -11,7 +11,7 @@ struct TermsOfServiceView: View {
 
     @State private var selectedLanguage = "fr"
 
-    private let accentColor = "45B7D1"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     private let sections: [String: [(title: String, content: String)]] = [
         "fr": [
