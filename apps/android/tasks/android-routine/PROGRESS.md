@@ -1,5 +1,45 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **P2P data-channel control protocol core** landed (slice `call-datachannel-protocol`,
+> feature-parity §H → advances "Live in-call transcription overlay" (`[~]`) by delivering its named-pending
+> **transcript transport**, and covers the in-band call-end shortcut). Parity source: iOS
+> `DataChannelControlMessage` + `DataChannelInbound.decode` + the `"transcription"`-labelled channel
+> (`apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift` / `P2PWebRTCClient.swift` /
+> `CallManager.swift`). One pure `:core:model` core, fully TDD-covered. **`DataChannelCodec` + `DataChannelInbound`**
+> is the SSOT codec for the in-band WebRTC data channel: `decode(bytes|string) → DataChannelInbound`
+> (`Bye(reason)` | `Caption(segment)` | `Ignored`) is total and side-effect-free — a `bye` control envelope
+> (`{"type":"bye","reason?":...}`) is the WhatsApp-style instant hangup shortcut (peer cuts without waiting for
+> the authoritative server `call:ended` fanout), a `ping` keep-alive is inert on receive (matches iOS `.ignored`),
+> and **every** malformed / unknown-type / empty / non-object / non-string-type frame degrades to `Ignored`
+> rather than throwing or dropping the transport. A non-string `reason` is dropped to `null` (never coerced).
+> **SOTA extension over iOS:** the same channel doubles as the captions transport — a `caption` frame carries a
+> `CallCaptionSegment` (reusing the already-landed captions SSOT) straight to the remote overlay with **no server
+> round-trip**, closing the captions core's explicitly-listed pending "socket transcript transport" over the more
+> direct P2P path. A decoded caption is **always forced `isLocal = false`** (a frame arriving on the channel is by
+> definition the peer's speech — a wire `isLocal:true` claim can never make a received caption render as "you"),
+> and a blank required field (`speakerId`/`speakerName`/`text`) → `Ignored`, a blank optional translation → dropped
+> to `null` (mirrors `CallCaptionResolver`'s blank handling). `encodeBye`/`encodePing`/`encodeCaption` produce the
+> exact wire frames (reason/blank-translation omitted via `explicitNulls=false`; the viewer-relative `isLocal`
+> intentionally never transmitted). **+30 behavioural tests** — `DataChannelProtocolTest` (bye with/without/
+> non-string reason, unknown-keys-alongside-bye, ping-inert, unknown-type, no-type, non-string-type, malformed,
+> empty, whitespace, array, bare-string, caption happy/with-translation/forced-remote/missing-text/blank-text/
+> missing-speakerId/blank-speakerName/blank-translation-dropped, encode-bye-omit-reason/with-reason/ping-bare,
+> round-trips bye/reasonless-bye/ping→Ignored/caption-flips-isLocal-preserves-translation/caption-no-translation,
+> byte-array-overload). **Mutation check (RED proof):** neutralising the blank-translation→null drop
+> (`nonBlankString` → `stringOrNull`) fails **exactly** `a caption frame with a blank translation drops the
+> translation but keeps the line` (30 tests run, 1 failed, no collateral) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through the proxy; `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (the new suite 30/30) + full `:app:assembleDebug`
+> → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 1 production file + 1 test + tracking;
+> **SDK purity** — a pure codec object + a sealed result in `:core:model`, zero framework/`org.webrtc` deps; the
+> `WebRtcEngine` data-channel actuator + overlay UI stay app-side, pending; **SSOT** — one codec, one inbound
+> classification, reuses `CallCaptionSegment` rather than a parallel type; **Prisme** — the caption arm carries
+> the translation without ever collapsing to a first-translation fallback; no coverage floor lowered, no test
+> weakened). **Next slice:** the app-side data-channel seam — a `:feature:calls`/`:sdk-core` `WebRtcEngine`
+> `RTCDataChannel` open/observe/send that feeds inbound bytes to `DataChannelCodec.decode` and dispatches
+> `Bye` → `CallStateMachine` end + `Caption` → a `CallViewModel` captions state driving `CaptionsMode`/
+> `CallCaptionResolver` + the accent-coherent overlay UI; OR the tracked Kover 90% coverage-gate infra follow-up.
+
 > On 2026-07-20 the **in-call video-filter config + preset + auto-degrade cores** landed (slice
 > `call-video-filter-config`, feature-parity §H → "In-call video filters (colour presets, low-light boost,
 > background blur, skin smoothing)" — an unchecked §H box; the build-order Calls area's next high-value pure

@@ -188,11 +188,21 @@ export const attachmentTranslationSchema = z.object({
  * Map of target language code → AttachmentTranslation.
  *
  * The outer key is the BCP-47 language code; the inner value is a typed
- * translation payload. Cross-field validation of
- * `outerKey === inner.<lang>` is enforced by `parseAttachmentTranslationsMap`
- * below — a mismatch breaks the Prisme Linguistique resolver since the
- * client looks up `translations[user.preferredLanguage]` and would get a
- * payload meant for a different language.
+ * translation payload. The key is AUTHORITATIVE and is NOT cross-checked
+ * against the content: `AttachmentTranslation` carries no top-level language
+ * field (the target language is implicit in the map key), so an
+ * `outerKey === inner.<lang>` check is structurally impossible at this layer —
+ * there is nothing to compare against. `parseAttachmentTranslationsMap` below
+ * validates only the key SHAPE (`languageCodeSchema`) and each inner payload;
+ * it does not — and cannot — detect a key/content-language mismatch.
+ *
+ * Consequence for the Prisme Linguistique: the client resolves
+ * `translations[user.preferredLanguage]`, so a payload persisted under the
+ * wrong key would surface as the wrong language. Keying each entry under the
+ * language it actually holds is therefore the WRITER's responsibility, upstream
+ * of this boundary — not a guarantee this schema provides. See the matching
+ * note on `parseAttachmentTranslationsMap` and the contract-lock test in
+ * `__tests__/attachment-validators.test.ts`.
  */
 export const attachmentTranslationsMapSchema = z.record(
   languageCodeSchema,

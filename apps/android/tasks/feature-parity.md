@@ -2172,10 +2172,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       blank-text segment renders no line; `resolveAll` drops blanks and keeps renderable
       lines in order. +24 behavioural tests. Mutation (RED proof): neutralising the
       blank-translation→absent fallback fails **exactly** the blank-translation test (1
-      failed, no collateral). **Pending:** the app-side `EdgeTranscription` STT actuator
-      (Android `SpeechRecognizer`), the socket transcript transport, and the accent-coherent
-      overlay UI + captions button that consume this core.
-- [ ] In-call translation data channel (dual-stream clean audio)
+      failed, no collateral). **P2P transcript transport core landed** (slice
+      `call-datachannel-protocol`): the pure `core:model` `DataChannelCodec` + `DataChannelInbound`
+      is the SSOT codec for the in-band WebRTC data channel (iOS labels it `"transcription"`),
+      classifying an inbound frame into `Bye(reason)` / `Caption(segment)` / `Ignored` and
+      encoding the outbound `bye` / `ping` / `caption` frames. Faithful port of iOS
+      `DataChannelControlMessage` / `DataChannelInbound.decode` (`WebRTCTypes.swift`): a `bye`
+      is the WhatsApp-style instant hangup shortcut, a `ping` is inert on receive, and any
+      malformed/unknown/empty frame degrades to `Ignored` (never throws). **SOTA extension:** the
+      same channel doubles as the captions transport — a `caption` frame carries a
+      `CallCaptionSegment` straight to the remote overlay with no server round-trip, and a
+      decoded caption is **always forced `isLocal = false`** (a wire `isLocal` claim can never
+      make a received caption render as "you"). +30 behavioural tests. Mutation (RED proof):
+      neutralising the blank-translation→null drop fails **exactly** the blank-translation test
+      (1 failed, no collateral). **Pending:** the app-side `EdgeTranscription` STT actuator
+      (Android `SpeechRecognizer`), the `WebRtcEngine` data-channel seam that feeds
+      `DataChannelCodec` and routes `Bye`/`Caption`, and the accent-coherent overlay UI +
+      captions button that consume these cores.
+- [ ] In-call translation data channel (dual-stream clean audio) — distinct from the caption
+      transport above; this is the separate *clean-audio* stream for far-end translation, still
+      pending.
 - [~] In-call video filters (colour presets, low-light boost, background blur, skin smoothing) —
       **pure config + preset + auto-degrade cores landed** (slice `call-video-filter-config`): the
       `core:model` `VideoFilterConfig` (colorimetry temperature/tint/brightness/contrast/saturation/
