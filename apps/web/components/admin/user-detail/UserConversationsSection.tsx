@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MessageSquare, Users, Clock, Loader2, ShieldCheck, X } from 'lucide-react';
+import { MessageSquare, Users, Clock, Loader2, Paperclip, ShieldCheck, X } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
@@ -56,14 +56,49 @@ interface PaginatedParticipants {
   pagination?: { total: number; offset: number; limit: number; hasMore: boolean };
 }
 
+type ParticipantLike = Pick<ConversationParticipant, 'displayName' | 'nickname' | 'avatar' | 'user'>;
+
+interface AdminConversationMessage {
+  id: string;
+  content: string;
+  originalLanguage: string;
+  messageType: string;
+  messageSource: string;
+  isEdited: boolean;
+  editedAt: string | null;
+  deletedAt: string | null;
+  replyToId: string | null;
+  createdAt: string;
+  sender: ParticipantLike | null;
+  attachmentCount: number;
+}
+
+interface PaginatedMessages {
+  success: boolean;
+  data: AdminConversationMessage[];
+  pagination?: { total: number; offset: number; limit: number; hasMore: boolean };
+}
+
 const PAGE_SIZE = 20;
 const MEMBERS_PAGE_SIZE = 30;
+const MESSAGES_PAGE_SIZE = 30;
 
 function formatDate(date: string | null, locale: string) {
   if (!date) return '—';
   try {
     return new Date(date).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' });
   } /* istanbul ignore next -- toLocaleDateString never throws in practice */ catch {
+    return '—';
+  }
+}
+
+function formatDateTime(date: string | null, locale: string) {
+  if (!date) return '—';
+  try {
+    return new Date(date).toLocaleString(locale, {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+  } /* istanbul ignore next -- toLocaleString never throws in practice */ catch {
     return '—';
   }
 }
@@ -82,11 +117,11 @@ const CONV_ROLE_KEYS: Record<string, string> = {
   member: 'usersDetail.convRoleMember',
 };
 
-function participantName(p: ConversationParticipant): string {
+function participantName(p: ParticipantLike): string {
   return p.user?.displayName || p.nickname || p.displayName || p.user?.username || '?';
 }
 
-function ParticipantAvatar({ p, size = 28 }: { p: ConversationParticipant; size?: number }) {
+function ParticipantAvatar({ p, size = 28 }: { p: ParticipantLike; size?: number }) {
   const avatar = p.user?.avatar || p.avatar;
   const name = participantName(p);
   return (
@@ -196,6 +231,133 @@ function GroupMembersModal({ conversation, onClose }: { conversation: AdminUserC
   );
 }
 
+function ConversationMessagesModal({ conversation, onClose }: { conversation: AdminUserConversation; onClose: () => void }) {
+  const { t } = useI18n('admin');
+  const locale = useCurrentInterfaceLanguage();
+  const [messages, setMessages] = useState<AdminConversationMessage[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const pagingRef = useRef({ offset: 0, hasMore: false, busy: true });
+
+  const load = async (nextOffset: number, replace: boolean) => {
+    pagingRef.current.busy = true;
+    if (replace) setLoading(true); else setLoadingMore(true);
+    try {
+      const resp = await apiService.get<PaginatedMessages>(
+        `/admin/conversations/${conversation.id}/messages`,
+        { offset: nextOffset, limit: MESSAGES_PAGE_SIZE }
+      );
+      const page = resp.data?.data ?? [];
+      const pagination = resp.data?.pagination;
+      setMessages(prev => (replace ? page : [...prev, ...page]));
+      setTotal(pagination?.total ?? page.length);
+      pagingRef.current = { offset: nextOffset + page.length, hasMore: pagination?.hasMore ?? false, busy: false };
+    } catch (err) {
+      console.error('Error fetching conversation messages:', err);
+      pagingRef.current.busy = false;
+    } finally {
+      if (replace) setLoading(false); else setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    load(0, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation.id]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const { offset: nextOffset, hasMore, busy } = pagingRef.current;
+        if (entries.some(e => e.isIntersecting) && hasMore && !busy) {
+          load(nextOffset, false);
+        }
+      },
+      { root: scrollRef.current, rootMargin: '120px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation.id]);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <Card
+        className="w-full max-w-2xl max-h-[85vh] flex flex-col dark:bg-gray-900 dark:border-gray-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="flex items-center gap-2 dark:text-gray-100 text-base min-w-0">
+            <MessageSquare className="h-5 w-5 flex-shrink-0" />
+            <span className="truncate">{conversation.title || conversation.identifier || t('usersDetail.messagesModalTitle')}</span>
+            <Badge variant="secondary" className="text-xs flex-shrink-0">{total}</Badge>
+          </CardTitle>
+          <button onClick={onClose} aria-label="Close" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0">
+            <X className="h-5 w-5" />
+          </button>
+        </CardHeader>
+        <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
+          <div ref={scrollRef} className="h-full max-h-[70vh] overflow-y-auto px-4 pb-4 space-y-2">
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
+              </div>
+            ) : messages.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 py-8 text-center">{t('usersDetail.noMessages')}</p>
+            ) : (
+              messages.map(msg => (
+                <div key={msg.id} className="flex items-start gap-2 p-2 border dark:border-gray-700 rounded-md">
+                  {msg.sender && <ParticipantAvatar p={msg.sender} size={24} />}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {msg.sender && (
+                        <span className="text-xs font-medium dark:text-gray-100">{participantName(msg.sender)}</span>
+                      )}
+                      {msg.sender?.user?.username && (
+                        <span className="text-xs text-gray-500 dark:text-gray-400">@{msg.sender.user.username}</span>
+                      )}
+                      <Badge variant="outline" className="text-[10px] px-1">{msg.originalLanguage}</Badge>
+                      {msg.isEdited && (
+                        <Badge variant="outline" className="text-[10px] px-1">{t('usersDetail.editedBadge')}</Badge>
+                      )}
+                      {msg.deletedAt && (
+                        <Badge variant="destructive" className="text-[10px] px-1">{t('usersDetail.deletedBadge')}</Badge>
+                      )}
+                    </div>
+                    <p className={`text-sm break-words whitespace-pre-wrap ${msg.deletedAt ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                      {msg.content}
+                    </p>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-400 dark:text-gray-500">
+                      <span>{formatDateTime(msg.createdAt, locale)}</span>
+                      {msg.attachmentCount > 0 && (
+                        <span className="flex items-center gap-0.5">
+                          <Paperclip className="h-3 w-3" />
+                          <span>{msg.attachmentCount}</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+            {loadingMore && (
+              <div className="flex items-center justify-center py-3">
+                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              </div>
+            )}
+            <div ref={sentinelRef} aria-hidden="true" className="h-px" />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function UserConversationsSection({ userId }: { userId: string }) {
   const { t } = useI18n('admin');
   const locale = useCurrentInterfaceLanguage();
@@ -207,6 +369,7 @@ export function UserConversationsSection({ userId }: { userId: string }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [modalConversation, setModalConversation] = useState<AdminUserConversation | null>(null);
+  const [messagesConversation, setMessagesConversation] = useState<AdminUserConversation | null>(null);
 
   const load = async (nextOffset: number, replace: boolean) => {
     if (replace) setLoading(true); else setLoadingMore(true);
@@ -291,27 +454,36 @@ export function UserConversationsSection({ userId }: { userId: string }) {
                     </span>
                   </div>
 
-                  {/* Direct → list the other participants; group/other → members modal */}
-                  {isDirect ? (
-                    others.length > 0 && (
-                      <div className="flex flex-wrap items-center gap-2">
-                        {others.map(p => (
-                          <div key={p.id} className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 rounded-full pl-1 pr-2 py-0.5">
-                            <ParticipantAvatar p={p} size={20} />
-                            <span className="text-xs dark:text-gray-200 truncate max-w-[140px]">{participantName(p)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  ) : (
+                  {/* Direct → list the other participants; group/other → members modal.
+                      Every conversation exposes the messages modal. */}
+                  {isDirect && others.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {others.map(p => (
+                        <div key={p.id} className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 rounded-full pl-1 pr-2 py-0.5">
+                          <ParticipantAvatar p={p} size={20} />
+                          <span className="text-xs dark:text-gray-200 truncate max-w-[140px]">{participantName(p)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {!isDirect && (
+                      <button
+                        onClick={() => setModalConversation(conv)}
+                        className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                      >
+                        <Users className="h-3 w-3" />
+                        <span>{t('usersDetail.viewMembers')} ({conv.memberCount})</span>
+                      </button>
+                    )}
                     <button
-                      onClick={() => setModalConversation(conv)}
+                      onClick={() => setMessagesConversation(conv)}
                       className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                     >
-                      <Users className="h-3 w-3" />
-                      <span>{t('usersDetail.viewMembers')} ({conv.memberCount})</span>
+                      <MessageSquare className="h-3 w-3" />
+                      <span>{t('usersDetail.viewMessages')}</span>
                     </button>
-                  )}
+                  </div>
 
                   <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400">
                     <div className="flex items-center gap-1">
@@ -351,6 +523,10 @@ export function UserConversationsSection({ userId }: { userId: string }) {
 
       {modalConversation && (
         <GroupMembersModal conversation={modalConversation} onClose={() => setModalConversation(null)} />
+      )}
+
+      {messagesConversation && (
+        <ConversationMessagesModal conversation={messagesConversation} onClose={() => setMessagesConversation(null)} />
       )}
     </Card>
   );

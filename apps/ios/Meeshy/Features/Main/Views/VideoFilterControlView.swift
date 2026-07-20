@@ -110,15 +110,18 @@ struct VideoFilterControlView: View {
                 .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(.secondary)
                 .frame(width: 80, alignment: .leading)
+                .accessibilityHidden(true)
 
             Slider(value: value, in: range)
                 .tint(MeeshyColors.indigo500)
                 .accessibilityLabel(label)
+                .accessibilityValue(formatValue(value.wrappedValue, neutral: neutral))
 
             Text(formatValue(value.wrappedValue, neutral: neutral))
                 .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                 .foregroundColor(.secondary)
                 .frame(width: 36, alignment: .trailing)
+                .accessibilityHidden(true)
         }
     }
 

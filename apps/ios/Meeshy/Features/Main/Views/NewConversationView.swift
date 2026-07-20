@@ -398,7 +398,22 @@ struct NewConversationView: View {
             )
         }
         .disabled(isBlocked)
+        .accessibilityLabel(userRowAccessibilityLabel(for: user, isBlocked: isBlocked))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // VoiceOver otherwise hears only "displayName, @username": the online dot
+    // (green Circle) and the "Bloqué" badge convey status by colour/shape alone
+    // (WCAG 1.4.1). Compose the status into the row label, mirroring the shipped
+    // ContactsListTab idiom and reusing its lowercase status key.
+    private func userRowAccessibilityLabel(for user: SearchedUser, isBlocked: Bool) -> String {
+        var parts = [user.displayName ?? user.username, "@\(user.username)"]
+        if isBlocked {
+            parts.append(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqu\u{00E9}", bundle: .main))
+        } else if user.isOnline == true {
+            parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
     }
 
     // Networking is delegated to `NewConversationViewModel`. The view no

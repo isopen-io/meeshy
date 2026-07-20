@@ -88,7 +88,11 @@ export const CommonSchemas = {
   // Le corps `{2}` seul rejetait tout code 639-3 sur sendMessage/editMessage
   // alors que systemLanguage/regionalLanguage (refine isSupportedLanguage) les
   // acceptent — incohérence qui bloquait l'envoi dans une langue supportée.
-  language: z.string().min(2).max(5).regex(/^[a-z]{2,3}(-[A-Z]{2})?$/, 'Code langue invalide'),
+  // La borne `.max(6)` reflète la longueur MAXIMALE de la regex (`[a-z]{3}` + `-`
+  // + `[A-Z]{2}` = 6, ex. `bas-CM`) : un `.max(5)` contredisait la regex et
+  // rejetait la forme 639-3 + région, laissant ouverte la même régression pour
+  // les codes 3-lettres régionalisés. La regex reste l'unique gardien de forme.
+  language: z.string().min(2).max(6).regex(/^[a-z]{2,3}(-[A-Z]{2})?$/, 'Code langue invalide'),
   
   // Type de conversation
   conversationType: z.enum(['direct', 'group', 'public', 'global', 'broadcast']),

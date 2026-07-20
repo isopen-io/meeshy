@@ -419,6 +419,9 @@ struct ConversationDashboardView: View {
                         )
                 }
                 .accessibilityLabel(period.accessibilityLabel)
+                // Selection is otherwise signalled by fill + weight only — the
+                // `.isSelected` trait lets VoiceOver announce the active period
+                // (mirror of CallsTab.chip / GlobalSearchView.tabButton doctrine).
                 .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
