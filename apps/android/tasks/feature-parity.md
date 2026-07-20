@@ -2132,7 +2132,31 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       is live and the user is authenticated, then marks the route consumed. +14 behavioural tests (8
       router, 6 route). **Pending:** a full `ConnectionService`/Telecom integration + ringtone, then the
       WebRTC media transport.
-- [ ] Call reconnection on network change (ICE restart)
+- [~] Call reconnection on network change (ICE restart) — **pure reliability policy landed**
+      (slice `call-reliability-policy`): the `core:model` `CallReliabilityPolicy` is the SSOT for
+      every reconnection *decision*, a total side-effect-free port of iOS `CallReliabilityPolicy`
+      (`WebRTCTypes.swift`). `signalingDegraded(callEstablished, socketConnected)` drives the
+      discreet "signaling deferred" hint without ever tearing down the DTLS-SRTP media path.
+      `evaluateHalfOpen(inbound, outbound, secondsInConnected)` self-heals a silent-audio half-open
+      path with exactly one ICE restart **only** once past a 4 s grace AND while we are still sending
+      (`outbound > 0`) — a mute/mic-off (`outbound == 0`) is a business condition, not a transport
+      fault, so it keeps waiting; the inbound gate is `>= 5` packets. `evaluateConnecting` bounds the
+      `.connecting` phase (one ICE restart at 12 s, fail at 25 s, fail taking priority);
+      `evaluateReconnecting` gives each `.reconnecting` attempt a 10 s watchdog budget so a silently
+      stalled restart escalates instead of hanging forever. `evaluateReconnectTrigger` arbitrates the
+      several independent reconnection sources (network-path edges, PC-state callbacks, watchdogs,
+      restart-failure) into StartCycle/Coalesce/Escalate so a single blip doesn't burn the whole
+      attempt budget on redundant edges. `reconnectingAllowed(state)` enforces the FSM invariant
+      (only Connected/Reconnecting/Connecting), `shouldRearmRestartOnCredentialRefresh(state)`
+      re-arms the in-flight restart the moment fresh TURN creds land mid-reconnect (inert elsewhere),
+      and `shouldResetCallClock(wasReconnecting, hasExistingStartDate)` keeps the duration timer from
+      freezing at 00:00 on a first-ever connect that transited `.reconnecting`. Reliability budget
+      constants added to `CallQualityThresholds` (RTP gate 5, grace 4 s, connect 12/25 s, reconnect
+      10 s). +28 behavioural tests (every arm + boundary + inert arm; three default-param tests pin
+      the constants against iOS). Mutation (RED proof): neutralising the "still sending" gate
+      (`outbound > 0` → `true`) fails **exactly** the mic-off test (28 tests, 1 failed, no
+      collateral). **Pending:** the app-side actuator — the `WebRtcEngine` PC-state/`NetworkCallback`
+      seam + watchdog timers that read these verdicts and perform the ICE restart / teardown.
 - [~] Call states: ringing/connecting/connected/ended; PiP / floating call pill —
       **pure call-lifecycle FSM landed** (`core:model` `me.meeshy.sdk.model.call`):
       `CallState` (Idle/Ringing(isOutgoing)/Offering/Connecting/Connected/Reconnecting(attempt)/

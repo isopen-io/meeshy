@@ -81,6 +81,39 @@ object CallQualityThresholds {
      * `QualityThresholds.criticalVideoFloorHeight`.
      */
     const val CRITICAL_VIDEO_FLOOR_HEIGHT: Int = 360
+
+    /**
+     * Inbound RTP packets that must arrive before a freshly-`.connected` call is
+     * declared genuinely two-way (not half-open). Below this, [CallReliabilityPolicy.evaluateHalfOpen]
+     * withholds the "healthy" verdict. Parity with iOS `QualityThresholds.rtpGateRequiredPackets`.
+     */
+    const val RTP_GATE_REQUIRED_PACKETS: Int = 5
+
+    /**
+     * Grace window (seconds) after `.connected` during which an absent inbound
+     * stream is legitimate (the first second post-ICE/DTLS is packet-free), so no
+     * half-open heal fires yet. Parity with iOS `QualityThresholds.halfOpenHealGraceSeconds`.
+     */
+    const val HALF_OPEN_HEAL_GRACE_SECONDS: Double = 4.0
+
+    /**
+     * Seconds in `.connecting` after which [CallReliabilityPolicy.evaluateConnecting]
+     * triggers one ICE restart. Parity with iOS `QualityThresholds.connectingRestartSeconds`.
+     */
+    const val CONNECTING_RESTART_SECONDS: Double = 12.0
+
+    /**
+     * Total seconds in `.connecting` after which the call fails rather than spin
+     * forever. Parity with iOS `QualityThresholds.connectingFailSeconds`.
+     */
+    const val CONNECTING_FAIL_SECONDS: Double = 25.0
+
+    /**
+     * Per-attempt `.reconnecting` budget (seconds): backoff + ICE re-gather on a
+     * weak link without stranding the user. Bounds each reconnection attempt's
+     * watchdog window. Parity with iOS `QualityThresholds.reconnectAttemptBudgetSeconds`.
+     */
+    const val RECONNECT_ATTEMPT_BUDGET_SECONDS: Double = 10.0
 }
 
 /**
