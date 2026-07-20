@@ -210,6 +210,10 @@ struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
         container.backgroundColor = .clear
 
         let host = UIHostingController(rootView: content())
+        // L'environnement SwiftUI ne traverse pas un UIHostingController : le
+        // `\.colorScheme` épinglé par le parent (chrome canvas) serait perdu et
+        // le contenu suivrait le thème de l'app. On forwarde via les traits.
+        host.overrideUserInterfaceStyle = context.environment.colorScheme == .dark ? .dark : .light
         host.view.translatesAutoresizingMaskIntoConstraints = false
         host.view.backgroundColor = .clear
         container.addSubview(host.view)
@@ -232,6 +236,8 @@ struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.onSwipeUp = onSwipeUp
         context.coordinator.onSwipeDown = onSwipeDown
+        context.coordinator.hostingController?.overrideUserInterfaceStyle =
+            context.environment.colorScheme == .dark ? .dark : .light
         (context.coordinator.hostingController as? UIHostingController<Content>)?.rootView = content()
     }
 

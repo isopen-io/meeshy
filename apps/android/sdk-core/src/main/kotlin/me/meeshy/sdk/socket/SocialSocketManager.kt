@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.SocketStatusCreatedData
 import me.meeshy.sdk.model.SocketStatusUpdatedData
 import me.meeshy.sdk.model.SocketStatusDeletedData
 import me.meeshy.sdk.model.SocketStatusReactedData
+import me.meeshy.sdk.model.SocketStatusUnreactedData
 import org.json.JSONObject
 import timber.log.Timber
 import javax.inject.Inject
@@ -53,6 +54,7 @@ class SocialSocketManager @Inject constructor(
     private val _statusUpdated = buf<SocketStatusUpdatedData>()
     private val _statusDeleted = buf<SocketStatusDeletedData>()
     private val _statusReacted = buf<SocketStatusReactedData>()
+    private val _statusUnreacted = buf<SocketStatusUnreactedData>()
 
     val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.asSharedFlow()
     val postLiked: SharedFlow<SocketPostLikedData> = _postLiked.asSharedFlow()
@@ -72,6 +74,7 @@ class SocialSocketManager @Inject constructor(
     val statusUpdated: SharedFlow<SocketStatusUpdatedData> = _statusUpdated.asSharedFlow()
     val statusDeleted: SharedFlow<SocketStatusDeletedData> = _statusDeleted.asSharedFlow()
     val statusReacted: SharedFlow<SocketStatusReactedData> = _statusReacted.asSharedFlow()
+    val statusUnreacted: SharedFlow<SocketStatusUnreactedData> = _statusUnreacted.asSharedFlow()
 
     fun attach() {
         listen("post:created", _postCreated)
@@ -92,6 +95,7 @@ class SocialSocketManager @Inject constructor(
         listen("status:updated", _statusUpdated)
         listen("status:deleted", _statusDeleted)
         listen("status:reacted", _statusReacted)
+        listen("status:unreacted", _statusUnreacted)
     }
 
     private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {

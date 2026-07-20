@@ -213,6 +213,21 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `status unreacted payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.statusUnreacted.test {
+            handlers.getValue("status:unreacted").invoke(
+                arrayOf(JSONObject("""{"statusId":"st9","userId":"u7","emoji":"😂"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.statusId).isEqualTo("st9")
+            assertThat(event.userId).isEqualTo("u7")
+            assertThat(event.emoji).isEqualTo("😂")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `comment reaction-removed payload is decoded and emitted`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.commentReactionRemoved.test {

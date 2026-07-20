@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketStatusCreatedData
 import me.meeshy.sdk.model.SocketStatusDeletedData
 import me.meeshy.sdk.model.SocketStatusReactedData
+import me.meeshy.sdk.model.SocketStatusUnreactedData
 import me.meeshy.sdk.model.SocketStatusUpdatedData
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.ApiError
@@ -64,6 +65,7 @@ class StatusesViewModelTest {
     private val statusUpdatedFlow = MutableSharedFlow<SocketStatusUpdatedData>(extraBufferCapacity = 8)
     private val statusDeletedFlow = MutableSharedFlow<SocketStatusDeletedData>(extraBufferCapacity = 8)
     private val statusReactedFlow = MutableSharedFlow<SocketStatusReactedData>(extraBufferCapacity = 8)
+    private val statusUnreactedFlow = MutableSharedFlow<SocketStatusUnreactedData>(extraBufferCapacity = 8)
 
     private class FakeClock(var now: Long = 0L) : CacheClock {
         override fun nowMillis(): Long = now
@@ -95,6 +97,7 @@ class StatusesViewModelTest {
         every { socialSocket.statusUpdated } returns statusUpdatedFlow
         every { socialSocket.statusDeleted } returns statusDeletedFlow
         every { socialSocket.statusReacted } returns statusReactedFlow
+        every { socialSocket.statusUnreacted } returns statusUnreactedFlow
         return StatusesViewModel(repository, session, cache, diskCache, socialSocket)
     }
 
@@ -736,5 +739,32 @@ class StatusesViewModelTest {
         statusReactedFlow.emit(SocketStatusReactedData(statusId = "a", userId = "me-id", emoji = "❤️"))
 
         assertThat(vm.state.value.statuses.first { it.id == "a" }.reactionSummary).isNull()
+    }
+
+    @Test
+    fun `a status unreacted socket event from another user decrements the reaction count`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), hasMore = false)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        statusReactedFlow.emit(SocketStatusReactedData(statusId = "a", userId = "u1", emoji = "❤️"))
+        statusReactedFlow.emit(SocketStatusReactedData(statusId = "a", userId = "u2", emoji = "❤️"))
+        statusUnreactedFlow.emit(SocketStatusUnreactedData(statusId = "a", userId = "u1", emoji = "❤️"))
+
+        assertThat(vm.state.value.statuses.first { it.id == "a" }.reactionSummary)
+            .containsExactly("❤️", 1)
+    }
+
+    @Test
+    fun `a status unreacted echo of the viewer's own unreaction is ignored`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a", userId = "me-id"), hasMore = false)
+
+        val vm = viewModel(currentUser = user("me-id"))
+        statusReactedFlow.emit(SocketStatusReactedData(statusId = "a", userId = "someone-else", emoji = "❤️"))
+        statusUnreactedFlow.emit(SocketStatusUnreactedData(statusId = "a", userId = "me-id", emoji = "❤️"))
+
+        assertThat(vm.state.value.statuses.first { it.id == "a" }.reactionSummary)
+            .containsExactly("❤️", 1)
     }
 }
