@@ -8,7 +8,7 @@ import XCTest
 /// The flow under test:
 ///   1. User selects a keyframe via `selection.selectedClipId`.
 ///   2. `KeyframeInspector` overlay surfaces snapshot data via
-///      `ProTimelineView.resolveKeyframeSnapshot(viewModel:)`.
+///      `TimelineInspectorHost.resolveKeyframeSnapshot(viewModel:)`.
 ///   3. User edits a transform/easing axis -> inspector calls
 ///      `TimelineViewModel.moveKeyframe(clipId:keyframeId:position:scale:
 ///      opacity:easing:)`.

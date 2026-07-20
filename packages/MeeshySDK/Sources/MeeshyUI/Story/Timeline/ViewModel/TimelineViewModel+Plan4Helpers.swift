@@ -245,6 +245,27 @@ extension TimelineViewModel {
         applySetClipProperty(cmd)
     }
 
+    /// Renomme un clip (nom persisté sur le modèle, undoable). `nil`/vide
+    /// remet le nom à `nil` (retour au tag de type par défaut).
+    public func setClipName(id: String, name: String?) {
+        guard let kind = clipKind(forId: id) else { return }
+        let normalized = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let newName = (normalized?.isEmpty ?? true) ? nil : normalized
+        let oldName: String?
+        switch kind {
+        case .video, .image:
+            oldName = project.mediaObjects.first(where: { $0.id == id })?.name
+        case .audio:
+            oldName = project.audioPlayerObjects.first(where: { $0.id == id })?.name
+        case .text:
+            oldName = project.textObjects.first(where: { $0.id == id })?.name
+        }
+        guard oldName != newName else { return }
+        let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
+                                         property: .name(old: oldName, new: newName))
+        applySetClipProperty(cmd)
+    }
+
     private func applySetClipProperty(_ cmd: SetClipPropertyCommand) {
         do {
             try cmd.apply(to: &project)

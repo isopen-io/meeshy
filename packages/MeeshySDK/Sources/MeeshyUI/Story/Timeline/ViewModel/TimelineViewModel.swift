@@ -75,7 +75,6 @@ public final class TimelineViewModel: ObservableObject {
     @Published public private(set) var canRedo: Bool = false
     @Published public internal(set) var isSnapEnabled: Bool = true
     @Published public var selection: ClipSelectionState = .init()
-    @Published public var mode: TimelineMode = .quick
     @Published public var zoomScale: CGFloat = 1.0
     @Published public var errorMessage: String?
     /// One-shot signal that `project.slideDuration` was just auto-recomputed
@@ -593,11 +592,7 @@ public final class TimelineViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Mode + snap toggles
-
-    public func setMode(_ newMode: TimelineMode) {
-        mode = newMode
-    }
+    // MARK: - Snap toggle
 
     public func toggleSnap() {
         isSnapEnabled.toggle()

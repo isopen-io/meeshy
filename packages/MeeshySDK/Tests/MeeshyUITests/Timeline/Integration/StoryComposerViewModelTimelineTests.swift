@@ -13,10 +13,6 @@ final class StoryComposerViewModelTimelineTests: XCTestCase {
                       "Lazy var must vend the same instance across reads")
     }
 
-    func test_timelineViewModel_modeDefaultsToQuick() {
-        let composer = StoryComposerViewModel()
-        XCTAssertEqual(composer.timelineViewModel.mode, .quick)
-    }
 
     func test_loadCurrentSlideIntoTimeline_populatesProject() async {
         let composer = StoryComposerViewModel()
