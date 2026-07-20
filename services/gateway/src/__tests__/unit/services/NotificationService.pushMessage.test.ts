@@ -73,6 +73,10 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     postMedia: {
       findFirst: jest.fn(),
     },
+    // GW3 — reaction/reply fan-out consults the per-conversation mute.
+    userConversationPreferences: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
 
   return {
@@ -112,7 +116,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-import { NotificationService } from '../../../services/notifications/NotificationService';
+import { NotificationService, pushCategoryForNotificationType } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const RECIPIENT_ID = '507f1f77bcf86cd799439011';
@@ -508,5 +512,136 @@ describe('NotificationService — message push title/body', () => {
       expect(payload.data?.unreadCount).toBeUndefined();
       expect(sendToUser).toHaveBeenCalledTimes(1);
     });
+  });
+
+  // GW4 — producers set native threadId (conversation grouping) + category
+  // (actionable iOS banners). The transport already forwards both (APNs
+  // thread-id/category, FCM aps) — the NSE stays as fallback only.
+  describe('GW4 — native threadId + category on push payloads', () => {
+    type ThreadedPayload = { threadId?: string; category?: string };
+
+    beforeEach(() => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        title: 'Chat', type: 'direct',
+      });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        username: 'alice', displayName: 'Alice Martin', avatar: null,
+      });
+      (prisma.postMedia.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.userConversationPreferences.findMany as jest.Mock).mockResolvedValue([]);
+    });
+
+    it('test_newMessagePush_carriesConversationThreadIdAndMessageCategory', async () => {
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Salut !',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.threadId).toBe(CONVERSATION_ID);
+      expect(payload.category).toBe('MEESHY_MESSAGE');
+    });
+
+    it('test_mentionPush_carriesMentionCategory', async () => {
+      await service.createMentionNotification({
+        mentionedUserId: RECIPIENT_ID,
+        mentionerUserId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'hello @you',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.threadId).toBe(CONVERSATION_ID);
+      expect(payload.category).toBe('MEESHY_MENTION');
+    });
+
+    it('test_reactionPush_carriesMessageCategory', async () => {
+      (prisma.message.findUnique as jest.Mock).mockResolvedValue({ content: 'msg' });
+
+      await service.createReactionNotification({
+        messageAuthorId: RECIPIENT_ID,
+        reactorUserId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        reactionEmoji: '❤️',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.threadId).toBe(CONVERSATION_ID);
+      expect(payload.category).toBe('MEESHY_MESSAGE');
+    });
+
+    it('test_postCommentPush_carriesSocialCategory_noThreadId', async () => {
+      await service.createPostCommentNotification({
+        actorId: SENDER_ID,
+        postId: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+        postAuthorId: RECIPIENT_ID,
+        commentId: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+        commentPreview: 'Nice post!',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.category).toBe('MEESHY_SOCIAL');
+      expect(payload.threadId).toBeUndefined();
+    });
+
+    it('test_missedCallPush_carriesMissedCallCategory', async () => {
+      await service.createMissedCallNotification({
+        recipientUserId: RECIPIENT_ID,
+        callerId: SENDER_ID,
+        conversationId: CONVERSATION_ID,
+        callSessionId: 'cccccccccccccccccccccccc',
+        callType: 'audio',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.threadId).toBe(CONVERSATION_ID);
+      expect(payload.category).toBe('MEESHY_CALL_MISSED');
+    });
+
+    it('test_friendRequestPush_carriesFriendRequestCategory', async () => {
+      await service.createFriendRequestNotification({
+        recipientUserId: RECIPIENT_ID,
+        requesterId: SENDER_ID,
+        friendRequestId: 'dddddddddddddddddddddddd',
+      });
+
+      const payload = lastPushPayload() as ThreadedPayload;
+      expect(payload.category).toBe('MEESHY_FRIEND_REQUEST');
+      expect(payload.threadId).toBeUndefined();
+    });
+  });
+});
+
+// ─── GW4 — pure type → category mapping ──────────────────────────────────────
+
+describe('pushCategoryForNotificationType', () => {
+  it('mirrors the iOS NSE mapping with the CALL split (incoming vs missed)', () => {
+    expect(pushCategoryForNotificationType('new_message')).toBe('MEESHY_MESSAGE');
+    expect(pushCategoryForNotificationType('message_reply')).toBe('MEESHY_MESSAGE');
+    expect(pushCategoryForNotificationType('message_reaction')).toBe('MEESHY_MESSAGE');
+    expect(pushCategoryForNotificationType('new_conversation_direct')).toBe('MEESHY_MESSAGE');
+    expect(pushCategoryForNotificationType('user_mentioned')).toBe('MEESHY_MENTION');
+    expect(pushCategoryForNotificationType('mention')).toBe('MEESHY_MENTION');
+    expect(pushCategoryForNotificationType('friend_request')).toBe('MEESHY_FRIEND_REQUEST');
+    expect(pushCategoryForNotificationType('contact_request')).toBe('MEESHY_FRIEND_REQUEST');
+    expect(pushCategoryForNotificationType('post_like')).toBe('MEESHY_SOCIAL');
+    expect(pushCategoryForNotificationType('post_comment')).toBe('MEESHY_SOCIAL');
+    expect(pushCategoryForNotificationType('story_new_comment')).toBe('MEESHY_SOCIAL');
+    expect(pushCategoryForNotificationType('friend_new_post')).toBe('MEESHY_SOCIAL');
+    expect(pushCategoryForNotificationType('incoming_call')).toBe('MEESHY_CALL_INCOMING');
+    expect(pushCategoryForNotificationType('missed_call')).toBe('MEESHY_CALL_MISSED');
+    expect(pushCategoryForNotificationType('call_ended')).toBe('MEESHY_CALL_MISSED');
+    expect(pushCategoryForNotificationType('call_declined')).toBe('MEESHY_CALL_MISSED');
+  });
+
+  it('returns undefined for unmapped types (no misleading actions)', () => {
+    expect(pushCategoryForNotificationType('system')).toBeUndefined();
+    expect(pushCategoryForNotificationType('login_new_device')).toBeUndefined();
+    expect(pushCategoryForNotificationType('made_up_type')).toBeUndefined();
   });
 });

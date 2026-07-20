@@ -60,6 +60,60 @@ function resolveActorName(actor: NotificationActor | undefined): string {
 }
 
 /**
+ * GW4 — native iOS category set by the PRODUCER (the NSE `applyCategory`
+ * stays as fallback for legacy payloads). Mirrors the NSE type mapping with
+ * one deliberate divergence: the CALL family is split into
+ * `MEESHY_CALL_INCOMING` (answer/decline) vs `MEESHY_CALL_MISSED`
+ * (callback/view) so a finished call never shows an "Answer" action.
+ * Unknown types return undefined — no category means no misleading actions.
+ */
+export function pushCategoryForNotificationType(type: NotificationType): string | undefined {
+  switch (type) {
+    case 'new_message':
+    case 'message_reply':
+    case 'reply':
+    case 'message_forwarded':
+    case 'message_reaction':
+    case 'reaction':
+    case 'new_conversation':
+    case 'new_conversation_direct':
+    case 'new_conversation_group':
+    case 'added_to_conversation':
+      return 'MEESHY_MESSAGE';
+    case 'mention':
+    case 'user_mentioned':
+      return 'MEESHY_MENTION';
+    case 'friend_request':
+    case 'contact_request':
+      return 'MEESHY_FRIEND_REQUEST';
+    case 'post_like':
+    case 'post_comment':
+    case 'post_repost':
+    case 'story_reaction':
+    case 'status_reaction':
+    case 'comment_like':
+    case 'comment_reply':
+    case 'comment_reaction':
+    case 'story_new_comment':
+    case 'story_thread_reply':
+    case 'friend_story_comment':
+    case 'friend_new_story':
+    case 'friend_new_post':
+    case 'friend_new_mood':
+      return 'MEESHY_SOCIAL';
+    case 'incoming_call':
+      return 'MEESHY_CALL_INCOMING';
+    case 'missed_call':
+    case 'call_ended':
+    case 'call_declined':
+    case 'call_recording_ready':
+      return 'MEESHY_CALL_MISSED';
+    default:
+      return undefined;
+  }
+}
+
+/**
  * Build the APN/FCM push header (title + optional subtitle) for a notification.
  *
  * Keeps the title focused on the sender so iOS Communication Notifications
@@ -805,6 +859,10 @@ export class NotificationService {
           }
 
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
+          // GW4 — native grouping + actionable banner set by the producer:
+          // threadId groups by conversation on iOS; category selects the
+          // action set (the NSE only fills these for legacy payloads).
+          const pushCategory = pushCategoryForNotificationType(params.type);
           this.pushService.sendToUser({
             userId: params.userId,
             // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
@@ -821,6 +879,8 @@ export class NotificationService {
               body: pushBody,
               link,
               collapseId: params.collapseId,
+              ...(params.context.conversationId ? { threadId: params.context.conversationId } : {}),
+              ...(pushCategory ? { category: pushCategory } : {}),
               ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
                 ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
