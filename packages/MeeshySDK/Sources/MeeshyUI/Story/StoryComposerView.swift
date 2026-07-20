@@ -111,6 +111,16 @@ public struct StoryComposerView: View {
     /// que rien n'est mesuré / le panneau n'est pas rendu (dessin immersif).
     @State var measuredBottomBandHeight: CGFloat = 0
 
+    /// Y (coord GLOBALES écran) du bord SUPÉRIEUR réel de la band d'outils,
+    /// rapporté par `ComposerControlsLayer.onBandTopYChange`. Source de vérité
+    /// pour la réserve basse du canvas : contrairement à
+    /// `measuredBottomBandHeight` (taille de layout, qui sous-estime si le
+    /// contenu déborde son `.frame(height:)` ou reste stale après resize), le
+    /// `minY` global reflète TOUJOURS le haut visuellement rendu. Le canvas y
+    /// colle son bas (moins le gap) → jamais recouvert/tronqué (bug 2026-07-20).
+    /// `.greatestFiniteMagnitude` = band repliée (réserve 0).
+    @State var measuredBandTopY: CGFloat = .greatestFiniteMagnitude
+
     @State var showDiscardAlert = false
     @State var showRestoreDraftAlert = false
     /// U4 inc.2 — données de la carte de reprise (cover rendu async depuis

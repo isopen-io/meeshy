@@ -254,6 +254,26 @@ describe('attachment-validators — Zod schemas at the JSON boundary', () => {
         attachmentTranslationsMapSchema.safeParse({ en, fr: { ...fr, quality: 2 } }).success,
       ).toBe(false);
     });
+
+    // Contract lock (iter. 183): the outer language key is AUTHORITATIVE and is
+    // NOT cross-checked against the content. AttachmentTranslation carries no
+    // top-level language field, so a key/content mismatch is structurally
+    // undetectable at this boundary — keying correctly is the caller's
+    // responsibility. This pins the honest contract (docstring above the schema)
+    // so the previously contradictory "cross-field validation is enforced" claim
+    // cannot silently return.
+    it('accepts a map whose key does not match the content language (no cross-field check)', () => {
+      const englishContentUnderFrenchKey: AttachmentTranslationInput = {
+        type: 'audio',
+        transcription: 'Hello, this is English text stored under the "fr" key',
+        createdAt: '2026-05-20T12:00:00Z',
+      };
+      const result = parseAttachmentTranslationsMap({ fr: englishContentUnderFrenchKey });
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value['fr']?.transcription).toContain('English text');
+      }
+    });
   });
 
   describe('parse helpers — boundary contract', () => {
