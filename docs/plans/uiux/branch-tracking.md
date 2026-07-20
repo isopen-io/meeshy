@@ -14,6 +14,18 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 185i, 2026-07-20)** — piste iOS (suffixe `i`).
+> - **185i (branche `claude/laughing-thompson-2yergu`, base `main` HEAD `4757622` = 180i #2124 mergé)** :
+>   i18n + VoiceOver selected-state pour le **period picker** de `ConversationDashboardView`
+>   (`periodPicker`, chips 7j/30j/Tout du chart d'activité). `ChartPeriod.rawValue` (dont
+>   `case all = "Tout"` en français dur) affiché via `Text(period.rawValue)` → nouveau
+>   `ChartPeriod.label` localisé (`dashboard.period.{week,month,all}`, idiome inline
+>   `String(localized:defaultValue:bundle:)` du fichier) ; raw values conservés comme
+>   **identifiants internes stables** (0 persistance/0 test les lit). Ajout `ChartPeriod.accessibilityLabel`
+>   (phrases pleines « 7 derniers jours »…) + `.accessibilityLabel` + `.accessibilityAddTraits(isSelected ? [.isSelected] : [])`
+>   sur chaque chip (WCAG 1.4.1). 1 fichier, 0 logique (switch/compare sur les cases, jamais rawValue), 0 test neuf.
+>   Base de départ démarrée = branche resynchronisée sur `main` HEAD (le 180i porté par la branche était déjà mergé #2124 → repartie fraîche). Gate = CI `iOS Tests`. Candidats 185i+ : `AudioFullscreenView` (pills vitesse/langue color-only, 184i), `StatusBubbleOverlay` (reply `.onTapGesture`, deferred 184i).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 151i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
 > - **151i (terminée, branche `claude/laughing-thompson-xp2i27`, base `main` HEAD `cd93248`)** :
 >   Structure **VoiceOver** de `EditProfileView` (écran d'édition de profil, 408 lignes). Dynamic Type déjà
