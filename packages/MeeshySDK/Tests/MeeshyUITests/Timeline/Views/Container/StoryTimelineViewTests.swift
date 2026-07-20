@@ -138,6 +138,20 @@ final class StoryTimelineViewTests: XCTestCase {
         XCTAssertEqual(StoryTimelineView.typeLabel(kind: .video, index: 2, customName: nil), "VIDEO_2")
     }
 
+    // MARK: - Zoom étendu (retour user 2026-07-20 : 5 % – 800 %)
+
+    func test_zoomRange_extendedTo5PercentAnd800Percent() {
+        XCTAssertEqual(TimelineScrubArea<Color>.zoomRange.lowerBound, 0.05, accuracy: 0.001)
+        XCTAssertEqual(TimelineScrubArea<Color>.zoomRange.upperBound, 8.0, accuracy: 0.001)
+    }
+
+    func test_pinchZoom_clampsToExtendedBounds() {
+        XCTAssertEqual(TimelineScrubArea<Color>.pinchZoom(anchor: 4, magnification: 10),
+                       8.0, accuracy: 0.001)
+        XCTAssertEqual(TimelineScrubArea<Color>.pinchZoom(anchor: 0.25, magnification: 0.01),
+                       0.05, accuracy: 0.001)
+    }
+
     func test_resolveCompactTracks_backgroundLanesFirst() {
         let tracks = StoryTimelineView.resolveCompactTracks(
             project: mixedSectionsProject(), selectedClipId: nil, maxCount: 10)
