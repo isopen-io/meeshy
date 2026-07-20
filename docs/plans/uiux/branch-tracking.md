@@ -14,6 +14,29 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 178i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **178i (branche `claude/laughing-thompson-ieqsfz`, base `main` HEAD `fd1136c`)** :
+>   `CrashReportSheet` (feuille diagnostics crash, ouverte depuis `MeeshyApp.swift:146`). Deux déficits
+>   d'interaction/VoiceOver : (1) la ligne dépliable était un **`.onTapGesture` sur un `VStack`** — pas de
+>   trait `.isButton`, invisible à VoiceOver **et** au clavier, état déplié/replié porté **uniquement** par
+>   la présence visuelle du bloc `details` (WCAG 4.1.2), et le geste englobait le `Text` monospace
+>   `.textSelection(.enabled)` (tap = collapse au lieu de sélection). (2) **`ShareLink` icône-seule** sans
+>   `.accessibilityLabel`. Fix = remplacer le `.onTapGesture` par un **`Button` natif** (`.buttonStyle(.plain)`
+>   + `.contentShape` pleine largeur → visuel identique, `.isButton` + actionnable clavier/VoiceOver gratuits),
+>   **sortir le bloc `details` du `Button`** (préserve la sélection de texte + supprime le conflit tap), état
+>   annoncé via `.accessibilityValue` (« Détails affichés »/« Détails masqués ») + `.accessibilityHint` stable,
+>   et `.accessibilityLabel` sur le `ShareLink`. **4 clés neuves code-only** (`crash.reports.details.expanded/collapsed/hint`,
+>   `crash.reports.share`), défauts FR (aligné `common.close` = « Fermer »), 0 `.xcstrings`. 1 fichier, 0 logique
+>   / 0 visuel / 0 test neuf ; Dynamic Type déjà OK (fonts sémantiques). Aucun test ne référence `CrashReportSheet`
+>   (grep = 0). Gate = CI `iOS Tests`.
+> - **⚠️ `CrashReportSheet` SOLDÉ** : la ligne dépliable est un `Button` natif (rôle/état/clavier), le partage
+>   est labellisé. Ne plus re-flagger. Candidats frais restants au scan : `VideoFullscreenPlayer`
+>   (`VideoLegacySupport.swift`, `xmark` icône-seule sans label + glyphe `.system(size: 28)` figé),
+>   `StatusComposerView` (compteur `\(count)/122` non locale-aware), `PeopleDiscoveryView`/`DiscoveryTab`
+>   (raw values FR non-accentuées codées en dur).
+
+| 178i | claude/laughing-thompson-ieqsfz (iOS a11y+native `CrashReportSheet` : `.onTapGesture` sur VStack → `Button` natif (`.isButton`+clavier+VoiceOver, `.buttonStyle(.plain)` visuel identique), `details` sorti du Button (préserve textSelection + supprime conflit tap/collapse), état `.accessibilityValue` affichés/masqués + `.accessibilityHint`, `.accessibilityLabel` sur ShareLink icône-seule ; 4 clés neuves code-only crash.reports.details.expanded/collapsed/hint + crash.reports.share défauts FR 0 xcstrings ; 1 fichier 0 logique/0 visuel/0 test neuf ; 0 test référence le composant ; gate CI iOS Tests) | ⏳ | ⏳ |
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (en cours, branche `claude/laughing-thompson-55w0p9`, base `main` HEAD `c61a3a7`)** :
 >   VoiceOver identity + localisation de `LinkPreviewCard` (aperçu OpenGraph inline sous une bulle,
