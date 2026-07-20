@@ -14,6 +14,29 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 169i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **169i (branche `claude/laughing-thompson-d08sym`, base `main` HEAD `3c4d772a5`)** :
+>   Localisation + VoiceOver de `MessageEditsDetailView` (panneau d'historique d'édition d'un message,
+>   extrait de l'ancien `MessageDetailSheet.editsTabContent`, présenté depuis `MessageMoreSheet.swift:286`).
+>   L'Explore sur `MessageDetail/` a confirmé un codebase par ailleurs fortement localisé — cette vue était
+>   le meilleur offender de taille modérée cumulant **les 2 déficits** : (1) **6 littéraux FR bruts** hors
+>   idiome `String(localized:defaultValue:bundle:)` et sans accents (`"Aucune modification"` / `"Historique"`,
+>   `"Ce message n'a pas ete modifie"` / le pluriel inline `"N version(s) precedente(s)"`, `"L'historique …
+>   apparait ici"`, `"Actuel"`, `"Version N"`) ; (2) **0 accessibilité** — bannière, chaque ligne de timeline
+>   et l'empty-state balayés en fragments par VoiceOver (le compte d'édition porté **uniquement** par la
+>   capsule visuelle). Fix = 7 helpers `message.edits.*` (défaut FR accentué inline, pluriel FR conservé
+>   inline façon 167i) + split label/valeur idiomatique : bannière `children: .ignore` + label (titre) +
+>   value (détail portant le compte), chaque ligne `children: .ignore` + label (`Actuel`/`Version N`) +
+>   value (heure + contenu), empty-state `children: .combine`, glyphes décoratifs `.accessibilityHidden(true)`.
+>   1 fichier, 0 logique, 0 test, 0 `.xcstrings`, 7 clés i18n neuves en `defaultValue`. Call site
+>   `MessageMoreSheet.swift:286` inchangé (signature `(message:editRevisions:)` identique) ; aucun test ne
+>   référence la vue (grep = 0) ; clés `message.edits.*` neuves (0 collision). Gate = CI `iOS Tests`. PR à venir.
+>   ⚠️ Iteration id passée de 168i → **169i** car 168i déjà pris par l'agent parallèle `BookmarksView`
+>   (branche `claude/laughing-thompson-sfei6s`).
+> - **⚠️ `MessageEditsDetailView` SOLDÉ** : localisation + VoiceOver complets. Reste dans `MessageDetail/` :
+>   `MessageViewsDetailView` (~11 littéraux FR + a11y chips/status), `MessageLanguageDetailView` /
+>   `MessageTranscriptionDetailView` / `MessageReportDetailView` (localisés mais a11y=0).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un

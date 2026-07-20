@@ -13,6 +13,44 @@ struct MessageEditsDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
 
+    // MARK: - Localized Strings
+
+    private var bannerTitleEmpty: String {
+        String(localized: "message.edits.title.empty",
+               defaultValue: "Aucune modification", bundle: .main)
+    }
+
+    private var bannerTitleHistory: String {
+        String(localized: "message.edits.title.history",
+               defaultValue: "Historique", bundle: .main)
+    }
+
+    private var bannerDetailEmpty: String {
+        String(localized: "message.edits.detail.empty",
+               defaultValue: "Ce message n'a pas été modifié", bundle: .main)
+    }
+
+    private func bannerDetailCount(_ count: Int) -> String {
+        String(localized: "message.edits.detail.count",
+               defaultValue: "\(count) version\(count > 1 ? "s" : "") précédente\(count > 1 ? "s" : "")",
+               bundle: .main)
+    }
+
+    private var emptyStateText: String {
+        String(localized: "message.edits.empty-state",
+               defaultValue: "L'historique des modifications apparaît ici", bundle: .main)
+    }
+
+    private var currentVersionHeader: String {
+        String(localized: "message.edits.current",
+               defaultValue: "Actuel", bundle: .main)
+    }
+
+    private func versionHeader(_ number: Int) -> String {
+        String(localized: "message.edits.version",
+               defaultValue: "Version \(number)", bundle: .main)
+    }
+
     @ViewBuilder
     var body: some View {
         let accent = Color(hex: message.senderColor ?? "#6366F1")
@@ -21,8 +59,8 @@ struct MessageEditsDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             timelineBanner(
                 icon: "pencil.and.list.clipboard",
-                text: revisions.isEmpty ? "Aucune modification" : "Historique",
-                detail: revisions.isEmpty ? "Ce message n'a pas ete modifie" : "\(revisions.count) version\(revisions.count > 1 ? "s" : "") precedente\(revisions.count > 1 ? "s" : "")",
+                text: revisions.isEmpty ? bannerTitleEmpty : bannerTitleHistory,
+                detail: revisions.isEmpty ? bannerDetailEmpty : bannerDetailCount(revisions.count),
                 count: revisions.isEmpty ? nil : "\(revisions.count)",
                 accent: accent
             )
@@ -30,7 +68,7 @@ struct MessageEditsDetailView: View {
             if revisions.isEmpty {
                 emptyStateView(
                     icon: "pencil.slash",
-                    text: "L'historique des modifications apparait ici",
+                    text: emptyStateText,
                     accent: accent
                 )
             } else {
@@ -38,7 +76,7 @@ struct MessageEditsDetailView: View {
                 // sees the "as-is" content as the anchor, then the
                 // chronological revisions below it.
                 editRevisionRow(
-                    header: "Actuel",
+                    header: currentVersionHeader,
                     content: message.content,
                     timestamp: message.editedAt ?? message.updatedAt,
                     accent: accent,
@@ -47,7 +85,7 @@ struct MessageEditsDetailView: View {
 
                 ForEach(Array(revisions.enumerated()), id: \.element.id) { index, revision in
                     editRevisionRow(
-                        header: "Version \(revisions.count - index)",
+                        header: versionHeader(revisions.count - index),
                         content: revision.content,
                         timestamp: revision.editedAt,
                         accent: accent,
@@ -91,6 +129,9 @@ struct MessageEditsDetailView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(header)
+        .accessibilityValue(rowAccessibilityValue(timestamp: timestamp, content: content))
     }
 
     // MARK: - Shared Components (copied from MessageDetailSheet)
@@ -100,6 +141,7 @@ struct MessageEditsDetailView: View {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(text)
@@ -133,6 +175,9 @@ struct MessageEditsDetailView: View {
                         .stroke(accent.opacity(0.12), lineWidth: 0.5)
                 )
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+        .accessibilityValue(detail)
     }
 
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
@@ -140,17 +185,23 @@ struct MessageEditsDetailView: View {
             Image(systemName: icon)
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Formatting
 
     private func formatTimeFR(_ date: Date) -> String {
         date.formatted(.dateTime.hour().minute())
+    }
+
+    private func rowAccessibilityValue(timestamp: Date, content: String) -> String {
+        "\(formatTimeFR(timestamp)), \(content)"
     }
 }
