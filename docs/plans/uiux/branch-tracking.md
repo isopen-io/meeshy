@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 172i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
+> - **172i (en cours, branche `claude/laughing-thompson-ks1h8d`, base `main` HEAD `612872b`)** :
+>   Alignement marque Indigo + structure VoiceOver de `MagicLinkView` (connexion par lien magique).
+>   Écran déjà 100 % Dynamic Type / i18n. 3 déficits non-typo : (1) **couleur figée hors-marque**
+>   `Color(hex: "8B5CF6")` (violet Tailwind, ×2 : teinte icône email + bordure focus) → `MeeshyColors.indigo400`
+>   (doctrine « avoid fixed colors » + signature Indigo) ; (2) **champ email** sans `.accessibilityLabel`
+>   → VoiceOver lisait le placeholder `nom@exemple.com` comme nom du champ → `.accessibilityLabel("Adresse email")`
+>   + icône `envelope.fill` masquée ; (3) **étape attente** : sous-titre + email fragmentés (2 focus) →
+>   `VStack(spacing: xs)` + `.accessibilityElement(children: .combine)` ; compteur d'expiration nu (« 1:30 ») →
+>   `.accessibilityLabel("Le lien expire dans") + .accessibilityValue`. 1 fichier, 0 logique, 0 test.
+>   2 clés i18n neuves `auth.magiclink.{email.a11yLabel,countdown.a11yLabel}` en `defaultValue` inline.
+>   Aucun test ne référence la vue (seul `LoginView` la présente) → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `MagicLinkView` couleur de marque + VoiceOver structure SOLDÉ** : violet figé éradiqué, label champ
+>   email posé, groupe confirmation combiné, compteur labellisé. Héros figés (doctrine ≥40pt). Ne plus reprendre.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 171i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **171i (en cours, branche `claude/laughing-thompson-cxw0zs`, base `main` HEAD `7c65395`)** :
 >   Migration vers **`ShareLink` natif** dans `CommunityLinkDetailView` (écran détail d'un lien de
