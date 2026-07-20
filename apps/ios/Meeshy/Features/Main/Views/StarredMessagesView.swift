@@ -65,20 +65,11 @@ struct StarredMessagesView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "star.circle")
-                .font(.system(size: 56, weight: .regular))
-                .foregroundStyle(MeeshyColors.indigo400)
-                .accessibilityHidden(true)
-            Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
-            Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
-                .font(MeeshyFont.relative(13))
-                .foregroundStyle(theme.textSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
+        EmptyStateView(
+            icon: "star.circle",
+            title: String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main),
+            subtitle: String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main)
+        )
     }
 
     private func navigate(to snapshot: StarredMessageSnapshot) {
