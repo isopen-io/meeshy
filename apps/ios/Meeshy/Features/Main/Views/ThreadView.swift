@@ -55,6 +55,7 @@ struct ThreadView: View {
             Text(String(localized: "thread.title", defaultValue: "Discussion", bundle: .main))
                 .font(.body.weight(.bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -100,6 +101,7 @@ struct ThreadView: View {
                         .font(.caption2)
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityElement(children: .combine)
 
                 Spacer()
             }
@@ -134,6 +136,8 @@ struct ThreadView: View {
                 .fill(Color(hex: accentColor).opacity(0.3))
                 .frame(height: 1)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private var repliesList: some View {
@@ -169,6 +173,7 @@ struct ThreadView: View {
                     .font(.subheadline)
                     .foregroundColor(theme.textPrimary)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
         }
@@ -223,6 +228,12 @@ struct ThreadView: View {
                     }
                 }
                 .disabled(isSending || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel(isSending
+                    ? String(localized: "bubble.delivery.sending", defaultValue: "Envoi en cours", bundle: .main)
+                    : String(localized: "composer.send.label", defaultValue: "Envoyer le message", bundle: .main))
+                .accessibilityHint(isSending
+                    ? Text("")
+                    : Text(String(localized: "composer.send.hint", defaultValue: "Envoie le texte saisi", bundle: .main)))
             }
             .padding(.horizontal, 16)
         }
