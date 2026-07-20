@@ -66,6 +66,7 @@ struct ContactsListTab: View {
                 )
         }
         .accessibilityLabel(String(format: String(localized: "contacts.list.filter-a11y", defaultValue: "Filtre: %@%@", bundle: .main), filter.rawValue, countSuffix))
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
     // MARK: - Content
@@ -108,6 +109,7 @@ struct ContactsListTab: View {
             Image(systemName: "magnifyingglass")
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             TextField(String(localized: "contacts.list.search-placeholder", defaultValue: "Rechercher un contact", bundle: .main), text: Binding(
                 get: { viewModel.searchQuery },
@@ -126,6 +128,7 @@ struct ContactsListTab: View {
                         .font(.subheadline)
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
         .padding(.horizontal, 12)
