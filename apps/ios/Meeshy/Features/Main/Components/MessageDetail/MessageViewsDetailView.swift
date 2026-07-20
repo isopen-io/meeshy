@@ -284,6 +284,16 @@ struct MessageViewsDetailView: View {
 
     // MARK: - Historique d'envoi (tentatives locales)
 
+    /// Pluriel résolu explicitement : le markup AGA inline (`^[…](inflect: true)`)
+    /// dans un `defaultValue` sans entrée String Catalog fuit en brut sur iOS 18.x.
+    static func sendAttemptCountLabel(_ count: Int) -> String {
+        String(
+            localized: "message-detail.send-history.attempt-count",
+            defaultValue: "\(count) \(count == 1 ? "attempt" : "attempts")",
+            bundle: .main
+        )
+    }
+
     private func sendAttemptsCard(accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -294,7 +304,7 @@ struct MessageViewsDetailView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
-                Text(String(localized: "message-detail.send-history.attempt-count", defaultValue: "^[\(sendAttempts.count) attempt](inflect: true)", bundle: .main))
+                Text(Self.sendAttemptCountLabel(sendAttempts.count))
                     .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
