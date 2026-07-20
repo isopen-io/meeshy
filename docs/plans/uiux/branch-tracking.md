@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 180i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **180i (en cours, branche `claude/laughing-thompson-jxv4l9`, base `main` HEAD `05491cc`)** :
+>   Migration vers **`ShareLink` natif** dans `TrackingLinkDetailView` (écran détail d'un lien de
+>   tracking — vue propriétaire). Le bouton **Partager** de l'`actionsBar` réimplémentait la feuille
+>   de partage à la main (~15 lignes) : `UIActivityViewController` + parcours
+>   `UIApplication.shared.connectedScenes` → top-VC (`presentVC`) + ancrage popover iPad manuel
+>   (crash si oublié). Remplacé par `ShareLink(item: url)` (iOS 16.0+, plancher app), idiome dominant
+>   (10 fichiers). Extraction d'un `actionButtonLabel` partagé → les 4 tuiles (Copy/Share/QR/Delete)
+>   rendent à l'identique, **0 changement visuel** (`.frame(maxWidth: .infinity)` sur le label).
+>   Fallback `ShareLink(item: String)` si URL malformée → aucun `guard…return` silencieux, aucun crash.
+>   **QR share conservé manuel** (`UIImage` généré à la volée au tap → non disponible pour ShareLink ;
+>   `presentVC` reste référencé, aucun code mort). 1 fichier, 0 logique, 0 clé i18n neuve
+>   (`tracking.link.detail.share` réutilisée), 0 test (structure de vue). 0 contention (aucune PR iOS
+>   ouverte ne touche ce fichier — recherche PR + grep tests vérifiés). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `TrackingLinkDetailView` chemin de partage d'URL SOLDÉ 180i** : ne plus réintroduire de
+>   `UIActivityViewController` manuel pour l'URL. Restent candidats (fichiers distincts, vérifier
+>   contention) : `AffiliateView`, `ConversationMediaViews`, `ConversationListView` (certains
+>   légitimement manuels : multi-items / activités custom / images générées à la volée).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 181i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **181i (en cours, branche `claude/laughing-thompson-giniq4`, base `main` HEAD `6faded3`)** :
 >   VoiceOver de `KeypadTab.resultRow` (People hub → onglet Clavier). La ligne de résultat
