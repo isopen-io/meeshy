@@ -14,6 +14,22 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 195i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Essaim iOS** : PR ouvertes #2146→#2182 (jusqu'à ~194i). Main HEAD `8a74c44`. Numéro **195i** choisi strictement > tout en vol.
+> - **195i (terminée, branche `claude/laughing-thompson-kgxs7c`, base `main` HEAD `8a74c44`)** :
+>   parité VoiceOver du **`Slider` de position vidéo** dans `MessageOverlayMenu` (transport inline
+>   de `PreviewVideoPlayer.videoControls`, overlay long-press). Le scrubber **audio** jumeau (l.884)
+>   portait déjà `.accessibilityLabel(media.playbackPosition)` + `.accessibilityValue("\(percentInt) %")` ;
+>   le scrubber **vidéo** (l.986, même `OverlayAudioPlayer`) n'avait que `.tint(accent)` → un `Slider`
+>   natif adjustable annonçait sa position brute sans nom ni valeur, et le `Text` de % voisin est
+>   `.accessibilityHidden(true)` → **aucun retour de position VoiceOver**. Fix (idiome 189i) : 2
+>   modifiers additifs copiant le jumeau audio → **0 clé i18n neuve** (réutilise `media.playbackPosition`
+>   déjà inline), **0 logique / 0 visuel / 0 test neuf**. 1 fichier. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** la valeur/label VoiceOver des `Slider` de `MessageOverlayMenu` (audio + vidéo, soldé 195i).
+> - **Base de départ 196i : `main` HEAD** (après merge, supprimer la branche). **Différé 196i+** (surfaces fraîches, vérifier collision d'abord) :
+>   `MeeshyAppIntents.swift` `NotificationCheckView` (`.foregroundColor(.blue)` → Indigo + `Text("… Unread")`/`Text("Try asking Siri:")` non localisés — snippet Siri sous-testé) ;
+>   `EditPostSheet.swift` `Picker` segmenté Post/Réel (l.241) sans `.accessibilityValue`.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 183i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **183i (branche `claude/laughing-thompson-8vaq6w`, base `main` HEAD `64f943d`)** :
 >   Consolidation design-system de `ProfileUserPostsList` (liste de publications de l'onglet « Postes »
