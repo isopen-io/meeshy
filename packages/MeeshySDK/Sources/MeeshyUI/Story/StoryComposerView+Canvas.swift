@@ -722,12 +722,13 @@ extension StoryComposerView {
                 sideInset: 14,
                 state: canvasIsCarded ? .carded : .free,
                 cardedCornerRadius: 22,
-                // Carte TOUJOURS centrée dans la région libre (user 2026-07-20 :
-                // « centrer la carte »). Un canvas PAYSAGE (16:9) court laissait,
-                // en `.top`, tout le mou vertical en bas → grand vide sous la carte
-                // perçu comme « canvas noir ». Centrée + letterbox flou (cf.
-                // `canvasLetterbox`), la carte paysage flotte au milieu, intégrée.
-                verticalAlignment: .center,
+                // Carte PAYSAGE (16:9, courte) : `.bottom` — collée juste au-dessus
+                // du sheet d'édition, elle « remonte » avec lui quand il grandit
+                // (user 2026-07-20), letterbox flou (cf. `canvasLetterbox`) au-dessus.
+                // Le sheet est plafonné (`presentedSheetHeight` → `maxSheetKeeping…`)
+                // pour que la carte reste ENTIÈREMENT visible, jamais rognée.
+                // PORTRAIT (9:16) : remplit la région → `.center` (aucun mou).
+                verticalAlignment: canvasRatio > 1 ? .bottom : .center,
                 canvasRatio: canvasRatio))
             let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: canvasRatio)
             // Rayon compensé par `framing.scale` : la carte est rendue à sa taille
@@ -861,7 +862,32 @@ extension StoryComposerView {
         if let fraction = presentedSystemSheetFraction {
             height = max(height, composerScreenHeight * fraction)
         }
-        return min(cap, height)
+        // `presentedSheetHeight` = de combien le CANVAS se rétracte en bas ; ce
+        // n'est PAS la hauteur réelle du sheet (content-driven côté
+        // `ComposerControlsLayer`, jamais plafonnée). Pour un canvas PAYSAGE on
+        // plafonne cette RÉSERVE à `maxCanvasBottomReservation` : au-delà, le
+        // sheet (plus grand) se rend PAR-DESSUS le bas du canvas (z-order : la
+        // band est après le canvas dans le ZStack) au lieu de rétrécir/rogner la
+        // carte (user 2026-07-20 : « faire passer le sheet par dessus »).
+        return min(cap, height, maxCanvasBottomReservation)
+    }
+
+    /// Rétraction basse MAXIMALE du canvas (borne de `presentedSheetHeight`).
+    /// Pour un canvas PAYSAGE (16:9, court, contraint en largeur donc de hauteur
+    /// ~fixe), le canvas ne se rétracte que jusqu'à ce que la carte pleine-largeur
+    /// tienne ENTIÈREMENT sous le header. Un sheet plus grand ne pousse PLUS le
+    /// canvas (il resterait rogné/hors-viewport) : il passe simplement PAR-DESSUS.
+    /// `.greatestFiniteMagnitude` pour un canvas PORTRAIT — il remplit la région,
+    /// le solveur le rétrécit proprement sans jamais le rogner.
+    var maxCanvasBottomReservation: CGFloat {
+        let ratio = viewModel.currentCanvasRatio
+        guard ratio > 1 else { return .greatestFiniteMagnitude }
+        // Carte pleine-largeur : largeur = écran − 2×sideInset(14), hauteur = w/ratio.
+        let cardHeight = (composerScreenWidth - 28) / ratio
+        // Header masqué en carding → réserve = safe-area haute + 12 (cf. framing).
+        let headerReserve = topSafeAreaInset + 12
+        return max(Self.composerBandMinHeight,
+                   composerScreenHeight - headerReserve - cardHeight - 12)
     }
 
     /// Plafond de hauteur réservée : ~70 % de l'écran. Assez haut pour couvrir
@@ -913,6 +939,22 @@ extension StoryComposerView {
             .compactMap { $0 as? UIWindowScene }
             .first?.windows.first(where: { $0.isKeyWindow })?.bounds.height
             ?? UIScreen.main.bounds.height
+    }
+
+    /// Largeur de la fenêtre active (miroir de `composerScreenHeight`) — sert au
+    /// calcul de la hauteur de la carte canvas pleine-largeur.
+    var composerScreenWidth: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.bounds.width
+            ?? UIScreen.main.bounds.width
+    }
+
+    /// Inset haut de la safe-area de la fenêtre active (encoche/Dynamic Island).
+    var topSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.safeAreaInsets.top ?? 0
     }
 
     /// Liseré pointillé du bord du canvas, visible uniquement quand le fond ne
