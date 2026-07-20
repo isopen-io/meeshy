@@ -40,9 +40,11 @@ passe est **VoiceOver + HIG uniquement**.
 - **Bouton créer** : `.accessibilityLabel` explicite (survit au remplacement du
   `Text` par le `ProgressView`), `.accessibilityValue` « Création en cours » quand
   `isCreating`, `.accessibilityHint` d'aide quand `!isValid` (URL invalide).
-- **Erreur** : `AccessibilityNotification.Announcement(message).post()` dans le
-  `catch` (sur le `MainActor`), déterministe et sans dépendance à la version de
-  la signature `onChange` (`AccessibilityNotification` : SwiftUI iOS 15+, déjà importé).
+- **Erreur** : `UIAccessibility.post(notification: .announcement, argument: message)`
+  dans le `catch` (sur le `MainActor`), déterministe et sans `onChange`. Pattern
+  déjà utilisé dans 9 fichiers (`ShareLinkDetailView`, `CallView`, `StoryViewerView`…)
+  et disponible iOS 16 — contrairement à `AccessibilityNotification.Announcement`
+  qui est iOS 17+ (première tentative rejetée par la CI, corrigée).
 
 ## i18n
 
@@ -68,7 +70,8 @@ Réutilise `accessibility.section_expanded` / `accessibility.section_collapsed`.
 - Aucune logique métier / couleur / police modifiée.
 - Signature `formField` rétro-compatible (2 params optionnels `nil`) → 4 appels
   restants (name, campaign, source, medium) compilent inchangés.
-- `AccessibilityNotification.Announcement` disponible iOS 15+ (plancher app iOS 16).
+- `UIAccessibility.post(.announcement)` disponible iOS 16 (plancher app), pattern
+  déjà présent 9× dans le codebase.
 - xcstrings : JSON valide, ordre d'insertion préservé, 0 entrée existante touchée.
 - 0 test ne référence la vue (privée, présentée par `TrackingLinksView`).
 - Build/tests : gate CI « iOS Tests » (pas de toolchain Swift en local).

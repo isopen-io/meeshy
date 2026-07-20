@@ -181,7 +181,7 @@ struct CreateTrackingLinkView: View {
                     let message = error.localizedDescription
                     errorMessage = message
                     isCreating = false
-                    AccessibilityNotification.Announcement(message).post()
+                    UIAccessibility.post(notification: .announcement, argument: message)
                 }
             }
         }

@@ -33,8 +33,9 @@ passe est **VoiceOver + HIG uniquement**. Aucune PR ouverte ne touche ce fichier
   développé/réduit (**réutilise** `accessibility.section_expanded/collapsed`) + hint.
 - **Bouton créer** : `.accessibilityLabel` explicite (survit au `ProgressView`) +
   `.accessibilityValue` « Création en cours » quand `isCreating` + hint quand invalide.
-- **Erreur** : `AccessibilityNotification.Announcement(...).post()` dans le `catch`
-  (déterministe, pas d'`onChange` version-dépendant, SwiftUI iOS 15+).
+- **Erreur** : `UIAccessibility.post(notification: .announcement, argument:)` dans le
+  `catch` (déterministe, pas d'`onChange`, iOS 16 — pattern déjà présent 9× dans le
+  codebase ; `AccessibilityNotification.Announcement` étant iOS 17+).
 
 ## i18n
 
