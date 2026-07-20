@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 181i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **181i (en cours, branche `claude/laughing-thompson-n2i97z`, base `main` HEAD `e5f9cb6`)** :
+>   Correction Dynamic Type à la **source** du primitive partagé `EmptyStateView`
+>   (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/EmptyStateView.swift`), consommé par **12+ écrans**.
+>   Découverte : le fil de migrations d'empty-states bespoke → `EmptyStateView` (168i, 179i, et d'autres
+>   en file) traînait un **tradeoff Dynamic Type répété** — le composant partagé lui-même figeait 4 polices
+>   en `.system(size:)` (icône héros 36/52, titre 15/18, sous-titre 12/14, label bouton 13/14) qui **ne
+>   scalent PAS** avec le réglage Dynamic Type. Chaque migration régressait donc potentiellement le scaling.
+>   Fix racine (vs. contournement par consommateur) : swap des 4 `.system(size:)` → `MeeshyFont.relative(...)`
+>   (`Theme/Accessibility.swift`, déjà public, même module MeeshyUI, déjà utilisé par JoinFlow). Mêmes tailles
+>   de base → **rendu identique au réglage par défaut**, scaling correct aux autres réglages. Les 12+
+>   consommateurs héritent du fix d'un coup. **0 changement de signature** → tous les call sites compilent
+>   inchangés. 1 fichier, 4 lignes, 0 logique, 0 clé i18n, 0 test touché (grep `EmptyStateView` dans
+>   `MeeshySDK/Tests` + `MeeshyTests` = 0). Numéros 178i/179i/180i déjà réutilisés par le fleet → 181i choisi.
+>   Gate = CI `iOS Tests` + build SDK. PR à venir.
+> - **⚠️ `EmptyStateView` Dynamic Type SOLDÉ** : ne plus réintroduire `.system(size:)` ici — tout tweak de
+>   taille passe par `MeeshyFont.relative`. Corollaire : migrer un empty-state bespoke vers `EmptyStateView`
+>   n'est **plus** une régression Dynamic Type (retire le footnote attaché à chaque itération de migration).
+>
 > **POINTEUR iOS AUTORITAIRE (mis à jour 186i, 2026-07-20)** — piste iOS (suffixe `i`).
 > - **Contexte** : essaim `laughing-thompson` dense — PR iOS ouvertes jusqu'à **185i** (#2140 `FriendRequestListView`, #2139 `RequestsTab`, #2137 `MessageLanguageDetailView`). Numéro **186i** choisi strictement > plus haut en vol (vérifié via `list_pull_requests`). Base = `main` HEAD `f80d5fb` (resync ; PR 180i `TrackingLinkDetailView` ShareLink mergée #2121, branche réinitialisée depuis `main`).
 > - **186i (terminée, branche `claude/laughing-thompson-is8ph7`, base `main` HEAD `f80d5fb`)** : état sélectionné VoiceOver des **2 sélecteurs à choix unique de `AudioFullscreenView`** (lecteur audio plein écran). L'a11y icône-seule de cette surface était soldée 104i (labels close/download/±10/play/translate + Dynamic Type glyphe état vide), qui avait différé `seekBar` + `authorInfoRow`. **Défaut distinct restant** : `speedRow` (vitesse `0.8×`…`2.25×`) et `languagePill` (langue écoutée, Prisme) signalaient la sélection par la **couleur seule** — aucun `.accessibilityAddTraits(.isSelected)` → VoiceOver lisait chaque capsule/pill à l'identique, active ou non (violation HIG « jamais la couleur seule pour un état », même classe que 178i/184i/185i). Fix miroir du sibling prouvé `CallsTab.chip` (`CallsTab.swift:60`) : `speedRow` → `.accessibilityLabel(speed.label)` (annonce « 1.5× ») + `.accessibilityAddTraits(player.speed == speed ? [.isSelected] : [])` ; `languagePill` → `.accessibilityAddTraits(isSelected ? [.isSelected] : [])` (libellé déjà porté par le `Text` intérieur). 1 fichier, 0 logique / 0 visuel / 0 clé i18n neuve (`PlaybackSpeed.label` SDK réutilisé) / 0 test neuf. Aucune suite ne cible `AudioFullscreenView` → 0 régression. Gate = CI `iOS Tests`.
