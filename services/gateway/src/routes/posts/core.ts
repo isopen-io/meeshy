@@ -7,7 +7,6 @@ import { PostTranslationService } from '../../services/posts/PostTranslationServ
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
-import { NotificationService } from '../../services/notifications/NotificationService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
@@ -35,7 +34,6 @@ export function registerCoreRoutes(
 ) {
   const postService = new PostService(prisma);
   const mentionService = new MentionService(prisma);
-  const notificationService = new NotificationService(prisma);
 
   // POST /posts — Create a new post
   //
@@ -123,6 +121,14 @@ export function registerCoreRoutes(
 
       let mentionedUserIdsForDedup: string[] = [];
 
+      // GW1 — use the DECORATED instance (wired push+socket+email by
+      // server.ts), never a bare local NotificationService: a bare instance
+      // persists notifications but silently drops every push and socket emit
+      // (friend_new_post/friend_new_story/friend_new_mood never delivered).
+      // The guard keeps degraded boot working (decoration happens after
+      // SocketIOManager init; standalone harnesses may not have it).
+      const notifService = fastify.notificationService;
+
       // Persist and notify post-body mentions (fire-and-forget)
       if (postContent) {
         const usernames = mentionService.extractMentions(postContent);
@@ -136,33 +142,37 @@ export function registerCoreRoutes(
             mentionService.createPostMentions(postId, mentionedUserIds).catch((err: unknown) => {
               fastify.log.error(`[POST /posts] post mention persist failed: ${err}`);
             });
-            notificationService.createPostMentionNotificationsBatch({
-              postId,
-              posterId,
-              mentionedUserIds,
-              postExcerpt: postContent.slice(0, 100),
-            }).catch((err: unknown) => {
-              fastify.log.error(`[POST /posts] post mention notify failed: ${err}`);
-            });
+            if (notifService) {
+              notifService.createPostMentionNotificationsBatch({
+                postId,
+                posterId,
+                mentionedUserIds,
+                postExcerpt: postContent.slice(0, 100),
+              }).catch((err: unknown) => {
+                fastify.log.error(`[POST /posts] post mention notify failed: ${err}`);
+              });
+            }
           }
         }
       }
 
       // Fan-out to friends: user_mentioned takes priority (dedup via excludeUserIds)
-      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
-      notificationService.createFriendContentNotificationsBatch({
-        postId: (post as any).id as string,
-        authorId: authContext.registeredUser.id,
-        contentType: postTypeForNotif,
-        excerpt: postContent?.slice(0, 100),
-        postCreatedAt: (post as any).createdAt ?? undefined,
-        postExpiresAt: (post as any).expiresAt ?? undefined,
-        excludeUserIds: mentionedUserIdsForDedup,
-        visibility: (post as any).visibility as string | undefined,
-        visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
-      }).catch((err: unknown) => {
-        fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
-      });
+      if (notifService) {
+        const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
+        notifService.createFriendContentNotificationsBatch({
+          postId: (post as any).id as string,
+          authorId: authContext.registeredUser.id,
+          contentType: postTypeForNotif,
+          excerpt: postContent?.slice(0, 100),
+          postCreatedAt: (post as any).createdAt ?? undefined,
+          postExpiresAt: (post as any).expiresAt ?? undefined,
+          excludeUserIds: mentionedUserIdsForDedup,
+          visibility: (post as any).visibility as string | undefined,
+          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
+        }).catch((err: unknown) => {
+          fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
+        });
+      }
 
       return sendSuccess(reply, post, { statusCode: 201, meta: { mentionedUsers } });
     } catch (error) {
@@ -256,14 +266,17 @@ export function registerCoreRoutes(
             mentionService.createPostMentions(postId, editMentionedUserIds).catch((err: unknown) => {
               fastify.log.error(`[PUT /posts/:postId] post mention persist failed: ${err}`);
             });
-            notificationService.createPostMentionNotificationsBatch({
-              postId,
-              posterId: editPosterId,
-              mentionedUserIds: editMentionedUserIds,
-              postExcerpt: editedContent.slice(0, 100),
-            }).catch((err: unknown) => {
-              fastify.log.error(`[PUT /posts/:postId] post mention notify failed: ${err}`);
-            });
+            const notifService = fastify.notificationService;
+            if (notifService) {
+              notifService.createPostMentionNotificationsBatch({
+                postId,
+                posterId: editPosterId,
+                mentionedUserIds: editMentionedUserIds,
+                postExcerpt: editedContent.slice(0, 100),
+              }).catch((err: unknown) => {
+                fastify.log.error(`[PUT /posts/:postId] post mention notify failed: ${err}`);
+              });
+            }
           }
         }
       }

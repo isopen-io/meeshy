@@ -13,6 +13,7 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker } from '../utils/circuitBreaker';
 
@@ -82,8 +83,11 @@ export interface SendPushOptions {
   // Skip the DND-hours/days check in `isPushAllowed` — for call-management
   // pushes only (incoming VoIP ring, its silent cancel, answered-elsewhere).
   // A DND schedule is meant for message notifications; every comparable
-  // product (FaceTime, WhatsApp, Signal) still rings through it. Does NOT
-  // bypass `pushEnabled: false`, which is an explicit opt-out of all push.
+  // product (FaceTime, WhatsApp, Signal) still rings through it. Note (GW6):
+  // call pushes are a dedicated category — `isPushAllowed` short-circuits on
+  // `callsEnabled` alone for them, so neither this flag nor `pushEnabled:
+  // false` governs call pushes (see isCallRelatedPush / the isCallPush
+  // early-return). `pushEnabled: false` still blocks every NON-call push.
   bypassDnd?: boolean;
 }
 
@@ -282,9 +286,21 @@ export class PushNotificationService {
   }
 
   /**
+   * GW6 — a call push is any send targeting a `voip` token OR carrying a
+   * call-management data type (`call` ring, `call_cancel` / `call_answered_elsewhere`
+   * stop-ring). `missed_call` is deliberately NOT in this set: it is a regular
+   * notification governed by missedCallEnabled/pushEnabled.
+   */
+  private isCallRelatedPush(options: SendPushOptions): boolean {
+    if (options.types?.includes('voip')) return true;
+    const dataType = options.payload.data?.type;
+    return dataType === 'call' || dataType === 'call_cancel' || dataType === 'call_answered_elsewhere';
+  }
+
+  /**
    * Vérifie si les push sont autorisés selon UserPreferences.notification
    */
-  private async isPushAllowed(userId: string, bypassDnd = false): Promise<boolean> {
+  private async isPushAllowed(userId: string, bypassDnd = false, isCallPush = false): Promise<boolean> {
     try {
       const userPrefs = await this.prisma.userPreferences.findUnique({
         where: { userId },
@@ -293,34 +309,18 @@ export class PushNotificationService {
       const raw = (userPrefs?.notification ?? {}) as Record<string, unknown>;
       const prefs: NotifPrefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
 
+      // GW6 — call pushes are a dedicated category: only `callsEnabled`
+      // governs them. Neither pushEnabled:false nor the DND window applies
+      // (calls ring through DND — producers also set bypassDnd:true).
+      if (isCallPush) return prefs.callsEnabled ?? true;
+
       if (!prefs.pushEnabled) return false;
 
-      // Vérifier DND
-      if (prefs.dndEnabled && !bypassDnd) {
-        const now = new Date();
-        const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
-        const start = prefs.dndStartTime;
-        const end = prefs.dndEndTime;
-        const overnight = start > end;
-        const inWindow = overnight
-          ? currentTime >= start || currentTime < end
-          : currentTime >= start && currentTime < end;
-
-        if (inWindow && prefs.dndDays && prefs.dndDays.length > 0) {
-          const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-          // Une fenêtre nocturne (start > end) déborde sur le lendemain : sa
-          // tranche du matin (00:00 → end) appartient à la nuit qui a COMMENCÉ
-          // la veille. Le filtre dndDays doit donc être testé contre le jour de
-          // DÉBUT de la fenêtre, pas contre le jour courant — sinon un matin est
-          // rattaché au mauvais jour (silence quand il faut notifier, et vice-versa).
-          const inMorningTail = overnight && currentTime < end;
-          const windowStartDay =
-            dayMap[inMorningTail ? (now.getUTCDay() + 6) % 7 : now.getUTCDay()];
-          if (!prefs.dndDays.includes(windowStartDay as any)) return true; // jour de début non sélectionné
-        }
-
-        if (inWindow) return false;
-      }
+      // Vérifier DND — GW7 : helper PARTAGÉ tz-aware `isWithinDnd`
+      // (packages/shared), même implémentation que
+      // NotificationService.isDNDActive. La fenêtre est évaluée dans l'heure
+      // locale utilisateur (dndUtcOffsetMinutes, 0 = UTC historique).
+      if (!bypassDnd && isWithinDnd(prefs)) return false;
 
       return true;
     } catch {
@@ -341,7 +341,7 @@ export class PushNotificationService {
     const { userId, payload, types, platforms, bypassDnd } = options;
 
     // Vérifier les préférences push utilisateur (UserPreferences.notification)
-    const pushAllowed = await this.isPushAllowed(userId, bypassDnd);
+    const pushAllowed = await this.isPushAllowed(userId, bypassDnd, this.isCallRelatedPush(options));
     if (!pushAllowed) {
       pushLogger.info('Push blocked by user preferences', { userId });
       return [];

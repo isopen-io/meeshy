@@ -26,12 +26,14 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
+import { filterMutedRecipients } from './mutedRecipients';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
@@ -56,6 +58,60 @@ function formatFileSize(bytes: number): string {
  */
 function resolveActorName(actor: NotificationActor | undefined): string {
   return actor?.displayName?.trim() || actor?.username?.trim() || 'Meeshy';
+}
+
+/**
+ * GW4 — native iOS category set by the PRODUCER (the NSE `applyCategory`
+ * stays as fallback for legacy payloads). Mirrors the NSE type mapping with
+ * one deliberate divergence: the CALL family is split into
+ * `MEESHY_CALL_INCOMING` (answer/decline) vs `MEESHY_CALL_MISSED`
+ * (callback/view) so a finished call never shows an "Answer" action.
+ * Unknown types return undefined — no category means no misleading actions.
+ */
+export function pushCategoryForNotificationType(type: NotificationType): string | undefined {
+  switch (type) {
+    case 'new_message':
+    case 'message_reply':
+    case 'reply':
+    case 'message_forwarded':
+    case 'message_reaction':
+    case 'reaction':
+    case 'new_conversation':
+    case 'new_conversation_direct':
+    case 'new_conversation_group':
+    case 'added_to_conversation':
+      return 'MEESHY_MESSAGE';
+    case 'mention':
+    case 'user_mentioned':
+      return 'MEESHY_MENTION';
+    case 'friend_request':
+    case 'contact_request':
+      return 'MEESHY_FRIEND_REQUEST';
+    case 'post_like':
+    case 'post_comment':
+    case 'post_repost':
+    case 'story_reaction':
+    case 'status_reaction':
+    case 'comment_like':
+    case 'comment_reply':
+    case 'comment_reaction':
+    case 'story_new_comment':
+    case 'story_thread_reply':
+    case 'friend_story_comment':
+    case 'friend_new_story':
+    case 'friend_new_post':
+    case 'friend_new_mood':
+      return 'MEESHY_SOCIAL';
+    case 'incoming_call':
+      return 'MEESHY_CALL_INCOMING';
+    case 'missed_call':
+    case 'call_ended':
+    case 'call_declined':
+    case 'call_recording_ready':
+      return 'MEESHY_CALL_MISSED';
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -472,37 +528,54 @@ export class NotificationService {
    * Lit UserPreferences.notification (JSON) — source unique de vérité.
    * Les notifications système passent toujours.
    */
-  private async shouldCreateNotification(userId: string, type: NotificationType): Promise<boolean> {
-    // Les notifications système/sécurité passent toujours
-    if (type === 'system') return true;
-
+  /**
+   * GW7 — chargement unique des préférences (null = lecture en échec, fail
+   * open). Réutilisé par le gating ET par les substitutions
+   * showPreview/showSenderName du push — une seule requête par notification.
+   */
+  private async loadNotificationPrefs(userId: string): Promise<NotifPrefs | null> {
     try {
       const userPrefs = await this.prisma.userPreferences.findUnique({
         where: { userId },
         select: { notification: true },
       });
-
       const raw = (userPrefs?.notification ?? {}) as Record<string, unknown>;
-      const prefs: NotifPrefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
-
-      // 1) Vérifier le toggle par type
-      if (!this.isTypeEnabled(prefs, type)) {
-        notificationLogger.info('Notification bloquée par préférence de type', { userId, type });
-        return false;
-      }
-
-      // 2) Vérifier le mode Ne Pas Déranger
-      if (this.isDNDActive(prefs)) {
-        notificationLogger.info('Notification bloquée par DND', { userId, type });
-        return false;
-      }
-
-      return true;
+      return { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
     } catch (error) {
-      // Fail open : en cas d'erreur de lecture des prefs, on crée la notification
-      notificationLogger.error('Erreur lecture préférences, notification autorisée par défaut', { error, userId, type });
-      return true;
+      notificationLogger.error('Erreur lecture préférences, notification autorisée par défaut', { error, userId });
+      return null;
     }
+  }
+
+  private async shouldCreateNotification(
+    userId: string,
+    type: NotificationType,
+    preloadedPrefs?: NotifPrefs | null
+  ): Promise<boolean> {
+    // Les notifications système/sécurité passent toujours
+    if (type === 'system') return true;
+
+    const prefs = preloadedPrefs !== undefined
+      ? preloadedPrefs
+      : await this.loadNotificationPrefs(userId);
+
+    // Fail open : en cas d'erreur de lecture des prefs, on crée la notification
+    if (prefs === null) return true;
+
+    // 1) Vérifier le toggle par type
+    if (!this.isTypeEnabled(prefs, type)) {
+      notificationLogger.info('Notification bloquée par préférence de type', { userId, type });
+      return false;
+    }
+
+    // 2) Vérifier le mode Ne Pas Déranger — helper PARTAGÉ tz-aware (GW7),
+    // même implémentation que PushNotificationService.isPushAllowed.
+    if (isWithinDnd(prefs)) {
+      notificationLogger.info('Notification bloquée par DND', { userId, type });
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -536,6 +609,9 @@ export class NotificationService {
       case 'story_new_comment':
       case 'friend_story_comment':
       case 'story_thread_reply': return prefs.postCommentEnabled ?? true;
+      case 'friend_new_post':
+      case 'friend_new_story':
+      case 'friend_new_mood':   return prefs.friendContentEnabled ?? true;
       case 'new_conversation_direct':
       case 'new_conversation_group':
       case 'new_conversation':  return prefs.conversationEnabled;
@@ -556,36 +632,12 @@ export class NotificationService {
 
   /**
    * Vérifie si le mode DND est actuellement actif.
-   * Utilise l'heure UTC du serveur.
+   * GW7 — délègue au helper PARTAGÉ tz-aware `isWithinDnd` (packages/shared)
+   * — même implémentation que PushNotificationService.isPushAllowed, la
+   * fenêtre est évaluée dans l'heure locale utilisateur (dndUtcOffsetMinutes).
    */
   private isDNDActive(prefs: NotifPrefs): boolean {
-    if (!prefs.dndEnabled) return false;
-
-    const now = new Date();
-    const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
-    const start = prefs.dndStartTime;
-    const end = prefs.dndEndTime;
-    const overnight = start > end;
-    const inWindow = overnight
-      ? currentTime >= start || currentTime < end // nocturne (ex: 22:00 - 08:00)
-      : currentTime >= start && currentTime < end; // diurne (ex: 14:00 - 16:00)
-
-    if (!inWindow) return false;
-
-    // Si dndDays est défini et non vide, vérifier le jour de DÉBUT de la fenêtre.
-    // Une fenêtre nocturne (start > end) déborde sur le lendemain : sa tranche du
-    // matin (00:00 → end) appartient à la nuit qui a COMMENCÉ la veille. Le filtre
-    // dndDays doit donc être testé contre le jour de début, pas le jour courant —
-    // sinon un matin est rattaché au mauvais jour (silence quand il faut notifier,
-    // et vice-versa). Cf. PushNotificationService.isPushAllowed (même logique).
-    if (prefs.dndDays && prefs.dndDays.length > 0) {
-      const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-      const inMorningTail = overnight && currentTime < end;
-      const windowStartDay = dayMap[inMorningTail ? (now.getUTCDay() + 6) % 7 : now.getUTCDay()];
-      if (!prefs.dndDays.includes(windowStartDay as any)) return false;
-    }
-
-    return true;
+    return isWithinDnd(prefs);
   }
 
   // ==============================================
@@ -647,8 +699,11 @@ export class NotificationService {
         return null;
       }
 
-      // Vérifier les préférences utilisateur avant création
-      const allowed = await this.shouldCreateNotification(params.userId, params.type);
+      // Vérifier les préférences utilisateur avant création — chargées UNE
+      // fois et réutilisées par les substitutions showPreview/showSenderName
+      // du push (GW7).
+      const notifPrefs = await this.loadNotificationPrefs(params.userId);
+      const allowed = await this.shouldCreateNotification(params.userId, params.type, notifPrefs);
       if (!allowed) {
         return null;
       }
@@ -679,13 +734,16 @@ export class NotificationService {
           : typeof meta.emoji === 'string' ? meta.emoji : null),
         parentCommentPreview: (typeof meta.parentCommentPreview === 'string' ? meta.parentCommentPreview : null),
       };
-      // On ne touche la base pour la langue du destinataire QUE si le type
-      // produit réellement un titre localisé ET que l'appelant ne l'a pas déjà
-      // fournie — évite une requête inutile pour les types non gérés (messages,
-      // appels, sécurité…), qui retombent sur le rendu client.
+      // On ne touche la base pour la langue du destinataire QUE si un rendu
+      // localisé en a réellement besoin (titre localisé du type, ou corps
+      // générique showPreview:false) ET que l'appelant ne l'a pas déjà
+      // fournie — résolution paresseuse mémoïsée, au plus UNE requête.
+      let memoizedLang: string | undefined = params.lang;
+      const recipientLang = async (): Promise<string> =>
+        memoizedLang ?? (memoizedLang = await this.resolveRecipientLang(params.userId));
       let display = buildNotificationDisplay(params.lang ?? 'fr', displayInput);
       if (display.title !== null && params.lang === undefined) {
-        display = buildNotificationDisplay(await this.resolveRecipientLang(params.userId), displayInput);
+        display = buildNotificationDisplay(await recipientLang(), displayInput);
       }
       // Sous-titre persisté : l'override explicite riche d'une méthode `create*`
       // (ex. « Votre publication : « aperçu » ») prime, sinon la base localisée
@@ -781,7 +839,18 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}?messageId=${params.context.messageId}` :
               `/conversations/${params.context.conversationId}`) :
             undefined;
-          const pushBody = params.content.substring(0, 200);
+          // GW7 — préférences de confidentialité du banner : showPreview:false
+          // remplace le corps par un libellé générique localisé (et supprime le
+          // subtitle, porteur d'aperçus) ; showSenderName:false remplace le
+          // titre (nom de l'acteur) par un titre neutre.
+          const showPreview = notifPrefs?.showPreview ?? true;
+          const showSenderName = notifPrefs?.showSenderName ?? true;
+          // Corps générique localisé dans la langue du DESTINATAIRE — résolue
+          // paresseusement quand l'appelant ne l'a pas fournie (réponses,
+          // réactions, mentions…), jamais un 'fr' codé en dur.
+          const pushBody = showPreview
+            ? params.content.substring(0, 200)
+            : notificationString(await recipientLang(), 'push.private');
 
           // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
           // par le payload push : embarquer le même compte unread que
@@ -801,22 +870,22 @@ export class NotificationService {
           }
 
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
-          this.pushService.sendToUser({
-            userId: params.userId,
-            // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
-            // delivered to PushKit, otherwise iOS shows a fake CallKit incoming call
-            // for every message/friend-request/conversation-creation. Real call
-            // pushes are dispatched separately from CallEventsHandler with types: ['voip'].
-            types: ['apns', 'fcm'],
-            payload: {
-              title: pushTitle,
+          // GW4 — native grouping + actionable banner set by the producer:
+          // threadId groups by conversation on iOS; category selects the
+          // action set (the NSE only fills these for legacy payloads).
+          const pushCategory = pushCategoryForNotificationType(params.type);
+          const pushPayload = {
+              title: showSenderName ? pushTitle : 'Meeshy',
               // Subtitle carries the conversation name for group/global chats
               // — survives iOS Communication Notification rewriting that would
               // otherwise drop a "<sender> | <conv>" concatenated title.
-              ...(pushSubtitle ? { subtitle: pushSubtitle } : {}),
+              // Dropped with showPreview:false (rich subtitles carry previews).
+              ...(pushSubtitle && showPreview ? { subtitle: pushSubtitle } : {}),
               body: pushBody,
               link,
               collapseId: params.collapseId,
+              ...(params.context.conversationId ? { threadId: params.context.conversationId } : {}),
+              ...(pushCategory ? { category: pushCategory } : {}),
               ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
                 ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
@@ -841,24 +910,88 @@ export class NotificationService {
                 senderDisplayName: params.actor?.displayName || '',
                 senderAvatar: params.actor?.avatar || '',
                 imageURL: params.actor?.avatar || '',
-                // Phase A — message media inline (audio waveform, image preview, video thumb).
-                // L'extension iOS lit ces champs pour télécharger le fichier et l'attacher
-                // comme UNNotificationAttachment avec le bon UTI typeHint.
-                attachmentUrl: params.context.firstAttachmentUrl || '',
-                attachmentMimeType: params.context.firstAttachmentMimeType || '',
-                attachmentDurationMs: params.context.firstAttachmentDurationMs != null
-                  ? String(params.context.firstAttachmentDurationMs)
-                  : '',
                 // Phase B — reactions. Emoji used so the iOS extension can format
                 // the body as "<sender> a réagi <emoji> à votre message" while the
                 // INSendMessageIntent path still renders the reactor's avatar.
                 reactionEmoji: (params.metadata && 'reactionEmoji' in params.metadata
                   ? String(params.metadata.reactionEmoji ?? '')
                   : ''),
-                encryptedContent: params.context.encryptedContent || '',
                 notificationLocKey: params.context.notificationLocKey || '',
+                // GW5 — persistance NSE : timestamp serveur + type du message,
+                // clés absentes (pas de '') quand la notification ne porte pas
+                // de message.
+                ...(params.context.messageCreatedAt ? { createdAt: params.context.messageCreatedAt } : {}),
+                ...(params.context.messageType ? { messageType: params.context.messageType } : {}),
+                // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
+                // data. La NSE réécrit inconditionnellement le body depuis
+                // encryptedContent et attache le média d'attachmentUrl — les
+                // embarquer vaincrait le mode privé (et translatedContent
+                // voyagerait en clair dans le canal push malgré l'opt-out).
+                ...(showPreview ? {
+                  // Phase A — message media inline (audio waveform, image preview,
+                  // video thumb). L'extension iOS lit ces champs pour télécharger le
+                  // fichier et l'attacher comme UNNotificationAttachment (UTI typeHint).
+                  attachmentUrl: params.context.firstAttachmentUrl || '',
+                  attachmentMimeType: params.context.firstAttachmentMimeType || '',
+                  attachmentDurationMs: params.context.firstAttachmentDurationMs != null
+                    ? String(params.context.firstAttachmentDurationMs)
+                    : '',
+                  encryptedContent: params.context.encryptedContent || '',
+                  ...(params.context.translatedContent ? {
+                    translatedContent: params.context.translatedContent,
+                    translatedLanguage: params.context.translatedLanguage || '',
+                  } : {}),
+                } : {}),
               },
-            },
+            };
+
+          // GW5 — budget APNs 4KB (rejet silencieux PayloadTooLarge sinon, et
+          // handleFailedToken compterait un strike sur un token sain).
+          // Dégradation par étages avec RE-VÉRIFICATION après chaque coupe :
+          // la traduction Prisme d'abord, puis encryptedContent — un banner
+          // générique délivré (la NSE retombe sur le body serveur) vaut mieux
+          // qu'un push rejeté qui ne s'affiche jamais.
+          const APNS_SAFE_PAYLOAD_BYTES = 3800;
+          const payloadBytes = (p: unknown): number => Buffer.byteLength(JSON.stringify(p), 'utf8');
+          const { translatedContent: _tc, translatedLanguage: _tl, ...dataWithoutTranslation } = pushPayload.data;
+          const { encryptedContent: _ec, ...dataWithoutContentFields } = dataWithoutTranslation;
+          const boundedPayload = [
+            pushPayload,
+            { ...pushPayload, data: dataWithoutTranslation },
+            { ...pushPayload, data: dataWithoutContentFields },
+          ].find(candidate => payloadBytes(candidate) <= APNS_SAFE_PAYLOAD_BYTES)
+            ?? { ...pushPayload, data: dataWithoutContentFields };
+
+          this.pushService.sendToUser({
+            userId: params.userId,
+            // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
+            // delivered to PushKit, otherwise iOS shows a fake CallKit incoming call
+            // for every message/friend-request/conversation-creation. Real call
+            // pushes are dispatched separately from CallEventsHandler with types: ['voip'].
+            types: ['apns', 'fcm'],
+            payload: boundedPayload,
+          }).then(async (results) => {
+            // GW7 — delivery.pushSent tracking : flippé dès qu'au moins un
+            // device a reçu le push (le champ était initialisé false et
+            // jamais mis à jour — tracking multi-canal mort).
+            const delivered = Array.isArray(results) && results.some(r => r?.success);
+            if (!delivered) return;
+            try {
+              // RE-LIRE delivery juste avant d'écrire : un autre writer (digest
+              // email quotidien) a pu poser emailSent:true entre-temps — le
+              // snapshot de création { emailSent: false } est périmé.
+              const current = await this.prisma.notification.findUnique({
+                where: { id: notification.id },
+                select: { delivery: true },
+              });
+              const liveDelivery = ((current as { delivery?: unknown } | null)?.delivery ?? {}) as Record<string, unknown>;
+              await this.prisma.notification.update({
+                where: { id: notification.id },
+                data: { delivery: { ...liveDelivery, pushSent: true } as any },
+              });
+            } catch (error) {
+              notificationLogger.error('pushSent flip failed', { error, notificationId: notification.id });
+            }
           }).catch(err => {
             notificationLogger.error('Push notification failed', { error: err, userId: params.userId });
           });
@@ -1076,9 +1209,12 @@ export class NotificationService {
     // expire in that window we MUST NOT leak the original content via the
     // banner. Refetch the live state right before the fan-out and bail when
     // the message is no longer eligible.
+    // GW5 — the same refetch feeds the NSE persistence fields: authoritative
+    // createdAt/messageType plus any translation already produced by the
+    // pipeline at fan-out time (Message.translations JSON, keyed by language).
     const liveMessage = await this.prisma.message.findUnique({
       where: { id: params.messageId },
-      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true },
+      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true, createdAt: true, messageType: true, translations: true },
     });
     if (!liveMessage) {
       notificationLogger.info('Skipping message notification (message vanished)', {
@@ -1122,6 +1258,19 @@ export class NotificationService {
 
     const recipientLang = await this.resolveRecipientLang(params.recipientUserId);
 
+    // GW5 — Prisme : sélectionner la traduction qui matche EXACTEMENT la
+    // langue résolue du destinataire (même résolution que le framing). Pas de
+    // fallback translations.first : aucune correspondance = le contenu est
+    // déjà dans la langue du destinataire. Les traductions chiffrées ne sont
+    // jamais poussées (la NSE déchiffre encryptedContent, pas les traductions).
+    const translationsJson = liveMessage.translations as Record<string, { text?: unknown; isEncrypted?: unknown }> | null | undefined;
+    const matchedTranslation = translationsJson
+      ? Object.entries(translationsJson).find(([lang, t]) =>
+          lang.toLowerCase() === recipientLang.toLowerCase()
+          && typeof t?.text === 'string'
+          && !t.isEncrypted)
+      : undefined;
+
     const content = buildMessageNotificationBodyI18n(recipientLang, {
       messagePreview: params.messagePreview,
       attachments: params.attachments,
@@ -1162,6 +1311,13 @@ export class NotificationService {
           : undefined,
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
+        // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
+        messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
+        messageType: liveMessage.messageType ?? undefined,
+        ...(matchedTranslation ? {
+          translatedContent: (matchedTranslation[1].text as string).substring(0, 200),
+          translatedLanguage: matchedTranslation[0],
+        } : {}),
       },
 
       metadata: {
@@ -1302,6 +1458,20 @@ export class NotificationService {
     conversationId: string;
     reactionEmoji: string;
   }): Promise<Notification | null> {
+    // GW3 — per-conversation mute suppresses reaction notifications
+    // (mentions pierce the mute; reactions do not). Checked BEFORE the
+    // throttle : le mute est déterministe/durable alors que
+    // shouldCreateReactionNotification MUTE son bucket — une réaction
+    // supprimée par le mute ne doit pas consommer le budget de la paire.
+    const nonMuted = await filterMutedRecipients(this.prisma, params.conversationId, [params.messageAuthorId]);
+    if (nonMuted.length === 0) {
+      notificationLogger.info('Reaction notification suppressed (conversation muted)', {
+        userId: params.messageAuthorId,
+        conversationId: params.conversationId,
+      });
+      return null;
+    }
+
     // Anti-spam: throttle reaction notifications per sender→recipient pair
     if (!this.shouldCreateReactionNotification(params.reactorUserId, params.messageAuthorId)) {
       return null;
@@ -1336,6 +1506,7 @@ export class NotificationService {
       type: 'message_reaction',
       priority: 'low',
       content: notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji }),
+      lang,
 
       actor: {
         id: params.reactorUserId,
@@ -2395,6 +2566,17 @@ export class NotificationService {
     messagePreview: string;
     originalMessageId?: string;
   }): Promise<Notification | null> {
+    // GW3 — per-conversation mute suppresses reply notifications
+    // (a reply is not a mention: it does not pierce the mute).
+    const nonMuted = await filterMutedRecipients(this.prisma, params.conversationId, [params.recipientUserId]);
+    if (nonMuted.length === 0) {
+      notificationLogger.info('Reply notification suppressed (conversation muted)', {
+        userId: params.recipientUserId,
+        conversationId: params.conversationId,
+      });
+      return null;
+    }
+
     const [replier, conversation] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: params.replierUserId },

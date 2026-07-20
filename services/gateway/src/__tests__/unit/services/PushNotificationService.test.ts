@@ -628,7 +628,13 @@ describe('PushNotificationService', () => {
         expect(result[0].success).toBe(true);
       });
 
-      it('bypassDnd:true does NOT override an explicit pushEnabled:false opt-out', async () => {
+      // GW6 — pushEnabled governs NOTIFICATION pushes only. Call pushes are a
+      // separate product category gated by the dedicated `callsEnabled`
+      // preference (default true): disabling message banners must not make
+      // incoming calls silently unreachable (FaceTime/WhatsApp/Signal parity).
+      it('pushEnabled:false still delivers an incoming-call VoIP push (callsEnabled default)', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'voip-token-123' }], failed: [] });
+
         const { PushNotificationService } = await getServiceWithEnv({
           ENABLE_PUSH_NOTIFICATIONS: 'true',
           ENABLE_APNS_PUSH: 'true',
@@ -636,6 +642,7 @@ describe('PushNotificationService', () => {
           APNS_KEY_ID: 'test-key-id',
           APNS_TEAM_ID: 'test-team-id',
           APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_VOIP_BUNDLE_ID: 'me.meeshy.app.voip',
         });
         const service = new PushNotificationService(mockPrisma as any);
 
@@ -655,7 +662,168 @@ describe('PushNotificationService', () => {
           bypassDnd: true,
         });
 
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+
+      it('pushEnabled:false still delivers a call-management data push (call_cancel)', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: false },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: '', body: '', silent: true, data: { type: 'call_cancel', callId: 'call-123' } },
+          types: ['apns'],
+          bypassDnd: true,
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+
+      it('callsEnabled:false blocks call pushes even with bypassDnd', async () => {
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          ENABLE_VOIP_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, callsEnabled: false },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'voip-token-123', type: 'voip', platform: 'ios', bundleId: null },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Incoming Call', body: 'John is calling...', callId: 'call-123', callerName: 'John' },
+          types: ['voip'],
+          bypassDnd: true,
+        });
+
         expect(result).toEqual([]);
+        expect(mockApnsProviderSend).not.toHaveBeenCalled();
+      });
+
+      // GW7 — DND parity with NotificationService via the SHARED isWithinDnd
+      // helper: the window is evaluated in the user's local wall-clock
+      // (dndUtcOffsetMinutes), no longer in server UTC.
+      it('GW7 — blocks a normal push at 23:00 Tokyo local (14:00 UTC) for a 22:00-08:00 window', async () => {
+        jest.setSystemTime(new Date('2026-01-01T14:00:00.000Z'));
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndUtcOffsetMinutes: 540 },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Test message' },
+        });
+
+        expect(result).toEqual([]);
+      });
+
+      it('GW7 — allows a normal push at 12:00 Tokyo local (03:00 UTC) for a 22:00-08:00 window', async () => {
+        jest.setSystemTime(new Date('2026-01-01T03:00:00.000Z'));
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndUtcOffsetMinutes: 540 },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Test message' },
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+
+      it('callsEnabled:false does not affect normal notification pushes', async () => {
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, callsEnabled: false },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Regular message', data: { type: 'new_message' } },
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
       });
     });
 

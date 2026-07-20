@@ -207,8 +207,6 @@ export class NotificationDigestJob {
     const pending = allUnread.filter(n => isNotYetEmailed(n.delivery));
     if (pending.length === 0) return false;
 
-    const pendingIds = pending.map(n => n.id);
-
     const frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
     const lang = user.systemLanguage || 'en';
 
@@ -234,13 +232,23 @@ export class NotificationDigestJob {
     const result = await this.emailService.sendNotificationDigestEmail(digestData);
 
     if (result.success) {
-      // Mark these specific notifications as emailed
-      await this.prisma.notification.updateMany({
-        where: { id: { in: pendingIds } },
-        data: {
-          delivery: { emailSent: true, emailSentAt: new Date().toISOString(), pushSent: false },
-        },
-      });
+      // Mark these specific notifications as emailed, PRESERVING each
+      // document's existing delivery state (pushSent is flipped by the push
+      // pipeline — a blanket write would reset it to false and corrupt the
+      // multi-channel tracking).
+      const emailSentAt = new Date().toISOString();
+      await Promise.all(pending.map(n =>
+        this.prisma.notification.update({
+          where: { id: n.id },
+          data: {
+            delivery: {
+              ...((n.delivery ?? {}) as Record<string, unknown>),
+              emailSent: true,
+              emailSentAt,
+            },
+          },
+        })
+      ));
       return true;
     }
 

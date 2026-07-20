@@ -23,6 +23,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'group.added', 'group.newContact',
   'attachment.photo', 'attachment.video', 'attachment.audio', 'attachment.document', 'attachment.files',
   'login.newDevice.title',
+  'push.private',
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 
@@ -83,6 +84,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Document',
     'attachment.files': '📎 {count} fichiers',
     'login.newDevice.title': 'Nouvelle connexion détectée',
+    'push.private': 'Nouvelle notification',
   },
   en: {
     'reaction.message': 'reacted {emoji} to your message',
@@ -120,6 +122,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Document',
     'attachment.files': '📎 {count} files',
     'login.newDevice.title': 'New login detected',
+    'push.private': 'New notification',
   },
   es: {
     'reaction.message': 'reaccionó {emoji} a tu mensaje',
@@ -157,6 +160,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Documento',
     'attachment.files': '📎 {count} archivos',
     'login.newDevice.title': 'Nuevo inicio de sesión detectado',
+    'push.private': 'Nueva notificación',
   },
   pt: {
     'reaction.message': 'reagiu {emoji} à sua mensagem',
@@ -194,6 +198,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Documento',
     'attachment.files': '📎 {count} arquivos',
     'login.newDevice.title': 'Novo login detectado',
+    'push.private': 'Nova notificação',
   },
   de: {
     'reaction.message': 'hat {emoji} auf deine Nachricht reagiert',
@@ -231,6 +236,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Dokument',
     'attachment.files': '📎 {count} Dateien',
     'login.newDevice.title': 'Neue Anmeldung erkannt',
+    'push.private': 'Neue Benachrichtigung',
   },
   it: {
     'reaction.message': 'ha reagito {emoji} al tuo messaggio',
@@ -268,6 +274,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 Documento',
     'attachment.files': '📎 {count} file',
     'login.newDevice.title': 'Nuovo accesso rilevato',
+    'push.private': 'Nuova notifica',
   },
   ar: {
     'reaction.message': 'تفاعل {emoji} مع رسالتك',
@@ -305,6 +312,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 مستند',
     'attachment.files': '📎 {count} ملفات',
     'login.newDevice.title': 'تم رصد تسجيل دخول جديد',
+    'push.private': 'إشعار جديد',
   },
   'zh-Hans': {
     'reaction.message': '用 {emoji} 回应了你的消息',
@@ -342,6 +350,7 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'attachment.document': '📎 文档',
     'attachment.files': '📎 {count} 个文件',
     'login.newDevice.title': '检测到新登录',
+    'push.private': '新通知',
   },
 };
 

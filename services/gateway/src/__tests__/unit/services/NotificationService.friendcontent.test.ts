@@ -1015,4 +1015,78 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       expect(recipientIds).toContain(FRIEND_1);
     });
   });
+
+  // =====================================================
+  // GW2 — friendContentEnabled preference gating
+  // =====================================================
+
+  describe('friendContentEnabled preference', () => {
+    const disabledPrefs = { notification: { friendContentEnabled: false } };
+
+    it.each([
+      ['POST', 'friend_new_post'],
+      ['STORY', 'friend_new_story'],
+      ['MOOD', 'friend_new_mood'],
+    ] as const)(
+      'test_createFriendContentNotificationsBatch_%s_friendContentDisabled_skipsRecipient',
+      async (contentType) => {
+        (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+          makeFriendRequest(AUTHOR_ID, FRIEND_1),
+        ]);
+        (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(disabledPrefs);
+
+        await service.createFriendContentNotificationsBatch({
+          postId: POST_ID,
+          authorId: AUTHOR_ID,
+          contentType,
+        });
+
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+      }
+    );
+
+    it('test_createFriendContentNotificationsBatch_friendContentAbsent_defaultsToEnabled', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: {},
+      });
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string; type: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call).toBeDefined();
+      expect(call![0].data.type).toBe('friend_new_post');
+    });
+
+    it('test_createFriendContentNotificationsBatch_friendContentDisabled_doesNotAffectOtherTypes', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(disabledPrefs);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: FRIEND_1,
+        username: 'liker',
+        displayName: 'Liker',
+        avatar: null,
+        systemLanguage: 'fr',
+      });
+      (prisma.postComment.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.createPostLikeNotification({
+        actorId: FRIEND_1,
+        postId: POST_ID,
+        postAuthorId: AUTHOR_ID,
+        emoji: '❤️',
+        postType: 'POST',
+      });
+
+      expect(prisma.notification.create).toHaveBeenCalled();
+    });
+  });
 });
