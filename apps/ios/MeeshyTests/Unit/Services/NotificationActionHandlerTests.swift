@@ -25,15 +25,19 @@ final class NotificationActionHandlerTests: XCTestCase {
         private(set) var beginCallCount = 0
         private(set) var endCallCount = 0
         private(set) var lastBeganName: String?
+        private(set) var lastExpirationHandler: (() -> Void)?
+        private(set) var endedIdentifiers: [UIBackgroundTaskIdentifier] = []
 
         func beginTask(name: String, expirationHandler: (() -> Void)?) -> UIBackgroundTaskIdentifier {
             beginCallCount += 1
             lastBeganName = name
+            lastExpirationHandler = expirationHandler
             return UIBackgroundTaskIdentifier(rawValue: 42)
         }
 
         func endTask(_ identifier: UIBackgroundTaskIdentifier) {
             endCallCount += 1
+            endedIdentifiers.append(identifier)
         }
     }
 
@@ -71,10 +75,14 @@ final class NotificationActionHandlerTests: XCTestCase {
         private(set) var insertedRecords: [MessageRecord] = []
         private(set) var markFailedCalls: [(localId: String, reason: String)] = []
         var insertError: Error?
+        /// Suspension point for the mid-flight expiration test — lets the test
+        /// freeze `handle()` between `beginTask` and the outbox/REST work.
+        var onInsert: (() async -> Void)?
 
         func insertOptimistic(_ record: MessageRecord) async throws {
             if let insertError { throw insertError }
             insertedRecords.append(record)
+            await onInsert?()
         }
 
         func markOptimisticFailed(localId: String, reason: String) async throws {
@@ -83,6 +91,34 @@ final class NotificationActionHandlerTests: XCTestCase {
     }
 
     private struct TestError: Error {}
+
+    /// One-shot async latch: `wait()` suspends until `open()` fires.
+    private actor AsyncGate {
+        private var opened = false
+        private var waiters: [CheckedContinuation<Void, Never>] = []
+
+        func wait() async {
+            if opened { return }
+            await withCheckedContinuation { waiters.append($0) }
+        }
+
+        func open() {
+            opened = true
+            waiters.forEach { $0.resume() }
+            waiters = []
+        }
+    }
+
+    /// Yield-polls the main actor until `condition` holds (bounded, no sleep).
+    private func waitUntil(
+        _ condition: @MainActor () -> Bool,
+        iterations: Int = 10_000
+    ) async {
+        for _ in 0..<iterations {
+            if condition() { return }
+            await Task.yield()
+        }
+    }
 
     // MARK: - Factory
 
@@ -100,6 +136,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         let locallyMarkedRead: () -> [String]
         let removedConversationBanners: () -> [String]
         let removedPostBanners: () -> [String]
+        let preparedReplyQueue: () -> Int
     }
 
     private func makeSUT(
@@ -121,6 +158,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         var markedRead: [String] = []
         var removedBanners: [String] = []
         var removedPostBanners: [String] = []
+        var preparedReplyQueueCount = 0
 
         let sut = NotificationActionHandler(
             messageService: messageService,
@@ -138,7 +176,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             openNotification: { _ in openedCount += 1 },
             localMarkRead: { markedRead.append($0) },
             removeDeliveredForConversation: { removedBanners.append($0) },
-            removeDeliveredForPost: { removedPostBanners.append($0) }
+            removeDeliveredForPost: { removedPostBanners.append($0) },
+            prepareReplyQueue: { preparedReplyQueueCount += 1 }
         )
 
         return SUTContext(
@@ -154,7 +193,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             openedNotifications: { openedCount },
             locallyMarkedRead: { markedRead },
             removedConversationBanners: { removedBanners },
-            removedPostBanners: { removedPostBanners }
+            removedPostBanners: { removedPostBanners },
+            preparedReplyQueue: { preparedReplyQueueCount }
         )
     }
 
@@ -202,6 +242,47 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertEqual(ctx.messageService.sendCallCount, 0)
     }
 
+    func test_handle_installsExpirationHandlerOnBackgroundTask() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.handle(
+            actionIdentifier: UNNotificationDismissActionIdentifier,
+            userInfo: [:],
+            replyText: nil
+        )
+
+        XCTAssertNotNil(ctx.backgroundTasks.lastExpirationHandler,
+                        "Without an expiration handler nothing ends the task when the flow outlives the background window — iOS terminates the process (0x8BADF00D family)")
+    }
+
+    func test_handle_expirationMidFlight_endsBackgroundTaskExactlyOnce() async {
+        let ctx = makeSUT()
+        let gate = AsyncGate()
+        ctx.persistence.onInsert = { await gate.wait() }
+
+        let sut = ctx.sut
+        let userInfo = replyUserInfo()
+        let handleTask = Task { @MainActor in
+            await sut.handle(
+                actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+                userInfo: userInfo,
+                replyText: "vol long courrier"
+            )
+        }
+        await waitUntil { ctx.backgroundTasks.lastExpirationHandler != nil }
+
+        ctx.backgroundTasks.lastExpirationHandler?()
+        await waitUntil { ctx.backgroundTasks.endCallCount == 1 }
+        XCTAssertEqual(ctx.backgroundTasks.endedIdentifiers,
+                       [UIBackgroundTaskIdentifier(rawValue: 42)],
+                       "The expiration handler must end THE task that was began")
+
+        await gate.open()
+        await handleTask.value
+        XCTAssertEqual(ctx.backgroundTasks.endCallCount, 1,
+                       "The normal completion path must not double-end an already-expired task")
+    }
+
     // MARK: - (b) Auth token pushed before any send
 
     func test_handle_reply_appliesAuthTokenBeforeSend() async {
@@ -226,7 +307,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             openNotification: { _ in },
             localMarkRead: { _ in },
             removeDeliveredForConversation: { _ in },
-            removeDeliveredForPost: { _ in }
+            removeDeliveredForPost: { _ in },
+            prepareReplyQueue: { }
         )
 
         await sut.handle(
@@ -283,6 +365,40 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertEqual(record.state, .sending)
         XCTAssertEqual(item.replyToId, "msg7")
         XCTAssertEqual(item.content, "Réponse depuis le lockscreen")
+    }
+
+    func test_handle_reply_wiresOutboxPoolBeforeEnqueue() async {
+        let ctx = makeSUT()
+        var preparedCountAtEnqueue = -1
+        let preparedReplyQueue = ctx.preparedReplyQueue
+        ctx.queue.onEnqueue = { preparedCountAtEnqueue = preparedReplyQueue() }
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.reply.rawValue,
+            userInfo: replyUserInfo(),
+            replyText: "durable même à froid"
+        )
+
+        XCTAssertEqual(preparedCountAtEnqueue, 1,
+                       "The outbox pool must be wired BEFORE enqueue — a background cold-launch never ran the root-view .task that configures OfflineQueue, so enqueue would throw .poolNotConfigured")
+        XCTAssertEqual(ctx.queue.enqueuedItems.count, 1)
+    }
+
+    func test_handle_comment_wiresOutboxPoolBeforeEnqueue() async {
+        let ctx = makeSUT()
+        var preparedCountAtEnqueue = -1
+        let preparedReplyQueue = ctx.preparedReplyQueue
+        ctx.queue.onEnqueue = { preparedCountAtEnqueue = preparedReplyQueue() }
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c9"),
+            replyText: "durable aussi"
+        )
+
+        XCTAssertEqual(preparedCountAtEnqueue, 1,
+                       "The comment outbox row is the ONLY durable copy of the text — the pool must be wired before enqueue")
+        XCTAssertEqual(ctx.queue.enqueuedKinds, [.createComment])
     }
 
     func test_handle_reply_networkFailure_keepsDurableOutboxRow() async {
@@ -684,7 +800,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertEqual(ctx.openedNotifications(), 0)
     }
 
-    func test_handle_accept_restFailure_doesNotCrashAndEndsBackgroundTask() async {
+    func test_handle_accept_restFailure_fallsBackToNavigationAndEndsBackgroundTask() async {
         let ctx = makeSUT()
         ctx.friendService.respondResult = .failure(TestError())
 
@@ -695,6 +811,36 @@ final class NotificationActionHandlerTests: XCTestCase {
         )
 
         XCTAssertEqual(ctx.friendService.respondCallCount, 1)
+        XCTAssertEqual(ctx.openedNotifications(), 1,
+                       "A failed respond must not silently drop the user's intent — surface the app like the unresolvable-id path does")
         XCTAssertEqual(ctx.backgroundTasks.endCallCount, 1)
+    }
+
+    func test_handle_accept_receivedRequestsFailure_fallsBackToNavigation() async {
+        let ctx = makeSUT()
+        ctx.friendService.receivedRequestsResult = .failure(TestError())
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.accept.rawValue,
+            userInfo: friendRequestUserInfo(friendRequestId: nil, senderId: "senderA"),
+            replyText: nil
+        )
+
+        XCTAssertEqual(ctx.friendService.respondCallCount, 0)
+        XCTAssertEqual(ctx.openedNotifications(), 1,
+                       "An offline accept from the lock screen must open the app, not no-op")
+    }
+
+    func test_handle_decline_restFailure_fallsBackToNavigation() async {
+        let ctx = makeSUT()
+        ctx.friendService.respondResult = .failure(TestError())
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.decline.rawValue,
+            userInfo: friendRequestUserInfo(friendRequestId: "fr1"),
+            replyText: nil
+        )
+
+        XCTAssertEqual(ctx.openedNotifications(), 1)
     }
 }

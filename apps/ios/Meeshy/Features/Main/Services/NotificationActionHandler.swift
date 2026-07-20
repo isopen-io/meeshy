@@ -29,6 +29,32 @@ struct UIApplicationBackgroundTaskScheduler: BackgroundTaskScheduling {
     }
 }
 
+/// Ends the wrapped background task exactly once, from whichever fires first:
+/// the normal completion path (`defer` in `handle()`) or iOS's expiration
+/// callback when the awaited flow outlives the background window (~30 s — the
+/// action flow chains up to two 60 s-timeout REST calls, so a stalled network
+/// mechanically exceeds it). Apple: failing to end an expired task terminates
+/// the process (0x8BADF00D family) — same hazard the silent-push path guards
+/// via `SilentPushState`.
+@MainActor
+final class BackgroundTaskLease {
+    private let scheduler: BackgroundTaskScheduling
+    private var identifier: UIBackgroundTaskIdentifier = .invalid
+
+    init(scheduler: BackgroundTaskScheduling, name: String) {
+        self.scheduler = scheduler
+        self.identifier = scheduler.beginTask(name: name) { [weak self] in
+            Task { @MainActor in self?.end() }
+        }
+    }
+
+    func end() {
+        guard identifier != .invalid else { return }
+        scheduler.endTask(identifier)
+        identifier = .invalid
+    }
+}
+
 /// Slice of `OfflineQueue` the handler needs: the durable message path
 /// (kind `.sendMessage`) and the generic mutation path (`.createComment`, …).
 nonisolated protocol NotificationReplyQueueing {
@@ -90,6 +116,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let friendService: FriendServiceProviding
     private let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?
+    private let injectedPrepareReplyQueue: (@MainActor () async -> Void)?
     private let backgroundTasks: BackgroundTaskScheduling
     private let authTokenProvider: @MainActor () -> String?
     private let applyAuthToken: @MainActor (String?) -> Void
@@ -105,6 +132,21 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// (which opens the on-disk GRDB pool).
     private var messagePersistence: OptimisticMessagePersisting {
         injectedPersistence ?? DependencyContainer.shared.messagePersistence
+    }
+
+    /// R2/R4 — the outbox pool is normally wired by the SwiftUI root-view
+    /// `.task` (`MeeshyApp`), a flow that never runs on a background
+    /// cold-launch — the very scenario notification actions target. Without
+    /// this, `enqueue` throws `.poolNotConfigured` and the "durable outbox"
+    /// guarantee is silently inoperative: the reply survives only as a
+    /// `.failed` bubble and the comment text is lost if REST also fails.
+    /// `OfflineQueue.configure` is idempotent for the same shared pool, so
+    /// wiring it again on a warm launch is harmless. Resolved lazily like
+    /// `messagePersistence` so tests never touch `DependencyContainer.shared`.
+    private var prepareReplyQueue: @MainActor () async -> Void {
+        injectedPrepareReplyQueue ?? {
+            await OfflineQueue.shared.configure(pool: DependencyContainer.shared.dbPool)
+        }
     }
 
     init(
@@ -141,7 +183,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             NotificationActionHandler.removeDeliveredNotifications(
                 matching: { ($0["postId"] as? String) == postId }
             )
-        }
+        },
+        prepareReplyQueue: (@MainActor () async -> Void)? = nil
     ) {
         self.messageService = messageService
         self.conversationService = conversationService
@@ -149,6 +192,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.friendService = friendService
         self.replyQueue = replyQueue
         self.injectedPersistence = messagePersistence
+        self.injectedPrepareReplyQueue = prepareReplyQueue
         self.backgroundTasks = backgroundTasks
         self.authTokenProvider = authTokenProvider
         self.applyAuthToken = applyAuthToken
@@ -168,11 +212,11 @@ final class NotificationActionHandler: NotificationActionHandling {
         userInfo: [AnyHashable: Any],
         replyText: String?
     ) async {
-        let taskId = backgroundTasks.beginTask(
-            name: "meeshy.notification-action",
-            expirationHandler: nil
+        let taskLease = BackgroundTaskLease(
+            scheduler: backgroundTasks,
+            name: "meeshy.notification-action"
         )
-        defer { backgroundTasks.endTask(taskId) }
+        defer { taskLease.end() }
 
         // Background cold-launch never runs `checkExistingSession`, so
         // `APIClient.shared.authToken` is nil even though the Keychain has a
@@ -272,6 +316,7 @@ final class NotificationActionHandler: NotificationActionHandling {
             logger.error("reply optimistic insert failed: \(error.localizedDescription, privacy: .public)")
         }
 
+        await prepareReplyQueue()
         var outboxRowLanded = false
         do {
             try await replyQueue.enqueue(item)
@@ -399,6 +444,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         )
         let clientMutationId = ClientMutationId.generate()
 
+        await prepareReplyQueue()
         do {
             try await replyQueue.enqueue(
                 .createComment,
@@ -473,7 +519,13 @@ final class NotificationActionHandler: NotificationActionHandling {
                 )
             }
         } catch {
-            logger.error("friend request \(accepted ? "accept" : "decline", privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            // A thrown resolution (`receivedRequests`) or a failed `respond`
+            // must not silently drop the user's intent — surface the app on
+            // the request screen, same degradation as the unresolvable-id
+            // path above. The banner is only purged on success, so the user
+            // can also re-tap later.
+            logger.error("friend request \(accepted ? "accept" : "decline", privacy: .public) failed: \(error.localizedDescription, privacy: .public) — falling back to navigation")
+            openNotification(userInfo)
         }
     }
 
