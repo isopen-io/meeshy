@@ -436,4 +436,60 @@ final class NotificationPayloadHelpersTests: XCTestCase {
 
         XCTAssertNil(result)
     }
+
+    // MARK: - mediaMessageTypes (N4 — typed pre-persisted bubble)
+
+    func test_mediaMessageTypes_audioMime_returnsAudio() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "audio/m4a"
+        )
+        XCTAssertEqual(result.messageType, "audio")
+        XCTAssertEqual(result.contentType, "audio")
+    }
+
+    func test_mediaMessageTypes_videoMp4Mime_returnsVideo() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "video/mp4"
+        )
+        XCTAssertEqual(result.messageType, "video")
+        XCTAssertEqual(result.contentType, "video")
+    }
+
+    func test_mediaMessageTypes_imageMime_returnsImage() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "image/jpeg"
+        )
+        XCTAssertEqual(result.messageType, "image")
+        XCTAssertEqual(result.contentType, "image")
+    }
+
+    func test_mediaMessageTypes_uppercaseMime_isCaseInsensitive() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "AUDIO/MP4"
+        )
+        XCTAssertEqual(result.messageType, "audio")
+    }
+
+    func test_mediaMessageTypes_nilMime_returnsText() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: nil
+        )
+        XCTAssertEqual(result.messageType, "text")
+        XCTAssertEqual(result.contentType, "text")
+    }
+
+    func test_mediaMessageTypes_emptyMime_returnsText() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: ""
+        )
+        XCTAssertEqual(result.messageType, "text")
+    }
+
+    func test_mediaMessageTypes_unknownMime_returnsText() {
+        let result = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: "application/pdf"
+        )
+        XCTAssertEqual(result.messageType, "text")
+        XCTAssertEqual(result.contentType, "text")
+    }
 }

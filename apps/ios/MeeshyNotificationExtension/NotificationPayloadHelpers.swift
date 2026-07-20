@@ -183,4 +183,25 @@ nonisolated enum NotificationPayloadHelpers {
             comment: "Push body fallback for an audio-only message when the gateway body is empty (E2EE caption)."
         )
     }
+
+    /// N4 — maps the push payload's `attachmentMimeType` to the
+    /// `messageType` / `contentType` pair stored on the pre-persisted
+    /// `MessageRecord`, so the bubble written by the NSE renders as the right
+    /// media kind BEFORE the canonical REST payload overwrites it (previously
+    /// hardcoded to `"text"`, showing an empty text bubble for a voice memo).
+    ///
+    /// Values mirror `MeeshyMessage.MessageType` raw values (`text`, `image`,
+    /// `audio`, `video`). Unknown / absent mime → `text`, matching the
+    /// gateway's default for caption-only messages.
+    nonisolated static func mediaMessageTypes(
+        forAttachmentMimeType mimeType: String?
+    ) -> (messageType: String, contentType: String) {
+        let normalized = mimeType?
+            .trimmingCharacters(in: .whitespaces)
+            .lowercased() ?? ""
+        if normalized.hasPrefix("audio/") { return ("audio", "audio") }
+        if normalized.hasPrefix("video/") { return ("video", "video") }
+        if normalized.hasPrefix("image/") { return ("image", "image") }
+        return ("text", "text")
+    }
 }

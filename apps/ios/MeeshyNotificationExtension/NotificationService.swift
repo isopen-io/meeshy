@@ -352,6 +352,13 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
         let content = userInfo["content"] as? String ?? ""
 
+        // N4 — derive the media kind from the attachment mime so the
+        // pre-persisted bubble renders as audio/image/video instead of an
+        // empty text bubble until the canonical REST fetch overwrites it.
+        let media = NotificationPayloadHelpers.mediaMessageTypes(
+            forAttachmentMimeType: userInfo["attachmentMimeType"] as? String
+        )
+
         do {
             let now = Date()
             let record = MessageRecord(
@@ -364,7 +371,8 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 // fetch will overwrite with the canonical value seconds later.
                 content: content,
                 originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en",
-                messageType: "text", messageSource: "user", contentType: "text",
+                messageType: media.messageType, messageSource: "user",
+                contentType: media.contentType,
                 // Incoming messages are .delivered (received by us), not
                 // .sent (which means "sent BY us and acked by server").
                 // The previous .sent value broke any GRDB query that
