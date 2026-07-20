@@ -946,6 +946,10 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        // Segment actif signalé uniquement par le remplissage accent → invisible
+        // sans la vue : trait `.isSelected` pour VoiceOver (doctrine 186i). Le
+        // libellé + compteur visibles restent la source du label lu.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
@@ -1606,6 +1610,9 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
+        // Capsule active signalée par le seul remplissage → trait `.isSelected`
+        // pour VoiceOver (doctrine 186i). Le libellé + compteur restent lus.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
@@ -1822,6 +1829,9 @@ struct MessageDetailSheet: View {
                     )
             )
         }
+        // La coche + le fond accent ne portent aucun label → trait `.isSelected`
+        // pour que VoiceOver annonce le motif de signalement choisi (doctrine 186i).
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Forward Tab Content
