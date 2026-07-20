@@ -285,7 +285,36 @@ final class DependencyContainer {
         let base = groupContainer ?? URL.applicationSupportDirectory
         let dbDir = base.appendingPathComponent("Database")
         try? FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
-        return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
+        let dbPath = dbDir.appendingPathComponent("meeshy_messages.sqlite").path
+        applyMessageStoreFileProtection(directoryPath: dbDir.path, databasePath: dbPath)
+        return dbPath
+    }
+
+    /// N2 — pin `.completeUntilFirstUserAuthentication` on the shared message
+    /// store (directory + sqlite + WAL/SHM sidecars), mirroring
+    /// `AppDatabase.resolveDatabaseURL`. The main app's
+    /// `default-data-protection = NSFileProtectionComplete` entitlement would
+    /// otherwise make any file (re)created by the app unreadable to the NSE
+    /// while the device is locked — silently disabling pre-persist.
+    private static func applyMessageStoreFileProtection(
+        directoryPath: String,
+        databasePath: String
+    ) {
+        let fileManager = FileManager.default
+        let protection: [FileAttributeKey: Any] = [
+            .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
+        ]
+        var paths = [directoryPath]
+        paths += ["", "-wal", "-shm"]
+            .map { databasePath + $0 }
+            .filter { fileManager.fileExists(atPath: $0) }
+        for path in paths {
+            do {
+                try fileManager.setAttributes(protection, ofItemAtPath: path)
+            } catch {
+                containerLogger.error("Failed to set file protection on \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     // MARK: - Database config (O7, N7, N8)
@@ -293,6 +322,11 @@ final class DependencyContainer {
     nonisolated static func dbConfig() -> Configuration {
         var config = Configuration()
         config.maximumReaderCount = min(ProcessInfo.processInfo.activeProcessorCount * 2, 16)
+        // N1 — the NSE opens its own pool on the same App Group file. GRDB's
+        // default `.immediateError` busy mode turns any cross-process write
+        // collision into SQLITE_BUSY; a 5 s timeout absorbs the contention
+        // (the NSE's writes are sub-millisecond, the app's are batched).
+        config.busyMode = .timeout(5)
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA synchronous = NORMAL")
             try db.execute(sql: "PRAGMA journal_size_limit = 16777216")

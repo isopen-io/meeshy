@@ -319,7 +319,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     private static let sharedPool: DatabasePool? = {
         guard let path = appGroupDatabasePath() else { return nil }
         do {
-            let pool = try DatabasePool(path: path)
+            // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
+            // the main app holds its own pool on this same file, and GRDB's
+            // default `.immediateError` busy mode would turn a cross-process
+            // write collision into an SQLITE_BUSY swallowed by the catch
+            // below (pre-persisted bubble silently lost).
+            var config = Configuration()
+            config.busyMode = .timeout(5)
+            let pool = try DatabasePool(path: path, configuration: config)
             try MessageDatabaseMigrations.runAll(on: pool)
             return pool
         } catch { return nil }
