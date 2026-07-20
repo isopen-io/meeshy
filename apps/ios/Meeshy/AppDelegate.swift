@@ -235,6 +235,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: []
         )
 
+        let commentAction = UNTextInputNotificationAction(
+            identifier: MeeshyNotificationAction.comment.rawValue,
+            title: String(localized: "notifications.action.comment", defaultValue: "Comment"),
+            options: [],
+            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Send"),
+            textInputPlaceholder: String(localized: "notifications.action.commentPlaceholder", defaultValue: "Comment…")
+        )
+
         let viewAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.view.rawValue,
             title: String(localized: "notifications.action.view", defaultValue: "View"),
@@ -299,6 +307,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: []
         )
 
+        // R3 — social pushes whose type is commentable AND that carry a postId
+        // (category set by the NSE, `NotificationPayloadHelpers.socialCategoryIdentifier`,
+        // or pushed directly by the gateway). Adds the inline text action.
+        let socialCommentableCategory = UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.socialCommentable.rawValue,
+            actions: [commentAction, viewAction, markReadAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
         // Call category: distinct action set for incoming (ringing) vs missed/ended.
         // Incoming calls would normally use CallKit/PushKit VoIP; this category
         // covers the regular-APNs path (missed_call, call_ended, call_declined,
@@ -315,6 +333,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             mentionCategory,
             friendRequestCategory,
             socialCategory,
+            socialCommentableCategory,
             callCategory
         ])
     }
@@ -425,6 +444,7 @@ enum MeeshyNotificationCategory: String {
     case mention = "MEESHY_MENTION"
     case friendRequest = "MEESHY_FRIEND_REQUEST"
     case social = "MEESHY_SOCIAL"
+    case socialCommentable = "MEESHY_SOCIAL_COMMENTABLE"
     case call = "MEESHY_CALL"
 }
 
@@ -432,6 +452,7 @@ enum MeeshyNotificationAction: String {
     case reply = "MEESHY_ACTION_REPLY"
     case markRead = "MEESHY_ACTION_MARK_READ"
     case view = "MEESHY_ACTION_VIEW"
+    case comment = "MEESHY_ACTION_COMMENT"
     case accept = "MEESHY_ACTION_ACCEPT"
     case decline = "MEESHY_ACTION_DECLINE"
     case callback = "MEESHY_ACTION_CALLBACK"

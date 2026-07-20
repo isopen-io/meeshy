@@ -204,4 +204,39 @@ nonisolated enum NotificationPayloadHelpers {
         if normalized.hasPrefix("image/") { return ("image", "image") }
         return ("text", "text")
     }
+
+    /// R3 — social push types whose banner exposes the inline « Commenter »
+    /// text action. A type is commentable when the produced comment has an
+    /// unambiguous target:
+    ///  - comment / thread notifications (`post_comment`, `comment_reply`,
+    ///    `story_new_comment`, `story_thread_reply`, `friend_story_comment`)
+    ///    → threaded reply to THE notified comment ;
+    ///  - `friend_new_post` → root comment on the new post.
+    /// Reactions / likes / moods / new stories stay on plain `MEESHY_SOCIAL`
+    /// (a Comment button there would be misleading).
+    nonisolated static let commentableSocialTypes: Set<String> = [
+        "post_comment",
+        "comment_reply",
+        "story_new_comment",
+        "story_thread_reply",
+        "friend_story_comment",
+        "friend_new_post"
+    ]
+
+    /// Category for a social push: `MEESHY_SOCIAL_COMMENTABLE` when the type
+    /// is commentable AND the payload carries a `postId` (the comment
+    /// endpoint's target), plain `MEESHY_SOCIAL` otherwise. Identifiers are a
+    /// cross-layer contract — the gateway (`category` push field) and
+    /// `AppDelegate.registerNotificationCategories` use the SAME strings.
+    nonisolated static func socialCategoryIdentifier(
+        type: String,
+        postId: String?
+    ) -> String {
+        guard commentableSocialTypes.contains(type),
+              let postId,
+              !postId.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return "MEESHY_SOCIAL"
+        }
+        return "MEESHY_SOCIAL_COMMENTABLE"
+    }
 }

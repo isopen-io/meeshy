@@ -99,6 +99,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         let openedNotifications: () -> Int
         let locallyMarkedRead: () -> [String]
         let removedConversationBanners: () -> [String]
+        let removedPostBanners: () -> [String]
     }
 
     private func makeSUT(
@@ -119,6 +120,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         var openedCount = 0
         var markedRead: [String] = []
         var removedBanners: [String] = []
+        var removedPostBanners: [String] = []
 
         let sut = NotificationActionHandler(
             messageService: messageService,
@@ -136,7 +138,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             openNotification: { _ in openedCount += 1 },
             localMarkRead: { markedRead.append($0) },
             removeDeliveredForConversation: { removedBanners.append($0) },
-            removeDeliveredForPost: { _ in }
+            removeDeliveredForPost: { removedPostBanners.append($0) }
         )
 
         return SUTContext(
@@ -151,7 +153,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             appliedTokens: { appliedTokens },
             openedNotifications: { openedCount },
             locallyMarkedRead: { markedRead },
-            removedConversationBanners: { removedBanners }
+            removedConversationBanners: { removedBanners },
+            removedPostBanners: { removedPostBanners }
         )
     }
 
@@ -393,5 +396,167 @@ final class NotificationActionHandlerTests: XCTestCase {
 
         XCTAssertEqual(ctx.openedNotifications(), 0)
         XCTAssertEqual(ctx.backgroundTasks.endCallCount, 1)
+    }
+
+    // MARK: - R3/R4 — inline comment on social pushes
+
+    private func socialUserInfo(
+        type: String,
+        postId: String? = "post1",
+        commentId: String? = nil
+    ) -> [AnyHashable: Any] {
+        var info: [AnyHashable: Any] = ["type": type]
+        if let postId { info["postId"] = postId }
+        if let commentId { info["commentId"] = commentId }
+        return info
+    }
+
+    private func decodedCommentPayload(_ ctx: SUTContext) throws -> CreateCommentPayload {
+        let data = try XCTUnwrap(ctx.queue.enqueuedPayloads.first)
+        return try JSONDecoder().decode(CreateCommentPayload.self, from: data)
+    }
+
+    func test_handle_comment_postCommentType_threadsReplyToNotifiedComment() async throws {
+        let ctx = makeSUT()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c9"),
+            replyText: "Bien vu !"
+        )
+
+        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
+        XCTAssertEqual(ctx.postService.lastAddCommentPostId, "post1")
+        XCTAssertEqual(ctx.postService.lastAddCommentContent, "Bien vu !")
+        XCTAssertEqual(ctx.postService.lastAddCommentParentId, "c9",
+                       "post_comment → threaded reply to THE notified comment")
+    }
+
+    func test_handle_comment_threadReplyTypes_useNotifiedCommentAsParent() async {
+        for type in ["comment_reply", "story_new_comment", "story_thread_reply", "friend_story_comment"] {
+            let ctx = makeSUT()
+
+            await ctx.sut.handle(
+                actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+                userInfo: socialUserInfo(type: type, commentId: "c42"),
+                replyText: "réponse"
+            )
+
+            XCTAssertEqual(ctx.postService.lastAddCommentParentId, "c42",
+                           "\(type) must thread under the notified comment")
+        }
+    }
+
+    func test_handle_comment_friendNewPost_createsRootComment() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "friend_new_post", commentId: "spurious"),
+            replyText: "Premier !"
+        )
+
+        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
+        XCTAssertNil(ctx.postService.lastAddCommentParentId,
+                     "friend_new_post → root comment, never threaded")
+    }
+
+    func test_handle_comment_missingCommentId_fallsBackToRootComment() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: nil),
+            replyText: "ok"
+        )
+
+        XCTAssertEqual(ctx.postService.addCommentCallCount, 1)
+        XCTAssertNil(ctx.postService.lastAddCommentParentId)
+    }
+
+    func test_handle_comment_anonymousSession_isLoggedNoop() async {
+        let ctx = makeSUT(isRegisteredUser: false)
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c1"),
+            replyText: "anonyme"
+        )
+
+        XCTAssertEqual(ctx.postService.addCommentCallCount, 0,
+                       "The comments endpoint requires a registered user — no call")
+        XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
+        XCTAssertEqual(ctx.backgroundTasks.endCallCount, 1)
+    }
+
+    func test_handle_comment_networkFailure_keepsDurableOutboxRow() async throws {
+        let ctx = makeSUT()
+        ctx.postService.addCommentResult = .failure(TestError())
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c9"),
+            replyText: "durable"
+        )
+
+        XCTAssertEqual(ctx.queue.enqueuedKinds, [.createComment],
+                       "The comment must survive as a .createComment outbox row")
+        let payload = try decodedCommentPayload(ctx)
+        XCTAssertEqual(payload.postId, "post1")
+        XCTAssertEqual(payload.parentCommentId, "c9")
+        XCTAssertEqual(payload.content, "durable")
+    }
+
+    func test_handle_comment_outboxAndRestShareSameClientMutationId() async throws {
+        let ctx = makeSUT()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c9"),
+            replyText: "idempotent"
+        )
+
+        let payload = try decodedCommentPayload(ctx)
+        XCTAssertEqual(ctx.postService.lastAddCommentClientMutationId, payload.clientMutationId,
+                       "Outbox replay and direct REST must share ONE mutation id so the gateway MutationLog dedups")
+        XCTAssertTrue(payload.clientMutationId.hasPrefix("cmid_"))
+    }
+
+    func test_handle_comment_success_removesDeliveredPostBanners() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c9"),
+            replyText: "fini"
+        )
+
+        XCTAssertEqual(ctx.removedPostBanners(), ["post1"])
+    }
+
+    func test_handle_comment_missingPostId_doesNothing() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", postId: nil, commentId: "c1"),
+            replyText: "sans cible"
+        )
+
+        XCTAssertEqual(ctx.postService.addCommentCallCount, 0)
+        XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
+    }
+
+    func test_handle_comment_emptyText_doesNothing() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.comment.rawValue,
+            userInfo: socialUserInfo(type: "post_comment", commentId: "c1"),
+            replyText: "  \n "
+        )
+
+        XCTAssertEqual(ctx.postService.addCommentCallCount, 0)
+        XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
     }
 }

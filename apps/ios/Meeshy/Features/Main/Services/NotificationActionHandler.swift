@@ -195,6 +195,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         case MeeshyNotificationAction.reply.rawValue:
             await handleReply(payload, replyText: replyText)
 
+        case MeeshyNotificationAction.comment.rawValue:
+            await handleComment(payload, userInfo: userInfo, replyText: replyText)
+
         case MeeshyNotificationAction.view.rawValue,
              MeeshyNotificationAction.accept.rawValue,
              MeeshyNotificationAction.decline.rawValue,
@@ -340,6 +343,87 @@ final class NotificationActionHandler: NotificationActionHandling {
             layoutVersion: 0, layoutMaxWidth: nil,
             changeVersion: 0
         )
+    }
+
+    // MARK: - Inline comment on social pushes (R3/R4)
+
+    /// Threading rule (spec D4-R3, décidé) :
+    ///  - comment / thread notifications → the produced comment is a threaded
+    ///    reply to THE notified comment (`parentId = commentId`) ;
+    ///  - `friend_new_post` (or any non-thread type) → root comment ;
+    ///  - missing `commentId` on a thread type → degrade to a root comment
+    ///    rather than dropping the user's text.
+    nonisolated static func threadedParentCommentId(
+        type: String,
+        notifiedCommentId: String?
+    ) -> String? {
+        let threadReplyTypes: Set<String> = [
+            "post_comment",
+            "comment_reply",
+            "story_new_comment",
+            "story_thread_reply",
+            "friend_story_comment"
+        ]
+        guard threadReplyTypes.contains(type),
+              let notifiedCommentId,
+              !notifiedCommentId.isEmpty else { return nil }
+        return notifiedCommentId
+    }
+
+    private func handleComment(
+        _ payload: NotificationPayload,
+        userInfo: [AnyHashable: Any],
+        replyText: String?
+    ) async {
+        guard let postId = payload.postId else {
+            logger.warning("comment action without postId — ignoring")
+            return
+        }
+        let text = (replyText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            logger.warning("comment action with empty text — ignoring")
+            return
+        }
+        guard isRegisteredUser() else {
+            logger.warning("comment action from an anonymous session — commenting requires a registered account, ignoring")
+            return
+        }
+
+        let parentId = Self.threadedParentCommentId(
+            type: payload.type ?? "",
+            notifiedCommentId: userInfo["commentId"] as? String
+        )
+        let clientMutationId = ClientMutationId.generate()
+
+        do {
+            try await replyQueue.enqueue(
+                .createComment,
+                payload: CreateCommentPayload(
+                    clientMutationId: clientMutationId,
+                    postId: postId,
+                    parentCommentId: parentId,
+                    content: text
+                ),
+                conversationId: nil
+            )
+        } catch {
+            logger.error("comment outbox enqueue failed: \(error.localizedDescription, privacy: .public)")
+        }
+
+        do {
+            _ = try await postService.addComment(
+                postId: postId,
+                content: text,
+                parentId: parentId,
+                effectFlags: nil,
+                clientMutationId: clientMutationId
+            )
+            logger.info("notification comment sent for post \(postId, privacy: .public)")
+        } catch {
+            logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .public)")
+        }
+
+        removeDeliveredForPost(postId)
     }
 
     // MARK: - Notification hygiene

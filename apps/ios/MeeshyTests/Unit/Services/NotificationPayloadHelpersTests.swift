@@ -492,4 +492,51 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         XCTAssertEqual(result.messageType, "text")
         XCTAssertEqual(result.contentType, "text")
     }
+
+    // MARK: - socialCategoryIdentifier (R3 — inline comment action)
+
+    func test_socialCategoryIdentifier_postCommentWithPostId_returnsCommentable() {
+        XCTAssertEqual(
+            NotificationPayloadHelpers.socialCategoryIdentifier(type: "post_comment", postId: "p1"),
+            "MEESHY_SOCIAL_COMMENTABLE"
+        )
+    }
+
+    func test_socialCategoryIdentifier_friendNewPostWithPostId_returnsCommentable() {
+        XCTAssertEqual(
+            NotificationPayloadHelpers.socialCategoryIdentifier(type: "friend_new_post", postId: "p1"),
+            "MEESHY_SOCIAL_COMMENTABLE"
+        )
+    }
+
+    func test_socialCategoryIdentifier_threadReplyTypesWithPostId_returnCommentable() {
+        for type in ["comment_reply", "story_new_comment", "story_thread_reply", "friend_story_comment"] {
+            XCTAssertEqual(
+                NotificationPayloadHelpers.socialCategoryIdentifier(type: type, postId: "p1"),
+                "MEESHY_SOCIAL_COMMENTABLE",
+                "\(type) with a postId must expose the comment action"
+            )
+        }
+    }
+
+    func test_socialCategoryIdentifier_commentableTypeWithoutPostId_returnsSocial() {
+        XCTAssertEqual(
+            NotificationPayloadHelpers.socialCategoryIdentifier(type: "post_comment", postId: nil),
+            "MEESHY_SOCIAL"
+        )
+        XCTAssertEqual(
+            NotificationPayloadHelpers.socialCategoryIdentifier(type: "post_comment", postId: ""),
+            "MEESHY_SOCIAL"
+        )
+    }
+
+    func test_socialCategoryIdentifier_nonCommentableType_returnsSocial() {
+        for type in ["post_like", "story_reaction", "comment_like", "friend_new_mood", "friend_new_story", "post_repost"] {
+            XCTAssertEqual(
+                NotificationPayloadHelpers.socialCategoryIdentifier(type: type, postId: "p1"),
+                "MEESHY_SOCIAL",
+                "\(type) has no commentable target — a Comment button would be misleading"
+            )
+        }
+    }
 }

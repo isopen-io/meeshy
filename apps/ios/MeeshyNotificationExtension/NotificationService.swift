@@ -218,7 +218,8 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         case "friend_request", "contact_request":
             category = "MEESHY_FRIEND_REQUEST"
 
-        // Social feed — view + mark as read
+        // Social feed — view + mark as read ; commentable types WITH a postId
+        // additionally expose the inline « Commenter » text action (R3).
         case "post_like",
              "post_comment",
              "post_repost",
@@ -235,7 +236,10 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
              "friend_new_story",
              "friend_new_post",
              "friend_new_mood":
-            category = "MEESHY_SOCIAL"
+            category = NotificationPayloadHelpers.socialCategoryIdentifier(
+                type: rawType,
+                postId: content.userInfo["postId"] as? String
+            )
 
         // Call events — callback / answer / decline actions
         case "missed_call",
