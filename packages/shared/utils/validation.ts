@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
+import { normalizeLanguageCode } from './language-normalize.js';
 
 /**
  * Code de langue in-app supporté, **validé ET normalisé** (lowercase).
@@ -82,13 +83,29 @@ export const CommonSchemas = {
   // ID MongoDB
   mongoId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'ID MongoDB invalide'),
   
-  // Langue — ISO 639-1 (2 lettres) OU ISO 639-3 (3 lettres, ex. 'bas', 'ksf',
-  // 'nnh', 'ewo' — langues camerounaises officiellement supportées, préservées
-  // verbatim par normalizeLanguageCode), avec sous-tag région BCP-47 optionnel.
-  // Le corps `{2}` seul rejetait tout code 639-3 sur sendMessage/editMessage
-  // alors que systemLanguage/regionalLanguage (refine isSupportedLanguage) les
-  // acceptent — incohérence qui bloquait l'envoi dans une langue supportée.
-  language: z.string().min(2).max(5).regex(/^[a-z]{2,3}(-[A-Z]{2})?$/, 'Code langue invalide'),
+  // Langue source (`originalLanguage` de sendMessage/editMessage) — NORMALISÉE
+  // vers la forme canonique via la SSOT `normalizeLanguageCode`, exactement comme
+  // resolveUserLanguage. Toute entrée BCP-47 réelle est acceptée puis réduite au
+  // code persisté : `'en-US'`/`'EN'` → `'en'`, `'zh-Hant-HK'` → `'zh'`,
+  // `'es-419'` → `'es'`, `'bas-CM'` → `'bas'`. Les codes 639-3 supportés (`'bas'`,
+  // `'ksf'`, `'nnh'`, `'dua'`, `'ewo'`) sont préservés verbatim ; les entrées non
+  // réductibles (`'f'`, `'english'`, `'fr2'`) sont rejetées.
+  //
+  // Root cause corrigée : l'ancien `regex /^[a-z]{2,3}(-[A-Z]{2})?$/` + `max(5)`
+  // (a) se contredisait — il matchait `'bas-CM'` (6 car.) mais `max(5)` le
+  // rejetait — et (b) laissait passer `'en-US'` SANS le normaliser, or
+  // MessagingService persiste `originalLanguage` verbatim : `'en-US'` stocké ne
+  // matchait jamais `'en'` côté lecteur (`originalLanguage === userLanguage`) →
+  // message éternellement « étranger » (corruption du Prisme Linguistique).
+  // Normaliser à la frontière élimine les deux défauts d'un coup.
+  language: z
+    .string()
+    .min(2)
+    .max(35)
+    .transform((code) => normalizeLanguageCode(code))
+    .refine((code): code is string => code !== undefined, {
+      message: 'Code langue invalide',
+    }),
   
   // Type de conversation
   conversationType: z.enum(['direct', 'group', 'public', 'global', 'broadcast']),

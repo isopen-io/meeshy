@@ -69,29 +69,43 @@ describe('CommonSchemas', () => {
   });
 
   describe('language', () => {
-    it('accepts ISO 639-1 two-letter codes', () => {
-      expect(CommonSchemas.language.safeParse('fr').success).toBe(true);
-      expect(CommonSchemas.language.safeParse('en').success).toBe(true);
+    it('accepts ISO 639-1 two-letter codes and returns them canonical', () => {
+      expect(CommonSchemas.language.parse('fr')).toBe('fr');
+      expect(CommonSchemas.language.parse('en')).toBe('en');
     });
 
-    it('accepts ISO 639-3 three-letter supported codes', () => {
+    it('accepts ISO 639-3 three-letter supported codes verbatim', () => {
       // Cameroonian languages first-class in packages/shared/utils/languages.ts
       // and preserved verbatim by normalizeLanguageCode — must not be rejected
       // on sendMessage/editMessage while systemLanguage/regionalLanguage accept them.
       for (const code of ['bas', 'ksf', 'nnh', 'dua', 'ewo']) {
-        expect(CommonSchemas.language.safeParse(code).success).toBe(true);
+        expect(CommonSchemas.language.parse(code)).toBe(code);
       }
     });
 
-    it('accepts a BCP-47 region subtag', () => {
-      expect(CommonSchemas.language.safeParse('en-US').success).toBe(true);
+    it('normalizes region / script / case variants to the canonical persisted code', () => {
+      // originalLanguage is persisted VERBATIM by MessagingService, then compared
+      // against the reader's normalized language (`originalLanguage === userLanguage`).
+      // Storing a raw BCP-47 tag (`en-US`, `zh-Hant-HK`) would never match `en`/`zh`,
+      // marking the message eternally "foreign" — a Prisme Linguistique corruption.
+      // Normalizing at the trust boundary via the SSOT keeps the persisted value canonical.
+      expect(CommonSchemas.language.parse('en-US')).toBe('en');
+      expect(CommonSchemas.language.parse('EN')).toBe('en');
+      expect(CommonSchemas.language.parse('fr-FR')).toBe('fr');
+      expect(CommonSchemas.language.parse('zh-Hant-HK')).toBe('zh');
+      expect(CommonSchemas.language.parse('es-419')).toBe('es');
+      // 3-letter supported code + region: matched the old regex but was rejected
+      // by the contradictory max(5) length cap. Now accepted and reduced to `bas`.
+      expect(CommonSchemas.language.parse('bas-CM')).toBe('bas');
     });
 
-    it('rejects malformed codes', () => {
+    it('rejects malformed / non-reducible codes', () => {
       expect(CommonSchemas.language.safeParse('f').success).toBe(false);
       expect(CommonSchemas.language.safeParse('english').success).toBe(false);
-      expect(CommonSchemas.language.safeParse('EN').success).toBe(false);
       expect(CommonSchemas.language.safeParse('fr2').success).toBe(false);
+      expect(CommonSchemas.language.safeParse('').success).toBe(false);
+      expect(CommonSchemas.language.safeParse('123').success).toBe(false);
+      expect(CommonSchemas.language.safeParse('@@').success).toBe(false);
     });
   });
 });

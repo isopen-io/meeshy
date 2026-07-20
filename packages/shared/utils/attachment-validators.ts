@@ -60,8 +60,13 @@ import { z } from 'zod';
  * the 3-letter ISO 639-3 codes `bas`/`ksf`/`nnh`/`dua`/`ewo` (supported
  * Cameroonian languages, see languages.ts) as canonical and never truncates
  * them — a `[a-zA-Z]{2}` anchor would reject a legitimate `bas` transcription
- * or `{ bas: {...} }` translation map at the trust boundary. Mirrors the
- * widened `CommonSchemas.language` regex in validation.ts.
+ * or `{ bas: {...} }` translation map at the trust boundary.
+ *
+ * Unlike `CommonSchemas.language` (validation.ts), which NORMALIZES its input
+ * to the canonical code via `normalizeLanguageCode`, this schema only validates
+ * the raw BCP-47-ish SHAPE and preserves the code verbatim: an attachment
+ * translation key is stored under the exact code the writer supplied (keying is
+ * the writer's responsibility — see `attachmentTranslationsMapSchema` below).
  */
 export const languageCodeSchema = z
   .string()
