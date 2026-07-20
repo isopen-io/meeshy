@@ -1,5 +1,96 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **rolling live-transcript accumulator core** landed (slice `call-transcript-buffer`,
+> feature-parity §H → advances "Live in-call transcription overlay" `[~]` by delivering the SSOT rolling
+> transcript the overlay renders — the missing accumulation layer between the already-landed caption transport
+> (`DataChannelCodec` → `Caption(segment)`) / STT and the display resolver (`CallCaptionResolver`). Parity source:
+> iOS `CallTranscriptionService.appendSegment` (`apps/ios/Meeshy/Features/Main/Services/CallTranscriptionService.swift`).
+> One pure, immutable `:core:model` core, fully TDD-covered. **`LiveTranscript` + `CallTranscriptSegment`** is the
+> total, side-effect-free accumulator: `append(segment, retentionLimit=50)` (1) first drops that speaker's
+> *in-progress* (non-final) line — `filterNot { speakerId == && !isFinal }` — so at most one interim line per speaker
+> is ever live (the recognizer's partial guess is replaced as it refines) while **every finalized line survives**;
+> (2) bounds the buffer to the `retentionLimit` most-recently-*appended* segments (insertion-order suffix, exact iOS
+> parity value 50) so a marathon call stays O(1); and `ordered` (3) projects the retained set sorted by wall-clock
+> `capturedAtMs` via a **stable** sort — ASR start-time is buffer-relative and resets on recognizer rotation, so only
+> capture time gives a stable cross-speaker order, and equal timestamps keep insertion order. `captionLines(mode)`
+> reuses the already-landed `CallCaptionResolver` SSOT for the Prisme projection (Translated → translation-or-original
+> fallback, Original → own words, Off → none, blank → no line), and `CallTranscriptSegment.toCaptionSegment()` bridges
+> the two shapes without a parallel resolver. **SOTA note:** iOS keeps two mutable arrays (`allSegments`/`segments`) plus
+> a 2000-entry `persistedSegments` inside a stateful service; Android is a single immutable data class whose every
+> transition returns a new value — trivially testable, no hidden state. **+21 behavioural tests** — `LiveTranscriptTest`
+> (empty append; interim-replaces-interim same speaker; interims coexist across speakers; final kept when a later
+> interim arrives; interim replaced by its final; two finals both retained; ordered-by-capture-time regardless of
+> append order; equal-timestamp stable insertion order; retention cap by insertion order; retention evicts
+> earliest-appended even when it holds the latest timestamp; default-limit-is-50; caption lines empty while Off;
+> Translated shows translation / falls back to original; Original shows own words; blank-text retained but no line;
+> caption lines follow capture-time order; append is pure / original unchanged; toCaptionSegment carries Prisme
+> fields). **Mutation check (RED proof):** neutralising the finality gate (`… && !isFinal` → `… `, so a new segment
+> evicts the speaker's finalized lines too) fails **exactly** the four finals-must-survive tests (`final kept when a
+> later interim arrives`, `two finals both retained`, and the two ordering tests that append multiple finals for one
+> speaker — 19 run, 4 failed, no collateral on retention/projection/purity) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through the proxy; `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (the new suite 21/21) + full `:app:assembleDebug`
+> → **BUILD SUCCESSFUL** (8m20s). Reviewer **PASS** (diff `apps/android` only — 1 new production file + 1 test +
+> tracking; **SDK purity** — a data class + a pure immutable reducer in `:core:model`, zero framework deps; the STT
+> actuator + `WebRtcEngine` data-channel seam + overlay UI stay app-side, pending; **SSOT** — one accumulator,
+> reuses `CallCaptionResolver` rather than a parallel projection, mirrors the iOS append rule exactly; **UDF** —
+> immutable `LiveTranscript`, every transition pure; **Prisme** — the caption projection carries the translation
+> without ever collapsing to a first-translation fallback; no coverage floor lowered, no test weakened).
+> **Next slice:** the app-side `WebRtcEngine` data-channel seam (`RTCDataChannel` open/observe/send feeding
+> `DataChannelCodec.decode` → `Bye` ends the call, `Caption` folds into `LiveTranscript` on a `CallViewModel`
+> captions state) + the accent-coherent overlay UI + captions button; OR the app-side Android `SpeechRecognizer`
+> STT actuator that emits local `CallTranscriptSegment`s into `LiveTranscript`; OR the tracked Kover 90%
+> coverage-gate infra follow-up.
+
+> On 2026-07-20 the **call-reliability decision core** landed (slice `call-reliability-policy`, feature-parity §H →
+> advances "Call reconnection on network change (ICE restart)" from `[ ]` → `[~]`; the build-order Calls area's next
+> high-value pure slice, closing the reconnection story at the *policy* layer). Parity source: iOS
+> `CallReliabilityPolicy` (`apps/ios/Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift`) — a `nonisolated enum` of
+> static reliability decisions. Android folds all of them into one pure `:core:model` `CallReliabilityPolicy` object,
+> each a total, side-effect-free function so the whole ICE-restart reconnection story is JVM-testable without a live
+> `PeerConnection`. **(1)** `signalingDegraded(callEstablished, socketConnected)` = `callEstablished && !socketConnected`
+> — drives the discreet "signaling deferred" hint; the DTLS-SRTP media path is decoupled from the socket, so a socket
+> drop mid-call never tears the call down. **(2)** `evaluateHalfOpen(inbound, outbound, secondsInConnected)` →
+> `Healthy`/`Waiting`/`HealHalfOpen`: `inbound >= 5` packets is Healthy; below that, within a 4 s grace it Waits (the
+> first second post-ICE/DTLS is legitimately packet-free); past grace it heals with **one** ICE restart **only while
+> still sending** (`outbound > 0`) — `outbound == 0` is a mute/mic-off business condition, not a transport fault, so it
+> keeps Waiting. **(3)** `evaluateConnecting(secondsInConnecting, didAttemptRestart)` → `Waiting`/`RestartIce`/`Fail`:
+> one ICE restart at 12 s, fail at 25 s, **fail taking priority** over restart. **(4)** `evaluateReconnecting(
+> secondsInAttempt)` → `Waiting`/`Retry`: each `.reconnecting` attempt gets a 10 s watchdog budget so a silently
+> stalled restart (no fresh PC-state/path signal to re-arm it) escalates instead of hanging forever. **(5)**
+> `evaluateReconnectTrigger(isAlreadyReconnecting, isEscalation)` → `StartCycle`/`Coalesce`/`Escalate`: arbitrates the
+> several independent reconnection sources (network-path edges, PC-state callbacks, watchdogs, restart-failure) so a
+> single blip doesn't spend the whole attempt budget on redundant trigger *edges* instead of *cycles* — escalation
+> always advances, else coalesce onto an in-flight cycle, else start one. **(6)** `reconnectingAllowed(state)` enforces
+> the FSM invariant (only `Connected`/`Reconnecting`/`Connecting` — before an answer no remote description exists so an
+> ICE restart is impossible). **(7)** `shouldRearmRestartOnCredentialRefresh(state)` re-arms the in-flight restart the
+> instant fresh TURN creds land mid-reconnect (inert on every other phase). **(8)** `shouldResetCallClock(
+> wasReconnecting, hasExistingStartDate)` = `!wasReconnecting || !hasExistingStartDate` — keeps the duration timer from
+> freezing at 00:00 on a first-ever connect that transited `.reconnecting`, while preserving a genuine mid-call
+> reconnect's running clock. Reliability budget constants added to `CallQualityThresholds`
+> (`RTP_GATE_REQUIRED_PACKETS=5`, `HALF_OPEN_HEAL_GRACE_SECONDS=4.0`, `CONNECTING_RESTART_SECONDS=12.0`,
+> `CONNECTING_FAIL_SECONDS=25.0`, `RECONNECT_ATTEMPT_BUDGET_SECONDS=10.0`), each at exact iOS parity.
+> **+28 behavioural tests** — `CallReliabilityPolicyTest` (signaling 3; half-open enough-inbound/one-below/in-grace/
+> past-grace-sending/past-grace-mic-off/defaults; connecting inside/restart-boundary/second-restart-suppressed/fail-
+> boundary/fail-priority/defaults; reconnecting inside/overrun/defaults; trigger start/coalesce/escalate-both;
+> reconnectingAllowed allowed×3 & forbidden×5; credential-refresh reconnect-only & inert×6; clock reset×2/first-ever/
+> preserve). Every default-param test pins a production constant against its iOS value. **Mutation check (RED proof):**
+> neutralising the half-open "still sending" gate (`outboundPackets > 0` → `true`) fails **exactly** `past grace with
+> no outbound either is a mic-off condition, not a fault` (28 tests run, 1 failed, no collateral) — behavioural, not
+> tautological. **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through the proxy; `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (the new suite 28/28) + full `:app:assembleDebug` →
+> **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 1 new production file + 1 edited constants file +
+> 1 test + tracking; **SDK purity** — a pure decision object + four verdict enums in `:core:model`, zero framework/
+> `org.webrtc` deps; the `WebRtcEngine`/`NetworkCallback` actuator + watchdog timers stay app-side, pending; **SSOT** —
+> one reliability object, all budgets in `CallQualityThresholds`, mirrors the `VideoSurvivalPolicy`/`DarkFramePolicy`
+> pure-policy pattern; **UDF** — total pure functions, no state; no coverage floor lowered, no test weakened; removed a
+> would-be dead `MAX_RECONNECT_ATTEMPTS` constant since no function this slice consumes it). **Next slice:** the §H
+> app-side reconnection actuator — a `:feature:calls`/`:sdk-core` `WebRtcEngine` PC-connection-state + `NetworkCallback`
+> seam that feeds these verdicts (half-open stats poll → `evaluateHalfOpen`; connect/reconnect watchdog timers →
+> `evaluateConnecting`/`evaluateReconnecting`; trigger arbitration → `evaluateReconnectTrigger`) and performs the ICE
+> restart / `CallStateMachine` teardown, closing the box to `[x]`; OR another §H core (in-call translation data
+> channel) or the tracked Kover 90% coverage-gate infra follow-up.
+
 > On 2026-07-20 the **P2P data-channel control protocol core** landed (slice `call-datachannel-protocol`,
 > feature-parity §H → advances "Live in-call transcription overlay" (`[~]`) by delivering its named-pending
 > **transcript transport**, and covers the in-band call-end shortcut). Parity source: iOS
@@ -6142,6 +6233,29 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-20 — slice `call-reliability-policy` ✅ impl + local gate green + reviewer PASS → PR #2166 (CI pending)
+- **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start; the prior slice
+  `call-datachannel-protocol` had already merged as #2160. Synced local `main` to `origin/main`, branched
+  `claude/apps/android/call-reliability-policy`.
+- **Slice:** pure `:core:model` `CallReliabilityPolicy` — port of iOS `CallReliabilityPolicy`
+  (`WebRTCTypes.swift`), 8 total side-effect-free reconnection decisions + 4 verdict enums
+  (`signalingDegraded`, `evaluateHalfOpen`, `evaluateConnecting`, `evaluateReconnecting`,
+  `evaluateReconnectTrigger`, `reconnectingAllowed`, `shouldRearmRestartOnCredentialRefresh`,
+  `shouldResetCallClock`). Reliability budget constants added to `CallQualityThresholds`. Advances
+  feature-parity §H "Call reconnection on network change (ICE restart)" `[ ]`→`[~]` at the policy layer.
+- **Tests:** +28 `CallReliabilityPolicyTest` (every arm + boundary + inert arm; 3 default-param tests pin
+  the constants against iOS). Mutation (RED proof): `outboundPackets > 0` → `true` fails **exactly** the
+  mic-off test (28 run, 1 failed, no collateral).
+- **Edge cases:** each boundary tested strictly (in-grace vs past-grace, restart vs fail priority, budget
+  boundary, escalation-wins arbitration, every `CallState` arm of the two state predicates, mic-off inert).
+- **Verify:** `:core:model:testDebugUnitTest` green (1708/1708, new suite 28/28) + `:app:assembleDebug`
+  → BUILD SUCCESSFUL (system Gradle 8.14.3, `LANG=C.utf8`, `$HOME/android-sdk`, freshly bootstrapped SDK).
+- **Reviewer:** PASS — diff `apps/android` only (1 new prod + 1 edited constants + 1 test + tracking);
+  SDK purity (pure object + enums in `:core:model`, zero `org.webrtc`/framework deps; actuator app-side,
+  pending); SSOT (one reliability object, budgets in `CallQualityThresholds`, mirrors
+  `VideoSurvivalPolicy`/`DarkFramePolicy`); UDF (total pure fns); no floor lowered, no test weakened.
+- **PR:** #2166 opened → CI running (monitored to green before squash-merge per the merge gate).
 
 ### 2026-07-19 — slice `status-bar-compose` ✅ impl + local gate green + reviewer PASS → PR + merge
 - **Opened with rule #0:** no open PR on the android track (`claude/apps/android/*`) — the 20 open PRs were the
