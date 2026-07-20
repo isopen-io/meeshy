@@ -946,6 +946,9 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        // HIG : l'état actif du filtre n'est signalé que par la couleur — trait
+        // VoiceOver pour que le segment sélectionné soit annoncé « sélectionné ».
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
@@ -1606,6 +1609,9 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
+        // HIG : le filtre d'émoji actif n'est marqué que par la couleur — trait
+        // VoiceOver pour annoncer le segment sélectionné.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
@@ -1822,6 +1828,9 @@ struct MessageDetailSheet: View {
                     )
             )
         }
+        // HIG : parité avec ReportMessageSheet.reportReasonRow — le motif de
+        // signalement sélectionné doit être annoncé « sélectionné » par VoiceOver.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Forward Tab Content
