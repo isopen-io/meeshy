@@ -33,9 +33,15 @@ final class TrackBarViewTests: XCTestCase {
         XCTAssertTrue(view.accessibilityComposedLabel.lowercased().contains("verrouill"))
     }
 
-    func test_labelColumnWidth_isNarrowIconOnlyColumn() {
-        XCTAssertEqual(TrackBarView<Color>.labelColumnWidth, 32, accuracy: 0.01,
-                       "Track label column must be icon-only width, not the old 72pt text+icon column — it was stealing horizontal space from the actual timeline (user report 2026-07-18).")
+    func test_labelColumnWidth_isNarrowTwoLineColumn() {
+        // Colonne deux-lignes (icône + durée / type) : bien plus étroite que
+        // l'ancienne colonne texte 72pt tout en tenant "IMAGE_1"/"3,2 s".
+        // Elle DOIT égaler `TimelineScrubArea.laneLabelWidth` (offset
+        // ruler/playhead) sinon ticks et pistes se désalignent (round 2026-07-19).
+        XCTAssertEqual(TrackBarView<Color>.labelColumnWidth, 52, accuracy: 0.01)
+        XCTAssertEqual(TrackBarView<Color>.labelColumnWidth,
+                       TimelineScrubArea<Color>.laneLabelWidth, accuracy: 0.01,
+                       "La colonne d'étiquette et l'offset ruler/playhead doivent rester en lockstep.")
     }
 
     func test_accessibilityLabel_stillIncludesFullTitle_afterTextRemoval() {
@@ -48,5 +54,24 @@ final class TrackBarViewTests: XCTestCase {
             iconName: "video.fill"
         ) { Color.clear }
         XCTAssertEqual(view.accessibilityComposedLabel, "Vidéo 1")
+    }
+
+    func test_accessibilityLabel_appendsDurationWhenPresent() {
+        let view = TrackBarView(
+            title: "Vidéo 1", isLocked: false, isSelected: false,
+            tintHex: "6366F1", isDark: false, laneWidth: 600, laneHeight: 52,
+            iconName: "video.fill", durationLabel: "3,2 s", typeLabel: "VIDEO_1"
+        ) { Color.clear }
+        XCTAssertEqual(view.accessibilityComposedLabel, "Vidéo 1 — 3,2 s")
+    }
+
+    func test_formatTrackDuration_subMinute_usesSecondsWithComma() {
+        XCTAssertEqual(TrackBarView<Color>.formatTrackDuration(3.2), "3,2 s")
+        XCTAssertEqual(TrackBarView<Color>.formatTrackDuration(0), "0,0 s")
+    }
+
+    func test_formatTrackDuration_overMinute_usesClock() {
+        XCTAssertEqual(TrackBarView<Color>.formatTrackDuration(64), "1:04")
+        XCTAssertEqual(TrackBarView<Color>.formatTrackDuration(125), "2:05")
     }
 }

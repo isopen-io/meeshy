@@ -245,4 +245,35 @@ final class StoryCanvasFramingTests: XCTestCase {
             StoryCanvasFraming.readerPresentation(isFullscreenSession: true, chromeVisible: false),
             .free)
     }
+
+    // MARK: - Alignement .bottom (carte paysage collée au sheet, user 2026-07-20)
+
+    private func landscapeInput(_ align: StoryCanvasFraming.VerticalAlignment,
+                                bottomInset: CGFloat = 320) -> StoryCanvasFraming.Input {
+        StoryCanvasFraming.Input(
+            viewport: CGSize(width: 402, height: 874),
+            headerInset: 74, bottomInset: bottomInset, sideInset: 14,
+            state: .carded, cardedCornerRadius: 22,
+            verticalAlignment: align, canvasRatio: 16.0 / 9.0)
+    }
+
+    func test_resolve_bottomAlignment_landscape_cardBottomSitsAtRegionBottom() {
+        // Une carte PAYSAGE `.bottom` colle son bord BAS à `regionBottom`
+        // (= viewport.height − bottomInset), juste au-dessus du sheet.
+        let bottomInset: CGFloat = 320
+        let r = StoryCanvasFraming.resolve(landscapeInput(.bottom, bottomInset: bottomInset))
+        let intrinsicH = 402.0 / (16.0 / 9.0)          // fit-par-largeur (16:9)
+        let scaledH = intrinsicH * r.scale
+        let cardBottom = 874.0 / 2 + r.offset.height + scaledH / 2
+        XCTAssertEqual(cardBottom, 874.0 - bottomInset, accuracy: 0.5,
+            "Carte paysage .bottom : bord bas au ras du sheet (regionBottom).")
+    }
+
+    func test_resolve_bottomVsCenter_landscape_bottomIsLower() {
+        // `.bottom` place la carte PLUS BAS (offset y plus grand) que `.center`.
+        let bottom = StoryCanvasFraming.resolve(landscapeInput(.bottom)).offset.height
+        let center = StoryCanvasFraming.resolve(landscapeInput(.center)).offset.height
+        XCTAssertGreaterThan(bottom, center,
+            ".bottom colle la carte au sheet ; .center la remonte au milieu de la région.")
+    }
 }

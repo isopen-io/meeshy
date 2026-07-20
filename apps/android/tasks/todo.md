@@ -4,7 +4,16 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Chat) — slice `chat-mention-remote-merge` ✅
+## This loop (Phase: Feed/Statuses) — slice `status-unreacted-socket` ✅
+Realtime `status:unreacted` — the symmetric inverse of the `status:reacted` handler, folding the gateway's canonical
+reaction-removal event into the live mood-statuses bar (a SOTA symmetry iOS's `StatusViewModel` bar handlers lack).
+`:core:model` `SocketStatusUnreactedData{statusId,userId,emoji}`; `:sdk-core` `SocialSocketManager.statusUnreacted`
+flow + `listen("status:unreacted")`; `:feature:feed` pure `StatusBarListState.unreacted` reducer (decrement, clamp ≥0,
+drop spent bucket, inert on absent/no-such-reaction) + `StatusesViewModel` fold skipping the un-reactor's own echo.
++8 tests, mutation-proven own-echo guard. `:app:assembleDebug` + touched test modules green. Diff = `apps/android`
+only. Reviewer PASS. Next: §H Calls WebRTC core, or the tracked Kover 90% coverage-gate infra.
+
+## Prior loop (Phase: Chat) — slice `chat-mention-remote-merge` ✅
 **@-mention autocomplete — debounced remote directory merge.** Completes §Chat "@-mention autocomplete (debounced
 API + local merge)" (local roster shipped 2026-07-06; this is the online half). Extends the existing pure
 `:feature:chat` `ChatMention` SSOT with `shouldQueryRemote` (≥2 trimmed chars) + `mergeSuggestions` (local-first

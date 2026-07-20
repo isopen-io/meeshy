@@ -1914,13 +1914,150 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `StatusRepositoryTest` (list friends/discover endpoint-select, non-status filter, missing-pagination default,
       failure envelope, transport error; create maps entry/PARSE-guard/transport; delete + react success/failure;
       mutation-proven: `DISCOVER→getStatuses` fails exactly the discover-endpoint test, dropping the create
-      `PARSE` guard fails exactly the non-status test). **Still open:** the `StatusesViewModel` (owns page
-      accumulation + `orderedForBar` + cache-first SWR, like the bookmarks screen) + the Compose `LazyRow` pill
-      bar + popover.
-- [ ] Status composer / republish: emoji grid, 122-char text, visibility (public/friends/except/only)
+      `PARSE` guard fails exactly the non-status test).
+      **`StatusesViewModel` landed** (slice `statuses-viewmodel`, 2026-07-19): `:feature:feed` `StatusesViewModel`
+      (UDF `StateFlow<StatusesUiState>`) drives the bar over `StatusRepository.list` — the pure `StatusBarListState`
+      accumulation SSOT (`appended` dedup-by-id + watermark, `created` front-hoist, `removed`, `reacted` count-bump)
+      projected through the `orderedForBar` SSOT (own-first, deduped). `loadInitial` (guarded) / `refresh` /
+      `loadMoreIfNeeded` (tail-threshold 3, silent-fail); `setMode(FRIENDS↔DISCOVER)` resets+reloads (inert on the
+      active tab, mirrors iOS's per-mode instance); optimistic `setStatus`/`clearStatus`/`react` with rollback;
+      `myStatus` surfaces only in FRIENDS mode. Cold open → skeleton then first page (no repo status cache yet, same
+      as bookmarks — L1 cache is the tracked instant-app follow-up). +29 tests (11 `StatusBarListStateTest`,
+      18 `StatusesViewModelTest`; mutation-proven: dropping the FRIENDS-only `myStatus` guard fails exactly the
+      discover test).
+      **Compose `StatusBarView` landed** (slice `status-bar-compose`, 2026-07-19): the `:feature:feed` `LazyRow`
+      emoji-pill rail pinned atop `FeedScreen` (iOS `StatusBarView` parity). The pure `buildStatusBarCells` SSOT
+      decomposes `StatusesUiState` into ordered `StatusBarCell`s — leading own/`MyStatus` or `AddStatus`, an inline
+      `ErrorRetry` chip ONLY on a cold-empty failure (iOS `error != nil && statuses.isEmpty`), the other users'
+      `Pill`s (deduped against the own cell), then a trailing `LoadingMore` spinner; `statusPopoverModel` projects a
+      tapped entry into the thought-bubble popover (emoji + author + text + `via` + `MoodStatusExpiry` countdown).
+      The Composable is thin glue: `loadMoreIfNeeded` on pill scroll-in, `refresh` on the retry chip, own-status
+      accent via `hexColor(avatarColor)`, `Popup` popover. +13 tests (`StatusBarPresentationTest`: 9 cell-builder
+      branches + 4 popover, mutation-proven: dropping the cold-empty `isEmpty()` guard fails exactly the
+      error-not-surfaced-when-populated test). **Still open:** the popover's republish/react actions.
+      **Status composer landed** (slice `status-composer`, 2026-07-19): the `:feature:feed` `StatusComposerSheet`
+      (`ModalBottomSheet`) opened from the bar's `AddStatus` cell (previously inert — now real, no dead-end). The
+      pure `StatusComposerDraft` owns every rule the Composable must not re-implement: the publish gate
+      (`canPublish` = a mood emoji is picked, iOS `disabled(selectedEmoji == nil)`), the 122-char cap (`withText`
+      clamps, iOS `onChange` prefix), the trimmed body actually sent (`trimmedContent`, `null` when blank), the
+      near-limit counter warning (`> 100`), and the emoji toggle (tap the selected one to clear it) + visibility
+      change. Publishes through `StatusesViewModel.setStatus(emoji, content, visibility)`. +14 tests
+      (`StatusComposerDraftTest`, mutation-proven: dropping the `withText` clamp fails exactly the over-limit
+      test; the toggle-deselect guard the emoji-clear test). **Deferred (follow-up §G):** EXCEPT/ONLY visibility
+      needs a per-user audience picker Android lacks — this ships the 4 no-audience cases (PUBLIC/COMMUNITY/
+      FRIENDS/PRIVATE, mirroring `StoryVisibility`); persisting the last-used visibility (iOS `@AppStorage`) and
+      offline-draft recovery (iOS `recoverUnsentStatus`) are also tracked follow-ups.
+- [x] Status composer: emoji grid, 122-char text, visibility (public/community/friends/private) — `status-composer`
+      (except/only audience picker deferred, tracked above)
 - [ ] Mood status create, react, delete; 21h expiry + viewer tracking
-- [ ] Status thought-bubble popover on avatar tap with republish action
-- [ ] Friends / Discover status feeds
+- [x] Status thought-bubble popover on avatar tap with republish action — **republish landed** (slice
+      `status-popover-republish`, 2026-07-19): the `Popup` popover already rendered emoji + author + text + `via` +
+      `MoodStatusExpiry` countdown (`status-bar-compose`); this slice adds the **Republish** affordance — shown only
+      on OTHER users' pills, hidden on the own MyStatus popover (`statusPopoverModel(entry, now, isOwn)` →
+      `canRepublish = !isOwn`, the caller deriving `isOwn = entry.id == myStatus?.id`, null-safe so DISCOVER's
+      myStatus-less bar makes every pill republishable — parity with iOS `StatusBubbleOverlay`'s `onRepublish != nil`
+      gate). Tapping it opens the composer **pre-seeded** via `StatusComposerDraft.republish(source)` (source
+      emoji/body/attribution/voice-audio pre-filled — port of iOS `initialEmoji/initialText/viaUsername/repostOfId/
+      repostAudioUrl`); the sheet forwards a pure `StatusPublishRequest` to `StatusesViewModel.setStatus`, which now
+      carries `viaUsername` through `StatusRepository.create` → `CreatePostRequest.viaUsername` (the wire field iOS
+      sends). +12 tests (8 `StatusComposerDraftTest`: publish-request map/null-gate, republish seed/clamp/bodyless/
+      blank-emoji/not-a-repost/attribution; 2 `StatusBarPresentationTest`: own hides / other offers republish; 1
+      `StatusRepositoryTest`: create body carries repost attribution; 1 `StatusesViewModelTest`: setStatus forwards
+      `viaUsername`). **The react half is a separate feature** — iOS puts reactions in a picker, NOT this popover;
+      deferred to a follow-up.
+      **L1 status cache landed** (slice `status-bar-l1-cache`, 2026-07-19): the in-memory `:sdk-core`
+      `StatusBarCache` (keyed per `StatusFeedMode`, iOS `cacheKey = "statuses_<mode>"`) is the Android analogue of
+      the memory tier of iOS `CacheCoordinator.statuses`. `StatusesViewModel` now paints a warm re-entry (or a switch
+      back to an already-loaded feed) instantly from the cache before any network call: `loadInitial`/`setMode` route
+      through a cache-first `loadFromCacheThenNetwork` (Fresh → serve, no fetch; Stale/Syncing → serve + background
+      revalidate; Empty → skeleton + fetch, mirroring iOS `loadStatuses`' switch), the first network page + optimistic
+      `setStatus`/`clearStatus` write through to the cache (iOS `saveCacheSnapshot`), and `refresh` invalidates then
+      reloads (iOS `refresh`). The fresh/stale/expired decision is the new pure `classifyCache` SSOT, now shared by
+      `cacheFirstFlow` too (no re-implementation). **Improvement over iOS:** an *expired* snapshot is still served
+      while it revalidates (stale-while-revalidate) rather than discarded. +23 tests (6 `ClassifyCacheTest` boundary
+      arms, 9 `StatusBarCacheTest`: empty/fresh-boundary/stale/syncing/per-mode isolation/invalidate-scope/re-save
+      restamp, 8 `StatusesViewModelTest`: fresh-served-no-fetch, stale-paints-then-replaces, write-through-on-fetch/
+      setStatus/clearStatus, mode-switch-instant, refresh-bypasses-cache). Mutation-proven: merging (not replacing) the
+      first page fails exactly `a stale cached bar paints instantly then the network first page replaces it`. Disk L2
+      tier (cold-launch parity across process death) is the tracked next follow-up.
+- [x] Instant-app status bar (L1 in-memory cache, cache-first paint) — `StatusBarCache` (slice
+      `status-bar-l1-cache`, 2026-07-19).
+- [x] Instant-app status bar — **disk L2 cache** (cold-launch parity across process death) — **landed** (slice
+      `status-bar-l2-cache`, 2026-07-19): Room-backed `StatusBarCacheRepository` (`:sdk-core/status`) persists the raw
+      feed per `StatusFeedMode` (`statuses:friends` / `statuses:discover`) into a new `status_bar_cache` table (DB
+      v10→11) and replays it, mirroring `ProfileStatsCacheRepository` exactly (row-presence = sync marker: absent →
+      cold `null`, present `[]` → synced-empty; undecodable payload → cache miss, never a crash). `StatusesViewModel`
+      wires it into the `CacheResult.Empty` (cold-L1) branch: seeds the bar from disk before the first network call
+      (only while still cold and the mode has not switched underneath the read), then reconciles — every network first
+      page and optimistic `setStatus`/`clearStatus` is written through to **both** tiers, and `refresh` invalidates the
+      disk row too. The disk tier is a pure keyed store (opaque params, no product decision) so it stays in `:sdk-core`
+      alongside `ProfileStatsCacheRepository`; the *when-to-read/write* orchestration stays in the `:feature:feed` VM.
+      +17 tests (9 `StatusBarCacheRepositoryTest` Robolectric-Room: cold-null, round-trip-in-order, per-mode keying,
+      two-feeds-independent, newest-wins, synced-empty≠cold, invalidate-scope, undecodable→null, rich-field round-trip;
+      8 `StatusesViewModelTest`: cold-launch-disk-seed, cold-disk→skeleton, network-write-through, warm-L1-never-reads-
+      disk, refresh-invalidates+writes-through, publish-write-through, clear-write-through, failed-clear-no-disk-write).
+      Mutation-proven: flipping the seed's mode-equality guard fails exactly `a cold launch seeds the bar from the disk
+      cache before the network answers`; dropping the network write-through fails exactly the two write-through tests.
+- [x] Mood status react from the bar popover (reaction picker) — **landed** (slice `status-popover-reaction-picker`,
+      2026-07-19): the popover now shows an existing-reactions summary row (pure `statusReactionChips` — count-desc,
+      emoji tie-break) plus a quick-reaction strip (`EmojiCatalog.defaultQuickReactions`) gated to OTHER users'
+      statuses (`StatusPopoverModel.canReact = !isOwn`); tapping fires the already-built optimistic
+      `StatusesViewModel.react` and dismisses. Own status stays read-only (no react/republish), coherent with the
+      republish gate.
+- [x] Friends / Discover status feeds — **toggle UI landed** (slice `status-feed-mode-toggle`, 2026-07-19): the
+      compact glass segmented `StatusFeedModeToggle` above the emoji rail drives the already-built
+      `StatusesViewModel.setMode` (which serves the target feed's L1-cached bar instantly, no-op on the active feed).
+      Pure `statusFeedModeTabs(current)` SSOT owns the order (explicit `[FRIENDS, DISCOVER]`, independent of the enum
+      declaration) + selection. iOS ships only the friends feed (two `StatusViewModel` instances, no in-UI switch) —
+      Android drives both from one VM, so this is a switch iOS never surfaced. `myStatus` surfaces only in FRIENDS
+      mode, so DISCOVER coherently swaps the leading cell to Add. +4 `StatusBarPresentationTest` (both-feeds-offered,
+      friends-first order, per-mode selection; mutation-proven: reversing `STATUS_FEED_TAB_ORDER` fails exactly the
+      order test, hard-wiring selection to FRIENDS fails exactly the discover-selection test).
+- [x] Statuses area **i18n (FR/ES/PT)** — **landed** (slice `status-strings-i18n`, 2026-07-20): the whole 26-key
+      `status_*` family (`status_bar_*` / `status_feed_*` / `status_composer_*`) was `values/`-only; now fully
+      localised in FR/ES/PT with format-specifier parity preserved (`%1$s`, `%1$d/%2$d`, …). Guarded by a new
+      full-module `FeedStringLocalizationParityTest` (2 tests): (1) every base `<string>` key is translated in every
+      shipped locale — no silent English fallthrough; (2) each translation keeps the base's positional format
+      specifiers — a drifted/dropped arg is a runtime crash, so this is correctness not cosmetics. The guard is
+      deliberately full-module so any future feed key added without its FR/ES/PT siblings turns red before it ships.
+      Mutation-proven RED: pre-translation the parity test failed with exactly the 26 missing `status_*` keys per
+      locale. Pure resource/parity slice — no product logic touched.
+- [x] Statuses **realtime socket wiring** (live bar updates) — **landed** (slice `status-realtime-socket`,
+      2026-07-20): full parity with iOS `StatusViewModel.subscribeToSocketEvents`. The social event bus gains four
+      status flows — `SocialSocketManager` now `listen`s `status:created` / `status:updated` / `status:deleted` /
+      `status:reacted` (canonical `SERVER_EVENTS` names — the prompt's `status:new`/`status:reaction` are informal
+      labels), each decoding a new `@Serializable` `:core:model` DTO (`SocketStatusCreatedData{status: ApiPost}`,
+      `SocketStatusUpdatedData`, `SocketStatusDeletedData{statusId,authorId}`, `SocketStatusReactedData{statusId,
+      userId,emoji}` — mirrors of the iOS structs). `StatusesViewModel` folds the deltas straight into the live
+      `StatusBarListState`: a friend's `status:created` hoists via `created` (mapped through `toStatusEntry`,
+      **de-duplicated + not re-hoisted if already present** — iOS `if !contains`); `status:updated` replaces in
+      place via the new pure `StatusBarListState.updated` reducer (inert when absent); `status:deleted` drops via
+      `removed`; `status:reacted` bumps via `reacted`, **skipping the reactor's own echo** (`payload.userId !=
+      currentUserId()`, since `react` already applied it optimistically). A non-`STATUS` payload (`toStatusEntry` →
+      null) is ignored. Deltas fold into `listState` only; the next network `fetchFirstPage` reconciles the
+      authoritative page (matches iOS's in-memory mutation — the cache tiers are reconciled by fetch/publish, not by
+      each socket delta). +15 tests (2 `StatusBarListStateTest`: `updated` in-place/inert; 4 `SocialSocketManagerTest`:
+      created/updated/deleted/reacted decode; 9 `StatusesViewModelTest`: created-hoist, created-echo-in-place,
+      non-status-ignored, updated-in-place, updated-absent-inert, deleted-drop, reacted-other-bumps, reacted-own-echo-
+      ignored). Mutation-proven RED: neutralising the own-echo guard fails **exactly** `a status reacted echo of the
+      viewer's own reaction is ignored`; neutralising the created present-guard fails **exactly** `a status created
+      echo of an already-present status leaves it in place` (2 of 42 fail, no collateral). SDK purity: the DTOs +
+      event bus are stateless building blocks in `:core:model` / `:sdk-core`; the "which delta does what to the bar"
+      orchestration stays in the `:feature:feed` VM.
+- [x] Statuses **realtime `status:unreacted`** (live bar reaction-removal) — **landed** (slice `status-unreacted-socket`,
+      2026-07-20): the symmetric inverse of the `status:reacted` handler, decoding the gateway's `status:unreacted`
+      (canonical `SERVER_EVENTS`, shared `StatusUnreactedEventData`). A **SOTA symmetry the iOS `StatusViewModel` bar
+      handlers lack** — iOS never folds reaction-removal into the bar. `SocialSocketManager` now `listen`s
+      `status:unreacted` into a new `statusUnreacted` `SharedFlow` decoding `SocketStatusUnreactedData{statusId,userId,
+      emoji}` (same shape as `SocketStatusReactedData`). A new pure `StatusBarListState.unreacted(statusId, emoji)`
+      reducer drops one reaction, **clamped ≥0 and removing the spent bucket** when it hits zero (so no empty entry
+      renders), inert (same instance) when the status is absent **or** carries no such reaction. `StatusesViewModel`
+      folds the delta into the live bar **skipping the un-reactor's own echo** (`payload.userId != currentUserId()`,
+      symmetric to `reacted`). +8 tests (5 `StatusBarListStateTest`: decrement, remove-bucket-at-zero, inert-absent-id,
+      inert-no-such-reaction, inert-no-reactions; 1 `SocialSocketManagerTest`: `status:unreacted` decode; 2
+      `StatusesViewModelTest`: other-user-decrements, own-echo-ignored). Mutation-proven RED: neutralising the own-echo
+      guard (`if (true)`) fails **exactly** `a status unreacted echo of the viewer's own unreaction is ignored`.
+      SDK purity: DTO + flow in `:core:model`/`:sdk-core`, the fold orchestration in the `:feature:feed` VM.
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)
@@ -2023,7 +2160,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
-- [ ] Camera-covered ("dark frame") detection during video calls
+- [~] Camera-covered ("dark frame") detection during video calls — **pure detection
+      core landed** (slice `call-dark-frame-detection`): the `core:model`
+      `DarkFramePolicy` is the SSOT camera-covered detector — a total, side-effect-free
+      reducer (`reduce(DarkFrameState, averageBrightness) → DarkFrameDecision`) ported
+      from iOS `DarkFrameDetector`, with **count-based hysteresis**: the cover latches
+      only after `consecutiveThreshold` (30, iOS default) consecutive frames whose
+      average luma is **strictly below** `darkThreshold` (15.0f, iOS default), so a
+      single dim frame never trips it, and clears the instant a bright frame returns
+      (iOS's responsive restore). It emits `Covered`/`Uncovered` **exactly once** per
+      stretch (idempotent while covered) and, a strict SOTA upgrade on iOS's unbounded
+      `Int`, **clamps the streak counter** at the threshold so `DarkFrameState` is O(1)
+      over a multi-hour covered stream (never overflows). The framework-agnostic other
+      half, pure `FrameLuminance.averageOfYPlane(...)`, ports the iOS Y-plane luma
+      averaging (sub-sampled, `rowStride`-aware so row padding is skipped, unsigned-byte
+      correct) and returns `null` on degenerate geometry rather than a fake pitch-black
+      reading. +24 behavioural tests (13 policy, 11 sampler). Mutation (RED proof):
+      removing the streak clamp fails **exactly** the bounded-counter test (13, 1 failed,
+      no collateral). **Pending:** the WebRTC `VideoProcessor`/`VideoSink` actuator seam
+      (read the captured frame's I420 Y plane → `FrameLuminance` → `DarkFramePolicy`) +
+      the in-call "camera may be covered" UI hint.
 - [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
       (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
       iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
