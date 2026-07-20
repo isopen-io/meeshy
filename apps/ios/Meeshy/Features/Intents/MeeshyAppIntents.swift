@@ -1,6 +1,7 @@
 import AppIntents
 import UIKit
 import SwiftUI
+import MeeshyUI
 
 // MARK: - App Shortcuts
 /// App Shortcuts are available on iOS 16+
@@ -281,10 +282,11 @@ struct NotificationCheckView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "bell.fill")
-                    .foregroundColor(.blue)
-                Text("\(unreadCount) Unread")
+                    .foregroundColor(MeeshyColors.info)
+                Text(String(localized: "siri.notifications.unreadCount", defaultValue: "\(unreadCount) Unread", bundle: .main))
                     .font(.headline)
             }
+            .accessibilityElement(children: .combine)
 
             if !recentMessages.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
@@ -371,30 +373,30 @@ class IntentHandler: NSObject {
 struct SiriTipsView: View {
     let tips = [
         SiriTip(
-            phrase: "Send message to John on Meeshy",
+            phrase: String(localized: "siri.tip.sendMessage", defaultValue: "Send message to John on Meeshy", bundle: .main),
             icon: "message.fill",
-            color: .blue
+            color: MeeshyColors.info
         ),
         SiriTip(
-            phrase: "Call Sarah on Meeshy",
+            phrase: String(localized: "siri.tip.call", defaultValue: "Call Sarah on Meeshy", bundle: .main),
             icon: "phone.fill",
-            color: .green
+            color: MeeshyColors.success
         ),
         SiriTip(
-            phrase: "Translate this to Spanish on Meeshy",
+            phrase: String(localized: "siri.tip.translate", defaultValue: "Translate this to Spanish on Meeshy", bundle: .main),
             icon: "translate",
-            color: .purple
+            color: MeeshyColors.purple600
         ),
         SiriTip(
-            phrase: "Check notifications on Meeshy",
+            phrase: String(localized: "siri.tip.checkNotifications", defaultValue: "Check notifications on Meeshy", bundle: .main),
             icon: "bell.fill",
-            color: .orange
+            color: MeeshyColors.warning
         )
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Try asking Siri:")
+            Text(String(localized: "siri.tips.header", defaultValue: "Try asking Siri:", bundle: .main))
                 .font(.headline)
 
             ForEach(tips) { tip in
@@ -402,6 +404,7 @@ struct SiriTipsView: View {
                     Image(systemName: tip.icon)
                         .foregroundColor(tip.color)
                         .frame(width: 30)
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\"\(tip.phrase)\"")
@@ -414,6 +417,7 @@ struct SiriTipsView: View {
                 .padding()
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(12)
+                .accessibilityElement(children: .combine)
             }
         }
         .padding()
