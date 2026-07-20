@@ -6192,6 +6192,29 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
+### 2026-07-20 — slice `call-reliability-policy` ✅ impl + local gate green + reviewer PASS → PR #2166 (CI pending)
+- **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start; the prior slice
+  `call-datachannel-protocol` had already merged as #2160. Synced local `main` to `origin/main`, branched
+  `claude/apps/android/call-reliability-policy`.
+- **Slice:** pure `:core:model` `CallReliabilityPolicy` — port of iOS `CallReliabilityPolicy`
+  (`WebRTCTypes.swift`), 8 total side-effect-free reconnection decisions + 4 verdict enums
+  (`signalingDegraded`, `evaluateHalfOpen`, `evaluateConnecting`, `evaluateReconnecting`,
+  `evaluateReconnectTrigger`, `reconnectingAllowed`, `shouldRearmRestartOnCredentialRefresh`,
+  `shouldResetCallClock`). Reliability budget constants added to `CallQualityThresholds`. Advances
+  feature-parity §H "Call reconnection on network change (ICE restart)" `[ ]`→`[~]` at the policy layer.
+- **Tests:** +28 `CallReliabilityPolicyTest` (every arm + boundary + inert arm; 3 default-param tests pin
+  the constants against iOS). Mutation (RED proof): `outboundPackets > 0` → `true` fails **exactly** the
+  mic-off test (28 run, 1 failed, no collateral).
+- **Edge cases:** each boundary tested strictly (in-grace vs past-grace, restart vs fail priority, budget
+  boundary, escalation-wins arbitration, every `CallState` arm of the two state predicates, mic-off inert).
+- **Verify:** `:core:model:testDebugUnitTest` green (1708/1708, new suite 28/28) + `:app:assembleDebug`
+  → BUILD SUCCESSFUL (system Gradle 8.14.3, `LANG=C.utf8`, `$HOME/android-sdk`, freshly bootstrapped SDK).
+- **Reviewer:** PASS — diff `apps/android` only (1 new prod + 1 edited constants + 1 test + tracking);
+  SDK purity (pure object + enums in `:core:model`, zero `org.webrtc`/framework deps; actuator app-side,
+  pending); SSOT (one reliability object, budgets in `CallQualityThresholds`, mirrors
+  `VideoSurvivalPolicy`/`DarkFramePolicy`); UDF (total pure fns); no floor lowered, no test weakened.
+- **PR:** #2166 opened → CI running (monitored to green before squash-merge per the merge gate).
+
 ### 2026-07-19 — slice `status-bar-compose` ✅ impl + local gate green + reviewer PASS → PR + merge
 - **Opened with rule #0:** no open PR on the android track (`claude/apps/android/*`) — the 20 open PRs were the
   parallel iOS a11y/i18n swarm. `main` carried #2050 (`statuses-viewmodel`, `7c65395`) as its latest android
