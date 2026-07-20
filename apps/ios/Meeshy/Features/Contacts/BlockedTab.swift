@@ -108,17 +108,10 @@ struct BlockedTab: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "hand.raised.slash")
-                .font(.system(.largeTitle).weight(.light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-            Text(String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloque", bundle: .main))
-                .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textMuted)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+        EmptyStateView(
+            icon: "person.crop.circle.badge.checkmark",
+            title: String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloque", bundle: .main),
+            subtitle: String(localized: "contacts.blocked.empty.subtitle", defaultValue: "Les utilisateurs que vous bloquez apparaitront ici", bundle: .main)
+        )
     }
 }
