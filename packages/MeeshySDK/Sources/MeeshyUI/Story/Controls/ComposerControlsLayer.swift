@@ -34,6 +34,15 @@ public struct ComposerControlsLayer: View {
     /// la band est repliée (FABs seuls / dessin immersif) — le canvas reste plein.
     var onBandHeightChange: ((CGFloat) -> Void)? = nil
 
+    /// Reporte la position Y (coord GLOBALES écran) du BORD SUPÉRIEUR réel de la
+    /// band. Contrairement à `onBandHeightChange` (taille de layout, qui peut
+    /// sous-estimer si le contenu déborde son `.frame(height:)` ou reste stale
+    /// après un resize), `minY` global reflète TOUJOURS le haut visuellement
+    /// rendu — le parent y colle le bas du canvas pour qu'il ne soit JAMAIS
+    /// recouvert (bug troncature 2026-07-20). `.greatestFiniteMagnitude` = band
+    /// repliée (aucune réserve).
+    var onBandTopYChange: ((CGFloat) -> Void)? = nil
+
     public init(
         viewModel: StoryComposerViewModel,
         bandStateMachine: Binding<BandStateMachine>,
@@ -46,6 +55,7 @@ public struct ComposerControlsLayer: View {
         bandMinHeight: CGFloat,
         bandMaxHeight: CGFloat,
         onBandHeightChange: ((CGFloat) -> Void)? = nil,
+        onBandTopYChange: ((CGFloat) -> Void)? = nil,
         onOpenMediaCrop: @escaping (String) -> Void,
         onOpenStickerPicker: (() -> Void)? = nil
     ) {
@@ -60,6 +70,7 @@ public struct ComposerControlsLayer: View {
         self.bandMinHeight = bandMinHeight
         self.bandMaxHeight = bandMaxHeight
         self.onBandHeightChange = onBandHeightChange
+        self.onBandTopYChange = onBandTopYChange
         self.onOpenMediaCrop = onOpenMediaCrop
         self.onOpenStickerPicker = onOpenStickerPicker
     }
@@ -309,9 +320,18 @@ public struct ComposerControlsLayer: View {
                 .background(
                     GeometryReader { p in
                         Color.clear
-                            .onAppear { onBandHeightChange?(p.size.height) }
+                            .onAppear {
+                                onBandHeightChange?(p.size.height)
+                                onBandTopYChange?(p.frame(in: .global).minY)
+                            }
                             .adaptiveOnChange(of: p.size.height) { _, h in
                                 onBandHeightChange?(h)
+                            }
+                            // Le HAUT réel de la band (coord globales) — source de
+                            // vérité pour la réserve du canvas (immunise frame/
+                            // overflow/stale). Suivre minY directement.
+                            .adaptiveOnChange(of: p.frame(in: .global).minY) { _, y in
+                                onBandTopYChange?(y)
                             }
                     }
                 )
@@ -323,7 +343,11 @@ public struct ComposerControlsLayer: View {
         // Band repliée (FABs seuls / dessin immersif) → réserve 0 : le canvas
         // redevient plein écran, les FABs flottent par-dessus.
         .adaptiveOnChange(of: effectiveBandState == .hidden) { _, hidden in
-            if hidden { onBandHeightChange?(0) }
+            if hidden {
+                onBandHeightChange?(0)
+                // Band repliée → aucun bord haut à réserver (canvas plein écran).
+                onBandTopYChange?(.greatestFiniteMagnitude)
+            }
         }
         .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
             // Slide switch invalidates any open formatPanel (id from previous slide).

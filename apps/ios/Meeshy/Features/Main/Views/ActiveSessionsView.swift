@@ -52,6 +52,8 @@ struct ActiveSessionsView: View {
             Text(String(localized: "sessions_title", defaultValue: "Sessions actives"))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                // Titre d'écran → trait En-tête pour le rotor VoiceOver (168i, parité 142i/164i).
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -105,44 +107,54 @@ struct ActiveSessionsView: View {
 
     private func sessionRow(_ session: UserSession) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: session.isCurrent ? "iphone" : "desktopcomputer")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400)
-                .frame(width: 32, height: 32)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill((session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400).opacity(0.12))
-                )
+            // Bloc informatif (icône + libellés) groupé en UN seul élément VoiceOver
+            // au lieu de ~5 arrêts fragmentés (168i, parité 142i/164i). VoiceOver lit
+            // « <appareil>, Actuelle, <ip>, Actif <date> » d'une traite ; le bouton
+            // Révoquer reste un élément actionnable distinct (sibling, hors du groupe).
+            HStack(spacing: 12) {
+                Image(systemName: session.isCurrent ? "iphone" : "desktopcomputer")
+                    // Glyphe décoratif borné par le cadre fixe 32×32 → police figée (86i) ;
+                    // l'identité de l'appareil est portée par `deviceName` → masqué du rotor.
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill((session.isCurrent ? MeeshyColors.success : MeeshyColors.indigo400).opacity(0.12))
+                    )
+                    .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(session.deviceName ?? String(localized: "sessions_unknown_device", defaultValue: "Appareil inconnu"))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(session.deviceName ?? String(localized: "sessions_unknown_device", defaultValue: "Appareil inconnu"))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
 
-                    if session.isCurrent {
-                        Text(String(localized: "sessions_current_badge", defaultValue: "Actuelle"))
-                            .font(MeeshyFont.relative(10, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(MeeshyColors.success))
+                        if session.isCurrent {
+                            Text(String(localized: "sessions_current_badge", defaultValue: "Actuelle"))
+                                .font(MeeshyFont.relative(10, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(MeeshyColors.success))
+                        }
+                    }
+
+                    if let ip = session.ipAddress {
+                        Text(ip)
+                            .font(MeeshyFont.relative(12, weight: .regular))
+                            .foregroundColor(theme.textMuted)
+                    }
+
+                    if let lastActive = session.lastActive {
+                        let formatted = lastActive.formatted(.relative(presentation: .named))
+                        Text(String(localized: "sessions_last_active", defaultValue: "Actif") + " " + formatted)
+                            .font(MeeshyFont.relative(11, weight: .regular))
+                            .foregroundColor(theme.textSecondary)
                     }
                 }
-
-                if let ip = session.ipAddress {
-                    Text(ip)
-                        .font(MeeshyFont.relative(12, weight: .regular))
-                        .foregroundColor(theme.textMuted)
-                }
-
-                if let lastActive = session.lastActive {
-                    let formatted = lastActive.formatted(.relative(presentation: .named))
-                    Text(String(localized: "sessions_last_active", defaultValue: "Actif") + " " + formatted)
-                        .font(MeeshyFont.relative(11, weight: .regular))
-                        .foregroundColor(theme.textSecondary)
-                }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
