@@ -14,6 +14,23 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **168i (en cours, branche `claude/laughing-thompson-55w0p9`, base `main` HEAD `c61a3a7`)** :
+>   VoiceOver identity + localisation de `LinkPreviewCard` (aperçu OpenGraph inline sous une bulle,
+>   whole-card `Button` ouvrant `SFSafariViewController` ; call site `BubbleStandardLayout.swift:934`).
+>   Candidat ouvert soldé en 167i. **0 accessibilité sur un élément interactif** : la carte était un
+>   `Button` sans `.accessibilityElement`/`Label`/`Hint` ni trait `.isLink` → VoiceOver balayait des
+>   fragments déconnectés (site name majuscule, titre tronqué, description, thumbnail déco), sans
+>   identité, sans affordance « ouvre le navigateur », sans sémantique lien. Fix = pattern HIG lien :
+>   `.accessibilityElement(children: .ignore)` + `.accessibilityLabel` (phrase miroir des 3 états de
+>   `content` — peuplé « Aperçu du lien : {siteName}. {titre}. {description} », échec « Lien vers {host} »,
+>   chargement « Aperçu du lien en cours de chargement, {host} ») + `.accessibilityHint` (« Ouvre le lien
+>   dans le navigateur ») + `.accessibilityAddTraits(.isLink)`. 1 fichier, 0 logique, 0 test. 4 clés i18n
+>   neuves `linkpreview.a11y.*` en `defaultValue` inline (pas d'édit `.xcstrings`). Aucun test ne
+>   référence la vue (grep = 0) ; call site unique inchangé. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `LinkPreviewCard` VoiceOver + localisation SOLDÉ** : ne plus reprendre (élément lien unique posé,
+>   label 3-états + hint + trait `.isLink`, thumbnail placeholder glyph figé volontaire borné au tile 72-pt).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
 >   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
