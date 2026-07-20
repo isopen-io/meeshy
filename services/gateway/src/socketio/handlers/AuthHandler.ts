@@ -444,16 +444,13 @@ export class AuthHandler {
       const user = this.connectedUsers.get(userIdOrToken);
       if (!user) return;
 
-      this.statusService.updateLastSeen(userIdOrToken, user.isAnonymous);
-
-      if (!user.isAnonymous) {
-        await this.prisma.user.update({
-          where: { id: userIdOrToken },
-          data: { lastActiveAt: new Date() }
-        });
-      }
+      // Throttled 60s inside StatusService — a passive-connected socket keeps
+      // lastActiveAt fresh (at most one DB write per minute) so it stays
+      // 'online' under the 5min anti-stale guard of the 1/3/5 presence rule.
+      // No per-beat unthrottled Prisma write here.
+      this.statusService.noteHeartbeat(userIdOrToken, user.isAnonymous);
     } catch (error) {
-      logger.debug('heartbeat DB update failed (best-effort)', { userId: userIdOrToken, error });
+      logger.debug('heartbeat presence refresh failed (best-effort)', { userId: userIdOrToken, error });
     }
   }
 
