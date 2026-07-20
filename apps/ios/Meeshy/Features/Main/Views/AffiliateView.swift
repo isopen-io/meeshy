@@ -11,7 +11,7 @@ struct AffiliateView: View {
     @StateObject private var viewModel = AffiliateViewModel()
     @State private var showCreateSheet = false
 
-    private let accentColor = "2ECC71"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -264,7 +264,7 @@ struct AffiliateView: View {
             } label: {
                 Image(systemName: "square.and.arrow.up")
                     .font(MeeshyFont.relative(16))
-                    .foregroundColor(MeeshyColors.success)
+                    .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main))
 
