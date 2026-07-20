@@ -207,6 +207,27 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   `UIActivityViewController` manuel pour l'URL. Restent candidats (fichiers distincts, vérifier
 >   contention) : `AffiliateView`, `ConversationMediaViews`, `ConversationListView` (certains
 >   légitimement manuels : multi-items / activités custom / images générées à la volée).
+> **POINTEUR AUTORITAIRE iOS (mis à jour 186i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **186i (en cours, branche `claude/laughing-thompson-u5ule2`, base `main` HEAD `5c55a06`)** :
+>   Structure VoiceOver de `CreateShareLinkView` (formulaire « Nouveau lien de partage »).
+>   Surface **fraîche** jamais auditée a11y (grep `accessibility` = 0), **déjà 100 % localisée**
+>   (59 `String(localized:)`) et en polices sémantiques → **0 migration i18n / Dynamic Type**.
+>   5 déficits corrigés : (1) **bouton picker de conversation** (la porte de l'action primaire —
+>   Créer est `.disabled` tant qu'aucune conv. n'est choisie) sans label → `.accessibilityLabel`
+>   stateful (`"{name}, {type}"` / `choose_group`) + `.accessibilityHint`, chevron masqué ;
+>   (2) glyphes décoratifs `iconBadge` (tous les toggles + limites + icône type) →
+>   `.accessibilityHidden(true)` en un seul edit du helper ; (3) en-têtes de section →
+>   icône masquée + `.isHeader` sur le titre ; (4) `formTextField` annoncé par son placeholder
+>   → label visible masqué + `.accessibilityLabel(label)` sur le `TextField` ; (5) rangées du
+>   `ConversationPickerSheet` (sélection = checkmark visuel seul) → `.combine` + `.isSelected`,
+>   glyphe masqué (calque `NewConversationView`). 1 fichier, 0 logique, 0 test, 1 clé i18n neuve
+>   en `defaultValue` inline (`share.link.create.conversation.a11yHint`) — 0 édit `.xcstrings`.
+>   0 contention (aucune PR iOS #2100–#2140 ne touche ce fichier ; 0 réf test). Gate = CI `iOS Tests`.
+> - **⚠️ `CreateShareLinkView` structure VoiceOver SOLDÉ 186i** : ne plus reprendre (bouton picker,
+>   glyphes décoratifs, en-têtes `.isHeader`, labels de champs, sélection picker-sheet `.isSelected`).
+>   Restes notés : label busy du bouton Créer pendant `isCreating` (texte déjà présent, faible valeur) ;
+>   aperçu URL du slug lu verbatim (acceptable). Candidats frais suivants hors PR ouvertes :
+>   `AffiliateCreateView`, `StatusComposerView` (⚠ 184i en cours), `MessageLanguageDetailView` (⚠ 185i).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 181i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **181i (en cours, branche `claude/laughing-thompson-giniq4`, base `main` HEAD `6faded3`)** :
 >   VoiceOver de `KeypadTab.resultRow` (People hub → onglet Clavier). La ligne de résultat
