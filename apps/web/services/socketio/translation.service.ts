@@ -26,8 +26,16 @@ import type {
   AudioTranslationsProgressiveListener,
   AudioTranslationsCompletedListener,
   TranscriptionListener,
+  TranslationFailedListener,
+  AudioTranslationFailedListener,
+  TranscriptionFailedListener,
   UnsubscribeFn
 } from './types';
+import type {
+  TranslationFailedEventData,
+  AudioTranslationFailedEventData,
+  TranscriptionFailedEventData,
+} from '@meeshy/shared/types/socketio-events';
 
 /**
  * TranslationService
@@ -39,6 +47,9 @@ export class TranslationService {
   private audioTranslationsProgressiveListeners: Set<AudioTranslationsProgressiveListener> = new Set();
   private audioTranslationsCompletedListeners: Set<AudioTranslationsCompletedListener> = new Set();
   private transcriptionListeners: Set<TranscriptionListener> = new Set();
+  private translationFailedListeners: Set<TranslationFailedListener> = new Set();
+  private audioTranslationFailedListeners: Set<AudioTranslationFailedListener> = new Set();
+  private transcriptionFailedListeners: Set<TranscriptionFailedListener> = new Set();
 
   // Translation caching and deduplication
   private translationCache: LRUCache<string, any> = new LRUCache(500);
@@ -107,6 +118,36 @@ export class TranslationService {
       });
 
       this.audioTranslationsCompletedListeners.forEach(listener => listener(data));
+    });
+
+    // Translation failure events — lets components clear "translating…" spinners
+    socket.on(SERVER_EVENTS.TRANSLATION_FAILED, (data: TranslationFailedEventData) => {
+      logger.warn('[TranslationService]', 'Translation failed', {
+        messageId: data.messageId,
+        conversationId: data.conversationId,
+        error: data.error,
+      });
+      this.translationFailedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.AUDIO_TRANSLATION_FAILED, (data: AudioTranslationFailedEventData) => {
+      logger.warn('[TranslationService]', 'Audio translation failed', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: data.conversationId,
+        error: data.error,
+      });
+      this.audioTranslationFailedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.TRANSCRIPTION_FAILED, (data: TranscriptionFailedEventData) => {
+      logger.warn('[TranslationService]', 'Transcription failed', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: data.conversationId,
+        error: data.error,
+      });
+      this.transcriptionFailedListeners.forEach(listener => listener(data));
     });
   }
 
@@ -215,6 +256,21 @@ export class TranslationService {
     return () => this.audioTranslationsCompletedListeners.delete(listener);
   }
 
+  onTranslationFailed(listener: TranslationFailedListener): UnsubscribeFn {
+    this.translationFailedListeners.add(listener);
+    return () => this.translationFailedListeners.delete(listener);
+  }
+
+  onAudioTranslationFailed(listener: AudioTranslationFailedListener): UnsubscribeFn {
+    this.audioTranslationFailedListeners.add(listener);
+    return () => this.audioTranslationFailedListeners.delete(listener);
+  }
+
+  onTranscriptionFailed(listener: TranscriptionFailedListener): UnsubscribeFn {
+    this.transcriptionFailedListeners.add(listener);
+    return () => this.transcriptionFailedListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners and cache
    */
@@ -224,6 +280,9 @@ export class TranslationService {
     this.audioTranslationsProgressiveListeners.clear();
     this.audioTranslationsCompletedListeners.clear();
     this.transcriptionListeners.clear();
+    this.translationFailedListeners.clear();
+    this.audioTranslationFailedListeners.clear();
+    this.transcriptionFailedListeners.clear();
     this.translationCache.clear();
     this.processedTranslationEvents.clear();
   }

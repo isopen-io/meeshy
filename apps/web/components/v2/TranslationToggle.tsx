@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/use-i18n';
 import { getFlag } from './flags';
@@ -18,6 +18,13 @@ export interface TranslationToggleProps {
   translations?: TranslationItem[];
   userLanguage?: string;
   variant?: 'inline' | 'block';
+  /**
+   * Inline variant only. When true (default) the resolved content is rendered
+   * above the language chip — comments and statuses rely on the toggle to
+   * display their text. Set false for callers that render the content
+   * themselves and want the toggle as a bare language indicator (StoryViewer).
+   */
+  showContent?: boolean;
   className?: string;
 }
 
@@ -41,34 +48,44 @@ function TranslationToggle({
   translations = [],
   userLanguage,
   variant = 'inline',
+  showContent = true,
   className,
 }: TranslationToggleProps) {
   const { t: tComponents } = useI18n('components');
-  const matchingTranslation = userLanguage
-    ? translations.find((t) => t.languageCode.toLowerCase().startsWith(userLanguage.toLowerCase()))
-    : undefined;
 
-  const [displayedVersion, setDisplayedVersion] = useState<{
-    languageCode: string;
-    languageName: string;
-    content: string;
-    isOriginal: boolean;
-  }>(() => {
-    if (matchingTranslation) {
-      return {
-        languageCode: matchingTranslation.languageCode,
-        languageName: matchingTranslation.languageName,
-        content: matchingTranslation.content,
-        isOriginal: false,
-      };
-    }
-    return {
+  const originalVersion = useMemo(
+    () => ({
       languageCode: originalLanguage,
       languageName: originalLanguageName || originalLanguage.toUpperCase(),
       content: originalContent,
-      isOriginal: true,
-    };
-  });
+      isOriginal: true as const,
+    }),
+    [originalLanguage, originalLanguageName, originalContent],
+  );
+
+  // Prisme: the preferred version is derived from the CURRENT props on every render so
+  // translations pushed asynchronously (comment/post:translation-updated) surface as soon
+  // as they land and a change of preferred language re-resolves live.
+  const autoResolved = useMemo(() => {
+    const matching = userLanguage
+      ? translations.find((t) => t.languageCode.toLowerCase().startsWith(userLanguage.toLowerCase()))
+      : undefined;
+    return matching ? { ...matching, isOriginal: false as const } : originalVersion;
+  }, [userLanguage, translations, originalVersion]);
+
+  // Only the user's explicit exploration is stored (language + original flag, never the
+  // content) so a manually selected language stays fresh when its text is re-translated.
+  const [manualSelection, setManualSelection] = useState<{
+    languageCode: string;
+    isOriginal: boolean;
+  } | null>(null);
+
+  const displayedVersion = useMemo(() => {
+    if (!manualSelection) return autoResolved;
+    if (manualSelection.isOriginal) return originalVersion;
+    const picked = translations.find((t) => t.languageCode === manualSelection.languageCode);
+    return picked ? { ...picked, isOriginal: false as const } : autoResolved;
+  }, [manualSelection, autoResolved, originalVersion, translations]);
 
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -99,7 +116,7 @@ function TranslationToggle({
   ];
 
   const handleSelect = useCallback((version: typeof displayedVersion) => {
-    setDisplayedVersion(version);
+    setManualSelection({ languageCode: version.languageCode, isOriginal: version.isOriginal });
     setShowMenu(false);
   }, []);
 
@@ -148,8 +165,13 @@ function TranslationToggle({
 
   // variant === 'inline'
   return (
-    <div className={cn('inline-flex flex-col', className)} ref={menuRef}>
-      <div className="relative inline-flex">
+    <div className={cn(showContent ? 'flex flex-col gap-1' : 'inline-flex flex-col', className)} ref={menuRef}>
+      {showContent && (
+        <p className="text-sm text-[var(--gp-text-primary)] whitespace-pre-wrap break-words">
+          {displayedVersion.content}
+        </p>
+      )}
+      <div className="relative inline-flex self-start">
         <button
           onClick={() => otherVersions.length > 0 && setShowMenu(!showMenu)}
           className={cn(

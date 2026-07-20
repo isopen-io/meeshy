@@ -2,6 +2,7 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class BubbleContentMatrixTests: XCTestCase {
 
     func test_simpleText_hasOnlyTextAndMeta() {
@@ -270,6 +271,29 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(resolved, "Bonjour")
     }
 
+    /// Prisme règle #1 — la langue active n'a aucune traduction correspondante et
+    /// la `preferredTranslation` vise une AUTRE langue : on doit retomber sur
+    /// l'ORIGINAL, jamais sur la traduction préférée.
+    func test_resolveEffectiveContent_returnsOriginalWhenNoTranslationMatchesActive() {
+        let msg = makeMessage(content: "Bonjour") // originalLanguage = fr
+        let preferred = MessageTranslation(
+            id: "t1",
+            messageId: "m1",
+            sourceLanguage: "fr",
+            targetLanguage: "es",
+            translatedContent: "Hola",
+            translationModel: "nllb",
+            confidenceScore: nil
+        )
+        let resolved = BubbleContent.resolveEffectiveContent(
+            message: msg,
+            translations: [],
+            preferredTranslation: preferred,
+            activeLangCode: "en"
+        )
+        XCTAssertEqual(resolved, "Bonjour")
+    }
+
     // MARK: - Reply routing (audioHostsReply / visualHostsReply)
 
     /// Un audio seul en reply doit héberger la citation dans son widget — pas
@@ -473,6 +497,147 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertLessThanOrEqual(cache.count, 2)
     }
 
+    // MARK: - Call notice
+
+    func test_callSummarySystemMessage_buildsCallNoticeWithTimestamp() {
+        let created = Date(timeIntervalSince1970: 1_700_000_000)
+        let msg = makeMessage(
+            content: "Appel vidéo · 04:32",
+            createdAt: created,
+            cachedTimeString: "18:41",
+            messageSource: .system,
+            callSummary: makeCallSummary(initiatorId: "u1", callType: .video, outcome: .completed, durationSeconds: 272)
+        )
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        let notice = content.callNotice
+        XCTAssertNotNil(notice)
+        XCTAssertEqual(notice?.timeString, "18:41")
+        XCTAssertEqual(notice?.timestamp, created)
+        // Current user initiated → outgoing.
+        XCTAssertEqual(notice?.isOutgoing, true)
+    }
+
+    func test_callSummarySystemMessage_incomingWhenCurrentUserIsNotInitiator() {
+        let msg = makeMessage(
+            content: "Appel vidéo entrant",
+            messageSource: .system,
+            callSummary: makeCallSummary(initiatorId: "peer", callType: .video, outcome: .completed, durationSeconds: 49)
+        )
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertEqual(content.callNotice?.isOutgoing, false)
+    }
+
+    func test_nonCallSystemMessage_hasNilCallNotice() {
+        let msg = makeMessage(content: "Conversation créée", messageSource: .system, callSummary: nil)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertNil(content.callNotice)
+        XCTAssertEqual(content.kind, .system)
+    }
+
+    private func makeCallSummary(
+        initiatorId: String,
+        callType: CallSummaryMetadata.MediaType,
+        outcome: CallSummaryMetadata.Outcome,
+        durationSeconds: Int
+    ) -> CallSummaryMetadata {
+        CallSummaryMetadata(
+            callId: "call1",
+            initiatorId: initiatorId,
+            callType: callType,
+            outcome: outcome,
+            durationSeconds: durationSeconds,
+            bytesTotal: 9_300_000,
+            bytesEstimated: true,
+            networkQuality: .good
+        )
+    }
+
+    // MARK: - Call notice presentation (bulle vivante + annulé par-spectateur)
+
+    private let accentHex = "#6366F1"
+
+    private func makeLiveSummary(callType: CallSummaryMetadata.MediaType = .audio) -> CallSummaryMetadata {
+        CallSummaryMetadata(
+            callId: "call1",
+            initiatorId: "peer",
+            callType: callType,
+            outcome: .completed,
+            durationSeconds: 0,
+            bytesTotal: nil,
+            bytesEstimated: false,
+            networkQuality: nil,
+            isLive: true
+        )
+    }
+
+    func test_liveCallPresentation_showsOngoingTitleAndJoinHint() {
+        let presentation = CallNoticePresentation(summary: makeLiveSummary(), isOutgoing: false, accentHex: accentHex)
+
+        XCTAssertEqual(presentation.title, "Appel audio en cours")
+        XCTAssertEqual(presentation.liveSubtitle, "Toucher pour rejoindre")
+    }
+
+    func test_liveVideoCallPresentation_titleIsVideoOngoing() {
+        let presentation = CallNoticePresentation(summary: makeLiveSummary(callType: .video), isOutgoing: true, accentHex: accentHex)
+
+        XCTAssertEqual(presentation.title, "Appel vidéo en cours")
+    }
+
+    func test_liveCallPresentation_readsKindBeforeOutcome_placeholderNeverRendersTerminal() {
+        // Le live porte outcome:'completed' comme placeholder neutre — il ne
+        // doit JAMAIS produire le rendu terminal (« Appel audio sortant »).
+        let presentation = CallNoticePresentation(summary: makeLiveSummary(), isOutgoing: true, accentHex: accentHex)
+
+        XCTAssertEqual(presentation.title, "Appel audio en cours")
+        XCTAssertFalse(presentation.title.contains("sortant"))
+    }
+
+    func test_terminalCallPresentation_hasNoLiveSubtitle() {
+        let terminal = makeCallSummary(initiatorId: "u1", callType: .audio, outcome: .completed, durationSeconds: 30)
+        let presentation = CallNoticePresentation(summary: terminal, isOutgoing: true, accentHex: accentHex)
+
+        XCTAssertNil(presentation.liveSubtitle)
+        XCTAssertEqual(presentation.title, "Appel audio sortant")
+    }
+
+    func test_cancelledCallPresentation_titleIsPerViewer() {
+        let cancelled = CallSummaryMetadata(
+            callId: "call1", initiatorId: "u1", callType: .audio, outcome: .missed,
+            durationSeconds: 0, bytesTotal: nil, bytesEstimated: false, networkQuality: nil,
+            endedByInitiator: true
+        )
+
+        let initiatorView = CallNoticePresentation(summary: cancelled, isOutgoing: true, accentHex: accentHex)
+        XCTAssertEqual(initiatorView.title, "Appel annulé")
+
+        let calleeView = CallNoticePresentation(summary: cancelled, isOutgoing: false, accentHex: accentHex)
+        XCTAssertEqual(calleeView.title, "Appel audio manqué")
+    }
+
+    func test_missedWithoutEndedByInitiator_staysMissedForBothViewers() {
+        let missed = makeCallSummary(initiatorId: "u1", callType: .audio, outcome: .missed, durationSeconds: 0)
+
+        XCTAssertEqual(CallNoticePresentation(summary: missed, isOutgoing: true, accentHex: accentHex).title, "Appel audio manqué")
+        XCTAssertEqual(CallNoticePresentation(summary: missed, isOutgoing: false, accentHex: accentHex).title, "Appel audio manqué")
+    }
+
+    func test_liveCallSummary_stillBuildsACallNotice() {
+        // Le routage BubbleContent existant (messageSource system + callSummary
+        // non-nil) doit accepter le kind 'call-live' — la bulle riche vivante.
+        let msg = makeMessage(
+            content: "Appel audio en cours",
+            messageSource: .system,
+            callSummary: makeLiveSummary()
+        )
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertNotNil(content.callNotice)
+        XCTAssertEqual(content.callNotice?.summary.isLive, true)
+    }
+
     // MARK: - Helpers
 
     private func makeMessage(
@@ -491,7 +656,9 @@ final class BubbleContentMatrixTests: XCTestCase {
         isEdited: Bool = false,
         reactions: [MeeshyReaction] = [],
         createdAt: Date = Date(timeIntervalSince1970: 0),
-        cachedTimeString: String? = "12:34"
+        cachedTimeString: String? = "12:34",
+        messageSource: MeeshyMessage.MessageSource = .user,
+        callSummary: CallSummaryMetadata? = nil
     ) -> MeeshyMessage {
         var effects = MessageEffects(flags: [])
         if isViewOnce {
@@ -504,7 +671,7 @@ final class BubbleContentMatrixTests: XCTestCase {
             content: content,
             originalLanguage: "fr",
             messageType: .text,
-            messageSource: .user,
+            messageSource: messageSource,
             isEdited: isEdited,
             editedAt: nil,
             deletedAt: deletedAt,
@@ -537,7 +704,8 @@ final class BubbleContentMatrixTests: XCTestCase {
             readByAllAt: nil,
             deliveredCount: 0,
             readCount: 0,
-            cachedTimeString: cachedTimeString
+            cachedTimeString: cachedTimeString,
+            callSummary: callSummary
         )
     }
 
@@ -571,6 +739,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
 // MARK: - BubbleBodyFooterLayout.bodyHeight (sizeThatFits double-measure removal)
 
+@MainActor
 final class BubbleBodyFooterLayoutHeightTests: XCTestCase {
 
     func test_bodyHeight_whenFooterDoesNotWiden_reusesProbeHeightWithoutRemeasure() {

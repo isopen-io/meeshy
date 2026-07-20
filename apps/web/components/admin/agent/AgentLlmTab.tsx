@@ -92,6 +92,7 @@ export function AgentLlmTab() {
       }
       const response = await agentAdminService.updateLlmConfig(payload);
       if (response.success && response.data) {
+        /* istanbul ignore next -- data is always truthy inside this if-branch */
         setConfig(response.data ?? null);
         setForm(prev => ({ ...prev, apiKeyEncrypted: '' }));
         const invalidation = (response as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })

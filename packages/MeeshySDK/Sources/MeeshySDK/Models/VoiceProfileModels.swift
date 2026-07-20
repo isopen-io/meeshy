@@ -2,30 +2,55 @@ import Foundation
 
 // MARK: - Voice Profile Consent
 
+/// Statut de consentement vocal — miroir du wire format gateway
+/// `GET /voice-profile/consent` : le schema de réponse Fastify ne sérialise
+/// QUE les trois timestamps ; les booléens sont dérivés côté client.
 public struct VoiceConsentStatus: Decodable, Sendable {
-    public let hasConsent: Bool
-    public let consentedAt: Date?
-    public let ageVerified: Bool
-    public let ageVerifiedAt: Date?
-    public let voiceCloningEnabled: Bool
+    public let voiceRecordingConsentAt: Date?
     public let voiceCloningEnabledAt: Date?
+    public let ageVerificationConsentAt: Date?
+
+    public var hasConsent: Bool { voiceRecordingConsentAt != nil }
+    public var consentedAt: Date? { voiceRecordingConsentAt }
+    public var ageVerified: Bool { ageVerificationConsentAt != nil }
+    public var ageVerifiedAt: Date? { ageVerificationConsentAt }
+    public var voiceCloningEnabled: Bool { voiceCloningEnabledAt != nil }
+
+    public init(
+        voiceRecordingConsentAt: Date? = nil,
+        voiceCloningEnabledAt: Date? = nil,
+        ageVerificationConsentAt: Date? = nil
+    ) {
+        self.voiceRecordingConsentAt = voiceRecordingConsentAt
+        self.voiceCloningEnabledAt = voiceCloningEnabledAt
+        self.ageVerificationConsentAt = ageVerificationConsentAt
+    }
 }
 
+/// Corps de `POST /voice-profile/consent` — wire format gateway
+/// (`VoiceProfileConsentRequest`, `packages/shared/types/voice-api.ts`) :
+/// `voiceRecordingConsent` est REQUIS ; `voiceCloningConsent` active en plus
+/// la traduction vocale utilisant le profil (`voiceCloningEnabledAt`).
 public struct VoiceConsentRequest: Encodable {
-    public let consentGiven: Bool
-    public let ageVerification: Bool
+    public let voiceRecordingConsent: Bool
+    public let voiceCloningConsent: Bool?
     public let birthDate: String?
 
-    public init(consentGiven: Bool, ageVerification: Bool, birthDate: String? = nil) {
-        self.consentGiven = consentGiven
-        self.ageVerification = ageVerification
+    public init(voiceRecordingConsent: Bool, voiceCloningConsent: Bool? = nil, birthDate: String? = nil) {
+        self.voiceRecordingConsent = voiceRecordingConsent
+        self.voiceCloningConsent = voiceCloningConsent
         self.birthDate = birthDate
     }
 }
 
+/// Réponse de `POST /voice-profile/consent` — mêmes trois timestamps que le
+/// statut (le `success` est porté par l'enveloppe `APIResponse`).
 public struct VoiceConsentResponse: Decodable, Sendable {
-    public let success: Bool
-    public let consentedAt: Date?
+    public let voiceRecordingConsentAt: Date?
+    public let voiceCloningEnabledAt: Date?
+    public let ageVerificationConsentAt: Date?
+
+    public var consentedAt: Date? { voiceRecordingConsentAt }
 }
 
 // MARK: - Voice Profile

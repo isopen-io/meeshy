@@ -194,7 +194,11 @@ public final class NotificationToastManager: ObservableObject {
             return
         }
         conversationReadTasks[conversationId] = Task { [weak self] in
-            try? await NotificationService.shared.markConversationRead(conversationId: conversationId)
+            do {
+                try await NotificationService.shared.markConversationRead(conversationId: conversationId)
+            } catch {
+                logger.error("Failed to mark conversation \(conversationId) read: \(error.localizedDescription)")
+            }
             await self?.refreshUnreadCount()
             self?.lastConversationReadAt[conversationId] = Date()
             self?.conversationReadTasks[conversationId] = nil
@@ -307,6 +311,10 @@ public final class NotificationToastManager: ObservableObject {
             self?.recentNotificationIds.remove(event.id)
         }
 
+        // Durably persist the notification into the local cache so the bell list
+        // shows it after a cold start / offline reopen — the toast is ephemeral.
+        persistToCache(event)
+
         // The unread counter reflects what the *server* thinks — increment it
         // regardless of local prefs so the coordinator stays aligned with the
         // authoritative count. Local prefs only gate the TOAST surface.
@@ -322,6 +330,24 @@ public final class NotificationToastManager: ObservableObject {
             focus: focus
         ) {
             showToast(event)
+        }
+    }
+
+    /// Durably append the freshly received notification to the `notifications`
+    /// cache so it survives an app restart / offline reopen. Strict no-op when the
+    /// list cache was never populated (see `prependToExisting`): fabricating a
+    /// single-item `.fresh` cache would suppress the next authoritative REST
+    /// refresh. De-duplicated by id, so an APN + socket double-delivery (already
+    /// guarded above) or a later REST refresh never doubles the row.
+    private func persistToCache(_ event: SocketNotificationEvent) {
+        // Built inline (not a static let) to stay clear of Swift 6 shared-mutable
+        // -state diagnostics on the non-Sendable formatter; notifications are
+        // infrequent so the allocation is negligible.
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let apiNotification = event.toAPINotification(createdAt: formatter.string(from: Date()))
+        Task {
+            await CacheCoordinator.shared.notifications.prependToExisting(apiNotification, for: "all")
         }
     }
 

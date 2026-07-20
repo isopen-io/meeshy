@@ -16,6 +16,8 @@
  *   packages/shared/types/video-call.ts (`CallStatus`, `CallEndReason`).
  */
 
+import { formatClock } from './duration-format.js';
+
 export type CallSummaryOutcome = 'completed' | 'missed' | 'rejected' | 'failed';
 export type CallSummaryMediaType = 'audio' | 'video';
 export type CallNetworkQuality = 'excellent' | 'good' | 'fair' | 'poor';
@@ -34,10 +36,15 @@ const NETWORK_QUALITIES: ReadonlySet<string> = new Set([
  * viewer from `initiatorId`, the media glyph from `callType`, the tint/red from
  * `outcome`, and the "duration · data · quality" line from the remaining fields.
  *
- * `kind: 'call'` discriminates this payload from any future structured metadata.
+ * `kind` discriminates this payload from any future structured metadata:
+ * `'call'` is the canonical TERMINAL summary; `'call-live'` marks the message
+ * posted at `call:initiate` while the call is still ongoing (edited in-place to
+ * `'call'` when the call reaches a terminal state). Old clients that only know
+ * `'call'` degrade to their plain-text system bubble on `'call-live'` — by
+ * design, no enum they decode strictly is ever extended.
  */
 export interface CallSummaryMetadata {
-  readonly kind: 'call';
+  readonly kind: 'call' | 'call-live';
   /** CallSession id — lets the client re-join an active call or call back. */
   readonly callId: string;
   /** User id of the call initiator — the client compares it to the current
@@ -56,6 +63,14 @@ export interface CallSummaryMetadata {
   readonly bytesEstimated: boolean;
   /** Overall network quality tier, or `null` when never measured. */
   readonly networkQuality: CallNetworkQuality | null;
+  /**
+   * Present (and `true`) ONLY on a missed call that was never answered and was
+   * ended by its own initiator — "cancelled" from the initiator's viewpoint.
+   * Clients render it per-viewer: initiator sees "Appel annulé", the callee
+   * keeps "Appel manqué". The key is ABSENT otherwise so old clients (which
+   * ignore unknown keys) keep their exact current behaviour.
+   */
+  readonly endedByInitiator?: true;
 }
 
 export interface CallSummaryInput {
@@ -102,22 +117,16 @@ const FAILURE_END_REASONS: ReadonlySet<string> = new Set([
   'heartbeatTimeout'
 ]);
 
-const pad2 = (value: number): string => (value < 10 ? `0${value}` : `${value}`);
-
 /**
  * Format a duration in seconds as "M:SS" (or "H:MM:SS" past an hour), with the
  * leading minutes zero-padded so a 4m32s call reads "04:32" (matches the
  * product spec). Negative or non-finite inputs clamp to "00:00".
+ *
+ * Delegates to the canonical {@link formatClock} (single source of truth for
+ * MM:SS / H:MM:SS rendering across shared, web and gateway).
  */
 export function formatCallDuration(seconds: number): string {
-  const total = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const secs = total % 60;
-  if (hours > 0) {
-    return `${hours}:${pad2(minutes)}:${pad2(secs)}`;
-  }
-  return `${pad2(minutes)}:${pad2(secs)}`;
+  return formatClock(seconds, { padMinutes: true });
 }
 
 const normalizeMediaType = (callType?: string | null): CallSummaryMediaType =>
@@ -134,6 +143,8 @@ export function callContentKey(outcome: CallSummaryOutcome, callType: CallSummar
 }
 
 const FRENCH_LABELS: Record<string, (duration: number) => string> = {
+  call_ongoing_video: _ => 'Appel vidéo en cours',
+  call_ongoing_audio: _ => 'Appel audio en cours',
   call_completed_video: d => `Appel vidéo · ${formatCallDuration(d)}`,
   call_completed_audio: d => `Appel audio · ${formatCallDuration(d)}`,
   call_missed_video: _ => 'Appel vidéo manqué',
@@ -210,6 +221,10 @@ export interface CallSummaryMetadataInput extends CallSummaryInput {
   readonly bytesReceived?: number | null;
   /** Overall network quality tier, if measured. */
   readonly networkQuality?: string | null;
+  /** When the call was answered, if ever (`CallSession.answeredAt`). */
+  readonly answeredAt?: Date | string | null;
+  /** User id recorded as having ended the call (`CallSession.metadata.endedBy`). */
+  readonly endedById?: string | null;
 }
 
 /** Approximate per-second byte rates per direction, used to ESTIMATE data spent
@@ -259,6 +274,20 @@ function resolveDataSpent(
   return { bytesTotal: null, bytesEstimated: false };
 }
 
+/**
+ * A missed call reads as "cancelled" from the initiator's side ONLY when it was
+ * never answered AND the initiator themself ended it (hung up before pickup, or
+ * dropped and was auto-left). Any other combination stays a plain missed call.
+ */
+const wasCancelledByInitiator = (
+  outcome: CallSummaryOutcome,
+  input: CallSummaryMetadataInput
+): boolean =>
+  outcome === 'missed' &&
+  !input.answeredAt &&
+  input.endedById != null &&
+  input.endedById === input.initiatorId;
+
 /** Derive the structured metadata from an already-computed `CallSummary`. */
 function metadataFromSummary(
   summary: CallSummary,
@@ -280,7 +309,8 @@ function metadataFromSummary(
     durationSeconds: summary.durationSeconds,
     bytesTotal,
     bytesEstimated,
-    networkQuality: normalizeQuality(input.networkQuality)
+    networkQuality: normalizeQuality(input.networkQuality),
+    ...(wasCancelledByInitiator(summary.outcome, input) ? { endedByInitiator: true as const } : {})
   };
 }
 
@@ -310,6 +340,79 @@ export function buildCallSummaryWithMetadata(
     return null;
   }
   return { summary, metadata: metadataFromSummary(summary, input) };
+}
+
+export interface LiveCallInput {
+  readonly callId: string;
+  readonly initiatorId: string;
+  /** Media type of the call (`CallSession.metadata.type`); non-'video' → audio. */
+  readonly callType?: string | null;
+}
+
+/**
+ * Build the LIVE call message (posted at `call:initiate`, before any terminal
+ * fact exists): `kind: 'call-live'`, a neutral `outcome` that clients must
+ * never read for rendering (the kind is checked FIRST), and no measurements.
+ * Always succeeds — a starting call has no suppression cases.
+ */
+export function buildLiveCallMetadata(
+  input: LiveCallInput
+): { summary: CallSummary; metadata: CallSummaryMetadata } {
+  const callType = normalizeMediaType(input.callType);
+  const contentKey = `call_ongoing_${callType}`;
+  const labelFn = FRENCH_LABELS[contentKey];
+  return {
+    summary: {
+      outcome: 'completed',
+      callType,
+      durationSeconds: 0,
+      contentKey,
+      content: labelFn ? labelFn(0) : contentKey
+    },
+    metadata: {
+      kind: 'call-live',
+      callId: input.callId,
+      initiatorId: input.initiatorId,
+      callType,
+      outcome: 'completed',
+      durationSeconds: 0,
+      bytesTotal: null,
+      bytesEstimated: false,
+      networkQuality: null
+    }
+  };
+}
+
+/**
+ * Terminal conversion for a live message whose call was garbage-collected
+ * (gateway crash mid-call, phantom/zombie sweeps). GC stays SILENT when no
+ * message exists (see `SILENT_END_REASONS`), but an already-posted live bubble
+ * must not stay "en cours" forever — it converts to the `failed` state.
+ */
+export function buildGarbageCollectedConversion(
+  input: LiveCallInput
+): { summary: CallSummary; metadata: CallSummaryMetadata } {
+  const callType = normalizeMediaType(input.callType);
+  return {
+    summary: {
+      outcome: 'failed',
+      callType,
+      durationSeconds: 0,
+      contentKey: callContentKey('failed', callType),
+      content: contentFor('failed', callType, 0)
+    },
+    metadata: {
+      kind: 'call',
+      callId: input.callId,
+      initiatorId: input.initiatorId,
+      callType,
+      outcome: 'failed',
+      durationSeconds: 0,
+      bytesTotal: null,
+      bytesEstimated: false,
+      networkQuality: null
+    }
+  };
 }
 
 /**

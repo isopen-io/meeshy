@@ -181,6 +181,7 @@
       "messageDeletedByOther": "A message has been deleted",
       "modifyError": "Error modifying message",
       "editError": "Error editing message",
+      "contentRequired": "Content required",
       "deleteError": "Error deleting message",
       "replyTo": "Reply to this message",
       "messageFound": "Message found!",
@@ -201,7 +202,10 @@
       "title": "Oops! Something went wrong",
       "description": "An unexpected error occurred. Please try again.",
       "details": "Error details",
-      "reload": "Reload page"
+      "reload": "Reload page",
+      "featureError": "Something went wrong in {feature}",
+      "featureUnavailable": "This section is unavailable right now.",
+      "retry": "Try again"
     },
     "download": "Download",
     "play": "Play",
@@ -213,6 +217,11 @@
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
     "rotate": "Rotate",
+    "imageViewer": "Image viewer",
+    "imageLoadError": "Unable to load image",
+    "downloadAnyway": "Download anyway",
+    "lightboxKeyboardHelp": "Use the ← → arrows to navigate • +/- to zoom • R to rotate • Esc to close",
+    "videoLightboxKeyboardHelp": "Use the ← → arrows to navigate • Space to play/pause • M to mute • F for fullscreen • Esc to close",
     "clearSearch": "Clear search",
     "backToList": "Back to list",
     "backToConversations": "Back to conversations",
@@ -260,8 +269,33 @@
     "storyVisibility": {
       "public": "Public",
       "friends": "Friends",
+      "community": "Community",
+      "except": "All except…",
+      "only": "Only…",
       "private": "Private"
     },
+    "audiencePicker": {
+      "searchPlaceholder": "Search people…",
+      "exceptHint": "Your story will be hidden from the selected people.",
+      "onlyHint": "Only the selected people will see your story.",
+      "empty": "No one found",
+      "remove": "Remove"
+    },
+    "postComposer": {
+      "contentLabel": "Post content",
+      "addPhoto": "Add photo",
+      "addVideo": "Add video",
+      "changeVisibility": "Change visibility",
+      "visibility": {
+        "public": "Public",
+        "friends": "Friends",
+        "except": "Friends except...",
+        "only": "Only...",
+        "private": "Private"
+      }
+    },
+    "audioUnavailable": "Audio URL unavailable",
+    "audioProgress": "Audio progress",
     "statusComposer": {
       "title": "What's your mood?",
       "placeholder": "What are you up to?",
@@ -275,5 +309,14 @@
     "anonymousUser": "Anonymous user"
   },
   "copied": "Copied",
-  "never": "Never"
+  "never": "Never",
+  "offlineMessage": "You're offline — messages will be sent once you reconnect",
+  "updateAvailable": "A new version of Meeshy is available!",
+  "updateNow": "Update now",
+  "wait": "Later",
+  "languageSelector": {
+    "selectLanguage": "Select a language",
+    "searchLanguage": "Search language...",
+    "noLanguageFound": "No language found"
+  }
 }

@@ -7,6 +7,16 @@ import { act } from '@testing-library/react';
 import { useCallStore } from '../../stores/call-store';
 import type { CallSession, CallParticipant, CallControls } from '@meeshy/shared/types/video-call';
 
+// Mock socket service for heartbeat tests
+const mockSocketEmit = jest.fn();
+const mockGetSocket = jest.fn();
+
+jest.mock('@/services/meeshy-socketio.service', () => ({
+  meeshySocketIOService: {
+    getSocket: () => mockGetSocket(),
+  },
+}));
+
 // Mock MediaStream and RTCPeerConnection
 class MockMediaStream {
   private tracks: MediaStreamTrack[] = [];
@@ -130,6 +140,55 @@ describe('CallStore', () => {
     });
   });
 
+  describe('Join request (bulle « Appel en cours » → CallManager)', () => {
+    const joinRequest = {
+      callId: 'call-live-1',
+      conversationId: 'conv-123',
+      callType: 'audio' as const,
+    };
+
+    beforeEach(() => {
+      act(() => {
+        useCallStore.setState({ joinRequest: null });
+      });
+    });
+
+    it('requestJoin pose la demande consommée par CallManager', () => {
+      act(() => {
+        useCallStore.getState().requestJoin(joinRequest);
+      });
+
+      expect(useCallStore.getState().joinRequest).toEqual(joinRequest);
+    });
+
+    it('requestJoin est un no-op quand on est déjà en appel', () => {
+      act(() => {
+        useCallStore.getState().setCurrentCall(mockCallSession);
+        useCallStore.getState().requestJoin(joinRequest);
+      });
+
+      expect(useCallStore.getState().joinRequest).toBeNull();
+    });
+
+    it('clearJoinRequest consomme la demande', () => {
+      act(() => {
+        useCallStore.getState().requestJoin(joinRequest);
+        useCallStore.getState().clearJoinRequest();
+      });
+
+      expect(useCallStore.getState().joinRequest).toBeNull();
+    });
+
+    it('reset purge toute demande en attente', () => {
+      act(() => {
+        useCallStore.getState().requestJoin(joinRequest);
+        useCallStore.getState().reset();
+      });
+
+      expect(useCallStore.getState().joinRequest).toBeNull();
+    });
+  });
+
   describe('Call Management', () => {
     describe('setCurrentCall', () => {
       it('should set current call and mark as in call', () => {
@@ -201,6 +260,73 @@ describe('CallStore', () => {
         });
 
         expect(useCallStore.getState().currentCall).toBeNull();
+      });
+
+      it('buffers a participant-joined event that arrives before currentCall exists, and merges it in once setCurrentCall claims that callId (initiator ack race, 2026-07-06)', () => {
+        const racingParticipant: CallParticipant = {
+          id: 'participant-racing',
+          callSessionId: 'call-123',
+          name: 'Racing Callee',
+          isAudioEnabled: true,
+          isVideoEnabled: true,
+          isSpeaking: false,
+          joinedAt: new Date(),
+        } as any;
+
+        act(() => {
+          // call:participant-joined arrives first — currentCall is still null.
+          useCallStore.getState().addParticipant(racingParticipant);
+        });
+        expect(useCallStore.getState().currentCall).toBeNull();
+
+        act(() => {
+          // The initiator's own call:initiate ack lands afterwards, with an
+          // empty participants array (use-video-call.ts's synthetic object).
+          useCallStore.getState().setCurrentCall({ ...mockCallSession, id: 'call-123', participants: [] });
+        });
+
+        const state = useCallStore.getState();
+        expect(state.currentCall?.participants).toHaveLength(1);
+        expect(state.currentCall?.participants[0].id).toBe('participant-racing');
+      });
+
+      it('does not leak a buffered participant into an unrelated call with a different id', () => {
+        const racingParticipant: CallParticipant = {
+          id: 'participant-racing',
+          callSessionId: 'call-never-claimed',
+          name: 'Racing Callee',
+          isAudioEnabled: true,
+          isVideoEnabled: true,
+          isSpeaking: false,
+          joinedAt: new Date(),
+        } as any;
+
+        act(() => {
+          useCallStore.getState().addParticipant(racingParticipant);
+          useCallStore.getState().setCurrentCall(mockCallSession); // id 'call-123' — different callId
+        });
+
+        expect(useCallStore.getState().currentCall?.participants).toEqual(mockCallSession.participants);
+      });
+
+      it('clears buffered participant-joined events on reset', () => {
+        const racingParticipant: CallParticipant = {
+          id: 'participant-racing',
+          callSessionId: 'call-123',
+          name: 'Racing Callee',
+          isAudioEnabled: true,
+          isVideoEnabled: true,
+          isSpeaking: false,
+          joinedAt: new Date(),
+        } as any;
+
+        act(() => {
+          useCallStore.getState().addParticipant(racingParticipant);
+          useCallStore.getState().reset();
+          useCallStore.getState().setCurrentCall(mockCallSession); // same id 'call-123'
+        });
+
+        expect(useCallStore.getState().currentCall?.participants).toEqual(mockCallSession.participants);
       });
     });
 
@@ -555,6 +681,436 @@ describe('CallStore', () => {
       expect(state.controls.audioEnabled).toBe(true);
       expect(state.controls.videoEnabled).toBe(true);
       expect(state.controls.screenShareEnabled).toBe(false);
+    });
+  });
+
+  describe('setIceServers', () => {
+    it('should store provided ICE servers', () => {
+      const iceServers: RTCIceServer[] = [
+        { urls: 'stun:stun.example.com' },
+        { urls: 'turn:turn.example.com', username: 'user', credential: 'pass' },
+      ];
+
+      act(() => {
+        useCallStore.getState().setIceServers(iceServers);
+      });
+
+      expect(useCallStore.getState().iceServers).toEqual(iceServers);
+    });
+
+    it('should replace previously stored ICE servers', () => {
+      const first: RTCIceServer[] = [{ urls: 'stun:first.example.com' }];
+      const second: RTCIceServer[] = [{ urls: 'stun:second.example.com' }];
+
+      act(() => {
+        useCallStore.getState().setIceServers(first);
+        useCallStore.getState().setIceServers(second);
+      });
+
+      expect(useCallStore.getState().iceServers).toEqual(second);
+    });
+  });
+
+  describe('setReconnecting', () => {
+    it('should set isReconnecting=true and store attempt number when attempt > 0', () => {
+      act(() => {
+        useCallStore.getState().setReconnecting(3);
+      });
+
+      const state = useCallStore.getState();
+      expect(state.isReconnecting).toBe(true);
+      expect(state.reconnectAttempt).toBe(3);
+    });
+
+    it('should set isReconnecting=false when attempt is 0', () => {
+      act(() => {
+        useCallStore.getState().setReconnecting(2);
+        useCallStore.getState().setReconnecting(0);
+      });
+
+      const state = useCallStore.getState();
+      expect(state.isReconnecting).toBe(false);
+      expect(state.reconnectAttempt).toBe(0);
+    });
+  });
+
+  describe('setConnectionQuality', () => {
+    it('should store the given connection quality level', () => {
+      act(() => {
+        useCallStore.getState().setConnectionQuality('good');
+      });
+
+      expect(useCallStore.getState().connectionQuality).toBe('good');
+    });
+
+    it('should update to a different quality level', () => {
+      act(() => {
+        useCallStore.getState().setConnectionQuality('excellent');
+        useCallStore.getState().setConnectionQuality('poor');
+      });
+
+      expect(useCallStore.getState().connectionQuality).toBe('poor');
+    });
+  });
+
+  describe('setCallEndReason', () => {
+    it('should store the call end reason', () => {
+      act(() => {
+        useCallStore.getState().setCallEndReason('completed');
+      });
+
+      expect(useCallStore.getState().callEndReason).toBe('completed');
+    });
+
+    it('should store rejected reason', () => {
+      act(() => {
+        useCallStore.getState().setCallEndReason('rejected');
+      });
+
+      expect(useCallStore.getState().callEndReason).toBe('rejected');
+    });
+  });
+
+  describe('Heartbeat', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      mockSocketEmit.mockReset();
+      mockGetSocket.mockReturnValue({ connected: true, emit: mockSocketEmit });
+    });
+
+    afterEach(() => {
+      // Stop any running heartbeat after each test
+      act(() => {
+        useCallStore.getState().stopHeartbeat();
+      });
+      jest.useRealTimers();
+    });
+
+    it('startHeartbeat emits CALL_HEARTBEAT on every 15-second tick', () => {
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-abc');
+      });
+
+      // No emit before first interval
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+
+      act(() => {
+        jest.advanceTimersByTime(15_000);
+      });
+
+      expect(mockSocketEmit).toHaveBeenCalledTimes(1);
+      expect(mockSocketEmit).toHaveBeenCalledWith(
+        expect.stringContaining('heartbeat'),
+        { callId: 'call-abc' }
+      );
+
+      act(() => {
+        jest.advanceTimersByTime(15_000);
+      });
+
+      expect(mockSocketEmit).toHaveBeenCalledTimes(2);
+    });
+
+    it('startHeartbeat does not emit when socket is disconnected', () => {
+      mockGetSocket.mockReturnValue({ connected: false, emit: mockSocketEmit });
+
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-xyz');
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(15_000);
+      });
+
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+    });
+
+    it('startHeartbeat does not emit when socket is null', () => {
+      mockGetSocket.mockReturnValue(null);
+
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-xyz');
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(15_000);
+      });
+
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+    });
+
+    it('startHeartbeat clears previous interval when called again', () => {
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-first');
+      });
+
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-second');
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(15_000);
+      });
+
+      // Only one tick should have fired, with the second callId
+      expect(mockSocketEmit).toHaveBeenCalledTimes(1);
+      expect(mockSocketEmit).toHaveBeenCalledWith(
+        expect.anything(),
+        { callId: 'call-second' }
+      );
+    });
+
+    it('stopHeartbeat prevents further CALL_HEARTBEAT emissions', () => {
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-stop');
+      });
+
+      act(() => {
+        useCallStore.getState().stopHeartbeat();
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(15_000);
+      });
+
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+    });
+
+    it('startHeartbeat registers a beforeunload handler', () => {
+      const addSpy = jest.spyOn(window, 'addEventListener');
+
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-unload');
+      });
+
+      expect(addSpy).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+      addSpy.mockRestore();
+    });
+
+    it('stopHeartbeat removes the beforeunload handler', () => {
+      const removeSpy = jest.spyOn(window, 'removeEventListener');
+
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-unload');
+        useCallStore.getState().stopHeartbeat();
+      });
+
+      expect(removeSpy).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+      removeSpy.mockRestore();
+    });
+
+    it('beforeunload handler emits CALL_END when socket is connected', () => {
+      const capturedHandlers: EventListener[] = [];
+      const addSpy = jest.spyOn(window, 'addEventListener').mockImplementation(
+        (event: string, handler: EventListenerOrEventListenerObject) => {
+          if (event === 'beforeunload') {
+            capturedHandlers.push(handler as EventListener);
+          }
+        }
+      );
+
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-unload-end');
+      });
+
+      addSpy.mockRestore();
+
+      // Fire the captured handler directly
+      expect(capturedHandlers.length).toBeGreaterThan(0);
+      capturedHandlers[capturedHandlers.length - 1](new Event('beforeunload'));
+
+      expect(mockSocketEmit).toHaveBeenCalledWith(
+        expect.stringContaining('end'),
+        { callId: 'call-unload-end', reason: 'completed' },
+        expect.any(Function)
+      );
+    });
+
+    it('beforeunload handler is a no-op (does not throw) when socket is not connected', () => {
+      // Regression guard: a previous sendBeacon "fallback" here pointed at a
+      // route (`POST /api/v1/calls/:callId/end`) that never existed server-side
+      // and could never carry the required Authorization header — it silently
+      // 404'd. There is no fallback anymore; disconnect cleanup relies on the
+      // gateway's grace-window path instead, so this handler should simply not
+      // throw when the socket is already gone.
+      mockGetSocket.mockReturnValue({ connected: false, emit: mockSocketEmit });
+
+      const capturedHandlers: EventListener[] = [];
+      const addSpy = jest.spyOn(window, 'addEventListener').mockImplementation(
+        (event: string, handler: EventListenerOrEventListenerObject) => {
+          if (event === 'beforeunload') {
+            capturedHandlers.push(handler as EventListener);
+          }
+        }
+      );
+
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-unload-disconnected');
+      });
+
+      addSpy.mockRestore();
+
+      expect(capturedHandlers.length).toBeGreaterThan(0);
+      expect(() => {
+        capturedHandlers[capturedHandlers.length - 1](new Event('beforeunload'));
+      }).not.toThrow();
+
+      // Socket emit not called (not connected)
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Reset with active heartbeat', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      mockSocketEmit.mockReset();
+      mockGetSocket.mockReturnValue({ connected: true, emit: mockSocketEmit });
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('reset() clears heartbeat interval so no further ticks fire', () => {
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-reset');
+      });
+
+      act(() => {
+        useCallStore.getState().reset();
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(15_000);
+      });
+
+      // No heartbeat after reset
+      expect(mockSocketEmit).not.toHaveBeenCalled();
+    });
+
+    it('reset() removes the beforeunload handler', () => {
+      const removeSpy = jest.spyOn(window, 'removeEventListener');
+
+      act(() => {
+        useCallStore.getState().startHeartbeat('call-reset-unload');
+      });
+
+      act(() => {
+        useCallStore.getState().reset();
+      });
+
+      expect(removeSpy).toHaveBeenCalledWith('beforeunload', expect.any(Function));
+      removeSpy.mockRestore();
+    });
+  });
+
+  describe('Branch coverage: null-guard false-paths', () => {
+    it('removeParticipant is a no-op when currentCall is null', () => {
+      // currentCall is null (store reset in beforeEach)
+      act(() => {
+        useCallStore.getState().removeParticipant('participant-9');
+      });
+
+      expect(useCallStore.getState().currentCall).toBeNull();
+    });
+
+    it('updateParticipant is a no-op when currentCall is null', () => {
+      act(() => {
+        useCallStore.getState().updateParticipant('participant-9', { isAudioEnabled: false });
+      });
+
+      expect(useCallStore.getState().currentCall).toBeNull();
+    });
+
+    it('updateParticipant leaves non-matching participants unchanged', () => {
+      // Set a call with two participants; update a non-existent participant so ternary false-branch runs
+      const callWithTwo = {
+        ...mockCallSession,
+        participants: [mockParticipant, mockParticipant2],
+      };
+      act(() => {
+        useCallStore.getState().setCurrentCall(callWithTwo);
+        useCallStore.getState().updateParticipant('nonexistent-id', { isAudioEnabled: false });
+      });
+
+      const participants = useCallStore.getState().currentCall?.participants;
+      // Both participants unchanged
+      expect(participants).toHaveLength(2);
+      expect(participants?.[0]).toEqual(mockParticipant);
+      expect(participants?.[1]).toEqual(mockParticipant2);
+    });
+
+    it('removeRemoteStream is a no-op for unknown participantId (stream not in map)', () => {
+      act(() => {
+        // Map is empty — participantId not found → stream is undefined → skip track stop
+        useCallStore.getState().removeRemoteStream('nonexistent-participant');
+      });
+
+      expect(useCallStore.getState().remoteStreams.size).toBe(0);
+    });
+
+    it('removePeerConnection is a no-op for unknown participantId (connection not in map)', () => {
+      act(() => {
+        useCallStore.getState().removePeerConnection('nonexistent-participant');
+      });
+
+      expect(useCallStore.getState().peerConnections.size).toBe(0);
+    });
+  });
+
+  describe('Reset with extended state', () => {
+    it('should reset extended state fields to their defaults', () => {
+      act(() => {
+        useCallStore.getState().setIceServers([{ urls: 'stun:stun.example.com' }]);
+        useCallStore.getState().setReconnecting(5);
+        useCallStore.getState().setConnectionQuality('poor');
+        useCallStore.getState().setCallEndReason('rejected');
+      });
+
+      act(() => {
+        useCallStore.getState().reset();
+      });
+
+      const state = useCallStore.getState();
+      expect(state.iceServers).toBeNull();
+      expect(state.isReconnecting).toBe(false);
+      expect(state.reconnectAttempt).toBe(0);
+      expect(state.connectionQuality).toBeNull();
+      expect(state.callEndReason).toBeNull();
+    });
+  });
+
+  describe('Pending retry (« Réessayer » after a transient failure)', () => {
+    beforeEach(() => {
+      act(() => { useCallStore.getState().clearCallRetry(); });
+    });
+
+    it('offerCallRetry records the conversation + type', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'video' });
+      });
+      expect(useCallStore.getState().pendingRetry).toEqual({ conversationId: 'conv-1', type: 'video' });
+    });
+
+    it('clearCallRetry drops the offer', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'audio' });
+        useCallStore.getState().clearCallRetry();
+      });
+      expect(useCallStore.getState().pendingRetry).toBeNull();
+    });
+
+    it('reset() PRESERVES a pending retry (the failed call teardown must not erase the offer)', () => {
+      act(() => {
+        useCallStore.getState().offerCallRetry({ conversationId: 'conv-1', type: 'video' });
+        useCallStore.getState().reset();
+      });
+      expect(useCallStore.getState().pendingRetry).toEqual({ conversationId: 'conv-1', type: 'video' });
+    });
+
+    it('reset() with no pending retry leaves it null', () => {
+      act(() => { useCallStore.getState().reset(); });
+      expect(useCallStore.getState().pendingRetry).toBeNull();
     });
   });
 });

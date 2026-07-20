@@ -5,6 +5,7 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.AuthSession
 import me.meeshy.sdk.model.LoginRequest
+import me.meeshy.sdk.model.MeEnvelope
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
@@ -21,7 +22,7 @@ class AuthRepositoryTest {
         override suspend fun login(body: LoginRequest) = response
         override suspend fun register(body: RegisterRequest) = response
         override suspend fun refresh(body: RefreshTokenRequest) = response
-        override suspend fun me() = ApiResponse<MeeshyUser>(success = false)
+        override suspend fun me() = ApiResponse<MeEnvelope>(success = false)
     }
 
     private fun session() = AuthSession(

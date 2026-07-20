@@ -29,10 +29,14 @@ struct BubbleExpandableText: View, Equatable {
     let highlightTerm: String?
     let mentionTint: Color
     let linkTint: Color
+    /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
+    /// `/l/<token>`. Empty by default (no rewrite) for non-message callers.
+    var trackedLinks: [String: String] = [:]
 
     var onLongPress: (() -> Void)? = nil
 
     @SwiftUI.State private var isExpanded: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.content == rhs.content &&
@@ -40,7 +44,8 @@ struct BubbleExpandableText: View, Equatable {
         lhs.mentionDisplayNames == rhs.mentionDisplayNames &&
         lhs.highlightTerm == rhs.highlightTerm &&
         lhs.mentionTint == rhs.mentionTint &&
-        lhs.linkTint == rhs.linkTint
+        lhs.linkTint == rhs.linkTint &&
+        lhs.trackedLinks == rhs.trackedLinks
     }
 
     var body: some View {
@@ -50,42 +55,79 @@ struct BubbleExpandableText: View, Equatable {
         if needsTruncation {
             let truncated = Self.truncateAtWord(content, limit: Self.truncateLimit)
             VStack(alignment: .leading, spacing: 4) {
-                MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm)
+                MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                     .fixedSize(horizontal: false, vertical: true)
                     .tint(linkTint)
-                    .textSelection(.enabled)
+                    // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir
+                    // le menu contextuel custom Meeshy (`MessageActionsMenu`, qui
+                    // porte « Copier »), jamais le menu d'édition natif iOS
+                    // (liquid glass « Copier / Rechercher / Traduire »).
 
                 // Bouton texte « Voir plus » aligné en bas à droite (spec produit).
-                // Hit-area élargie via `.frame(minHeight: 28).contentShape(Rectangle())`
-                // pour rester au-dessus du minimum thumb-friendly (24pt).
-                // `.buttonStyle(.plain)` est OBLIGATOIRE pour que le tap survive au
-                // `.simultaneousGesture(LongPressGesture(0.35))` que `BubbleSwipeContainer`
-                // pose sur la bulle — sans lui le default style entre en arbitrage avec
-                // le long-press parent et le tap est souvent avalé.
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isExpanded = true
-                    }
-                } label: {
-                    Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(textColor.opacity(0.6))
-                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .trailing)
-                        .padding(.top, 2)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
+                //
+                // AMÉLIORATION FIABILITÉ (Task ExpandableTextFix) :
+                // 1. Décalage horizontal (`.padding(.trailing, 48)`) pour garantir
+                //    l'exclusion de la zone de contact du coin inférieur droit.
+                //    L'overlay des réactions (bouton "+") fait 40pt de large et
+                //    déborde de 4pt vers l'extérieur : 48pt assure une séparation
+                //    géométrique absolue.
+                // 2. Utilisation de `.highPriorityGesture` avec un `TapGesture`
+                //    pour garantir que le tap gagne sur le `LongPressGesture`
+                //    simultané du parent (`BubbleSwipeContainer`) et sur la
+                //    sélection de texte (`.textSelection(.enabled)`).
+                // 3. `.textSelection(.disabled)` explicite sur le bouton pour
+                //    qu'un tap imprécis ne déclenche pas le mode sélection.
+                Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .foregroundColor(textColor.opacity(0.6))
+                    // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
+                    // creusait ~16pt de vide au-dessus ET en dessous du libellé
+                    // avant la date (feedback produit 2026-07-08). La cible
+                    // tactile atteint les 44pt HIG via un contentShape étendu
+                    // UNIQUEMENT vers le bas (`DownwardExtendedTapShape`, +20pt)
+                    // — jamais vers le haut, pour ne pas mordre sur le texte
+                    // tronqué / les liens juste au-dessus.
+                    .frame(maxWidth: .infinity, minHeight: 24, alignment: .trailing)
+                    .padding(.trailing, 48)
+                    .contentShape(DownwardExtendedTapShape(extraBottom: 20))
+                    .textSelection(.disabled)
+                    .highPriorityGesture(
+                        TapGesture().onEnded { expand() }
+                    )
+                    .accessibilityIdentifier("bubble.expand.more")
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
+                    .accessibilityHint(Text(String(localized: "bubble.expand.more.hint", defaultValue: "Affiche le message complet", bundle: .main)))
+                    // Le libellé n'est pas un vrai `Button` (il porte un
+                    // `.highPriorityGesture` custom pour battre le long-press du
+                    // parent) : la double-tape VoiceOver n'atteint pas ce geste.
+                    // On câble donc l'action d'activation par défaut explicitement.
+                    .accessibilityAction { expand() }
             }
         } else {
             // Déplié (ou court) : on affiche le message COMPLET sans aucun
             // bouton. Le dépliage est à sens unique — le chevron "V" a rempli
             // son rôle et disparaît (spec : « déplier uniquement et disparaître,
             // pas de repli »). `isExpanded` reste local à la sous-vue.
-            MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm)
+            MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
-                .textSelection(.enabled)
+                // Pas de `.textSelection(.enabled)` : voir note ci-dessus — le
+                // long-press passe par le menu contextuel custom Meeshy, pas par
+                // le menu d'édition natif iOS.
+        }
+    }
+
+    /// Dépliage à sens unique, partagé par le tap et l'action VoiceOver.
+    /// Respecte Reduce Motion : pas d'animation quand l'utilisateur l'a désactivée.
+    private func expand() {
+        HapticFeedback.light()
+        if reduceMotion {
+            isExpanded = true
+        } else {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isExpanded = true
+            }
         }
     }
 

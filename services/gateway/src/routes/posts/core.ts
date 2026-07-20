@@ -10,6 +10,23 @@ import { resolveMentionedUsers, MentionService } from '../../services/MentionSer
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
+
+/**
+ * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
+ * socket d'un post/story/status — miroir exact du hoist `trackingLinks` des
+ * messages (`MessageHandler`). Le destinataire rend le lien (texte + façade
+ * vidéo) vers `/l/<token>` sans réécrire l'URL. Les réponses REST exposent déjà
+ * `metadata` ; ce hoist ne sert que les payloads temps réel. No-op si absent.
+ */
+function hoistTrackingLinks<T extends Record<string, unknown>>(post: T): T {
+  const metadata = post?.metadata as Record<string, unknown> | null | undefined;
+  const tl = metadata?.trackingLinks;
+  if (Array.isArray(tl) && tl.length > 0) {
+    return { ...post, trackingLinks: tl } as T;
+  }
+  return post;
+}
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -51,8 +68,9 @@ export function registerCoreRoutes(
         kind: 'createPost',
         op: () => postService.createPost({
           ...parsed.data,
+          content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
           type: parsed.data.type ?? 'POST',
-          visibility: parsed.data.visibility ?? 'PUBLIC',
+          visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
         }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>,
         onDuplicate: async (resultId) => {
           const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
@@ -64,24 +82,26 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const postType = parsed.data.type ?? 'POST';
-        const broadcastPost = post as unknown as Post;
+        const broadcastPost = hoistTrackingLinks(post) as unknown as Post;
         if (postType === 'STORY') {
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
         } else if (postType === 'STATUS') {
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
         } else {
           // U1 — echo the request cmid so an offline author reconciles its
           // optimistic temp post (keyed by cmid) with this server post.
-          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch(() => {});
+          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast post created failed'));
         }
       }
 
-      // Trigger async translation for posts/stories with text content (fire-and-forget)
+      // Trigger async translation for plain posts with text content
+      // (fire-and-forget). G2 — les STORY sont EXCLUES : leur `content` est
+      // déjà traduit par le pipeline audience-driven du service
+      // (`PostService.triggerStoryTextTranslation`) ; déclencher AUSSI
+      // `translatePost` (5 langues fixes) doublait les jobs ZMQ et créait
+      // des écritures concurrentes dans `Post.translations`.
       const postType = parsed.data.type ?? 'POST';
-      const shouldTranslateContent = Boolean(parsed.data.content) && (
-        postType === 'POST' ||
-        (postType === 'STORY' && parsed.data.content?.trim())
-      );
+      const shouldTranslateContent = Boolean(parsed.data.content) && postType === 'POST';
       if (shouldTranslateContent) {
         try {
           const translationService = PostTranslationService.shared;
@@ -90,7 +110,7 @@ export function registerCoreRoutes(
             parsed.data.content,
             parsed.data.originalLanguage ?? (post as any).originalLanguage,
             authContext.registeredUser.id,
-          ).catch(() => {});
+          ).catch((err) => fastify.log.warn({ err }, '[POST /posts]: translate post failed'));
         } catch {
           // PostTranslationService not initialized — skip silently
         }
@@ -129,13 +149,17 @@ export function registerCoreRoutes(
       }
 
       // Fan-out to friends: user_mentioned takes priority (dedup via excludeUserIds)
-      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
       notificationService.createFriendContentNotificationsBatch({
         postId: (post as any).id as string,
         authorId: authContext.registeredUser.id,
         contentType: postTypeForNotif,
         excerpt: postContent?.slice(0, 100),
+        postCreatedAt: (post as any).createdAt ?? undefined,
+        postExpiresAt: (post as any).expiresAt ?? undefined,
         excludeUserIds: mentionedUserIdsForDedup,
+        visibility: (post as any).visibility as string | undefined,
+        visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
       }).catch((err: unknown) => {
         fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
       });
@@ -200,7 +224,10 @@ export function registerCoreRoutes(
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const post = await postService.updatePost(postId, authContext.registeredUser.id, parsed.data);
+      const sanitizedUpdateData = parsed.data.content !== undefined
+        ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
+        : parsed.data;
+      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData);
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
@@ -249,11 +276,11 @@ export function registerCoreRoutes(
       if (socialEvents) {
         const updatedPostType = (post as any).type as string;
         if (updatedPostType === 'STORY') {
-          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast story updated failed'));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast status updated failed'));
         } else {
-          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[PUT /posts/:postId]: broadcast post updated failed'));
         }
       }
 
@@ -292,11 +319,11 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         if (result.type === 'STATUS') {
-          socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch(() => {});
+          socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast status deleted failed'));
         } else if (result.type === 'STORY') {
-          socialEvents.broadcastStoryDeleted(postId, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryDeleted(postId, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast story deleted failed'));
         } else {
-          socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId]: broadcast post deleted failed'));
         }
       }
 

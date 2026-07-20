@@ -1,7 +1,9 @@
 'use client';
 
 import { HTMLAttributes, useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
+import { formatDuration } from '@/utils/audio-formatters';
 
 export interface AudioPlayerProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onPlay' | 'onPause'> {
   /** Audio source URL */
@@ -14,16 +16,6 @@ export interface AudioPlayerProps extends Omit<HTMLAttributes<HTMLDivElement>, '
   onPause?: () => void;
   /** Callback when playback ends */
   onEnded?: () => void;
-}
-
-/**
- * Format seconds to mm:ss
- */
-function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 /**
@@ -85,11 +77,13 @@ export function AudioPlayer({
   className,
   ...props
 }: AudioPlayerProps) {
+  const { t } = useI18n('common');
+
   // Safety check: return empty div if src is missing
   if (!src) {
     return (
       <div className="px-3 py-2 text-sm text-[var(--gp-text-muted)]">
-        Audio URL non disponible
+        {t('audioUnavailable')}
       </div>
     );
   }
@@ -275,7 +269,7 @@ export function AudioPlayer({
           'hover:scale-105 active:scale-95',
           isLoading && 'opacity-50 cursor-wait'
         )}
-        aria-label={isPlaying ? 'Pause' : 'Play'}
+        aria-label={isPlaying ? t('pause') : t('play')}
       >
         {isLoading ? (
           <div
@@ -300,7 +294,7 @@ export function AudioPlayer({
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           role="slider"
-          aria-label="Audio progress"
+          aria-label={t('audioProgress')}
           aria-valuemin={0}
           aria-valuemax={duration}
           aria-valuenow={currentTime}
@@ -350,10 +344,10 @@ export function AudioPlayer({
         {/* Time display */}
         <div className="flex items-center justify-between text-xs font-medium">
           <span className="text-[var(--gp-text-secondary)] transition-colors duration-300">
-            {formatTime(currentTime)}
+            {formatDuration(currentTime)}
           </span>
           <span className="text-[var(--gp-text-muted)] transition-colors duration-300">
-            {formatTime(duration)}
+            {formatDuration(duration)}
           </span>
         </div>
       </div>

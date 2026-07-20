@@ -16,6 +16,7 @@ final class StoryPublishQueueTests: XCTestCase {
             .appendingPathComponent("StoryPublishQueueTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         queue = StoryPublishQueue.shared
+        await queue._testResetPublishHandler()
         await queue.clearAll()
     }
 
@@ -23,6 +24,128 @@ final class StoryPublishQueueTests: XCTestCase {
         try? FileManager.default.removeItem(at: tempDir)
         await queue.clearAll()
         try await super.tearDown()
+    }
+
+    // MARK: - E10 : cleanup des copies média aux dispositions terminales
+
+    func test_processNext_success_removesLocalMediaAndEmptyParentDir() async throws {
+        let published = PublishedIds()
+        await queue.setPublishHandler { item in
+            await published.append(item.id)
+            return "server-ok"
+        }
+
+        let mediaDir = tempDir.appendingPathComponent("pending_e10", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue.enqueue(item)
+        await queue.processNext()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path),
+                       "A successfully drained item must remove its local media copies")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaDir.path),
+                       "The per-story directory is removed once empty")
+    }
+
+    func test_processNext_retryableFailure_keepsLocalMedia() async throws {
+        await queue.setPublishHandler { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+
+        let mediaDir = tempDir.appendingPathComponent("pending_retry", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue.enqueue(item)
+        await queue.processNext()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: mediaFile.path),
+                      "A retryable failure keeps the media — the next drain still needs it")
+    }
+
+    func test_clearAll_removesLocalMediaCopies() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_clearall", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue.enqueue(item)
+        await queue.clearAll()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path),
+                       "Logout clearAll must not leave the previous account's media on disk")
+        let count = await queue.count
+        XCTAssertEqual(count, 0)
+    }
+
+    // MARK: - E5 write-ahead : in-flight marking
+
+    func test_processNext_skipsInFlightItems() async {
+        // Handler AVANT l'enqueue : setPublishHandler auto-draine (M5) une
+        // queue non vide, ce qui courserait le processNext explicite du test.
+        let published = PublishedIds()
+        await queue.setPublishHandler { item in
+            await published.append(item.id)
+            return "server-\(item.id)"
+        }
+
+        let uiDriven = makeItem(visibility: "PUBLIC")
+        let queued = makeItem(visibility: "FRIENDS")
+        await queue.enqueue(uiDriven)
+        await queue.enqueue(queued)
+        await queue.markInFlight(uiDriven.id)
+        await queue.processNext()
+
+        let ids = await published.values
+        XCTAssertEqual(ids, [queued.id],
+                       "The drain must skip the item whose upload is UI-driven right now")
+        let stillQueued = await queue.pendingItems.map(\.id)
+        XCTAssertTrue(stillQueued.contains(uiDriven.id),
+                      "The in-flight item stays persisted (killed process = boot replays it)")
+    }
+
+    func test_dequeue_clearsInFlightMarker() async {
+        let item = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(item)
+        await queue.markInFlight(item.id)
+        await queue.dequeue(item.id)
+        let inFlight = await queue.isInFlight(item.id)
+        XCTAssertFalse(inFlight)
+    }
+
+    func test_clearInFlight_makesItemEligibleForDrainAgain() async {
+        let published = PublishedIds()
+        await queue.setPublishHandler { item in
+            await published.append(item.id)
+            return "server-\(item.id)"
+        }
+
+        let item = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(item)
+        await queue.markInFlight(item.id)
+        await queue.clearInFlight(item.id)
+        await queue.processNext()
+
+        let ids = await published.values
+        XCTAssertEqual(ids, [item.id])
+    }
+
+    /// Collecteur Sendable pour les handlers @Sendable de la queue.
+    private actor PublishedIds {
+        private(set) var values: [String] = []
+        func append(_ id: String) { values.append(id) }
     }
 
     // MARK: - enqueue / dequeue
@@ -214,6 +337,114 @@ final class StoryPublishQueueTests: XCTestCase {
         XCTAssertEqual(received?.reason, .maxRetriesReached)
         let remaining = await queue.count
         XCTAssertEqual(remaining, 0)
+    }
+
+    // MARK: - Failed items history (retry-able, media preserved)
+
+    func test_processNext_unrecoverableError_addsToFailedPendingItems() async {
+        // Handler BEFORE enqueue: setPublishHandler auto-drains (M5) a
+        // non-empty queue, which would race the explicit processNext() below.
+        await queue.setPublishHandler { _ in
+            throw StoryPublishUnrecoverableError("validation rejected")
+        }
+        let item = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(item)
+        await queue.processNext()
+
+        let failed = await queue.failedPendingItems
+        XCTAssertEqual(failed.map(\.id), [item.id])
+        XCTAssertNotNil(failed.first?.lastError)
+        let pending = await queue.pendingItems
+        XCTAssertTrue(pending.isEmpty, "a permanently-failed item leaves the retry queue")
+    }
+
+    func test_processNext_permanentFailure_preservesLocalMedia() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_failed_history", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        // Handler BEFORE enqueue: avoids racing the M5 auto-drain trigger.
+        await queue.setPublishHandler { _ in
+            throw StoryPublishUnrecoverableError("validation rejected")
+        }
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue.enqueue(item)
+        await queue.processNext()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: mediaFile.path),
+                      "A permanent failure must keep the media on disk so the user can retry from the failed-items history")
+    }
+
+    func test_retryFailedItem_movesItemBackToPendingQueue() async {
+        var item = makeItem(visibility: "PUBLIC")
+        item.retryCount = 3
+        item.lastError = "boom"
+        await queue._testSetFailedItems([item])
+
+        await queue.retryFailedItem(item.id)
+
+        let pending = await queue.pendingItems
+        XCTAssertEqual(pending.map(\.id), [item.id])
+        XCTAssertEqual(pending.first?.retryCount, 0)
+        XCTAssertNil(pending.first?.lastError)
+        let failed = await queue.failedPendingItems
+        XCTAssertTrue(failed.isEmpty)
+    }
+
+    func test_discardFailedItem_removesItemAndDeletesMedia() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_discard", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue._testSetFailedItems([item])
+
+        await queue.discardFailedItem(item.id)
+
+        let failed = await queue.failedPendingItems
+        XCTAssertTrue(failed.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path))
+    }
+
+    func test_failedItems_capped_dropsOldestWhenExceedingLimit() async {
+        let seeded = (0..<20).map { _ in makeItem(visibility: "PUBLIC") }
+        await queue._testSetFailedItems(seeded)
+
+        // Handler BEFORE enqueue: avoids racing the M5 auto-drain trigger.
+        await queue.setPublishHandler { _ in
+            throw StoryPublishUnrecoverableError("validation rejected")
+        }
+        let newItem = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(newItem)
+        await queue.processNext()
+
+        let failed = await queue.failedPendingItems
+        XCTAssertEqual(failed.count, 20, "the failed-items history stays capped")
+        XCTAssertFalse(failed.contains { $0.id == seeded[0].id }, "the oldest failed item is dropped to make room")
+        XCTAssertTrue(failed.contains { $0.id == newItem.id })
+    }
+
+    func test_clearAll_alsoPurgesFailedItemsAndMedia() async throws {
+        let mediaDir = tempDir.appendingPathComponent("pending_clearall_failed", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue._testSetFailedItems([item])
+        await queue.clearAll()
+
+        let failed = await queue.failedPendingItems
+        XCTAssertTrue(failed.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path))
     }
 
     // MARK: - Helpers

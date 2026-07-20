@@ -1,12 +1,11 @@
 'use client';
 
-import { memo, useMemo, useCallback, useRef, useState, useEffect } from 'react';
+import { memo, useMemo, useCallback, useState, useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import type { User, BubbleTranslation, ConversationType, TranslationModel } from '@meeshy/shared/types';
 import type { Message } from '@meeshy/shared/types/conversation';
 import { useI18n } from '@/hooks/useI18n';
-import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { useMessageView } from '@/hooks/use-message-view-state';
 import { reportService } from '@/services/report.service';
 import type { CallSummaryMetadata } from '@meeshy/shared/utils/call-summary';
@@ -17,7 +16,6 @@ import { LanguageSelectionMessageView } from './bubble-message/LanguageSelection
 import { EditMessageView } from './bubble-message/EditMessageView';
 import { DeleteConfirmationView } from './bubble-message/DeleteConfirmationView';
 import { ReportMessageView } from './bubble-message/ReportMessageView';
-import { formatRelativeDate } from '@/utils/date-format';
 import { hasModeratorPrivileges } from '@meeshy/shared/types/role-types';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
@@ -81,8 +79,6 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
 }: BubbleMessageProps) {
   
   const { t } = useI18n();
-  const currentInterfaceLanguage = useCurrentInterfaceLanguage();
-  const _contentRef = useRef<HTMLDivElement>(null);
 
   // State local pour la langue d'affichage (permet la mise à jour immédiate du contenu)
   const [localDisplayLanguage, setLocalDisplayLanguage] = useState<string | null>(null);
@@ -97,8 +93,6 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   // Hook de virtualization pour ce message spécifique
   const {
     currentMode,
-    _currentData,
-    _isActive,
     enterReactionMode,
     enterLanguageMode,
     enterEditMode,
@@ -149,26 +143,6 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
     return translation ? ((translation as unknown).content || (translation as unknown).translatedContent || message.content) : message.content;
   }, [effectiveDisplayLanguage, message.originalLanguage, message.originalContent, message.content, message.translations]);
 
-  // Contenu de réponse (pour les messages parents - utilise effectiveDisplayLanguage)
-  const _replyToContent = useMemo(() => {
-    if (!message.replyTo) return undefined;
-    
-    const replyMessage = message.replyTo as unknown;
-    if (effectiveDisplayLanguage === (replyMessage.originalLanguage || 'fr')) {
-      return replyMessage.originalContent || replyMessage.content;
-    }
-    
-    const translation = replyMessage.translations?.find((t: unknown) => 
-      (t.language || t.targetLanguage) === effectiveDisplayLanguage
-    );
-    return translation ? (translation.content || translation.translatedContent || replyMessage.content) : replyMessage.content;
-  }, [message.replyTo, effectiveDisplayLanguage]);
-
-  // Format de date pour les réponses - utilise la fonction utilitaire factorisée
-  const _formatReplyDate = useCallback((date: Date | string) => {
-    return formatRelativeDate(date, { t, locale: currentInterfaceLanguage });
-  }, [t, currentInterfaceLanguage]);
-
   // Actions des vues spécialisées
   const handleReactionSelect = useCallback((_emoji: string) => {
     // L'ajout de réaction se fait via MessageReactions existant
@@ -210,11 +184,6 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
     }
   }, [onDeleteMessage, exitMode, t]);
 
-  const _handleCopyMessage = useCallback(() => {
-    navigator.clipboard.writeText(currentContent);
-    toast.success(t('messageCopied'));
-  }, [currentContent, t]);
-
   const handleReportMessage = useCallback(async (messageId: string, reportType: string, reason: string) => {
     try {
       await reportService.reportMessage(messageId, reportType, reason);
@@ -231,9 +200,12 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
 
   // Call-summary system message → rich, actionable call bubble (bypasses the
   // view-mode machine; it has no reactions/edit/translation affordances).
+  // 'call' = terminal summary; 'call-live' = ongoing call posted at initiate,
+  // edited in-place at the terminal (message:edited).
+  const messageKind = (message.metadata as CallSummaryMetadata | undefined)?.kind;
   const callMetadata =
     message.messageSource === 'system' &&
-    (message.metadata as CallSummaryMetadata | undefined)?.kind === 'call'
+    (messageKind === 'call' || messageKind === 'call-live')
       ? (message.metadata as CallSummaryMetadata)
       : null;
   if (callMetadata) {
@@ -243,6 +215,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
         currentUserId={currentUser?.id ?? ''}
         conversationId={conversationId ?? message.conversationId}
         conversationType={conversationType}
+        isAnonymous={isAnonymous}
       />
     );
   }

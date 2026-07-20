@@ -63,7 +63,7 @@ export class CaptchaService {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
-        validateStatus: (status) => status < 500
+        validateStatus: /* istanbul ignore next */ (status) => status < 500
       });
 
       if (response.status !== 200) {

@@ -62,7 +62,7 @@ public struct AvatarConfig {
     public let accentColor: String
     public let context: AvatarContext
     public let moodEmoji: String?
-    public let presenceState: PresenceState
+    public let presenceState: PresenceState?
     public let storyRingState: StoryRingState
     public let onTap: (() -> Void)?
     public let onViewProfile: (() -> Void)?
@@ -74,7 +74,7 @@ public struct AvatarConfig {
         accentColor: String,
         context: AvatarContext = .messageBubble,
         moodEmoji: String? = nil,
-        presenceState: PresenceState = .offline,
+        presenceState: PresenceState? = nil,
         storyRingState: StoryRingState = .none,
         onTap: (() -> Void)? = nil,
         onViewProfile: (() -> Void)? = nil,
@@ -225,15 +225,15 @@ public struct UserIdentityBar: View {
                 .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
 
         case .presence(let state):
-            if state != .offline {
-                HStack(spacing: 4) {
-                    Circle()
-                        .fill(state == .online ? Color(hex: "2ECC71") : Color(hex: "F39C12"))
-                        .frame(width: 6, height: 6)
-                    Text(state == .online ? "En ligne" : "Absent")
-                        .font(.system(size: 11))
-                        .foregroundColor(state == .online ? Color(hex: "2ECC71") : Color(hex: "F39C12"))
-                }
+            // Couleurs + libellé via le mapping central (PresenceStyle) :
+            // vert online/recent, orange away, gris offline.
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(state.dotColor)
+                    .frame(width: 6, height: 6)
+                Text(state.localizedLabel)
+                    .font(.system(size: 11))
+                    .foregroundColor(state.dotColor)
             }
 
         case .memberSince(let value):
@@ -330,9 +330,11 @@ public struct UserIdentityBar: View {
                 .font(.system(size: 10))
                 .foregroundColor(secondaryColor.opacity(0.7))
         case .slow:
-            // 5s-30s without ACK: warmer "slow send" indicator using the
-            // semantic warning color to nudge the user without alarming them.
-            Image(systemName: "clock.badge.exclamationmark")
+            // 5s-30s without ACK or auto-retry in flight: warmer "slow send"
+            // indicator. Plain clock — spec 2026-07-08
+            // (message-send-failure-retry-flow, règle 2) : aucun glyphe
+            // évoquant un échec tant que l'état n'est pas `.failed`.
+            Image(systemName: "clock")
                 .font(.system(size: 10))
                 .foregroundColor(MeeshyColors.warning)
         case .sent:
@@ -411,7 +413,7 @@ extension UserIdentityBar {
         activeFlag: String?,
         onFlagTap: ((String) -> Void)?,
         onTranslateTap: (() -> Void)?,
-        presenceState: PresenceState = .offline,
+        presenceState: PresenceState? = nil,
         moodEmoji: String? = nil,
         storyRingState: StoryRingState = .none,
         onAvatarTap: (() -> Void)?,
@@ -537,7 +539,6 @@ extension UserIdentityBar {
             url: avatarURL,
             accentColor: accentColor,
             context: .postComment,
-            presenceState: .offline,
             contextMenuItems: contextMenuItems
         )
 
@@ -593,7 +594,6 @@ extension UserIdentityBar {
             url: avatarURL,
             accentColor: accentColor,
             context: .userListItem,
-            presenceState: .offline,
             contextMenuItems: contextMenuItems
         )
 

@@ -20,6 +20,8 @@ import {
   type LanguageStats
 } from '@/lib/bubble-stream-modules';
 import { TrendingSection } from '@/components/common/trending-section';
+import { useLiveUserStatus } from '@/hooks/use-live-user-status';
+import { PRESENCE_DOT_CLASS } from '@/lib/user-status';
 import type { User } from '@meeshy/shared/types';
 
 interface StreamSidebarProps {
@@ -116,10 +118,12 @@ export const StreamSidebar = memo(function StreamSidebar({
 
 StreamSidebar.displayName = 'StreamSidebar';
 
+
 /**
  * Composant UserItem avec memo pour optimiser les re-renders
  */
 const UserItem = memo(function UserItem({ user }: { user: User }) {
+  const status = useLiveUserStatus(user.id, user);
   return (
     <div className="flex items-center space-x-3 p-2 rounded hover:bg-gray-50/80 dark:hover:bg-gray-700/50 cursor-pointer transition-colors">
       <Avatar className="h-8 w-8">
@@ -136,7 +140,9 @@ const UserItem = memo(function UserItem({ user }: { user: User }) {
           @{user.username}
         </p>
       </div>
-      <div className="w-2 h-2 bg-green-500 rounded-full" />
+      {status !== 'offline' && (
+        <div className={`w-2 h-2 ${PRESENCE_DOT_CLASS[status]} rounded-full`} />
+      )}
     </div>
   );
 });

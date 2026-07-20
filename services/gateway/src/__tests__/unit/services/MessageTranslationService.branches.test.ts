@@ -113,7 +113,9 @@ jest.mock('@meeshy/shared/types/attachment-audio', () => ({
 const mockResolveUserLanguagesOrdered: MockFn = jest.fn().mockReturnValue(['fr', 'en']);
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   resolveUserLanguagesOrdered: (...args: unknown[]) =>
-    mockResolveUserLanguagesOrdered(...args)
+    mockResolveUserLanguagesOrdered(...args),
+  generateConversationIdentifier: (title?: string) =>
+    `mshy_${(title ?? 'x').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'x'}-20260101000000`
 }));
 
 jest.mock('../../../utils/translation-transformer', () => ({
@@ -257,27 +259,11 @@ describe('MessageTranslationService — branch supplement', () => {
     jest.clearAllMocks();
   });
 
-  // =========================================================================
-  // 1. _generateConversationIdentifier — private method, accessed directly
-  // =========================================================================
-  describe('_generateConversationIdentifier', () => {
-    it('generates a random unique id when called without a title', () => {
-      // Covers: if (title) → FALSE branch (line 305) + lines 318-319
-      const result: string = (svc as any)['_generateConversationIdentifier']();
-      expect(result).toMatch(/^mshy_[a-z0-9]+-\d{14}$/);
-    });
-
-    it('generates a random unique id when title sanitizes to an empty string', () => {
-      // '!!!' → all non-alphanum removed → '' → if (sanitizedTitle.length > 0) FALSE branch (line 313)
-      const result: string = (svc as any)['_generateConversationIdentifier']('!!!');
-      expect(result).toMatch(/^mshy_[a-z0-9]+-\d{14}$/);
-    });
-
-    it('returns sanitized-title form when title has valid characters', () => {
-      const result: string = (svc as any)['_generateConversationIdentifier']('Hello World');
-      expect(result).toMatch(/^mshy_hello-world-\d{14}$/);
-    });
-  });
+  // Note: conversation-identifier generation was consolidated onto the shared
+  // SSOT `generateConversationIdentifier` (@meeshy/shared/utils/conversation-helpers);
+  // the former private `_generateConversationIdentifier` copy was removed. Its
+  // sanitization contract is covered by the shared util's own tests and by the
+  // gateway delegation tests (identifier-generator.test.ts, link-helpers.test.ts).
 
   // =========================================================================
   // 2. _processTranslationsAsync — memory cache HIT path
@@ -725,6 +711,83 @@ describe('MessageTranslationService — branch supplement', () => {
 
       // After cleanup, old entries are deleted; map should be smaller
       expect(processedTasks.size).toBeLessThan(501);
+    });
+  });
+
+  // =========================================================================
+  // 10b. _handleTranslationCompleted — ordering guard for edit-retranslation race
+  // =========================================================================
+  describe('_handleTranslationCompleted — stale retranslation ordering guard', () => {
+    const emitCompleted = (taskId: string, messageId: string, translatedText: string) =>
+      mockZmqClient.emit('translationCompleted', {
+        taskId,
+        targetLanguage: 'fr',
+        result: {
+          messageId,
+          targetLanguage: 'fr',
+          translatedText,
+          sourceLanguage: 'en',
+          modelType: 'medium',
+          confidenceScore: 0.9,
+          processingTime: 1
+        }
+      });
+
+    const stubEditedMessage = () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: 'msg-race',
+        content: 'edited content',
+        conversationId: 'conv-1',
+        originalLanguage: 'en',
+        translations: null
+      });
+      // Inside retranslate: translations null → delete step is skipped.
+      prisma.message.findUnique.mockResolvedValue({ translations: null });
+    };
+
+    it('drops a translation result whose task was superseded by a newer edit of the same message', async () => {
+      // Two rapid edits → two retranslation dispatches with distinct taskIds.
+      mockZmqClient.sendTranslationRequest
+        .mockReset()
+        .mockResolvedValueOnce('task-edit-A')
+        .mockResolvedValueOnce('task-edit-B');
+      stubEditedMessage();
+
+      await svc.retranslateMessageAsync('msg-race', { targetLanguage: 'fr' }); // task-edit-A
+      await svc.retranslateMessageAsync('msg-race', { targetLanguage: 'fr' }); // task-edit-B (latest)
+
+      // The OLDER task's ZMQ response lands last (out of order).
+      prisma.message.update.mockClear();
+      emitCompleted('task-edit-A', 'msg-race', 'stale A');
+      await flushAsync(8);
+
+      // Guard drops it before _saveTranslationToDatabase → no DB write.
+      expect(prisma.message.update).not.toHaveBeenCalled();
+    });
+
+    it('persists the translation carried by the latest retranslation task', async () => {
+      mockZmqClient.sendTranslationRequest.mockReset().mockResolvedValueOnce('task-latest');
+      stubEditedMessage();
+
+      await svc.retranslateMessageAsync('msg-race', { targetLanguage: 'fr' }); // task-latest
+
+      // Save step reads then writes the message translations JSON.
+      prisma.message.findUnique.mockResolvedValue({ translations: {} });
+      prisma.message.update.mockClear();
+      emitCompleted('task-latest', 'msg-race', 'fresh');
+      await flushAsync(8);
+
+      expect(prisma.message.update).toHaveBeenCalled();
+    });
+
+    it('never drops a translation for a message that was never retranslated', async () => {
+      // No retranslation registered → guard is inert, the initial translation saves.
+      prisma.message.findUnique.mockResolvedValue({ translations: {} });
+      prisma.message.update.mockClear();
+      emitCompleted('task-initial', 'msg-plain', 'Bonjour');
+      await flushAsync(8);
+
+      expect(prisma.message.update).toHaveBeenCalled();
     });
   });
 
@@ -1213,6 +1276,30 @@ describe('MessageTranslationService — branch supplement', () => {
       expect(processSpy).toHaveBeenCalledWith(
         expect.objectContaining({ audioDurationMs: 0 })
       );
+    });
+  });
+
+  // =========================================================================
+  // 22b. invalidateCacheForMessage — public API for message-edit flow
+  // =========================================================================
+  describe('invalidateCacheForMessage', () => {
+    it('removes all LRU cache entries for the given messageId before retranslation', () => {
+      const msgId = '507f1f77bcf86cd799439011';
+      const cache = (svc as any).translationCache as TranslationCache;
+
+      cache.set(`${msgId}_en_fr`, { messageId: msgId } as any);
+      cache.set(`${msgId}_fr`, { messageId: msgId } as any);
+      cache.set('other_en_fr', { messageId: 'other' } as any);
+
+      svc.invalidateCacheForMessage(msgId);
+
+      expect(cache.get(`${msgId}_en_fr`)).toBeNull();
+      expect(cache.get(`${msgId}_fr`)).toBeNull();
+      expect(cache.get('other_en_fr')).not.toBeNull();
+    });
+
+    it('is a no-op when the messageId has no cached entries', () => {
+      expect(() => svc.invalidateCacheForMessage('nonexistent-id')).not.toThrow();
     });
   });
 

@@ -9,6 +9,27 @@ import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
 
 /**
+ * Code de langue in-app supporté, **validé ET normalisé** (lowercase).
+ *
+ * Source de vérité unique de la normalisation à l'écriture : `isSupportedLanguage`
+ * accepte les codes de manière insensible à la casse (`'EN'`, `'Fr'`) mais ne les
+ * transforme pas — sans le `.transform` ci-dessous, un `systemLanguage: 'EN'` serait
+ * persisté verbatim et casserait la résolution du Prisme Linguistique côté lecture
+ * (les traductions sont stockées sous clé minuscule). On lowercase donc au point
+ * d'écriture pour garantir l'invariant « la base ne contient que des codes
+ * minuscules », rendant les compensations de lecture (`resolveUserLanguage`) purement
+ * défensives.
+ *
+ * @see packages/shared/utils/conversation-helpers.ts — résolveurs de lecture
+ */
+const supportedLanguageCode = z
+  .string()
+  .min(2)
+  .max(5)
+  .refine((code) => isSupportedLanguage(code), { message: 'Unsupported language code' })
+  .transform((code) => code.toLowerCase());
+
+/**
  * Valider un schéma Zod et retourner une erreur standardisée
  */
 export function validateSchema<T>(
@@ -42,24 +63,36 @@ export function validateSchema<T>(
  * Schémas de validation réutilisables
  */
 export const CommonSchemas = {
-  // Pagination
+  // Pagination — coerce defensively: the `|| default` must be applied AFTER
+  // parseInt so non-numeric ('abc' → NaN) and negative ('-5') query strings fall
+  // back to safe bounds instead of leaking into Prisma `take`/`skip`. Mirrors the
+  // gateway's validatePagination (services/gateway/src/utils/pagination.ts).
   pagination: z.object({
-    limit: z.string().optional().transform((val) => parseInt(val || '20', 10)),
-    offset: z.string().optional().transform((val) => parseInt(val || '0', 10)),
+    limit: z.string().optional().transform((val) => Math.min(Math.max(1, parseInt(val ?? '', 10) || 20), 100)),
+    offset: z.string().optional().transform((val) => Math.max(0, parseInt(val ?? '', 10) || 0)),
   }),
-  
+
   // Message pagination
   messagePagination: z.object({
-    limit: z.string().optional().transform((val) => parseInt(val || '20', 10)),
-    offset: z.string().optional().transform((val) => parseInt(val || '0', 10)),
+    limit: z.string().optional().transform((val) => Math.min(Math.max(1, parseInt(val ?? '', 10) || 20), 100)),
+    offset: z.string().optional().transform((val) => Math.max(0, parseInt(val ?? '', 10) || 0)),
     before: z.string().optional(),
   }),
   
   // ID MongoDB
   mongoId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'ID MongoDB invalide'),
   
-  // Langue
-  language: z.string().min(2).max(5).regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'Code langue invalide'),
+  // Langue — ISO 639-1 (2 lettres) OU ISO 639-3 (3 lettres, ex. 'bas', 'ksf',
+  // 'nnh', 'ewo' — langues camerounaises officiellement supportées, préservées
+  // verbatim par normalizeLanguageCode), avec sous-tag région BCP-47 optionnel.
+  // Le corps `{2}` seul rejetait tout code 639-3 sur sendMessage/editMessage
+  // alors que systemLanguage/regionalLanguage (refine isSupportedLanguage) les
+  // acceptent — incohérence qui bloquait l'envoi dans une langue supportée.
+  // La borne `.max(6)` reflète la longueur MAXIMALE de la regex (`[a-z]{3}` + `-`
+  // + `[A-Z]{2}` = 6, ex. `bas-CM`) : un `.max(5)` contredisait la regex et
+  // rejetait la forme 639-3 + région, laissant ouverte la même régression pour
+  // les codes 3-lettres régionalisés. La regex reste l'unique gardien de forme.
+  language: z.string().min(2).max(6).regex(/^[a-z]{2,3}(-[A-Z]{2})?$/, 'Code langue invalide'),
   
   // Type de conversation
   conversationType: z.enum(['direct', 'group', 'public', 'global', 'broadcast']),
@@ -77,7 +110,7 @@ export const CommonSchemas = {
   description: z.string().max(500, 'Description trop longue').optional(),
   
   // Email
-  email: z.string().email('Email invalide'),
+  email: z.email('Email invalide'),
   
   // Username
   username: z.string().min(3, 'Username trop court').max(30, 'Username trop long')
@@ -134,7 +167,7 @@ export const UserSchemas = {
   full: z.object({
     id: z.string(),
     username: z.string(),
-    email: z.string().email().optional(),
+    email: z.email().optional(),
     firstName: z.string().optional(),
     lastName: z.string().optional(),
     displayName: z.string().optional(),
@@ -144,24 +177,24 @@ export const UserSchemas = {
     phoneCountryCode: z.string().nullable().optional(),
     role: userRoleEnum.optional(),
     isActive: z.boolean().optional(),
-    deactivatedAt: z.string().datetime().nullable().optional(),
+    deactivatedAt: z.iso.datetime().nullable().optional(),
     systemLanguage: z.string().optional(),
     regionalLanguage: z.string().optional(),
     customDestinationLanguage: z.string().nullable().optional(),
     autoTranslateEnabled: z.boolean().optional(),
     isOnline: z.boolean().optional(),
-    lastActiveAt: z.string().datetime().nullable().optional(),
-    emailVerifiedAt: z.string().datetime().nullable().optional(),
-    phoneVerifiedAt: z.string().datetime().nullable().optional(),
-    twoFactorEnabledAt: z.string().datetime().nullable().optional(),
-    lastPasswordChange: z.string().datetime().nullable().optional(),
+    lastActiveAt: z.iso.datetime().nullable().optional(),
+    emailVerifiedAt: z.iso.datetime().nullable().optional(),
+    phoneVerifiedAt: z.iso.datetime().nullable().optional(),
+    twoFactorEnabledAt: z.iso.datetime().nullable().optional(),
+    lastPasswordChange: z.iso.datetime().nullable().optional(),
     lastLoginIp: z.string().nullable().optional(),
     lastLoginLocation: z.string().nullable().optional(),
     lastLoginDevice: z.string().nullable().optional(),
     timezone: z.string().nullable().optional(),
     profileCompletionRate: z.number().nullable().optional(),
-    createdAt: z.string().datetime().optional(),
-    updatedAt: z.string().datetime().optional(),
+    createdAt: z.iso.datetime().optional(),
+    updatedAt: z.iso.datetime().optional(),
   }),
 
   // Mise à jour du profil
@@ -170,17 +203,11 @@ export const UserSchemas = {
     lastName: z.string().min(1).max(50).optional(),
     displayName: z.string().min(1).max(100).optional(),
     bio: z.string().max(500).optional(),
-    avatar: z.string().url().optional(),
+    avatar: z.url().optional(),
     phoneNumber: z.string().optional(),
-    systemLanguage: z.string().min(2).max(5).refine(
-      code => isSupportedLanguage(code),
-      { message: 'Unsupported language code' }
-    ).optional(),
-    regionalLanguage: z.string().min(2).max(5).refine(
-      code => isSupportedLanguage(code),
-      { message: 'Unsupported language code' }
-    ).optional(),
-    customDestinationLanguage: z.string().min(2).max(5).nullable().optional(),
+    systemLanguage: supportedLanguageCode.optional(),
+    regionalLanguage: supportedLanguageCode.optional(),
+    customDestinationLanguage: z.string().min(2).max(5).transform((code) => code.toLowerCase()).nullable().optional(),
     autoTranslateEnabled: z.boolean().optional(),
     timezone: z.string().optional(),
   }),
@@ -226,19 +253,16 @@ export const updateUserProfileSchema = z.object({
     message: 'Le nom ne peut pas contenir d\'emojis'
   }),
   displayName: z.string().optional(), // Autorise les emojis dans displayName
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   phoneNumber: z.union([z.string(), z.null()]).optional(),
   bio: z.string().max(500).optional(),
-  systemLanguage: z.string().min(2).max(5).refine(
-    code => isSupportedLanguage(code),
-    { message: 'Unsupported language code' }
-  ).optional(),
-  regionalLanguage: z.string().min(2).max(5).refine(
-    code => isSupportedLanguage(code),
-    { message: 'Unsupported language code' }
-  ).optional(),
-  customDestinationLanguage: z.union([z.literal(''), z.null(), z.string().min(2).max(5)]).optional(),
+  systemLanguage: supportedLanguageCode.optional(),
+  regionalLanguage: supportedLanguageCode.optional(),
+  customDestinationLanguage: z
+    .union([z.literal(''), z.null(), z.string().min(2).max(5).transform((code) => code.toLowerCase())])
+    .optional(),
   autoTranslateEnabled: z.boolean().optional(),
+  voicePublic: z.boolean().optional(),
 }).strict();
 
 /**
@@ -320,17 +344,11 @@ export const AuthSchemas = {
       .regex(/^(?=.*\p{L})[\p{L}\s'.-]+$/u, 'Le prénom doit contenir au moins une lettre'),
     lastName: z.string().min(1).max(50)
       .regex(/^(?=.*\p{L})[\p{L}\s'.-]+$/u, 'Le nom doit contenir au moins une lettre'),
-    email: z.string().email('Email invalide'),
+    email: z.email('Email invalide'),
     phoneNumber: z.string().optional(),
     phoneCountryCode: z.string().length(2).optional(),
-    systemLanguage: z.string().min(2).max(5).refine(
-      code => isSupportedLanguage(code),
-      { message: 'Unsupported language code' }
-    ).default('fr'),
-    regionalLanguage: z.string().min(2).max(5).refine(
-      code => isSupportedLanguage(code),
-      { message: 'Unsupported language code' }
-    ).default('fr'),
+    systemLanguage: supportedLanguageCode.default('fr'),
+    regionalLanguage: supportedLanguageCode.default('fr'),
     phoneTransferToken: z.string().optional(), // Token proving SMS verification for phone transfer
   }),
 
@@ -344,7 +362,7 @@ export const AuthSchemas = {
   verifyEmail: z.object({
     token: z.string().min(1).optional(),
     code: z.string().length(6).regex(/^[0-9]{6}$/).optional(),
-    email: z.string().email(),
+    email: z.email(),
   }).refine(
     (data) => !!data.token || !!data.code,
     { message: 'Either token or code must be provided' }
@@ -352,7 +370,7 @@ export const AuthSchemas = {
 
   // Resend verification
   resendVerification: z.object({
-    email: z.string().email(),
+    email: z.email(),
   }),
 
   // Phone verification
@@ -367,7 +385,7 @@ export const AuthSchemas = {
 
   // Password reset
   requestPasswordReset: z.object({
-    email: z.string().email(),
+    email: z.email(),
   }),
 
   resetPassword: z.object({
@@ -398,7 +416,7 @@ export const SessionSchemas = {
     osName: z.string().nullable().optional(),
     location: z.string().nullable().optional(),
     isMobile: z.boolean(),
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
   }),
 
   // Session complète
@@ -417,8 +435,8 @@ export const SessionSchemas = {
     country: z.string().nullable().optional(),
     city: z.string().nullable().optional(),
     location: z.string().nullable().optional(),
-    createdAt: z.string().datetime(),
-    lastActivityAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
+    lastActivityAt: z.iso.datetime(),
     isCurrentSession: z.boolean(),
     isTrusted: z.boolean(),
   }),
@@ -465,7 +483,7 @@ const messageTranslationSchema = z.object({
   confidenceScore: z.number().min(0).max(1).nullable().optional(),
   sourceLanguage: z.string().nullable().optional(),
   cached: z.boolean().nullable().optional(),
-  createdAt: z.string().datetime(),
+  createdAt: z.iso.datetime(),
 });
 
 /**
@@ -488,7 +506,7 @@ const messageMinimalSchema = z.object({
   content: z.string(),
   senderId: z.string().nullable().optional(),
   messageType: messageTypeEnum,
-  createdAt: z.string().datetime(),
+  createdAt: z.iso.datetime(),
 });
 
 /**
@@ -515,24 +533,24 @@ export const MessageSchemas = {
     messageType: messageTypeEnum,
     messageSource: messageSourceEnum.optional(),
     isEdited: z.boolean(),
-    editedAt: z.string().datetime().nullable().optional(),
-    deletedAt: z.string().datetime().nullable().optional(),
+    editedAt: z.iso.datetime().nullable().optional(),
+    deletedAt: z.iso.datetime().nullable().optional(),
     replyToId: z.string().nullable().optional(),
     forwardedFromId: z.string().nullable().optional(),
     forwardedFromConversationId: z.string().nullable().optional(),
-    expiresAt: z.string().datetime().nullable().optional(),
+    expiresAt: z.iso.datetime().nullable().optional(),
     isViewOnce: z.boolean().optional(),
     viewOnceCount: z.number().optional(),
     isBlurred: z.boolean().optional(),
     deliveredCount: z.number().optional(),
     readCount: z.number().optional(),
-    deliveredToAllAt: z.string().datetime().nullable().optional(),
-    readByAllAt: z.string().datetime().nullable().optional(),
+    deliveredToAllAt: z.iso.datetime().nullable().optional(),
+    readByAllAt: z.iso.datetime().nullable().optional(),
     isEncrypted: z.boolean().optional(),
     encryptionMode: encryptionModeEnum.nullable().optional(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime().nullable().optional(),
-    timestamp: z.string().datetime().optional(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime().nullable().optional(),
+    timestamp: z.iso.datetime().optional(),
     translations: z.array(messageTranslationSchema).optional(),
     attachments: z.array(z.object({})).nullable().optional(),
   }),
@@ -655,7 +673,7 @@ export const ConversationSchemas = {
   participant: z.object({
     userId: z.string(),
     role: userRoleEnum,
-    joinedAt: z.string().datetime(),
+    joinedAt: z.iso.datetime(),
     isActive: z.boolean(),
     permissions: z.object({
       canInvite: z.boolean(),
@@ -682,12 +700,12 @@ export const ConversationSchemas = {
     id: z.string(),
     type: conversationLinkTypeEnum,
     url: z.string(),
-    expiresAt: z.string().datetime().nullable().optional(),
+    expiresAt: z.iso.datetime().nullable().optional(),
     maxUses: z.number().nullable().optional(),
     currentUses: z.number(),
     isActive: z.boolean(),
     createdBy: z.string(),
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
     allowAnonymousMessages: z.boolean().nullable().optional(),
     allowAnonymousFiles: z.boolean().nullable().optional(),
     allowViewHistory: z.boolean().nullable().optional(),
@@ -703,7 +721,7 @@ export const ConversationSchemas = {
     messagesLast24h: z.number(),
     messagesLast7days: z.number(),
     averageResponseTime: z.number(),
-    lastActivity: z.string().datetime(),
+    lastActivity: z.iso.datetime(),
     topLanguages: z.array(z.object({
       language: z.string(),
       messageCount: z.number(),
@@ -720,7 +738,7 @@ export const ConversationSchemas = {
     avatar: z.string().nullable().optional(),
     memberCount: z.number(),
     lastMessage: messageMinimalSchema.nullable().optional(),
-    lastMessageAt: z.string().datetime().nullable().optional(),
+    lastMessageAt: z.iso.datetime().nullable().optional(),
     unreadCount: z.number().nullable().optional(),
   }),
 
@@ -742,7 +760,7 @@ export const ConversationSchemas = {
     participants: z.array(z.object({
       userId: z.string(),
       role: userRoleEnum,
-      joinedAt: z.string().datetime(),
+      joinedAt: z.iso.datetime(),
       isActive: z.boolean(),
       permissions: z.object({
         canInvite: z.boolean(),
@@ -753,14 +771,14 @@ export const ConversationSchemas = {
       }).nullable().optional(),
     })).optional(),
     lastMessage: messageMinimalSchema.nullable().optional(),
-    lastMessageAt: z.string().datetime().nullable().optional(),
+    lastMessageAt: z.iso.datetime().nullable().optional(),
     messageCount: z.number().nullable().optional(),
     unreadCount: z.number().nullable().optional(),
     encryptionMode: encryptionModeEnum.nullable().optional(),
-    encryptionEnabledAt: z.string().datetime().nullable().optional(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-    lastActivityAt: z.string().datetime().nullable().optional(),
+    encryptionEnabledAt: z.iso.datetime().nullable().optional(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
+    lastActivityAt: z.iso.datetime().nullable().optional(),
     createdBy: z.string().nullable().optional(),
     createdByUser: UserSchemas.minimal.nullable().optional(),
   }),
@@ -1106,14 +1124,14 @@ export const AttachmentSchemas = {
 
     // Security/Moderation
     scanStatus: scanStatusEnum.nullable().optional(),
-    scanCompletedAt: z.string().datetime().nullable().optional(),
+    scanCompletedAt: z.iso.datetime().nullable().optional(),
     moderationStatus: moderationStatusEnum.nullable().optional(),
     moderationReason: z.string().nullable().optional(),
 
     // Delivery status
-    deliveredToAllAt: z.string().datetime().nullable().optional(),
-    viewedByAllAt: z.string().datetime().nullable().optional(),
-    downloadedByAllAt: z.string().datetime().nullable().optional(),
+    deliveredToAllAt: z.iso.datetime().nullable().optional(),
+    viewedByAllAt: z.iso.datetime().nullable().optional(),
+    downloadedByAllAt: z.iso.datetime().nullable().optional(),
     viewedCount: z.number().optional(),
     downloadedCount: z.number().optional(),
 
@@ -1122,8 +1140,8 @@ export const AttachmentSchemas = {
     encryptionMode: encryptionModeEnum.nullable().optional(),
 
     // Timestamps
-    createdAt: z.string().datetime(),
-    metadata: z.record(z.unknown())
+    createdAt: z.iso.datetime(),
+    metadata: z.record(z.string(), z.unknown())
       .refine(
         (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
         { message: 'metadata exceeds 8KB serialized' }
@@ -1156,7 +1174,7 @@ export const ReactionSchemas = {
     userId: z.string().nullable().optional(),
     anonymousId: z.string().nullable().optional(),
     emoji: z.string(),
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
     user: UserSchemas.minimal.nullable().optional(),
   }),
 
@@ -1187,7 +1205,7 @@ export const MentionSchemas = {
     id: z.string(),
     messageId: z.string(),
     mentionedUserId: z.string(),
-    mentionedAt: z.string().datetime(),
+    mentionedAt: z.iso.datetime(),
     mentionedUser: UserSchemas.minimal,
   }),
 };
@@ -1212,9 +1230,9 @@ export const FriendRequestSchemas = {
     receiverId: z.string(),
     message: z.string().nullable().optional(),
     status: friendRequestStatusEnum,
-    respondedAt: z.string().datetime().nullable().optional(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    respondedAt: z.iso.datetime().nullable().optional(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
     sender: UserSchemas.minimal.optional(),
     receiver: UserSchemas.minimal.optional(),
   }),
@@ -1385,11 +1403,11 @@ export const NotificationSchemas = {
     data: z.string().nullable().optional(),
     priority: notificationPriorityEnum,
     isRead: z.boolean(),
-    readAt: z.string().datetime().nullable().optional(),
+    readAt: z.iso.datetime().nullable().optional(),
     emailSent: z.boolean(),
     pushSent: z.boolean(),
-    expiresAt: z.string().datetime().nullable().optional(),
-    createdAt: z.string().datetime(),
+    expiresAt: z.iso.datetime().nullable().optional(),
+    createdAt: z.iso.datetime(),
 
     // Sender info
     senderId: z.string().nullable().optional(),
@@ -1411,7 +1429,7 @@ export const NotificationSchemas = {
     title: z.string(),
     content: z.string(),
     isRead: z.boolean(),
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
   }),
 
   // Marquer comme lu
@@ -1451,8 +1469,8 @@ export const NotificationPreferenceSchemas = {
     dndStartTime: z.string().nullable().optional(),
     dndEndTime: z.string().nullable().optional(),
 
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
   }),
 
   // Mise à jour des préférences
@@ -1498,10 +1516,10 @@ export const CommunitySchemas = {
     banner: z.string().nullable().optional(),
     isPrivate: z.boolean(),
     isActive: z.boolean(),
-    deletedAt: z.string().datetime().nullable().optional(),
+    deletedAt: z.iso.datetime().nullable().optional(),
     createdBy: z.string(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
     creator: UserSchemas.minimal.optional(),
     memberCount: z.number().optional(),
     conversationCount: z.number().optional(),
@@ -1522,10 +1540,10 @@ export const CommunitySchemas = {
     id: z.string(),
     communityId: z.string(),
     userId: z.string(),
-    joinedAt: z.string().datetime(),
+    joinedAt: z.iso.datetime(),
     role: communityRoleEnum,
     isActive: z.boolean(),
-    leftAt: z.string().datetime().nullable().optional(),
+    leftAt: z.iso.datetime().nullable().optional(),
     user: UserSchemas.minimal.optional(),
   }),
 
@@ -1541,8 +1559,8 @@ export const CommunitySchemas = {
   update: z.object({
     name: z.string().min(1).max(100).optional(),
     description: z.string().max(500).optional(),
-    avatar: z.string().url().optional(),
-    banner: z.string().url().optional(),
+    avatar: z.url().optional(),
+    banner: z.url().optional(),
     isPrivate: z.boolean().optional(),
   }),
 
@@ -1599,16 +1617,16 @@ export const CallSessionSchemas = {
     initiatorId: z.string(),
     mode: callModeEnum,
     status: callStatusEnum,
-    startedAt: z.string().datetime().nullable().optional(),
-    endedAt: z.string().datetime().nullable().optional(),
+    startedAt: z.iso.datetime().nullable().optional(),
+    endedAt: z.iso.datetime().nullable().optional(),
     duration: z.number().nullable().optional(),
     isRecorded: z.boolean(),
     recordingUrl: z.string().nullable().optional(),
     isTranscribed: z.boolean(),
     transcriptionId: z.string().nullable().optional(),
     averageQuality: z.number().nullable().optional(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
     initiator: UserSchemas.minimal.optional(),
     participantCount: z.number().optional(),
   }),
@@ -1618,7 +1636,7 @@ export const CallSessionSchemas = {
     id: z.string(),
     mode: callModeEnum,
     status: callStatusEnum,
-    startedAt: z.string().datetime().nullable().optional(),
+    startedAt: z.iso.datetime().nullable().optional(),
     duration: z.number().nullable().optional(),
     participantCount: z.number().optional(),
   }),
@@ -1642,8 +1660,8 @@ export const CallParticipantSchemas = {
     userId: z.string(),
     role: callParticipantRoleEnum,
     status: callParticipantStatusEnum,
-    joinedAt: z.string().datetime().nullable().optional(),
-    leftAt: z.string().datetime().nullable().optional(),
+    joinedAt: z.iso.datetime().nullable().optional(),
+    leftAt: z.iso.datetime().nullable().optional(),
     duration: z.number().nullable().optional(),
     isMuted: z.boolean(),
     isVideoOff: z.boolean(),
@@ -1687,9 +1705,9 @@ export const ReportSchemas = {
     status: reportStatusEnum,
     resolution: z.string().nullable().optional(),
     resolvedBy: z.string().nullable().optional(),
-    resolvedAt: z.string().datetime().nullable().optional(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    resolvedAt: z.iso.datetime().nullable().optional(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
     reporter: UserSchemas.minimal.optional(),
   }),
 
@@ -1749,11 +1767,11 @@ export const UserStatsSchemas = {
 
     // Engagement
     averageResponseTime: z.number().nullable().optional(),
-    lastActiveAt: z.string().datetime().nullable().optional(),
+    lastActiveAt: z.iso.datetime().nullable().optional(),
     streakDays: z.number(),
 
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
   }),
 };
 
@@ -1787,8 +1805,8 @@ export const AudioTranscriptionSchemas = {
     model: z.string().nullable().optional(),
     status: audioProcessingStatusEnum,
     errorMessage: z.string().nullable().optional(),
-    createdAt: z.string().datetime(),
-    completedAt: z.string().datetime().nullable().optional(),
+    createdAt: z.iso.datetime(),
+    completedAt: z.iso.datetime().nullable().optional(),
   }),
 
   // Demander une transcription
@@ -1813,7 +1831,7 @@ export const TranslatedAudioSchemas = {
     voiceModelId: z.string().nullable().optional(),
     duration: z.number().nullable().optional(),
     status: audioProcessingStatusEnum,
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
   }),
 
   // Demander une traduction audio
@@ -1841,8 +1859,8 @@ export const VoiceModelSchemas = {
     quality: z.number().nullable().optional(),
     isDefault: z.boolean(),
     isPublic: z.boolean(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
   }),
 
   // Créer un modèle vocal
@@ -1874,7 +1892,7 @@ export const ReadCursorSchemas = {
     conversationId: z.string(),
     userId: z.string(),
     lastReadMessageId: z.string().nullable().optional(),
-    lastReadAt: z.string().datetime(),
+    lastReadAt: z.iso.datetime(),
     unreadCount: z.number(),
   }),
 
@@ -1920,7 +1938,7 @@ export const AdminAuditLogSchemas = {
     newState: z.string().nullable().optional(),
     ipAddress: z.string().nullable().optional(),
     userAgent: z.string().nullable().optional(),
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
     admin: UserSchemas.minimal.optional(),
   }),
 
@@ -1930,8 +1948,8 @@ export const AdminAuditLogSchemas = {
     action: adminActionEnum.optional(),
     targetType: auditTargetTypeEnum.optional(),
     targetId: z.string().optional(),
-    startDate: z.string().datetime().optional(),
-    endDate: z.string().datetime().optional(),
+    startDate: z.iso.datetime().optional(),
+    endDate: z.iso.datetime().optional(),
   }),
 };
 
@@ -2014,9 +2032,9 @@ export const SecurityEventSchemas = {
     userAgent: z.string().nullable().optional(),
     location: z.string().nullable().optional(),
     isResolved: z.boolean(),
-    resolvedAt: z.string().datetime().nullable().optional(),
+    resolvedAt: z.iso.datetime().nullable().optional(),
     resolvedBy: z.string().nullable().optional(),
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
   }),
 
   // Filtres de recherche
@@ -2025,8 +2043,8 @@ export const SecurityEventSchemas = {
     eventType: securityEventTypeEnum.optional(),
     severity: securitySeverityEnum.optional(),
     isResolved: z.boolean().optional(),
-    startDate: z.string().datetime().optional(),
-    endDate: z.string().datetime().optional(),
+    startDate: z.iso.datetime().optional(),
+    endDate: z.iso.datetime().optional(),
   }),
 };
 
@@ -2059,9 +2077,9 @@ export const AffiliateTokenSchemas = {
     maxUses: z.number().nullable().optional(),
     currentUses: z.number(),
     isActive: z.boolean(),
-    expiresAt: z.string().datetime().nullable().optional(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    expiresAt: z.iso.datetime().nullable().optional(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
   }),
 
   // Créer un token
@@ -2070,7 +2088,7 @@ export const AffiliateTokenSchemas = {
     description: z.string().max(500).optional(),
     commission: z.number().min(0).max(100).optional(),
     maxUses: z.number().min(1).optional(),
-    expiresAt: z.string().datetime().optional(),
+    expiresAt: z.iso.datetime().optional(),
   }),
 };
 
@@ -2086,7 +2104,7 @@ export const AffiliateRelationSchemas = {
     tokenId: z.string(),
     status: affiliateRelationStatusEnum,
     earnings: z.number(),
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
     affiliate: UserSchemas.minimal.optional(),
     referredUser: UserSchemas.minimal.optional(),
   }),
@@ -2113,20 +2131,20 @@ export const TrackingLinkSchemas = {
     totalClicks: z.number(),
     uniqueClicks: z.number(),
     isActive: z.boolean(),
-    expiresAt: z.string().datetime().nullable().optional(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    expiresAt: z.iso.datetime().nullable().optional(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
   }),
 
   // Créer un lien
   create: z.object({
-    destinationUrl: z.string().url(),
+    destinationUrl: z.url(),
     shortCode: z.string().min(3).max(20).regex(/^[a-zA-Z0-9-_]+$/).optional(),
     title: z.string().max(100).optional(),
     campaign: z.string().max(50).optional(),
     source: z.string().max(50).optional(),
     medium: z.string().max(50).optional(),
-    expiresAt: z.string().datetime().optional(),
+    expiresAt: z.iso.datetime().optional(),
   }),
 };
 
@@ -2147,7 +2165,7 @@ export const TrackingLinkClickSchemas = {
     browser: z.string().nullable().optional(),
     os: z.string().nullable().optional(),
     isUnique: z.boolean(),
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
   }),
 };
 
@@ -2166,22 +2184,22 @@ export const AnonymousParticipantSchemas = {
     sessionId: z.string(),
     nickname: z.string().nullable().optional(),
     language: z.string(),
-    email: z.string().email().nullable().optional(),
+    email: z.email().nullable().optional(),
     avatarColor: z.string().nullable().optional(),
     isActive: z.boolean(),
-    lastActiveAt: z.string().datetime().nullable().optional(),
+    lastActiveAt: z.iso.datetime().nullable().optional(),
     ipAddress: z.string().nullable().optional(),
     userAgent: z.string().nullable().optional(),
     country: z.string().nullable().optional(),
     messageCount: z.number(),
-    createdAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
   }),
 
   // Rejoindre en anonyme
   join: z.object({
     nickname: z.string().min(2).max(30).optional(),
     language: z.string().min(2).max(5).default('fr'),
-    email: z.string().email().optional(),
+    email: z.email().optional(),
   }),
 };
 
@@ -2232,8 +2250,8 @@ export const UserPreferenceSchemas = {
     // Keyboard
     enterToSend: z.boolean(),
 
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
+    createdAt: z.iso.datetime(),
+    updatedAt: z.iso.datetime(),
   }),
 
   // Mettre à jour les préférences

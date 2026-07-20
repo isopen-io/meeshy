@@ -4,6 +4,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
+import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
   generateDefaultConversationTitle
@@ -20,6 +21,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import {
   generateConversationIdentifier,
   ensureUniqueConversationIdentifier
@@ -31,8 +33,33 @@ import type {
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
+
+/**
+ * Cap (in Unicode code points) applied to `lastMessage.content` in the GET
+ * /conversations LIST response. The clients only ever render this field as a
+ * 1–2 line row preview, yet it was shipped raw — a single long message
+ * multiplied across every list refresh inflates payloads and forces the iOS
+ * text engine to typeset the full string on every row measurement
+ * (CoreText cost is O(total length), `lineLimit` does not bound it).
+ * Truncation iterates code points, never splitting a surrogate pair.
+ * The full content still flows through GET /conversations/:id/messages.
+ */
+export const LAST_MESSAGE_PREVIEW_MAX_LENGTH = 300;
+
+export function truncateMessagePreview(content: string | null | undefined): string | null | undefined {
+  if (content == null || content.length <= LAST_MESSAGE_PREVIEW_MAX_LENGTH) return content;
+  let result = '';
+  let count = 0;
+  for (const char of content) {
+    if (count >= LAST_MESSAGE_PREVIEW_MAX_LENGTH) break;
+    result += char;
+    count += 1;
+  }
+  return result;
+}
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -68,10 +95,34 @@ export const conversationListParticipantSelect = {
       firstName: true,
       lastName: true,
       avatar: true,
+      banner: true,
       isOnline: true,
       lastActiveAt: true
     }
   }
+} as const;
+
+/**
+ * Sélection des préférences utilisateur jointes à une conversation (liste ET
+ * détail). `customName` DOIT y figurer : c'est lui qui pilote le nom affiché
+ * d'un DM côté client (`displayName = customName ?? title ?? …`). Son absence
+ * historique créait un flip-flop de titre — la liste froide montrait le nom
+ * du participant, puis le premier pin/mute rapportait `customName` via la
+ * réponse du PATCH préférences et le titre basculait (vu « sandra raveloson »
+ * → « Sany » 2026-07-04). Le champ doit AUSSI être déclaré dans le schema
+ * wire (`userPreferences` de la conversation, api-schemas.ts), sinon
+ * fast-json-stringify le strippe silencieusement — même piège que `reaction`,
+ * sélectionné ici mais absent du wire jusqu'à ce même fix.
+ */
+export const conversationUserPreferencesSelect = {
+  isPinned: true,
+  isMuted: true,
+  isArchived: true,
+  deletedForUserAt: true,
+  tags: true,
+  categoryId: true,
+  reaction: true,
+  customName: true
 } as const;
 
 /**
@@ -344,19 +395,11 @@ export function registerCoreRoutes(
             },
             select: conversationListParticipantSelect
           },
-          // User preferences (isPinned, isMuted, isArchived, tags, categoryId)
+          // User preferences (pin/mute/archive/tags/catégorie/customName/reaction)
           userPreferences: {
             where: { userId: userId },
             take: 1,
-            select: {
-              isPinned: true,
-              isMuted: true,
-              isArchived: true,
-              deletedForUserAt: true,
-              tags: true,
-              categoryId: true,
-              reaction: true
-            }
+            select: conversationUserPreferencesSelect
           },
           messages: {
             where: {
@@ -477,6 +520,17 @@ export function registerCoreRoutes(
       // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
       const presenceChecker = fastify.presenceChecker;
 
+      // Présence des co-participants : montrable (co-participation = contexte
+      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
+      // showLastSeen de chacun — même règle que le broadcast user:status et le
+      // presence:snapshot. Anonymes inchangés.
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        conversations.flatMap((conversation) => [
+          ...conversation.participants.slice(0, 5).map((m: any) => m.userId),
+          conversation.messages[0]?.sender?.userId,
+        ]).filter((uid): uid is string => !!uid)
+      );
+
       // Calculate hasMore. Two strategies:
       //   1. When we have a real `totalCount` (includeCount=true OR
       //      offset===0 — see L401-405), `hasMore = offset + N < total`.
@@ -500,15 +554,30 @@ export function registerCoreRoutes(
 
         // Merge presence override. firstName/lastName now come directly from m.user
         // (participant select was extended in iter-8 — no separate memberUsers query needed).
+        const isDirect = conversation.type === 'direct';
         const membersWithUser = conversation.participants
           .slice(0, 5)
           .map((m: any) => {
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
+            const vis = m.userId ? presenceVis.get(m.userId) : undefined;
+            const hideOnline = vis?.showOnline === false;
+            const hideLastSeen = vis?.showLastSeenTimestamp === false;
             return {
               ...m,
-              isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
+              // Bannière de profil top-level : le schéma participant (minimal) est
+              // plat et strippe `user`, donc on lève la bannière au niveau
+              // participant pour la remontée en DM. Réservé aux DM — en groupe le
+              // client ignore `participantBanner` (évite le sur-transfert).
+              // Note : `Participant` n'a pas de colonne `banner`, seule `User` en a.
+              banner: isDirect ? (m.user?.banner ?? null) : null,
+              isOnline: hideOnline ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
+              lastActiveAt: hideLastSeen ? null : m.lastActiveAt,
               user: m.userId
-                ? { ...m.user, isOnline: liveOnline === undefined ? m.user?.isOnline : liveOnline }
+                ? {
+                    ...m.user,
+                    isOnline: hideOnline ? false : (liveOnline === undefined ? m.user?.isOnline : liveOnline),
+                    lastActiveAt: hideLastSeen ? null : m.user?.lastActiveAt
+                  }
                 : null
             };
           });
@@ -538,17 +607,26 @@ export function registerCoreRoutes(
             const msg = conversation.messages[0];
             if (!msg) return null;
             const sender = msg.sender as any;
+            const senderLiveOnline = sender
+              ? presenceChecker?.isOnline(sender.userId ?? sender.id)
+              : undefined;
+            const senderVis = sender?.userId ? presenceVis.get(sender.userId) : undefined;
             return {
               ...msg,
+              content: truncateMessagePreview(msg.content),
               sender: sender ? {
                 ...sender,
                 username: sender.user?.username ?? sender.username ?? null,
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
-                displayName: sender.displayName ?? sender.user?.displayName ?? null,
-                avatar: sender.avatar ?? sender.user?.avatar ?? null,
-                isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
-                lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
+                displayName: resolveParticipantDisplayName(sender),
+                avatar: resolveParticipantAvatar(sender),
+                isOnline: senderVis?.showOnline === false
+                  ? false
+                  : (senderLiveOnline ?? sender.user?.isOnline ?? sender.isOnline ?? null),
+                lastActiveAt: senderVis?.showLastSeenTimestamp === false
+                  ? null
+                  : (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null),
               } : null
             };
           })(),
@@ -656,15 +734,7 @@ export function registerCoreRoutes(
           userPreferences: {
             where: { userId: authRequest.authContext.userId },
             take: 1,
-            select: {
-              isPinned: true,
-              isMuted: true,
-              isArchived: true,
-              deletedForUserAt: true,
-              tags: true,
-              categoryId: true,
-              reaction: true
-            }
+            select: conversationUserPreferencesSelect
           }
         }
       });
@@ -722,9 +792,27 @@ export function registerCoreRoutes(
       // (message.groupBy plein scan à froid, TTL 1h) pour un résultat jeté.
       // Les clients consomment les stats via l'event Socket.IO
       // `conversation:stats`, qui se recompute seul (updateOnNewMessage).
+      // Même politique de présence que la liste : override runtime + gate
+      // showOnlineStatus/showLastSeen (cf. GET /conversations).
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        conversation.participants
+          .map((m: any) => m.userId)
+          .filter((uid: string | null): uid is string => !!uid)
+      );
+      const gatedParticipants = conversation.participants.map((m: any) => {
+        const liveOnline = fastify.presenceChecker?.isOnline(m.userId ?? m.id);
+        const vis = m.userId ? presenceVis.get(m.userId) : undefined;
+        return {
+          ...m,
+          isOnline: vis?.showOnline === false ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
+          lastActiveAt: vis?.showLastSeenTimestamp === false ? null : m.lastActiveAt
+        };
+      });
+
       const { _count, ...conversationData } = conversation;
       return sendSuccess(reply, {
         ...conversationData,
+        participants: gatedParticipants,
         title: displayTitle,
         memberCount: _count.participants,
         unreadCount
@@ -762,7 +850,9 @@ export function registerCoreRoutes(
         'create-conversation'
       );
 
-      const { type, title, description, participantIds = [], communityId, identifier } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string };
+      const { type, title: rawTitle, description: rawDescription, participantIds = [], communityId, identifier } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string };
+      const title = rawTitle !== undefined ? SecuritySanitizer.sanitizeText(rawTitle) : undefined;
+      const description = rawDescription !== undefined ? SecuritySanitizer.sanitizeText(rawDescription) : undefined;
 
       // Utiliser le nouveau système d'authentification unifié
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -831,6 +921,48 @@ export function registerCoreRoutes(
         if (blocked) {
           throw createError(ErrorCode.USER_BLOCKED);
         }
+
+        // Idempotence DM — une conversation directe entre deux users est
+        // UNIQUE. Sans ce check, chaque « Nouvelle conversation → Créer »
+        // fabriquait une DM de plus (2 DM identiques observées en prod le
+        // 2026-07-03 pendant les tests d'appel) : on rouvre l'existante
+        // (200) au lieu d'en créer une deuxième. Les archivées comptent —
+        // recréer la DM d'un contact archivé doit la ROUVRIR, pas la
+        // dupliquer. Groupes : jamais dédupliqués (même-membres légitime).
+        const existingDirect = await prisma.conversation.findFirst({
+          where: {
+            type: 'direct',
+            AND: [
+              { participants: { some: { userId, isActive: true } } },
+              { participants: { some: { userId: uniqueParticipantIds[0], isActive: true } } }
+            ]
+          },
+          // Des doublons historiques existent (5 DM atabeth↔jcnm datant
+          // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
+          // arbitraire — sinon l'utilisateur retombe sur une DM morte.
+          orderBy: { lastMessageAt: 'desc' },
+          include: {
+            participants: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    avatar: true,
+                    banner: true
+                  }
+                }
+              }
+            }
+          }
+        });
+        if (existingDirect) {
+          return sendSuccess(reply, {
+            ...existingDirect,
+            title: existingDirect.title || null
+          }, { statusCode: 200 });
+        }
       }
 
       const allUserIds = [userId, ...uniqueParticipantIds];
@@ -891,7 +1023,8 @@ export function registerCoreRoutes(
                   id: true,
                   username: true,
                   displayName: true,
-                  avatar: true
+                  avatar: true,
+                  banner: true
                 }
               }
             }
@@ -956,9 +1089,20 @@ export function registerCoreRoutes(
       // pour compat avec les anciens clients pendant ~3 mois.
       try {
         const socketIOHandler = fastify.socketIOHandler;
-        const io = socketIOHandler?.getManager()?.getIO();
+        const socketManager = socketIOHandler?.getManager();
+        const io = socketManager?.getIO();
         if (io) {
           const allParticipantIds = [userId, ...uniqueParticipantIds];
+          // Auto-join every already-connected participant's sockets to the
+          // conversation room BEFORE announcing it. Without this, connected
+          // participants are in `connectedUsers` (so never offline-queued)
+          // but not in ROOMS.conversation(id) — every message:new for the
+          // new conversation is silently missed until their next reconnect.
+          for (const participantId of allParticipantIds) {
+            socketManager.joinUserToConversationRoom(participantId, conversation.id).catch(
+              (err: unknown) => logger.error('Failed to auto-join participant to new conversation room', { participantId, error: err })
+            );
+          }
           const conversationNewPayload = {
             conversationId: conversation.id,
             conversationType: type,
@@ -1052,7 +1196,7 @@ export function registerCoreRoutes(
   }, async (request, reply) => {
     try {
       const { id } = request.params;
-      const { title, description, avatar, banner, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = request.body as {
+      const { title: rawTitle, description: rawDescription, avatar, banner, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = request.body as {
         title?: string
         description?: string
         avatar?: string | null
@@ -1062,6 +1206,8 @@ export function registerCoreRoutes(
         slowModeSeconds?: number
         autoTranslateEnabled?: boolean
       };
+      const title = rawTitle !== undefined ? SecuritySanitizer.sanitizeText(rawTitle) : undefined;
+      const description = rawDescription !== undefined ? SecuritySanitizer.sanitizeText(rawDescription) : undefined;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -1111,7 +1257,8 @@ export function registerCoreRoutes(
                   id: true,
                   username: true,
                   displayName: true,
-                  avatar: true
+                  avatar: true,
+                  banner: true
                 }
               }
             }

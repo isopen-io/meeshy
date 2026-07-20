@@ -18,6 +18,7 @@ struct ComposerBottomBand: View {
     var onEditText: ((String) -> Void)? = nil
     var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
+    var onOpenStickerPicker: (() -> Void)? = nil
 
     /// Non-nil (mode dessin) → le grabber devient un handle de RESIZE : drag vertical
     /// ajuste cette hauteur de panneau (clampée), pilotée via `panelHeight`. Le canvas
@@ -27,13 +28,9 @@ struct ComposerBottomBand: View {
     var minHeight: CGFloat = 160
     var maxHeight: CGFloat = 540
     /// Appelé quand le grabber est tiré nettement EN-DESSOUS de `minHeight` :
-    /// en mode dessin (Option A) cela REPLIE le drawer (poignée seule) sans quitter
-    /// le dessin (le canvas devient 100 % visible) — cf. `drawingCollapsed`.
+    /// le parent FERME alors le band et rend les FABs (C-DIR2 (b) — le repli
+    /// « poignée seule » a été retiré, directive user 2026-07-04).
     var onResizeDismiss: (() -> Void)? = nil
-    /// `true` (dessin replié) → la bande n'affiche QUE sa poignée ; tirer la poignée
-    /// vers le haut rappelle `onExpandDrawer` pour ré-afficher la liste des traits.
-    var drawingCollapsed: Bool = false
-    var onExpandDrawer: (() -> Void)? = nil
     @State private var dragStartHeight: CGFloat?
 
     @Environment(\.colorScheme) private var colorScheme
@@ -83,10 +80,6 @@ struct ComposerBottomBand: View {
         VStack(spacing: 0) {
             grabber
 
-            // Drawer dessin replié « totalement » → poignée seule (le canvas est
-            // 100 % visible). Le panneau (liste des traits) est masqué ; tirer la
-            // poignée vers le haut le ré-affiche (`onExpandDrawer`).
-            if !drawingCollapsed {
             // Panel content — keyed by state so the old panel slides
             // down and the new one slides up from the bottom.
             Group {
@@ -114,6 +107,7 @@ struct ComposerBottomBand: View {
                         onSwitchTool: onTapTile,
                         onEditMedia: onEditMedia,
                         onEditText: onEditText,
+                        onOpenStickerPicker: onOpenStickerPicker,
                         onDeleteText: onDeleteText,
                         onShowInTimeline: onShowInTimeline,
                         panelHeightOverride: resizableHeight?.wrappedValue
@@ -149,46 +143,58 @@ struct ComposerBottomBand: View {
                 insertion: .move(edge: .bottom).combined(with: .opacity),
                 removal: .move(edge: .bottom).combined(with: .opacity)
             ))
-            } // if !drawingCollapsed
         }
-        .padding(.bottom, drawingCollapsed ? 8 : 16) // Breathing room above home indicator
+        .padding(.bottom, 16) // Breathing room above home indicator
         .frame(maxWidth: .infinity)
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 24,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 24,
-                style: .continuous
-            )
-            // Bandeau: tint opaque sous le material épais. Ça empêche les fonds
-            // de canvas très clairs (image avec beaucoup de blanc, slide pastel)
-            // d'inverser la perception du material et de tuer le contraste du
-            // texte/icônes. ultraThinMaterial laissait trop transparaître le
-            // canvas en arrière-plan.
-            .fill(
-                (colorScheme == .dark
-                    ? MeeshyColors.indigo950.opacity(0.92)
-                    : Color.white.opacity(0.92))
-            )
-            .overlay(
-                UnevenRoundedRectangle(
-                    topLeadingRadius: 24,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: 24,
-                    style: .continuous
-                )
-                .stroke(
-                    (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.08),
-                    lineWidth: 0.5
-                )
-            )
-            .ignoresSafeArea(edges: .bottom)
-        )
+        .background(bandBackground)
+        // `.compositingGroup()` aplatit le band en UNE silhouette avant
+        // l'ombre : sans lui, `.shadow` se propage à CHAQUE sous-vue opaque —
+        // le bloc timeline pleine largeur projetait sa propre ligne d'ombre
+        // au-dessus du transport (capture user 2026-07-20).
+        .compositingGroup()
         .shadow(color: .black.opacity(0.25), radius: 14, y: -6)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: stateKey)
-        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: drawingCollapsed)
+    }
+
+    private static let bandShape = UnevenRoundedRectangle(
+        topLeadingRadius: 24,
+        bottomLeadingRadius: 0,
+        bottomTrailingRadius: 0,
+        topTrailingRadius: 24,
+        style: .continuous
+    )
+
+    private var bandStroke: Color {
+        (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.08)
+    }
+
+    /// iOS 26+: the band is real Liquid Glass — refractive, responds to what's
+    /// behind it — strongly tinted so the same contrast guarantee the pre-26
+    /// opaque fill provided (bright/pastel canvas backgrounds never inverting
+    /// text/icon legibility) still holds. iOS < 26: the exact opaque tint this
+    /// shipped with since 2026-05-14 (a true `.ultraThinMaterial` let very
+    /// light canvases show through and killed contrast) — unchanged, zero
+    /// regression risk on OS versions that can't render real glass.
+    @ViewBuilder
+    private var bandBackground: some View {
+        if #available(iOS 26.0, *) {
+            Color.clear
+                .glassEffect(
+                    .regular.tint(colorScheme == .dark
+                        ? MeeshyColors.indigo950.opacity(0.55)
+                        : Color.white.opacity(0.55)),
+                    in: Self.bandShape
+                )
+                .overlay(Self.bandShape.stroke(bandStroke, lineWidth: 0.5))
+                .ignoresSafeArea(edges: .bottom)
+        } else {
+            Self.bandShape
+                .fill(colorScheme == .dark
+                    ? MeeshyColors.indigo950.opacity(0.92)
+                    : Color.white.opacity(0.92))
+                .overlay(Self.bandShape.stroke(bandStroke, lineWidth: 0.5))
+                .ignoresSafeArea(edges: .bottom)
+        }
     }
 
     /// Poignée du band. En mode redimensionnable (dessin), drag vertical = RESIZE :
@@ -204,24 +210,20 @@ struct ComposerBottomBand: View {
             .padding(.bottom, 6)
             .frame(maxWidth: .infinity)        // hit-area sur toute la largeur
             .contentShape(Rectangle())
-            .accessibilityLabel("Poignée de la barre d'outils")
+            .accessibilityLabel(String(
+                localized: "story.composer.grabber",
+                defaultValue: "Poignée de la barre d'outils", bundle: .module
+            ))
             .accessibilityAddTraits(.isButton)
 
-        if drawingCollapsed {
-            // Drawer replié : la poignée seule reste ; un drag vers le HAUT le
-            // redéploie (le panneau de l'outil réapparaît). Un tap aussi (pratique).
+        if let height = resizableHeight {
             handle
-                .accessibilityHint("Faites glisser vers le haut pour afficher les options de l'outil.")
-                .onTapGesture { onExpandDrawer?() }
-                .gesture(
-                    DragGesture(minimumDistance: 4)
-                        .onEnded { value in
-                            if value.translation.height < -24 { onExpandDrawer?() }
-                        }
-                )
-        } else if let height = resizableHeight {
-            handle
-                .accessibilityHint("Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou replier.")
+                // « replier » périmé depuis C-DIR2 : tirer sous le min FERME.
+                .accessibilityHint(String(
+                    localized: "story.composer.grabber.hint.resize",
+                    defaultValue: "Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou fermer.",
+                    bundle: .module
+                ))
                 .gesture(
                     DragGesture(minimumDistance: 2)
                         .onChanged { value in
@@ -233,14 +235,18 @@ struct ComposerBottomBand: View {
                             let base = dragStartHeight ?? height.wrappedValue
                             let proposed = base - value.translation.height
                             dragStartHeight = nil
-                            // Tiré nettement sous le min → REPLIE le drawer (poignée
-                            // seule) sans quitter l'outil actif (cf. `onResizeDismiss`).
+                            // Tiré nettement sous le min → FERME le band et rend
+                            // les FABs (C-DIR2 (b), cf. `onResizeDismiss`).
                             if proposed < minHeight - 50 { onResizeDismiss?() }
                         }
                 )
         } else {
             handle
-                .accessibilityHint("Faites glisser vers le bas pour réduire ou fermer.")
+                .accessibilityHint(String(
+                    localized: "story.composer.grabber.hint.dismiss",
+                    defaultValue: "Faites glisser vers le bas pour réduire ou fermer.",
+                    bundle: .module
+                ))
         }
     }
 }

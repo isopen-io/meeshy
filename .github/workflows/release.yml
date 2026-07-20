@@ -18,7 +18,6 @@ on:
       - 'apps/*/package.json'
       - 'services/*/package.json'
       - 'packages/*/package.json'
-
   workflow_dispatch:
     inputs:
       force_release:
@@ -32,6 +31,14 @@ on:
         type: boolean
         default: false
 
+# Sérialise les releases par branche : deux pushes rapprochés déclenchaient
+# des runs concurrents qui se volaient le push de version (non fast-forward).
+# Pas de cancel-in-progress : une release entamée va au bout, la suivante
+# trouve les changesets déjà consommés et skip proprement.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   packages: write
@@ -41,7 +48,9 @@ env:
   DOCKER_NAMESPACE: isopen
   PLATFORMS: linux/amd64,linux/arm64
   NODE_VERSION: '22'
-  PNPM_VERSION: '9'
+  # bun is the canonical package manager across the pipelines (CI parity with
+  # ci.yml / docker.yml, which default to bun). Keep this in lockstep with them.
+  BUN_VERSION: '1.3.14'
 
 jobs:
   # ===========================================================================
@@ -55,7 +64,7 @@ jobs:
       published: ${{ steps.check.outputs.published }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -86,37 +95,34 @@ jobs:
       has_changes: ${{ steps.version.outputs.published }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # ios-release.yml is manual-only (workflow_dispatch) — cutting this
+          # release's `v*` tag never triggers an iOS build/upload, regardless
+          # of token. RELEASE_PAT is kept (falling back to GITHUB_TOKEN) only
+          # so the version-bump commit/tag push itself isn't blocked by branch
+          # protection; it no longer serves to chain into another workflow.
+          token: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
-          run_install: false
-
-      - name: Get pnpm store directory
-        id: pnpm-cache
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install dependencies (bun with retry)
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
 
       - name: Configure Git
         run: |
@@ -151,7 +157,7 @@ jobs:
         id: version
         run: |
           echo "📦 Applying changesets..."
-          pnpm changeset version
+          bunx changeset version
 
           # Vérifier s'il y a eu des changements
           if git diff --quiet; then
@@ -171,7 +177,11 @@ jobs:
       - name: Get new version
         id: get-version
         run: |
-          VERSION=$(jq -r '.version' package.json)
+          # Le package.json racine n'est PAS versionné par changesets (figé à
+          # 1.0.0 → « tag already exists » à chaque release). La version de
+          # release = max des trois services livrés ; updateInternalDependencies:
+          # patch garantit qu'un bump de packages/shared propage un bump ici.
+          VERSION=$(jq -r '.version' apps/web/package.json services/gateway/package.json services/translator/package.json | sort -V | tail -n 1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
           echo "📌 New version: $VERSION"
@@ -183,6 +193,15 @@ jobs:
         run: |
           git add -A
           git commit -m "chore(release): version packages [skip ci]" || echo "No changes to commit"
+          # Le push peut être rejeté (non fast-forward) si main a avancé entre le
+          # checkout du runner et ce push : rebase puis retry au lieu d'échouer.
+          for attempt in 1 2 3; do
+            if git push origin "$BRANCH_NAME"; then
+              exit 0
+            fi
+            echo "⚠️  Push rejeté (tentative $attempt) — rebase sur origin/$BRANCH_NAME..."
+            git pull --rebase origin "$BRANCH_NAME"
+          done
           git push origin "$BRANCH_NAME"
 
       - name: Create Git tag
@@ -190,6 +209,17 @@ jobs:
         env:
           TAG_NAME: ${{ steps.get-version.outputs.tag }}
         run: |
+          # Idempotent : un re-run/race peut retrouver un tag déjà posé. S'il
+          # pointe sur HEAD c'est la même release (skip) ; sinon c'est un vrai
+          # conflit de version → échec explicite (le build checkout ce tag).
+          if git rev-parse -q --verify "refs/tags/$TAG_NAME" >/dev/null; then
+            if [ "$(git rev-parse "$TAG_NAME^{commit}")" = "$(git rev-parse HEAD)" ]; then
+              echo "ℹ️  Tag $TAG_NAME déjà posé sur HEAD — skip"
+              exit 0
+            fi
+            echo "::error::Tag $TAG_NAME existe déjà sur un autre commit"
+            exit 1
+          fi
           git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
           git push origin "$TAG_NAME"
 
@@ -226,7 +256,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.version.outputs.tag }}
 
@@ -250,20 +280,20 @@ jobs:
           echo "📦 $SERVICE_NAME version: $VERSION"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}
           tags: |
@@ -273,7 +303,7 @@ jobs:
             type=sha,prefix=sha-,format=short
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -322,7 +352,7 @@ jobs:
       needs.version.outputs.has_changes == 'true'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ needs.version.outputs.tag }}
@@ -343,7 +373,7 @@ jobs:
           echo "$CHANGELOG" > /tmp/changelog.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         env:
           RELEASE_TAG: ${{ needs.version.outputs.tag }}
         with:

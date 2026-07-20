@@ -87,7 +87,7 @@ export function useConversationDetails(
 
       onConversationUpdated?.(updatedData);
       setIsEditingDescription(false);
-      toast.success(t('conversationDetails.descriptionUpdated') || 'Description updated successfully');
+      toast.success(t('conversationDetails.descriptionUpdated', 'Description updated successfully'));
     } catch (error: any) {
       console.error('Error updating conversation description:', error);
 

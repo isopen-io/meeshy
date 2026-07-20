@@ -25,43 +25,37 @@ public struct FullscreenImageView: View {
             Color.black
                 .ignoresSafeArea()
 
-            if let urlString = imageURL, let url = URL(string: urlString) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        ProgressView()
-                            .tint(Color(hex: accentColor))
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .scaleEffect(scale)
-                            .offset(offset)
-                            .gesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        scale = max(1.0, min(value, 4.0))
-                                    }
-                            )
-                            .simultaneousGesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        isDragging = true
-                                        offset = value.translation
-                                    }
-                                    .onEnded { _ in
-                                        isDragging = false
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            offset = .zero
-                                        }
-                                    }
-                            )
-                    case .failure:
-                        fallbackView
-                    @unknown default:
-                        fallbackView
-                    }
+            if let urlString = imageURL, !urlString.isEmpty {
+                // CachedAsyncImage (DiskCacheStore persistant) plutôt qu'AsyncImage :
+                // l'image plein écran a presque toujours déjà été téléchargée par
+                // l'avatar/la bannière — la rouvrir doit être un hit disque, pas
+                // un nouveau téléchargement.
+                CachedAsyncImage(url: urlString) {
+                    ProgressView()
+                        .tint(Color(hex: accentColor))
                 }
+                .scaledToFit()
+                .scaleEffect(scale)
+                .offset(offset)
+                .gesture(
+                    MagnificationGesture()
+                        .onChanged { value in
+                            scale = max(1.0, min(value, 4.0))
+                        }
+                )
+                .simultaneousGesture(
+                    DragGesture()
+                        .onChanged { value in
+                            isDragging = true
+                            offset = value.translation
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                offset = .zero
+                            }
+                        }
+                )
             } else {
                 fallbackView
             }

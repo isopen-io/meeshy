@@ -16,6 +16,12 @@ public nonisolated struct MeeshyColors {
     public static let indigo900 = Color(hex: "312E81")
     public static let indigo950 = Color(hex: "1E1B4B")
 
+    // MARK: - Additional Brand Accents
+
+    public static let purple500 = Color(hex: "A855F7")
+    public static let purple600 = Color(hex: "8B5CF6")
+    public static let purple700 = Color(hex: "B24BF3")
+
     // MARK: - Semantic Aliases
 
     public static let brandPrimary = indigo500
@@ -63,6 +69,7 @@ public nonisolated struct MeeshyColors {
     public static let indigo300Hex = "A5B4FC"
     public static let indigo400Hex = "818CF8"
     public static let indigo600Hex = "4F46E5"
+    public static let purple500Hex = "A855F7"
 
     // MARK: - Feature Accents (link management surfaces: tracking, share, community)
     //

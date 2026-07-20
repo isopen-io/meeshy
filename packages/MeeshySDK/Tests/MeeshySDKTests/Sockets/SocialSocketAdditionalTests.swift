@@ -106,24 +106,39 @@ final class SocialSocketAdditionalTests: XCTestCase {
 
     // MARK: - Point 53: SocketPostBookmarkedData
 
-    func test_socketPostBookmarkedData_bookmarked() throws {
+    func test_socketPostBookmarkedData_bookmarked_withAbsoluteCount() throws {
         let json = """
-        {"postId": "p1", "bookmarked": true}
+        {"postId": "p1", "bookmarked": true, "bookmarkCount": 4}
         """.data(using: .utf8)!
 
         let data = try decoder.decode(SocketPostBookmarkedData.self, from: json)
         XCTAssertEqual(data.postId, "p1")
         XCTAssertTrue(data.bookmarked)
+        XCTAssertEqual(data.bookmarkCount, 4)
     }
 
     func test_socketPostBookmarkedData_unbookmarked() throws {
         let json = """
-        {"postId": "p2", "bookmarked": false}
+        {"postId": "p2", "bookmarked": false, "bookmarkCount": 0}
         """.data(using: .utf8)!
 
         let data = try decoder.decode(SocketPostBookmarkedData.self, from: json)
         XCTAssertEqual(data.postId, "p2")
         XCTAssertFalse(data.bookmarked)
+        XCTAssertEqual(data.bookmarkCount, 0)
+    }
+
+    /// Rollout safety: an older gateway that omits `bookmarkCount` must still
+    /// decode (the field is optional) so the icon sync never breaks.
+    func test_socketPostBookmarkedData_missingCount_decodesToNil() throws {
+        let json = """
+        {"postId": "p3", "bookmarked": true}
+        """.data(using: .utf8)!
+
+        let data = try decoder.decode(SocketPostBookmarkedData.self, from: json)
+        XCTAssertEqual(data.postId, "p3")
+        XCTAssertTrue(data.bookmarked)
+        XCTAssertNil(data.bookmarkCount)
     }
 
     // MARK: - Point 53: SocketPostTranslationUpdatedData

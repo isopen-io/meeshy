@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.StoryViewersResponse
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -41,6 +42,13 @@ interface StoryApi {
         @Body body: StoryLikeRequest,
     ): ApiResponse<Unit>
 
+    @GET("posts/{id}/comments")
+    suspend fun comments(
+        @Path("id") storyId: String,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPostComment>>
+
     @POST("posts/{id}/comments")
     suspend fun comment(
         @Path("id") storyId: String,
@@ -55,4 +63,7 @@ interface StoryApi {
 
     @GET("posts/{id}")
     suspend fun fetchPost(@Path("id") postId: String): ApiResponse<ApiPost>
+
+    @GET("posts/{id}/interactions")
+    suspend fun viewers(@Path("id") storyId: String): ApiResponse<StoryViewersResponse>
 }

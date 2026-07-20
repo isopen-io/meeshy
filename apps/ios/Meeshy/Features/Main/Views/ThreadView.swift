@@ -48,6 +48,7 @@ struct ThreadView: View {
                     .font(.callout.weight(.semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 
@@ -243,9 +244,9 @@ struct ThreadView: View {
             )
         } catch {
             // Match prior behaviour: silently swallow on error so the
-            // empty-state UI is shown. ThreadView has no error surface
-            // (no `loadError` like ReplyThreadOverlay) — that's an
-            // existing limitation, not something this refactor changes.
+            // empty-state UI is shown. ThreadView has no dedicated error
+            // surface (no `loadError` state) — that's an existing
+            // limitation, not something this refactor changes.
         }
         isLoading = false
     }

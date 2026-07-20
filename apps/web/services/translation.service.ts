@@ -5,6 +5,7 @@
  */
 
 import axios from 'axios';
+import { logger } from '@/utils/logger';
 import { LRUCache } from '@/lib/lru-cache';
 import type { TranslationModel } from '@meeshy/shared/types';
 
@@ -95,7 +96,7 @@ class TranslationService {
       
       return result;
     } catch (error) {
-      console.error('Erreur lors de la traduction:', error);
+      logger.error('[Translation]', 'Erreur lors de la traduction', { error });
       
       // Retourner le texte original en cas d'erreur
       return {
@@ -138,7 +139,7 @@ class TranslationService {
         processingTime: response.data.processing_time || 0
       };
     } catch (error) {
-      console.error('Erreur lors de la traduction avec détection automatique:', error);
+      logger.error('[Translation]', 'Erreur lors de la traduction avec détection automatique', { error });
       
       // Fallback: essayer avec français comme langue source
       return this.translateText({
@@ -160,7 +161,7 @@ class TranslationService {
       });
       return response.status === 200;
     } catch (error) {
-      console.error('Service de traduction indisponible:', error);
+      logger.error('[Translation]', 'Service de traduction indisponible', { error });
       return false;
     }
   }
@@ -175,7 +176,7 @@ class TranslationService {
       });
       return response.data.languages || ['fr', 'en', 'es', 'de', 'pt', 'zh', 'ja', 'ar'];
     } catch (error) {
-      console.error('Erreur lors de la récupération des langues supportées:', error);
+      logger.error('[Translation]', 'Erreur lors de la récupération des langues supportées', { error });
       return ['fr', 'en', 'es', 'de', 'pt', 'zh', 'ja', 'ar'];
     }
   }

@@ -2,6 +2,18 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// Émis (à `true`) par une bulle dont le carrousel média inline est ouvert :
+/// le pager horizontal possède alors le glissement gauche/droite, donc le
+/// swipe Répondre/Transférer du `BubbleSwipeContainer` parent doit s'effacer
+/// jusqu'au retour à la grille (fermeture du carrousel → la branche disparaît
+/// de la hiérarchie et la préférence retombe à `defaultValue`).
+struct BubbleInlinePagingPreferenceKey: PreferenceKey {
+    static let defaultValue: Bool = false
+    static func reduce(value: inout Bool, nextValue: () -> Bool) {
+        value = value || nextValue()
+    }
+}
+
 /// Wraps a bubble with a horizontal swipe gesture that fires either a reply
 /// or forward action. Restored from the pre-bubble-decompose `+MessageRow`
 /// SwiftUI list layout — the new UICollectionView host (MessageListViewController)
@@ -30,16 +42,34 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// overlay is visible. Frame publication continues so the overlay can
     /// keep the bubble pinned to its real position.
     var isHiddenForOverlay: Bool = false
+    /// Résistance du swipe latéral selon le type de contenu. `.resistant`
+    /// (audio/vidéo) relève le seuil pour ne pas gêner le scrubber de lecture.
+    var resistance: SwipeResistance = .normal
     let onSwipeReply: () -> Void
     let onSwipeForward: () -> Void
     /// Long press triggers the message's contextual options (reply, forward,
     /// reactions, copy, delete, …). The container fires the haptic so each
     /// caller doesn't have to.
     let onLongPress: () -> Void
+    /// `false` (iOS 26+) désactive le `LongPressGesture` custom : le cell
+    /// attache alors un `.contextMenu` NATIF (Liquid Glass) qui possède la
+    /// pression. `true` (< iOS 26) garde le long-press → overlay custom.
+    /// Les deux ne coexistent jamais (double déclenchement).
+    var enableLongPress: Bool = true
     @ViewBuilder let content: () -> Content
 
     @State private var offset: CGFloat = 0
     @State private var didCrossThreshold: Bool = false
+    /// Miroir de `BubbleInlinePagingPreferenceKey` remonté par la bulle :
+    /// vrai tant que le carrousel média inline est ouvert — le drag
+    /// reply/forward est alors totalement désengagé (même règle que le
+    /// scrubbing média).
+    @State private var isInlinePagingActive: Bool = false
+    /// Miroir de `MediaScrubbingPreferenceKey` (SDK) remonté par les widgets
+    /// média : vrai pendant qu'un doigt manipule la waveform audio ou la seek
+    /// bar vidéo. Remplace l'ancien paramètre `isScrubbing` qui n'était câblé
+    /// par aucun call site — la protection scrubbing → swipe était inopérante.
+    @State private var isMediaScrubbing: Bool = false
 
     private var replyDirection: CGFloat { isMine ? -1 : 1 }
 
@@ -68,6 +98,9 @@ struct BubbleSwipeContainer<Content: View>: View {
 
             content()
                 .offset(x: offset)
+                .accessibilityAction(named: String(localized: "a11y.message.actions.reply", bundle: .main)) { onSwipeReply() }
+                .accessibilityAction(named: String(localized: "a11y.message.actions.forward", bundle: .main)) { onSwipeForward() }
+                .accessibilityAction(named: String(localized: "a11y.message.actions.long_press", bundle: .main)) { onLongPress() }
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(
@@ -78,6 +111,8 @@ struct BubbleSwipeContainer<Content: View>: View {
                 )
                 .opacity(isHiddenForOverlay ? 0 : 1)
                 .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
+                .onPreferenceChange(BubbleInlinePagingPreferenceKey.self) { isInlinePagingActive = $0 }
+                .onPreferenceChange(MediaScrubbingPreferenceKey.self) { isMediaScrubbing = $0 }
                 .simultaneousGesture(dragGesture)
                 // Long press surfaces via `simultaneousGesture` so it
                 // cooperates with the inner reaction "+" tap. The parent
@@ -95,13 +130,12 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // le LongPressGesture s'annule et laisse le pan parent
                 // s'approprier le geste sans aucune contention. Le
                 // scroll est ainsi prioritaire sur le long press.
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
-                        .onEnded { _ in
-                            HapticFeedback.medium()
-                            onLongPress()
-                        }
-                )
+                //
+                // iOS 26+ : `enableLongPress == false` — le cell attache
+                // un `.contextMenu` NATIF (Liquid Glass) qui possède la
+                // pression ; ce geste custom est retiré pour éviter le
+                // double déclenchement (overlay custom + menu natif).
+                .modifier(ConditionalBubbleLongPress(enabled: enableLongPress, action: onLongPress))
         }
     }
 
@@ -120,7 +154,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                     // direction, forward (curved arrow forward) for the
                     // opposite. Crossfade transition keeps the swap subtle.
                     Image(systemName: isReplyDir ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.right.fill")
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(MeeshyFont.relative(22, weight: .semibold))
                         .foregroundStyle(MeeshyColors.brandPrimary)
                         .transition(.scale.combined(with: .opacity))
                 } else {
@@ -129,9 +163,9 @@ struct BubbleSwipeContainer<Content: View>: View {
                     // whether to commit the gesture.
                     VStack(spacing: 2) {
                         Text(swipeStampDay)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(MeeshyFont.relative(11, weight: .medium))
                         Text(swipeStampTime)
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                     }
                     .foregroundColor(.secondary)
                     .transition(.opacity)
@@ -152,19 +186,26 @@ struct BubbleSwipeContainer<Content: View>: View {
         // contention. 22pt reste largement en-dessous d'un swipe
         // horizontal réel (~60-100pt), donc reply/forward continuent
         // de répondre normalement.
-        DragGesture(minimumDistance: 22)
+        DragGesture(minimumDistance: BubbleSwipeResistance.minimumDistance(resistance))
             .onChanged { value in
                 let h = value.translation.width
-                let v = abs(value.translation.height)
-                // Horizontal-dominant only (3:1 ratio) so un scroll vertical —
-                // notamment un scroll vers le haut pour charger les anciens
-                // messages — ne peut JAMAIS franchir le seuil de swipe et
-                // déclencher le retour haptique par erreur. Un vrai
-                // swipe-pour-répondre (~60-100pt horizontal, quasi pas de
-                // vertical) passe toujours le gate. Avant : 2:1, qui laissait
-                // fuiter le haptic sur les scrolls diagonaux.
-                guard abs(h) > v * 3 else { return }
-                guard abs(h) > 12 else { return }
+                // Décision d'engagement centralisée dans la logique pure
+                // `BubbleSwipeResistance` (testée) : dominance horizontale +
+                // seuil selon la résistance, et abandon total pendant un
+                // scrubbing média. En `.normal` : 3:1 / 22pt (comportement
+                // historique). En `.resistant` : 4:1 / 48pt + priorité scrubber.
+                // Carrousel inline ouvert → le pager possède le glissement
+                // horizontal : reply/forward désengagés au même titre qu'un
+                // scrubbing média, jusqu'au retour à la grille.
+                guard BubbleSwipeResistance.shouldEngage(
+                    translationWidth: h,
+                    translationHeight: value.translation.height,
+                    isScrubbing: BubbleSwipeResistance.isGestureOwnershipClaimed(
+                        mediaScrubbing: isMediaScrubbing,
+                        inlinePaging: isInlinePagingActive
+                    ),
+                    resistance: resistance
+                ) else { return }
                 let zone: CGFloat = 72
                 let absH = abs(h)
                 let sign: CGFloat = h > 0 ? 1 : -1
@@ -201,6 +242,100 @@ struct BubbleSwipeContainer<Content: View>: View {
     }
 }
 
+
+/// Applique le `LongPressGesture` custom de la bulle UNIQUEMENT quand
+/// `enabled` (< iOS 26). Sur iOS 26+ le cell attache un `.contextMenu` natif
+/// à la place — ce geste doit alors disparaître pour éviter le double
+/// déclenchement. Un modifier conditionnel (plutôt qu'un `.simultaneousGesture`
+/// masqué) garantit que le recognizer n'est même pas installé.
+private struct ConditionalBubbleLongPress: ViewModifier {
+    let enabled: Bool
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
+                    .onEnded { _ in
+                        HapticFeedback.medium()
+                        action()
+                    }
+            )
+        } else {
+            content
+        }
+    }
+}
+
+/// Attache un `.contextMenu` NATIF (Liquid Glass iOS 26) au contenu SwiftUI
+/// d'une cellule de message quand un builder est fourni ET que l'OS rend le
+/// menu système. `menu` est résolu UNE fois par configuration de cellule
+/// (précédent `ConversationRowItem.nativeContextMenu` : AnyView stable, jamais
+/// un `@ViewBuilder` générique — sinon EXC_BAD_ACCESS iOS 26). `preview` rend
+/// la VRAIE bulle d'origine à l'endroit (la collection view étant inversée, le
+/// snapshot par défaut ne l'affichait pas correctement) — feedback 2026-07-14.
+extension View {
+    @ViewBuilder
+    func nativeMessageContextMenu<Preview: View>(
+        menu: (() -> AnyView)?,
+        @ViewBuilder preview: @escaping () -> Preview
+    ) -> some View {
+        if #available(iOS 26.0, *), let menu {
+            self.contextMenu { menu() } preview: { preview() }
+        } else {
+            self
+        }
+    }
+}
+
+// MARK: - Aperçu du menu contextuel de message (hug + scale-to-fit)
+
+/// Conteneur d'aperçu du `.contextMenu` NATIF d'un message. Il rend la bulle
+/// « standalone » (déjà dépouillée de ses spacers de row côté `BubbleStandard
+/// Layout` → elle épouse son contenu) et la met à l'échelle UNIQUEMENT si elle
+/// dépasse la hauteur disponible, pour qu'elle tienne dans l'écran SANS jamais
+/// déformer ses proportions. La `.frame` finale (dimensions mises à l'échelle)
+/// informe le layout SwiftUI de la taille visible — le platter système colle
+/// alors à la bulle, sans bordure ni card. Anti-« effet bordure » 2026-07-14.
+struct MessageMenuPreviewContainer<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @State private var naturalSize: CGSize = .zero
+
+    /// Plafond de hauteur de l'aperçu — 62 % de l'écran, comme l'overlay custom
+    /// (`MessageOverlayMenu.maxPreviewHeight`), pour laisser respirer la rangée
+    /// d'emojis + le menu au-dessus/dessous.
+    private var maxHeight: CGFloat { UIScreen.main.bounds.height * 0.62 }
+
+    private var fitScale: CGFloat {
+        guard naturalSize.height > maxHeight, naturalSize.height > 0 else { return 1 }
+        // Plancher 0.5 : au-delà, un média très haut resterait lisible plutôt
+        // que de rétrécir à l'infini (même garde-fou que l'overlay custom).
+        return max(0.5, maxHeight / naturalSize.height)
+    }
+
+    var body: some View {
+        content()
+            .background(
+                GeometryReader { proxy in
+                    Color.clear.preference(key: MessageMenuPreviewSizeKey.self, value: proxy.size)
+                }
+            )
+            .onPreferenceChange(MessageMenuPreviewSizeKey.self) { naturalSize = $0 }
+            .scaleEffect(fitScale, anchor: .center)
+            .frame(
+                width: naturalSize.width > 0 ? naturalSize.width * fitScale : nil,
+                height: naturalSize.height > 0 ? naturalSize.height * fitScale : nil
+            )
+    }
+}
+
+private struct MessageMenuPreviewSizeKey: PreferenceKey {
+    static let defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next != .zero { value = next }
+    }
+}
 
 struct MessageListView: UIViewControllerRepresentable {
     let store: MessageStore
@@ -251,6 +386,14 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Long-press on a bubble — opens the contextual options menu for that
     /// message (reply, forward, react, copy, delete, …).
     var onLongPress: ((String) -> Void)?
+    /// iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) d'une bulle,
+    /// construit par `ConversationView` (là où toutes les actions sont déjà
+    /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le
+    /// long-press custom → overlay reste alors le chemin).
+    var nativeMessageMenu: ((Message) -> AnyView)? = nil
+    /// Long-press on a call-summary notice → request the shared call-detail
+    /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
+    var onCallDetailRequest: ((String) -> Void)?
     /// User-initiated reaction add. Carries the message id and the tapped
     /// bubble cell's on-screen frame (window coords, `nil` when the cell is
     /// not realized) so the quick-reaction bar can anchor to the bubble.
@@ -315,6 +458,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
+        vc.nativeMessageMenu = nativeMessageMenu
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -330,6 +474,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onCallBack = { [weak conversationViewModel] summary in
             conversationViewModel?.callBack(for: summary)
         }
+        vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
         vc.applyBottomInset(bottomInset)
         return vc
@@ -367,6 +512,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
         vc.onLongPress = onLongPress
+        vc.nativeMessageMenu = nativeMessageMenu
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -382,6 +528,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onCallBack = { [weak conversationViewModel] summary in
             conversationViewModel?.callBack(for: summary)
         }
+        vc.onCallDetailRequest = onCallDetailRequest
         vc.conversationViewModel = conversationViewModel
         vc.applyBottomInset(bottomInset)
     }

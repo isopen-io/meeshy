@@ -19,7 +19,15 @@ import type {
   TranscriptionReadyEventData,
   AudioTranslationsProgressiveEventData,
   AudioTranslationsCompletedEventData,
-  PresenceSnapshotEventData
+  PresenceSnapshotEventData,
+  TranslationFailedEventData,
+  AudioTranslationFailedEventData,
+  TranscriptionFailedEventData,
+  FriendRequestCancelledEventData,
+  FriendRequestNewEventData,
+  FriendRequestAcceptedEventData,
+  FriendRequestRejectedEventData,
+  UserUpdatedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
 
@@ -47,6 +55,17 @@ export type OnlineStatsListener = (data: { conversationId: string; onlineUsers: 
 export type ReactionListener = (data: { messageId: string; userId: string; emoji: string; conversationId: string }) => void;
 export type ConversationJoinedListener = (data: { conversationId: string; userId: string }) => void;
 export type ReadStatusListener = (data: { conversationId: string; participantId: string; type: 'read' | 'received'; updatedAt: Date; summary: { totalMembers: number; deliveredCount: number; readCount: number } }) => void;
+export type TranslationFailedListener = (data: TranslationFailedEventData) => void;
+export type AudioTranslationFailedListener = (data: AudioTranslationFailedEventData) => void;
+export type TranscriptionFailedListener = (data: TranscriptionFailedEventData) => void;
+export type ConversationNewListener = (data: { conversationId: string; conversationType: string; title: string | null; creatorId: string; participantIds: readonly string[]; createdAt: string }) => void;
+export type FriendRequestCancelledListener = (data: FriendRequestCancelledEventData) => void;
+export type FriendRequestNewListener = (data: FriendRequestNewEventData) => void;
+export type FriendRequestAcceptedListener = (data: FriendRequestAcceptedEventData) => void;
+export type FriendRequestRejectedListener = (data: FriendRequestRejectedEventData) => void;
+export type UserUpdatedListener = (data: UserUpdatedEventData) => void;
+export type ConversationDeletedListener = (data: { userId: string; conversationId: string }) => void;
+export type ConversationUpdatedListener = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void;
 
 /**
  * Unsubscribe function type

@@ -210,7 +210,7 @@ describe('NodeCryptoAdapter', () => {
       expect(imported.type).toBe('private');
     });
 
-    it.skip('should derive shared secret from key agreement (TODO: fix ECDH implementation)', async () => {
+    it('should derive shared secret from key agreement', async () => {
       const alice = await adapter.generateECDHKeyPair();
       const bob = await adapter.generateECDHKeyPair();
 
@@ -243,7 +243,7 @@ describe('NodeCryptoAdapter', () => {
       expect(decrypted).toEqual(plaintext);
     });
 
-    it.skip('should produce different shared secrets for different key pairs (TODO: fix ECDH implementation)', async () => {
+    it('should produce different shared secrets for different key pairs', async () => {
       const alice = await adapter.generateECDHKeyPair();
       const bob = await adapter.generateECDHKeyPair();
       const charlie = await adapter.generateECDHKeyPair();

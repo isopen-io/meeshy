@@ -120,7 +120,7 @@ const StoryTextObjectSchema = z.object({
   startTime: z.number().min(0).max(86400).optional(),
   duration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
-  translations: z.record(z.string().max(STORY_TEXT_MAX)).optional(),
+  translations: z.record(z.string(), z.string().max(STORY_TEXT_MAX)).optional(),
 }).passthrough();
 
 const StoryStickerObjectSchema = z.object({
@@ -172,7 +172,7 @@ export const StoryEffectsSchema = z.object({
 
 export const CreatePostSchema = z.object({
   type: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).default('POST'),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).default('PUBLIC'),
+  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
   visibilityUserIds: z.array(z.string()).max(500).optional(),
   content: z.string().max(5000).optional(),
   communityId: z.string().optional(),
@@ -180,7 +180,7 @@ export const CreatePostSchema = z.object({
   storyEffects: StoryEffectsSchema.optional(),
   // Status/mood-specific
   moodEmoji: z.string().max(10).optional(),
-  audioUrl: z.string().url().optional(),
+  audioUrl: z.url().optional(),
   audioDuration: z.number().int().positive().optional(),
   // Original language override (ISO 639-1, e.g. "fr", "en")
   originalLanguage: z.string().min(2).max(5).optional(),
@@ -220,14 +220,26 @@ export const UpdatePostSchema = z.object({
 }, { message: 'EXCEPT and ONLY visibility require at least one userId in visibilityUserIds' });
 
 export const CreateCommentSchema = z.object({
-  content: z.string().min(1).max(2000),
+  // Le contenu peut être vide quand un média est joint (commentaire média seul).
+  // Le refine ci-dessous garantit qu'un commentaire porte AU MOINS du texte ou un média.
+  content: z.string().max(2000).optional().default(''),
   parentId: z.string().optional(),
   effectFlags: z.number().int().min(0).optional(),
   /// ISO 639-1 (or BCP-47) code of the language the comment is written in.
   /// Optional — when omitted the translation pipeline detects the language
   /// from the content as a fallback.
   originalLanguage: z.string().min(2).max(16).optional(),
-});
+  /// IDs de PostMedia déjà uploadés (uploadcontext=comment, postId/commentId=null
+  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments
+  /// (tableau), MAIS un commentaire ne porte QU'UN SEUL média → borné à 1.
+  attachmentIds: z.array(z.string()).max(1).optional(),
+  /// Transcription Whisper produite côté mobile pour un média audio (évite la
+  /// re-transcription serveur). Même structure que pour les posts.
+  mobileTranscription: MobileTranscriptionSchema.optional(),
+}).refine(
+  (data) => (data.content?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
+  { message: 'A comment must have text content or an attached media' },
+);
 
 export const RepostSchema = z.object({
   targetType: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).optional(),
@@ -254,7 +266,7 @@ export const WatchSampleSchema = z.object({
 });
 
 export const EngagementSessionSchema = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.guid(),
   // Champ informatif côté client uniquement : la route IGNORE ce userId et
   // prend l'identité du token auth (anti-spoof). Optionnel pour refléter
   // qu'il n'est pas fiable côté serveur.

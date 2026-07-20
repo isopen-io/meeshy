@@ -2,6 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg';
@@ -27,12 +28,14 @@ interface LoadingStateProps {
   className?: string;
 }
 
-export function LoadingState({ 
-  message = 'Chargement...', 
-  size = 'md', 
-  fullScreen = false, 
-  className 
+export function LoadingState({
+  message,
+  size = 'md',
+  fullScreen = false,
+  className
 }: LoadingStateProps) {
+  const { t } = useI18n('common');
+  const displayMessage = message ?? t('loading', 'Loading...');
   const containerClasses = fullScreen
     ? 'fixed inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm z-50'
     : 'flex items-center justify-center p-8';
@@ -41,9 +44,9 @@ export function LoadingState({
     <div className={cn(containerClasses, className)}>
       <div className="flex flex-col items-center space-y-4">
         <LoadingSpinner size={size} />
-        {message && (
+        {displayMessage && (
           <p className="text-sm text-muted-foreground animate-pulse">
-            {message}
+            {displayMessage}
           </p>
         )}
       </div>

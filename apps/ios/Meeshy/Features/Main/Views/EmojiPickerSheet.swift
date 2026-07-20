@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import MeeshyUI
 
 // MARK: - Emoji Grid Category
 
@@ -36,6 +37,28 @@ enum EmojiGridCategory: String, CaseIterable, Identifiable {
         case .objects: return "lightbulb"
         case .symbols: return "heart"
         case .flags: return "flag"
+        }
+    }
+
+    /// Localized, human-facing name for the category.
+    ///
+    /// The tab is an **icon-only** button, so its `accessibilityLabel` is the
+    /// only thing VoiceOver can announce. `rawValue` is the storage/identity
+    /// key (`id`) and must stay stable, so the display layer lives here —
+    /// keeping the Prisme Linguistique promise that the user hears the category
+    /// in their own language rather than a hardcoded French string.
+    var localizedName: String {
+        switch self {
+        case .recent: return String(localized: "emoji.category.recent", defaultValue: "Récents", bundle: .main)
+        case .smileys: return String(localized: "emoji.category.smileys", defaultValue: "Smileys", bundle: .main)
+        case .people: return String(localized: "emoji.category.people", defaultValue: "Personnes", bundle: .main)
+        case .animals: return String(localized: "emoji.category.animals", defaultValue: "Animaux", bundle: .main)
+        case .food: return String(localized: "emoji.category.food", defaultValue: "Nourriture", bundle: .main)
+        case .activities: return String(localized: "emoji.category.activities", defaultValue: "Activités", bundle: .main)
+        case .travel: return String(localized: "emoji.category.travel", defaultValue: "Voyages", bundle: .main)
+        case .objects: return String(localized: "emoji.category.objects", defaultValue: "Objets", bundle: .main)
+        case .symbols: return String(localized: "emoji.category.symbols", defaultValue: "Symboles", bundle: .main)
+        case .flags: return String(localized: "emoji.category.flags", defaultValue: "Drapeaux", bundle: .main)
         }
     }
 
@@ -175,11 +198,11 @@ struct EmojiPickerView: View {
             // Search bar
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(.secondary)
 
                 TextField(String(localized: "emoji.search", defaultValue: "Rechercher un emoji"), text: $searchText)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .autocorrectionDisabled()
 
                 if !searchText.isEmpty {
@@ -187,7 +210,7 @@ struct EmojiPickerView: View {
                         searchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(.secondary)
                     }
                     .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
@@ -196,7 +219,7 @@ struct EmojiPickerView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(Color(UIColor.systemGray6))
-            .cornerRadius(10)
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
 
@@ -211,7 +234,9 @@ struct EmojiPickerView: View {
                                 }
                             } label: {
                                 Image(systemName: category.icon)
-                                    .font(.system(size: 13, weight: .medium))
+                                    // Doctrine 82i : glyphe d'onglet de catégorie dans un cadre tap fixe
+                                    // 36×28 → taille figée (l'icône ne doit pas déborder de l'onglet).
+                                    .font(MeeshyFont.relative(13, weight: .medium))
                                     .foregroundColor(selectedCategory == category ? .white : .primary)
                                     .frame(width: 36, height: 28)
                                     .background(
@@ -220,7 +245,7 @@ struct EmojiPickerView: View {
                                     )
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(category.rawValue)
+                            .accessibilityLabel(category.localizedName)
                             .accessibilityAddTraits(selectedCategory == category ? [.isSelected] : [])
                         }
                     }
@@ -280,7 +305,8 @@ struct EmojiPickerView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .foregroundColor(.secondary)
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
+                .accessibilityHidden(true)
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.semibold)

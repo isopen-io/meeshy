@@ -36,7 +36,7 @@ struct VideoEditorFABColumn: View {
             .shadow(color: .black.opacity(0.22), radius: 7, y: 3)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(category.title)
+        .accessibilityLabel(VideoEditorLabels.title(for: category))
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 }

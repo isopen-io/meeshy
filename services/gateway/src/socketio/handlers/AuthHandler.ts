@@ -9,6 +9,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketAuthenticateSchema } from '../../validation/socket-event-schemas.js';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
@@ -79,14 +80,21 @@ export class AuthHandler {
         return;
       }
     } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        logger.info('token expired on socket connect', { socketId: socket.id });
+        socket.emit(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, { code: 'token_expired', message: 'JWT token has expired' });
+        socket.disconnect(true);
+        return;
+      }
       logger.error('erreur authentification automatique', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
+      socket.disconnect(true);
     }
   }
 
   async handleManualAuthentication(
     socket: Socket,
-    data: { userId?: string; sessionToken?: string; language?: string }
+    data: { userId?: string; sessionToken?: string; language?: string; token?: string }
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketAuthenticateSchema, data);
@@ -96,86 +104,44 @@ export class AuthHandler {
       }
       const validated = schemaValidation.data;
 
-      const { userId, sessionToken, language } = validated;
-
-      if (!userId && !sessionToken) {
-        socket.emit(SERVER_EVENTS.ERROR, { message: 'userId or sessionToken required' });
+      // Rate-limit auth attempts by IP to prevent credential stuffing.
+      // Key: socket IP so the limit spans multiple socket connections from the same host.
+      const clientIp = socket.handshake.address ?? socket.id;
+      const rateLimiter = getSocketRateLimiter();
+      const allowed = await rateLimiter.checkLimit(clientIp, SOCKET_RATE_LIMITS.SOCKET_AUTH);
+      if (!allowed) {
+        logger.warn('socket auth rate limit exceeded', { ip: clientIp, socketId: socket.id });
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'Too many authentication attempts. Please wait before retrying.', code: 'RATE_LIMIT_EXCEEDED' });
+        socket.disconnect(true);
         return;
       }
 
-      if (sessionToken && !userId) {
+      const { sessionToken, language, token } = validated;
+
+      if (!token && !sessionToken) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'token or sessionToken required' });
+        return;
+      }
+
+      if (sessionToken && !token) {
         await this._authenticateAnonymousUser(socket, sessionToken, language);
         return;
       }
 
-      if (userId) {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            systemLanguage: true,
-            regionalLanguage: true,
-            customDestinationLanguage: true,
-            deviceLocale: true,
-          }
-        });
-
-        if (!user) {
-          socket.emit(SERVER_EVENTS.ERROR, { message: 'User not found' });
-          return;
-        }
-
-        const resolvedLanguages = resolveUserLanguagesOrdered(user, {
-          deviceLocale: user.deviceLocale ?? undefined,
-        });
-
-        const socketUser: SocketUser = {
-          id: user.id,
-          socketId: socket.id,
-          isAnonymous: false,
-          language: language || user.systemLanguage || 'en',
-          resolvedLanguages,
-          userId: user.id
-        };
-
-        this._registerUser(user.id, socketUser, socket);
-
-        try {
-          if (user.id && typeof user.id === 'string') {
-            socket.join(user.id);
-            socket.join(ROOMS.user(user.id));
-            socket.join(ROOMS.feed(user.id));
-          }
-        } catch (error) {
-          logger.error('failed to join personal rooms', { userId: user.id, error });
-        }
-
-        this.statusService.markConnected(user.id, false);
-        await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
-        await this._joinUserConversations(socket, user.id, false);
-
-        try {
-          socket.join('conversation:any');
-        } catch {}
-
-        socket.emit(SERVER_EVENTS.AUTHENTICATED, {
-          success: true,
-          user: { id: user.id, language: socketUser.language, isAnonymous: false },
-          version: process.env.APP_VERSION || '1.1.0'
-        });
-
-        // Snapshot de présence: liste les contacts (participants des conversations
-        // partagées) actuellement online pour que le client seed son store sans attendre
-        // qu'un changement d'état arrive. Best-effort, on swallow les erreurs.
-        if (this.emitPresenceSnapshot) {
-          this.emitPresenceSnapshot(socket, user.id, false).catch(error => {
-            logger.error('failed to emit presence snapshot', { userId: user.id, error });
-          });
-        }
+      if (token) {
+        await this._authenticateJWTUser(socket, token);
+        return;
       }
     } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        logger.info('token expired on manual auth', { socketId: socket.id });
+        socket.emit(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, { code: 'token_expired', message: 'JWT token has expired' });
+        socket.disconnect(true);
+        return;
+      }
       logger.error('erreur authentification manuelle', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
+      socket.disconnect(true);
     }
   }
 
@@ -201,6 +167,7 @@ export class AuthHandler {
 
     if (!user) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'User not found' });
+      socket.disconnect(true);
       return;
     }
 
@@ -217,25 +184,36 @@ export class AuthHandler {
       userId: user.id
     };
 
-    this._registerUser(user.id, socketUser, socket);
-
+    // Join every room this socket needs to receive messages in BEFORE
+    // registering the user as "connected". Delivery code (MessageHandler,
+    // MeeshySocketIOManager) gates the offline-delivery queue purely on
+    // `connectedUsers.has(userId)`: if we registered first, a message could
+    // arrive in the gap between registration and these awaited room joins
+    // completing, be skipped from the offline queue (recipient looks
+    // online), and never reach the room broadcast either — permanently lost.
     try {
       if (user.id && typeof user.id === 'string') {
-        socket.join(user.id);
-        socket.join(ROOMS.user(user.id));
-        socket.join(ROOMS.feed(user.id));
+        await Promise.allSettled([
+          socket.join(ROOMS.user(user.id)),
+          socket.join(ROOMS.feed(user.id)),
+        ]);
       }
     } catch (error) {
       logger.error('failed to join personal rooms (JWT auth)', { userId: user.id, error });
     }
 
-    this.statusService.markConnected(user.id, false);
-    await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
     await this._joinUserConversations(socket, user.id, false);
 
     try {
-      socket.join('conversation:any');
-    } catch {}
+      await socket.join('conversation:any');
+    } catch (error) {
+      logger.debug('failed to join conversation:any room (JWT auth)', { userId: user.id, error });
+    }
+
+    this._registerUser(user.id, socketUser, socket);
+
+    this.statusService.markConnected(user.id, false);
+    await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -277,6 +255,7 @@ export class AuthHandler {
 
     if (!participant) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
+      socket.disconnect(true);
       return;
     }
 
@@ -291,21 +270,38 @@ export class AuthHandler {
       sessionToken
     };
 
-    this._registerUser(participant.id, socketUser, socket);
-
+    // Join rooms before registering — see matching comment in
+    // _authenticateJWTUser for why registration must come last.
+    // The personal room MUST use ROOMS.user(...) — the same convention the JWT
+    // path uses (`socket.join(ROOMS.user(user.id))`) and, critically, the only
+    // room every personal-event emitter targets (`io.to(ROOMS.user(participant
+    // .userId ?? participant.id))` for CONVERSATION_UNREAD_UPDATED, mentions,
+    // etc.). Joining the bare `socketUser.id` room left the anonymous socket in
+    // a room no emitter ever addresses, so `conversation:unread-updated` (and
+    // any other personal broadcast that falls back to `participant.id`) never
+    // reached anonymous participants — their unread badge stayed stale until a
+    // manual REST refetch.
     try {
       if (socketUser.id && typeof socketUser.id === 'string') {
-        socket.join(socketUser.id);
+        await socket.join(ROOMS.user(socketUser.id));
       }
     } catch (error) {
       logger.error('failed to join personal room for anonymous user', { anonymousId: socketUser.id, error });
     }
 
-    await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
-
     try {
-      socket.join(ROOMS.conversation(participant.conversationId));
-    } catch {}
+      await socket.join(ROOMS.conversation(participant.conversationId));
+    } catch (error) {
+      logger.warn('failed to join conversation room for anonymous user — messages may not be received', {
+        anonymousId: socketUser.id,
+        conversationId: participant.conversationId,
+        error,
+      });
+    }
+
+    this._registerUser(participant.id, socketUser, socket);
+
+    await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -361,43 +357,64 @@ export class AuthHandler {
     this.userSockets.delete(userIdOrToken);
     this.statusService.markDisconnected(userIdOrToken, isAnonymous);
 
-    try {
-      const activeParticipations = await this.prisma.callParticipant.findMany({
-        where: {
-          leftAt: null,
-          participant: isAnonymous
-            ? { id: userIdOrToken }
-            : { userId: userIdOrToken }
-        },
-        include: {
-          callSession: true
-        }
-      });
-
-      if (activeParticipations.length > 0) {
-        logger.debug('disconnect-cleanup: active call participations found', {
-          socketId: socket.id,
-          userId: userIdOrToken,
-          count: activeParticipations.length,
-          callIds: activeParticipations.map((p: { callSessionId: string }) => p.callSessionId)
+    // CALL-RESILIENCE — call lifecycle on disconnect is owned by
+    // CallEventsHandler's per-socket disconnect handler (reconnect grace for
+    // answered calls, immediate leave pre-answer, shutdown guard). Leaving
+    // calls here too marked answered CallSessions ended in DB while their P2P
+    // media was still alive (socket blip / gateway restart on a single-device
+    // user), defeating that grace window. Anonymous participants are the one
+    // case that handler cannot resolve (its lookup is keyed on
+    // participant.userId) and they get no reconnect grace (ADR-6) — the
+    // immediate auto-leave stays for them only.
+    if (isAnonymous) {
+      try {
+        const activeParticipations = await this.prisma.callParticipant.findMany({
+          where: {
+            // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
+            // whose leftAt field was never written (pre-C5 participants).
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+            participant: { id: userIdOrToken }
+          },
+          include: {
+            callSession: true
+          }
         });
-      }
 
-      for (const participation of activeParticipations) {
-        try {
-          await this.callService.leaveCall({
-            callId: participation.callSessionId,
+        if (activeParticipations.length > 0) {
+          logger.debug('disconnect-cleanup: active call participations found', {
+            socketId: socket.id,
             userId: userIdOrToken,
-            participantId: participation.participantId
+            count: activeParticipations.length,
+            callIds: activeParticipations.map((p: { callSessionId: string }) => p.callSessionId)
           });
-        } catch (error) {
-          logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
         }
+
+        for (const participation of activeParticipations) {
+          try {
+            await this.callService.leaveCall({
+              callId: participation.callSessionId,
+              userId: userIdOrToken,
+              participantId: participation.participantId
+            });
+          } catch (error) {
+            logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
+          }
+        }
+      } catch (error) {
+        logger.error('error checking/leaving active calls on disconnect', { userId: userIdOrToken, error });
       }
-    } catch (error) {
-      logger.error('error checking/leaving active calls on disconnect', { userId: userIdOrToken, error });
     }
 
+    // Guard: a new socket may have reconnected while async cleanup (the
+    // anonymous call-participation lookup above awaits Prisma) was in
+    // progress. That reconnect's own auth flow already broadcast the correct
+    // isOnline:true and repopulated userSockets/connectedUsers — broadcasting
+    // isOnline:false below would be a stale last-write-wins clobber of both
+    // the room presence event and the DB flag. Bail out entirely in that case.
+    const stillHasSockets = (this.userSockets.get(userIdOrToken)?.size ?? 0) > 0;
+    if (stillHasSockets) {
+      return;
+    }
     this.connectedUsers.delete(userIdOrToken);
 
     try {
@@ -411,9 +428,17 @@ export class AuthHandler {
     }
   }
 
-  async handleHeartbeat(socket: Socket): Promise<void> {
+  async handleHeartbeat(socket: Socket, data?: { clientTime?: number }): Promise<void> {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) return;
+
+    const serverTime = new Date().toISOString();
+    const latencyHintMs = data?.clientTime !== undefined
+      ? Date.now() - data.clientTime
+      : undefined;
+
+    // Emit ACK before the async DB write so clients get RTT data immediately
+    socket.emit(SERVER_EVENTS.HEARTBEAT_ACK, { serverTime, latencyHintMs });
 
     try {
       const user = this.connectedUsers.get(userIdOrToken);
@@ -427,7 +452,35 @@ export class AuthHandler {
           data: { lastActiveAt: new Date() }
         });
       }
-    } catch {}
+    } catch (error) {
+      logger.debug('heartbeat DB update failed (best-effort)', { userId: userIdOrToken, error });
+    }
+  }
+
+  // Retries beyond the initial attempt for a rejected conversation room join.
+  // Total attempts per room = 1 + JOIN_RETRY_ATTEMPTS. Bounded so a permanently
+  // broken adapter can never spin forever; each retry re-attempts only the rooms
+  // that STILL failed, so a room that joined on the first try is never re-joined.
+  private static readonly JOIN_RETRY_ATTEMPTS = 2;
+
+  /**
+   * Joins the socket to each conversation room, retrying only the rooms whose
+   * join rejected (transient adapter hiccup). Returns the conversation ids that
+   * remained un-joined after all retries were exhausted.
+   *
+   * A failed-and-un-retried join is silent message loss: the delivery gate
+   * (`connectedUsers.has(userId)`) treats the recipient as online and skips the
+   * offline queue, yet the missed room means the live `message:new` never
+   * arrives either. Retrying closes the common transient case.
+   */
+  private async _joinConversationRoomsWithRetry(socket: Socket, conversationIds: string[]): Promise<string[]> {
+    const maxAttempts = 1 + AuthHandler.JOIN_RETRY_ATTEMPTS;
+    let pending = conversationIds;
+    for (let attempt = 1; attempt <= maxAttempts && pending.length > 0; attempt++) {
+      const results = await Promise.allSettled(pending.map(id => socket.join(ROOMS.conversation(id))));
+      pending = pending.filter((_, i) => results[i].status === 'rejected');
+    }
+    return pending;
   }
 
   private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
@@ -446,10 +499,22 @@ export class AuthHandler {
         });
       }
 
-      for (const conv of conversations) {
-        socket.join(ROOMS.conversation(conv.conversationId));
+      const conversationIds = conversations.map(conv => conv.conversationId);
+      const stillFailed = await this._joinConversationRoomsWithRetry(socket, conversationIds);
+      if (stillFailed.length > 0) {
+        // Escalated to error: after retries, these room joins are genuinely
+        // broken. Because delivery gates the offline queue purely on
+        // `connectedUsers.has(userId)`, this recipient now looks online but is
+        // absent from these rooms — a message sent to them lands nowhere (no
+        // live emit, no offline enqueue) until a later reconnect re-joins them.
+        logger.error('conversation room joins failed after retries — recipient may miss live messages until reconnect', {
+          userId,
+          failed: stillFailed.length,
+          total: conversationIds.length,
+          conversationIds: stillFailed,
+        });
       }
-      logger.debug('user joined conversation rooms', { userId, count: conversations.length });
+      logger.debug('user joined conversation rooms', { userId, count: conversationIds.length - stillFailed.length });
     } catch (error) {
       logger.error('error joining conversations for user', { userId, error });
     }

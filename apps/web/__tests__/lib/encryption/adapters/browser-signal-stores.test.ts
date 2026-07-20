@@ -74,7 +74,7 @@ jest.mock('@signalapp/libsignal-client', () => ({
   Uuid: {
     fromString: jest.fn((str: string) => str),
   },
-}));
+}), { virtual: true });
 
 // Mock IndexedDB
 const createMockIndexedDB = () => {

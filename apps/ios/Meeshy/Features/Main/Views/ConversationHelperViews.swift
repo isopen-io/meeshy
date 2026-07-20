@@ -66,7 +66,7 @@ struct ThemedBackButton: View {
                 // Chevron — always visible, in a fixed 40-pt slot so the
                 // back affordance stays anchored regardless of pill width
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundStyle(gradientFill)
                     .frame(width: 40, height: 40)
 
@@ -86,6 +86,13 @@ struct ThemedBackButton: View {
                     // affordance. Dark/light parity with the conversation
                     // list row badge via MeeshyColors.unreadBadgeBackground.
                     Text(Self.displayedUnread(unreadCount))
+                        // Fixed: compact numeric unread badge (iMessage
+                        // convention). The pill hugs the digits via
+                        // `.fixedSize` + `minWidth: 22` — letting it scale
+                        // with Dynamic Type would break the pill-tight
+                        // capsule and push it out of the back-button glass.
+                        // VoiceOver reads the count from the button label
+                        // (`a11y.back.with_unread`), so the glyph is hidden.
                         .font(.system(size: 12, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .lineLimit(1)
@@ -115,7 +122,7 @@ struct ThemedBackButton: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: compactMode)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showsPill)
         }
-        .accessibilityLabel(showsPill ? "Retour, \(unreadCount) messages non lus dans les autres conversations" : "Retour")
+        .accessibilityLabel(showsPill ? String(format: String(localized: "a11y.back.with_unread", bundle: .main), unreadCount) : String(localized: "a11y.back", bundle: .main))
     }
 }
 
@@ -127,7 +134,7 @@ struct ThemedAvatarButton: View {
     let isExpanded: Bool
     var storyState: StoryRingState = .none
     var avatarURL: String? = nil
-    var presenceState: PresenceState = .offline
+    var presenceState: PresenceState? = nil
     var moodEmoji: String? = nil
     let action: () -> Void
     @State private var isPressed = false
@@ -153,6 +160,8 @@ struct ThemedAvatarButton: View {
             .shadow(color: Color(hex: color).opacity(isExpanded ? 0.6 : 0.4), radius: isExpanded ? 12 : 8, y: 3)
             .scaleEffect(isPressed ? 0.9 : (isExpanded ? 1.1 : 1))
         }
+        .accessibilityLabel(String(format: String(localized: "accessibility.user_profile_of", defaultValue: "Profil de %@", bundle: .main), name))
+        .accessibilityHint(String(localized: "accessibility.user_profile.hint", defaultValue: "Ouvre les détails du profil", bundle: .main))
     }
 }
 
@@ -192,7 +201,7 @@ struct ThemedComposerButton: View {
                     .shadow(color: Color(hex: colors[0]).opacity(isActive ? 0.5 : 0.2), radius: isActive ? 10 : 6, y: 3)
 
                 Image(systemName: icon)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(MeeshyFont.relative(18, weight: .semibold))
                     .foregroundColor(isActive ? .white : Color(hex: colors[0]))
                     .rotationEffect(rotateIcon ? .degrees(45) : .degrees(0))
                     .offset(x: rotateIcon ? -1 : 0, y: rotateIcon ? 1 : 0)

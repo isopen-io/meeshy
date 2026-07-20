@@ -160,6 +160,12 @@ struct BubbleQuotedReply: View, Equatable {
             .padding(.trailing, 10)
         }
         .padding(.vertical, 8)
+        // La barre d'accent (RoundedRectangle) est infiniment flexible en
+        // hauteur : sans fixedSize, un hôte qui sur-propose de la hauteur
+        // (VStack du conteneur média+citation quand la vidéo letterboxe)
+        // fait gonfler la citation qui absorbe tout l'excédent. On la fige
+        // à sa hauteur idéale (titre + 2 lignes max de preview).
+        .fixedSize(horizontal: false, vertical: true)
         .contentShape(Rectangle())
 
         switch style {

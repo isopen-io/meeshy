@@ -17,7 +17,7 @@ export const agentNewMessageSchema = z.object({
 export const agentConfigUpdatedSchema = z.object({
   type: z.literal('agent:config-updated'),
   conversationId: z.string(),
-  config: z.record(z.unknown()),
+  config: z.record(z.string(), z.unknown()),
 });
 
 export const agentUserStatusSchema = z.object({

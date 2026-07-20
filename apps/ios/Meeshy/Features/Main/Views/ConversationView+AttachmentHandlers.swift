@@ -11,6 +11,17 @@ import os
 // MARK: - Recording, Sending & Attachment Handlers
 extension ConversationView {
 
+    /// Décision pure et testable du popup de consentement vocal à l'envoi
+    /// (2026-07-08) : uniquement quand le send contient de l'audio, que le
+    /// consentement vocal manque, et qu'on n'a pas déjà proposé cette session.
+    nonisolated static func shouldPromptVoiceConsent(
+        hasAudio: Bool,
+        consentMissing: Bool,
+        alreadyPrompted: Bool
+    ) -> Bool {
+        hasAudio && consentMissing && !alreadyPrompted
+    }
+
     // MARK: - Recording Functions
     func startRecording() {
         audioRecorder.startRecording()
@@ -71,11 +82,27 @@ extension ConversationView {
             hasReply: refId != nil
         )
 
+        // Popup consentement vocal (2026-07-08) : un envoi contenant de
+        // l'audio sans consentement vocal validé propose UNE fois par session
+        // la traduction automatique (profil vocal + traduction avec la voix).
+        // On interrompt AVANT toute mutation du composer : la décision du
+        // popup relance ce même send avec un état intact.
+        if Self.shouldPromptVoiceConsent(
+            hasAudio: plan.contains { $0.kind == .audio },
+            consentMissing: viewModel.voiceConsentMissing,
+            alreadyPrompted: composerState.voiceConsentPromptedThisSession
+        ) {
+            composerState.voiceConsentPromptedThisSession = true
+            composerState.showVoiceAutoTranslateConsent = true
+            return
+        }
+
         if attachments.isEmpty {
             // Text-only send: clear UI immediately
             composerState.pendingAttachments.removeAll()
             composerState.pendingMediaFiles.removeAll()
             composerState.pendingThumbnails.removeAll()
+            purgeDraftAttachmentMedia()
             composerText.text = ""
             ReplyContextCleaner(conversationId: viewModel.conversationId)
                 .clear(pendingReplyReference: &composerState.pendingReplyReference)
@@ -177,6 +204,10 @@ extension ConversationView {
                     composerState.pendingMediaFiles.removeAll()
                     composerState.uploadProgress = nil
                     composerState.isUploading = false
+                    // APRÈS l'upload : un brouillon restauré envoie depuis les
+                    // copies du dossier draft — purger avant les aurait
+                    // supprimées sous les pieds de l'upload.
+                    purgeDraftAttachmentMedia()
                 }
             }
             let serverOrigin = MeeshyConfig.shared.serverOrigin
@@ -344,12 +375,58 @@ extension ConversationView {
                     anySuccess = anySuccess || ok
                 } catch {
                     Logger.messages.error("Group upload failed (\(String(describing: send.group.kind))): \(error.localizedDescription)")
-                    // S7 — flip the optimistic bubble to .failed so it stops
-                    // showing a permanent .sending spinner and offers a retry,
-                    // instead of a silent ghost (the offline-visual path reaches
-                    // here because the TUS upload throws with no durable queue).
-                    await viewModel.markOptimisticMediaFailed(
-                        tempId: send.tempId, reason: error.localizedDescription)
+                    // Spec 2026-07-08 (message-send-failure-retry-flow, règle 4) :
+                    // un échec d'upload EN LIGNE rejoint l'outbox durable —
+                    // mêmes re-tentatives automatiques avec backoff que le
+                    // texte — au lieu de basculer la bulle directement en
+                    // `.failed`. `.sendFailed` fait transiter la ligne
+                    // optimiste `.sending` → `.queued` (horloge conservée) ;
+                    // l'indicateur d'échec reste un état terminal atteint par
+                    // `retryExhausted`. Les fichiers déjà uploadés avant
+                    // l'échec seront ré-uploadés au rejeu (le dedup message
+                    // par clientMessageId côté gateway évite tout doublon).
+                    _ = try? await viewModel.messagePersistence.applyEvent(
+                        localId: send.tempId, event: .sendFailed(error))
+                    var requeued = false
+                    if send.group.kind == .audio {
+                        let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
+                        if !urls.isEmpty {
+                            requeued = (try? await OfflineQueue.shared.enqueueAudios(
+                                sourceAudioURLs: urls,
+                                conversationId: viewModel.conversationId,
+                                content: nil,
+                                clientMessageId: send.tempId,
+                                originalLanguage: lang,
+                                replyToId: send.group.carriesReply ? replyId : nil
+                            )) != nil
+                        }
+                    } else {
+                        let pairs: [(url: URL, kind: String)] = send.group.attachments.compactMap { att in
+                            guard let url = mediaFiles[att.id] else { return nil }
+                            let kind = AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)).rawValue
+                            return (url, kind)
+                        }
+                        if !pairs.isEmpty {
+                            requeued = (try? await OfflineQueue.shared.enqueueMedia(
+                                sourceMediaURLs: pairs.map { $0.url },
+                                kinds: pairs.map { $0.kind },
+                                conversationId: viewModel.conversationId,
+                                content: nil,
+                                clientMessageId: send.tempId,
+                                originalLanguage: lang,
+                                replyToId: send.group.carriesReply ? replyId : nil
+                            )) != nil
+                        }
+                    }
+                    if requeued {
+                        anySuccess = true
+                        Logger.messages.info("Group upload failed online — requeued to durable outbox \(send.tempId)")
+                    } else {
+                        // Ré-enfilage impossible (fichiers sources disparus,
+                        // disque plein, encodage) : état terminal, retry manuel.
+                        await viewModel.markOptimisticMediaFailed(
+                            tempId: send.tempId, reason: error.localizedDescription)
+                    }
                 }
             }
 
@@ -399,6 +476,12 @@ extension ConversationView {
     // MARK: - Attachment Handlers
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        // Priming echo (strip multi-selection injected before presenting the
+        // picker) — not a user confirmation, nothing to ingest yet.
+        if composerState.photoPickerPriming {
+            composerState.photoPickerPriming = false
+            return
+        }
         composerState.selectedPhotoItems.removeAll()
         HapticFeedback.light()
         for item in items {
@@ -533,5 +616,12 @@ extension ConversationView {
         Task {
             await viewModel.sendMessage(content: text, originalLanguage: lang)
         }
+    }
+
+    /// Purge les copies durables des pièces jointes du brouillon — à l'envoi
+    /// réussi (le brouillon n'existe plus) et au clear explicite. Idempotent.
+    func purgeDraftAttachmentMedia() {
+        guard let userId = AuthManager.shared.currentUser?.id else { return }
+        MessageDraftMediaStore.purge(userId: userId, conversationId: viewModel.conversationId)
     }
 }

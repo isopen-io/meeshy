@@ -28,6 +28,7 @@
     "online": "En línea",
     "offline": "Fuera de línea",
     "away": "Ausente",
+    "recent": "Activo recientemente",
     "pending": "Pendiente",
     "rejected": "Rechazado",
     "neverSeen": "Nunca visto",
@@ -35,7 +36,12 @@
     "minutesAgo": "hace {count} min",
     "hoursAgo": "hace {count}h",
     "daysAgo": "hace {count}d",
-    "lastSeenDate": "Visto el {date}"
+    "lastSeenDate": "Visto el {date}",
+    "lastSeenMinutes": "Visto hace {count} min",
+    "lastSeenHours": "Visto hace {count}h",
+    "lastSeenYesterday": "Visto ayer a las {time}",
+    "lastSeenBeforeYesterday": "Visto anteayer a las {time}",
+    "lastSeenDateTime": "Visto el {date} a las {time}"
   },
   "actions": {
     "menu": "Menú de acciones",

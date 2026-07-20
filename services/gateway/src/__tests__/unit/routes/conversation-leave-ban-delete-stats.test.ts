@@ -142,9 +142,11 @@ function createMockIO(extraSockets: any[] = []) {
 }
 
 function wireIO(fastify: ReturnType<typeof createMockFastify>, io?: any) {
+  const invalidateParticipantCache = jest.fn<any>();
   fastify.socketIOHandler = io
-    ? { getManager: () => ({ getIO: () => io }) }
+    ? { getManager: () => ({ getIO: () => io, invalidateParticipantCache }) }
     : undefined;
+  (fastify as any)._invalidateParticipantCache = invalidateParticipantCache;
 }
 
 function makeRequest(params: Record<string, string>, userId: string, extra: Record<string, any> = {}) {
@@ -236,7 +238,7 @@ describe('registerLeaveRoutes — POST /conversations/:id/leave', () => {
 
   it('emits CONVERSATION_PARTICIPANT_LEFT and removes user from room when IO present', async () => {
     const io = createMockIO();
-    const { prisma, route, reply } = setup(io);
+    const { fastify, prisma, route, reply } = setup(io);
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'member' }));
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
@@ -247,6 +249,7 @@ describe('registerLeaveRoutes — POST /conversations/:id/leave', () => {
     );
     expect(io.in).toHaveBeenCalledWith(ROOMS.user(VALID_USER_ID));
     expect(io._leave).toHaveBeenCalledWith(ROOMS.conversation(VALID_CONV_ID));
+    expect((fastify as any)._invalidateParticipantCache).toHaveBeenCalledWith(VALID_USER_ID, VALID_CONV_ID);
     expect(mockedSendSuccess).toHaveBeenCalled();
   });
 
@@ -387,7 +390,7 @@ describe('registerBanRoutes', () => {
 
     it('emits CONVERSATION_PARTICIPANT_BANNED and removes sockets when IO present', async () => {
       const io = createMockIO();
-      const { prisma, banRoute, reply } = setup(io);
+      const { fastify, prisma, banRoute, reply } = setup(io);
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'creator' })
         .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, role: 'member', bannedAt: null, displayName: 'Bob' });
@@ -398,6 +401,7 @@ describe('registerBanRoutes', () => {
         expect.objectContaining({ userId: TARGET_USER_ID })
       );
       expect(io._leave).toHaveBeenCalledWith(ROOMS.conversation(VALID_CONV_ID));
+      expect((fastify as any)._invalidateParticipantCache).toHaveBeenCalledWith(TARGET_USER_ID, VALID_CONV_ID);
     });
 
     it('creator can ban admin', async () => {

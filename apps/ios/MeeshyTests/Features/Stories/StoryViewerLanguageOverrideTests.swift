@@ -5,6 +5,7 @@ import XCTest
 /// Le Prisme Linguistique affiche par défaut la langue préférée (`preferredContentLanguages`),
 /// mais l'utilisateur peut explorer une autre langue via le picker — l'override est alors
 /// PRÉPENDU à la chaîne (priorité la plus haute), sans jamais supprimer les préférences de base.
+@MainActor
 final class StoryViewerLanguageOverrideTests: XCTestCase {
 
     func test_viewerLanguageChain_nilOverride_returnsBaseUnchanged() {

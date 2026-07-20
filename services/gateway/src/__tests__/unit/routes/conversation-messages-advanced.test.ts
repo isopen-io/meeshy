@@ -37,7 +37,7 @@ const mockGetOrCompute = jest.fn<any>().mockResolvedValue([]);
 const mockOnMessageEdited = jest.fn<any>().mockResolvedValue(undefined);
 const mockOnMessageDeleted = jest.fn<any>().mockResolvedValue(undefined);
 
-const mockAddReaction = jest.fn().mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+const mockAddReaction = jest.fn().mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
 const mockRemoveReaction = jest.fn().mockResolvedValue(true);
 const mockCreateUpdateEvent = jest.fn().mockResolvedValue({ messageId: 'msg-id', emoji: '👍' });
 
@@ -311,7 +311,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       processedContent: 'processed content',
       trackingLinks: [],
     });
-    mockAddReaction.mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+    mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
     mockRemoveReaction.mockResolvedValue(true);
     mockCreateUpdateEvent.mockResolvedValue({ messageId: MSG_ID, emoji: '👍' });
 
@@ -460,6 +460,33 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getEditHandler(fastify)(req, reply);
 
       expect(mockSendForbidden).not.toHaveBeenCalled();
+    });
+
+    it('keys onMessageEdited by the message sender, not the editing moderator', async () => {
+      // An ADMIN/MODERATOR may edit another user's message. The per-participant
+      // stats delta must land on the original sender's key, not the editor's.
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage({
+        senderId: PART_ID,
+        sender: { id: PART_ID, userId: OTHER_USER_ID, role: 'USER' },
+      }));
+      prisma.participant.findFirst.mockResolvedValue({ user: { role: 'ADMIN' } });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'New content',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'New content' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(mockOnMessageEdited).toHaveBeenCalled();
+      expect(mockOnMessageEdited.mock.calls[0][2]).toBe(OTHER_USER_ID);
     });
 
     it('returns 400 when content is whitespace only', async () => {
@@ -868,6 +895,46 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(fastify._mockEmit).toHaveBeenCalledWith('message:deleted', expect.objectContaining({ messageId: MSG_ID }));
     });
 
+    it('keys onMessageDeleted by the message sender (registered author)', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        sender: { id: PART_ID, userId: USER_ID },
+        attachments: [],
+      });
+      prisma.message.update.mockResolvedValue({});
+
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(req, reply);
+
+      expect(mockOnMessageDeleted).toHaveBeenCalled();
+      expect(mockOnMessageDeleted.mock.calls[0][2]).toBe(USER_ID);
+    });
+
+    it('keys onMessageDeleted by the Participant.id when an admin deletes an anonymous message', async () => {
+      // Anonymous senders have sender.userId === null; the participantStats map is
+      // keyed by Participant.id for them (matching the create/recompute contract).
+      // A moderator/admin can delete such a message, so the sender key must fall
+      // back to senderId, not '' (which would leave the participant breakdown stale).
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        senderId: PART_ID,
+        sender: { id: PART_ID, userId: null },
+        attachments: [],
+      });
+      prisma.participant.findFirst.mockResolvedValue({ user: { role: 'ADMIN' } });
+      prisma.message.update.mockResolvedValue({});
+
+      const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
+      const reply = makeReply();
+
+      await getDeleteMsgHandler(fastify)(req, reply);
+
+      expect(mockOnMessageDeleted).toHaveBeenCalled();
+      expect(mockOnMessageDeleted.mock.calls[0][2]).toBe(PART_ID);
+    });
+
     it('calls sendInternalError on outer error', async () => {
       prisma.message.findFirst.mockRejectedValue(new Error('DB fail'));
       const req = makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } });
@@ -1001,6 +1068,127 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getPatchHandler(fastify)(req, reply);
 
       expect(mockSendInternalError).toHaveBeenCalled();
+    });
+
+    it('broadcasts MESSAGE_EDITED via Socket.IO on happy path (parity with PUT sibling)', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'Original',
+        originalLanguage: 'fr',
+        senderId: PART_ID,
+        sender: { userId: USER_ID },
+        conversation: {
+          identifier: 'some-conv',
+          participants: [{ userId: USER_ID, isActive: true }],
+        },
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'Updated',
+        translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      const req = makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Updated' } });
+      const reply = makeReply();
+
+      await getPatchHandler(fastify)(req, reply);
+
+      expect(fastify._mockGetManager).toHaveBeenCalled();
+      expect(fastify._mockTo).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+      expect(fastify._mockEmit).toHaveBeenCalledWith(
+        'message:edited',
+        expect.objectContaining({ id: MSG_ID, conversationId: CONV_ID })
+      );
+    });
+
+    it('invalidates cached translations and triggers retranslation on happy path (parity with PUT sibling)', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'Original',
+        originalLanguage: 'fr',
+        senderId: PART_ID,
+        sender: { userId: USER_ID },
+        conversation: {
+          identifier: 'some-conv',
+          participants: [{ userId: USER_ID, isActive: true }],
+        },
+      });
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'Updated',
+        translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      const req = makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Updated' } });
+      const reply = makeReply();
+
+      await getPatchHandler(fastify)(req, reply);
+
+      expect(fastify.translationService._processRetranslationAsync).toHaveBeenCalledWith(
+        MSG_ID,
+        expect.objectContaining({ id: MSG_ID, content: 'Updated', conversationId: CONV_ID })
+      );
+    });
+
+    it('continues successfully when retranslation fails (parity with PUT sibling)', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'Original',
+        originalLanguage: 'fr',
+        senderId: PART_ID,
+        sender: { userId: USER_ID },
+        conversation: { identifier: 'meeshy', participants: [] },
+      });
+      fastify.translationService = {
+        _processRetranslationAsync: jest.fn().mockRejectedValue(new Error('translation error')),
+      };
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'Updated',
+        translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      const req = makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Updated' } });
+      const reply = makeReply();
+
+      await getPatchHandler(fastify)(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    it('socketIOManager null in patch edit - no broadcast but success', async () => {
+      fastify.socketIOHandler.getManager.mockReturnValue(null);
+      prisma.message.findFirst.mockResolvedValue({
+        id: MSG_ID,
+        conversationId: CONV_ID,
+        content: 'Original',
+        originalLanguage: 'fr',
+        senderId: PART_ID,
+        sender: { userId: USER_ID },
+        conversation: { identifier: 'meeshy', participants: [] },
+      });
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: 'Updated',
+        translations: null,
+        sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, role: 'USER', user: { username: 'alice' } },
+      });
+
+      const req = makeRequest({ params: { messageId: MSG_ID }, body: { content: 'Updated' } });
+      const reply = makeReply();
+
+      await getPatchHandler(fastify)(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalled();
+      expect(fastify._mockEmit).not.toHaveBeenCalled();
     });
   });
 
@@ -1228,7 +1416,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     it('returns success and broadcasts reaction on happy path', async () => {
       prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
       prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
@@ -1240,6 +1428,26 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
       expect(fastify._mockEmit).toHaveBeenCalledWith('reaction:added', expect.any(Object));
+    });
+
+    it('returns success but skips the broadcast when addReaction reports unchanged (idempotent re-react)', async () => {
+      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+      // Duplicate add for an emoji the participant already has — a DB no-op.
+      // The route must still report success but must NOT re-broadcast
+      // REACTION_ADDED (nothing changed). Parity with the socket handler.
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [], unchanged: true });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { emoji: '👍' },
+      });
+      const reply = makeReply();
+
+      await getAddReactionHandler(fastify)(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
+      expect(fastify._mockEmit).not.toHaveBeenCalledWith('reaction:added', expect.any(Object));
     });
 
     it('returns 400 on Invalid emoji format error', async () => {
@@ -1290,10 +1498,10 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendForbidden).toHaveBeenCalled();
     });
 
-    it('returns 400 on Maximum reactions error from service', async () => {
+    it('returns 400 when reacting to a system message', async () => {
       prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
       prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Maximum reactions limit reached'));
+      mockAddReaction.mockRejectedValue(new Error('Cannot react to a system message'));
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
@@ -1303,7 +1511,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getAddReactionHandler(fastify)(req, reply);
 
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Maximum reactions limit reached');
+      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Cannot react to a system message');
     });
 
     it('returns 500 on generic error', async () => {
@@ -1811,7 +2019,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
-    it('handles null sender.userId using ?? empty string', async () => {
+    it('falls back to senderId (participant key) when sender.userId is absent', async () => {
       prisma.message.findFirst.mockResolvedValue({
         id: MSG_ID,
         conversationId: CONV_ID,
@@ -1834,9 +2042,10 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockOnMessageDeleted).toHaveBeenCalledWith(
         expect.anything(),
         CONV_ID,
-        '', // null?.userId ?? '' = ''
+        PART_ID, // sender?.userId undefined → ?? senderId (the participantStats key)
         expect.any(String),
-        []
+        [],
+        expect.anything()
       );
     });
 
@@ -1863,7 +2072,8 @@ describe('registerMessagesAdvancedRoutes', () => {
         CONV_ID,
         USER_ID,
         '', // null ?? '' = ''
-        []
+        [],
+        expect.anything()
       );
     });
 
@@ -1890,7 +2100,8 @@ describe('registerMessagesAdvancedRoutes', () => {
         CONV_ID,
         USER_ID,
         'hello',
-        [] // null ?? [] = []
+        [], // null ?? [] = []
+        expect.anything()
       );
     });
 
@@ -1914,7 +2125,8 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockOnMessageDeleted).toHaveBeenCalledWith(
         expect.anything(), CONV_ID, USER_ID, 'hello',
-        ['file'] // '' doesn't start with any prefix → 'file'
+        ['file'], // '' doesn't start with any prefix → 'file'
+        expect.anything()
       );
     });
 
@@ -1941,7 +2153,8 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockOnMessageDeleted).toHaveBeenCalledWith(
         expect.anything(), CONV_ID, USER_ID, 'hello',
-        ['video', 'file']
+        ['video', 'file'],
+        expect.anything()
       );
     });
 
@@ -2028,7 +2241,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('add reaction: socketIOHandler null at registration - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
       const f = createNullSocketFastify();
       const p = makePrisma();
       p.message.findFirst.mockResolvedValue({ id: MSG_ID });
@@ -2078,7 +2291,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('add reaction: socketIOHandler getIO returns null - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ id: 'reaction-id', emoji: '👍' });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
       const f = createNullSocketFastify();
       f.socketIOHandler = { getManager: jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(null) }) };
       const p = makePrisma();
@@ -2161,9 +2374,55 @@ describe('registerMessagesAdvancedRoutes', () => {
   describe('PUT edit message - safeParse validation failure', () => {
     const getEditHandler = (f: any) => getHandler(f, 'PUT', '/conversations/:id/messages/:messageId');
 
-    it('returns 400 when body content is empty string (safeParse fails)', async () => {
-      // EditMessageBodySchema uses z.string().min(1) for content
-      // Sending content: '' triggers safeParse failure → branch 0[0] covered
+    it('returns 400 when body content exceeds the max length (safeParse fails)', async () => {
+      // EditMessageBodySchema allows empty content (attachment caption removal)
+      // but still caps length at 10 000. An over-long content triggers a
+      // safeParse failure → the 'Validation error' branch is covered.
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'x'.repeat(10_001) },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(mockSendBadRequest).toHaveBeenCalledWith(
+        reply,
+        'Validation error',
+        expect.objectContaining({ message: expect.any(String) })
+      );
+    });
+
+    it('accepts empty content when the message has attachments (caption removal)', async () => {
+      // Parity with the socket edit path: clearing a caption on an attachment
+      // message is allowed. The attachment-aware check is the source of truth.
+      prisma.message.findFirst.mockResolvedValue(
+        makeExistingMessage({ attachments: [{ id: 'att-1' }] })
+      );
+      prisma.message.update.mockResolvedValue({
+        id: MSG_ID,
+        content: '',
+        validatedMentions: [],
+        translations: null,
+      });
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: '' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(mockSendBadRequest).not.toHaveBeenCalled();
+      expect(mockSendSuccess).toHaveBeenCalled();
+    });
+
+    it('still rejects empty content when the message has no attachments', async () => {
+      prisma.message.findFirst.mockResolvedValue(
+        makeExistingMessage({ attachments: [] })
+      );
+
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
         body: { content: '' },
@@ -2174,8 +2433,7 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       expect(mockSendBadRequest).toHaveBeenCalledWith(
         reply,
-        'Validation error',
-        expect.objectContaining({ message: expect.any(String) })
+        expect.stringContaining('empty')
       );
     });
   });

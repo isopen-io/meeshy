@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class DraftStoreReplyTests: XCTestCase {
 
     private static let suiteName = "DraftStoreReplyTests"

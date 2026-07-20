@@ -9,7 +9,6 @@ import path from 'path';
 import os from 'os';
 import { spawn } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
-import { parseFile } from 'music-metadata';
 import { PDFParse } from 'pdf-parse';
 import * as ffmpeg from 'fluent-ffmpeg';
 import { createImageThumbnail, thumbnailPathFor, createResponsiveVariants, variantPathFor } from './thumbnail';
@@ -18,6 +17,19 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 
 // Logger dédié pour MetadataManager
 const logger = enhancedLogger.child({ module: 'MetadataManager' });
+
+// music-metadata est ESM-only depuis v8 ; le gateway compile en CommonJS, donc un
+// require() statique casse (ERR_REQUIRE_ESM). On charge via import() dynamique, masqué
+// à tsc (sinon downlevelé en require) par le constructeur Function. Le seam reste
+// injectable pour les tests via `musicMetadataLoader.parseFile`.
+type MusicMetadataModule = typeof import('music-metadata');
+export const musicMetadataLoader: { parseFile?: MusicMetadataModule['parseFile'] } = {};
+const importMusicMetadata = new Function('return import("music-metadata")') as () => Promise<MusicMetadataModule>;
+async function resolveParseFile(): Promise<MusicMetadataModule['parseFile']> {
+  if (musicMetadataLoader.parseFile) return musicMetadataLoader.parseFile;
+  const mm = await importMusicMetadata();
+  return mm.parseFile;
+}
 
 
 export interface AudioMetadata {
@@ -462,6 +474,7 @@ export class MetadataManager {
 
       // Tenter d'extraire avec music-metadata d'abord
       try {
+        const parseFile = await resolveParseFile();
         const parsedMetadata = await parseFile(fullPath);
         const format = parsedMetadata.format;
 

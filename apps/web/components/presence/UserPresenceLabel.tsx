@@ -2,13 +2,7 @@
 
 import { memo, type ReactNode } from 'react';
 import { useLiveUserStatus } from '@/hooks/use-live-user-status';
-import type { PresenceSource, UserStatus } from '@/lib/user-status';
-
-const dotColors: Record<UserStatus, string> = {
-  online: 'bg-green-500 animate-pulse',
-  away: 'bg-orange-400',
-  offline: 'bg-gray-400',
-};
+import { PRESENCE_DOT_CLASS, type PresenceSource, type UserStatus } from '@/lib/user-status';
 
 interface UserPresenceLabelProps {
   userId?: string;
@@ -36,13 +30,19 @@ export const UserPresenceLabel = memo(function UserPresenceLabel({
 
   const labels: Record<UserStatus, string> = {
     online: t('status.online'),
+    recent: t('status.recent', { defaultValue: 'Actif récemment' }),
     away: t('status.away', { defaultValue: 'Absent' }),
     offline: t('status.offline'),
   };
 
+  // Au-dela de 30min (offline) : plus aucune info de presence, sauf texte custom.
+  if (status === 'offline' && !children) return null;
+
   return (
     <div className={`flex items-center space-x-2 ${className ?? ''}`}>
-      <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${dotColors[status]}`} />
+      {status !== 'offline' && (
+        <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full ${PRESENCE_DOT_CLASS[status]}`} />
+      )}
       <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 font-medium">
         {children ?? labels[status]}
       </span>

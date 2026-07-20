@@ -13,7 +13,7 @@ export const AnalyticsMessageTypesQuerySchema = z.object({
 export type AnalyticsMessageTypesQuery = z.infer<typeof AnalyticsMessageTypesQuerySchema>;
 
 export const AnalyticsLanguageDistQuerySchema = z.object({
-  limit: z.string().transform(Number).default('5'),
+  limit: z.string().transform(Number).prefault('5'),
 });
 
 export type AnalyticsLanguageDistQuery = z.infer<typeof AnalyticsLanguageDistQuerySchema>;
@@ -29,8 +29,8 @@ export type AnalyticsKpisQuery = z.infer<typeof AnalyticsKpisQuerySchema>;
 // ---------------------------------------------------------------------------
 
 export const AnonymousUsersQuerySchema = z.object({
-  offset: z.string().transform(Number).default('0'),
-  limit: z.string().transform(Number).default('20'),
+  offset: z.string().transform(Number).prefault('0'),
+  limit: z.string().transform(Number).prefault('20'),
   search: z.string().optional(),
   status: z.enum(['active', 'inactive']).optional(),
 });
@@ -48,8 +48,8 @@ export const BroadcastIdParamSchema = z.object({
 export type BroadcastIdParam = z.infer<typeof BroadcastIdParamSchema>;
 
 export const BroadcastsListQuerySchema = z.object({
-  offset: z.string().transform(Number).default('0'),
-  limit: z.string().transform(Number).pipe(z.number().min(1).max(100)).default('20'),
+  offset: z.string().transform(Number).prefault('0'),
+  limit: z.string().transform(Number).pipe(z.number().min(1).max(100)).prefault('20'),
   status: z.string().optional(),
 });
 
@@ -60,7 +60,7 @@ export const CreateBroadcastBodySchema = z.object({
   subject: z.string(),
   body: z.string(),
   sourceLanguage: z.string(),
-  targeting: z.record(z.unknown())
+  targeting: z.record(z.string(), z.unknown())
     .refine(
       (t) => { try { return JSON.stringify(t).length <= 32 * 1024; } catch { return false; } },
       { message: 'targeting exceeds 32KB serialized' }
@@ -75,7 +75,7 @@ export const UpdateBroadcastBodySchema = z.object({
   subject: z.string().optional(),
   body: z.string().optional(),
   sourceLanguage: z.string().optional(),
-  targeting: z.record(z.unknown())
+  targeting: z.record(z.string(), z.unknown())
     .refine(
       (t) => { try { return JSON.stringify(t).length <= 32 * 1024; } catch { return false; } },
       { message: 'targeting exceeds 32KB serialized' }
@@ -90,8 +90,8 @@ export type UpdateBroadcastBody = z.infer<typeof UpdateBroadcastBodySchema>;
 // ---------------------------------------------------------------------------
 
 export const InvitationsListQuerySchema = z.object({
-  offset: z.string().transform(Number).default('0'),
-  limit: z.string().transform(Number).pipe(z.number().max(100)).default('20'),
+  offset: z.string().transform(Number).prefault('0'),
+  limit: z.string().transform(Number).pipe(z.number().max(100)).prefault('20'),
   status: z.string().optional(),
   communityId: mongoId.optional(),
   senderId: mongoId.optional(),
@@ -117,7 +117,7 @@ export type UpdateInvitationBody = z.infer<typeof UpdateInvitationBodySchema>;
 
 export const LanguageStatsQuerySchema = z.object({
   period: z.enum(['7d', '30d', '90d']).default('30d'),
-  limit: z.string().transform(Number).default('10'),
+  limit: z.string().transform(Number).prefault('10'),
 });
 
 export type LanguageStatsQuery = z.infer<typeof LanguageStatsQuerySchema>;
@@ -130,7 +130,7 @@ export const LanguageTimelineQuerySchema = z.object({
 export type LanguageTimelineQuery = z.infer<typeof LanguageTimelineQuerySchema>;
 
 export const TranslationAccuracyQuerySchema = z.object({
-  limit: z.string().transform(Number).default('10'),
+  limit: z.string().transform(Number).prefault('10'),
 });
 
 export type TranslationAccuracyQuery = z.infer<typeof TranslationAccuracyQuerySchema>;
@@ -162,7 +162,7 @@ export const RankingsQuerySchema = z.object({
   limit: z
     .string()
     .transform(Number)
-    .default('50')
+    .prefault('50')
     .pipe(z.number().min(1).max(100)),
 });
 

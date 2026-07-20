@@ -124,7 +124,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
         await fs.rename(sourcePath, destPath);
       } catch {
         await fs.copyFile(sourcePath, destPath);
-        await fs.unlink(sourcePath).catch(() => {});
+        await fs.unlink(sourcePath).catch((err) => logger.debug('tus: temp file unlink failed after copy', { sourcePath, err }));
       }
 
       const fileSize = upload.size || 0;
@@ -183,7 +183,11 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       }
 
       const uploadContext = upload.metadata?.uploadcontext;
-      const isPostMedia = uploadContext === 'post' || uploadContext === 'story' || uploadContext === 'status';
+      // Les commentaires réutilisent PostMedia (FK `commentId`) — même pipeline
+      // d'upload/transcription/traduction que les posts. Le média est créé en
+      // pending (postId=null, commentId=null) puis lié au commentaire à sa création.
+      const isPostMedia = uploadContext === 'post' || uploadContext === 'story'
+        || uploadContext === 'status' || uploadContext === 'comment';
 
       let recordId: string;
       if (isPostMedia) {

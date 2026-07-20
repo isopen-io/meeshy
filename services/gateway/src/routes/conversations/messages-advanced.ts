@@ -17,6 +17,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { SERVER_EVENTS, ROOMS, type SocketIOMessage } from '@meeshy/shared/types/socketio-events';
+import { emitConversationPreviewUpdate } from '../../socketio/emitConversationPreviewUpdate';
 import type {
   ConversationParams,
   EditMessageBody
@@ -26,8 +27,12 @@ import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalE
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 
+// Editing allows empty content (unlike sending): the message may carry
+// attachments whose caption is being cleared. The attachment-aware emptiness
+// check below is the single source of truth, in parity with the socket edit
+// path (SocketMessageEditSchema + MessageHandler.handleMessageEdit).
 const EditMessageBodySchema = z.object({
-  content: CommonSchemas.messageContent,
+  content: z.string().max(10000, 'Message trop long'),
   originalLanguage: CommonSchemas.language.optional(),
 });
 // Logger dédié pour messages-advanced
@@ -122,7 +127,8 @@ export function registerMessagesAdvancedRoutes(
         include: {
           sender: {
             select: { id: true, userId: true, role: true }
-          }
+          },
+          attachments: { select: { id: true } }
         }
       });
 
@@ -173,8 +179,11 @@ export function registerMessagesAdvancedRoutes(
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier ce message');
       }
 
-      // Validation du contenu
-      if (!content || content.trim().length === 0) {
+      // Validation du contenu : le contenu vide n'est autorisé que si le
+      // message porte des pièces jointes (suppression de légende). Parité avec
+      // le chemin socket (MessageHandler.handleMessageEdit).
+      const hasAttachments = existingMessage.attachments && existingMessage.attachments.length > 0;
+      if ((!content || content.trim().length === 0) && !hasAttachments) {
         return sendBadRequest(reply, 'Message content cannot be empty');
       }
 
@@ -414,11 +423,14 @@ export function registerMessagesAdvancedRoutes(
         // Utiliser les instances déjà disponibles dans le contexte Fastify
         const translationService = fastify.translationService;
 
-        // Invalider les traductions existantes (vider le JSON translations)
+        // Invalider les traductions en base ET dans le cache mémoire LRU avant
+        // de lancer la retraduction — sinon _processRetranslationAsync peut
+        // servir l'ancien résultat caché au lieu de calculer le nouveau.
         await prisma.message.update({
           where: { id: messageId },
           data: { translations: null }
         });
+        translationService.invalidateCacheForMessage(messageId);
 
         // Créer un objet message pour la retraduction (avec contenu traité incluant tracking links)
         const messageForRetranslation = {
@@ -446,7 +458,7 @@ export function registerMessagesAdvancedRoutes(
       );
 
       conversationMessageStatsService.onMessageEdited(
-        prisma, conversationId, userId, existingMessage.content ?? '', processedContent
+        prisma, conversationId, existingMessage.sender?.userId ?? existingMessage.senderId, existingMessage.content ?? '', processedContent
       ).catch(err => logger.error('[MESSAGES] Stats edit update error:', err));
 
       // Construire la réponse avec mentions validées (PAS de traductions - elles arriveront via socket).
@@ -475,6 +487,12 @@ export function registerMessagesAdvancedRoutes(
           const room = ROOMS.conversation(conversationId);
           socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse as unknown as SocketIOMessage);
           logger.info(`Edit - Broadcasted message:edited to room ${room}`);
+          // Refresh the last-message preview for list-screen participants —
+          // parity with the WS edit path and broadcastNewMessage.
+          await emitConversationPreviewUpdate(
+            prisma, socketIOManager.getIO(), conversationId, userId,
+            (err) => logger.warn('conversation preview fanout (advanced edit) failed', err as Error)
+          );
         }
       } catch (socketError) {
         logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
@@ -614,14 +632,15 @@ export function registerMessagesAdvancedRoutes(
       });
 
       conversationMessageStatsService.onMessageDeleted(
-        prisma, conversationId, existingMessage.sender?.userId ?? '', existingMessage.content ?? '',
+        prisma, conversationId, existingMessage.sender?.userId ?? existingMessage.senderId, existingMessage.content ?? '',
         (existingMessage.attachments ?? []).map(a => {
           const mime = a.mimeType ?? '';
           if (mime.startsWith('image/')) return 'image';
           if (mime.startsWith('audio/')) return 'audio';
           if (mime.startsWith('video/')) return 'video';
           return 'file';
-        })
+        }),
+        existingMessage.messageType || 'text'
       ).catch(err => logger.error('[MESSAGES] Stats delete update error:', err));
 
       // Invalider et recalculer les stats
@@ -641,6 +660,13 @@ export function registerMessagesAdvancedRoutes(
             messageId,
             conversationId
           });
+          // Refresh the last-message preview for list-screen participants:
+          // deleting the latest message changes their row, which
+          // MESSAGE_DELETED (conversation room only) never tells them.
+          await emitConversationPreviewUpdate(
+            prisma, socketIOManager.getIO(), conversationId, userId,
+            (err) => logger.warn('conversation preview fanout (advanced delete) failed', err as Error)
+          );
         }
       } catch (socketError) {
         logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
@@ -754,13 +780,15 @@ export function registerMessagesAdvancedRoutes(
         }
       }
 
-      // Mettre à jour le contenu du message
+      // Mettre à jour le contenu du message (invalide aussi les traductions existantes :
+      // la retraduction ci-dessous les recalcule, parité avec PUT /conversations/:id/messages/:messageId)
       const updatedMessage = await prisma.message.update({
         where: { id: messageId },
         data: {
           content: content.trim(),
           isEdited: true,
-          editedAt: new Date()
+          editedAt: new Date(),
+          translations: null
         },
         include: {
           sender: {
@@ -776,10 +804,52 @@ export function registerMessagesAdvancedRoutes(
         }
       });
 
-      // Note: Les traductions existantes restent inchangées
-      // Le service de traduction sera notifié si nécessaire via WebSocket
+      // Déclencher la retraduction automatique du message modifié (parité avec le sibling PUT)
+      try {
+        const translationService = fastify.translationService;
 
-      return sendSuccess(reply, updatedMessage);
+        const messageForRetranslation = {
+          id: messageId,
+          content: content.trim(),
+          originalLanguage: message.originalLanguage,
+          conversationId: message.conversationId,
+          senderId: message.senderId
+        };
+
+        await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
+      } catch (translationError) {
+        logger.error('Erreur lors de la retraduction', translationError);
+        // Ne pas faire échouer l'édition si la retraduction échoue
+      }
+
+      const messageResponse = {
+        ...updatedMessage,
+        conversationId: message.conversationId,
+        translations: transformTranslationsToArray(
+          messageId,
+          (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+        )
+      };
+
+      // Diffuser la mise à jour via Socket.IO (parité avec le sibling PUT)
+      try {
+        const socketIOManager = socketIOHandler.getManager();
+        if (socketIOManager) {
+          const room = ROOMS.conversation(message.conversationId);
+          socketIOManager.getIO().to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, messageResponse as unknown as SocketIOMessage);
+          // Refresh the last-message preview for list-screen participants —
+          // parity with the WS edit path and broadcastNewMessage.
+          await emitConversationPreviewUpdate(
+            prisma, socketIOManager.getIO(), message.conversationId, userId,
+            (err) => logger.warn('conversation preview fanout (advanced edit alt) failed', err as Error)
+          );
+        }
+      } catch (socketError) {
+        logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', socketError);
+        // Ne pas faire échouer l'édition si la diffusion échoue
+      }
+
+      return sendSuccess(reply, messageResponse);
 
     } catch (error) {
       logger.error('Error updating message', error);
@@ -1012,14 +1082,21 @@ export function registerMessagesAdvancedRoutes(
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(prisma);
 
-      const reaction = await reactionService.addReaction({
+      const addResult = await reactionService.addReaction({
         messageId,
         emoji,
         participantId: currentParticipant.id,
       });
 
-      if (!reaction) {
+      if (!addResult) {
         return sendInternalError(reply, 'Failed to add reaction');
+      }
+
+      if (addResult.unchanged) {
+        // Idempotent no-op: the participant already had exactly this emoji.
+        // Skip the REACTION_ADDED broadcast (nothing changed) but still report
+        // success. Parity with the socket `reaction:add` handler.
+        return sendSuccess(reply, { added: true, emoji });
       }
 
       // Broadcast via Socket.IO to all conversation participants
@@ -1036,6 +1113,18 @@ export function registerMessagesAdvancedRoutes(
           const socketIOManager = socketIOHandler.getManager?.();
           const io = socketIOHandler.getManager()?.getIO();
           if (io) {
+            // Swap 1-réaction-par-user : l'ancien emoji part avant que le
+            // nouveau arrive (agrégations recalculées par event).
+            for (const removedEmoji of addResult.replacedEmojis) {
+              const removeEvent = await reactionService.createUpdateEvent(
+                messageId,
+                removedEmoji,
+                'remove',
+                currentParticipant.id,
+                conversationId,
+              );
+              io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
+            }
             io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
           }
         }
@@ -1059,8 +1148,8 @@ export function registerMessagesAdvancedRoutes(
       if (error.message?.includes('not a member') || error.message?.includes('not a participant')) {
         return sendForbidden(reply, 'Access denied to this conversation');
       }
-      if (error.message?.includes('Maximum')) {
-        return sendBadRequest(reply, error.message);
+      if (error.message === 'Cannot react to a system message') {
+        return sendBadRequest(reply, 'Cannot react to a system message');
       }
 
       return sendInternalError(reply, 'Failed to add reaction');

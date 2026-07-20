@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-final class MockPreferenceService: PreferenceServiceProviding {
+final class MockPreferenceService: PreferenceServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 
@@ -86,7 +86,7 @@ final class MockPreferenceService: PreferenceServiceProviding {
 
     nonisolated func getCategories() async throws -> [ConversationCategory] {
         await MainActor.run { getCategoriesCallCount += 1 }
-        return try await MainActor.run { try getCategoriesResult.get() }
+        return try getCategoriesResult.get()
     }
 
     nonisolated func getConversationPreferences(conversationId: String) async throws -> APIConversationPreferences {
@@ -94,7 +94,7 @@ final class MockPreferenceService: PreferenceServiceProviding {
             getConversationPreferencesCallCount += 1
             lastGetConversationPreferencesId = conversationId
         }
-        return try await MainActor.run { try getConversationPreferencesResult.get() }
+        return try getConversationPreferencesResult.get()
     }
 
     nonisolated func updateConversationPreferences(conversationId: String, request: UpdateConversationPreferencesRequest) async throws {
@@ -103,7 +103,7 @@ final class MockPreferenceService: PreferenceServiceProviding {
             lastUpdateConversationPreferencesId = conversationId
             lastUpdateConversationPreferencesRequest = request
         }
-        try await MainActor.run { try updateConversationPreferencesResult.get() }
+        try updateConversationPreferencesResult.get()
     }
 
     nonisolated func patchCategory(id: String, isExpanded: Bool) async throws {
@@ -112,12 +112,12 @@ final class MockPreferenceService: PreferenceServiceProviding {
             lastPatchCategoryId = id
             lastPatchCategoryIsExpanded = isExpanded
         }
-        try await MainActor.run { try patchCategoryResult.get() }
+        try patchCategoryResult.get()
     }
 
     nonisolated func getAllPreferences() async throws -> UserPreferences {
         await MainActor.run { getAllPreferencesCallCount += 1 }
-        return try await MainActor.run { try getAllPreferencesResult.get() }
+        return try getAllPreferencesResult.get()
     }
 
     nonisolated func patchPreferences<T: Encodable>(category: PreferenceCategory, body: T) async throws {
@@ -125,7 +125,7 @@ final class MockPreferenceService: PreferenceServiceProviding {
             patchPreferencesCallCount += 1
             lastPatchPreferencesCategory = category
         }
-        try await MainActor.run { try patchPreferencesResult.get() }
+        try patchPreferencesResult.get()
     }
 
     nonisolated func resetPreferences(category: PreferenceCategory) async throws {
@@ -133,7 +133,7 @@ final class MockPreferenceService: PreferenceServiceProviding {
             resetPreferencesCallCount += 1
             lastResetPreferencesCategory = category
         }
-        try await MainActor.run { try resetPreferencesResult.get() }
+        try resetPreferencesResult.get()
     }
 
     nonisolated func createCategory(name: String, color: String?, icon: String?) async throws -> ConversationCategory {
@@ -143,12 +143,12 @@ final class MockPreferenceService: PreferenceServiceProviding {
             lastCreateCategoryColor = color
             lastCreateCategoryIcon = icon
         }
-        return try await MainActor.run { try createCategoryResult.get() }
+        return try createCategoryResult.get()
     }
 
     nonisolated func getMyConversationTags() async throws -> [String] {
         await MainActor.run { getMyConversationTagsCallCount += 1 }
-        return try await MainActor.run { try getMyConversationTagsResult.get() }
+        return try getMyConversationTagsResult.get()
     }
 
     // MARK: - Cache-first overrides

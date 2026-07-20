@@ -62,6 +62,7 @@ import { useMessageActions } from '@/hooks/conversations/useMessageActions';
 import { useTranslationState } from '@/hooks/conversations/use-translation-state';
 import { useParticipants } from '@/hooks/conversations/use-participants';
 import { useVideoCall } from '@/hooks/conversations/use-video-call';
+import { useCallRetryToast } from '@/hooks/conversations/use-call-retry-toast';
 
 // Dynamic imports (bundle-dynamic-imports) - chargés uniquement quand nécessaires
 const AttachmentGallery = dynamic(
@@ -192,6 +193,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const {
     addTranslatingState,
     removeTranslatingState,
+    clearMessageTranslatingState,
     isTranslating,
     usedLanguages,
     addUsedLanguages,
@@ -206,6 +208,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const { startCall: handleStartCall } = useVideoCall({
     conversation: selectedConversation,
   });
+
+  // « Réessayer » après un échec transitoire d'appel (failed/connectionLost) —
+  // toast actionnable qui re-initie le même type d'appel pour cette conversation.
+  useCallRetryToast(selectedConversation?.id ?? null, handleStartCall);
 
   // États locaux
   const [selectedLanguage, setSelectedLanguage] = useState('fr');
@@ -232,8 +238,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   // Activer les notifications push FCM
   useFCMNotifications({ autoSyncToken: true });
 
-  // Sync Socket.IO events avec le cache React Query
-  useSocketCacheSync({ conversationId: effectiveSelectedId, enabled: !!effectiveSelectedId });
+  // Sync Socket.IO events avec le cache React Query — reste actif sur la vue
+  // liste (sans sélection) pour que lastMessage/unread et les caches de messages
+  // continuent d'être alimentés par les événements socket.
+  useSocketCacheSync({ conversationId: effectiveSelectedId, enabled: true });
   useInvalidateOnReconnect();
   useAutoRetryFailedMessages();
 
@@ -316,6 +324,13 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     [removeTranslatingState, addUsedLanguages]
   );
 
+  const onTranslationFailed = useCallback(
+    (data: { messageId: string }) => {
+      clearMessageTranslatingState(data.messageId);
+    },
+    [clearMessageTranslatingState]
+  );
+
   const onUserTyping = useCallback(
     (userId: string, _username: string, _isTyping: boolean, typingConversationId: string) => {
       if (!user || userId === user.id) return;
@@ -331,6 +346,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       currentUser: user || undefined,
       onUserTyping,
       onTranslation,
+      onTranslationFailed,
     });
 
   // Typing indicators
@@ -771,7 +787,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       if (failedMsg.attachmentIds.length > 0) setAttachmentIds(failedMsg.attachmentIds);
       if (failedMsg.replyTo) useReplyStore.getState().setReplyingTo(failedMsg.replyTo as unknown);
       setTimeout(() => messageComposerRef.current?.focus(), 100);
-      toast.info(t('messageRestored') || 'Message restauré.');
+      toast.info(t('bubbleStream.messageRestored', 'Message restored in composer'));
     },
     [setNewMessage, setAttachmentIds, t]
   );

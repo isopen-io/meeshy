@@ -23,7 +23,7 @@ import {
 
 // Schémas de validation locaux pour les endpoints admin
 const verifyEmailSchema = z.object({
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   verified: z.boolean(),
   reason: z.string().optional()
 });
@@ -222,12 +222,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { statusCode: 201, message: 'User created successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.errors
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -302,12 +297,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: 'User updated successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.errors
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -379,12 +369,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: `User role updated to ${validatedData.role}` });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.errors
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -452,12 +437,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: validatedData.isActive ? 'User activated' : 'User deactivated' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.errors
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -515,12 +495,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, { message: 'Password reset successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.errors
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -763,12 +738,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Email verified' : 'Email unverified' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.errors
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -832,12 +802,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Phone verified' : 'Phone unverified' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.errors
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -906,12 +871,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: `${validatedData.consentType} ${validatedData.enabled ? 'enabled' : 'disabled'}` });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.errors
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -975,12 +935,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Age verified' : 'Age unverified' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.errors
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -1488,6 +1443,83 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     } catch (error) {
       fastify.log.error({ err: error }, 'Error fetching conversation participants');
       return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation participants' });
+    }
+  });
+
+  /**
+   * GET /admin/conversations/:conversationId/messages - Paginated messages of a
+   * conversation, newest first (for the messages modal in the admin user fiche).
+   * Deleted messages are included (moderation view) and flagged via deletedAt.
+   * Requires canViewUsers permission.
+   */
+  fastify.get<{
+    Params: { conversationId: string };
+    Querystring: { offset?: string; limit?: string };
+  }>('/admin/conversations/:conversationId/messages', {
+    preHandler: [fastify.authenticate, requireUserViewAccess]
+  }, async (request, reply) => {
+    try {
+      const { conversationId } = request.params;
+      const { offset = '0', limit } = request.query;
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
+
+      const conversation = await fastify.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { id: true }
+      });
+      if (!conversation) {
+        return sendNotFound(reply, 'Conversation non trouvée');
+      }
+
+      const where = { conversationId };
+      const [messages, total] = await Promise.all([
+        fastify.prisma.message.findMany({
+          where,
+          select: {
+            id: true,
+            content: true,
+            originalLanguage: true,
+            messageType: true,
+            messageSource: true,
+            isEdited: true,
+            editedAt: true,
+            deletedAt: true,
+            replyToId: true,
+            createdAt: true,
+            sender: {
+              select: {
+                id: true,
+                userId: true,
+                type: true,
+                displayName: true,
+                avatar: true,
+                nickname: true,
+                user: { select: { id: true, username: true, displayName: true, avatar: true } }
+              }
+            },
+            _count: { select: { attachments: true } }
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.message.count({ where })
+      ]);
+
+      const data = messages.map(({ _count, ...rest }) => ({
+        ...rest,
+        attachmentCount: _count?.attachments ?? 0
+      }));
+
+      return sendPaginatedSuccess(reply, data, {
+        total,
+        offset: offsetNum,
+        limit: limitNum,
+        hasMore: offsetNum + messages.length < total
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error fetching conversation messages');
+      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation messages' });
     }
   });
 }

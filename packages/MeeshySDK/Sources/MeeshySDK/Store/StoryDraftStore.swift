@@ -39,10 +39,10 @@ public final class StoryDraftStore: @unchecked Sendable {
             return disk
         }
         Logger.cache.warning("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory")
-        return (try? DatabaseQueue()) ?? {
-            // Last-resort path; `DatabaseQueue()` is trivially constructible.
-            try! DatabaseQueue()  // swiftlint:disable:this force_try
-        }()
+        guard let mem = try? DatabaseQueue() else {
+            fatalError("[StoryDraftStore] Cannot create in-memory GRDB queue — out of memory")
+        }
+        return mem
     }
 
     private func createSchema() throws {
@@ -122,7 +122,6 @@ public final class StoryDraftStore: @unchecked Sendable {
         audioURLs: [String: URL]
     ) {
         ensureMediaDir()
-        let fm = FileManager.default
 
         do {
             try db.write { db in
@@ -138,9 +137,12 @@ public final class StoryDraftStore: @unchecked Sendable {
         for (id, image) in images {
             let fileName = "\(id).jpg"
             let dest = mediaDir.appendingPathComponent(fileName)
-            if let data = image.jpegData(compressionQuality: 0.85) {
-                try? data.write(to: dest)
+            guard let data = image.jpegData(compressionQuality: 0.85) else { continue }
+            do {
+                try data.write(to: dest)
                 entries.append((id, "image", fileName))
+            } catch {
+                Logger.cache.error("[StoryDraftStore] Écriture image échouée (\(fileName)): \(error.localizedDescription)")
             }
         }
 
@@ -148,18 +150,18 @@ public final class StoryDraftStore: @unchecked Sendable {
             let ext = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
             let fileName = "\(id).\(ext)"
             let dest = mediaDir.appendingPathComponent(fileName)
-            try? fm.removeItem(at: dest)
-            try? fm.copyItem(at: url, to: dest)
-            entries.append((id, "video", fileName))
+            if persistCopy(from: url, to: dest) {
+                entries.append((id, "video", fileName))
+            }
         }
 
         for (id, url) in audioURLs {
             let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
             let fileName = "\(id).\(ext)"
             let dest = mediaDir.appendingPathComponent(fileName)
-            try? fm.removeItem(at: dest)
-            try? fm.copyItem(at: url, to: dest)
-            entries.append((id, "audio", fileName))
+            if persistCopy(from: url, to: dest) {
+                entries.append((id, "audio", fileName))
+            }
         }
 
         do {
@@ -173,6 +175,30 @@ public final class StoryDraftStore: @unchecked Sendable {
             }
         } catch {
             Logger.cache.error("[StoryDraftStore] Erreur saveMedia: \(error.localizedDescription)")
+        }
+    }
+    /// Copies `source` into the store at `dest`. Returns `true` when `dest`
+    /// holds a valid file afterwards (only then may the caller register the
+    /// DB row — a row without file becomes a « média perdu » at next resume).
+    ///
+    /// Après `restoreDraft()`, les URLs re-sauvées par l'autosave pointent
+    /// DÉJÀ dans le media dir : supprimer `dest` avant copie détruisait la
+    /// source (source == dest) et le média était perdu au resume suivant.
+    private func persistCopy(from source: URL, to dest: URL) -> Bool {
+        let fm = FileManager.default
+        if source.standardizedFileURL.path == dest.standardizedFileURL.path {
+            return fm.fileExists(atPath: dest.path)
+        }
+        guard fm.fileExists(atPath: source.path) else {
+            return fm.fileExists(atPath: dest.path)
+        }
+        try? fm.removeItem(at: dest)
+        do {
+            try fm.copyItem(at: source, to: dest)
+            return true
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Copie média échouée (\(source.lastPathComponent)): \(error.localizedDescription)")
+            return fm.fileExists(atPath: dest.path)
         }
     }
     #endif
@@ -335,6 +361,38 @@ public final class StoryDraftStore: @unchecked Sendable {
     }
 
     // MARK: - Clear
+
+    // MARK: - Command history blob (E4 inc.2)
+
+    /// E4 inc.2 — historique undo/redo du composer en blob OPAQUE : le store
+    /// core ne peut pas dépendre de `CommandStackSnapshot` (MeeshyUI), il
+    /// persiste des bytes. Rangé dans `story_draft_meta` (base64, colonne
+    /// TEXT existante — zéro migration) → purgé avec le draft par `clear()`.
+    public func saveCommandHistoryBlob(_ data: Data) {
+        do {
+            try db.write { db in
+                try db.execute(
+                    sql: "INSERT OR REPLACE INTO story_draft_meta (key, value) VALUES ('command_history', ?)",
+                    arguments: [data.base64EncodedString()])
+            }
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Erreur saveCommandHistoryBlob: \(error.localizedDescription)")
+        }
+    }
+
+    public func loadCommandHistoryBlob() -> Data? {
+        let base64: String?
+        do {
+            base64 = try db.read { db in
+                try String.fetchOne(db, sql: "SELECT value FROM story_draft_meta WHERE key = 'command_history'")
+            }
+        } catch {
+            Logger.cache.error("[StoryDraftStore] Erreur loadCommandHistoryBlob: \(error.localizedDescription)")
+            return nil
+        }
+        guard let base64 else { return nil }
+        return Data(base64Encoded: base64)
+    }
 
     public func clear() {
         clearMediaDir()

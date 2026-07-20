@@ -33,20 +33,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // recorded during *previous* sessions here.
         //
         // P3 wire-up (Sprint 4):
-        // - `StoryFilteredLayer.preheatAllPipelines()` compiles every Metal
-        //   compute pipeline state process-wide so the composer / reader
-        //   never pay the compile cost on the first user-visible frame.
         // - `MeeshyMetricsSubscriber.shared.register()` attaches to
         //   `MXMetricManager` so the `MXSignpostMetric` entries produced by
         //   `TimelineSignposter` are aggregated into the rolling 24h window.
         //   Without this call the docstring promise of "automatic
         //   aggregation" is vacuous: the signposts appear in Instruments
-        //   but no payload ever lands. Both calls are `@MainActor`-isolated
-        //   and idempotent — safe to invoke alongside the crash observer
-        //   install in the same MainActor hop.
+        //   but no payload ever lands. It is `@MainActor`-isolated and
+        //   idempotent — safe to invoke alongside the crash observer install
+        //   in the same MainActor hop.
         Task { @MainActor in
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
-            StoryFilteredLayer.preheatAllPipelines()
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
             // P1.5 — surface DependencyContainer boot diagnostics now that
@@ -63,6 +59,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         UNUserNotificationCenter.current().delegate = self
         registerNotificationCategories()
         BackgroundTaskManager.shared.registerTasks()
+
+        // VoIP push registration MUST happen unconditionally, on every
+        // process launch (including background launches iOS triggers to
+        // deliver a VoIP push itself), per Apple's PushKit contract —
+        // PKPushRegistry has to exist with its delegate wired before a VoIP
+        // push can even reach `didReceiveIncomingPushWith`, let alone report
+        // it to CallKit in time. This used to live ONLY inside a SwiftUI
+        // `.task` gated on `authManager.isAuthenticated` (MeeshyApp.swift) —
+        // on a fresh install (not yet logged in) the registry was never
+        // created at all, and even once logged in, a `.task` isn't a
+        // reliable place for launch-time OS contracts. `register()` is
+        // idempotent (no-ops if already registered), so this is safe
+        // alongside the existing call in MeeshyApp.swift's push bootstrap.
+        Task { @MainActor in
+            VoIPPushManager.shared.register()
+        }
 
         // Masquer le spinner natif d'iOS pour les pull-to-refresh
         // SwiftUI `.refreshable`. `.tint(.clear)` au site d'utilisation
@@ -127,6 +139,35 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
+        // Sonnerie fantôme — le gateway envoie une push background `call_cancel`
+        // quand l'appel se termine sans avoir été décroché : si CallKit sonne
+        // encore pour ce callId (socket jamais monté, le fanout call:ended ne
+        // nous a pas atteints), on coupe. Gardes FSM dans CallManager — un
+        // cancel tardif ne touche jamais un appel décroché.
+        if (userInfo["type"] as? String) == "call_cancel",
+           let cancelCallId = userInfo["callId"] as? String, !cancelCallId.isEmpty {
+            Logger.network.info("call_cancel silent push received (callId=\(cancelCallId, privacy: .public))")
+            Task { @MainActor in
+                CallManager.shared.endRingingFromCancellation(callId: cancelCallId)
+                completionHandler(.noData)
+            }
+            return
+        }
+
+        // Multi-device : un autre appareil du compte a décroché — pendant
+        // socketless de `call:already-answered` (voir sendCallCancellationPushes
+        // côté gateway pour le rationale réseau). Le device qui a décroché
+        // reçoit aussi cette push et l'ignore par garde FSM.
+        if (userInfo["type"] as? String) == "call_answered_elsewhere",
+           let answeredCallId = userInfo["callId"] as? String, !answeredCallId.isEmpty {
+            Logger.network.info("call_answered_elsewhere silent push received (callId=\(answeredCallId, privacy: .public))")
+            Task { @MainActor in
+                CallManager.shared.endRingingAnsweredElsewhere(callId: answeredCallId)
+                completionHandler(.noData)
+            }
+            return
+        }
+
         let unreadTotal = userInfo["unreadCount"] as? Int
         let convId = userInfo["conversationId"] as? String
         let convUnread = userInfo["conversationUnread"] as? Int

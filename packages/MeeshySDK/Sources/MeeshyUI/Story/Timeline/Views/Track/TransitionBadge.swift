@@ -40,11 +40,11 @@ public struct TransitionBadge: View, Equatable {
     }
 
     public var accessibilityComposed: String {
-        let kindLabel: String
-        switch kind {
-        case .crossfade: kindLabel = String(localized: "story.timeline.transition.kind.crossfade", bundle: .module)
-        case .dissolve:  kindLabel = String(localized: "story.timeline.transition.kind.dissolve", bundle: .module)
-        }
+        // Both kinds render identically (dissolve degrades to a crossfade
+        // opacity ramp — see ReaderTransitionResolver.liveRenderableTransition),
+        // so both are labeled as crossfade. Prevents VoiceOver announcing a
+        // "Dissolve" capability the app doesn't actually render.
+        let kindLabel = String(localized: "story.timeline.transition.kind.crossfade", bundle: .module)
         return "\(kindLabel) — \(String(format: "%.2f", duration))s"
     }
 
@@ -54,7 +54,7 @@ public struct TransitionBadge: View, Equatable {
                 .fill(MeeshyColors.warning)
                 .overlay(Diamond().stroke(Color.black.opacity(0.6), lineWidth: 1))
                 .shadow(color: MeeshyColors.warning.opacity(0.65), radius: isSelected ? 8 : 3)
-            Image(systemName: kind == .crossfade ? "arrow.triangle.2.circlepath" : "drop.fill")
+            Image(systemName: "arrow.triangle.2.circlepath")
                 .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(.black)
                 .accessibilityHidden(true)

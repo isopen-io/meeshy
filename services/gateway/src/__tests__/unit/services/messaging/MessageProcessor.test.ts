@@ -24,10 +24,12 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 const mockFindExistingTrackingLink = jest.fn() as jest.Mock<any>;
 const mockCreateTrackingLink = jest.fn() as jest.Mock<any>;
+const mockCollectContentTrackingLinks = jest.fn(async () => []) as jest.Mock<any>;
 jest.mock('../../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
     findExistingTrackingLink: (...a: any[]) => mockFindExistingTrackingLink(...a),
     createTrackingLink: (...a: any[]) => mockCreateTrackingLink(...a),
+    collectContentTrackingLinks: (...a: any[]) => mockCollectContentTrackingLinks(...a),
   })),
 }));
 
@@ -388,6 +390,23 @@ describe('MessageProcessor.saveMessage', () => {
     const msg = await processor.saveMessage({ ...baseData });
     expect(msgCreate).toHaveBeenCalledTimes(1);
     expect(msg).toHaveProperty('timestamp');
+  });
+
+  // Parité REST : le snapshot du message cité doit porter ses pièces jointes,
+  // sinon l'aperçu de citation est vide pour les messages reçus en temps réel.
+  it('demande les attachments du replyTo dans le create (aperçu de citation)', async () => {
+    await processor.saveMessage({ ...baseData, replyToId: 'orig-msg-id' });
+    const createArgs = msgCreate.mock.calls[0][0] as { include?: { replyTo?: { include?: Record<string, unknown> } } };
+    expect(createArgs.include?.replyTo?.include).toHaveProperty('attachments');
+  });
+
+  it('demande les attachments du replyTo dans le fallback dédup (findFirst)', async () => {
+    const cid = 'cid_55555555-5555-4555-8555-555555555555';
+    msgCreate.mockRejectedValueOnce(Object.assign(new Error('Unique constraint'), { code: 'P2002' }));
+    msgFindFirst.mockResolvedValue(makeMessage({ clientMessageId: cid }));
+    await processor.saveMessage({ ...baseData, clientMessageId: cid });
+    const findFirstArgs = msgFindFirst.mock.calls[0][0] as { include?: { replyTo?: { include?: Record<string, unknown> } } };
+    expect(findFirstArgs.include?.replyTo?.include).toHaveProperty('attachments');
   });
 
   it('uses provided encryptedContent + encryptionMetadata', async () => {
@@ -985,5 +1004,80 @@ describe('MessageProcessor — branch gap coverage', () => {
     await expect(processor.saveMessage({ ...baseData, content: '@alice' })).resolves.toBeDefined();
     // extractMentionsWithParticipants called with empty participants from catch
     expect(mockExtractMentionsWithParticipants).toHaveBeenCalledWith(expect.any(String), []);
+  });
+});
+
+// ── B.1/B.2 performance optimizations ─────────────────────────────────────
+
+describe('MessageProcessor — B.1/B.2 send path optimizations', () => {
+  let processor: MessageProcessor;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resetPrisma();
+    mockExtractMentions.mockReturnValue([]);
+    mockExtractMentionsWithParticipants.mockReturnValue([]);
+    mockResolveUsernames.mockResolvedValue(new Map());
+    mockValidateMentionPermissions.mockResolvedValue({ validUserIds: [] });
+    mockCreateMentions.mockResolvedValue(undefined);
+    mockAssociateAttachmentsToMessage.mockResolvedValue(undefined);
+    mockShouldProcess.mockReturnValue(false);
+    processor = makeProcessor();
+  });
+
+  describe('B.2 — processMentionsInDB short-circuit', () => {
+    it('skips getConversationParticipants when content has no @ and no mentionedUserIds', async () => {
+      await processor.saveMessage({ ...baseData, content: 'Hello world, no mentions here!' });
+      expect(partFindMany).not.toHaveBeenCalled();
+    });
+
+    it('skips participant lookup when content has no @ even with other special chars', async () => {
+      await processor.saveMessage({ ...baseData, content: 'Price is $100 & tax!' });
+      expect(partFindMany).not.toHaveBeenCalled();
+    });
+
+    it('calls getConversationParticipants when content contains @', async () => {
+      partFindMany.mockResolvedValue([]);
+      mockExtractMentionsWithParticipants.mockReturnValue([]);
+      await processor.saveMessage({ ...baseData, content: 'Hey @alice how are you?' });
+      expect(partFindMany).toHaveBeenCalled();
+    });
+
+    it('calls processMentionsInDB when explicit mentionedUserIds provided even without @', async () => {
+      mockValidateMentionPermissions.mockResolvedValue({ validUserIds: [SENDER_ID] });
+      userFindMany.mockResolvedValue([{ username: 'alice' }]);
+      msgUpdate.mockResolvedValue(makeMessage());
+      await processor.saveMessage({ ...baseData, content: 'A plain message', mentionedUserIds: [SENDER_ID] });
+      expect(mockValidateMentionPermissions).toHaveBeenCalled();
+    });
+
+    it('still resolves successfully when content has no @ (no DB round-trip)', async () => {
+      const result = await processor.saveMessage({ ...baseData, content: 'Simple message, no at-signs.' });
+      expect(result).toHaveProperty('id', MSG_ID);
+    });
+  });
+
+  describe('B.1 — trackingLinks update is fire-and-forget', () => {
+    it('resolves even when trackingLinks withTiming rejects', async () => {
+      const perfMock = jest.requireMock('../../../../utils/logger-enhanced') as {
+        performanceLogger: { withTiming: jest.MockedFunction<(name: unknown, fn: () => unknown, corr?: unknown) => Promise<unknown>> };
+      };
+      const originalImpl = perfMock.performanceLogger.withTiming.getMockImplementation();
+      perfMock.performanceLogger.withTiming.mockImplementation((name: unknown, fn: () => unknown) => {
+        if (name === 'messaging.trackingLinks') {
+          return Promise.reject(new Error('tracking link DB failure'));
+        }
+        return Promise.resolve(typeof fn === 'function' ? fn() : undefined);
+      });
+
+      await expect(processor.saveMessage({ ...baseData })).resolves.toHaveProperty('id', MSG_ID);
+
+      // Restore original mock
+      if (originalImpl) {
+        perfMock.performanceLogger.withTiming.mockImplementation(originalImpl);
+      } else {
+        perfMock.performanceLogger.withTiming.mockImplementation((_name: unknown, fn: () => unknown) => fn());
+      }
+    });
   });
 });

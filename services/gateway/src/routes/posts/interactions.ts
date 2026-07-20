@@ -7,7 +7,8 @@ import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema } from './types';
-import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response';
+import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict } from '../../utils/response';
+import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
@@ -91,7 +92,10 @@ export function registerInteractionRoutes(
             emoji,
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId).catch(() => {});
+          }, post.authorId,
+            (post as { visibility?: string }).visibility ?? 'PUBLIC',
+            (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
+          ).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: broadcast post liked failed'));
         }
       }
 
@@ -104,11 +108,20 @@ export function registerInteractionRoutes(
           postAuthorId: post.authorId,
           emoji,
           postType: post.type,
-        }).catch(() => {});
+          postPreview: (post as { content?: string | null }).content?.slice(0, 80) ?? undefined,
+          postCreatedAt: (post as { createdAt?: Date | string | null }).createdAt ?? undefined,
+          postExpiresAt: (post as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
+        }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: notify post like failed'));
       }
 
       return sendSuccess(reply, { liked: true, reactionSummary: post.reactionSummary });
     } catch (error) {
+      // The max-1-reaction domain guard is reachable (a user changing their
+      // emoji) — surface it as 409, not a 500. Preserves the "max 1" semantics
+      // while keeping a reachable domain error out of INTERNAL_ERROR.
+      if (error instanceof ConflictError) {
+        return sendConflict(reply, error.message, { code: error.code });
+      }
       fastify.log.error(`[POST /posts/:postId/like] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
@@ -173,7 +186,10 @@ export function registerInteractionRoutes(
             emoji: '❤️',
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId).catch(() => {});
+          }, post.authorId,
+            (post as { visibility?: string }).visibility ?? 'PUBLIC',
+            (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
+          ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/like]: broadcast post unliked failed'));
         }
       }
 
@@ -195,11 +211,15 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      await postService.bookmarkPost(postId, authContext.registeredUser.id);
+      const result = await postService.bookmarkPost(postId, authContext.registeredUser.id);
       // Sync temps réel (perso) : le feed et le reel viewer réhydratent
-      // `isBookmarkedByMe` → le favori survit à la fermeture/réouverture.
-      fastify.socialEvents?.broadcastPostBookmarked({ postId, bookmarked: true }, authContext.registeredUser.id);
-      return sendSuccess(reply, { bookmarked: true });
+      // `isBookmarkedByMe` + le `bookmarkCount` absolu → le favori et son
+      // compteur survivent à la fermeture/réouverture, sans reload.
+      fastify.socialEvents?.broadcastPostBookmarked(
+        { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/bookmark] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -217,9 +237,12 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      await postService.unbookmarkPost(postId, authContext.registeredUser.id);
-      fastify.socialEvents?.broadcastPostBookmarked({ postId, bookmarked: false }, authContext.registeredUser.id);
-      return sendSuccess(reply, { bookmarked: false });
+      const result = await postService.unbookmarkPost(postId, authContext.registeredUser.id);
+      fastify.socialEvents?.broadcastPostBookmarked(
+        { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
+        authContext.registeredUser.id,
+      );
+      return sendSuccess(reply, { bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
       fastify.log.error(`[DELETE /posts/:postId/bookmark] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -248,14 +271,19 @@ export function registerInteractionRoutes(
       // éviter de rejouer la requête à chaque impression répétée du feed.
       // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
       if (isNewView) {
-        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch(() => {});
+        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/view]: mark post notifications as read failed'));
       }
 
       // If this is a story, broadcast the view to the story author
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
-        // Fetch post to check type and get author + viewCount
-        const post = await postService.getPostById(postId);
+        // Fetch post to check type and get author + viewCount. Passe le viewer :
+        // sans lui, `getPostById` applique le filtre PUBLIC-seul et retourne
+        // `null` pour une story FRIENDS (le cas courant) → `broadcastStoryViewed`
+        // ne partait jamais alors que `recordView` (même filtre viewer) avait
+        // bien enregistré la vue. Le viewer vient de passer ce même filtre dans
+        // `recordView`, donc la story est retrouvée ici aussi.
+        const post = await postService.getPostById(postId, viewerId);
         if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
           socialEvents.broadcastStoryViewed({
             storyId: postId,
@@ -679,7 +707,7 @@ export function registerInteractionRoutes(
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
           repost: repost as unknown as Post,
-        }, authContext.registeredUser.id).catch(() => {});
+        }, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: broadcast post reposted failed'));
       }
 
       // Notify original post author
@@ -692,9 +720,11 @@ export function registerInteractionRoutes(
             originalPostId: postId,
             postAuthorId: original.authorId,
             repostId: repost.id,
-            postType: (original as { type?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' }).type,
+            postType: (original as { type?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' }).type,
             postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
-          }).catch(() => {});
+            postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
+            postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
+          }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: notify post repost failed'));
         }
       }
 

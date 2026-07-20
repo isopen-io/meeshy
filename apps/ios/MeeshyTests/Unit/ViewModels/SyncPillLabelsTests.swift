@@ -6,6 +6,7 @@ import XCTest
 /// by the sync pill. The label is status-aware: a pending / inflight row reads
 /// as work in progress ("Envoi de…"), a terminal `.failed` / `.exhausted` row
 /// reads as a failure ("… non envoyé") so a lingering row never looks active.
+@MainActor
 final class SyncPillLabelsTests: XCTestCase {
 
     private func item(

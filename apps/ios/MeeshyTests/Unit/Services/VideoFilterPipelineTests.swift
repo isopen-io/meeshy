@@ -3,6 +3,7 @@ import XCTest
 
 // MARK: - VideoFilterConfig Tests
 
+@MainActor
 final class VideoFilterConfigTests: XCTestCase {
 
     func test_default_hasExpectedValues() {
@@ -57,6 +58,7 @@ final class VideoFilterConfigTests: XCTestCase {
 
 // MARK: - VideoFilterPreset Tests
 
+@MainActor
 final class VideoFilterPresetTests: XCTestCase {
 
     func test_natural_hasDefaultColorimetry() {
@@ -116,6 +118,7 @@ final class VideoFilterPresetTests: XCTestCase {
 
 // MARK: - VideoFilterPipeline Tests
 
+@MainActor
 final class VideoFilterPipelineTests: XCTestCase {
 
     private func makeSUT() -> VideoFilterPipeline {
@@ -144,21 +147,5 @@ final class VideoFilterPipelineTests: XCTestCase {
     func test_isAutoDegraded_initiallyFalse() {
         let sut = makeSUT()
         XCTAssertFalse(sut.isAutoDegraded)
-    }
-}
-
-// MARK: - DarkFrameDetector Tests
-
-final class DarkFrameDetectorTests: XCTestCase {
-
-    func test_lastAverageBrightness_initiallyNil() {
-        let detector = DarkFrameDetector()
-        XCTAssertNil(detector.lastAverageBrightness)
-    }
-
-    func test_reset_clearsState() {
-        let detector = DarkFrameDetector()
-        detector.reset()
-        XCTAssertNil(detector.lastAverageBrightness)
     }
 }

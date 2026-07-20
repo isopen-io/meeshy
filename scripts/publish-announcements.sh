@@ -16,7 +16,8 @@ readonly NC='\033[0m'
 
 # Configuration
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly MMP_SCRIPT="${SCRIPT_DIR}/scripts/mmp.sh"
+readonly MMP_SCRIPT="${SCRIPT_DIR}/mmp.sh"
+readonly REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly DELAY=2
 
 # Check if mmp.sh exists
@@ -24,38 +25,34 @@ if [[ ! -x "$MMP_SCRIPT" ]]; then
     echo -e "${YELLOW}Making mmp.sh executable...${NC}"
     chmod +x "$MMP_SCRIPT"
 fi
-export MEESHY_PASSWORD=${MEESHY_PASSWORD:-FSDQ73yQ5TG4n36BnGId}
-# Check for password
-if [[ -z "${MEESHY_PASSWORD:-FSDQ73yQ5TG4n36BnGId}" ]]; then
+# Check for password — never hardcode secrets.
+# Priorité: variable d'env existante > .env.local (racine) > .env / env.production
+if [[ -z "${MEESHY_PASSWORD:-}" ]]; then
     echo -e "${YELLOW}MEESHY_PASSWORD not set. Checking environment files...${NC}"
-    
-    # Try to load from env.production
-    if [[ -f "${SCRIPT_DIR}/env.production" ]]; then
-        echo -e "${BLUE}Loading from env.production...${NC}"
-        set -a
-        source "${SCRIPT_DIR}/env.production"
-        set +a
-        
-        # Check if we got MEESHY_BIGBOSS_PASSWORD instead
-        if [[ -n "${MEESHY_BIGBOSS_PASSWORD:-FSDQ73yQ5TG4n36BnGId}" ]] && [[ "$MEESHY_BIGBOSS_PASSWORD" != "CHANGE_ME_MEESHY_PASSWORD" ]]; then
-            export MEESHY_PASSWORD="$MEESHY_BIGBOSS_PASSWORD"
+
+    for envfile in "${REPO_ROOT}/.env.local" "${REPO_ROOT}/.env" "${SCRIPT_DIR}/env.production"; do
+        [[ -n "${MEESHY_PASSWORD:-}" ]] && break
+        if [[ -f "$envfile" ]]; then
+            echo -e "${BLUE}Loading from ${envfile}...${NC}"
+            set -a
+            source "$envfile"
+            set +a
+            # Certains fichiers utilisent MEESHY_BIGBOSS_PASSWORD
+            if [[ -z "${MEESHY_PASSWORD:-}" ]] && [[ -n "${MEESHY_BIGBOSS_PASSWORD:-}" ]] && [[ "$MEESHY_BIGBOSS_PASSWORD" != "CHANGE_ME_MEESHY_PASSWORD" ]]; then
+                export MEESHY_PASSWORD="$MEESHY_BIGBOSS_PASSWORD"
+            fi
         fi
-    elif [[ -f "${SCRIPT_DIR}/.env" ]]; then
-        echo -e "${BLUE}Loading from .env...${NC}"
-        set -a
-        source "${SCRIPT_DIR}/.env"
-        set +a
-    fi
-    
+    done
+
     # If still not set or is placeholder, ask user
-    if [[ -z "${MEESHY_PASSWORD:-FSDQ73yQ5TG4n36BnGId}" ]] || [[ "$MEESHY_PASSWORD" == "CHANGE_ME_MEESHY_PASSWORD" ]]; then
+    if [[ -z "${MEESHY_PASSWORD:-}" ]] || [[ "$MEESHY_PASSWORD" == "CHANGE_ME_MEESHY_PASSWORD" ]]; then
         echo ""
         echo -e "${YELLOW}Please enter the Meeshy password:${NC}"
-        read -s MEESHY_PASSWORD
-        export MEESHY_PASSWORD
+        read -rs MEESHY_PASSWORD
         echo ""
     fi
 fi
+export MEESHY_PASSWORD
 
 echo ""
 echo -e "${CYAN}╔════════════════════════════════════════════════════════════════╗${NC}"
@@ -73,7 +70,6 @@ Try it now: meeshy.me/chat/meeshy
 #RealTimeMessaging #EmojiReactions #MeeshyUpdates
 EOF
 
-export $MEESHY_PASSWORD
 "$MMP_SCRIPT" -f /tmp/post1.txt -y --no-backup --no-cleanup
 echo -e "${GREEN}✓ Post 1/7 published${NC}"
 sleep $DELAY

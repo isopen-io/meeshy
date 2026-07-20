@@ -1,57 +1,77 @@
 /**
- * Calcul du statut de presence — combine isOnline (socket event) + lastActiveAt (temps).
+ * Présence utilisateur côté web — délègue le calcul d'état à la SOURCE DE
+ * VÉRITÉ partagée `@meeshy/shared/utils/user-presence` et centralise ICI le
+ * mapping état -> classes Tailwind (un seul endroit pour toute l'app).
  *
- * Priorite:
- * 1. Si isOnline === false (deconnexion explicite via socket) → offline immediat
- * 2. Si isOnline === true ET lastActiveAt < 5min → online
- * 3. Sinon, calcul temporel classique sur lastActiveAt
+ * Règle produit (identique iOS / Android) :
+ *   online  (isOnline backend OU activité <= 60s) -> VERT emerald-400 + pulse
+ *   recent  (activité <= 5min)                    -> VERT emerald-400
+ *   away    (5-30min)                             -> ORANGE amber-400
+ *   offline (> 30min)                             -> GRIS gray-400
+ *
+ * Les hex correspondent exactement aux tokens iOS/Android :
+ * emerald-400 = #34D399 (MeeshyColors.success), amber-400 = #FBBF24
+ * (MeeshyColors.warning), gray-400 = #9CA3AF (neutral400).
  */
 
 import type { SocketIOUser as User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
+import {
+  getUserPresenceStatus,
+  presenceTone,
+  isPresenceActive,
+  isPresencePulsing,
+  PRESENCE_ONLINE_WINDOW_MS,
+  PRESENCE_RECENT_WINDOW_MS,
+  PRESENCE_AWAY_WINDOW_MS,
+  type UserPresenceStatus,
+  type UserPresenceSource,
+  type PresenceTone,
+} from '@meeshy/shared/utils/user-presence';
 
-export type UserStatus = 'online' | 'away' | 'offline';
-
-export type PresenceSource = {
-  isOnline?: boolean;
-  lastActiveAt?: Date | string | number | null;
+export type UserStatus = UserPresenceStatus;
+export type PresenceSource = UserPresenceSource;
+export {
+  presenceTone,
+  isPresenceActive,
+  isPresencePulsing,
+  PRESENCE_ONLINE_WINDOW_MS,
+  PRESENCE_RECENT_WINDOW_MS,
+  PRESENCE_AWAY_WINDOW_MS,
 };
+export type { PresenceTone };
 
-function getMinutesAgo(lastActiveAt: Date | string | number): number {
-  return (Date.now() - new Date(lastActiveAt).getTime()) / (1000 * 60);
+export function getUserStatus(user: User | Participant | PresenceSource | null | undefined): UserStatus {
+  return getUserPresenceStatus(user as PresenceSource | null | undefined);
 }
 
 /**
- * < 5 min   → VERT  (online)
- * 5-30 min  → ORANGE (away)
- * > 30 min  → GRIS  (offline)
- *
- * isOnline = false → GRIS immediat (deconnexion socket)
- * isOnline = true + lastActiveAt recent → VERT
+ * Mapping central statut -> classe de fond du dot. Seul 'online' pulse.
+ * TOUT composant présence (dot, badge, sidebar) DOIT consommer ces maps —
+ * ne jamais redéclarer bg-emerald/amber/gray localement.
  */
-export function getUserStatus(user: User | Participant | PresenceSource | null | undefined): UserStatus {
-  if (!user) return 'offline';
+export const PRESENCE_DOT_CLASS: Record<UserStatus, string> = {
+  online: 'bg-emerald-400 animate-pulse',
+  recent: 'bg-emerald-400',
+  away: 'bg-amber-400',
+  offline: 'bg-gray-400',
+};
 
-  const { isOnline, lastActiveAt } = user as PresenceSource;
+/** Variante badge (avec état hover) pour les Badge shadcn. */
+export const PRESENCE_BADGE_CLASS: Record<UserStatus, string> = {
+  online: 'bg-emerald-400 hover:bg-emerald-500',
+  recent: 'bg-emerald-400 hover:bg-emerald-500',
+  away: 'bg-amber-400 hover:bg-amber-500',
+  offline: 'bg-gray-400 hover:bg-gray-500',
+};
 
-  if (isOnline === false) {
-    if (!lastActiveAt) return 'offline';
-    const minutesAgo = getMinutesAgo(lastActiveAt);
-    if (minutesAgo < 30) return 'away';
-    return 'offline';
-  }
+/** Couleur de texte des libellés de présence (« En ligne », « Vu il y a… »). */
+export const PRESENCE_TEXT_CLASS: Record<PresenceTone, string> = {
+  success: 'text-emerald-600 dark:text-emerald-400',
+  warning: 'text-amber-600 dark:text-amber-400',
+  muted: 'text-gray-500 dark:text-gray-400',
+};
 
-  if (isOnline === true) {
-    if (!lastActiveAt) return 'online';
-    const minutesAgo = getMinutesAgo(lastActiveAt);
-    if (minutesAgo < 5) return 'online';
-    if (minutesAgo < 30) return 'away';
-    return 'away';
-  }
-
-  if (!lastActiveAt) return 'offline';
-  const minutesAgo = getMinutesAgo(lastActiveAt);
-  if (minutesAgo < 5) return 'online';
-  if (minutesAgo < 30) return 'away';
-  return 'offline';
+export function presenceTextClass(status: UserStatus): string {
+  return PRESENCE_TEXT_CLASS[presenceTone(status)];
 }

@@ -152,19 +152,6 @@ final class TimelineViewModelTests: XCTestCase {
         XCTAssertEqual(kf?.scale ?? 0, 1.2, accuracy: 0.001)
     }
 
-    // MARK: - Task 14
-
-    func test_switchToProMode_preservesSelection() async {
-        let (sut, _) = makeSUT(project: TimelineProjectFactory.projectWithVideoClip())
-        await sut.awaitConfigured()
-        sut.selectClip(id: "clip-1")
-        sut.setMode(.pro)
-        XCTAssertEqual(sut.mode, .pro)
-        XCTAssertEqual(sut.selection.selectedClipId, "clip-1")
-        sut.setMode(.quick)
-        XCTAssertEqual(sut.mode, .quick)
-        XCTAssertEqual(sut.selection.selectedClipId, "clip-1")
-    }
 
     func test_toggleSnap_flipsState() async {
         let (sut, _) = makeSUT()

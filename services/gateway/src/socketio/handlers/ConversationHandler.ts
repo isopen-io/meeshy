@@ -11,6 +11,8 @@ import { conversationStatsService } from '../../services/ConversationStatsServic
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import type { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -18,17 +20,21 @@ export interface ConversationHandlerDependencies {
   prisma: PrismaClient;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
+  readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
 }
 
 export class ConversationHandler {
   private prisma: PrismaClient;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
+  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
     this.prisma = deps.prisma;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.readStatusService = deps.readStatusService;
   }
 
   /**
@@ -58,13 +64,46 @@ export class ConversationHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      const userId = this.socketToUser.get(socket.id);
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      const connectedUser = userIdOrToken ? this.connectedUsers.get(userIdOrToken) : null;
 
-      if (userId) {
-        // Membership check: a user can only join a conversation they are
-        // an active participant of. Banned and removed participants are
-        // both rejected here so the client knows to purge its local
-        // cache and dismiss any open view of the conversation.
+      if (!connectedUser) {
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: validated.conversationId,
+          reason: 'not_authenticated',
+          message: 'Non authentifié',
+        });
+        return;
+      }
+
+      const joinAllowed = await this.rateLimiter.checkLimit(userIdOrToken!, SOCKET_RATE_LIMITS.CONVERSATION_JOIN);
+      if (!joinAllowed) {
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: validated.conversationId,
+          reason: 'rate_limited',
+          message: 'Trop de requêtes. Veuillez réessayer.',
+        });
+        return;
+      }
+
+      if (connectedUser.isAnonymous) {
+        // Anonymous: verify participant owns this exact conversation
+        const participantId = connectedUser.participantId;
+        const participant = await this.prisma.participant.findFirst({
+          where: { id: participantId, conversationId: normalizedId, isActive: true },
+          select: { id: true },
+        });
+        if (!participant) {
+          socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+            conversationId: validated.conversationId,
+            reason: 'not_a_member',
+            message: 'Vous n\'êtes pas membre de cette conversation',
+          });
+          return;
+        }
+      } else {
+        // Registered: check participant record by userId
+        const userId = connectedUser.userId!;
         const participant = await this.prisma.participant.findFirst({
           where: { conversationId: normalizedId, userId },
           select: { id: true, bannedAt: true, leftAt: true, isActive: true },
@@ -99,15 +138,25 @@ export class ConversationHandler {
       }
 
       const room = ROOMS.conversation(normalizedId);
-      socket.join(room);
-      if (userId) {
+      await socket.join(room);
+      const registeredUserId = connectedUser.userId;
+      if (registeredUserId) {
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,
-          userId
+          userId: registeredUserId
         });
 
+        try {
+          const unreadCount = await this.readStatusService.getUnreadCount(registeredUserId, normalizedId);
+          socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
+        } catch (err) {
+          logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
+        }
+
         // Envoyer les stats de conversation
-        await this.sendConversationStatsToSocket(socket, validated.conversationId).catch(() => {});
+        await this.sendConversationStatsToSocket(socket, validated.conversationId).catch(err => {
+          logger.warn('conversation stats broadcast failed (non-blocking)', { conversationId: validated.conversationId, error: err });
+        });
       }
     } catch (error) {
       logger.error('conversation:join failed', { error });
@@ -137,7 +186,7 @@ export class ConversationHandler {
       );
 
       const room = ROOMS.conversation(normalizedId);
-      socket.leave(room);
+      await socket.leave(room);
 
       const userId = this.socketToUser.get(socket.id);
       if (userId) {
@@ -148,6 +197,7 @@ export class ConversationHandler {
       }
     } catch (error) {
       logger.error('conversation:leave failed', { error });
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Failed to leave conversation' });
     }
   }
 
@@ -156,10 +206,14 @@ export class ConversationHandler {
    */
   async sendConversationStatsToSocket(socket: Socket, conversationId: string): Promise<void> {
     try {
-      const stats = await conversationStatsService.updateOnNewMessage(
+      // Read-only refresh on join: getOrCompute returns cached-or-freshly-computed
+      // stats WITHOUT mutating them. Using updateOnNewMessage here (the per-new-message
+      // increment path) bumped messagesPerLanguage['fr'] by one on every warm-cache
+      // join, inflating a conversation's message counts and persisting the corruption
+      // in the shared singleton cache until its 1h TTL expired.
+      const stats = await conversationStatsService.getOrCompute(
         this.prisma,
         conversationId,
-        'fr', // Default language pour stats refresh
         () => Array.from(this.connectedUsers.values()).map((u) => u.id)
       );
 

@@ -29,6 +29,20 @@ export type CallStatus =
   | 'failed';
 
 /**
+ * Statuts TERMINAUX — un call dans l'un de ces états est résolu : aucun
+ * chemin (leave, disconnect-grace, force-end) ne doit plus réécrire son
+ * statut/endReason/duration ni re-poster de summary.
+ * Mirror runtime : `TERMINAL_STATUSES` dans services/gateway CallService
+ * (typée sur l'enum Prisma) — garder les deux listes synchronisées.
+ */
+export const CALL_TERMINAL_STATUSES: readonly CallStatus[] = [
+  'ended',
+  'missed',
+  'rejected',
+  'failed',
+] as const;
+
+/**
  * Raison de fin d'appel — synced with Prisma CallEndReason enum
  * @see schema.prisma CallEndReason
  */
@@ -249,6 +263,8 @@ export interface ConnectionQualityStats {
    */
   readonly bytesSent?: number;
   readonly bytesReceived?: number;
+  /** TWCC GCC bandwidth estimate in bps. Present when Transport-CC is active. */
+  readonly availableOutgoingBitrateBps?: number;
 }
 
 // ===== WEBRTC SIGNALING =====
@@ -515,6 +531,12 @@ export interface CallQualityFeedback {
 
 export interface CallAnalytics {
   readonly setupTimeMs: number
+  /**
+   * answer/join → connected : la négociation WebRTC seule, SANS le temps de
+   * sonnerie humain inclus dans `setupTimeMs`. Optionnel (absent des builds
+   * iOS < 2026-07-03) ; -1 = jamais connecté / ancrage manquant.
+   */
+  readonly negotiationTimeMs?: number
   readonly iceMethod: 'direct' | 'stun' | 'turn'
   readonly codec: { readonly audio: string; readonly video: string }
   readonly averageRtt: number
@@ -633,7 +655,7 @@ export interface CallQualityAlertEvent {
  */
 export interface CallInitiateAck {
   readonly success: boolean;
-  readonly data?: { callId: string; mode: CallMode; iceServers: RTCIceServer[] };
+  readonly data?: { callId: string; mode: CallMode; iceServers: RTCIceServer[]; ttl?: number };
   readonly error?: { code: string; message: string };
 }
 
@@ -713,13 +735,15 @@ export interface CallTranscriptionSegmentEvent {
 
 /**
  * Event: call:translated-segment (Server → Client)
- * Translated transcription segment broadcast to call participants
+ * Transcription segment (with optional translation) broadcast to call participants.
+ * `translatedText` is omitted when ZMQ translation is not enabled or unavailable;
+ * consumers should fall back to displaying `text` in that case.
  */
 export interface CallTranslatedSegmentEvent {
   readonly callId: string;
   readonly segment: {
     readonly text: string;
-    readonly translatedText: string;
+    readonly translatedText?: string;
     readonly speakerId: string;
     readonly startMs: number;
     readonly endMs: number;
@@ -764,6 +788,46 @@ export interface CallState {
   translations: Map<string, Translation[]>;  // transcriptionId → translations
 }
 
+/**
+ * Server → Client: fresh ICE servers after TTL refresh.
+ */
+export interface CallIceServersRefreshedEvent {
+  readonly callId: string;
+  readonly iceServers: RTCIceServer[];
+  readonly ttl: number;
+}
+
+/**
+ * Client → Server: force-leave a conversation's active call.
+ * Sent as a preflight before `call:initiate` to clean up zombie call sessions
+ * left by a previous client crash or disconnect without graceful teardown.
+ */
+export interface CallForceLeaveClientEvent {
+  readonly conversationId: string;
+}
+
+/**
+ * Server → Client: the gateway has force-ended the call.
+ * Emitted when a server-side cleanup (GC, admin action, heartbeat timeout)
+ * terminates a call. iOS/web clients subscribe to this on their personal
+ * user room so the call UI is dismissed cleanly without waiting for a WebRTC
+ * connection failure.
+ */
+export interface CallForceLeaveServerEvent {
+  readonly callId: string;
+  readonly reason?: string;
+}
+
+/**
+ * Client → Server: request fresh TURN credentials before TTL expiry.
+ * Clients send this at ~80% of the credential TTL so long calls always
+ * have valid TURN credentials available for ICE restarts.
+ * Gateway responds with `call:ice-servers-refreshed`.
+ */
+export interface CallRequestIceServersEvent {
+  readonly callId: string;
+}
+
 // ===== SOCKET.IO EVENT NAMES =====
 
 /**
@@ -777,7 +841,6 @@ export const CALL_EVENTS = {
   SIGNAL: 'call:signal',
   TOGGLE_AUDIO: 'call:toggle-audio',
   TOGGLE_VIDEO: 'call:toggle-video',
-  TOGGLE_SCREEN_SHARE: 'call:toggle-screen-share',
   END: 'call:end',
 
   // Client → Server (fire-and-forget)
@@ -785,12 +848,27 @@ export const CALL_EVENTS = {
   QUALITY_REPORT: 'call:quality-report',
   RECONNECTING: 'call:reconnecting',
   RECONNECTED: 'call:reconnected',
+  REQUEST_ICE_SERVERS: 'call:request-ice-servers',
+
+  // Client → Server (fire-and-forget, lifecycle telemetry)
+  BACKGROUNDED: 'call:backgrounded',
+  FOREGROUNDED: 'call:foregrounded',
+  SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
+  ANALYTICS: 'call:analytics',
+
+  // Server → Client (peer notification)
+  SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
 
   // Server → Client
   INITIATED: 'call:initiated',
   PARTICIPANT_JOINED: 'call:participant-joined',
   PARTICIPANT_LEFT: 'call:participant-left',
   SIGNAL_RECEIVED: 'call:signal',
+  /**
+   * @deprecated Jamais émis par le gateway (audit appels 2026-07-11 #4) —
+   * le mode `sfu` est renvoyé dans les ACKs sans média SFU derrière. Ne pas
+   * s'y abonner ; sera supprimé si le mode SFU est formellement abandonné.
+   */
   MODE_CHANGED: 'call:mode-changed',
   MEDIA_TOGGLED: 'call:media-toggled',
   ENDED: 'call:ended',
@@ -800,13 +878,23 @@ export const CALL_EVENTS = {
   /// their devices answers a call, so the rest dismiss their ringing UI.
   ALREADY_ANSWERED: 'call:already-answered',
   QUALITY_ALERT: 'call:quality-alert',
+  ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
 
   // Transcription & Translation (Phase 2/3)
+  // Seuls TRANSCRIPTION_SEGMENT (client → serveur) et TRANSLATED_SEGMENT
+  // (serveur → clients) sont câblés dans CallEventsHandler. Les 4 autres
+  // sont un contrat déclaré jamais émis (audit appels 2026-07-11 #4) —
+  // conservés uniquement parce que le design leader/follower est suspendu,
+  // pas abandonné. Ne pas s'y abonner tant qu'un émetteur n'existe pas.
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION: 'call:transcription',
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSLATION: 'call:translation',
   TRANSCRIPTION_SEGMENT: 'call:transcription-segment',
   TRANSLATED_SEGMENT: 'call:translated-segment',
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION_CAPABILITY: 'call:transcription-capability',
+  /** @deprecated Jamais émis par le gateway — voir bloc ci-dessus. */
   TRANSCRIPTION_ROLE: 'call:transcription-role',
 } as const;
 
@@ -821,6 +909,14 @@ export interface CallError {
   readonly code: CallErrorCode;
   readonly message: string;
   readonly details?: Record<string, unknown>;
+  /**
+   * The call this error pertains to, when known. Clients with an active call
+   * MUST ignore any `call:error` whose `callId` is present and does not match
+   * their current call — an error for call A must never tear down an
+   * unrelated, healthy call B on the same device. Absent only for errors that
+   * occur before a call context exists (auth failures, generic rate limits).
+   */
+  readonly callId?: string;
 }
 
 /**
@@ -851,7 +947,9 @@ export const CALL_ERROR_CODES = {
   UNSUPPORTED_CALL_TYPE: 'UNSUPPORTED_CALL_TYPE',
   ALREADY_IN_CALL: 'ALREADY_IN_CALL',
   NOT_IN_CALL: 'NOT_IN_CALL',
-  
+  /** Optimistic-locking conflict on CallSession.version persisted after retry (see CallService.joinCall). */
+  CALL_STATE_CONFLICT: 'CALL_STATE_CONFLICT',
+
   // Media control errors
   MEDIA_TOGGLE_FAILED: 'MEDIA_TOGGLE_FAILED',
 

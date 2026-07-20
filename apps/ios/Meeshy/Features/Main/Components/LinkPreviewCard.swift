@@ -24,6 +24,38 @@ struct LinkPreviewCard: View {
     private var accent: Color { Color(hex: accentColor) }
     private var fallbackHost: String { URL(string: urlString)?.host ?? urlString }
 
+    // VoiceOver identity, mirroring the three visual states of `content`. The
+    // populated card reads its metadata as a sentence; the terminal and loading
+    // shells fall back to the host so the element is never anonymous.
+    private var accessibilityLabelText: String {
+        if let meta = metadata, meta.hasAnyVisibleField {
+            let joined = [
+                meta.siteName?.nilIfBlank ?? meta.host,
+                meta.title?.nilIfBlank,
+                meta.description?.nilIfBlank
+            ]
+            .compactMap { $0 }
+            .joined(separator: ". ")
+            return String(localized: "linkpreview.a11y.label",
+                          defaultValue: "Aperçu du lien : \(joined)",
+                          bundle: .main)
+        }
+        if didResolve {
+            return String(localized: "linkpreview.a11y.label-failed",
+                          defaultValue: "Lien vers \(fallbackHost)",
+                          bundle: .main)
+        }
+        return String(localized: "linkpreview.a11y.label-loading",
+                      defaultValue: "Aperçu du lien en cours de chargement, \(fallbackHost)",
+                      bundle: .main)
+    }
+
+    private var accessibilityHintText: String {
+        String(localized: "linkpreview.a11y.hint",
+               defaultValue: "Ouvre le lien dans le navigateur",
+               bundle: .main)
+    }
+
     var body: some View {
         Button {
             HapticFeedback.light()
@@ -32,6 +64,15 @@ struct LinkPreviewCard: View {
             content
         }
         .buttonStyle(.plain)
+        // VoiceOver swept the card as disconnected fragments (uppercase site
+        // name, title, description, thumbnail) with no coherent identity, no
+        // "opens in browser" affordance, and no link trait. Collapse the
+        // fragments into one element that reads the preview as a sentence and
+        // announces itself as a link.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityHint(accessibilityHintText)
+        .accessibilityAddTraits(.isLink)
         // Resolve OG metadata into LOCAL state, keyed by url so it runs once per
         // URL (and re-runs only if this recycled cell rebinds to a different
         // message). The store returns cached/known-failed data instantly; a real
@@ -71,7 +112,7 @@ struct LinkPreviewCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let siteName = meta.siteName?.nilIfBlank ?? meta.host {
                     Text(siteName)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundStyle(accent)
                         .textCase(.uppercase)
                         .tracking(0.3)
@@ -79,13 +120,13 @@ struct LinkPreviewCard: View {
                 }
                 if let title = meta.title?.nilIfBlank {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                         .lineLimit(2)
                 }
                 if let description = meta.description?.nilIfBlank {
                     Text(description)
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.7))
                         .lineLimit(2)
                 }
@@ -113,11 +154,11 @@ struct LinkPreviewCard: View {
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 6) {
                 Text(fallbackHost)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(accent)
                     .lineLimit(1)
                 Text(urlString)
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                     .lineLimit(1)
             }
@@ -145,18 +186,18 @@ struct LinkPreviewCard: View {
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 6) {
                 Text(fallbackHost)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(accent)
                     .lineLimit(1)
                 Text(urlString)
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                     .lineLimit(1)
             }
             .padding(.vertical, 8)
             Spacer(minLength: 0)
             Image(systemName: "link")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundStyle(accent.opacity(0.6))
                 .padding(.trailing, 12)
         }
@@ -181,7 +222,7 @@ struct LinkPreviewCard: View {
                 .fill(accent.opacity(0.1))
                 .overlay(
                     Image(systemName: "link")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundStyle(accent.opacity(0.6))
                 )
         }

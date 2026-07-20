@@ -13,10 +13,15 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 const mockNormalizeConversationId = jest.fn() as jest.Mock<any>;
 const mockGetConnectedUser = jest.fn() as jest.Mock<any>;
 const mockValidateSocketEvent = jest.fn() as jest.Mock<any>;
+const mockResolveParticipant = jest.fn() as jest.Mock<any>;
 
 jest.mock('../../utils/socket-helpers', () => ({
   normalizeConversationId: (...args: unknown[]) => mockNormalizeConversationId(...args),
   getConnectedUser: (...args: unknown[]) => mockGetConnectedUser(...args),
+}));
+
+jest.mock('../../utils/participant-resolver', () => ({
+  resolveParticipant: (...args: unknown[]) => mockResolveParticipant(...args),
 }));
 
 jest.mock('../../../middleware/validation.js', () => ({
@@ -52,21 +57,33 @@ function makePrisma(overrides: Record<string, any> = {}): any {
   return {
     conversation: {
       findUnique: jest.fn<any>().mockResolvedValue({ id: CONV_ID, identifier: 'test-conv' }),
+      ...(overrides.conversation ?? {}),
     },
     participant: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
+      // Backs `_getBlockedSocketIdsInRoom`'s room-membership lookup — empty by
+      // default (no other online participants → no blocking check needed).
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...(overrides.participant ?? {}),
     },
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...(overrides.user ?? {}),
     },
-    ...overrides,
   };
 }
 
 function makeSocket(overrides: Record<string, any> = {}): Socket {
+  // `socket.to(room)` returns a chainable object exposing both a direct
+  // `.emit` (no exclusions) and `.except(socketIds).emit` (blocked viewers
+  // excluded) — mirrors the real Socket.IO BroadcastOperator API.
   return {
     id: SOCKET_ID,
-    to: jest.fn<any>().mockReturnValue({ emit: jest.fn() }),
+    to: jest.fn<any>().mockReturnValue({
+      emit: jest.fn(),
+      except: jest.fn<any>().mockReturnValue({ emit: jest.fn() }),
+    }),
     emit: jest.fn(),
     ...overrides,
   } as unknown as Socket;
@@ -94,12 +111,45 @@ function makeConnectedUsers(userId = USER_ID, isAnonymous = false) {
   return users;
 }
 
+const BLOCKED_VIEWER_ID = 'blocked-viewer-id';
+const BLOCKED_SOCKET_ID = 'socket-blocked-viewer';
+
+/**
+ * A room where `BLOCKED_VIEWER_ID` is an online co-participant who has
+ * blocked (or been blocked by) the typing user `USER_ID`. Mirrors the fixture
+ * shape `getBlockedUserIdsAmong` expects: `prisma.user.findMany` simulates the
+ * "candidate blocked me" direction (viewer → typer).
+ */
+function makeBlockedScenario() {
+  const connectedUsers = makeConnectedUsers();
+  connectedUsers.set(BLOCKED_VIEWER_ID, {
+    id: BLOCKED_VIEWER_ID,
+    socketId: BLOCKED_SOCKET_ID,
+    isAnonymous: false,
+    language: 'en',
+    resolvedLanguages: ['en'],
+  });
+  const userSockets = new Map([[BLOCKED_VIEWER_ID, new Set([BLOCKED_SOCKET_ID])]]);
+  const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+  const prisma = makePrisma({
+    user: {
+      findUnique: jest.fn<any>().mockResolvedValue(dbUser),
+      findMany: jest.fn<any>().mockResolvedValue([{ id: BLOCKED_VIEWER_ID }]),
+    },
+    participant: {
+      findMany: jest.fn<any>().mockResolvedValue([{ userId: BLOCKED_VIEWER_ID }]),
+    },
+  });
+  return { connectedUsers, userSockets, prisma };
+}
+
 function makeHandler({
   prisma = makePrisma(),
   statusService = makeStatusService(),
   privacyPreferencesService = makePrivacyService(),
   connectedUsers = makeConnectedUsers(),
   socketToUser = new Map([[SOCKET_ID, USER_ID]]),
+  userSockets = new Map<string, Set<string>>(),
 } = {}) {
   return new StatusHandler({
     prisma,
@@ -107,6 +157,7 @@ function makeHandler({
     privacyPreferencesService: privacyPreferencesService as any,
     connectedUsers,
     socketToUser,
+    userSockets,
   });
 }
 
@@ -120,6 +171,9 @@ describe('StatusHandler', () => {
     mockGetConnectedUser.mockReturnValue({
       user: { id: USER_ID, isAnonymous: false, socketId: SOCKET_ID, language: 'fr', resolvedLanguages: [] },
       realUserId: USER_ID,
+    });
+    mockResolveParticipant.mockResolvedValue({
+      participantId: 'participant-1', userId: USER_ID, isAnonymous: false, displayName: 'Alice',
     });
   });
 
@@ -236,6 +290,21 @@ describe('StatusHandler', () => {
       expect(emitFn).toHaveBeenCalledWith(
         SERVER_EVENTS.TYPING_START,
         expect.objectContaining({ displayName: 'carol', username: 'carol' })
+      );
+    });
+
+    it('returns early without broadcasting when caller is not a participant of the conversation', async () => {
+      mockResolveParticipant.mockResolvedValue(null);
+      const dbUser = { id: USER_ID, username: 'eve', firstName: null, lastName: null, displayName: 'Eve' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(mockResolveParticipant).toHaveBeenCalledWith(
+        expect.objectContaining({ userIdOrToken: USER_ID, conversationId: CONV_ID })
       );
     });
 
@@ -400,11 +469,7 @@ describe('StatusHandler', () => {
       expect(findUnique).toHaveBeenCalledTimes(1);
     });
 
-    it('invalidateIdentityCache removes the cache entry (using bare userId key)', async () => {
-      // Note: the production cache stores keys as `user:${userId}` / `anon:${userId}`,
-      // but invalidateIdentityCache() deletes by bare `userId`. The current observable
-      // behavior is that this is a no-op for user: entries (key mismatch), so we
-      // assert what the code actually does rather than what one might expect.
+    it('invalidateIdentityCache removes the prefixed cache entries for a userId', async () => {
       const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
       const findUnique = jest.fn<any>().mockResolvedValue(dbUser);
       const prisma = makePrisma({ user: { findUnique } });
@@ -415,17 +480,12 @@ describe('StatusHandler', () => {
       await handler.handleTypingStart(socket, { conversationId: CONV_ID });
       expect(findUnique).toHaveBeenCalledTimes(1);
 
-      // Delete by bare userId — note the key mismatch means `user:xxx` entry stays
+      // invalidateIdentityCache removes the prefixed entry
       handler.invalidateIdentityCache(USER_ID);
 
-      // Verify the method exists and is callable without throwing
       const identityCache = (handler as any).identityCache as Map<string, unknown>;
-      // The entry `user:${USER_ID}` was not removed (key mismatch with bare userId)
-      expect(identityCache.has(`user:${USER_ID}`)).toBe(true);
-      // The bare userId key (if it existed) would be removed — this is the public contract
-      identityCache.set(USER_ID, { username: 'cached', displayName: 'Cached', expiresAt: Date.now() + 60_000 });
-      handler.invalidateIdentityCache(USER_ID);
-      expect(identityCache.has(USER_ID)).toBe(false);
+      expect(identityCache.has(`user:${USER_ID}`)).toBe(false);
+      expect(identityCache.has(`anon:${USER_ID}`)).toBe(false);
     });
 
     it('refreshes cache when TTL has expired', async () => {
@@ -525,6 +585,21 @@ describe('StatusHandler', () => {
       await expect(handler.handleTypingStop(socket, { conversationId: CONV_ID })).resolves.toBeUndefined();
     });
 
+    it('returns early without broadcasting when caller is not a participant of the conversation', async () => {
+      mockResolveParticipant.mockResolvedValue(null);
+      const dbUser = { id: USER_ID, username: 'eve', firstName: null, lastName: null, displayName: 'Eve' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(mockResolveParticipant).toHaveBeenCalledWith(
+        expect.objectContaining({ userIdOrToken: USER_ID, conversationId: CONV_ID })
+      );
+    });
+
     it('does not call statusService.updateLastSeen on typing stop', async () => {
       const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
       const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
@@ -535,6 +610,438 @@ describe('StatusHandler', () => {
       await handler.handleTypingStop(socket, { conversationId: CONV_ID });
 
       expect(statusService.updateLastSeen).not.toHaveBeenCalled();
+    });
+
+    it('clears the throttle so a fresh typing:start after stop re-emits within the throttle window', async () => {
+      jest.useFakeTimers();
+      const now = 1_000_000;
+      jest.setSystemTime(now);
+
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      // 1. start → emits typing:start, arms the throttle
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      // 2. stop 0.5s later → emits typing:stop, MUST clear the throttle entry
+      jest.setSystemTime(now + 500);
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+      // 3. start again 1s after the first start (< 2s throttle window) → the
+      //    explicit stop ended the burst, so this new burst MUST re-emit.
+      jest.setSystemTime(now + 1_000);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      // start + stop + start = 3 room broadcasts. Without the throttle clear the
+      // second start is swallowed and only 2 broadcasts occur.
+      expect((socket.to as jest.Mock).mock.calls.length).toBe(3);
+    });
+
+    it('suppresses typing:stop when a second device is still typing in the same conversation', async () => {
+      // Multi-device flow: device 2 starts typing within the shared 2s throttle
+      // window, so its start is tracked but not re-broadcast. An explicit stop
+      // from device 1 must NOT retract the indicator device 2 still owns.
+      const SOCKET_1 = 'socket-device-1';
+      const SOCKET_2 = 'socket-device-2';
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket1 = makeSocket({ id: SOCKET_1 });
+      const socket2 = makeSocket({ id: SOCKET_2 });
+      const socketToUser = new Map([[SOCKET_1, USER_ID], [SOCKET_2, USER_ID]]);
+      const userSockets = new Map([[USER_ID, new Set([SOCKET_1, SOCKET_2])]]);
+      const handler = makeHandler({ prisma, socketToUser, userSockets });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+
+      await handler.handleTypingStart(socket1, { conversationId: CONV_ID });
+      await handler.handleTypingStart(socket2, { conversationId: CONV_ID });
+
+      // Device 1 stops; device 2 is still genuinely typing in this conversation.
+      await handler.handleTypingStop(socket1, { conversationId: CONV_ID });
+
+      // socket1 broadcast only its own typing:start (1 call). The suppressed stop
+      // must NOT add a second broadcast.
+      expect((socket1.to as jest.Mock).mock.calls.length).toBe(1);
+    });
+
+    it('still untracks the stopping socket even when the stop broadcast is suppressed', async () => {
+      const SOCKET_1 = 'socket-device-1';
+      const SOCKET_2 = 'socket-device-2';
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket1 = makeSocket({ id: SOCKET_1 });
+      const socket2 = makeSocket({ id: SOCKET_2 });
+      const socketToUser = new Map([[SOCKET_1, USER_ID], [SOCKET_2, USER_ID]]);
+      const userSockets = new Map([[USER_ID, new Set([SOCKET_1, SOCKET_2])]]);
+      const handler = makeHandler({ prisma, socketToUser, userSockets });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      await handler.handleTypingStart(socket1, { conversationId: CONV_ID });
+      await handler.handleTypingStart(socket2, { conversationId: CONV_ID });
+
+      await handler.handleTypingStop(socket1, { conversationId: CONV_ID });
+
+      const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
+      expect(activeTypers.has(SOCKET_1)).toBe(false);
+      expect((activeTypers.get(SOCKET_2) ?? []).length).toBe(1);
+    });
+
+    it('broadcasts typing:stop when the other device is typing in a DIFFERENT conversation', async () => {
+      const SOCKET_1 = 'socket-device-1';
+      const SOCKET_2 = 'socket-device-2';
+      const CONV_ID_2 = '507f1f77bcf86cd799439099';
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket1 = makeSocket({ id: SOCKET_1 });
+      const socket2 = makeSocket({ id: SOCKET_2 });
+      const socketToUser = new Map([[SOCKET_1, USER_ID], [SOCKET_2, USER_ID]]);
+      const userSockets = new Map([[USER_ID, new Set([SOCKET_1, SOCKET_2])]]);
+      const handler = makeHandler({ prisma, socketToUser, userSockets });
+
+      // socket1 types in CONV_ID, socket2 types in CONV_ID_2.
+      mockNormalizeConversationId.mockResolvedValueOnce(CONV_ID).mockResolvedValueOnce(CONV_ID_2);
+      await handler.handleTypingStart(socket1, { conversationId: CONV_ID });
+      await handler.handleTypingStart(socket2, { conversationId: CONV_ID_2 });
+
+      // socket1 stops in CONV_ID — socket2 is NOT typing there, so the stop MUST fire.
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      await handler.handleTypingStop(socket1, { conversationId: CONV_ID });
+
+      // start (1) + stop (1) = 2 broadcasts on socket1.
+      expect((socket1.to as jest.Mock).mock.calls.length).toBe(2);
+      const stopEmit = ((socket1.to as jest.Mock).mock.results[1] as any).value.emit as jest.Mock;
+      expect(stopEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ isTyping: false, conversationId: CONV_ID })
+      );
+    });
+  });
+
+  // ── blocking privacy ─────────────────────────────────────────────────────────
+  // Typing is a moment-to-moment presence signal, more sensitive than the
+  // `_broadcastUserStatus` snapshot already gated on blocking — it must not
+  // leak to a co-participant in a bidirectional block relationship either.
+
+  describe('blocking privacy', () => {
+    it('handleTypingStart excludes a blocked co-participant socket from the broadcast', async () => {
+      const { connectedUsers, userSockets, prisma } = makeBlockedScenario();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, userSockets });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const toResult = ((socket.to as jest.Mock).mock.results[0] as any).value;
+      expect(toResult.except).toHaveBeenCalledWith([BLOCKED_SOCKET_ID]);
+      expect(toResult.emit).not.toHaveBeenCalled();
+      const exceptEmit = ((toResult.except as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
+      expect(exceptEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_START,
+        expect.objectContaining({ userId: USER_ID, conversationId: CONV_ID })
+      );
+    });
+
+    it('handleTypingStop excludes a blocked co-participant socket from the broadcast', async () => {
+      const { connectedUsers, userSockets, prisma } = makeBlockedScenario();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, userSockets });
+
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      const toResult = ((socket.to as jest.Mock).mock.results[0] as any).value;
+      expect(toResult.except).toHaveBeenCalledWith([BLOCKED_SOCKET_ID]);
+      const exceptEmit = ((toResult.except as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
+      expect(exceptEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, conversationId: CONV_ID })
+      );
+    });
+
+    it('does not call except() when no online co-participant is blocked', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const toResult = ((socket.to as jest.Mock).mock.results[0] as any).value;
+      expect(toResult.except).not.toHaveBeenCalled();
+      expect(toResult.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.TYPING_START,
+        expect.objectContaining({ userId: USER_ID })
+      );
+    });
+
+    it('only queries blocking for registered (non-anonymous) co-participants', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const participantFindMany = jest.fn<any>().mockResolvedValue([]);
+      const prisma = makePrisma({
+        user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) },
+        participant: { findMany: participantFindMany },
+      });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      expect(participantFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ conversationId: CONV_ID, isActive: true, userId: { not: null } }),
+        })
+      );
+    });
+  });
+
+  // ── handleSocketDisconnecting ───────────────────────────────────────────────
+
+  describe('handleSocketDisconnecting', () => {
+    it('broadcasts typing:stop for each active typing conversation on disconnect', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      const CONV_ID_2 = '507f1f77bcf86cd799439099';
+      mockNormalizeConversationId
+        .mockResolvedValueOnce(CONV_ID)
+        .mockResolvedValueOnce(CONV_ID_2);
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: CONV_ID_2 } });
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      throttleMap.clear();
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID_2 });
+
+      const broadcastFn = jest.fn();
+      await handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn);
+
+      expect(broadcastFn).toHaveBeenCalledTimes(2);
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID }),
+        undefined
+      );
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID_2),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID_2 }),
+        undefined
+      );
+    });
+
+    it('clears activeTypers entries for the socket after disconnect', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
+      expect(activeTypers.has(SOCKET_ID)).toBe(true);
+
+      await handler.handleSocketDisconnecting(SOCKET_ID, jest.fn());
+
+      expect(activeTypers.has(SOCKET_ID)).toBe(false);
+    });
+
+    it('is a no-op when socket has no active typing', async () => {
+      const handler = makeHandler();
+      const broadcastFn = jest.fn();
+
+      await expect(handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn)).resolves.not.toThrow();
+      expect(broadcastFn).not.toHaveBeenCalled();
+    });
+
+    it('resolves without throwing and still clears typing state when the blocked-lookup DB query rejects', async () => {
+      // The disconnect handler is fired fire-and-forget (`void ...` with no
+      // .catch at the call site). A transient Mongo failure in the blocked-viewer
+      // lookup must NOT escape as an unhandled rejection, and typing state MUST
+      // still be cleaned up — otherwise the socket leaks an activeTypers entry
+      // and peers keep a phantom "typing…" indicator for a user who has left.
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const participantFindMany = jest.fn<any>()
+        .mockResolvedValueOnce([]) // handleTypingStart setup succeeds
+        .mockRejectedValue(new Error('transient Mongo error')); // disconnect lookup fails
+      const prisma = makePrisma({
+        user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) },
+        participant: { findMany: participantFindMany },
+      });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      expect(activeTypers.has(SOCKET_ID)).toBe(true);
+
+      const broadcastFn = jest.fn();
+      await expect(
+        handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn)
+      ).resolves.not.toThrow();
+
+      expect(activeTypers.has(SOCKET_ID)).toBe(false);
+      expect([...throttleMap.keys()].some(k => k.startsWith(`${USER_ID}:`))).toBe(false);
+    });
+
+    it('still broadcasts typing:stop for healthy conversations when one conversation lookup rejects', async () => {
+      // A per-conversation lookup failure must not abort the whole loop —
+      // remaining conversations the socket was typing in must still receive
+      // their typing:stop broadcast.
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const CONV_ID_2 = '507f1f77bcf86cd799439099';
+      const participantFindMany = jest.fn<any>()
+        .mockResolvedValueOnce([]) // typing:start CONV_ID
+        .mockResolvedValueOnce([]) // typing:start CONV_ID_2
+        .mockRejectedValueOnce(new Error('transient Mongo error')) // disconnect: first conv lookup fails
+        .mockResolvedValueOnce([]); // disconnect: second conv lookup succeeds
+      const prisma = makePrisma({
+        user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) },
+        participant: { findMany: participantFindMany },
+      });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      mockNormalizeConversationId
+        .mockResolvedValueOnce(CONV_ID)
+        .mockResolvedValueOnce(CONV_ID_2);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: CONV_ID_2 } });
+      ((handler as any).typingThrottleMap as Map<string, number>).clear();
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID_2 });
+
+      const broadcastFn = jest.fn();
+      await expect(
+        handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn)
+      ).resolves.not.toThrow();
+
+      // One conversation failed, the other must still be broadcast.
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID_2),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID_2 }),
+        undefined
+      );
+      expect(((handler as any).activeTypers as Map<string, unknown[]>).has(SOCKET_ID)).toBe(false);
+    });
+
+    it('suppresses typing:stop when another socket for same user is typing in the same conversation', async () => {
+      const SOCKET_1 = 'socket-device-1';
+      const SOCKET_2 = 'socket-device-2';
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket1 = makeSocket({ id: SOCKET_1 });
+      const socket2 = makeSocket({ id: SOCKET_2 });
+      const socketToUser = new Map([[SOCKET_1, USER_ID], [SOCKET_2, USER_ID]]);
+      const handler = makeHandler({ prisma, socketToUser });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+
+      // Both sockets are typing in the same conversation
+      await handler.handleTypingStart(socket1, { conversationId: CONV_ID });
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      throttleMap.clear();
+      await handler.handleTypingStart(socket2, { conversationId: CONV_ID });
+
+      // socket1 disconnects — socket2 is still typing in that conversation
+      const broadcastFn = jest.fn();
+      await handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
+
+      // typing:stop must NOT be broadcast because socket2 is still typing
+      expect(broadcastFn).not.toHaveBeenCalled();
+    });
+
+    it('suppresses typing:stop when a second device started typing within the throttle window (no manual reset)', async () => {
+      // Real-world multi-device flow: both devices start typing within the 2s
+      // per-user throttle, so device 2's start is throttled out of BROADCASTING
+      // but must still be tracked as typing. Unlike the test above, the throttle
+      // map is NOT cleared between the two starts.
+      const SOCKET_1 = 'socket-device-1';
+      const SOCKET_2 = 'socket-device-2';
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket1 = makeSocket({ id: SOCKET_1 });
+      const socket2 = makeSocket({ id: SOCKET_2 });
+      const socketToUser = new Map([[SOCKET_1, USER_ID], [SOCKET_2, USER_ID]]);
+      const handler = makeHandler({ prisma, socketToUser });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+
+      await handler.handleTypingStart(socket1, { conversationId: CONV_ID });
+      // Device 2 within the throttle window — throttled from re-broadcasting.
+      await handler.handleTypingStart(socket2, { conversationId: CONV_ID });
+
+      // Device 1 drops; device 2 is still genuinely typing in this conversation.
+      const broadcastFn = jest.fn();
+      await handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
+
+      expect(broadcastFn).not.toHaveBeenCalled();
+    });
+
+    it('broadcasts typing:stop when another socket exists but is NOT typing in the same conversation', async () => {
+      const SOCKET_1 = 'socket-device-1';
+      const SOCKET_2 = 'socket-device-2';
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket1 = makeSocket({ id: SOCKET_1 });
+      const socketToUser = new Map([[SOCKET_1, USER_ID], [SOCKET_2, USER_ID]]);
+      const handler = makeHandler({ prisma, socketToUser });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      await handler.handleTypingStart(socket1, { conversationId: CONV_ID });
+
+      // socket2 exists but is not tracked in activeTypers (not typing)
+      const broadcastFn = jest.fn();
+      await handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
+
+      // typing:stop MUST be broadcast because socket2 is not typing in this conversation
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false }),
+        undefined
+      );
+    });
+
+    it('broadcasts typing:stop when otherSocketIds is undefined (single device)', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const broadcastFn = jest.fn();
+      await handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn, undefined);
+
+      expect(broadcastFn).toHaveBeenCalledTimes(1);
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false }),
+        undefined
+      );
+    });
+
+    it('passes blocked co-participant socket ids to broadcastFn on disconnect', async () => {
+      const { connectedUsers, userSockets, prisma } = makeBlockedScenario();
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, userSockets });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const broadcastFn = jest.fn();
+      await handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn);
+
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false }),
+        [BLOCKED_SOCKET_ID]
+      );
     });
   });
 
@@ -562,6 +1069,43 @@ describe('StatusHandler', () => {
 
       expect(() => handler.clearTypingThrottle('unknown-user')).not.toThrow();
       expect(throttleMap.size).toBe(1);
+    });
+  });
+
+  // ── destroy / periodic eviction ──────────────────────────────────────────────
+
+  describe('destroy', () => {
+    it('clears the periodic cleanup timer without throwing', () => {
+      const handler = makeHandler();
+      expect(() => handler.destroy()).not.toThrow();
+      expect(() => handler.destroy()).not.toThrow(); // idempotent
+    });
+  });
+
+  describe('_evictStaleThrottleEntries (via size-triggered cleanup)', () => {
+    it('removes entries older than TTL when map exceeds cleanup threshold', async () => {
+      jest.useFakeTimers();
+      const CLEANUP_SIZE = (StatusHandler as any).TYPING_THROTTLE_CLEANUP_SIZE as number;
+      const TTL_MS = (StatusHandler as any).TYPING_THROTTLE_TTL_MS as number;
+
+      const handler = makeHandler();
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+
+      const now = Date.now();
+      const staleTs = now - TTL_MS - 1_000;
+
+      // Fill past the cleanup threshold with stale entries
+      for (let i = 0; i < CLEANUP_SIZE + 1; i++) {
+        throttleMap.set(`user-${i}:conv`, staleTs);
+      }
+
+      // Trigger the cleanup by calling handleTypingStart which sets a fresh entry
+      // and then invokes _evictStaleThrottleEntries if size > threshold.
+      // Call it directly to avoid full async chain:
+      (handler as any)._evictStaleThrottleEntries();
+
+      // All stale entries should be gone
+      expect(throttleMap.size).toBe(0);
     });
   });
 });

@@ -25,7 +25,7 @@ interface VideoStreamProps {
 export function VideoStream({
   stream,
   muted = false,
-  _isLocal = false,
+  isLocal: _isLocal = false,
   className,
   participantName,
   isAudioEnabled = true,

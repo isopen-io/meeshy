@@ -1,8 +1,9 @@
 package me.meeshy.app.conversations
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,24 +15,46 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.MarkChatRead
+import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,52 +71,69 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
+import me.meeshy.ui.component.CollapsibleSection
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.chrome.FloatingGradientFab
+import me.meeshy.ui.component.chrome.MeeshyBackground
+import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.format.RelativeTimeFormat
+import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
+import java.time.ZoneId
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationListScreen(
     onConversationClick: (String) -> Unit,
     onLogout: () -> Unit,
+    onNewConversation: () -> Unit = {},
+    onContacts: () -> Unit = {},
     viewModel: ConversationListViewModel = hiltViewModel(),
+    header: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    MeeshyBackground {
     Scaffold(
-        containerColor = MeeshyTheme.tokens.backgroundPrimary,
+        containerColor = Color.Transparent,
         topBar = {
-            TopAppBar(
+            LargeTopAppBar(
+                colors = TopAppBarDefaults.largeTopAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                    titleContentColor = MeeshyPalette.Indigo500,
+                    actionIconContentColor = MeeshyTheme.tokens.textSecondary,
+                ),
                 title = {
-                    if (state.isSearchActive) {
-                        ConversationSearchField(
-                            query = state.searchText,
-                            onQueryChange = viewModel::setSearch,
-                        )
-                    } else {
-                        Text(stringResource(R.string.conversations_title), fontWeight = FontWeight.Bold)
-                    }
+                    Text(
+                        text = stringResource(R.string.conversations_title),
+                        style = MaterialTheme.typography.displayMedium,
+                        color = MeeshyPalette.Indigo500,
+                    )
                 },
                 actions = {
-                    if (state.isSearchActive) {
-                        IconButton(onClick = { viewModel.setSearchActive(false) }) {
-                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.conversations_search_close))
-                        }
-                    } else {
-                        IconButton(onClick = { viewModel.setSearchActive(true) }) {
-                            Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.conversations_search))
-                        }
-                        IconButton(onClick = onLogout) {
-                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.conversations_logout))
-                        }
+                    // iOS parity: search moves to the bottom bar; sign-out lives in
+                    // Settings (Danger section), so the top keeps only Contacts.
+                    IconButton(onClick = onContacts) {
+                        Icon(Icons.Filled.People, contentDescription = stringResource(R.string.conversations_contacts))
                     }
                 },
+            )
+        },
+        bottomBar = {
+            ConversationSearchBar(
+                query = state.searchText,
+                onQueryChange = viewModel::setSearch,
             )
         },
     ) { padding ->
@@ -103,39 +143,62 @@ fun ConversationListScreen(
                 .padding(padding),
         ) {
             ConnectionBannerStrip(state.banner)
-            ConversationFilterBar(
-                selected = state.selectedFilter,
-                onSelect = viewModel::selectFilter,
-            )
+            header()
+            // iOS parity: no Material filter chips on the conversation list — the
+            // filter state stays (defaults to ALL) but the chip row is not rendered.
             Box(modifier = Modifier.weight(1f)) {
-                when {
-                    state.showSkeleton -> SkeletonList()
+                when (val content = ConversationListContent.of(state)) {
+                    ConversationListContent.Skeleton -> SkeletonList()
 
-                    state.conversations.isEmpty() && state.errorMessage != null ->
-                        CenteredMessage(
-                            state.errorMessage!!,
-                            stringResource(R.string.conversations_retry),
-                            viewModel::refresh,
-                        )
+                    is ConversationListContent.Error,
+                    ConversationListContent.FilteredEmpty,
+                    ConversationListContent.ColdEmpty ->
+                        EmptyStateVisual.of(content)?.let { visual ->
+                            EmptyStateCard(visual = visual, onRetry = viewModel::refresh)
+                        }
 
-                    state.conversations.isEmpty() && state.isFilteredEmpty ->
-                        CenteredMessage(stringResource(R.string.conversations_no_results), null, null)
-
-                    state.conversations.isEmpty() ->
-                        CenteredMessage(stringResource(R.string.conversations_empty), null, null)
-
-                    else -> PullToRefreshBox(
+                    ConversationListContent.Populated -> PullToRefreshBox(
                         isRefreshing = state.isUserRefreshing,
                         onRefresh = viewModel::refresh,
                         modifier = Modifier.fillMaxSize(),
                     ) {
+                        val row: @Composable (ApiConversation) -> Unit = { conversation ->
+                            ConversationRow(
+                                conversation = conversation,
+                                currentUserId = state.currentUserId,
+                                draft = state.draftFor(conversation.id),
+                                onClick = { onConversationClick(conversation.id) },
+                                onTogglePin = { viewModel.togglePin(conversation.id) },
+                                onToggleMute = { viewModel.toggleMute(conversation.id) },
+                                onToggleArchive = { viewModel.toggleArchive(conversation.id) },
+                                onMarkRead = { viewModel.markRead(conversation.id) },
+                                onDiscardDraft = { viewModel.discardDraft(conversation.id) },
+                            )
+                        }
+                        // Sections (parity iOS): Épingles first, then Mes conversations.
+                        // The pinned/others split is the pure ConversationSections SSOT,
+                        // which also omits an empty section (no phantom "Mes conversations"
+                        // header when every row is pinned). Section bodies compose eagerly
+                        // (few items on a real account); revisit for lazy paging if a user
+                        // has hundreds of threads.
+                        val sections = ConversationSections.of(state.conversations)
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(state.conversations, key = { it.id }) { conversation ->
-                                ConversationRow(
-                                    conversation = conversation,
-                                    currentUserId = state.currentUserId,
-                                    onClick = { onConversationClick(conversation.id) },
-                                )
+                            sections.forEach { section ->
+                                item(key = "section-${section.kind}") {
+                                    CollapsibleSection(
+                                        title = stringResource(section.kind.titleRes()),
+                                        count = section.items.size,
+                                        iconContainerColor = section.kind.containerColor(),
+                                        icon = {
+                                            Icon(
+                                                section.kind.icon(),
+                                                contentDescription = null,
+                                                tint = MeeshyPalette.White,
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        },
+                                    ) { section.items.forEach { row(it) } }
+                                }
                             }
                         }
                     }
@@ -143,27 +206,55 @@ fun ConversationListScreen(
             }
         }
     }
+    }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** iOS parity: a floating glass search pill anchored to the bottom of the screen. */
 @Composable
-private fun ConversationSearchField(
+private fun ConversationSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
 ) {
-    TextField(
-        value = query,
-        onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        placeholder = { Text(stringResource(R.string.conversations_search_hint)) },
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-        ),
-    )
+    MeeshyGlassSurface(
+        shape = RoundedCornerShape(MeeshyRadius.pill),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = null,
+                tint = MeeshyTheme.tokens.textMuted,
+                modifier = Modifier.size(20.dp),
+            )
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MeeshyTheme.tokens.textPrimary),
+                cursorBrush = SolidColor(MeeshyPalette.Indigo500),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = MeeshySpacing.sm),
+                decorationBox = { inner ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.conversations_search_hint),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MeeshyTheme.tokens.textMuted,
+                            )
+                        }
+                        inner()
+                    }
+                },
+            )
+        }
+    }
 }
 
 @Composable
@@ -199,13 +290,103 @@ private fun ConnectionBannerStrip(banner: ConnectionBanner, modifier: Modifier =
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConversationRow(
     conversation: ApiConversation,
     currentUserId: String?,
+    draft: ConversationDraft?,
     onClick: () -> Unit,
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleArchive: () -> Unit,
+    onMarkRead: () -> Unit,
+    onDiscardDraft: () -> Unit,
 ) {
-    val title = conversation.displayTitle()
+    val prefs = conversation.resolvedPreferences
+    val isPinned = prefs?.isPinned == true
+    val isMuted = prefs?.isMuted == true
+    val isArchived = prefs?.isArchived == true
+
+    // Swipe snaps back after firing the action (non-destructive) — the visual
+    // outcome is the row re-sorting/re-filtering itself once the cache mutates.
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> onTogglePin()
+                SwipeToDismissBoxValue.EndToStart -> onToggleArchive()
+                SwipeToDismissBoxValue.Settled -> Unit
+            }
+            false
+        },
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            SwipeActionBackground(
+                direction = dismissState.dismissDirection,
+                isPinned = isPinned,
+                isArchived = isArchived,
+            )
+        },
+    ) {
+        ConversationRowContent(
+            conversation = conversation,
+            currentUserId = currentUserId,
+            draft = draft,
+            isPinned = isPinned,
+            isMuted = isMuted,
+            isArchived = isArchived,
+            onClick = onClick,
+            onTogglePin = onTogglePin,
+            onToggleMute = onToggleMute,
+            onToggleArchive = onToggleArchive,
+            onMarkRead = onMarkRead,
+            onDiscardDraft = onDiscardDraft,
+        )
+    }
+}
+
+/**
+ * The conversation row's trailing timestamp as a compact relative label ("5 min", "2 h", "3 j",
+ * …) — the Android parity of iOS `ThemedConversationRow`'s
+ * `RelativeTimeFormatter.shortString(for: conversation.lastMessageAt)`. Returns null when the
+ * conversation carries no parseable timestamp, so a brand-new row with no activity shows no label
+ * rather than a placeholder. The [rememberRelativeTimeStrings] read stays before the early return
+ * to keep the composable-call graph unconditional.
+ */
+@Composable
+private fun conversationRowRelativeTime(conversation: ApiConversation): String? {
+    val strings = rememberRelativeTimeStrings()
+    val millis = ConversationRowTime.epochMillis(conversation) ?: return null
+    return RelativeTimeFormat.short(
+        epochMillis = millis,
+        referenceMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault(),
+        locale = Locale.getDefault(),
+        strings = strings,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@Composable
+private fun ConversationRowContent(
+    conversation: ApiConversation,
+    currentUserId: String?,
+    draft: ConversationDraft?,
+    isPinned: Boolean,
+    isMuted: Boolean,
+    isArchived: Boolean,
+    onClick: () -> Unit,
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleArchive: () -> Unit,
+    onMarkRead: () -> Unit,
+    onDiscardDraft: () -> Unit,
+) {
+    val title = conversation.displayTitle(currentUserId)
+    var menuExpanded by remember { mutableStateOf(false) }
     val previewLabels = LastMessagePreviewLabels(
         photo = stringResource(R.string.conversations_preview_photo),
         video = stringResource(R.string.conversations_preview_video),
@@ -215,50 +396,254 @@ private fun ConversationRow(
         none = stringResource(R.string.conversations_no_messages),
         you = stringResource(R.string.conversations_preview_you),
         senderFormat = stringResource(R.string.conversations_preview_sender_format),
+        draftPrefix = stringResource(R.string.conversations_preview_draft_prefix),
     )
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .semantics { role = Role.Button; contentDescription = title }
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        MeeshyAvatar(
-            name = title,
-            containerColor = hexColor(conversation.accentHex()),
-        )
-        Column(
+    val draftLine = draftPreview(draft, previewLabels)
+    Box {
+        MeeshyGlassSurface(
+            shape = RoundedCornerShape(MeeshyRadius.xl),
             modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = MeeshySpacing.md),
+                .fillMaxWidth()
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { menuExpanded = true },
+                )
+                .semantics { role = Role.Button; contentDescription = title },
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MeeshyTheme.tokens.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+            MeeshyAvatar(
+                name = title,
+                containerColor = hexColor(conversation.accentHex()),
             )
-            Text(
-                text = lastMessagePreview(
-                    message = conversation.lastMessage,
-                    currentUserId = currentUserId,
-                    showSender = conversation.type != "direct",
-                    labels = previewLabels,
-                ),
-                style = MaterialTheme.typography.bodySmall,
-                color = MeeshyTheme.tokens.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = MeeshySpacing.md),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isPinned) {
+                        Icon(
+                            imageVector = Icons.Filled.PushPin,
+                            contentDescription = stringResource(R.string.conversations_badge_pinned),
+                            tint = MeeshyTheme.tokens.textSecondary,
+                            modifier = Modifier
+                                .size(14.dp)
+                                .padding(end = MeeshySpacing.xs),
+                        )
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MeeshyTheme.tokens.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (isMuted) {
+                        Icon(
+                            imageVector = Icons.Filled.NotificationsOff,
+                            contentDescription = stringResource(R.string.conversations_badge_muted),
+                            tint = MeeshyTheme.tokens.textSecondary,
+                            modifier = Modifier
+                                .size(14.dp)
+                                .padding(start = MeeshySpacing.xs),
+                        )
+                    }
+                }
+                Text(
+                    text = draftLine ?: lastMessagePreview(
+                        message = conversation.lastMessage,
+                        currentUserId = currentUserId,
+                        showSender = conversation.type != "direct",
+                        labels = previewLabels,
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (draftLine != null) {
+                        hexColor(conversation.accentHex())
+                    } else {
+                        MeeshyTheme.tokens.textSecondary
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            ) {
+                conversationRowRelativeTime(conversation)?.let { relativeTime ->
+                    Text(
+                        text = relativeTime,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (conversation.unreadCount > 0) {
+                            MeeshyTheme.tokens.error
+                        } else {
+                            hexColor(conversation.accentHex())
+                        },
+                        maxLines = 1,
+                    )
+                }
+                if (conversation.unreadCount > 0) {
+                    Badge { Text(conversation.unreadCount.coerceAtMost(99).toString()) }
+                }
+            }
+            }
+        }
+
+        ConversationContextMenu(
+            expanded = menuExpanded,
+            onDismiss = { menuExpanded = false },
+            isPinned = isPinned,
+            isMuted = isMuted,
+            isArchived = isArchived,
+            hasUnread = conversation.unreadCount > 0,
+            hasDraft = draft?.isMeaningful == true,
+            onTogglePin = onTogglePin,
+            onToggleMute = onToggleMute,
+            onToggleArchive = onToggleArchive,
+            onMarkRead = onMarkRead,
+            onDiscardDraft = onDiscardDraft,
+        )
+    }
+}
+
+@Composable
+private fun ConversationContextMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    isPinned: Boolean,
+    isMuted: Boolean,
+    isArchived: Boolean,
+    hasUnread: Boolean,
+    hasDraft: Boolean,
+    onTogglePin: () -> Unit,
+    onToggleMute: () -> Unit,
+    onToggleArchive: () -> Unit,
+    onMarkRead: () -> Unit,
+    onDiscardDraft: () -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        DropdownMenuItem(
+            text = {
+                Text(
+                    stringResource(
+                        if (isPinned) R.string.conversations_action_unpin
+                        else R.string.conversations_action_pin,
+                    ),
+                )
+            },
+            leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+            onClick = { onTogglePin(); onDismiss() },
+        )
+        DropdownMenuItem(
+            text = {
+                Text(
+                    stringResource(
+                        if (isMuted) R.string.conversations_action_unmute
+                        else R.string.conversations_action_mute,
+                    ),
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    if (isMuted) Icons.Filled.Notifications else Icons.Filled.NotificationsOff,
+                    contentDescription = null,
+                )
+            },
+            onClick = { onToggleMute(); onDismiss() },
+        )
+        if (hasUnread) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_mark_read)) },
+                leadingIcon = { Icon(Icons.Filled.MarkChatRead, contentDescription = null) },
+                onClick = { onMarkRead(); onDismiss() },
             )
         }
-        if (conversation.unreadCount > 0) {
-            Badge { Text(conversation.unreadCount.coerceAtMost(99).toString()) }
+        if (hasDraft) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_action_discard_draft)) },
+                leadingIcon = { Icon(Icons.Filled.DeleteSweep, contentDescription = null) },
+                onClick = { onDiscardDraft(); onDismiss() },
+            )
+        }
+        DropdownMenuItem(
+            text = {
+                Text(
+                    stringResource(
+                        if (isArchived) R.string.conversations_action_unarchive
+                        else R.string.conversations_action_archive,
+                    ),
+                )
+            },
+            leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) },
+            onClick = { onToggleArchive(); onDismiss() },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeActionBackground(
+    direction: SwipeToDismissBoxValue,
+    isPinned: Boolean,
+    isArchived: Boolean,
+) {
+    val (alignment, icon, description, background) = when (direction) {
+        SwipeToDismissBoxValue.StartToEnd -> SwipeActionVisual(
+            alignment = Alignment.CenterStart,
+            icon = Icons.Filled.PushPin,
+            description = stringResource(
+                if (isPinned) R.string.conversations_action_unpin
+                else R.string.conversations_action_pin,
+            ),
+            background = MeeshyPalette.Warning.copy(alpha = 0.20f),
+        )
+        SwipeToDismissBoxValue.EndToStart -> SwipeActionVisual(
+            alignment = Alignment.CenterEnd,
+            icon = Icons.Filled.Archive,
+            description = stringResource(
+                if (isArchived) R.string.conversations_action_unarchive
+                else R.string.conversations_action_archive,
+            ),
+            background = MeeshyTheme.tokens.backgroundTertiary,
+        )
+        SwipeToDismissBoxValue.Settled -> SwipeActionVisual(
+            alignment = Alignment.CenterStart,
+            icon = Icons.Filled.PushPin,
+            description = "",
+            background = Color.Transparent,
+        )
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(background)
+            .padding(horizontal = MeeshySpacing.xl),
+        contentAlignment = alignment,
+    ) {
+        if (direction != SwipeToDismissBoxValue.Settled) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = MeeshyTheme.tokens.textSecondary,
+            )
         }
     }
 }
+
+private data class SwipeActionVisual(
+    val alignment: Alignment,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val description: String,
+    val background: Color,
+)
 
 @Composable
 private fun SkeletonList() {
@@ -281,22 +666,95 @@ private fun SkeletonList() {
     }
 }
 
+/**
+ * The iconified empty-state card (parity §B): glyph in a tinted disc + title +
+ * subtitle + optional retry CTA, laid on a [MeeshyGlassSurface]. The copy/icon
+ * choice is the pure [EmptyStateVisual]; this glue only renders it. The error
+ * glyph tints red, the others accent-indigo, keeping the palette coherent.
+ */
 @Composable
-private fun CenteredMessage(message: String, actionLabel: String?, onAction: (() -> Unit)?) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+private fun EmptyStateCard(visual: EmptyStateVisual, onRetry: () -> Unit) {
+    val accent = if (visual.glyph == EmptyStateGlyph.Error) MeeshyPalette.Error else MeeshyPalette.Indigo500
+    Box(
+        modifier = Modifier.fillMaxSize().padding(MeeshySpacing.xl),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
-        if (actionLabel != null && onAction != null) {
-            Button(onClick = onAction, modifier = Modifier.padding(top = MeeshySpacing.lg)) {
-                Text(actionLabel)
+        MeeshyGlassSurface(shape = RoundedCornerShape(MeeshyRadius.lg)) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.xl),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(accent.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = visual.glyph.icon(),
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+                Text(
+                    text = stringResource(visual.title.resId()),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MeeshyTheme.tokens.textPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = MeeshySpacing.lg),
+                )
+                visual.subtitle?.let { subtitle ->
+                    Text(
+                        text = when (subtitle) {
+                            is EmptyStateSubtitle.Resource -> stringResource(subtitle.copy.resId())
+                            is EmptyStateSubtitle.Literal -> subtitle.text
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MeeshyTheme.tokens.textSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = MeeshySpacing.sm),
+                    )
+                }
+                visual.cta?.let { cta ->
+                    Button(onClick = onRetry, modifier = Modifier.padding(top = MeeshySpacing.lg)) {
+                        Text(stringResource(cta.resId()))
+                    }
+                }
             }
         }
     }
+}
+
+private fun EmptyStateGlyph.icon() = when (this) {
+    EmptyStateGlyph.Error -> Icons.Filled.CloudOff
+    EmptyStateGlyph.NoResults -> Icons.Filled.SearchOff
+    EmptyStateGlyph.NoConversations -> Icons.AutoMirrored.Filled.Chat
+}
+
+private fun ConversationSectionKind.titleRes(): Int = when (this) {
+    ConversationSectionKind.PINNED -> R.string.conversations_section_pinned
+    ConversationSectionKind.ALL -> R.string.conversations_section_all
+}
+
+private fun ConversationSectionKind.icon() = when (this) {
+    ConversationSectionKind.PINNED -> Icons.Filled.PushPin
+    ConversationSectionKind.ALL -> Icons.AutoMirrored.Filled.Chat
+}
+
+private fun ConversationSectionKind.containerColor(): Color = when (this) {
+    ConversationSectionKind.PINNED -> MeeshyPalette.Error
+    ConversationSectionKind.ALL -> MeeshyPalette.Indigo500
+}
+
+private fun EmptyStateCopy.resId(): Int = when (this) {
+    EmptyStateCopy.ErrorTitle -> R.string.conversations_error_title
+    EmptyStateCopy.ErrorSubtitle -> R.string.conversations_error_subtitle
+    EmptyStateCopy.Retry -> R.string.conversations_retry
+    EmptyStateCopy.FilteredTitle -> R.string.conversations_no_results
+    EmptyStateCopy.FilteredSubtitle -> R.string.conversations_no_results_subtitle
+    EmptyStateCopy.ColdTitle -> R.string.conversations_empty
+    EmptyStateCopy.ColdSubtitle -> R.string.conversations_empty_subtitle
 }

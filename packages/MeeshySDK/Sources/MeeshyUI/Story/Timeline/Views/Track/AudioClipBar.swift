@@ -16,6 +16,7 @@ public struct AudioClipBar: View, Equatable {
             && lhs.geometry == rhs.geometry
             && lhs.laneHeight == rhs.laneHeight
             && lhs.waveformSamples == rhs.waveformSamples
+            && lhs.audioURL == rhs.audioURL
     }
 
     public let clipId: String
@@ -39,17 +40,35 @@ public struct AudioClipBar: View, Equatable {
     /// the drift snowballs across frames because each `onChanged` re-reads
     /// the (already-mutated) clip start. Mirrors `VideoClipBar.onMoveEnded`.
     public let onMoveEnded: () -> Void
+    /// Poignées de trim — la fenêtre d'un audio se règle au doigt (affichées
+    /// à la sélection). Défauts no-op pour les call sites existants.
+    public let onTrimStartDelta: (CGFloat) -> Void
+    public let onTrimEndDelta: (CGFloat) -> Void
+    /// URL locale du fichier — quand `waveformSamples` est vide (draft
+    /// restauré, repost), la barre extrait elle-même sa forme d'onde
+    /// (AudioWaveform, RMS + cache). Sans ça la lane audio était un aplat.
+    public let audioURL: URL?
+
+    /// Forme d'onde auto-extraite (état interne, hors `==`).
+    @State private var loadedSamples: [Float] = []
+
+    var effectiveSamples: [Float] {
+        waveformSamples.isEmpty ? loadedSamples : waveformSamples
+    }
 
     public init(
         clipId: String, title: String, startTime: Float, duration: Float,
         volume: Float, isMuted: Bool, isSelected: Bool, isLocked: Bool,
         isDark: Bool, geometry: TimelineGeometry, laneHeight: CGFloat,
         waveformSamples: [Float],
+        audioURL: URL? = nil,
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
         onLongPress: @escaping () -> Void,
         onMoveDelta: @escaping (CGFloat) -> Void,
-        onMoveEnded: @escaping () -> Void = {}
+        onMoveEnded: @escaping () -> Void = {},
+        onTrimStartDelta: @escaping (CGFloat) -> Void = { _ in },
+        onTrimEndDelta: @escaping (CGFloat) -> Void = { _ in }
     ) {
         self.clipId = clipId; self.title = title
         self.startTime = startTime; self.duration = duration
@@ -57,9 +76,12 @@ public struct AudioClipBar: View, Equatable {
         self.isSelected = isSelected; self.isLocked = isLocked
         self.isDark = isDark; self.geometry = geometry
         self.laneHeight = laneHeight; self.waveformSamples = waveformSamples
+        self.audioURL = audioURL
         self.onTap = onTap; self.onDoubleTap = onDoubleTap
         self.onLongPress = onLongPress; self.onMoveDelta = onMoveDelta
         self.onMoveEnded = onMoveEnded
+        self.onTrimStartDelta = onTrimStartDelta
+        self.onTrimEndDelta = onTrimEndDelta
     }
 
     public var accessibilityComposed: String {
@@ -85,6 +107,11 @@ public struct AudioClipBar: View, Equatable {
                 RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
                     .allowsHitTesting(false)
             }
+            if isSelected, !isLocked {
+                ClipTrimHandles(laneHeight: laneHeight,
+                                onTrimStartDelta: onTrimStartDelta,
+                                onTrimEndDelta: onTrimEndDelta)
+            }
         }
         .frame(width: geometry.width(for: duration), height: laneHeight - 4)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -101,6 +128,10 @@ public struct AudioClipBar: View, Equatable {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
         .accessibilityValue(accessibilityValueDescription)
+        .task(id: audioURL) {
+            guard waveformSamples.isEmpty, let audioURL else { return }
+            loadedSamples = await AudioWaveform.samples(url: audioURL, count: 80)
+        }
     }
 
     /// In-clip name chip — parity with `VideoClipBar.titleLabel` so audio
@@ -140,12 +171,12 @@ public struct AudioClipBar: View, Equatable {
             // 'Index out of range' on any audio clip that hadn't yet
             // had its waveform extracted. iterating samples.indices
             // is correct for any count including 0.
-            if !waveformSamples.isEmpty {
-                let count = waveformSamples.count
+            if !effectiveSamples.isEmpty {
+                let count = effectiveSamples.count
                 let stepX = geo.size.width / CGFloat(count)
                 HStack(alignment: .center, spacing: 1) {
-                    ForEach(waveformSamples.indices, id: \.self) { i in
-                        let amp = CGFloat(waveformSamples[i])
+                    ForEach(effectiveSamples.indices, id: \.self) { i in
+                        let amp = CGFloat(effectiveSamples[i])
                         Capsule()
                             .fill(Color.white.opacity(0.85))
                             .frame(width: max(1, stepX - 1),

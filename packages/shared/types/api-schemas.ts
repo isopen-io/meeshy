@@ -723,6 +723,7 @@ export const messageSchema = {
     // Delivery Status
     deliveredCount: { type: 'number', description: 'Number of recipients who received the message' },
     readCount: { type: 'number', description: 'Number of recipients who read the message' },
+    recipientCount: { type: 'number', description: 'Number of active recipients (participants excluding the sender) — all-or-nothing denominator' },
     deliveredToAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Delivered to all timestamp' },
     readByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Read by all timestamp' },
 
@@ -876,7 +877,7 @@ export const conversationParticipantSchema = {
     lastName: { type: 'string', nullable: true, description: 'Last name' },
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
-    email: { type: 'string', nullable: true, description: 'Email address' },
+    banner: { type: 'string', nullable: true, description: 'Profile banner URL' },
     role: {
       type: 'string',
       enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
@@ -1157,6 +1158,7 @@ export const conversationParticipantMinimalSchema = {
     type: { type: 'string', nullable: true, description: 'Participant type (registered/anonymous)' },
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+    banner: { type: 'string', nullable: true, description: 'Profile banner URL (flattened top-level for DM surfacing)' },
     role: { type: 'string', description: 'Member role' },
     language: { type: 'string', nullable: true, description: 'Preferred language' },
     nickname: { type: 'string', nullable: true, description: 'Nickname in conversation' },
@@ -1203,6 +1205,7 @@ export const conversationParticipantMinimalSchema = {
         firstName: { type: 'string', nullable: true, description: 'First name' },
         lastName: { type: 'string', nullable: true, description: 'Last name' },
         avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+        banner: { type: 'string', nullable: true, description: 'Profile banner URL' },
         isOnline: { type: 'boolean', description: 'Online status' },
         lastActiveAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last active timestamp' }
       }
@@ -1250,7 +1253,9 @@ export const conversationMinimalSchema = {
           isArchived: { type: 'boolean', description: 'Is archived by user' },
           isDeletedForUser: { type: 'boolean', description: 'Is deleted for user' },
           tags: { type: 'array', items: { type: 'string' }, description: 'User-defined tags' },
-          categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' }
+          categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' },
+          customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name (drives DM display name)' },
+          reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' }
         }
       },
       description: 'User preferences for this conversation'
@@ -1804,7 +1809,9 @@ export const notificationContextSchema = {
     originalMessageId: { type: 'string', nullable: true, description: 'Original message ID (for replies)' },
     callSessionId: { type: 'string', nullable: true, description: 'Related call session ID' },
     friendRequestId: { type: 'string', nullable: true, description: 'Related friend request ID' },
-    reactionId: { type: 'string', nullable: true, description: 'Related reaction ID' }
+    reactionId: { type: 'string', nullable: true, description: 'Related reaction ID' },
+    postId: { type: 'string', nullable: true, description: 'Related post/story/mood ID (navigation target)' },
+    commentId: { type: 'string', nullable: true, description: 'Related comment ID (navigation anchor)' }
   }
 } as const;
 
@@ -1911,6 +1918,8 @@ export const notificationSchema = {
     },
 
     // === CONTENT ===
+    title: { type: 'string', nullable: true, description: 'Localized, entity-aware "actor + action" headline (server-built single source; null → client fallback)' },
+    subtitle: { type: 'string', nullable: true, description: 'Localized subtitle base WITHOUT date (client appends the device-local date)' },
     content: { type: 'string', description: 'Notification content (preview or main text)' },
 
     // === ACTOR - Qui a déclenché ===
@@ -2122,13 +2131,26 @@ export const callSessionSchema = {
     initiatorId: { type: 'string', description: 'User who initiated the call' },
     mode: {
       type: 'string',
-      enum: ['voice', 'video'],
-      description: 'Call mode'
+      enum: ['p2p', 'sfu'],
+      description: 'WebRTC architecture (p2p or sfu) — NOT the call type; see metadata.type'
     },
     status: {
       type: 'string',
       enum: ['ringing', 'active', 'ended', 'missed', 'rejected', 'failed'],
       description: 'Call status'
+    },
+
+    // Whitelisted metadata — fast-json-stringify strips everything else
+    // (privacy fix 2026-05-12: raw Prisma metadata leaked other participants'
+    // telemetry). `type` is the ONLY REST source of the audio/video nature of
+    // the call: `mode` carries the WebRTC architecture, never 'video'.
+    metadata: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        type: { type: 'string', enum: ['audio', 'video'], description: 'Call type (audio or video)' }
+      },
+      description: 'Call metadata (whitelisted: type only)'
     },
 
     // Timestamps
@@ -3234,7 +3256,8 @@ export const updateUserRequestSchema = {
     regionalLanguage: { type: 'string', minLength: 2, maxLength: 5, description: 'Regional language code' },
     customDestinationLanguage: { type: 'string', maxLength: 5, nullable: true, description: 'Custom destination language (empty string allowed)' },
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
-    timezone: { type: 'string', description: 'User timezone (IANA format)' }
+    timezone: { type: 'string', description: 'User timezone (IANA format)' },
+    voicePublic: { type: 'boolean', description: 'Expose the cloned voice sample on the public profile' }
   }
 } as const;
 

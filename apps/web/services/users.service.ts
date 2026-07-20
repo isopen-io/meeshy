@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
 import { User } from '@/types';
 import { getDefaultPermissions } from '@/utils/user-adapter';
@@ -38,7 +39,7 @@ export const usersService = {
       const response = await apiService.get<User[]>('/users');
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des utilisateurs:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des utilisateurs', { error });
       throw error;
     }
   },
@@ -94,7 +95,7 @@ export const usersService = {
         data: finalUserData
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération du profil:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération du profil', { error });
       throw error;
     }
   },
@@ -107,7 +108,7 @@ export const usersService = {
       const response = await apiService.patch<User>('/users/me', updateData);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du profil:', error);
+      logger.error('[Service]', 'Erreur lors de la mise à jour du profil', { error });
       throw error;
     }
   },
@@ -144,7 +145,7 @@ export const usersService = {
       }>('/users/me/dashboard-stats');
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques du dashboard:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des statistiques du dashboard', { error });
       throw error;
     }
   },
@@ -168,7 +169,7 @@ export const usersService = {
         message: response.message
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération du profil utilisateur:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération du profil utilisateur', { error });
       throw error;
     }
   },
@@ -188,7 +189,7 @@ export const usersService = {
         message: response.message
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques utilisateur:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des statistiques utilisateur', { error });
       throw error;
     }
   },
@@ -341,7 +342,7 @@ export const usersService = {
     } catch (error) {
       // Échec silencieux - l'affiliation n'est pas critique
       if (process.env.NODE_ENV === 'development') {
-        console.warn(`[UsersService] Impossible de récupérer le token d'affiliation pour l'utilisateur ${userId}:`, error);
+        logger.warn('[UsersService]', `Impossible de récupérer le token d'affiliation pour l'utilisateur ${userId}`, { error });
       }
       // Retourner une réponse avec data null en cas d'erreur
       return {

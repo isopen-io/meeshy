@@ -30,7 +30,7 @@ final class StoryViewerReactionFlowTests: XCTestCase {
 
     func test_specPattern_stripVisible_isNotDismissedImmediately() {
         // Strip a un délai 0.5s avant dismiss — feedback visuel délibéré.
-        var showEmojiStrip = true
+        let showEmojiStrip = true
         var bigReactionEmoji: String?
 
         // Le préambule de triggerStoryReaction NE touche PAS showEmojiStrip.
@@ -42,13 +42,10 @@ final class StoryViewerReactionFlowTests: XCTestCase {
 
     func test_specPattern_noOverlayVisible_animationStillFires() {
         // Pas d'overlay → animation directe.
-        var showFullEmojiPicker = false
-        var showEmojiStrip = false
+        let showFullEmojiPicker = false
+        let showEmojiStrip = false
         var bigReactionEmoji: String?
 
-        if showFullEmojiPicker {
-            showFullEmojiPicker = false
-        }
         bigReactionEmoji = "🔥"
 
         XCTAssertFalse(showFullEmojiPicker)

@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
 import type { ApiResponse } from '@meeshy/shared/types';
 import type { AdminUser } from '@meeshy/shared/types';
@@ -115,7 +116,7 @@ export const adminService = {
       const response = await apiService.get<AdminDashboardData>('/admin/dashboard');
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques admin:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération des statistiques admin', { error });
       throw error;
     }
   },
@@ -140,7 +141,7 @@ export const adminService = {
       const response = await apiService.get<AdminUsersResponse>('/admin/users', params);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des utilisateurs:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération des utilisateurs', { error });
       throw error;
     }
   },
@@ -153,7 +154,7 @@ export const adminService = {
       const response = await apiService.patch<User>(`/admin/users/${userId}/role`, { role });
       return response;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du rôle:', error);
+      logger.error('[Admin]', 'Erreur lors de la mise à jour du rôle', { error });
       throw error;
     }
   },
@@ -166,7 +167,7 @@ export const adminService = {
       const response = await apiService.patch<User>(`/admin/users/${userId}/status`, { isActive });
       return response;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du statut:', error);
+      logger.error('[Admin]', 'Erreur lors de la mise à jour du statut', { error });
       throw error;
     }
   },
@@ -179,7 +180,7 @@ export const adminService = {
       const response = await apiService.delete<void>(`/admin/users/${userId}`);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la suppression de l\'utilisateur:', error);
+      logger.error('[Admin]', "Erreur lors de la suppression de l'utilisateur", { error });
       throw error;
     }
   },
@@ -201,7 +202,7 @@ export const adminService = {
       const response = await apiService.get<AdminAnonymousUsersResponse>('/admin/anonymous-users', params);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des utilisateurs anonymes:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération des utilisateurs anonymes', { error });
       throw error;
     }
   },
@@ -226,7 +227,7 @@ export const adminService = {
       const response = await apiService.get<any>('/admin/messages', params);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des messages:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération des messages', { error });
       throw error;
     }
   },
@@ -248,7 +249,7 @@ export const adminService = {
       const response = await apiService.get<any>('/admin/communities', params);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des communautés:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération des communautés', { error });
       throw error;
     }
   },
@@ -273,7 +274,7 @@ export const adminService = {
       const response = await apiService.get<any>('/admin/translations', params);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des traductions:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération des traductions', { error });
       throw error;
     }
   },
@@ -295,7 +296,7 @@ export const adminService = {
       const response = await apiService.get<any>('/admin/share-links', params);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des liens de partage:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération des liens de partage', { error });
       throw error;
     }
   },
@@ -314,7 +315,7 @@ export const adminService = {
       const response = await apiService.get<any>('/admin/ranking', params);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la récupération des classements:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération des classements', { error });
       throw error;
     }
   },
@@ -327,7 +328,7 @@ export const adminService = {
       if (status) params.status = status;
       return await apiService.get<any>('/admin/broadcasts', params);
     } catch (error) {
-      console.error('Erreur lors de la récupération des broadcasts:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération des broadcasts', { error });
       throw error;
     }
   },
@@ -336,7 +337,7 @@ export const adminService = {
     try {
       return await apiService.get<any>(`/admin/broadcasts/${id}`);
     } catch (error) {
-      console.error('Erreur lors de la récupération du broadcast:', error);
+      logger.error('[Admin]', 'Erreur lors de la récupération du broadcast', { error });
       throw error;
     }
   },
@@ -345,7 +346,7 @@ export const adminService = {
     try {
       return await apiService.post<any>('/admin/broadcasts', data);
     } catch (error) {
-      console.error('Erreur lors de la création du broadcast:', error);
+      logger.error('[Admin]', 'Erreur lors de la création du broadcast', { error });
       throw error;
     }
   },
@@ -354,7 +355,7 @@ export const adminService = {
     try {
       return await apiService.put<any>(`/admin/broadcasts/${id}`, data);
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du broadcast:', error);
+      logger.error('[Admin]', 'Erreur lors de la mise à jour du broadcast', { error });
       throw error;
     }
   },
@@ -363,7 +364,7 @@ export const adminService = {
     try {
       return await apiService.post<any>(`/admin/broadcasts/${id}/preview`, {});
     } catch (error) {
-      console.error('Erreur lors de la prévisualisation du broadcast:', error);
+      logger.error('[Admin]', 'Erreur lors de la prévisualisation du broadcast', { error });
       throw error;
     }
   },
@@ -372,7 +373,7 @@ export const adminService = {
     try {
       return await apiService.post<any>(`/admin/broadcasts/${id}/send`, {});
     } catch (error) {
-      console.error('Erreur lors de l\'envoi du broadcast:', error);
+      logger.error('[Admin]', "Erreur lors de l'envoi du broadcast", { error });
       throw error;
     }
   },
@@ -381,7 +382,7 @@ export const adminService = {
     try {
       return await apiService.delete<any>(`/admin/broadcasts/${id}`);
     } catch (error) {
-      console.error('Erreur lors de la suppression du broadcast:', error);
+      logger.error('[Admin]', 'Erreur lors de la suppression du broadcast', { error });
       throw error;
     }
   },

@@ -1,0 +1,13 @@
+{
+  "deleted": "Story deleted",
+  "deleteError": "Couldn't delete the story",
+  "replySent": "Reply sent",
+  "loading": "Loading story…",
+  "unavailableTitle": "Story unavailable",
+  "notAStoryTitle": "This content isn't a story",
+  "goneTitle": "This story no longer exists",
+  "unavailableBody": "This story is private or has expired.",
+  "notAStoryBody": "The link points to a post, not a story.",
+  "goneBody": "The story you're looking for may have expired (stories last 24h).",
+  "backToFeed": "Back to feed"
+}

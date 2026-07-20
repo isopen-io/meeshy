@@ -9,7 +9,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { smsService } from '../../services/SmsService';
 import crypto from 'crypto';
 import { getCacheStore } from '../../services/CacheStore';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict } from '../../utils/response';
+import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict } from '../../utils/response';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
 
@@ -17,7 +17,7 @@ const logger = enhancedLogger.child({ module: 'contact-change' });
  * Schema pour le changement d'email
  */
 const changeEmailSchema = z.object({
-  newEmail: z.string().email('Email invalide')
+  newEmail: z.email('Email invalide')
 }).strict();
 
 /**
@@ -185,11 +185,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
-        });
+        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data');
       }
 
       logError(fastify.log, 'Initiate email change error:', error);
@@ -317,11 +313,7 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
-        });
+        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data');
       }
 
       logError(fastify.log, 'Verify email change error:', error);
@@ -411,10 +403,7 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
       if (lastSent) {
         const secondsRemaining = Math.ceil((parseInt(lastSent) + 60000 - Date.now()) / 1000);
         if (secondsRemaining > 0) {
-          return reply.status(429).send({
-            success: false,
-            error: `Please wait ${secondsRemaining} seconds before resending`
-          });
+          return sendError(reply, 429, `Please wait ${secondsRemaining} seconds before resending`);
         }
       }
 
@@ -575,11 +564,7 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
-        });
+        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data');
       }
 
       logError(fastify.log, 'Initiate phone change error:', error);
@@ -704,11 +689,7 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: error.errors[0]?.message || 'Invalid data',
-          details: error.errors
-        });
+        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data');
       }
 
       logError(fastify.log, 'Verify phone change error:', error);

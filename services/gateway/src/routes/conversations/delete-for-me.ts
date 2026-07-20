@@ -4,6 +4,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS, ROOMS, type ConversationDeletedEventData } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 
 export function registerDeleteForMeRoutes(
   fastify: FastifyInstance,
@@ -100,19 +101,23 @@ export function registerDeleteForMeRoutes(
         where: { id: participant.id },
         data: { deletedForMe: now, isActive: false },
       })
+      invalidateParticipantLookup(participant.id, conversationId)
 
       // Remove user from socket room silently
-      const io = socketIOHandler?.getManager()?.getIO()
+      const manager = socketIOHandler?.getManager()
+      const io = manager?.getIO()
       if (io) {
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
-        for (const s of userSockets) {
-          s.leave(ROOMS.conversation(conversationId))
-        }
+        await Promise.all(userSockets.map(s => s.leave(ROOMS.conversation(conversationId))))
         // Notify the user's other devices so they drop the conversation from
         // their local store/list (per-user soft delete). Consumed iOS-side by
         // ConversationStore.applyConversationDeleted.
         const deletedPayload: ConversationDeletedEventData = { userId, conversationId }
         io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_DELETED, deletedPayload)
+
+        // Invalidate the 5-minute participantId cache so the now-inactive user
+        // cannot send messages to this conversation during the cache window.
+        manager?.invalidateParticipantCache?.(userId, conversationId)
       }
 
       return sendSuccess(reply, { conversationId, deletedAt: now.toISOString() })

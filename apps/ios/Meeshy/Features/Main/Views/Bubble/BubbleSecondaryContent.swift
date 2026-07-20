@@ -15,6 +15,9 @@ struct BubbleSecondaryContent: View, Equatable {
     let mentionDisplayNames: [String: String]
     let mentionTint: Color
     let linkTint: Color
+    /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
+    /// `/l/<token>`. Empty by default (no rewrite).
+    var trackedLinks: [String: String] = [:]
 
     var body: some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for: langCode))
@@ -45,7 +48,8 @@ struct BubbleSecondaryContent: View, Equatable {
                     color: secondaryTextColor,
                     mentionColor: mentionTint,
                     accentColor: linkTint,
-                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                    trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks
                 )
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -64,5 +68,6 @@ struct BubbleSecondaryContent: View, Equatable {
             && lhs.mentionDisplayNames == rhs.mentionDisplayNames
             && lhs.mentionTint == rhs.mentionTint
             && lhs.linkTint == rhs.linkTint
+            && lhs.trackedLinks == rhs.trackedLinks
     }
 }

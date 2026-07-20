@@ -77,6 +77,13 @@
       "position": "Position {label}",
       "distributionNote": "This chart shows the performance distribution of the top {count} ranked by position.",
       "curveNote": "The descending curve shows how values decrease across positions."
+    },
+    "conversationType": {
+      "direct": "Direct",
+      "group": "Group",
+      "public": "Public",
+      "broadcast": "Broadcast",
+      "unknown": "Unknown"
     }
   },
   "scanLog": {
@@ -295,6 +302,7 @@
       "fieldCooldown": "Cooldown (minutes)",
       "cooldownHint": "Delay before re-selecting this topic for the same conversation.",
       "fieldActive": "Active (used by strategist)",
+      "close": "Close",
       "cancel": "Cancel",
       "saving": "Saving...",
       "save": "Save",
@@ -347,6 +355,46 @@
       "added": "Added",
       "noResults": "No user found",
       "minChars": "Enter at least 2 characters"
+    },
+    "conversationsTab": {
+      "deleteConfirm": "Delete this agent configuration?",
+      "title": "Agent Configurations",
+      "count": "{count} configured conversations",
+      "searchPlaceholder": "Search...",
+      "configure": "Configure",
+      "empty": "No conversations configured for the agent",
+      "viewMessages": "View agent messages",
+      "triggerScheduler": "Trigger scheduler",
+      "columns": {
+        "conversation": "Conversation",
+        "status": "Status",
+        "triggers": "Triggers",
+        "controlled": "Controlled",
+        "messages": "Messages",
+        "confidence": "Confidence",
+        "lastResponse": "Last resp.",
+        "actions": "Actions"
+      }
+    },
+    "conversationPicker": {
+      "searchPlaceholder": "Search by title, ID or identifier...",
+      "searching": "Searching rooms...",
+      "untitled": "Untitled",
+      "noResults": "No conversation found for \"{term}\"",
+      "minChars": "Enter at least 2 characters to search"
+    },
+    "rolesSection": {
+      "empty": "No role observed for this conversation",
+      "origin": {
+        "observed": "Observed",
+        "archetype": "Archetype",
+        "hybrid": "Hybrid"
+      },
+      "locked": "Locked",
+      "unlock": "Unlock",
+      "messagesAnalyzed": "{count} msgs analyzed",
+      "confidence": "Confidence",
+      "assignArchetype": "Assign an archetype..."
     }
   },
   "agentLive": {
@@ -919,7 +967,8 @@
     "clickColReferrer": "Referrer",
     "clickColSource": "Source",
     "clickColStatus": "Status",
-    "fieldNamePlaceholder": "Summer promo"
+    "fieldNamePlaceholder": "Summer promo",
+    "copyError": "Failed to copy link"
   },
   "users": {
     "newUser": {
@@ -1712,6 +1761,11 @@
   "usersDetail": {
     "viewMembers": "View members",
     "membersModalTitle": "Members",
+    "viewMessages": "View messages",
+    "messagesModalTitle": "Messages",
+    "noMessages": "No messages",
+    "editedBadge": "Edited",
+    "deletedBadge": "Deleted",
     "mediaTitle": "Media",
     "loadingMedia": "Loading media...",
     "noMedia": "No media",
@@ -1748,7 +1802,6 @@
     "noConversations": "No conversations",
     "noPosts": "No posts",
     "loadMore": "Load more",
-    "deletedBadge": "Deleted",
     "membersWord": "members",
     "filterAll": "All",
     "postTypePost": "Post",
@@ -1920,7 +1973,8 @@
     "next": "Next",
     "deleteTitle": "Delete share link",
     "deleteDescription": "This action is irreversible. The share link and all its accesses will be permanently deleted.",
-    "deleteConfirm": "Delete"
+    "deleteConfirm": "Delete",
+    "copyError": "Failed to copy link"
   },
   "translationsPage": {
     "loadError": "Error loading translations",

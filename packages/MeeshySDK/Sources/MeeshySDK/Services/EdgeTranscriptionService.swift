@@ -148,7 +148,7 @@ public final class EdgeTranscriptionService: ObservableObject {
                         language: localeIdentifier,
                         confidence: overallConfidence,
                         segments: segments,
-                        speakingRate: result.bestTranscription.speakingRate
+                        speakingRate: result.speechRecognitionMetadata?.speakingRate ?? 0
                     ))
                 }
                 box.attach(task)

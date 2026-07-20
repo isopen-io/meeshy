@@ -60,14 +60,17 @@ struct MagicLinkView: View {
                     Button {
                         dismiss()
                     } label: {
+                        // Chrome de fermeture : glyphe dans un cadre de tap fixe (toolbar) —
+                        // gardé figé, doctrine 82i/87i. Libellé VoiceOver ajouté.
                         Image(systemName: "xmark")
                             .font(.system(size: MeeshyFont.headlineSize, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "auth.magiclink.title", defaultValue: "Connexion par lien magique", bundle: .main))
-                        .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
             }
@@ -80,6 +83,7 @@ struct MagicLinkView: View {
         VStack(spacing: MeeshySpacing.xxl) {
             Spacer()
 
+            // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i/87i), masqué à VoiceOver.
             Image(systemName: "wand.and.stars")
                 .font(.system(size: 56, weight: .light))
                 .foregroundStyle(
@@ -90,22 +94,24 @@ struct MagicLinkView: View {
                     )
                 )
                 .padding(.bottom, MeeshySpacing.lg)
+                .accessibilityHidden(true)
 
             Text(String(localized: "auth.magiclink.email.title", defaultValue: "Entrez votre adresse email", bundle: .main))
-                .font(.system(size: MeeshyFont.titleSize, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             Text(String(localized: "auth.magiclink.email.subtitle", defaultValue: "Nous vous enverrons un lien de connexion securise", bundle: .main))
-                .font(.system(size: MeeshyFont.subheadSize, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
 
             // Email field
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "envelope.fill")
-                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .foregroundColor(MeeshyColors.indigo400.opacity(0.7))
                     .frame(width: 20)
+                    .accessibilityHidden(true)
                 TextField(String(localized: "auth.magiclink.email.placeholder", defaultValue: "nom@exemple.com", bundle: .main), text: $email)
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
@@ -115,6 +121,8 @@ struct MagicLinkView: View {
                     .foregroundColor(theme.textPrimary)
                     .submitLabel(.send)
                     .onSubmit { sendMagicLink() }
+                    .accessibilityLabel(String(localized: "auth.magiclink.email.a11yLabel",
+                                               defaultValue: "Adresse email", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + 2)
@@ -125,7 +133,7 @@ struct MagicLinkView: View {
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
                                 isEmailFocused
-                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    ? MeeshyColors.indigo400.opacity(0.6)
                                     : theme.inputBorder.opacity(0.3),
                                 lineWidth: 1
                             )
@@ -135,7 +143,7 @@ struct MagicLinkView: View {
             // Error message
             if let errorMessage {
                 Text(errorMessage)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -160,7 +168,7 @@ struct MagicLinkView: View {
                             .tint(.white)
                     } else {
                         Text(String(localized: "auth.magiclink.send", defaultValue: "Envoyer le lien magique", bundle: .main))
-                            .font(.system(size: MeeshyFont.headlineSize, weight: .bold))
+                            .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
@@ -190,6 +198,7 @@ struct MagicLinkView: View {
                     .fill(MeeshyColors.indigo600.opacity(0.1))
                     .frame(width: 120, height: 120)
 
+                // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i/87i), masqué à VoiceOver.
                 Image(systemName: "envelope.open.fill")
                     .font(.system(size: 48, weight: .light))
                     .foregroundStyle(
@@ -202,38 +211,45 @@ struct MagicLinkView: View {
                     .adaptiveSymbolPulse()
             }
             .padding(.bottom, MeeshySpacing.md)
+            .accessibilityHidden(true)
 
             Text(String(localized: "auth.magiclink.sent.title", defaultValue: "Lien envoye !", bundle: .main))
-                .font(.system(size: MeeshyFont.titleSize, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Un lien de connexion a ete envoye a", bundle: .main))
-                .font(.system(size: MeeshyFont.subheadSize, weight: .regular))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
+            VStack(spacing: MeeshySpacing.xs) {
+                Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Un lien de connexion a ete envoye a", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                    .foregroundColor(theme.textMuted)
+                    .multilineTextAlignment(.center)
 
-            Text(email)
-                .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo400)
+                Text(email)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundColor(MeeshyColors.indigo400)
+            }
+            .accessibilityElement(children: .combine)
 
             if linkExpired {
                 Text(String(localized: "auth.magiclink.expired", defaultValue: "Lien expire, renvoyez-en un nouveau", bundle: .main))
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .padding(.top, MeeshySpacing.sm)
             } else {
                 Text(String(localized: "auth.magiclink.instructions", defaultValue: "Ouvrez votre email et cliquez sur le lien", bundle: .main))
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.top, MeeshySpacing.sm)
 
                 if countdownRemaining > 0 {
                     Text(formattedCountdown)
-                        .font(.system(size: MeeshyFont.titleSize, weight: .bold).monospacedDigit())
+                        .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold).monospacedDigit())
                         .foregroundColor(MeeshyColors.indigo600)
                         .padding(.top, MeeshySpacing.sm)
+                        .accessibilityLabel(String(localized: "auth.magiclink.countdown.a11yLabel",
+                                                   defaultValue: "Le lien expire dans", bundle: .main))
+                        .accessibilityValue(formattedCountdown)
                 }
             }
 
@@ -241,10 +257,10 @@ struct MagicLinkView: View {
             Button(action: sendMagicLink) {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     Text(String(localized: "auth.magiclink.resend", defaultValue: "Renvoyer", bundle: .main))
                 }
-                .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.indigo400)
             }
             .accessibilityLabel(String(localized: "auth.magiclink.resendLabel",
@@ -260,7 +276,7 @@ struct MagicLinkView: View {
                 }
             } label: {
                 Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
             .padding(.top, MeeshySpacing.sm)

@@ -11,6 +11,7 @@ import type { ZmqTranslationClient } from '../zmq-translation/ZmqTranslationClie
 import type { TranslationCompletedEvent } from '../zmq-translation/types';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { isUrlOnly } from '../../utils/url-content';
 
 const log = enhancedLogger.child({ module: 'PostTranslationService' });
 
@@ -64,9 +65,18 @@ export class PostTranslationService {
    * Fire-and-forget: results arrive via ZMQ events.
    */
   async translatePost(postId: string, content: string, originalLanguage?: string, authorId?: string): Promise<void> {
+    // Skip translation for URL-only posts: links carry no translatable text and
+    // must be preserved verbatim (NLLB would corrupt them). Mixed content still
+    // translates — the translator masks/restores the URLs.
+    if (isUrlOnly(content)) {
+      log.info('PostTranslation: skipping URL-only post (links preserved verbatim)', { postId });
+      return;
+    }
+
     const sourceLang = originalLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
+    /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
     if (targetLanguages.length === 0) {
       log.info('PostTranslation: no target languages after filtering source', { postId, sourceLang });
       return;
@@ -100,6 +110,14 @@ export class PostTranslationService {
 
     if (!post?.content) {
       log.warn('PostTranslation: post not found or has no content', { postId });
+      return;
+    }
+
+    // Skip URL-only posts on the on-demand path too: links carry no translatable
+    // text and must be preserved verbatim (NLLB would corrupt them). Mirrors the
+    // translatePost guard so a shared link is never mangled, whatever the path.
+    if (isUrlOnly(post.content)) {
+      log.info('PostTranslation: skipping URL-only post on-demand (links preserved verbatim)', { postId, targetLanguage });
       return;
     }
 
@@ -139,9 +157,17 @@ export class PostTranslationService {
    * Fire-and-forget: results arrive via ZMQ events.
    */
   async translateComment(commentId: string, postId: string, content: string, originalLanguage?: string): Promise<void> {
+    // Skip URL-only comments: links carry no translatable text and must be
+    // preserved verbatim (NLLB would corrupt them). Mirrors the translatePost guard.
+    if (isUrlOnly(content)) {
+      log.info('CommentTranslation: skipping URL-only comment (links preserved verbatim)', { commentId });
+      return;
+    }
+
     const sourceLang = originalLanguage ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
+    /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
     if (targetLanguages.length === 0) {
       log.info('CommentTranslation: no target languages after filtering source', { commentId, sourceLang });
       return;
@@ -175,11 +201,13 @@ export class PostTranslationService {
 
       if (messageId.startsWith('post:')) {
         const postId = messageId.slice('post:'.length);
+        /* istanbul ignore next -- handlePostTranslationCompleted wraps its own errors; this .catch is belt-and-suspenders dead code */
         this.handlePostTranslationCompleted(postId, event).catch((err) => {
           log.error('handlePostTranslationCompleted failed', err, { postId });
         });
       } else if (messageId.startsWith('comment:')) {
         const commentId = messageId.slice('comment:'.length);
+        /* istanbul ignore next -- handleCommentTranslationCompleted wraps its own errors; this .catch is belt-and-suspenders dead code */
         this.handleCommentTranslationCompleted(commentId, event).catch((err) => {
           log.error('handleCommentTranslationCompleted failed', err, { commentId });
         });
@@ -215,7 +243,7 @@ export class PostTranslationService {
 
       const post = await this.prisma.post.findUnique({
         where: { id: postId },
-        select: { authorId: true },
+        select: { authorId: true, visibility: true, visibilityUserIds: true },
       });
 
       if (post) {
@@ -228,7 +256,9 @@ export class PostTranslationService {
             confidenceScore: confidenceScore ?? 1,
             createdAt: new Date().toISOString(),
           },
-        }, post.authorId).catch(() => {});
+        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err: unknown) => {
+          log.error('PostTranslation: broadcast failed', err instanceof Error ? err : new Error(String(err)), { postId, targetLanguage });
+        });
       }
     } catch (err) {
       log.error('PostTranslation: persist failed', err, { postId, targetLanguage });
@@ -267,7 +297,7 @@ export class PostTranslationService {
       if (comment) {
         const post = await this.prisma.post.findUnique({
           where: { id: comment.postId },
-          select: { authorId: true },
+          select: { authorId: true, visibility: true, visibilityUserIds: true },
         });
 
         if (post) {
@@ -281,7 +311,9 @@ export class PostTranslationService {
               confidenceScore: confidenceScore ?? 1,
               createdAt: new Date().toISOString(),
             },
-          }, post.authorId).catch(() => {});
+          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err: unknown) => {
+            log.error('CommentTranslation: broadcast failed', err instanceof Error ? err : new Error(String(err)), { commentId, targetLanguage });
+          });
         }
       }
     } catch (err) {

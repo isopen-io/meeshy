@@ -38,7 +38,7 @@ jest.mock('../../../services/MentionService', () => ({
 import { MessageHandler } from '../../../socketio/handlers/MessageHandler';
 
 interface AutoDeliverAccess {
-  _autoDeliverToOnlineRecipients(msg: unknown, conversationId: string): Promise<void>;
+  autoDeliverToOnlineRecipients(msg: unknown, conversationId: string): Promise<void>;
 }
 
 const senderParticipantId = 'p_sender';
@@ -120,7 +120,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
     const { handler, prisma, readStatusService, privacyPreferencesService, to, emit } =
       makeHandler({ onlineUsers: [onlineUserId] });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
@@ -152,7 +152,9 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       `user:${offlineUserId}`
     ]));
 
-    expect(emit).toHaveBeenCalledTimes(1);
+    // 2 events: legacy read-status:updated + dual-emitted message:read-status-updated
+    // (same payload — see tasks/socketio-events-cleanup.md #3).
+    expect(emit).toHaveBeenCalledTimes(2);
     const [eventName, payload] = emit.mock.calls[0];
     expect(eventName).toBe('read-status:updated');
     expect(payload).toMatchObject({
@@ -162,6 +164,9 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       userId: onlineUserId,
       summary: { totalMembers: 2, deliveredCount: 1, readCount: 0 }
     });
+    const [dualEventName, dualPayload] = emit.mock.calls[1];
+    expect(dualEventName).toBe('message:read-status-updated');
+    expect(dualPayload).toEqual(payload);
   });
 
   it('marks all online recipients in parallel and acks with the first of them', async () => {
@@ -169,7 +174,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       onlineUsers: [onlineUserId, offlineUserId]
     });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
@@ -186,8 +191,12 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       messageId
     );
 
-    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledTimes(2);
     expect(emit.mock.calls[0][1]).toMatchObject({
+      participantId: onlineParticipantId,
+      userId: onlineUserId
+    });
+    expect(emit.mock.calls[1][1]).toMatchObject({
       participantId: onlineParticipantId,
       userId: onlineUserId
     });
@@ -201,13 +210,17 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       .mockRejectedValueOnce(new Error('cursor conflict'))
       .mockResolvedValueOnce(undefined);
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
 
-    expect(emit).toHaveBeenCalledTimes(1);
+    expect(emit).toHaveBeenCalledTimes(2);
     expect(emit.mock.calls[0][1]).toMatchObject({
+      participantId: offlineParticipantId,
+      userId: offlineUserId
+    });
+    expect(emit.mock.calls[1][1]).toMatchObject({
       participantId: offlineParticipantId,
       userId: offlineUserId
     });
@@ -216,7 +229,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
   it('does nothing when no recipient is online', async () => {
     const { handler, readStatusService, emit } = makeHandler({ onlineUsers: [] });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
@@ -231,7 +244,7 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
       showReadReceipts: false
     });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: senderParticipantId } as any,
       conversationId
     );
@@ -240,10 +253,59 @@ describe('MessageHandler — auto-deliver to online recipients', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
+  it('excludes the sender on the WS path where senderId is the User.id and the sender is online', async () => {
+    // WS `message:send` path: MessagingService.createSuccessResponse normalises
+    // `senderId` to the sender's User.id (clients compare against their userId),
+    // whereas the REST/ZMQ path keeps it as the raw Participant.id. The sender is
+    // ALWAYS online at broadcast time (they just sent), so exclusion must key off
+    // identity, not presence — otherwise the sender's own message is auto-marked
+    // `received` and their UI shows a false delivered (✓✓) receipt.
+    const { handler, readStatusService } = makeHandler({
+      onlineUsers: [senderUserId, onlineUserId]
+    });
+
+    await handler.autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderUserId } as any,
+      conversationId
+    );
+
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledTimes(1);
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledWith(
+      onlineParticipantId,
+      conversationId,
+      messageId
+    );
+    expect(readStatusService.markMessagesAsReceived).not.toHaveBeenCalledWith(
+      senderParticipantId,
+      conversationId,
+      messageId
+    );
+  });
+
+  it('excludes an anonymous sender on the WS path where senderId stays the Participant.id', async () => {
+    // Anonymous senders have no User.id, so createSuccessResponse falls back to
+    // the Participant.id — the exclusion must still hold on that representation.
+    const { handler, readStatusService } = makeHandler({
+      onlineUsers: [senderUserId, onlineUserId]
+    });
+
+    await handler.autoDeliverToOnlineRecipients(
+      { id: messageId, senderId: senderParticipantId } as any,
+      conversationId
+    );
+
+    expect(readStatusService.markMessagesAsReceived).toHaveBeenCalledTimes(1);
+    expect(readStatusService.markMessagesAsReceived).not.toHaveBeenCalledWith(
+      senderParticipantId,
+      conversationId,
+      messageId
+    );
+  });
+
   it('aborts safely when senderId is missing', async () => {
     const { handler, readStatusService, emit } = makeHandler({ onlineUsers: [onlineUserId] });
 
-    await handler._autoDeliverToOnlineRecipients(
+    await handler.autoDeliverToOnlineRecipients(
       { id: messageId, senderId: null } as any,
       conversationId
     );

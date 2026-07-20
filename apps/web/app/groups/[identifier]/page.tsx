@@ -2,6 +2,7 @@
 
 import { GroupsLayout } from '@/components/groups/groups-layout';
 import { Suspense, use } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface GroupPageProps {
   params: Promise<{
@@ -15,7 +16,8 @@ function GroupPageContent({ params }: GroupPageProps) {
 }
 
 function GroupPageFallback() {
-  return <div>Chargement du groupe...</div>;
+  const { t } = useI18n('groups');
+  return <div>{t('details.loadingGroup', 'Loading group…')}</div>;
 }
 
 export default function GroupPage({ params }: GroupPageProps) {

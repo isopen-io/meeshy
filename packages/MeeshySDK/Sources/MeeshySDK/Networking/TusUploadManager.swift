@@ -132,6 +132,12 @@ public actor TusUploadManager {
                     let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
                         try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, token: token, uploadContext: uploadContext, thumbHash: thumbHash)
                     }
+                    // Local-first : copie le fichier qu'on vient d'uploader dans le
+                    // cache média typé, keyé par l'URL canonique serveur. L'auteur
+                    // relit ses propres médias (story, pièce jointe) depuis le disque
+                    // — offline, jamais re-téléchargés. Idempotent (no-op si déjà
+                    // caché, ex. via MessagePersistenceActor.adoptSDKLevel).
+                    await Self.seedMediaCache(localFile: fileURL, result: result)
                     activeCount -= 1
                     continuation.resume(returning: result)
                     processQueue()
@@ -146,6 +152,30 @@ public actor TusUploadManager {
                 }
             }
         }
+    }
+
+    /// Local-first cache seed : copie le fichier source qu'on vient d'uploader
+    /// dans le `DiskCacheStore` typé (image/vidéo/audio) selon le MIME, keyé par
+    /// l'URL canonique serveur (`result.fileUrl` — exactement la clé que le
+    /// reader résout). Non-destructif (la source reste pour le caller, ex. un
+    /// asset encore référencé par la preview live). Idempotent. Un MIME non-média
+    /// (document…) est ignoré. C'est ce qui garantit que l'auteur joue ses
+    /// propres stories / pièces jointes depuis le disque, offline, sans jamais
+    /// re-télécharger un média qu'il possède déjà localement.
+    private static func seedMediaCache(localFile: URL, result: TusUploadResult) async {
+        let mime = result.mimeType
+        let store: DiskCacheStore?
+        if mime.hasPrefix("image/") {
+            store = CacheCoordinator.shared.images
+        } else if mime.hasPrefix("video/") {
+            store = CacheCoordinator.shared.video
+        } else if mime.hasPrefix("audio/") {
+            store = CacheCoordinator.shared.audio
+        } else {
+            store = nil
+        }
+        guard let store else { return }
+        await store.seed(copyingLocalFile: localFile, for: result.fileUrl)
     }
 
     private func withBackgroundTask<T: Sendable>(named name: String, operation: @Sendable () async throws -> T) async throws -> T {

@@ -13,6 +13,14 @@ SCHEME="Meeshy"
 PROJECT="Meeshy.xcodeproj"
 DERIVED_DATA="Build"
 
+# Apple Developer Team — required for device code-signing under automatic
+# provisioning (CODE_SIGN_STYLE=Automatic in project.yml). Without it,
+# xcodebuild fails: "Signing for 'Meeshy' requires a development team".
+# Mirrors fastlane's source of truth (Appfile/Matchfile default + Fastfile
+# xcargs DEVELOPMENT_TEAM=D72UK7R5RE) and honours the same FASTLANE_TEAM_ID
+# override. Simulator builds don't sign, so this is only consumed by `device`.
+DEVELOPMENT_TEAM="${FASTLANE_TEAM_ID:-D72UK7R5RE}"
+
 # Xcode GUI SPM package cache — avoids re-cloning on slow networks
 # Auto-detected: finds the latest Meeshy DerivedData with SourcePackages
 XCODE_PKG_CACHE=""
@@ -245,9 +253,12 @@ do_device_deploy_only() {
     # building for device, and the device install ships an inconsistent .app.
     wait_for_existing_build
 
-    local dev_product="$APP_NAME"
-    [ "$CONFIGURATION" = "Debug" ] && dev_product="$APP_NAME Dev"
-    local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$dev_product.app"
+    # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration
+    # (project.yml deliberately leaves PRODUCT_NAME unset), so the product is
+    # "Meeshy.app" for both Debug and Release. The legacy "Meeshy Dev" name came
+    # from Configuration/Debug.xcconfig, which is NOT wired into the generated
+    # project (no configFiles: key) and therefore has no effect.
+    local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     local build_log="/tmp/meeshy_device_build_$$.log"
 
     local ncpu
@@ -276,6 +287,7 @@ do_device_deploy_only() {
         -skipMacroValidation \
         -jobs "$ncpu" \
         ONLY_ACTIVE_ARCH=YES \
+        DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build >"$build_log" 2>&1
     local build_rc=$?
@@ -401,21 +413,24 @@ ensure_booted() {
 
 is_app_running() {
     if [ "$PLATFORM" = "mac" ]; then
-        pgrep -f "$(app_path)/Contents/MacOS/" >/dev/null 2>&1
+        pgrep -f "/Wrapper/$APP_NAME.app/$APP_NAME" >/dev/null 2>&1
     else
         xcrun simctl spawn "$DEVICE_ID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID" 2>/dev/null
     fi
 }
 
 app_path() {
-    # Debug config produces "Meeshy Dev.app", Release produces "Meeshy.app"
-    local product_name="$APP_NAME"
-    [ "$CONFIGURATION" = "Debug" ] && product_name="$APP_NAME Dev"
-
+    # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration, so
+    # both Debug and Release produce "Meeshy.app". The old "Meeshy Dev.app"
+    # name lived in Configuration/Debug.xcconfig, which the generated project
+    # never references — see do_device_deploy_only for the same rationale.
     if [ "$PLATFORM" = "mac" ]; then
-        echo "$DERIVED_DATA/Products/$CONFIGURATION-maccatalyst/$product_name.app"
+        # "Designed for iPad" (the only valid macOS slice — SUPPORTS_MACCATALYST=0
+        # by design) builds an iOS bundle under Debug-iphoneos, NOT a Mac Catalyst
+        # app under Debug-maccatalyst. See build_destination() for the rationale.
+        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     else
-        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$product_name.app"
+        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$APP_NAME.app"
     fi
 }
 
@@ -555,8 +570,11 @@ do_build() {
 
     local mac_flags=()
     if [ "$PLATFORM" = "mac" ]; then
+        # NB: no SUPPORTS_MACCATALYST=YES here — the project is SUPPORTS_MACCATALYST=0
+        # by design (native calls are gated on isiOSAppOnMac), so the macOS build is
+        # an iOS "Designed for iPad" bundle. Forcing Catalyst would break that path
+        # and is a no-op against the Designed-for-iPad destination anyway.
         mac_flags=(
-            SUPPORTS_MACCATALYST=YES
             CODE_SIGN_IDENTITY=-
             CODE_SIGNING_REQUIRED=NO
             CODE_SIGNING_ALLOWED=NO
@@ -642,13 +660,15 @@ do_install() {
 
 do_launch() {
     if [ "$PLATFORM" = "mac" ]; then
-        # Kill existing instance
-        pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
-        sleep 0.5
-
-        log "Launching ${BOLD}$APP_NAME${NC} on macOS..."
-        open "$(app_path)"
-        ok "App launched"
+        # A "Designed for iPad" build is an iOS bundle (LSRequiresIPhoneOS=true)
+        # that macOS refuses to launch from the CLI ("incorrect executable
+        # format"). Mac Catalyst would be CLI-launchable but is off the table —
+        # the native call subsystem is gated on isiOSAppOnMac. So we build here
+        # and hand off to Xcode for the actual launch.
+        warn "macOS \"Designed for iPad\" bundles cannot be launched from the CLI."
+        log "Launch from Xcode: select ${BOLD}My Mac (Designed for iPad)${NC}, then press ${BOLD}⌘R${NC}."
+        log "Bundle: ${BOLD}$(app_path)${NC}"
+        log "Stream the running app's logs with: ${BOLD}./meeshy.sh logs --mac${NC}"
         return 0
     fi
 
@@ -700,7 +720,7 @@ start_crash_monitor() {
         while true; do
             sleep 5
             if [ "$PLATFORM" = "mac" ]; then
-                if ! pgrep -f "$(app_path)/Contents/MacOS/" >/dev/null 2>&1; then
+                if ! pgrep -f "/Wrapper/$APP_NAME.app/$APP_NAME" >/dev/null 2>&1; then
                     echo ""
                     err "App appears to have crashed or been terminated."
                     err "Check logs at: $LOGFILE"
@@ -811,14 +831,25 @@ do_release() {
         return 1
     fi
 
-    if ! command -v bundle >/dev/null 2>&1; then
-        err "Bundler missing. Install with: gem install bundler"
-        return 1
-    fi
-
-    if [ ! -f "Gemfile.lock" ]; then
+    # Prefer `bundle exec` for reproducibility (CI parity). Fall back to a
+    # globally installed fastlane when bundler can't resolve the locked gems on
+    # this machine — e.g. macOS system Ruby against a Gemfile.lock pinned for
+    # another platform (the global fastlane/cocoapods already match the lock).
+    # NB: `bundle check` is a false positive here (a binary gem present for the
+    # wrong arch satisfies it), so we probe the real `bundle exec` resolution.
+    local -a fastlane_runner
+    if command -v bundle >/dev/null 2>&1 && [ ! -f "Gemfile.lock" ]; then
         log "Bundle install (first-time setup)…"
         bundle install || return 1
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v bundle >/dev/null 2>&1 && bundle exec ruby -e 'exit 0' >/dev/null 2>&1; then
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v fastlane >/dev/null 2>&1; then
+        warn "Bundler can't resolve the locked gems here → using the global fastlane."
+        fastlane_runner=(fastlane)
+    else
+        err "No usable fastlane. Fix bundler (cd apps/ios && bundle install) or run: gem install fastlane"
+        return 1
     fi
 
     # Match needs MATCH_PASSWORD to decrypt the certificates Git repo. The password
@@ -855,10 +886,10 @@ do_release() {
     warn "This will : sync certificates · build Release IPA (~15 min) · upload to $lane_label"
     echo ""
 
-    ASC_KEY_FILEPATH="$key_file" \
-    ASC_KEY_ID="5542B6LVNL" \
-    ASC_ISSUER_ID="69a6de89-ae7a-47e3-e053-5b8c7c11a4d1" \
-        bundle exec fastlane "$lane" "${fastlane_args[@]}"
+    ASC_KEY_FILEPATH="${ASC_KEY_FILEPATH:-$key_file}" \
+    ASC_KEY_ID="${ASC_KEY_ID:-5542B6LVNL}" \
+    ASC_ISSUER_ID="${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}" \
+        "${fastlane_runner[@]}" "$lane" "${fastlane_args[@]}"
     local rc=$?
 
     echo ""
@@ -1136,28 +1167,119 @@ EOXML
 }
 
 # ─── Tests ───────────────────────────────────────────────────────────────────
+# Exécution PHASÉE (2026-07-04) : le run se termine toujours par la connexion
+# réelle au compte de test pour laisser l'app du simulateur dans un état
+# connecté (MeeshyTests est hébergé dans Meeshy.app → la session Keychain
+# écrite par la phase 3 survit au run).
+#   Phase 1 — suites isolées (infra, appels/WebRTC, médias, mocks purs)
+#   Phase 2 — connexion & manipulation de contenu : auth/session, stories,
+#             posts/feed/reels, traduction, brouillons locaux, UI/UX produit.
+#             Contient notamment AuthServiceTests (vrais logout() sur
+#             AuthManager.shared) — d'où son passage AVANT la phase 3.
+#   Phase 3 — ZZEndStateConnectedSessionTests : login réel avec les creds de
+#             test (fastlane/.env → TEST_RUNNER_DEMO_*), jamais de logout.
+# La répartition 1/2 est dérivée dynamiquement des noms de classes : toute
+# nouvelle suite matchant FINAL_PHASE_CLASS_PATTERN rejoint la phase 2.
+END_STATE_SUITE="ZZEndStateConnectedSessionTests"
+# Connexion/session : Auth|Session|TwoFactor|EmailVerification|Connection|Guest|Presence|Anonymous
+# Contenu produit   : Story|Post|Feed|Reel|Bookmark|Status|Discover|Community|Conversation|Message|Thread|Attachment|Share|Block|Contact|Request|Friend|Voice|Keypad|CallsViewModel|Engagement|Search
+# Traduction        : Language|Translat|Compose|Mention
+# Brouillons locaux : Draft|EditHistory|Starred|LocallyHidden|Outbox|Offline
+# UI/UX/navigation  : Bubble|Skeleton|Themed|Toast|Sync|Consent|Navigation|DeepLink|Router|Tab|Notification|Profile
+# État persistant hors-catégorie (wipes UserDefaults réels, cf. classification 2026-07-04) : CallQualitySummary|VoIPPush
+FINAL_PHASE_CLASS_PATTERN='Auth|Session|TwoFactor|EmailVerification|Connection|Guest|Presence|Anonymous|Story|Post|Feed|Reel|Bookmark|Status|Discover|Community|Conversation|Message|Thread|Attachment|Share|Block|Contact|Request|Friend|Voice|Keypad|CallsViewModel|Engagement|Search|Language|Translat|Compose|Mention|Draft|EditHistory|Starred|LocallyHidden|Outbox|Offline|Bubble|Skeleton|Themed|Toast|Sync|Consent|Navigation|DeepLink|Router|Tab|Notification|Profile|CallQualitySummary|VoIPPush'
+# Jamais exécutées dans les phases 1/2 : perf (opt-in), XCUITest hors target,
+# et la suite d'état final (réservée à la phase 3).
+NON_PHASE_SUITES="MessageListPerformanceTests BubbleSimpleMessagePerfTests SearchPerformanceTests BubbleExpandableTextUITests"
+
+discover_test_classes() {
+    grep -rhoE "class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*:[[:space:]]*XCTestCase" MeeshyTests --include="*.swift" \
+        | sed -E 's/.*class[[:space:]]+([A-Za-z0-9_]+).*/\1/' \
+        | sort -u
+}
+
+xcpretty_or_cat() {
+    if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
+}
+
 do_test() {
     local destination="platform=iOS Simulator,id=$DEVICE_ID"
+    local coverage_flag
+    coverage_flag=$([ "$COVERAGE" = true ] && echo YES || echo NO)
+    local common_flags=(
+        -project "$PROJECT"
+        -scheme "$SCHEME"
+        -destination "$destination"
+        -configuration Debug
+        -derivedDataPath "$DERIVED_DATA"
+        "${XCODE_PKG_FLAGS[@]}"
+        -enableCodeCoverage "$coverage_flag"
+    )
 
     mkdir -p "$TEST_OUTPUT_DIR"
+    rm -rf "$TEST_OUTPUT_DIR"/phase1-isolated.xcresult \
+           "$TEST_OUTPUT_DIR"/phase2-content.xcresult \
+           "$TEST_OUTPUT_DIR"/phase3-connected.xcresult \
+           "$TEST_OUTPUT_DIR"/unit-tests.xcresult
 
-    log "Running unit tests..."
-    xcodebuild test \
-        -project "$PROJECT" \
-        -scheme "$SCHEME" \
-        -destination "$destination" \
-        -configuration Debug \
-        -derivedDataPath "$DERIVED_DATA" \
-        "${XCODE_PKG_FLAGS[@]}" \
-        -enableCodeCoverage "$([ "$COVERAGE" = true ] && echo YES || echo NO)" \
-        -resultBundlePath "$TEST_OUTPUT_DIR/unit-tests.xcresult" \
+    log "Building for testing..."
+    xcodebuild build-for-testing "${common_flags[@]}" \
+        2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --color; else cat; fi
+
+    # Répartition dynamique des classes entre phase 1 (skip) et phase 2 (only)
+    local phase1_skip=() phase2_only=() cls
+    while IFS= read -r cls; do
+        [ -z "$cls" ] && continue
+        [[ " $NON_PHASE_SUITES $END_STATE_SUITE " == *" $cls "* ]] && continue
+        if [[ "$cls" =~ $FINAL_PHASE_CLASS_PATTERN ]]; then
+            phase1_skip+=( "-skip-testing:MeeshyTests/$cls" )
+            phase2_only+=( "-only-testing:MeeshyTests/$cls" )
+        fi
+    done < <(discover_test_classes)
+
+    local skip_always=()
+    for cls in $NON_PHASE_SUITES; do
+        skip_always+=( "-skip-testing:MeeshyTests/$cls" )
+    done
+
+    local p1=0 p2=0 p3=0
+
+    log "Phase 1/3 — suites isolées (infra, mocks purs)..."
+    xcodebuild test-without-building "${common_flags[@]}" \
+        -resultBundlePath "$TEST_OUTPUT_DIR/phase1-isolated.xcresult" \
         -only-testing:MeeshyTests \
-        -skip-testing:MeeshyTests/MessageListPerformanceTests \
-        -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
-        -skip-testing:MeeshyTests/SearchPerformanceTests \
-        2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
+        "${skip_always[@]}" \
+        -skip-testing:MeeshyTests/$END_STATE_SUITE \
+        "${phase1_skip[@]}" \
+        2>&1 | xcpretty_or_cat || p1=$?
 
-    ok "Unit tests completed"
+    log "Phase 2/3 — connexion & manipulation de contenu (${#phase2_only[@]} suites : auth, story, post, traduction, drafts, UI/UX)..."
+    xcodebuild test-without-building "${common_flags[@]}" \
+        -resultBundlePath "$TEST_OUTPUT_DIR/phase2-content.xcresult" \
+        "${phase2_only[@]}" \
+        2>&1 | xcpretty_or_cat || p2=$?
+
+    # Phase 3 — connexion finale : les creds passent par l'environnement du
+    # runner (préfixe TEST_RUNNER_ → visible du process hôte Meeshy.app).
+    local demo_user="${DEMO_USER:-}" demo_password="${DEMO_PASSWORD:-}"
+    if [ -z "$demo_user" ] && [ -f fastlane/.env ]; then
+        demo_user=$(grep -m1 '^DEMO_USER=' fastlane/.env | cut -d= -f2-)
+        demo_password=$(grep -m1 '^DEMO_PASSWORD=' fastlane/.env | cut -d= -f2-)
+    fi
+    if [ -z "$demo_user" ] || [ -z "$demo_password" ]; then
+        warn "DEMO_USER/DEMO_PASSWORD introuvables (fastlane/.env) — phase 3 sautée côté test (XCTSkip), l'app restera déconnectée"
+    fi
+
+    log "Phase 3/3 — connexion finale au compte de test (laisse l'app connectée)..."
+    TEST_RUNNER_DEMO_USER="$demo_user" TEST_RUNNER_DEMO_PASSWORD="$demo_password" \
+    xcodebuild test-without-building "${common_flags[@]}" \
+        -resultBundlePath "$TEST_OUTPUT_DIR/phase3-connected.xcresult" \
+        -only-testing:MeeshyTests/$END_STATE_SUITE \
+        2>&1 | xcpretty_or_cat || p3=$?
+
+    [ "$p1" -eq 0 ] && ok "Phase 1 (isolées) : verte" || err "Phase 1 (isolées) : échec (exit $p1) — voir $TEST_OUTPUT_DIR/phase1-isolated.xcresult"
+    [ "$p2" -eq 0 ] && ok "Phase 2 (connexion & contenu) : verte" || err "Phase 2 (connexion & contenu) : échec (exit $p2) — voir $TEST_OUTPUT_DIR/phase2-content.xcresult"
+    [ "$p3" -eq 0 ] && ok "Phase 3 (état connecté) : verte — l'app est connectée au compte de test" || err "Phase 3 (état connecté) : échec (exit $p3) — voir $TEST_OUTPUT_DIR/phase3-connected.xcresult"
 
     if [ "$UI_TESTS" = true ]; then
         log "Running UI tests..."
@@ -1176,10 +1298,19 @@ do_test() {
 
     if [ "$COVERAGE" = true ]; then
         log "Generating coverage report..."
-        xcrun xccov view --report "$TEST_OUTPUT_DIR/unit-tests.xcresult" > "$TEST_OUTPUT_DIR/coverage.txt"
+        : > "$TEST_OUTPUT_DIR/coverage.txt"
+        local bundle
+        for bundle in phase1-isolated phase2-content phase3-connected; do
+            if [ -d "$TEST_OUTPUT_DIR/$bundle.xcresult" ]; then
+                echo "━━━ $bundle ━━━" >> "$TEST_OUTPUT_DIR/coverage.txt"
+                xcrun xccov view --report "$TEST_OUTPUT_DIR/$bundle.xcresult" >> "$TEST_OUTPUT_DIR/coverage.txt" 2>/dev/null || true
+            fi
+        done
         ok "Coverage report: $TEST_OUTPUT_DIR/coverage.txt"
         head -20 "$TEST_OUTPUT_DIR/coverage.txt"
     fi
+
+    return $(( p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
@@ -1294,7 +1425,7 @@ usage() {
     echo -e "  ${BOLD}Platform:${NC}"
     echo -e "    ${YELLOW}--iphone${NC}                 iPhone simulator ${DIM}(default)${NC}"
     echo -e "    ${YELLOW}--ipad${NC}                   iPad simulator"
-    echo -e "    ${YELLOW}--mac, --macos${NC}            macOS (Mac Catalyst)"
+    echo -e "    ${YELLOW}--mac, --macos${NC}            macOS (Designed for iPad — build only, launch via Xcode)"
     echo ""
     echo -e "  ${BOLD}Flags:${NC}"
     echo -e "    ${YELLOW}--clean, -C${NC}              Clean before building"
@@ -1308,7 +1439,7 @@ usage() {
     echo -e "  ${BOLD}Examples:${NC}"
     echo -e "    ${DIM}./meeshy.sh${NC}                          ${DIM}# Build + run iPhone sim + logs${NC}"
     echo -e "    ${DIM}./meeshy.sh run --ipad${NC}               ${DIM}# Build + run iPad sim + logs${NC}"
-    echo -e "    ${DIM}./meeshy.sh run --mac${NC}                ${DIM}# Build + run as macOS app${NC}"
+    echo -e "    ${DIM}./meeshy.sh run --mac${NC}                ${DIM}# Build macOS app (then launch via Xcode ⌘R)${NC}"
     echo -e "    ${DIM}./meeshy.sh run --clean${NC}              ${DIM}# Clean build + run${NC}"
     echo -e "    ${DIM}./meeshy.sh build --release${NC}          ${DIM}# Release build only${NC}"
     echo -e "    ${DIM}./meeshy.sh build --ipad${NC}             ${DIM}# Build for iPad sim${NC}"
@@ -1388,7 +1519,12 @@ case "$COMMAND" in
         do_install
         do_launch
         echo ""
-        if [ -t 1 ]; then
+        if [ "$PLATFORM" = "mac" ]; then
+            # Nothing was CLI-launched (see do_launch) — don't monitor a process
+            # that isn't running. Logs become available once the app is launched
+            # from Xcode: ./meeshy.sh logs --mac
+            ok "Build ready. Launch via Xcode (⌘R on \"My Mac (Designed for iPad)\")."
+        elif [ -t 1 ]; then
             # Interactive terminal — stream logs until Ctrl+C
             start_log_stream
             start_crash_monitor
@@ -1409,7 +1545,7 @@ case "$COMMAND" in
         detect_simulator
         log "Stopping $APP_NAME..."
         if [ "$PLATFORM" = "mac" ]; then
-            pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
+            pkill -f "/Wrapper/$APP_NAME.app/$APP_NAME" 2>/dev/null || true
         else
             xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
         fi
@@ -1421,7 +1557,7 @@ case "$COMMAND" in
         ensure_booted
         log "Stopping $APP_NAME..."
         if [ "$PLATFORM" = "mac" ]; then
-            pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
+            pkill -f "/Wrapper/$APP_NAME.app/$APP_NAME" 2>/dev/null || true
         else
             xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
         fi
@@ -1430,7 +1566,9 @@ case "$COMMAND" in
         do_install
         do_launch
         echo ""
-        if [ -t 1 ]; then
+        if [ "$PLATFORM" = "mac" ]; then
+            ok "Build ready. Launch via Xcode (⌘R on \"My Mac (Designed for iPad)\")."
+        elif [ -t 1 ]; then
             start_log_stream
             start_crash_monitor
             wait "$LOG_STREAM_PID" 2>/dev/null || true

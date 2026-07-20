@@ -11,7 +11,7 @@ const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
 // Validation schemas
 const requestMagicLinkSchema = z.object({
-  email: z.string().email('Invalid email address').max(255),
+  email: z.email('Invalid email address').max(255),
   rememberDevice: z.boolean().optional().default(false) // Stored server-side for security
 });
 
@@ -69,7 +69,12 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
           properties: {
             success: { type: 'boolean', example: true },
             message: { type: 'string', example: 'If an account exists, a login link has been sent.' },
-            expiresInSeconds: { type: 'number', example: 600, description: 'Token expiry duration in seconds' }
+            data: {
+              type: 'object',
+              properties: {
+                expiresInSeconds: { type: 'number', example: 600, description: 'Token expiry duration in seconds' }
+              }
+            }
           }
         },
         400: {
@@ -88,7 +93,8 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       // Validate input
       const validationResult = requestMagicLinkSchema.safeParse(request.body);
       if (!validationResult.success) {
-        return sendBadRequest(reply, validationResult.error.errors[0]?.message || 'Invalid email address');
+        /* istanbul ignore next -- Zod always produces a non-falsy message; the || branch is unreachable */
+        return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Invalid email address');
       }
 
       const { email, rememberDevice } = validationResult.data;
@@ -105,7 +111,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         rememberDevice // Stored server-side for security
       });
 
-      return reply.send(result);
+      return sendSuccess(reply, { expiresInSeconds: (result as any).expiresInSeconds }, { message: result.message });
 
     } catch (error) {
       logger.error('MagicLink error', error as Error);
@@ -169,7 +175,8 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       const validationResult = validateMagicLinkSchema.safeParse({ token: query.token });
 
       if (!validationResult.success) {
-        return sendBadRequest(reply, validationResult.error.errors[0]?.message || 'Token is required');
+        /* istanbul ignore next -- Zod always produces a non-falsy message; the || branch is unreachable */
+        return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
       }
 
       const { token } = validationResult.data;
@@ -257,7 +264,8 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       const validationResult = validateMagicLinkSchema.safeParse(request.body);
 
       if (!validationResult.success) {
-        return sendBadRequest(reply, validationResult.error.errors[0]?.message || 'Token is required');
+        /* istanbul ignore next -- Zod always produces a non-falsy message; the || branch is unreachable */
+        return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
       }
 
       const { token } = validationResult.data;

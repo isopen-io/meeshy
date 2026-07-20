@@ -57,6 +57,13 @@ class OutboxRepository @Inject constructor(
     /** Still-deliverable rows of one lane, oldest first. */
     suspend fun deliverable(lane: String): List<OutboxEntity> = outboxDao.deliverableForLane(lane)
 
+    /**
+     * Current [OutboxState] of [cmid], or `null` when the row is gone (delivered
+     * and deleted, or discarded). Used by the drainer to resolve a `dependsOn`
+     * gate across lanes — a prerequisite need not share the dependent's lane.
+     */
+    suspend fun stateOf(cmid: String): OutboxState? = outboxDao.find(cmid)?.stateEnum
+
     suspend fun markInflight(cmid: String) {
         val row = outboxDao.find(cmid) ?: return
         outboxDao.updateState(cmid, OutboxState.INFLIGHT.name, row.attempts, now())
@@ -100,6 +107,40 @@ class OutboxRepository @Inject constructor(
         if (outboxDao.find(cmid) == null) return false
         outboxDao.updateState(cmid, OutboxState.PENDING.name, 0, now())
         return true
+    }
+
+    /**
+     * Removes a row outright — a user **discarding** a permanently-failed mutation
+     * (e.g. an exhausted story publish they no longer want to retry). Unknown
+     * `cmid`s are a no-op. Unlike [markSucceeded] this signals no outcome: it is a
+     * deliberate user removal, not a delivery.
+     */
+    suspend fun discard(cmid: String) {
+        outboxDao.deleteAll(listOf(cmid))
+    }
+
+    /**
+     * Grafts a delivered prerequisite's outcome into its still-queued dependents
+     * (ARCHITECTURE.md §5) — the second half of the durable upload→publish chain.
+     * For every **`PENDING`** row whose `dependsOn` is [prerequisiteCmid], [rewrite]
+     * is applied to its payload; a non-`null` result is persisted, a `null` result
+     * (no-op) leaves the row untouched. `INFLIGHT`/`EXHAUSTED` dependents are skipped
+     * — only a row that has not yet started delivery can safely have its payload
+     * rewritten. The generic `(payload) -> payload?` shape keeps the queue agnostic
+     * of any one mutation's payload format.
+     *
+     * @return how many dependents were actually rewritten.
+     */
+    suspend fun rewriteDependents(prerequisiteCmid: String, rewrite: (String) -> String?): Int {
+        val dependents = outboxDao.findDependents(OutboxDependencyKey.likePattern(prerequisiteCmid))
+            .filter { it.stateEnum == OutboxState.PENDING }
+        var changed = 0
+        for (row in dependents) {
+            val newPayload = rewrite(row.payload) ?: continue
+            outboxDao.updatePayload(row.cmid, newPayload, now())
+            changed++
+        }
+        return changed
     }
 
     /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */

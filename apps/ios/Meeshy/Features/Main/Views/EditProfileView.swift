@@ -51,9 +51,9 @@ struct EditProfileView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.indigo400)
             }
@@ -61,8 +61,9 @@ struct EditProfileView: View {
             Spacer()
 
             Text(String(localized: "profile.edit.title", defaultValue: "Modifier le profil", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -120,6 +121,7 @@ struct EditProfileView: View {
                     matching: .images,
                     photoLibrary: .shared()
                 ) {
+                    // Fixed glyph: decorative badge inside a fixed 30×30 circle overlay — scaling would overflow the badge.
                     Image(systemName: "camera.fill")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.white)
@@ -127,6 +129,7 @@ struct EditProfileView: View {
                         .background(Circle().fill(MeeshyColors.indigo400))
                         .overlay(Circle().stroke(bgPrimary, lineWidth: 2))
                 }
+                .accessibilityLabel(String(localized: "profile.edit.change_photo", defaultValue: "Change profile photo", bundle: .main))
             }
 
             if viewModel.isUploadingAvatar {
@@ -135,9 +138,10 @@ struct EditProfileView: View {
                         .scaleEffect(0.8)
                         .tint(MeeshyColors.indigo400)
                     Text(String(localized: "profile.edit.uploading_photo", defaultValue: "Envoi de la photo...", bundle: .main))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -162,10 +166,10 @@ struct EditProfileView: View {
                 bioField
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: accentColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: accentColor), lineWidth: 1)
                     )
             )
@@ -173,9 +177,10 @@ struct EditProfileView: View {
     }
 
     private var bioField: some View {
-        HStack(alignment: .top, spacing: 12) {
+        let bioLabel = String(localized: "profile.edit.field.bio", defaultValue: "Bio", bundle: .main)
+        return HStack(alignment: .top, spacing: 12) {
             Image(systemName: "text.quote")
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo400)
                 .frame(width: 28, height: 28)
                 .background(
@@ -183,20 +188,23 @@ struct EditProfileView: View {
                         .fill(MeeshyColors.indigo400.opacity(0.12))
                 )
                 .padding(.top, 2)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "profile.edit.field.bio", defaultValue: "Bio", bundle: .main))
-                    .font(.system(size: 11, weight: .medium))
+                Text(bioLabel)
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
+                    .accessibilityHidden(true)
 
                 TextField(
                     String(localized: "profile.edit.field.bio.placeholder", defaultValue: "Parlez de vous...", bundle: .main),
                     text: $viewModel.bio,
                     axis: .vertical
                 )
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(3...6)
+                .accessibilityLabel(bioLabel)
                 .adaptiveOnChange(of: viewModel.bio) { _, newValue in
                     if newValue.count > viewModel.bioMaxLength {
                         viewModel.bio = String(newValue.prefix(viewModel.bioMaxLength))
@@ -206,7 +214,7 @@ struct EditProfileView: View {
                 HStack {
                     Spacer()
                     Text("\(viewModel.bio.count)/\(viewModel.bioMaxLength)")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(
                             viewModel.bio.count >= viewModel.bioMaxLength
                                 ? MeeshyColors.error
@@ -255,10 +263,10 @@ struct EditProfileView: View {
                 )
             }
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: "4338CA"))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: "4338CA"), lineWidth: 1)
                     )
             )
@@ -271,7 +279,7 @@ struct EditProfileView: View {
         VStack(spacing: 8) {
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
@@ -290,7 +298,7 @@ struct EditProfileView: View {
                             .tint(.white)
                     }
                     Text(String(localized: "common.save", defaultValue: "Sauvegarder", bundle: .main))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(MeeshyFont.relative(15, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -312,15 +320,17 @@ struct EditProfileView: View {
 
     private var successOverlay: some View {
         VStack(spacing: 12) {
+            // Fixed glyph: 48pt hero confirmation icon — kept fixed to preserve visual hierarchy of the success overlay.
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
+                .accessibilityHidden(true)
 
             Text(String(localized: "profile.edit.success", defaultValue: "Profil mis a jour", bundle: .main))
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(32)
+        .padding(MeeshySpacing.xxxl)
         .background(
             RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)
@@ -330,6 +340,8 @@ struct EditProfileView: View {
                 )
         )
         .transition(.scale.combined(with: .opacity))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isStaticText)
     }
 
     // MARK: - Reusable Components
@@ -337,14 +349,17 @@ struct EditProfileView: View {
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
         .padding(.leading, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func editableField(
@@ -353,22 +368,25 @@ struct EditProfileView: View {
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo400)
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(MeeshyColors.indigo400.opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
+                    .accessibilityHidden(true)
 
                 TextField(placeholder, text: text)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(theme.textPrimary)
+                    .accessibilityLabel(title)
             }
 
             Spacer()
@@ -380,7 +398,7 @@ struct EditProfileView: View {
     private func readOnlyRow(icon: String, title: String, value: String, color: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(Color(hex: color))
                 .frame(width: 28, height: 28)
                 .background(
@@ -389,17 +407,19 @@ struct EditProfileView: View {
                 )
 
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Text(value)
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(value)")
     }
 }

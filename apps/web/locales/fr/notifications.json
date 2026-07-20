@@ -100,7 +100,19 @@
       "memberJoined": "Nouveau membre dans \"{title}\"",
       "missedCall": "Appel {type} manqué",
       "system": "Notification système",
-      "default": "Nouvelle notification"
+      "default": "Nouvelle notification",
+      "postLike": "@{sender} a aimé votre publication",
+      "postComment": "@{sender} a commenté votre publication",
+      "postRepost": "@{sender} a republié votre publication",
+      "commentReply": "@{sender} a répondu à votre commentaire",
+      "commentLike": "@{sender} a aimé votre commentaire",
+      "commentReaction": "@{sender} a réagi à votre commentaire",
+      "storyReaction": "@{sender} a réagi à votre story",
+      "statusReaction": "@{sender} a réagi à votre statut",
+      "friendNewPost": "@{sender} a publié",
+      "friendNewStory": "@{sender} a ajouté une story",
+      "friendNewMood": "@{sender} a partagé une humeur",
+      "loginNewDevice": "Nouvelle connexion détectée"
     },
     "content": {
       "memberJoinedMessage": "@{sender} a rejoint le groupe",
@@ -141,7 +153,8 @@
       "now": "à l'instant",
       "minute": "il y a {count} min",
       "hour": "il y a {count}h",
-      "day": "il y a {count}j"
+      "day": "il y a {count}j",
+      "yesterdayAt": "hier {time}"
     },
     "unreadCount": {
       "single": "{count} non lue sur {total}",
@@ -346,6 +359,9 @@
       "reconnecting": "Reconnexion...",
       "disconnected": "Déconnecté"
     },
-    "dismiss": "Fermer"
+    "dismiss": "Fermer",
+    "context": {
+      "expired": "expirée"
+    }
   }
 }

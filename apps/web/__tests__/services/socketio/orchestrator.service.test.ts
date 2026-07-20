@@ -50,6 +50,8 @@ const mockTypOnTypingStart = jest.fn();
 const mockTypOnTypingStop = jest.fn();
 const mockTypGetListenerCount = jest.fn();
 const mockTypCleanup = jest.fn();
+const mockTypClearAllTypingState = jest.fn();
+const mockTypClearConversationTypingState = jest.fn();
 
 // PresenceService mocks
 const mockPresSetupEventListeners = jest.fn();
@@ -158,6 +160,8 @@ jest.mock('@/services/socketio/typing.service', () => ({
     onTypingStop: (...args: unknown[]) => mockTypOnTypingStop(...args),
     getListenerCount: (...args: unknown[]) => mockTypGetListenerCount(...args),
     cleanup: (...args: unknown[]) => mockTypCleanup(...args),
+    clearAllTypingState: (...args: unknown[]) => mockTypClearAllTypingState(...args),
+    clearConversationTypingState: (...args: unknown[]) => mockTypClearConversationTypingState(...args),
   })),
 }));
 
@@ -429,6 +433,44 @@ describe('SocketIOOrchestrator', () => {
 
       expect(mockMsgSetEncryptionHandlers).not.toHaveBeenCalled();
     });
+
+    it('does not re-register event listeners when called again with the same underlying socket', () => {
+      // Regression: ensureConnection()/setCurrentUser() can call initializeConnection()
+      // repeatedly (e.g. every sendMessage() while the status flag briefly lags behind
+      // socket.connected). connectionService.getSocket() keeps returning the SAME socket
+      // instance across those calls — re-running setupEventListeners() on it must not
+      // stack duplicate Socket.IO listeners (duplicate messages/receipts/reactions).
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      const socket = makeConnectedSocket();
+      mockConnGetSocket.mockReturnValue(socket);
+
+      orchestrator.initializeConnection();
+      orchestrator.initializeConnection();
+      orchestrator.initializeConnection();
+
+      expect(mockConnSetupConnectionListeners).toHaveBeenCalledTimes(1);
+      expect(mockTypSetupEventListeners).toHaveBeenCalledTimes(1);
+      expect(mockPresSetupEventListeners).toHaveBeenCalledTimes(1);
+      expect(mockTransSetupEventListeners).toHaveBeenCalledTimes(1);
+      expect(mockPrefSetupEventListeners).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-registers event listeners when the underlying socket instance changes', () => {
+      // A brand new socket (e.g. after a full logout/cleanup + re-login) has no
+      // listeners attached yet, so it MUST get wired up again.
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      const socketA = makeConnectedSocket();
+      mockConnGetSocket.mockReturnValue(socketA);
+      orchestrator.initializeConnection();
+
+      const socketB = { connected: true, id: 'socket-3' } as any;
+      mockConnGetSocket.mockReturnValue(socketB);
+      orchestrator.initializeConnection();
+
+      expect(mockConnSetupConnectionListeners).toHaveBeenCalledTimes(2);
+      expect(mockTypSetupEventListeners).toHaveBeenCalledTimes(2);
+      expect(mockTypSetupEventListeners).toHaveBeenNthCalledWith(2, socketB);
+    });
   });
 
   // ─── onAuthenticated (via initializeConnection callback) ──────────────────
@@ -440,14 +482,15 @@ describe('SocketIOOrchestrator', () => {
       mockConnGetSocket.mockReturnValue(socket);
       mockMsgHasEncryptionHandlers.mockReturnValue(false);
 
-      orchestrator.setCurrentUser(makeUser({ id: 'user-e2ee' }));
-
       let capturedOnAuth: (() => void) | null = null;
       mockConnSetupConnectionListeners.mockImplementation((onAuth: () => void) => {
         capturedOnAuth = onAuth;
       });
 
-      orchestrator.initializeConnection();
+      // setCurrentUser() triggers the initializeConnection() call that wires up
+      // listeners on this (first) socket instance — listeners are only attached
+      // once per socket, so the mock must be armed before this call.
+      orchestrator.setCurrentUser(makeUser({ id: 'user-e2ee' }));
       capturedOnAuth?.();
 
       await Promise.resolve();
@@ -462,14 +505,12 @@ describe('SocketIOOrchestrator', () => {
       mockMsgHasEncryptionHandlers.mockReturnValue(false);
       mockE2eeInitializeForUser.mockRejectedValue(new Error('e2ee failed'));
 
-      orchestrator.setCurrentUser(makeUser({ id: 'user-e2ee-fail' }));
-
       let capturedOnAuth: (() => void) | null = null;
       mockConnSetupConnectionListeners.mockImplementation((onAuth: () => void) => {
         capturedOnAuth = onAuth;
       });
 
-      orchestrator.initializeConnection();
+      orchestrator.setCurrentUser(makeUser({ id: 'user-e2ee-fail' }));
       capturedOnAuth?.();
 
       await Promise.resolve();
@@ -718,22 +759,17 @@ describe('SocketIOOrchestrator', () => {
       );
     });
 
-    it('second timeout resolves message when first timeout entry was removed from map', async () => {
+    it('registers exactly one timeout per queued message (no duplicate timeout leak)', async () => {
       const orchestrator = SocketIOOrchestrator.getInstance();
       mockConnGetSocket.mockReturnValue(null);
 
-      const sendPromise = orchestrator.sendMessage('conv-1', 'second-timeout-msg');
+      const sendPromise = orchestrator.sendMessage('conv-1', 'single-timeout-msg');
 
-      // Remove the first timeout from pendingMessageTimeouts (simulating it was cleared externally)
-      // but WITHOUT calling clearTimeout — so the second timeout will fire when the first is gone
-      const pendingMessageTimeoutsMap = (orchestrator as any).pendingMessageTimeouts as Map<string, any>;
-      const firstTimeoutId = pendingMessageTimeoutsMap.get('cid_generated');
-      if (firstTimeoutId !== undefined) {
-        clearTimeout(firstTimeoutId);
-        pendingMessageTimeoutsMap.delete('cid_generated');
-      }
+      const pendingMessageTimeoutsMap = (orchestrator as any).pendingMessageTimeouts as Map<string, unknown>;
+      expect(pendingMessageTimeoutsMap.size).toBe(1);
+      expect(pendingMessageTimeoutsMap.has('cid_generated')).toBe(true);
 
-      // Advance time so the second timeout fires with the message still in the queue
+      // Advance time past MESSAGE_QUEUE_TIMEOUT — the single tracked timeout fires
       jest.advanceTimersByTime(130000);
 
       const result = await sendPromise;
@@ -742,6 +778,8 @@ describe('SocketIOOrchestrator', () => {
         '[SocketIOOrchestrator]',
         'Message queue timeout, message discarded'
       );
+      // After timeout fires, entry is removed from the map
+      expect(pendingMessageTimeoutsMap.size).toBe(0);
     });
 
     it('discards message in processPendingMessages when timestamp is expired', async () => {
@@ -1106,6 +1144,36 @@ describe('SocketIOOrchestrator', () => {
       await extraPromise;
     });
 
+    it('clears the evicted message timeout when the queue is full (no timer/map leak)', async () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockConnGetSocket.mockReturnValue(null);
+      let n = 0;
+      mockGenerateClientMessageId.mockImplementation(() => `evict-cid-${n++}`);
+
+      const pendingMessageTimeouts: Map<string, ReturnType<typeof setTimeout>> = (orchestrator as any).pendingMessageTimeouts;
+
+      const promises: Promise<any>[] = [];
+      for (let i = 0; i < 50; i++) {
+        promises.push(orchestrator.sendMessage('conv-1', `msg-${i}`));
+      }
+      expect(pendingMessageTimeouts.size).toBe(50);
+
+      const timersBefore = jest.getTimerCount();
+      const extraPromise = orchestrator.sendMessage('conv-1', 'extra'); // evicts evict-cid-0
+
+      // The evicted message's timer must be cleared and its map entry removed:
+      // net armed-timer count is unchanged (one added for `extra`, one cleared for the evicted message).
+      expect(pendingMessageTimeouts.has('evict-cid-0')).toBe(false);
+      expect(pendingMessageTimeouts.size).toBe(50);
+      expect(jest.getTimerCount()).toBe(timersBefore);
+
+      const oldestResult = await promises[0];
+      expect(oldestResult.success).toBe(false);
+
+      jest.advanceTimersByTime(130000);
+      await extraPromise;
+    });
+
     it('pending message individual timeout resolves with failure', async () => {
       const orchestrator = SocketIOOrchestrator.getInstance();
       mockConnGetSocket.mockReturnValue(null);
@@ -1118,26 +1186,22 @@ describe('SocketIOOrchestrator', () => {
       expect(result.success).toBe(false);
     });
 
-    it('second setTimeout resolves with failure when first timeout was cleared externally', async () => {
+    it('tracked timeout fires exactly once and removes its entry from pendingMessageTimeouts', async () => {
       const orchestrator = SocketIOOrchestrator.getInstance();
       mockConnGetSocket.mockReturnValue(null);
-      mockGenerateClientMessageId.mockReturnValue('cid-second-timeout');
+      mockGenerateClientMessageId.mockReturnValue('cid-single-timeout');
 
-      const promise = orchestrator.sendMessage('conv-1', 'second-timeout-msg');
+      const promise = orchestrator.sendMessage('conv-1', 'single-timeout-msg');
 
-      // Clear the first (per-message) timeout so it won't fire and remove the message
       const pendingMessageTimeouts: Map<string, ReturnType<typeof setTimeout>> = (orchestrator as any).pendingMessageTimeouts;
-      const firstTimeoutId = pendingMessageTimeouts.get('cid-second-timeout');
-      if (firstTimeoutId !== undefined) {
-        clearTimeout(firstTimeoutId);
-        pendingMessageTimeouts.delete('cid-second-timeout');
-      }
+      expect(pendingMessageTimeouts.has('cid-single-timeout')).toBe(true);
 
-      // Now advance timers so the second setTimeout fires with the message still in queue
       jest.advanceTimersByTime(120001);
 
       const result = await promise;
       expect(result.success).toBe(false);
+      // Tracked entry is cleaned up after timeout fires
+      expect(pendingMessageTimeouts.has('cid-single-timeout')).toBe(false);
     });
 
     it('passes all optional fields to messagingService.sendMessage', async () => {
@@ -1646,6 +1710,32 @@ describe('SocketIOOrchestrator', () => {
       expect(r2.success).toBe(false);
     });
 
+    it('clears all pending message timeouts (no timer/map leak on teardown)', async () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      mockConnGetSocket.mockReturnValue(null);
+      let n = 0;
+      mockGenerateClientMessageId.mockImplementation(() => `cleanup-cid-${n++}`);
+
+      const promise1 = orchestrator.sendMessage('conv-1', 'msg1');
+      const promise2 = orchestrator.sendMessage('conv-1', 'msg2');
+      const promise3 = orchestrator.sendMessage('conv-1', 'msg3');
+
+      const pendingMessageTimeouts: Map<string, ReturnType<typeof setTimeout>> = (orchestrator as any).pendingMessageTimeouts;
+      expect(pendingMessageTimeouts.size).toBe(3);
+
+      const timersBefore = jest.getTimerCount();
+      orchestrator.cleanup();
+
+      // cleanup() must clear every armed message timer and empty the tracking map.
+      expect(pendingMessageTimeouts.size).toBe(0);
+      expect(jest.getTimerCount()).toBe(timersBefore - 3);
+
+      const [r1, r2, r3] = await Promise.all([promise1, promise2, promise3]);
+      expect(r1.success).toBe(false);
+      expect(r2.success).toBe(false);
+      expect(r3.success).toBe(false);
+    });
+
     it('calls cleanup on all services', () => {
       const orchestrator = SocketIOOrchestrator.getInstance();
 
@@ -1728,6 +1818,32 @@ describe('SocketIOOrchestrator', () => {
         '[SocketIOOrchestrator]',
         'Error',
         expect.objectContaining({ error })
+      );
+    });
+
+    it('onSessionRevoked callback dispatches meeshy:session-revoked DOM event and logs warn', () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      const socket = makeConnectedSocket();
+      mockConnGetSocket.mockReturnValue(socket);
+
+      let capturedOnSessionRevoked: (() => void) | null = null;
+      mockConnSetupConnectionListeners.mockImplementation(
+        (_onAuth: unknown, _onDisconnect: unknown, _onError: unknown, onRevoked: () => void) => {
+          capturedOnSessionRevoked = onRevoked;
+        }
+      );
+
+      orchestrator.initializeConnection();
+
+      const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+      expect(() => capturedOnSessionRevoked?.()).not.toThrow();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'meeshy:session-revoked' })
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        '[SocketIOOrchestrator]',
+        expect.stringContaining('Session revoked by server')
       );
     });
   });

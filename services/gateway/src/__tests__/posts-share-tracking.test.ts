@@ -23,9 +23,9 @@ type Link = {
 
 const buildPrisma = () => {
   const post = {
-    findFirst: jest.fn<(arg?: unknown) => Promise<{ id: string; authorId: string; shareCount?: number; type?: string } | null>>()
-      .mockResolvedValue({ id: POST_ID, authorId: 'author', shareCount: 0, type: 'POST' }),
-    update: jest.fn<(arg?: unknown) => Promise<{ shareCount: number }>>().mockResolvedValue({ shareCount: 1 }),
+    findFirst: jest.fn<(arg?: unknown) => Promise<{ id: string; authorId: string; shareCount?: number; type?: string; bookmarkCount?: number } | null>>()
+      .mockResolvedValue({ id: POST_ID, authorId: 'author', shareCount: 0, type: 'POST', bookmarkCount: 0 }),
+    update: jest.fn<(arg?: unknown) => Promise<{ shareCount: number; bookmarkCount: number }>>().mockResolvedValue({ shareCount: 1, bookmarkCount: 1 }),
     updateMany: jest.fn<(arg?: unknown) => Promise<{ count: number }>>().mockResolvedValue({ count: 1 }),
   };
   const trackingLink = {
@@ -161,17 +161,20 @@ describe('PostService.bookmarkPost — P2002 fix', () => {
   let service: PostService;
   beforeEach(() => { prisma = buildPrisma(); service = new PostService(prisma); });
 
-  it('creates the bookmark and increments bookmarkCount on first bookmark', async () => {
+  it('creates the bookmark and returns the incremented absolute bookmarkCount', async () => {
+    // update() returns the post AFTER `increment: 1` → that is the absolute
+    // count broadcast on `post:bookmarked` so the 3 views reconcile without reload.
     const res = await service.bookmarkPost(POST_ID, USER_ID);
-    expect(res).toEqual({ success: true });
+    expect(res).toEqual({ success: true, bookmarkCount: 1 });
     expect(prisma.postBookmark.create).toHaveBeenCalledTimes(1);
     expect(prisma.post.update).toHaveBeenCalledTimes(1);
   });
 
-  it('does NOT re-increment bookmarkCount on a duplicate (P2002)', async () => {
+  it('does NOT re-increment on a duplicate (P2002) and returns the unchanged count', async () => {
+    prisma.post.findFirst.mockResolvedValueOnce({ id: POST_ID, authorId: 'author', bookmarkCount: 7 });
     prisma.postBookmark.create.mockRejectedValueOnce(new P2002Error());
     const res = await service.bookmarkPost(POST_ID, USER_ID);
-    expect(res).toEqual({ success: true });
+    expect(res).toEqual({ success: true, bookmarkCount: 7 });
     expect(prisma.post.update).not.toHaveBeenCalled();
   });
 });
@@ -181,8 +184,11 @@ describe('PostService.unbookmarkPost — count guard', () => {
   let service: PostService;
   beforeEach(() => { prisma = buildPrisma(); service = new PostService(prisma); });
 
-  it('decrements only when bookmarkCount stays >= 0 (guarded updateMany)', async () => {
-    await service.unbookmarkPost(POST_ID, USER_ID);
+  it('decrements only when bookmarkCount stays >= 0 and returns the fresh absolute count', async () => {
+    // read-after-write reflects the post AFTER the guarded decrement.
+    prisma.post.findFirst.mockResolvedValueOnce({ id: POST_ID, authorId: 'author', bookmarkCount: 2 });
+    const res = await service.unbookmarkPost(POST_ID, USER_ID);
+    expect(res).toEqual({ success: true, bookmarkCount: 2 });
     expect(prisma.postBookmark.delete).toHaveBeenCalledTimes(1);
     expect(prisma.post.updateMany).toHaveBeenCalledTimes(1);
     const arg = prisma.post.updateMany.mock.calls[0][0] as any;
@@ -190,9 +196,11 @@ describe('PostService.unbookmarkPost — count guard', () => {
     expect(arg.data).toMatchObject({ bookmarkCount: { decrement: 1 } });
   });
 
-  it('does not decrement when the bookmark was not present', async () => {
+  it('does not decrement when the bookmark was not present but still returns the count', async () => {
     prisma.postBookmark.delete.mockRejectedValueOnce(new P2002Error());
-    await service.unbookmarkPost(POST_ID, USER_ID);
+    prisma.post.findFirst.mockResolvedValueOnce({ id: POST_ID, authorId: 'author', bookmarkCount: 5 });
+    const res = await service.unbookmarkPost(POST_ID, USER_ID);
+    expect(res).toEqual({ success: true, bookmarkCount: 5 });
     expect(prisma.post.updateMany).not.toHaveBeenCalled();
   });
 });

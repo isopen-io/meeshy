@@ -24,11 +24,11 @@ jest.mock('@/hooks/useI18n', () => ({
         'bubbleStream.messageRestored': 'Message restored to composer',
         'bubbleStream.messageDismissed': 'Message dismissed',
         'bubbleStream.allMessagesDismissed': 'All failed messages dismissed',
-        'restoreMessage': 'Restore',
-        'retryNow': 'Retry',
-        'retrying': 'Retrying...',
-        'dismiss': 'Dismiss',
-        'dismissAll': 'Dismiss All',
+        'bubbleStream.restoreMessage': 'Restore',
+        'bubbleStream.retryNow': 'Retry',
+        'bubbleStream.retrying': 'Retrying...',
+        'bubbleStream.dismiss': 'Dismiss',
+        'bubbleStream.dismissAll': 'Dismiss All',
       };
       return translations[key] || key;
     },

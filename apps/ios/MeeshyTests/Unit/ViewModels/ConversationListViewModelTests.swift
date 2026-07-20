@@ -403,6 +403,35 @@ final class ConversationListViewModelTests: XCTestCase {
                      "4xx must restore the conversation (clear deletedForUserAt)")
     }
 
+    // MARK: - deleteConversation: sweeps local call transcripts
+
+    func test_deleteConversation_sweepsLocalCallTranscripts() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv-call-1")])
+        await sut.storeHydrationTask?.value
+
+        let callMessage = MeeshyMessage(
+            conversationId: "conv-call-1", content: "",
+            callSummary: CallSummaryMetadata(
+                callId: "call-sweep-1", initiatorId: "user-1", callType: .audio, outcome: .completed,
+                durationSeconds: 12, bytesTotal: nil, bytesEstimated: false, networkQuality: nil
+            )
+        )
+        try? await CacheCoordinator.shared.messages.save([callMessage], for: "conv-call-1")
+        let transcript = CallTranscript(
+            callId: "call-sweep-1", conversationId: "conv-call-1",
+            callStartedAt: Date(timeIntervalSince1970: 0), segments: []
+        )
+        await CallTranscriptStore.shared.saveMerging(transcript)
+
+        await sut.deleteConversation(conversationId: "conv-call-1")
+        await drainMainQueue()
+
+        let loaded = await CallTranscriptStore.shared.transcript(for: "call-sweep-1")
+        XCTAssertNil(loaded, "deleting a conversation must sweep every local call transcript it carried")
+    }
+
     // MARK: - filterConversations hides soft-deleted rows
 
     func test_filterConversations_excludesSoftDeleted() {
@@ -1439,6 +1468,47 @@ final class ConversationListViewModelTests: XCTestCase {
                        "bumpToTop on unknown id must leave the list untouched")
     }
 
+    // MARK: - conversation:updated socket event — graft du titre
+
+    /// Un DM n'est jamais renommable : son `title` client est le NOM DU
+    /// PARTICIPANT, dérivé à la conversion REST (`toConversation`). Le
+    /// payload socket porte le titre BRUT de la DB — le greffer écraserait
+    /// le nom affiché (vu au pin/unpin 2026-07-04 : « sandra raveloson » →
+    /// « Sany » après un `setPinned`).
+    func test_conversationUpdatedEvent_titleOnDirect_doesNotClobberParticipantName() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "dm1", name: "sandra raveloson", type: .direct)
+        ])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "dm1", lastMessageAt: nil, title: "Sany")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.title, "sandra raveloson",
+                       "Le titre brut du payload socket ne doit pas écraser le nom du participant d'un DM")
+    }
+
+    func test_conversationUpdatedEvent_titleOnGroup_appliesRename() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "g1", name: "Ancien nom", type: .group)
+        ])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "g1", lastMessageAt: nil, title: "Nouveau nom")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.title, "Nouveau nom",
+                       "Le rename d'un groupe doit continuer de se propager via l'event socket")
+    }
+
     // MARK: - conversation:updated socket event with lastMessageAt
 
     func test_conversationUpdatedEvent_withLastMessageAt_triggersBumpToTop() async throws {
@@ -2189,7 +2259,7 @@ final class ConversationListViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 200_000_000)
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
-        let cachedItems = cached.value ?? []
+        let cachedItems = cached.snapshot() ?? []
         XCTAssertTrue(cachedItems.contains(where: { $0.id == "persisted" }),
                       "loadMore must persist the merged list to the cache")
     }
@@ -2220,6 +2290,29 @@ final class ConversationListViewModelTests: XCTestCase {
         await sut.loadMore()
         XCTAssertEqual(conversationService.lastListPageCursor, nil,
                        "After pullToRefresh the cursor must reset so the next loadMore starts from the top")
+    }
+
+    func test_pullToRefresh_preservesMediaCaches() async {
+        // Local-first : les octets média (avatars, bannières, thumbnails)
+        // téléchargés une fois ne doivent jamais être re-téléchargés tant que
+        // l'app est installée. Le pull-to-refresh rafraîchit les métadonnées,
+        // jamais les assets binaires.
+        let imageKey = "https://gate.meeshy.me/api/v1/attachments/file/avatars%2Ftest-pullrefresh.jpg"
+        let thumbKey = "https://gate.meeshy.me/api/v1/attachments/test-pullrefresh/thumbnail"
+        await CacheCoordinator.shared.images.store(Data("avatar-bytes".utf8), for: imageKey)
+        await CacheCoordinator.shared.thumbnails.store(Data("thumb-bytes".utf8), for: thumbKey)
+        let (sut, _, _, _, _, _, _) = makeSUT()
+
+        await sut.pullToRefresh()
+
+        let imageStillCached = await CacheCoordinator.shared.images.isCached(imageKey)
+        let thumbStillCached = await CacheCoordinator.shared.thumbnails.isCached(thumbKey)
+        await CacheCoordinator.shared.images.remove(for: imageKey)
+        await CacheCoordinator.shared.thumbnails.remove(for: thumbKey)
+        XCTAssertTrue(imageStillCached,
+                      "pullToRefresh must not wipe the persistent image cache (avatars/banners)")
+        XCTAssertTrue(thumbStillCached,
+                      "pullToRefresh must not wipe the thumbnail cache")
     }
 
     func test_initialState_paginationStateIsIdleAndHasMoreIsTrue() {
@@ -2272,6 +2365,30 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(conversationService.lastListPageCursor, "deep-tail",
                        "Cold start must resume from the persisted cursor instead of refetching page 1")
+    }
+
+    func test_loadMore_withoutCursor_pagesFromLocalTail() async {
+        // Full sync partiel (ou curseur jamais persisté) : des conversations
+        // sont affichées mais `nextCursor` est nil. loadMore doit paginer
+        // depuis la queue locale réelle — la conversation au lastMessageAt
+        // le plus ancien, même sémantique que le curseur gateway `before` —
+        // au lieu de refetcher la page 1 (dont le zero-progress guard
+        // forcerait `.exhausted` et tuerait l'infinite scroll).
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [makeConversation(id: "older")], nextCursor: "older", hasMore: true)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+        sut.conversations = [
+            makeConversation(id: "newest", lastMessageAt: Date()),
+            makeConversation(id: "tail", lastMessageAt: Date(timeIntervalSinceNow: -3_600)),
+        ]
+
+        await sut.loadMore()
+
+        XCTAssertEqual(conversationService.lastListPageCursor, "tail",
+                       "Without a persisted cursor, loadMore must page from the oldest loaded conversation instead of refetching page 1")
     }
 
     // MARK: - ThemedConversationRow timestamp color
@@ -2581,9 +2698,11 @@ private func makeConversationUpdatedEvent(
     let data = try! JSONSerialization.data(withJSONObject: json)
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .custom { decoder in
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let container = try decoder.singleValueContainer()
         let str = try container.decode(String.self)
-        if let date = isoFormatter.date(from: str) { return date }
+        if let date = parser.date(from: str) { return date }
         throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date")
     }
     return try! decoder.decode(ConversationUpdatedEvent.self, from: data)
@@ -2642,6 +2761,7 @@ final class ConvListTestCategoryWriter: UserCategoryWriting, @unchecked Sendable
 
 // MARK: - RelativeTimeFormatter.shortString (conversation list / feed timestamps)
 
+@MainActor
 final class RelativeTimeFormatterShortTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_750_000_000)

@@ -4,17 +4,38 @@ import MeeshyUI
 
 // MARK: - Tab Definitions
 
-enum ContactsTab: String, CaseIterable, Hashable {
+/// Top-level tabs of the People hub. The three primary surfaces of the
+/// redesigned contact view: the call journal, the dial pad, and the contact
+/// directory (an annuaire filtered by `ContactFilter`).
+enum PeopleTab: String, CaseIterable, Hashable {
+    case calls = "Appels"
+    case keypad = "Clavier"
     case contacts = "Contacts"
-    case requests = "Demandes"
+
+    var icon: String {
+        switch self {
+        case .calls: return "phone.fill"
+        case .keypad: return "circle.grid.3x3.fill"
+        case .contacts: return "person.2.fill"
+        }
+    }
+}
+
+/// Sub-tabs of the **Découverte d'utilisateurs Meeshy** view (`PeopleDiscoveryView`).
+///
+/// Moved out of the contact directory so the Contacts tab stays an exploitable
+/// annuaire. Reachable from the floating menu ladder and from deep links
+/// (`Route.peopleDiscovery(DiscoveryTab)`). Order is the on-screen order:
+/// Decouvrir (the search landing) first, then Demandes, then Bloques.
+enum DiscoveryTab: String, CaseIterable, Hashable {
     case discover = "Decouvrir"
+    case requests = "Demandes"
     case blocked = "Bloques"
 
     var icon: String {
         switch self {
-        case .contacts: return "person.2.fill"
-        case .requests: return "person.badge.plus"
         case .discover: return "magnifyingglass"
+        case .requests: return "person.badge.plus"
         case .blocked: return "hand.raised.fill"
         }
     }
@@ -97,8 +118,14 @@ extension View {
     /// tabs stay silent) to drive the hub's collapsing header.
     func reportsContactsScroll(active: Bool, onChange: @escaping (CGFloat) -> Void) -> some View {
         coordinateSpace(name: ContactsScrollOffset.space)
+            // iOS 16–17: the sentinel preference drives the offset.
             .onPreferenceChange(ContactsScrollOffsetKey.self) { value in
                 if active { onChange(value) }
+            }
+            // iOS 18+: `.onPreferenceChange` no longer re-fires on scroll, so read
+            // `contentOffset.y` natively (negated to match the sentinel's minY sign).
+            .trackScrollContentOffset { value in
+                if active { onChange(-value) }
             }
     }
 }

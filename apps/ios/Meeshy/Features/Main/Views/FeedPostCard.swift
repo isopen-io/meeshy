@@ -40,6 +40,10 @@ struct FeedPostCard: View {
     var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
     var onTapPost: ((FeedPost) -> Void)? = nil
     var onTapRepost: ((String) -> Void)? = nil
+    /// Fired when the user taps "voir plus" to expand the truncated text. Lets a
+    /// host (e.g. the profile posts list) count a post view on expansion. The
+    /// inline expansion happens regardless; this is an additional side-effect.
+    var onSeeMore: (() -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
@@ -56,6 +60,12 @@ struct FeedPostCard: View {
     var authorStoryRing: StoryRingState = .none
     var onViewAuthorStory: (() -> Void)? = nil
 
+    /// Feed autoplay coordinator (RF2). Passed as a plain `let` — NOT observed —
+    /// so election changes never invalidate this leaf card; the inner
+    /// `ReelRepostEmbedContainer` observes it. `nil` keeps the static-poster
+    /// fallback (e.g. profile lists with no feed-level autoplay).
+    var reelAutoplay: ReelFeedAutoplayCoordinator? = nil
+
     // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
     // évite que chaque changement de thème force un re-render de toutes les cards.
     private var theme: ThemeManager { ThemeManager.shared }
@@ -63,6 +73,7 @@ struct FeedPostCard: View {
     @State private var showTranslationSheet = false
     @State private var showRepostOptions = false
     @State private var selectedProfileUser: ProfileSheetUser?
+    @State var audioFullscreen: AudioFullscreenSource?
     @State private var secondaryLangCode: String? = nil
     @State private var activeDisplayLangCode: String? = nil
     @State var fullscreenMediaId: String? = nil
@@ -85,6 +96,31 @@ struct FeedPostCard: View {
         if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
         return "\(value)"
     }
+
+    /// Compact preview descriptor for the media carried by a reposted POST/STATUS
+    /// (RF1). Holds the first media (rendered as a thumbnail) and the total count
+    /// (drives a "+N" badge).
+    struct RepostMediaPreview: Equatable {
+        let primary: FeedMedia
+        let count: Int
+        static func == (lhs: RepostMediaPreview, rhs: RepostMediaPreview) -> Bool {
+            lhs.primary.id == rhs.primary.id && lhs.count == rhs.count
+        }
+    }
+
+    /// Resolver for the reposted POST/STATUS quote-block media preview. Returns
+    /// `nil` when the repost carries no media — text-only reposts then keep their
+    /// byte-identical layout (the preview block is skipped). Otherwise the first
+    /// media + total count. Pure; unit-tested.
+    static func repostMediaPreviewModel(for repost: RepostContent) -> RepostMediaPreview? {
+        guard let primary = repost.media.first else { return nil }
+        return RepostMediaPreview(primary: primary, count: repost.media.count)
+    }
+
+    /// Tap target for the reposted quote block (incl. its media preview): ALWAYS
+    /// the original reposted post (`repost.id`), never the reposter's outer card
+    /// (`post.id`). Routed through the enclosing repost Button. Pure; unit-tested.
+    static func repostTapTargetId(for repost: RepostContent) -> String { repost.id }
 
     /// VoiceOver label for the tappable media preview. Distinguishes a video
     /// from an image (and falls back to a generic "media" wording for mixed or
@@ -204,6 +240,24 @@ struct FeedPostCard: View {
         HapticFeedback.light()
     }
 
+    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché. Dérivée (non stockée) :
+    /// le gate `.equatable()` (compare `post.content`) ne ré-évalue le body que si le contenu
+    /// change, donc le NSDataDetector ne tourne pas à chaque re-render parent.
+    private var embeddedVideo: EmbeddedVideo? {
+        EmbeddableVideoResolver.resolve(in: effectiveContent)
+    }
+
+    /// Teinte des liens cliquables dans le corps du post.
+    private var postLinkTint: Color { Color(hex: accentColor) }
+
+    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
+    /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
+    private var embedTrackedURL: URL? {
+        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
+              let token = post.trackedLinkMap[raw] else { return nil }
+        return URL(string: "https://meeshy.me/l/\(token)")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Main content
@@ -213,13 +267,15 @@ struct FeedPostCard: View {
                     // Author header
                     authorHeader
 
-                    // Post content — tap text opens detail, "voir plus/moins" toggles expansion
+                    // Post content — tap text opens detail, "voir plus/moins" toggles expansion.
+                    // Le corps passe par `MessageTextRenderer` pour rendre les URLs
+                    // cliquables + trackées (`/l/<token>`) tout en gardant `onTapPost`
+                    // sur le texte non-lien (priorité au lien = défaut SwiftUI).
                     let truncation = truncatedContent
                     if isTextExpanded {
-                        Text(effectiveContent)
-                            .font(.subheadline)
-                            .foregroundColor(theme.textPrimary)
+                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
+                            .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
                             .accessibilityAction { onTapPost?(post) }
 
@@ -234,10 +290,9 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint(String(localized: "a11y.feed.post.see_less.hint", defaultValue: "Réduit le texte", bundle: .main))
                     } else {
-                        Text(truncation.text + (truncation.isTruncated ? "..." : ""))
-                            .font(.subheadline)
-                            .foregroundColor(theme.textPrimary)
+                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
                             .lineLimit(nil)
+                            .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
                             .accessibilityAction { onTapPost?(post) }
 
@@ -245,11 +300,27 @@ struct FeedPostCard: View {
                             Text(String(localized: "feed.post.see_more", defaultValue: "voir plus", bundle: .main))
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textMuted)
-                                .onTapGesture {
-                                    withAnimation(.easeInOut(duration: 0.25)) {
-                                        isTextExpanded = true
-                                    }
-                                }
+                                // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
+                                // creusait ~14pt de vide au-dessus et en dessous du libellé
+                                // avant la rangée d'actions (même correctif que le « Voir
+                                // plus » des bulles, 2026-07-08). Cible tactile 44pt HIG via
+                                // un contentShape étendu UNIQUEMENT vers le bas
+                                // (`DownwardExtendedTapShape`, +20pt) — vers le texte du post
+                                // au-dessus, jamais.
+                                .frame(minHeight: 24)
+                                .contentShape(DownwardExtendedTapShape(extraBottom: 20))
+                                .textSelection(.disabled)
+                                .highPriorityGesture(
+                                    TapGesture()
+                                        .onEnded {
+                                            HapticFeedback.light()
+                                            withAnimation(.easeInOut(duration: 0.25)) {
+                                                isTextExpanded = true
+                                            }
+                                            onSeeMore?()
+                                        }
+                                )
+                                .accessibilityIdentifier("feed.post.see_more")
                                 .accessibilityAddTraits(.isButton)
                                 .accessibilityHint(String(localized: "a11y.feed.post.see_more.hint", defaultValue: "Affiche le texte complet", bundle: .main))
                         }
@@ -298,6 +369,13 @@ struct FeedPostCard: View {
                     onTapPost?(post)
                 }
 
+                // Embed vidéo (YouTube) détecté dans le contenu : player façade
+                // (vignette → lecture inline), hors du geste d'ouverture du post.
+                if let embeddedVideo {
+                    VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
+                        .padding(.top, 8)
+                }
+
                 // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
                 // For this branch the gateway has snapshotted the original story media
                 // into the outer POST, but the canonical source is `post.repost` —
@@ -311,11 +389,21 @@ struct FeedPostCard: View {
                 } else if isReelRepost {
                     // Repost-of-REEL: a reel's content lives in media/caption, never
                     // in `content`, so the legacy quote block rendered blank (and the
-                    // POST card drops the reel badge). Render a rich reel preview.
-                    ReelRepostEmbedCell(
-                        post: post,
-                        onTap: { post.repost.map { onTapRepost?($0.id) } }
-                    )
+                    // POST card drops the reel badge). Render a rich reel preview with
+                    // inline muted autoplay (RF2) when a feed coordinator is provided;
+                    // otherwise the static-poster cell.
+                    if let reelAutoplay {
+                        ReelRepostEmbedContainer(
+                            coordinator: reelAutoplay,
+                            post: post,
+                            onTap: { post.repost.map { onTapRepost?($0.id) } }
+                        )
+                    } else {
+                        ReelRepostEmbedCell(
+                            post: post,
+                            onTap: { post.repost.map { onTapRepost?($0.id) } }
+                        )
+                    }
                 } else {
                     // Media preview (outside nav tap target — has its own fullscreen gesture)
                     if post.hasMedia {
@@ -378,15 +466,24 @@ struct FeedPostCard: View {
                 user: user,
                 moodEmoji: mood?.emoji,
                 onMoodTap: mood?.tapHandler,
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 // L'état réel n'est connu que pour l'auteur du post (la card
                 // est une leaf sans accès au StoryViewModel) ; les autres
                 // profils gardent l'anneau décoratif legacy (nil).
                 storyRingState: isPostAuthor ? authorStoryRing : nil,
                 onViewStory: isPostAuthor ? onViewAuthorStory.map { handler in
                     { selectedProfileUser = nil; handler() }
-                } : nil
+                } : nil,
+                postsContent: { uid in
+                    AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { tapped in
+                        selectedProfileUser = nil
+                        onTapPost?(tapped)
+                    }, onOpenReel: { reel, reels in
+                        ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
+                    }))
+                }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
@@ -407,6 +504,7 @@ struct FeedPostCard: View {
                 senderInfoMap: senderMap
             )
         }
+        .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .withStatusBubble()
     }
 
@@ -440,14 +538,24 @@ struct FeedPostCard: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
 
-                    // Repost indicator inline
+                    // Repost indicator inline — compact source attribution right
+                    // after the author pseudo ("a republié de @handle"), so the
+                    // embedded story/quote cell no longer needs a verbose
+                    // "Reposté de @handle" block.
                     if post.repostAuthor != nil {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.caption2)
                                 .accessibilityHidden(true)
-                            Text(String(localized: "feed.post.reposted", defaultValue: "a republié", bundle: .main))
-                                .font(.caption)
+                            if let handle = post.repost?.authorUsername ?? post.repostAuthor {
+                                Text(String(format: String(localized: "feed.post.reposted_from", defaultValue: "a republié de @%@", bundle: .main), handle))
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            } else {
+                                Text(String(localized: "feed.post.reposted", defaultValue: "a republié", bundle: .main))
+                                    .font(.caption)
+                            }
                         }
                         .foregroundColor(theme.textMuted)
                     }
@@ -459,7 +567,7 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.accentText(accentColor))
 
                     let flags = buildAvailableFlags()
-                    if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                    if !flags.isEmpty || post.translations?.isEmpty == false {
                         Text("·")
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
@@ -483,7 +591,7 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                         }
 
-                        if post.translations != nil, !post.translations!.isEmpty {
+                        if post.translations?.isEmpty == false {
                             Image(systemName: "translate")
                                 .font(.caption2.weight(.medium))
                                 .foregroundColor(MeeshyColors.indigo400)
@@ -507,12 +615,12 @@ struct FeedPostCard: View {
                             Text(Self.compactCount(post.impressionCount)).font(.caption2.weight(.medium))
                             Text("·").font(.caption2)
                             Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                            Text(Self.compactCount(post.postOpenCount)).font(.caption2.weight(.medium))
+                            Text(Self.compactCount(post.viewCount)).font(.caption2.weight(.medium))
                         }
                         .foregroundColor(theme.textMuted)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
-                        .accessibilityValue("\(post.impressionCount) · \(post.postOpenCount)")
+                        .accessibilityValue("\(post.impressionCount) · \(post.viewCount)")
                     }
                 }
             }
@@ -574,7 +682,7 @@ struct FeedPostCard: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16))
+                    .font(MeeshyFont.relative(16))
                     .foregroundColor(theme.textMuted)
                     .padding(8)
             }
@@ -587,7 +695,7 @@ struct FeedPostCard: View {
     private func repostView(_ repost: RepostContent) -> some View {
         Button {
             HapticFeedback.light()
-            onTapRepost?(repost.id)
+            onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 // Original author
@@ -611,11 +719,27 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.textMuted)
                 }
 
-                // Original content
-                Text(repost.content)
-                    .font(.footnote)
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(4)
+                // Original content — préfixé du mood emoji pour un STATUS
+                // reposté (sinon un mood republié n'afficherait qu'un corps vide).
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    if let mood = repost.moodEmoji, !mood.isEmpty {
+                        Text(mood)
+                            .font(.body)
+                            .accessibilityHidden(true)
+                    }
+                    Text(repost.content)
+                        .font(.footnote)
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(4)
+                }
+
+                // Reposted media (RF1) — a reposted POST/STATUS carrying images or
+                // video rendered text-only before this; show a compact thumbnail
+                // preview reusing the own-media building blocks. No AVPlayer: the
+                // surrounding Button routes the tap to the ORIGINAL reposted post.
+                if let mediaModel = Self.repostMediaPreviewModel(for: repost) {
+                    repostMediaPreview(mediaModel)
+                }
 
                 // Original stats
                 HStack(spacing: 12) {
@@ -684,7 +808,7 @@ struct FeedPostCard: View {
 
                         let heartColor: Color = effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                         Image(systemName: effectiveIsLiked || effectiveLikeCount > 0 ? "heart.fill" : "heart")
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(18))
                             .foregroundColor(heartColor)
                             .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -692,7 +816,7 @@ struct FeedPostCard: View {
                         // Accent BORDER on the glyph when the current user liked.
                         if effectiveIsLiked {
                             Image(systemName: "heart")
-                                .font(.system(size: 18))
+                                .font(MeeshyFont.relative(18))
                                 .foregroundColor(Color(hex: accentColor))
                                 .scaleEffect(likeAnimating ? 1.3 : 1.1)
                                 .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -720,7 +844,7 @@ struct FeedPostCard: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "bubble.right")
-                        .font(.system(size: 17))
+                        .font(MeeshyFont.relative(17))
 
                     if post.commentCount > 0 {
                         Text("\(post.commentCount)")
@@ -742,12 +866,12 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
                         // Accent BORDER on the glyph when the current user reposted.
                         if isReposted {
                             Image(systemName: "arrow.2.squarepath.circle")
-                                .font(.system(size: 17))
+                                .font(MeeshyFont.relative(17))
                                 .foregroundColor(Color(hex: accentColor))
                         }
                     }
@@ -767,7 +891,7 @@ struct FeedPostCard: View {
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), displayRepostCount ?? post.repostCount))
             .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
             .accessibilityAddTraits(isReposted ? .isSelected : [])
-            .confirmationDialog(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
+            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
                 Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(post.id) }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
@@ -783,12 +907,12 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
                         // Accent BORDER on the glyph when the current user bookmarked.
                         if isBookmarked {
                             Image(systemName: "bookmark")
-                                .font(.system(size: 17))
+                                .font(MeeshyFont.relative(17))
                                 .foregroundColor(Color(hex: accentColor))
                         }
                     }
@@ -819,7 +943,7 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .opacity(isShareInFlight ? 0 : 1)
                         if isShareInFlight {
                             ProgressView()
@@ -952,11 +1076,30 @@ struct FeedPostCard: View {
                         }
                     }
 
-                    // Content (Prisme Linguistique)
-                    Text(comment.displayContent)
-                        .font(.footnote)
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(2)
+                    // Content (Prisme Linguistique) — masqué pour un commentaire
+                    // média-seul (displayContent vide) : évite une ligne fantôme.
+                    if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(comment.displayContent)
+                            .font(.footnote)
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(2)
+                    }
+
+                    // Média unique (image/vidéo/audio) — rendu inline dans l'aperçu
+                    // du feed avec les MÊMES building blocks que la sheet. L'audio est
+                    // ainsi lisible/arrêtable directement (le player porte son propre
+                    // bouton, qui capte le tap sans ouvrir la sheet).
+                    if let media = comment.media.first {
+                        CommentMediaView(
+                            media: media,
+                            accentColor: accentColor,
+                            authorName: comment.author,
+                            authorAvatarURL: comment.authorAvatarURL,
+                            authorColor: comment.authorColor,
+                            sentAt: comment.timestamp
+                        )
+                        .padding(.top, 2)
+                    }
 
                     // Stats row: likes and replies
                     HStack(spacing: 16) {

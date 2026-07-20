@@ -15,7 +15,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ZMQSingleton } from '../ZmqSingleton';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { getLanguagesWithTranslation } from '../../utils/languages';
-import { postInclude, NOT_DELETED } from './postIncludes';
+import { postInclude, commentMediaInclude, NOT_DELETED } from './postIncludes';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
@@ -205,14 +205,15 @@ export class PostAudioService {
         });
       }
 
-      await this.prisma.postMedia.update({
+      const updated = await this.prisma.postMedia.update({
         where: { id: postMediaId },
         data: { transcription: transcriptionPayload },
+        select: { commentId: true },
       });
 
-      log.info('Transcription persisted — fetching post for broadcast', { postId, postMediaId });
+      log.info('Transcription persisted — broadcasting media owner update', { postId, postMediaId });
 
-      await this.broadcastPostUpdate(postId);
+      await this.broadcastMediaOwnerUpdate(postId, updated.commentId);
     } catch (err: unknown) {
       log.error('handleTranscriptionReady failed', err, { postId, postMediaId });
     }
@@ -231,17 +232,82 @@ export class PostAudioService {
 
       const translationsPayload: Prisma.InputJsonValue = translations as unknown as Prisma.InputJsonValue;
 
-      await this.prisma.postMedia.update({
+      const updated = await this.prisma.postMedia.update({
         where: { id: postMediaId },
         data: { translations: translationsPayload },
+        select: { commentId: true },
       });
 
-      log.info('Translations persisted — broadcasting post:updated', { postId, postMediaId, langCount });
+      log.info('Translations persisted — broadcasting media owner update', { postId, postMediaId, langCount });
 
-      await this.broadcastPostUpdate(postId);
+      await this.broadcastMediaOwnerUpdate(postId, updated.commentId);
     } catch (err: unknown) {
       log.error('handleAudioTranslationsReady failed', err, { postId, postMediaId });
     }
+  }
+
+  /**
+   * Route the post-processing broadcast to the media's actual owner.
+   * When the PostMedia belongs to a comment (`commentId` set), emit
+   * `comment:media-updated` carrying the enriched comment. Otherwise fall back to
+   * the regular `post:updated` broadcast for post/story/status media.
+   */
+  private async broadcastMediaOwnerUpdate(postId: string, commentId: string | null): Promise<void> {
+    if (commentId) {
+      await this.broadcastCommentMediaUpdate(commentId);
+      return;
+    }
+    await this.broadcastPostUpdate(postId);
+  }
+
+  /**
+   * Fetch the comment (with its media + author) and broadcast comment:media-updated.
+   */
+  private async broadcastCommentMediaUpdate(commentId: string): Promise<void> {
+    const comment = await this.prisma.postComment.findFirst({
+      where: { id: commentId, deletedAt: NOT_DELETED },
+      select: {
+        id: true,
+        postId: true,
+        content: true,
+        originalLanguage: true,
+        translations: true,
+        likeCount: true,
+        replyCount: true,
+        effectFlags: true,
+        parentId: true,
+        createdAt: true,
+        metadata: true,
+        author: { select: { id: true, username: true, displayName: true, avatar: true } },
+        media: commentMediaInclude,
+      },
+    });
+
+    if (!comment) {
+      log.warn('Comment not found after media update — skipping broadcast', { commentId });
+      return;
+    }
+
+    const post = await this.prisma.post.findFirst({
+      where: { id: comment.postId, deletedAt: NOT_DELETED },
+      select: { authorId: true, visibility: true, visibilityUserIds: true },
+    });
+    if (!post) {
+      log.warn('Post not found for comment media broadcast — skipping', { commentId, postId: comment.postId });
+      return;
+    }
+
+    await this.socialEvents.broadcastCommentMediaUpdated(
+      {
+        postId: comment.postId,
+        commentId: comment.id,
+        comment: comment as unknown as Parameters<SocialEventsHandler['broadcastCommentMediaUpdated']>[0]['comment'],
+      },
+      post.authorId,
+      post.visibility,
+      post.visibilityUserIds ?? [],
+    );
+    log.info('comment:media-updated broadcast sent', { commentId, postId: comment.postId });
   }
 
   /**

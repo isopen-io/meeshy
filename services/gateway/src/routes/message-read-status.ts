@@ -3,11 +3,13 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { createCustomRateLimiter } from '../utils/rate-limiter.js';
 const logger = enhancedLogger.child({ module: 'MessageReadStatusRoutes' });
 
 interface MessageParams {
@@ -36,6 +38,22 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {
     requireAuth: true,
     allowAnonymous: false
+  });
+
+  // Rate limiter for write operations that broadcast to conversation rooms.
+  // 30 req/min per user — generous enough for normal tab-switching / reconnect
+  // patterns while blocking tight loops that would spam read-receipt broadcasts.
+  const readReceiptWriteLimiter = createCustomRateLimiter({
+    max: 30,
+    windowMs: 60 * 1000,
+    keyPrefix: 'read-receipt',
+    message: 'Too many read-receipt updates. Please slow down.',
+    keyGenerator: (request: FastifyRequest) => {
+      /* istanbul ignore next -- keyGenerator is called by rate-limiter middleware; mocked in tests, never invoked directly */
+      const authRequest = request as UnifiedAuthRequest;
+      /* istanbul ignore next */
+      return `user:${authRequest.authContext?.userId ?? request.ip ?? 'unknown'}`;
+    }
   });
 
   /**
@@ -163,7 +181,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: ConversationParams;
   }>('/conversations/:conversationId/mark-as-read', {
     preValidation: [requiredAuth],
-    preHandler: [validateParams(ConversationIdParamSchema)]
+    preHandler: [validateParams(ConversationIdParamSchema), readReceiptWriteLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { conversationId: rawId } = request.params;
@@ -203,8 +221,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         false // Les utilisateurs authentifiés ne sont pas anonymes ici
       );
 
-      // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
       if (shouldShowReadReceipts) {
+        // READ_STATUS_UPDATED (peer disclosure) + CONVERSATION_UNREAD_UPDATED (badge reset)
         try {
           await broadcastReadStatusUpdate(fastify, prisma, readStatusService, {
             conversationId,
@@ -214,7 +232,15 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           });
         } catch (socketError) {
           logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
-          // Ne pas faire échouer la requête si Socket.IO échoue
+        }
+      } else {
+        // Badge reset is internal multi-device sync, not a peer disclosure — always fire.
+        const manager = fastify.socketIOHandler?.getManager?.();
+        if (manager) {
+          manager.getIO().to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+            conversationId,
+            unreadCount: 0,
+          });
         }
       }
 
@@ -235,7 +261,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: ConversationParams;
   }>('/conversations/:conversationId/mark-as-received', {
     preValidation: [requiredAuth],
-    preHandler: [validateParams(ConversationIdParamSchema)]
+    preHandler: [validateParams(ConversationIdParamSchema), readReceiptWriteLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { conversationId: rawId } = request.params;
@@ -303,7 +329,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
    * Push-driven delivery acknowledgement. Called by the iOS Notification
    * Service Extension when an OFFLINE recipient receives a `new_message`
    * push: the extension holds no socket, so the gateway's online
-   * auto-delivery path (`MessageHandler._autoDeliverToOnlineRecipients`)
+   * auto-delivery path (`MessageHandler.autoDeliverToOnlineRecipients`)
    * never fires for that recipient and the author stays stuck on a single
    * checkmark. This endpoint marks the message delivered for the
    * authenticated recipient and broadcasts `read-status:updated` so the
@@ -318,7 +344,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: DeliveryReceiptRouteParams;
   }>('/conversations/:conversationId/messages/:messageId/delivery-receipt', {
     preValidation: [requiredAuth],
-    preHandler: [validateParams(DeliveryReceiptParamsSchema)]
+    preHandler: [validateParams(DeliveryReceiptParamsSchema), readReceiptWriteLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { conversationId: rawId, messageId } = request.params;
@@ -427,21 +453,50 @@ async function broadcastReadStatusUpdate(
   const socketIOManager = socketIOHandler?.getManager?.();
   if (!socketIOManager) return;
 
-  const [summary, activeParticipants] = await Promise.all([
+  // Read frontier + unread count of the ACTOR (args.userId), scoped to their
+  // participant row, let the actor's OTHER devices sync their own read cursor
+  // without a refetch (multi-device read sync). They travel ONLY on a 'read':
+  // that is the sole action advancing the read cursor. A 'received' (delivery)
+  // never moves lastReadAt, so it carries the aggregate summary only (peers
+  // use it for checkmarks) and omits these per-user fields — which the client
+  // would drop anyway, and which would needlessly disclose the actor's backlog
+  // to every peer in the room.
+  const actorReadSyncP: Promise<{ lastReadAt: Date | null; unreadCount: number } | undefined> =
+    args.type === 'read'
+      ? Promise.all([
+          prisma.conversationReadCursor.findUnique({
+            where: {
+              conversation_participant_cursor: {
+                participantId: args.participantId,
+                conversationId: args.conversationId
+              }
+            },
+            select: { lastReadAt: true }
+          }),
+          readStatusService.getUnreadCount(args.participantId, args.conversationId)
+        ]).then(([cursor, unreadCount]) => ({
+          lastReadAt: cursor?.lastReadAt ?? null,
+          unreadCount
+        }))
+      : Promise.resolve(undefined);
+
+  const [summary, activeParticipants, actorReadSync] = await Promise.all([
     readStatusService.getLatestMessageSummary(args.conversationId),
     prisma.participant.findMany({
       where: { conversationId: args.conversationId, isActive: true },
       select: { userId: true }
-    })
+    }),
+    actorReadSyncP
   ]);
 
-  const payload = {
+  const payload: ReadStatusUpdatedEventData = {
     conversationId: args.conversationId,
     participantId: args.participantId,
     userId: args.userId,
     type: args.type,
     updatedAt: new Date(),
-    summary
+    summary,
+    ...(actorReadSync ?? {})
   };
 
   const io = socketIOManager.getIO();
@@ -460,4 +515,12 @@ async function broadcastReadStatusUpdate(
   }
 
   emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+  emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
+
+  if (args.type === 'read') {
+    io.to(ROOMS.user(args.userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+      conversationId: args.conversationId,
+      unreadCount: actorReadSync?.unreadCount ?? 0,
+    });
+  }
 }

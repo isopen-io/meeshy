@@ -14,6 +14,37 @@ import MeeshySDK
 /// user A dans le compose box. Migration ascendante des clés legacy
 /// (`meeshy_draft_<convId>`) au premier `load()` du user courant.
 /// Voir `docs/superpowers/specs/2026-05-26-user-session-migration-design.md`.
+/// Référence d'une pièce jointe de brouillon dont le fichier a été copié
+/// dans le dossier DURABLE de drafts (`MessageDraftMediaStore`) — les
+/// fichiers du composer vivent dans `tmp/`, purgeable par iOS, donc une
+/// simple référence ne survivrait pas.
+public struct DraftAttachmentRef: Codable, Equatable, Sendable {
+    public var attachmentId: String
+    /// Nom de fichier RELATIF dans le dossier draft de la conversation.
+    public var storedFileName: String
+    public var originalName: String
+    public var mimeType: String
+    public var fileSize: Int
+    public var duration: Int?
+    public var width: Int?
+    public var height: Int?
+    public var thumbnailColor: String
+
+    public init(attachmentId: String, storedFileName: String, originalName: String,
+                mimeType: String, fileSize: Int = 0, duration: Int? = nil,
+                width: Int? = nil, height: Int? = nil, thumbnailColor: String = "4ECDC4") {
+        self.attachmentId = attachmentId
+        self.storedFileName = storedFileName
+        self.originalName = originalName
+        self.mimeType = mimeType
+        self.fileSize = fileSize
+        self.duration = duration
+        self.width = width
+        self.height = height
+        self.thumbnailColor = thumbnailColor
+    }
+}
+
 public struct MessageDraft: Codable, Equatable, Sendable {
     public var text: String
     public var replyToId: String?
@@ -29,6 +60,10 @@ public struct MessageDraft: Codable, Equatable, Sendable {
     public var isBlurEnabled: Bool
     public var ephemeralDurationRawValue: Int?
     public var updatedAt: Date
+    /// Pièces jointes copiées dans le dossier draft durable. Optionnel pour
+    /// la rétro-compatibilité de décodage des brouillons persistés avant ce
+    /// champ (clé absente → nil).
+    public var attachments: [DraftAttachmentRef]?
 
     public init(
         text: String = "",
@@ -40,7 +75,8 @@ public struct MessageDraft: Codable, Equatable, Sendable {
         effectFlags: UInt32 = 0,
         isBlurEnabled: Bool = false,
         ephemeralDurationRawValue: Int? = nil,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        attachments: [DraftAttachmentRef]? = nil
     ) {
         self.text = text
         self.replyToId = replyToId
@@ -52,6 +88,7 @@ public struct MessageDraft: Codable, Equatable, Sendable {
         self.isBlurEnabled = isBlurEnabled
         self.ephemeralDurationRawValue = ephemeralDurationRawValue
         self.updatedAt = updatedAt
+        self.attachments = attachments
     }
 
     /// `true` when the draft is effectively empty and can be removed from
@@ -64,6 +101,7 @@ public struct MessageDraft: Codable, Equatable, Sendable {
             && effectFlags == 0
             && !isBlurEnabled
             && ephemeralDurationRawValue == nil
+            && (attachments?.isEmpty ?? true)
     }
 
     /// `true` when the draft carries actual unsent TEXT (after trimming). The

@@ -15,20 +15,36 @@ public struct RulerView: View, Equatable {
     public let isDark: Bool
     public let height: CGFloat
     public let onTapTime: (Float) -> Void
+    /// Called once when a drag on the ruler starts. Hosts wire this to
+    /// `TimelineViewModel.beginScrub()` so continuous `onTapTime` callbacks
+    /// seek with sub-50ms tolerance instead of freezing on GOP decompression.
+    public let onScrubBegan: () -> Void
+    /// Called once when the drag ends. Hosts wire this to
+    /// `TimelineViewModel.endScrub()` so the release frame is re-seeked
+    /// frame-accurately.
+    public let onScrubEnded: () -> Void
 
     public init(
         totalDuration: Float,
         geometry: TimelineGeometry,
         isDark: Bool,
         height: CGFloat = 24,
-        onTapTime: @escaping (Float) -> Void
+        onTapTime: @escaping (Float) -> Void,
+        onScrubBegan: @escaping () -> Void = {},
+        onScrubEnded: @escaping () -> Void = {}
     ) {
         self.totalDuration = totalDuration
         self.geometry = geometry
         self.isDark = isDark
         self.height = height
         self.onTapTime = onTapTime
+        self.onScrubBegan = onScrubBegan
+        self.onScrubEnded = onScrubEnded
     }
+
+    /// DragGesture has no `.onBegan` — synthesized from the first `.onChanged`
+    /// of the current drag, mirroring `PlayheadView.dragInFlight`.
+    @State private var dragInFlight: Bool = false
 
     public static func tickInterval(for zoom: CGFloat) -> Double {
         let pps = Double(TimelineGeometry.basePixelsPerSecond * zoom)
@@ -84,7 +100,19 @@ public struct RulerView: View, Equatable {
         .contentShape(Rectangle())
         .gesture(
             DragGesture(minimumDistance: 0)
-                .onChanged { v in onTapTime(geometry.time(forX: max(0, v.location.x))) }
+                .onChanged { v in
+                    if !dragInFlight {
+                        dragInFlight = true
+                        onScrubBegan()
+                    }
+                    onTapTime(geometry.time(forX: max(0, v.location.x)))
+                }
+                .onEnded { _ in
+                    if dragInFlight {
+                        dragInFlight = false
+                        onScrubEnded()
+                    }
+                }
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Ruler")

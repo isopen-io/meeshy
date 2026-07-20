@@ -46,7 +46,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1171</string>
+	<string>1252</string>
 	<key>FirebaseAppDelegateProxyEnabled</key>
 	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
@@ -107,7 +107,6 @@
 		<string>fetch</string>
 		<string>remote-notification</string>
 		<string>processing</string>
-		<string>bluetooth-peripheral</string>
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<false/>

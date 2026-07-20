@@ -3,6 +3,7 @@
 import { useRef } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface OTPInputProps {
   value: string;
@@ -17,6 +18,7 @@ export function OTPInput({
   disabled = false,
   id = 'recovery-otp',
 }: OTPInputProps) {
+  const { t } = useI18n('auth');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const CODE_LENGTH = 6;
 
@@ -45,7 +47,7 @@ export function OTPInput({
   };
 
   return (
-    <div className="flex justify-center gap-2" role="group" aria-label="Code de vérification à 6 chiffres">
+    <div className="flex justify-center gap-2" role="group" aria-label={t('otp.groupLabel', { length: CODE_LENGTH })}>
       {Array.from({ length: CODE_LENGTH }).map((_, index) => (
         <motion.input
           key={index}
@@ -59,7 +61,7 @@ export function OTPInput({
           onKeyDown={(e) => handleKeyDown(index, e)}
           onPaste={handlePaste}
           disabled={disabled}
-          aria-label={`Chiffre ${index + 1} sur 6`}
+          aria-label={t('otp.digitLabel', { index: index + 1, total: CODE_LENGTH })}
           autoComplete="one-time-code"
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}

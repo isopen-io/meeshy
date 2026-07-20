@@ -23,6 +23,7 @@ export function AgentTopicRegexTester({ topicId }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const handleTest = async () => {
+    /* istanbul ignore if -- button is disabled when sampleText is blank; guard is unreachable via UI */
     if (!sampleText.trim()) return;
     setLoading(true);
     setError(null);

@@ -32,6 +32,13 @@ jest.mock('@/hooks/useI18n', () => ({
         'gallery.download': 'Télécharger',
         'gallery.fullscreen': 'Ouvrir en plein écran',
         'gallery.close': 'Fermer',
+        // deleteDialog namespace translations
+        'deleteDialog.title': 'Confirmer la suppression',
+        'deleteDialog.description': 'Êtes-vous sûr de vouloir supprimer ce fichier ? Cette action est irréversible.',
+        'deleteDialog.serverNote': 'Le fichier sera définitivement supprimé du serveur.',
+        'deleteDialog.cancel': 'Annuler',
+        'deleteDialog.deleting': 'Suppression...',
+        'deleteDialog.delete': 'Supprimer',
         // common namespace translations
         'common.close': 'Fermer',
         'common.download': 'Télécharger',
@@ -72,6 +79,12 @@ jest.mock('@/hooks/use-i18n', () => ({
         'gallery.download': 'Télécharger',
         'gallery.fullscreen': 'Ouvrir en plein écran',
         'gallery.close': 'Fermer',
+        'deleteDialog.title': 'Confirmer la suppression',
+        'deleteDialog.description': 'Êtes-vous sûr de vouloir supprimer ce fichier ? Cette action est irréversible.',
+        'deleteDialog.serverNote': 'Le fichier sera définitivement supprimé du serveur.',
+        'deleteDialog.cancel': 'Annuler',
+        'deleteDialog.deleting': 'Suppression...',
+        'deleteDialog.delete': 'Supprimer',
         'common.close': 'Fermer',
         'common.download': 'Télécharger',
       };

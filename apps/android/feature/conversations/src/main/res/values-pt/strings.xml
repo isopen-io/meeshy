@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_title">Meeshy Chats</string>
+    <string name="conversations_section_pinned">Fixados</string>
+    <string name="conversations_section_all">Minhas conversas</string>
     <string name="conversations_logout">Sair</string>
+    <string name="conversations_contacts">Contatos</string>
     <string name="conversations_empty">Ainda não há conversas</string>
+    <string name="conversations_empty_subtitle">Inicie uma conversa para vê-la aqui.</string>
     <string name="conversations_retry">Tentar novamente</string>
+    <string name="conversations_error_title">Não foi possível carregar as conversas</string>
+    <string name="conversations_error_subtitle">Verifique sua conexão e tente novamente.</string>
+    <string name="conversations_no_results_subtitle">Tente outra busca ou filtro.</string>
     <string name="conversations_no_messages">Ainda não há mensagens</string>
     <string name="conversations_banner_syncing">Sincronizando…</string>
     <string name="conversations_banner_reconnecting">Reconectando…</string>
@@ -14,6 +21,7 @@
     <string name="conversations_preview_file">📎 Arquivo</string>
     <string name="conversations_preview_location">📍 Localização</string>
     <string name="conversations_preview_you">Você</string>
+    <string name="conversations_preview_draft_prefix">Rascunho: </string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
     <string name="conversations_search">Pesquisar</string>
     <string name="conversations_search_hint">Pesquisar conversas</string>
@@ -28,4 +36,23 @@
     <string name="conversations_filter_channels">Canais</string>
     <string name="conversations_filter_favorites">Favoritos</string>
     <string name="conversations_filter_archived">Arquivadas</string>
+    <string name="conversations_action_pin">Fixar</string>
+    <string name="conversations_action_unpin">Desafixar</string>
+    <string name="conversations_action_mute">Silenciar</string>
+    <string name="conversations_action_unmute">Ativar som</string>
+    <string name="conversations_action_archive">Arquivar</string>
+    <string name="conversations_action_unarchive">Desarquivar</string>
+    <string name="conversations_action_mark_read">Marcar como lida</string>
+    <string name="conversations_action_discard_draft">Descartar rascunho</string>
+    <string name="conversations_action_more">Mais ações</string>
+    <string name="conversations_badge_pinned">Fixada</string>
+    <string name="conversations_badge_muted">Silenciada</string>
+    <string name="conversations_new">Nova conversa</string>
+    <string name="new_conversation_title">Nova conversa</string>
+    <string name="new_conversation_back">Voltar</string>
+    <string name="new_conversation_create">Criar</string>
+    <string name="new_conversation_search_hint">Procurar pessoas</string>
+    <string name="new_conversation_group_title">Nome do grupo</string>
+    <string name="new_conversation_remove">Remover</string>
+    <string name="new_conversation_selected">Selecionado</string>
 </resources>

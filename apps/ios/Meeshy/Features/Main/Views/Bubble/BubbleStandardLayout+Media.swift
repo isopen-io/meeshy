@@ -214,15 +214,15 @@ extension BubbleStandardLayout {
                             isDark: isDark
                         )
                         .equatable()
-                        .padding(8)
+                        .padding(MeeshySpacing.sm)
                         .transition(.opacity)
                     }
                 }
         }
         .compositingGroup()
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .stroke(strokeColor, lineWidth: 0.5)
         )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -344,10 +344,10 @@ fileprivate struct BubbleGridCell: View {
             let total = summary.values.reduce(0, +)
             HStack(spacing: 1) {
                 ForEach(summary.keys.sorted().prefix(3), id: \.self) { emoji in
-                    Text(emoji).font(.system(size: 11))
+                    Text(emoji).font(MeeshyFont.relative(11))
                 }
                 if total > 1 {
-                    Text("\(total)").font(.system(size: 9, weight: .semibold)).foregroundColor(.white)
+                    Text("\(total)").font(MeeshyFont.relative(9, weight: .semibold)).foregroundColor(.white)
                 }
             }
             .padding(.horizontal, 5).padding(.vertical, 2)
@@ -373,9 +373,9 @@ fileprivate struct BubbleGridCell: View {
                     },
                     onDismiss: { withAnimation { showReactionPicker = false } }
                 )
-                .padding(8)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal, 6)
+                .padding(MeeshySpacing.sm)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+                .padding(.horizontal, MeeshySpacing.xs + 2)
             }
             .transition(.opacity)
         }
@@ -403,9 +403,16 @@ fileprivate struct BubbleGridCell: View {
                     frame: .bubble,
                     availability: availability,
                     performance: .inline,
+                    // Grille multi-média : cellules ~150pt de large — le bouton
+                    // play 64pt écrasait la vignette. 44pt (minimum HIG) en
+                    // multi, 64pt conservé pour la vidéo solo pleine largeur.
+                    playButtonDiameter: solo ? 64 : 44,
                     onDownload: onDownload,
                     onExpand: { fullscreenAttachment = attachment }
                 )
+            }
+            .overlay(alignment: .bottom) {
+                MediaConsumptionProgressBar(attachmentId: attachment.id, accentHex: contactColor)
             }
             overflowOverlay
             viewCountBadge
@@ -432,7 +439,7 @@ fileprivate struct BubbleGridCell: View {
         if overflowCount > 0 {
             Color.black.opacity(0.5)
             Text("+\(overflowCount)")
-                .font(.system(size: 24, weight: .bold))
+                .font(MeeshyFont.relative(24, weight: .bold))
                 .foregroundColor(.white)
         }
     }
@@ -454,7 +461,8 @@ fileprivate struct BubbleGridCell: View {
                 HStack {
                     Spacer()
                     Text("\(attachment.viewOnceCount)")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
+                        .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
                         .background(
@@ -615,6 +623,8 @@ fileprivate struct BubbleGridVideoThumbnailView: View {
                 .fill(Color(hex: contactColor).opacity(0.85))
                 .frame(width: solo ? 42 : 30, height: solo ? 42 : 30)
             Image(systemName: "play.fill")
+                // Doctrine 86i : glyphe play dans un cercle de lecture de dimension fixe
+                // (48/36) → taille figée, proportionnée au cercle (ne doit pas déborder).
                 .font(.system(size: solo ? 18 : 12, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: solo ? 2 : 1)
@@ -630,7 +640,7 @@ fileprivate struct BubbleGridVideoThumbnailView: View {
                 HStack {
                     Spacer()
                     Text(formatted)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
@@ -656,15 +666,15 @@ private struct AttachmentBlurOverlayView: View {
 
             VStack(spacing: 5) {
                 Image(systemName: "eye.slash.fill")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundStyle(.white)
 
                 Text(isViewOnce ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main) : String(localized: "bubble.media.masked", defaultValue: "Contenu masque", bundle: .main))
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(.white)
 
                 Text(String(localized: "bubble.media.holdToView", defaultValue: "Maintenir pour voir", bundle: .main))
-                    .font(.system(size: 9))
+                    .font(MeeshyFont.relative(9))
                     .foregroundStyle(.white.opacity(0.7))
             }
         }
@@ -732,7 +742,7 @@ struct BubbleCarouselView: View {
             if !hasPlayingInlineVideo {
                 BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
                     .equatable()
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
         }
         .onAppear {
@@ -780,12 +790,14 @@ struct BubbleCarouselView: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
+                    // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))
                     .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
             }
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
             Spacer()
 
@@ -828,7 +840,7 @@ struct BubbleCarouselView: View {
             )
         } else {
             Text("\(carouselIndex + 1) / \(items.count)")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
@@ -896,8 +908,9 @@ struct BubbleCarouselView: View {
             Color(hex: attachment.thumbnailColor)
                 .overlay(
                     Image(systemName: "photo")
-                        .font(.system(size: 28))
+                        .font(MeeshyFont.relative(28))
                         .foregroundColor(.white.opacity(0.4))
+                        .accessibilityHidden(true)
                 )
         }
     }
@@ -919,6 +932,9 @@ struct BubbleCarouselView: View {
                 onExpand: { fullscreenAttachment = attachment }
             )
         }
+        .overlay(alignment: .bottom) {
+            MediaConsumptionProgressBar(attachmentId: attachment.id, accentHex: contactColor)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -932,7 +948,7 @@ struct BubbleCarouselView: View {
             // le cache image (téléchargement complet + échec de décodage
             // UIImage). On prefetch le thumbnail uniquement ; si absent, skip.
             let urlStr: String = attachment.type == .video
-                ? (attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl! : "")
+                ? (attachment.thumbnailUrl ?? "")
                 : (attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl)
             guard !urlStr.isEmpty else { continue }
             Task {

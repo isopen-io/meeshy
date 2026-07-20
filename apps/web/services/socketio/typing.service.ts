@@ -9,6 +9,8 @@
 'use client';
 
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { logger } from '@/utils/logger';
+import { useUserStore } from '@/stores/user-store';
 import type { TypingEvent } from '@/types';
 import type {
   TypedSocket,
@@ -47,6 +49,15 @@ export class TypingService {
    * Handle typing start event
    */
   private handleTypingStart(event: TypingEvent): void {
+    // Typing = signal de présence le plus fort : l'émetteur est actif LÀ,
+    // MAINTENANT. On force son état online localement pour que le dot vert
+    // reste cohérent avec « X écrit… » même si le dernier user:status date
+    // (le gateway ne rebroadcaste pas lastActiveAt sur typing:start).
+    useUserStore.getState().updateUserStatus(event.userId, {
+      isOnline: true,
+      lastActiveAt: new Date(),
+    });
+
     // Add user to typing users for this conversation
     if (!this.typingUsers.has(event.conversationId)) {
       this.typingUsers.set(event.conversationId, new Set());
@@ -127,7 +138,7 @@ export class TypingService {
    */
   startTyping(socket: TypedSocket | null, conversationId: string): void {
     if (!socket || !socket.connected) {
-      console.warn('[TypingService] Socket not available');
+      logger.warn('[TypingService]', 'Socket not available');
       return;
     }
     const now = Date.now();
@@ -144,7 +155,7 @@ export class TypingService {
    */
   stopTyping(socket: TypedSocket | null, conversationId: string): void {
     if (!socket || !socket.connected) {
-      console.warn('[TypingService] Socket not available');
+      logger.warn('[TypingService]', 'Socket not available');
       return;
     }
     this.lastStartEmitAt.delete(conversationId);
@@ -178,6 +189,47 @@ export class TypingService {
    */
   onTypingStop(listener: TypingListener): UnsubscribeFn {
     return this.onTyping(listener);
+  }
+
+  /**
+   * Clear typing state for a single conversation and notify listeners.
+   * Called when the user leaves a conversation so stale indicators don't
+   * persist in the background.
+   */
+  clearConversationTypingState(conversationId: string): void {
+    const userIds = this.typingUsers.get(conversationId);
+    if (!userIds) return;
+
+    userIds.forEach(userId => {
+      const timeoutKey = `${conversationId}:${userId}`;
+      const t = this.typingTimeouts.get(timeoutKey);
+      if (t) { clearTimeout(t); this.typingTimeouts.delete(timeoutKey); }
+      this.typingListeners.forEach(listener =>
+        listener({ conversationId, userId, isTyping: false } as any)
+      );
+    });
+    this.typingUsers.delete(conversationId);
+    this.lastStartEmitAt.delete(conversationId);
+  }
+
+  /**
+   * Clear all active typing indicators and notify listeners.
+   * Called on socket disconnect so UI reflects reality immediately
+   * instead of waiting for the 15-second safety timeout.
+   */
+  clearAllTypingState(): void {
+    this.typingTimeouts.forEach(timeout => clearTimeout(timeout));
+    this.typingTimeouts.clear();
+
+    this.typingUsers.forEach((userIds, conversationId) => {
+      userIds.forEach(userId => {
+        this.typingListeners.forEach(listener =>
+          listener({ conversationId, userId, isTyping: false } as any)
+        );
+      });
+    });
+    this.typingUsers.clear();
+    this.lastStartEmitAt.clear();
   }
 
   /**

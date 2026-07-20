@@ -27,6 +27,7 @@ jest.mock('../../../validation/socket-event-schemas', () => ({
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
+  isValidationFailure: jest.fn((r) => !r.success),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -161,7 +162,7 @@ describe('ReactionHandler — Fix 4: self-reaction notification guard', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (normalizeConversationId as unknown as jest.MockedFunction<() => Promise<string>>).mockResolvedValue(CONVERSATION_ID);
 
-    mockReactionService.addReaction.mockResolvedValue({ id: 'reaction-1', emoji: EMOJI });
+    mockReactionService.addReaction.mockResolvedValue({ reaction: { id: 'reaction-1', emoji: EMOJI }, replacedEmojis: [] });
     mockReactionService.createUpdateEvent.mockResolvedValue({ messageId: MESSAGE_ID, emoji: EMOJI });
   });
 
@@ -227,5 +228,24 @@ describe('ReactionHandler — Fix 4: self-reaction notification guard', () => {
         reactorUserId: OTHER_USER_ID,
       })
     );
+  });
+
+  it('handleReactionRemove is idempotent — removing an absent reaction returns success (not an error) and does not broadcast', async () => {
+    // The reaction is already gone (concurrent removal, retry of an applied
+    // remove, double-tap). A `{ success: false }` makes the client roll the
+    // optimistic un-react back, re-showing a reaction that is gone. Mirror the
+    // idempotent REST DELETE (R-GW2).
+    mockReactionService.removeReaction.mockResolvedValue(false);
+    const socket = createMockSocket();
+    const callback = jest.fn();
+
+    await handler.handleReactionRemove(socket as any, { messageId: MESSAGE_ID, emoji: EMOJI }, callback);
+
+    expect(callback).toHaveBeenCalledWith({
+      success: true,
+      data: { message: 'Reaction already absent' },
+    });
+    // Nothing changed → no reaction:removed broadcast.
+    expect(mockIO.emit).not.toHaveBeenCalled();
   });
 });

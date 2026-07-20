@@ -35,18 +35,19 @@ struct LinksHubView: View {
 
                     Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
-                    VStack(spacing: 20) {
+                    VStack(spacing: MeeshySpacing.xl) {
                         headerBanner
-                            .padding(.horizontal, 16)
-                            .padding(.top, 8)
+                            .padding(.horizontal, MeeshySpacing.lg)
+                            .padding(.top, MeeshySpacing.sm)
 
                         linkCategoryCards
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                     }
                     .padding(.bottom, 40)
                 }
                 .coordinateSpace(name: "scroll")
-                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }   // iOS 16–17
+                .trackScrollContentOffset { scrollOffset = -$0 }                            // iOS 18+ (preference path is dead there)
 
             VStack(spacing: 0) {
                 CollapsibleHeader(
@@ -72,6 +73,7 @@ struct LinksHubView: View {
         .sheet(isPresented: $showCreateAffiliate) {
             AffiliateCreateView { _ in }
                 .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -95,21 +97,22 @@ struct LinksHubView: View {
                 Spacer()
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(Color.white.opacity(0.05))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(MeeshyColors.communityAccent.opacity(0.3), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Category Cards
 
     private var linkCategoryCards: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.md + 2) {
             linkCard(
                 icon: "link",
                 title: String(localized: "links.hub.share.title", defaultValue: "Liens de partage", bundle: .main),
@@ -177,6 +180,7 @@ struct LinksHubView: View {
                     Image(systemName: icon)
                         .font(.title3.weight(.semibold))
                         .foregroundColor(accent)
+                        .accessibilityHidden(true)
                 }
 
                 // Texte
@@ -204,24 +208,48 @@ struct LinksHubView: View {
                                 .foregroundColor(accent)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(createLabel ?? title)
+                        // Re-exposé via l'action rotor « Créer… » de la carte (idiome 183i) :
+                        // ce Button secondaire imbriqué dans le Button de navigation est
+                        // masqué à VoiceOver pour éviter un élément interactif ambigu.
+                        .accessibilityHidden(true)
                     }
 
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
                 }
             }
-            .padding(14)
+            .padding(MeeshySpacing.md + 2)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(Color.white.opacity(0.05))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(accent.opacity(0.2), lineWidth: 1)
                     )
             )
         }
         .buttonStyle(.plain)
+        .modifier(LinkCardCreateAction(label: createLabel, onCreate: onCreate))
+    }
+}
+
+// MARK: - Accessibility helpers
+
+/// Ré-expose l'action « Créer… » d'une carte de liens comme action VoiceOver
+/// nommée (rotor Actions), le `Button` secondaire visible étant masqué à
+/// VoiceOver pour éviter un élément interactif imbriqué ambigu (idiome 183i).
+/// Aucune action ajoutée pour les cartes sans création (ex. communauté).
+private struct LinkCardCreateAction: ViewModifier {
+    let label: String?
+    let onCreate: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let label, let onCreate {
+            content.accessibilityAction(named: Text(verbatim: label)) { onCreate() }
+        } else {
+            content
+        }
     }
 }

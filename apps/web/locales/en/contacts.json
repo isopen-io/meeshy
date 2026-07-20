@@ -28,6 +28,7 @@
     "online": "Online",
     "offline": "Offline",
     "away": "Away",
+    "recent": "Recently active",
     "pending": "Pending",
     "rejected": "Rejected",
     "neverSeen": "Never seen",
@@ -35,7 +36,12 @@
     "minutesAgo": "{count} min ago",
     "hoursAgo": "{count}h ago",
     "daysAgo": "{count}d ago",
-    "lastSeenDate": "Seen on {date}"
+    "lastSeenDate": "Seen on {date}",
+    "lastSeenMinutes": "Seen {count} min ago",
+    "lastSeenHours": "Seen {count}h ago",
+    "lastSeenYesterday": "Seen yesterday at {time}",
+    "lastSeenBeforeYesterday": "Seen two days ago at {time}",
+    "lastSeenDateTime": "Seen on {date} at {time}"
   },
   "actions": {
     "menu": "Actions menu",

@@ -11,6 +11,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { authManager } from '@/services/auth-manager.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import type { Message, User, TypingEvent, UserStatusEvent, TranslationEvent } from '@/types';
+import type { TranslationFailedEventData } from '@meeshy/shared/types/socketio-events';
 
 export interface UseSocketIOMessagingOptions {
   conversationId?: string | null;
@@ -20,8 +21,9 @@ export interface UseSocketIOMessagingOptions {
   onMessageEdited?: (message: Message) => void;
   onMessageDeleted?: (messageId: string) => void;
   onUserTyping?: (userId: string, username: string, isTyping: boolean, conversationId: string) => void;
-  onUserStatus?: (userId: string, username: string, isOnline: boolean) => void;
+  onUserStatus?: (userId: string, username: string, isOnline: boolean, lastActiveAt?: Date | null) => void;
   onTranslation?: (messageId: string, translations: any[]) => void;
+  onTranslationFailed?: (data: TranslationFailedEventData) => void;
   onConversationStats?: (data: any) => void;
   onConversationOnlineStats?: (data: any) => void;
 }
@@ -39,6 +41,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     onUserTyping,
     onUserStatus,
     onTranslation,
+    onTranslationFailed,
     onConversationStats,
     onConversationOnlineStats
   } = options;
@@ -128,6 +131,11 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
       });
       unsubscribers.push(unsub);
     }
+
+    if (onTranslationFailed) {
+      const unsub = meeshySocketIOService.onTranslationFailed(onTranslationFailed);
+      unsubscribers.push(unsub);
+    }
     
     if (onUserTyping) {
       const unsub = meeshySocketIOService.onTyping((event: TypingEvent) => {
@@ -139,7 +147,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     
     if (onUserStatus) {
       const unsub = meeshySocketIOService.onUserStatus((event: UserStatusEvent) => {
-        onUserStatus(event.userId, event.username, event.isOnline);
+        onUserStatus(event.userId, event.username, event.isOnline, event.lastActiveAt);
       });
       unsubscribers.push(unsub);
     }
@@ -157,7 +165,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onUserTyping, onUserStatus, onConversationStats, onConversationOnlineStats]);
+  }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onTranslationFailed, onUserTyping, onUserStatus, onConversationStats, onConversationOnlineStats]);
 
   // ÉTAPE 4: Surveiller l'état de connexion (event-driven, plus de polling)
   useEffect(() => {

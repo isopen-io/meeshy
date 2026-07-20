@@ -48,6 +48,26 @@ final class CommentRecordTests: XCTestCase {
         let b = CommentRecordFactory.make(id: "c_1", changeVersion: 2)
         XCTAssertNotEqual(a, b)
     }
+
+    func test_reactionSummary_defaultsToEmpty() {
+        let comment = CommentRecordFactory.make(id: "c_no_rx")
+        XCTAssertTrue(comment.reactionSummary.isEmpty)
+    }
+
+    func test_reactionSummary_decodesPersistedJson() throws {
+        let dbQueue = try DatabaseQueue()
+        try FeedDatabaseMigrations.runAll(on: dbQueue)
+
+        let json = try JSONEncoder().encode(["👍": 3, "🔥": 1])
+        let comment = CommentRecordFactory.make(id: "c_rx", postId: "post_1", reactionSummaryJson: json)
+        try dbQueue.write { db in try comment.insert(db) }
+
+        let fetched = try dbQueue.read { db in
+            try CommentRecord.filter(Column("id") == "c_rx").fetchOne(db)
+        }
+        XCTAssertEqual(fetched?.reactionSummary["👍"], 3)
+        XCTAssertEqual(fetched?.reactionSummary["🔥"], 1)
+    }
 }
 
 enum CommentRecordFactory {
@@ -56,7 +76,8 @@ enum CommentRecordFactory {
         postId: String = "post_default",
         parentId: String? = nil,
         content: String = "Test comment",
-        changeVersion: Int64 = 0
+        changeVersion: Int64 = 0,
+        reactionSummaryJson: Data? = nil
     ) -> CommentRecord {
         CommentRecord(
             id: id, postId: postId, parentId: parentId,
@@ -64,7 +85,8 @@ enum CommentRecordFactory {
             authorDisplayName: "Commenter", authorAvatarURL: nil,
             content: content, originalLanguage: "fr",
             translatedContent: nil, likeCount: 0, replyCount: 0,
-            effectFlags: 0, createdAt: Date(), changeVersion: changeVersion
+            effectFlags: 0, createdAt: Date(), changeVersion: changeVersion,
+            reactionSummaryJson: reactionSummaryJson
         )
     }
 }

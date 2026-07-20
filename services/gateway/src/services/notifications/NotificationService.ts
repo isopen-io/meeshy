@@ -10,6 +10,8 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SequenceService } from '../SequenceService';
+import { emitWithSeq } from '../../socketio/utils/emitWithSeq';
 import type {
   NotificationActor,
   NotificationContext,
@@ -18,29 +20,33 @@ import type {
   NotificationType,
   Notification,
 } from '@meeshy/shared/types/notification';
+import type { UserUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { getDistinctConversationPartnerUserIds } from '../../utils/conversation-partners';
 import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
-import { notificationString, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { formatClock } from '@meeshy/shared/utils/duration-format';
+import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
+import { getCommunityCoMemberIds } from '../posts/communityVisibility';
 
 function formatDuration(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `0:${String(seconds).padStart(2, '0')}`;
+  return formatClock(Math.round(ms / 1000));
 }
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  // Bascule le tier sur la valeur ARRONDIE (comme formatCallDataSize) : sinon
+  // p.ex. 1 048 500 o (< 1 Mio) affiche "1024 Ko" au lieu de "1.0 Mo".
+  const ko = Math.round(bytes / 1024);
+  if (ko < 1024) return `${ko} Ko`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
@@ -372,6 +378,25 @@ export function buildMessageNotificationBodyI18n(lang: string, params: {
   return [base, badges].filter(Boolean).join(' ');
 }
 
+/**
+ * Notification types whose offline email is a genuine account-security alert
+ * (login, password, 2FA, lockout…). Used to (a) keep these in a separate
+ * email-throttle bucket so a social email can never suppress a security alert,
+ * and (b) route them to the security email template rather than the generic one.
+ */
+const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
+  'login_new_device',
+  'login_suspicious',
+  'suspicious_activity',
+  'password_changed',
+  'two_factor_enabled',
+  'two_factor_disabled',
+  'account_locked',
+  'security_alert',
+]);
+
+const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
+
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
@@ -387,11 +412,14 @@ export class NotificationService {
 
   private pushService?: PushNotificationService;
   private emailService?: EmailService;
+  private readonly sequenceService: SequenceService;
 
   constructor(
     private prisma: PrismaClient,
     private io?: SocketIOServer
   ) {
+    // A2 — allocation des `_seq` per-user pour les events user-scoped.
+    this.sequenceService = new SequenceService(prisma);
     // Nettoyer les entrées de rate limit périmées toutes les 2 minutes
     const mentionsCleanup = setInterval(() => this.cleanupOldMentions(), 120_000);
     mentionsCleanup.unref?.();
@@ -502,7 +530,8 @@ export class NotificationService {
       case 'post_repost':       return prefs.postRepostEnabled ?? true;
       case 'story_reaction':    return prefs.storyReactionEnabled ?? true;
       case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
-      case 'comment_like':      return prefs.commentLikeEnabled ?? true;
+      case 'comment_like':
+      case 'comment_reaction':  return prefs.commentLikeEnabled ?? true;
       case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
       case 'story_new_comment':
       case 'friend_story_comment':
@@ -533,25 +562,30 @@ export class NotificationService {
     if (!prefs.dndEnabled) return false;
 
     const now = new Date();
-
-    // Si dndDays est défini et non vide, vérifier le jour
-    if (prefs.dndDays && prefs.dndDays.length > 0) {
-      const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-      const today = dayMap[now.getUTCDay()];
-      if (!prefs.dndDays.includes(today as any)) return false;
-    }
-
     const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
     const start = prefs.dndStartTime;
     const end = prefs.dndEndTime;
+    const overnight = start > end;
+    const inWindow = overnight
+      ? currentTime >= start || currentTime < end // nocturne (ex: 22:00 - 08:00)
+      : currentTime >= start && currentTime < end; // diurne (ex: 14:00 - 16:00)
 
-    // DND nocturne (ex: 22:00 - 08:00)
-    if (start > end) {
-      return currentTime >= start || currentTime < end;
+    if (!inWindow) return false;
+
+    // Si dndDays est défini et non vide, vérifier le jour de DÉBUT de la fenêtre.
+    // Une fenêtre nocturne (start > end) déborde sur le lendemain : sa tranche du
+    // matin (00:00 → end) appartient à la nuit qui a COMMENCÉ la veille. Le filtre
+    // dndDays doit donc être testé contre le jour de début, pas le jour courant —
+    // sinon un matin est rattaché au mauvais jour (silence quand il faut notifier,
+    // et vice-versa). Cf. PushNotificationService.isPushAllowed (même logique).
+    if (prefs.dndDays && prefs.dndDays.length > 0) {
+      const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+      const inMorningTail = overnight && currentTime < end;
+      const windowStartDay = dayMap[inMorningTail ? (now.getUTCDay() + 6) % 7 : now.getUTCDay()];
+      if (!prefs.dndDays.includes(windowStartDay as any)) return false;
     }
 
-    // DND diurne (ex: 14:00 - 16:00)
-    return currentTime >= start && currentTime < end;
+    return true;
   }
 
   // ==============================================
@@ -579,7 +613,20 @@ export class NotificationService {
     context: NotificationContext;
     metadata: NotificationMetadata;
     expiresAt?: Date;
+    /**
+     * Forwarded to APNs `apns-collapse-id` / FCM `collapseKey` so undelivered
+     * pushes pile up into one banner instead of spamming the device when it
+     * reconnects. Scope it per-conversation (`conv-${conversationId}`), never
+     * per-message — a per-message id is unique by construction and never
+     * collapses anything.
+     */
     collapseId?: string;
+    /**
+     * Langue résolue du destinataire (Prisme-first). Fournie par les méthodes
+     * `create*` qui la résolvent déjà ; sinon résolue ici. Pilote le calcul
+     * localisé du `title`/`subtitle` persistés (source unique multi-plateforme).
+     */
+    lang?: string;
   }): Promise<Notification | null> {
     try {
       // SECURITY: Validate notification type
@@ -619,11 +666,41 @@ export class NotificationService {
       } : undefined;
       const sanitizedMetadata = SecuritySanitizer.sanitizeJSON(params.metadata);
 
+      // Titre/sous-titre localisés, conscients de l'entité — calculés UNE fois
+      // côté serveur (langue du destinataire) puis persistés. Source unique pour
+      // la liste in-app (iOS/iPadOS/macOS) et le web ; corrige les libellés
+      // imprécis/non localisés historiquement reconstruits côté client.
+      const meta = (params.metadata ?? {}) as Record<string, unknown>;
+      const displayInput = {
+        type: params.type,
+        actorName: sanitizedActor?.displayName ?? params.actor?.username ?? null,
+        postType: typeof meta.postType === 'string' ? meta.postType : null,
+        emoji: (typeof meta.reactionEmoji === 'string' ? meta.reactionEmoji
+          : typeof meta.emoji === 'string' ? meta.emoji : null),
+        parentCommentPreview: (typeof meta.parentCommentPreview === 'string' ? meta.parentCommentPreview : null),
+      };
+      // On ne touche la base pour la langue du destinataire QUE si le type
+      // produit réellement un titre localisé ET que l'appelant ne l'a pas déjà
+      // fournie — évite une requête inutile pour les types non gérés (messages,
+      // appels, sécurité…), qui retombent sur le rendu client.
+      let display = buildNotificationDisplay(params.lang ?? 'fr', displayInput);
+      if (display.title !== null && params.lang === undefined) {
+        display = buildNotificationDisplay(await this.resolveRecipientLang(params.userId), displayInput);
+      }
+      // Sous-titre persisté : l'override explicite riche d'une méthode `create*`
+      // (ex. « Votre publication : « aperçu » ») prime, sinon la base localisée
+      // du builder. SANS date — le client append la date locale.
+      const persistedSubtitle = (params.subtitle && params.subtitle.trim() !== '')
+        ? params.subtitle.trim().slice(0, 160)
+        : (display.subtitle ?? null);
+
       const notification = await this.prisma.notification.create({
         data: {
           userId: params.userId,
           type: params.type,
           priority: params.priority,
+          title: display.title,
+          subtitle: persistedSubtitle,
           content: sanitizedContent,
 
           // Relation optionnelle avec Message
@@ -675,15 +752,22 @@ export class NotificationService {
       // can render sender + conversation context without having to re-derive
       // them client-side. `formatted` already contains the raw `actor`/`context`
       // so this is purely additive.
+      // Cadrage TOAST : acteur en title + sous-titre push (nom de groupe /
+      // aperçu de commentaire). On surcharge explicitement le title/subtitle que
+      // `formatted` porte désormais (titre headline + sous-titre entité persistés
+      // pour la LISTE/REST) afin que les messages directs restent sans sous-titre
+      // et que le toast garde le nom de l'expéditeur comme title.
       const socketPayload = {
         ...formatted,
         title: pushTitle,
-        ...(pushSubtitle ? { subtitle: pushSubtitle } : {}),
+        subtitle: pushSubtitle,
       };
 
-      // Émettre via Socket.IO
+      // Émettre via Socket.IO — A2 : event user-scoped enrichi de `_seq`
+      // (SyncEngine, détection de gap exacte). `emitWithSeq` est résilient :
+      // sur échec d'allocation de séquence, l'event part sans `_seq`.
       if (this.io) {
-        this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, socketPayload);
+        await emitWithSeq(this.io, this.sequenceService, params.userId, SERVER_EVENTS.NOTIFICATION_NEW, socketPayload as unknown as Record<string, unknown>);
         notificationLogger.debug('notification:new emitted via socket', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
@@ -698,6 +782,23 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}`) :
             undefined;
           const pushBody = params.content.substring(0, 200);
+
+          // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
+          // par le payload push : embarquer le même compte unread que
+          // `notification:counts` (même source → même sémantique, pas de
+          // flicker au recale foreground). `badge` pilote `aps.badge`
+          // nativement ; `data.unreadCount` (string) alimente le miroir App
+          // Group écrit par la NSE pour le widget. Best-effort : sur échec
+          // du count, le push part sans badge (comportement historique).
+          let unreadBadge: number | undefined;
+          try {
+            const count = await this.prisma.notification.count({
+              where: { userId: params.userId, readAt: null },
+            });
+            if (typeof count === 'number') unreadBadge = count;
+          } catch {
+            unreadBadge = undefined;
+          }
 
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
           this.pushService.sendToUser({
@@ -716,13 +817,24 @@ export class NotificationService {
               body: pushBody,
               link,
               collapseId: params.collapseId,
+              ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
+                ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',
                 conversationTitle: params.context.conversationTitle || '',
                 conversationType: params.context.conversationType || '',
                 messageId: params.context.messageId || '',
                 postId: params.context.postId || '',
+                // Comment navigation: the tapped social notification must land on the
+                // exact comment (open entity → comments sheet → scroll/highlight). The
+                // iOS NotificationPayload reads these to thread the commentId through to
+                // PostDetailView / the story comments overlay. `parentCommentId` lets the
+                // client expand the parent thread before scrolling to a reply.
+                commentId: params.context.commentId
+                  || (params.metadata && 'commentId' in params.metadata ? String(params.metadata.commentId ?? '') : ''),
+                parentCommentId: params.context.parentCommentId
+                  || (params.metadata && 'parentCommentId' in params.metadata ? String(params.metadata.parentCommentId ?? '') : ''),
                 postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
                 senderId: params.actor?.id || '',
                 senderUsername: params.actor?.username || '',
@@ -762,7 +874,12 @@ export class NotificationService {
           if (sockets.length === 0) {
             const { getCacheStore } = await import('../CacheStore');
             const cache = getCacheStore();
-            const throttleKey = `notif:email:throttle:${params.userId}`;
+            // Per-category throttle: security alerts and social notifications
+            // use independent 5-min buckets, so a social email (mention, missed
+            // call) can never preempt a genuine security alert (new login,
+            // suspicious activity) for the same user within the window.
+            const throttleCategory = isSecurityEmailType(params.type) ? 'security' : 'social';
+            const throttleKey = `notif:email:throttle:${throttleCategory}:${params.userId}`;
             const canSend = await cache.setnx(throttleKey, '1', 300);
             if (canSend) {
               const user = await this.prisma.user.findUnique({
@@ -780,7 +897,7 @@ export class NotificationService {
                   }).catch(err => {
                     notificationLogger.error('Login alert email failed', { error: err, userId: params.userId });
                   });
-                } else {
+                } else if (isSecurityEmailType(params.type)) {
                   this.emailService.sendSecurityAlertEmail({
                     to: user.email,
                     name: user.username || 'User',
@@ -789,6 +906,18 @@ export class NotificationService {
                     details: params.content.substring(0, 500),
                   }).catch(err => {
                     notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
+                  });
+                } else {
+                  // Social / general notification (mention, missed call, …):
+                  // neutral notification email, never the security template.
+                  this.emailService.sendNotificationEmail({
+                    to: user.email,
+                    name: user.username || 'User',
+                    language: user.systemLanguage || 'fr',
+                    notificationType: params.type,
+                    details: params.content.substring(0, 500),
+                  }).catch(err => {
+                    notificationLogger.error('Immediate notification email failed', { error: err, userId: params.userId });
                   });
                 }
               }
@@ -884,6 +1013,8 @@ export class NotificationService {
       userId: raw.userId,
       type: raw.type as NotificationType,
       priority: raw.priority as NotificationPriority,
+      title: raw.title ?? null,
+      subtitle: raw.subtitle ?? null,
       content: raw.content,
 
       actor: (raw.actor || undefined) as NotificationActor | undefined,
@@ -1005,7 +1136,8 @@ export class NotificationService {
       type: 'new_message',
       priority: 'normal',
       content,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
+      lang: recipientLang,
 
       actor: {
         id: params.senderId,
@@ -1040,6 +1172,12 @@ export class NotificationService {
             count: params.attachmentCount,
             firstType: params.firstAttachmentType || 'document',
             firstFilename: params.firstAttachmentFilename || 'file',
+            ...(params.firstAttachmentDuration != null
+              ? { firstDurationMs: Math.round(params.firstAttachmentDuration * 1000) }
+              : {}),
+            ...(params.firstAttachmentFileSize != null ? { firstFileSize: params.firstAttachmentFileSize } : {}),
+            ...(params.firstAttachmentWidth != null ? { firstWidth: params.firstAttachmentWidth } : {}),
+            ...(params.firstAttachmentHeight != null ? { firstHeight: params.firstAttachmentHeight } : {}),
           },
         }),
       } as any,
@@ -1084,7 +1222,7 @@ export class NotificationService {
       type: 'user_mentioned',
       priority: 'high',
       content: params.messagePreview,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
 
       actor: {
         id: params.mentionerUserId,
@@ -1235,8 +1373,12 @@ export class NotificationService {
     commentPreview?: string;
     /** Display name (fallback: username) of the post/story author. */
     postAuthorName?: string;
-    /** True when the parent post is a story (vs a regular feed post). */
-    isStory?: boolean;
+    /**
+     * Type d'entité portant le commentaire réagi. Mirror du sibling
+     * `createPostLikeNotification` : un REEL/STATUS ne s'effondre plus vers 'POST'
+     * dans la métadonnée ni dans le corps localisé.
+     */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
   }): Promise<void> {
     if (params.commentAuthorId === params.reactorUserId) return;
 
@@ -1265,7 +1407,7 @@ export class NotificationService {
       actor: reactorName,
       emoji: params.reactionEmoji,
       author: params.postAuthorName,
-      isStory: params.isStory,
+      postType: params.postType,
     });
 
     // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
@@ -1282,6 +1424,7 @@ export class NotificationService {
       priority: 'low',
       content: body,
       subtitle,
+      lang,
 
       actor: {
         id: params.reactorUserId,
@@ -1290,6 +1433,9 @@ export class NotificationService {
         avatar: reactor.avatar,
       },
 
+      // postId/commentId vivent dans context (cible de navigation = contexte
+      // central de la notif). Ils sont désormais exposés par le schema de
+      // réponse (notificationContextSchema) — plus de strip côté REST.
       context: {
         postId: params.postId,
         commentId: params.commentId,
@@ -1298,6 +1444,10 @@ export class NotificationService {
       metadata: {
         action: 'view_post',
         reactionEmoji: params.reactionEmoji,
+        // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
+        // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
+        // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
+        postType: params.postType ?? 'POST',
       },
     });
   }
@@ -1411,7 +1561,11 @@ export class NotificationService {
      * bucket 1 est sauté pour éviter la double notification.
      * Défaut STORY (compat avec les appels existants).
      */
-    postType?: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+    postType?: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
+    /** Date de publication ISO du contenu commenté (contexte expiry côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO du contenu commenté (story/status éphémère). */
+    postExpiresAt?: string | Date;
     /**
      * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
      * Use to pass mentionedUserIds so users who received user_mentioned don't also get
@@ -1419,6 +1573,16 @@ export class NotificationService {
      * The story author always gets STORY_NEW_COMMENT regardless of this list.
      */
     excludeUserIds?: string[];
+    /**
+     * Visibilité du post commenté. Filtre les buckets fan-out (thread + amis)
+     * exactement comme `SocialEventsHandler.getVisibilityFilteredRecipients` et
+     * `createFriendContentNotificationsBatch` : un post ONLY/EXCEPT/PRIVATE/
+     * COMMUNITY ne doit JAMAIS notifier (extrait de commentaire inclus) un
+     * utilisateur qui n'a pas le droit de le voir. Défaut PUBLIC (compat).
+     */
+    visibility?: string;
+    /** Liste d'IDs pour les modes ONLY (autorisés) / EXCEPT (exclus). */
+    visibilityUserIds?: string[];
   }): Promise<void> {
     const [actor, postAuthor] = await Promise.all([
       this.prisma.user.findUnique({
@@ -1440,6 +1604,37 @@ export class NotificationService {
         params.commenterId
       );
 
+    // Filtre de visibilité — miroir de SocialEventsHandler.getVisibilityFilteredRecipients
+    // et de createFriendContentNotificationsBatch : un post restreint ne doit jamais
+    // fanout un commentaire (extrait inclus) vers un utilisateur qui ne peut pas le voir.
+    // L'auteur (bucket STORY_NEW_COMMENT) est exempt — il possède le post.
+    const visibility = params.visibility ?? 'PUBLIC';
+    const visibilityUserIdSet = new Set(params.visibilityUserIds ?? []);
+    const coMemberIds = visibility === 'COMMUNITY'
+      ? new Set(await getCommunityCoMemberIds(this.prisma, params.storyAuthorId))
+      : null;
+    const canSeePost = (userId: string): boolean => {
+      switch (visibility) {
+        case 'PRIVATE': return false;
+        case 'ONLY': return visibilityUserIdSet.has(userId);
+        case 'EXCEPT': return !visibilityUserIdSet.has(userId);
+        case 'COMMUNITY': return coMemberIds!.has(userId);
+        default: return true; // PUBLIC / FRIENDS
+      }
+    };
+    // Un post COMMUNITY fanout aux co-membres (pas aux amis de l'auteur) — le graphe
+    // amis et le graphe communauté diffèrent ; on cible exactement le même set que le
+    // broadcast temps réel, buckets thread/auteur/commenter restant disjoints.
+    const friendAudience = (
+      visibility === 'COMMUNITY'
+        ? [...coMemberIds!].filter(id =>
+            id !== params.storyAuthorId &&
+            id !== params.commenterId &&
+            !previousCommenterIds.includes(id))
+        : friendIds.filter(canSeePost)
+    );
+    const engagedAudience = previousCommenterIds.filter(canSeePost);
+
     const excerpt = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
       : '';
@@ -1450,20 +1645,30 @@ export class NotificationService {
     // restauré côté NSE après la donation d'intent), le body reste le contenu
     // du commentaire.
     const postType = params.postType ?? 'STORY';
+    // REEL est une variante de post : le catalogue i18n serveur le rend comme
+    // « publication », mais on conserve REEL dans la metadata pour que le client
+    // affiche le libellé/icône « Réel » distinct.
+    const i18nPostType = postType === 'REEL' ? 'POST' : postType;
     const authorName = postAuthor?.displayName?.trim()
       || postAuthor?.username?.trim()
       || '';
-    const langs = await this.resolveRecipientLangs([authorId, ...previousCommenterIds, ...friendIds]);
+    const langs = await this.resolveRecipientLangs([authorId, ...engagedAudience, ...friendAudience]);
     const contextSubtitleFor = (lang: string): string => authorName
-      ? notificationString(lang, 'comment.subtitleFrom', { postType, author: authorName })
-      : notificationString(lang, 'comment.subtitleBare', { postType });
+      ? notificationString(lang, 'comment.subtitleFrom', { postType: i18nPostType, author: authorName })
+      : notificationString(lang, 'comment.subtitleBare', { postType: i18nPostType });
 
-    const commonContext = { postId: params.postId, commentId: params.commentId };
+    const commonContext = {
+      postId: params.postId,
+      commentId: params.commentId,
+      ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+      ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+    };
     const commonMetadata = {
       action: 'view_post' as const,
       postId: params.postId,
       commentId: params.commentId,
       commentPreview: excerpt,
+      postType,
     };
     const actorInfo = {
       id: params.commenterId,
@@ -1486,17 +1691,18 @@ export class NotificationService {
           userId: authorId,
           type: 'story_new_comment',
           priority: 'normal',
-          content: excerpt || notificationString(aLang, 'comment.your', { postType }),
-          subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType }),
+          content: excerpt || notificationString(aLang, 'comment.your', { postType: i18nPostType }),
+          subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType: i18nPostType }),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
+          lang: aLang,
         })
       );
     }
 
     // 2. Previous commenters (thread participants) — skip mentioned users
-    for (const recipientId of previousCommenterIds) {
+    for (const recipientId of engagedAudience) {
       if (excludeSet.has(recipientId)) continue;
       const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
@@ -1504,17 +1710,18 @@ export class NotificationService {
           userId: recipientId,
           type: 'story_thread_reply',
           priority: 'low',
-          content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType }),
+          content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType: i18nPostType }),
           subtitle: contextSubtitleFor(rLang),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
+          lang: rLang,
         })
       );
     }
 
-    // 3. Friends of the story author — skip mentioned users
-    for (const recipientId of friendIds) {
+    // 3. Friends of the story author (or community co-members) — skip mentioned users
+    for (const recipientId of friendAudience) {
       if (excludeSet.has(recipientId)) continue;
       const rLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
@@ -1522,11 +1729,12 @@ export class NotificationService {
           userId: recipientId,
           type: 'friend_story_comment',
           priority: 'low',
-          content: excerpt || notificationString(rLang, 'comment.generic', { postType }),
+          content: excerpt || notificationString(rLang, 'comment.generic', { postType: i18nPostType }),
           subtitle: contextSubtitleFor(rLang),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
+          lang: rLang,
         })
       );
     }
@@ -1568,6 +1776,7 @@ export class NotificationService {
     const content = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
       : '';
+    const langs = await this.resolveRecipientLangs(params.mentionedUserIds);
 
     const actorInfo = {
       id: params.commenterId,
@@ -1596,6 +1805,7 @@ export class NotificationService {
           priority: 'high',
           content,
           actor: actorInfo,
+          lang: langs.get(userId) ?? 'fr',
           context: {
             postId: params.postId,
             commentId: params.commentId,
@@ -1673,6 +1883,7 @@ export class NotificationService {
           priority: 'high',
           content: excerpt || notificationString(langs.get(userId) ?? 'fr', 'mention'),
           actor: actorInfo,
+          lang: langs.get(userId) ?? 'fr',
           context: {
             postId: params.postId,
           },
@@ -1715,19 +1926,32 @@ export class NotificationService {
   async createFriendContentNotificationsBatch(params: {
     postId: string;
     authorId: string;
-    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
     excerpt?: string;
+    /** Date de publication ISO du contenu (contexte « publié il y a … » côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
+    /** Nature du média principal — affiché quand le contenu n'a pas de texte. */
+    mediaType?: 'image' | 'video' | 'audio' | 'text';
     /**
      * User IDs to exclude from fan-out.
      * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
      */
     excludeUserIds?: string[];
+    /** Post visibility — used to filter recipients (same rules as Socket.IO broadcast). */
+    visibility?: string;
+    /** User IDs list for ONLY/EXCEPT visibility modes. */
+    visibilityUserIds?: string[];
   }): Promise<void> {
-    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
+    // REEL est une variante de post : même type de notification (friend_new_post),
+    // mais le contentType REEL est conservé dans la metadata pour l'affichage client.
+    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
       STORY: 'friend_new_story',
       POST: 'friend_new_post',
       MOOD: 'friend_new_mood',
       STATUS: 'friend_new_mood',
+      REEL: 'friend_new_post',
     };
     const notificationType = typeMap[params.contentType];
 
@@ -1750,6 +1974,16 @@ export class NotificationService {
 
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
+    // Vignette du contenu publié → rendue in-app + attachée au push iOS. Le
+    // mediaType explicite de l'appelant prime ; sinon on le dérive du média.
+    const media = await this.resolvePostMedia(params.postId);
+    const mediaType = params.mediaType ?? media?.mediaType;
+
+    const visibility = params.visibility ?? 'PUBLIC';
+    const visibilityUserIds = params.visibilityUserIds ?? [];
+    const visibilityUserIdSet = new Set(visibilityUserIds);
+
+    if (visibility === 'PRIVATE') return;
 
     // Content : le wording « a publié une nouvelle … » est localisé par
     // destinataire ; le subtitle typé (« Nouvelle story » …) voyage en
@@ -1761,10 +1995,28 @@ export class NotificationService {
     };
     const contentKey = contentKeyByType[notificationType];
 
-    const candidateFriendIds = friendRequests
+    const baseFriendIds = friendRequests
       .map(fr => (fr.senderId === params.authorId ? fr.receiverId : fr.senderId))
       .filter(id => id !== params.authorId && !excludeSet.has(id));
-    const langs = await this.resolveRecipientLangs(candidateFriendIds);
+
+    let recipientIds: string[];
+    if (visibility === 'COMMUNITY') {
+      // Une action dans une communauté est OBLIGATOIREMENT notifiée à TOUS les
+      // membres de la communauté (pas seulement aux contacts de l'auteur) —
+      // miroir de SocialEventsHandler.getVisibilityFilteredRecipients pour que
+      // notification et broadcast temps réel ciblent exactement le même set.
+      const coMemberIds = await getCommunityCoMemberIds(this.prisma, params.authorId);
+      recipientIds = coMemberIds.filter(id => id !== params.authorId && !excludeSet.has(id));
+    } else if (visibility === 'ONLY') {
+      recipientIds = visibilityUserIds.filter(id => id !== params.authorId && !excludeSet.has(id));
+    } else if (visibility === 'EXCEPT') {
+      recipientIds = baseFriendIds.filter(id => !visibilityUserIdSet.has(id));
+    } else {
+      recipientIds = baseFriendIds;
+    }
+
+    const uniqueRecipientIds = [...new Set(recipientIds)];
+    const langs = await this.resolveRecipientLangs(uniqueRecipientIds);
 
     const actorInfo = {
       id: params.authorId,
@@ -1773,32 +2025,36 @@ export class NotificationService {
       avatar: author.avatar,
     };
 
-    const seenIds = new Set<string>();
     const tasks: Array<Promise<unknown>> = [];
 
-    for (const fr of friendRequests) {
-      const friendId = fr.senderId === params.authorId ? fr.receiverId : fr.senderId;
-
-      if (friendId === params.authorId) continue;
-      if (excludeSet.has(friendId)) continue;
-      if (seenIds.has(friendId)) continue;
-      seenIds.add(friendId);
-
-      const fLang = langs.get(friendId) ?? 'fr';
+    for (const recipientId of uniqueRecipientIds) {
+      const fLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
         this.createNotification({
-          userId: friendId,
+          userId: recipientId,
           type: notificationType,
           priority: 'normal',
           content: excerpt || notificationString(fLang, contentKey),
-          subtitle: notificationString(fLang, 'friend.subtitleNew', { postType: params.contentType }),
+          subtitle: notificationString(fLang, 'friend.subtitleNew', {
+            postType: params.contentType === 'REEL' ? 'POST' : params.contentType,
+          }),
           actor: actorInfo,
-          context: { postId: params.postId },
+          lang: fLang,
+          context: {
+            postId: params.postId,
+            ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+            ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+            ...(media?.thumbnailUrl
+              ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+              : {}),
+          },
           metadata: {
             action: 'view_post',
             postId: params.postId,
             contentType: params.contentType,
             excerpt,
+            ...(mediaType ? { mediaType } : {}),
+            ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
           } as any,
         })
       );
@@ -1949,6 +2205,98 @@ export class NotificationService {
   }
 
   // ==============================================
+  // FRIEND_REQUEST_CANCELLED (realtime-only, no persisted Notification)
+  // ==============================================
+
+  /**
+   * Fired when a pending friend request is removed via
+   * `DELETE /friend-requests/:id` — sender cancelling, or receiver
+   * declining/removing without an explicit accept/reject. Unlike the other
+   * `create*FriendRequest*` methods this does NOT persist a `Notification`
+   * row (ephemeral realtime signal only) so the counterpart's pending list
+   * can invalidate immediately without polluting their notification feed.
+   */
+  emitFriendRequestCancelled(params: {
+    recipientUserId: string;
+    friendRequestId: string;
+    cancelledBy: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.recipientUserId)).emit(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, {
+      friendRequestId: params.friendRequestId,
+      cancelledBy: params.cancelledBy,
+    });
+  }
+
+  // ==============================================
+  // FRIEND_REQUEST_NEW / ACCEPTED / REJECTED (typed, dual-emitted
+  // alongside the legacy NOTIFICATION_NEW string-discriminated payload —
+  // see socketio-events-cleanup.md #7. Same pattern as CONVERSATION_NEW /
+  // FRIEND_REQUEST_CANCELLED: realtime-only signal, no separate
+  // `Notification` row of their own.)
+  // ==============================================
+
+  emitFriendRequestNew(params: {
+    receiverId: string;
+    friendRequestId: string;
+    senderId: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.receiverId)).emit(SERVER_EVENTS.FRIEND_REQUEST_NEW, {
+      friendRequestId: params.friendRequestId,
+      senderId: params.senderId,
+      receiverId: params.receiverId,
+    });
+  }
+
+  emitFriendRequestAccepted(params: {
+    senderId: string;
+    friendRequestId: string;
+    accepterId: string;
+    conversationId?: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.senderId)).emit(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, {
+      friendRequestId: params.friendRequestId,
+      accepterId: params.accepterId,
+      conversationId: params.conversationId,
+    });
+  }
+
+  emitFriendRequestRejected(params: {
+    senderId: string;
+    friendRequestId: string;
+    rejecterId: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.senderId)).emit(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, {
+      friendRequestId: params.friendRequestId,
+      rejecterId: params.rejecterId,
+    });
+  }
+
+  /**
+   * Propagates a profile change (displayName, avatar, banner, username) to
+   * every user sharing an active conversation with `userId`, instead of a
+   * full broadcast. Realtime-only signal — no `Notification` row, same
+   * pattern as `emitFriendRequestCancelled`. See
+   * tasks/socketio-events-cleanup.md #6.
+   */
+  async emitUserUpdated(params: {
+    userId: string;
+    changes: UserUpdatedEventData['changes'];
+  }): Promise<void> {
+    if (!this.io) return;
+    const partnerIds = await getDistinctConversationPartnerUserIds(this.prisma, params.userId);
+    if (partnerIds.length === 0) return;
+
+    const payload: UserUpdatedEventData = { userId: params.userId, changes: params.changes };
+    for (const partnerId of partnerIds) {
+      this.io.to(ROOMS.user(partnerId)).emit(SERVER_EVENTS.USER_UPDATED, payload);
+    }
+  }
+
+  // ==============================================
   // MEMBER_JOINED
   // ==============================================
 
@@ -2065,7 +2413,7 @@ export class NotificationService {
       type: 'message_reply',
       priority: 'normal',
       content: params.messagePreview,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
 
       actor: {
         id: params.replierUserId,
@@ -2123,7 +2471,13 @@ export class NotificationService {
     postId: string;
     postAuthorId: string;
     emoji: string;
-    postType?: 'POST' | 'STORY' | 'STATUS';
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+    /** Aperçu du contenu réagi (≤ ~80 chars) — identifie QUELLE entité. */
+    postPreview?: string;
+    /** Date de publication ISO du contenu réagi (contexte expiry côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     // Don't notify yourself
     if (params.actorId === params.postAuthorId) return null;
@@ -2148,12 +2502,25 @@ export class NotificationService {
 
     const lang = await this.resolveRecipientLang(params.postAuthorId);
     const reactPostType = params.postType === 'STORY' ? 'STORY' : params.postType === 'STATUS' ? 'STATUS' : 'POST';
+    const subtitlePostType = params.postType ?? 'POST';
+
+    // Détail du contenu réagi : extrait texte si présent, sinon vignette/résumé
+    // média (« Votre story · 📷 Photo ») — le destinataire identifie QUEL
+    // contenu sans ouvrir l'app, et le push iOS attache la miniature.
+    const trimmedPreview = params.postPreview?.trim() ?? '';
+    const media = await this.resolvePostMedia(params.postId);
+    const subtitle = this.buildOwnerSubtitleWithDetail(lang, subtitlePostType, {
+      textPreview: trimmedPreview,
+      mediaType: media?.mediaType,
+    });
 
     return this.createNotification({
       userId: params.postAuthorId,
       type,
       priority: 'normal',
       content: notificationString(lang, 'reaction.post', { emoji: params.emoji, postType: reactPostType }),
+      subtitle,
+      lang,
 
       actor: {
         id: params.actorId,
@@ -2164,6 +2531,11 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
@@ -2171,6 +2543,11 @@ export class NotificationService {
         postId: params.postId,
         emoji: params.emoji,
         postType: params.postType || 'POST',
+        ...(trimmedPreview !== ''
+          ? { postPreview: this.truncateMessage(trimmedPreview) }
+          : {}),
+        ...(media ? { mediaType: media.mediaType } : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -2186,9 +2563,13 @@ export class NotificationService {
     commentId: string;
     commentPreview: string;
     /** Type du post commenté — pilote le wording du subtitle. Défaut POST. */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS';
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Extrait du post commenté (≤ ~80 chars) pour identifier LE post visé. */
     postPreview?: string;
+    /** Date de publication ISO du post (le client en dérive « du JJ/MM/AAAA HH:MM »). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     if (params.actorId === params.postAuthorId) return null;
 
@@ -2200,18 +2581,16 @@ export class NotificationService {
 
     // Subtitle = la cible du commentaire (« Votre humeur : « … » ») ; body =
     // le texte du commentaire. Le destinataire sait QUOI a été commenté sans
-    // ouvrir l'app.
-    const ownerLabel: Record<'POST' | 'STORY' | 'MOOD' | 'STATUS', string> = {
-      POST: 'Votre publication',
-      STORY: 'Votre story',
-      MOOD: 'Votre humeur',
-      STATUS: 'Votre statut',
-    };
-    const label = ownerLabel[params.postType ?? 'POST'];
+    // ouvrir l'app. Libellé localisé (Prisme-first) — plus de français codé en dur.
+    const lang = await this.resolveRecipientLang(params.postAuthorId);
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
-    const subtitle = trimmedPostPreview !== ''
-      ? `${label} : « ${this.truncateMessage(trimmedPostPreview)} »`
-      : label;
+    // Cible du commentaire : extrait texte du post si présent, sinon résumé
+    // média (« Votre publication · 📷 Photo ») + vignette poussée au push iOS.
+    const media = await this.resolvePostMedia(params.postId);
+    const subtitle = this.buildOwnerSubtitleWithDetail(lang, params.postType ?? 'POST', {
+      textPreview: trimmedPostPreview,
+      mediaType: media?.mediaType,
+    });
 
     return this.createNotification({
       userId: params.postAuthorId,
@@ -2219,6 +2598,7 @@ export class NotificationService {
       priority: 'normal',
       content: this.truncateMessage(params.commentPreview),
       subtitle,
+      lang,
 
       actor: {
         id: params.actorId,
@@ -2229,6 +2609,11 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
@@ -2236,6 +2621,12 @@ export class NotificationService {
         postId: params.postId,
         commentId: params.commentId,
         commentPreview: this.truncateMessage(params.commentPreview),
+        postType: params.postType ?? 'POST',
+        ...(trimmedPostPreview !== ''
+          ? { postPreview: this.truncateMessage(trimmedPostPreview) }
+          : {}),
+        ...(media ? { mediaType: media.mediaType } : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -2250,9 +2641,13 @@ export class NotificationService {
     postAuthorId: string;
     repostId: string;
     /** Type du post partagé — pilote le wording. Défaut POST. */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS';
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
     /** Extrait du post partagé pour identifier LE contenu repris. */
     postPreview?: string;
+    /** Date de publication ISO du contenu partagé (contexte expiry côté client). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     if (params.actorId === params.postAuthorId) return null;
 
@@ -2264,16 +2659,20 @@ export class NotificationService {
 
     const lang = await this.resolveRecipientLang(params.postAuthorId);
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
+    const media = await this.resolvePostMedia(params.originalPostId);
     const subtitle = trimmedPostPreview !== ''
       ? `« ${this.truncateMessage(trimmedPostPreview)} »`
-      : undefined;
+      : (this.mediaSummaryString(lang, media?.mediaType) || undefined);
 
     return this.createNotification({
       userId: params.postAuthorId,
       type: 'post_repost',
       priority: 'normal',
-      content: notificationString(lang, 'repost', { postType: params.postType ?? 'POST' }),
+      content: notificationString(lang, 'repost', {
+        postType: params.postType === 'REEL' ? 'POST' : (params.postType ?? 'POST'),
+      }),
       ...(subtitle ? { subtitle } : {}),
+      lang,
 
       actor: {
         id: params.actorId,
@@ -2284,12 +2683,23 @@ export class NotificationService {
 
       context: {
         postId: params.originalPostId,
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
         action: 'view_post',
         originalPostId: params.originalPostId,
         repostId: params.repostId,
+        postType: params.postType ?? 'POST',
+        ...(trimmedPostPreview !== ''
+          ? { postPreview: this.truncateMessage(trimmedPostPreview) }
+          : {}),
+        ...(media ? { mediaType: media.mediaType } : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -2303,9 +2713,18 @@ export class NotificationService {
     postId: string;
     commentAuthorId: string;
     commentId: string;
+    /** Identifiant du commentaire parent — permet au client de déplier le fil
+     *  parent puis de défiler/surligner la réponse (`commentId`). */
+    parentCommentId?: string;
     replyPreview: string;
     /** Extrait du commentaire parent — identifie À QUOI on répond. */
     parentCommentPreview?: string;
+    /** Type du contenu portant le commentaire — précise « sur votre story/réel ». Défaut POST. */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
+    /** Date de publication ISO du contenu (le client en dérive « du JJ/MM/AAAA HH:MM »). */
+    postCreatedAt?: string | Date;
+    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
+    postExpiresAt?: string | Date;
   }): Promise<Notification | null> {
     if (params.actorId === params.commentAuthorId) return null;
 
@@ -2315,12 +2734,16 @@ export class NotificationService {
     });
     if (!actor) return null;
 
-    // Subtitle = le commentaire auquel on répond ; body = la réponse.
+    // Le titre « X a répondu à votre commentaire » est calculé par le builder
+    // (source unique localisée). Le subtitle précise l'ENTITÉ portant le
+    // commentaire (« Story », « Réel »…) — pas « publication » générique ; le
+    // client y append la date locale (« · 23/06/2026 14:30 ») depuis postCreatedAt.
     const lang = await this.resolveRecipientLang(params.commentAuthorId);
     const trimmedParent = params.parentCommentPreview?.trim() ?? '';
-    const subtitle = trimmedParent !== ''
-      ? notificationString(lang, 'comment.replyWithParent', { preview: this.truncateMessage(trimmedParent) })
-      : notificationString(lang, 'comment.reply');
+    // POST_NOUN_CAP gère REEL distinctement (« Réel ») → pas de mapping vers POST.
+    const subtitle = notificationString(lang, 'comment.subtitleBare', { postType: params.postType ?? 'POST' });
+    // Vignette du contenu portant le commentaire → attachée au push iOS.
+    const media = await this.resolvePostMedia(params.postId);
 
     return this.createNotification({
       userId: params.commentAuthorId,
@@ -2328,6 +2751,7 @@ export class NotificationService {
       priority: 'normal',
       content: this.truncateMessage(params.replyPreview),
       subtitle,
+      lang,
 
       actor: {
         id: params.actorId,
@@ -2338,13 +2762,27 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        commentId: params.commentId,
+        ...(params.parentCommentId ? { parentCommentId: params.parentCommentId } : {}),
+        ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
+        ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
         action: 'view_post',
         postId: params.postId,
         commentId: params.commentId,
+        ...(params.parentCommentId ? { parentCommentId: params.parentCommentId } : {}),
         commentPreview: this.truncateMessage(params.replyPreview),
+        postType: params.postType ?? 'POST',
+        ...(trimmedParent !== ''
+          ? { parentCommentPreview: this.truncateMessage(trimmedParent) }
+          : {}),
+        ...(media ? { mediaType: media.mediaType } : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -2375,6 +2813,8 @@ export class NotificationService {
     const subtitle = trimmedPreview !== ''
       ? `« ${this.truncateMessage(trimmedPreview)} »`
       : undefined;
+    // Vignette du post portant le commentaire → attachée au push iOS.
+    const media = await this.resolvePostMedia(params.postId);
 
     return this.createNotification({
       userId: params.commentAuthorId,
@@ -2382,6 +2822,7 @@ export class NotificationService {
       priority: 'low',
       content: notificationString(lang, 'reaction.comment', { emoji: params.emoji }),
       ...(subtitle ? { subtitle } : {}),
+      lang,
 
       actor: {
         id: params.actorId,
@@ -2392,6 +2833,9 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
@@ -2399,6 +2843,10 @@ export class NotificationService {
         postId: params.postId,
         commentId: params.commentId,
         emoji: params.emoji,
+        ...(trimmedPreview !== ''
+          ? { commentPreview: this.truncateMessage(trimmedPreview) }
+          : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -2950,6 +3398,87 @@ export class NotificationService {
     return words.slice(0, maxWords).join(' ') + '...';
   }
 
+  /**
+   * Résout le 1er média d'un post → nature + miniature pour enrichir la
+   * notification : la ligne in-app rend la vignette, le push iOS l'attache
+   * (UNNotificationAttachment). Pour image on attache le fichier lui-même ;
+   * pour vidéo/audio on attache la miniature générée (toujours une image).
+   *
+   * Défensif : retourne `null` (au lieu de jeter) si le modèle `postMedia`
+   * est absent (tests) ou si le post n'a pas de média visuel — l'appelant
+   * retombe alors sur le rendu texte seul.
+   */
+  private async resolvePostMedia(postId: string): Promise<{
+    mediaType: 'image' | 'video' | 'audio';
+    thumbnailUrl?: string;
+    thumbnailMimeType?: string;
+  } | null> {
+    try {
+      const media = await this.prisma.postMedia.findFirst({
+        where: { postId },
+        orderBy: { order: 'asc' },
+        select: { mimeType: true, fileUrl: true, thumbnailUrl: true },
+      });
+      if (!media) return null;
+
+      const mime = (media.mimeType ?? '').toLowerCase();
+      const mediaType = mime.startsWith('image/') ? 'image'
+        : mime.startsWith('video/') ? 'video'
+          : mime.startsWith('audio/') ? 'audio'
+            : null;
+      if (!mediaType) return null;
+
+      // Vignette poussée au client/iOS : toujours une image téléchargeable.
+      // Image → le fichier ; vidéo/audio → la miniature générée (si présente).
+      const rawThumb = mediaType === 'image'
+        ? (media.fileUrl || media.thumbnailUrl || undefined)
+        : (media.thumbnailUrl || undefined);
+      const thumbnailUrl = rawThumb ? this.toPublicMediaUrl(rawThumb) : undefined;
+      const thumbnailMimeType = thumbnailUrl
+        ? (mediaType === 'image' ? (media.mimeType ?? 'image/jpeg') : 'image/jpeg')
+        : undefined;
+
+      return { mediaType, thumbnailUrl, thumbnailMimeType };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Absolutise une URL média relative pour qu'elle soit téléchargeable par
+   *  l'extension de notification iOS (qui n'a pas de base configurée). */
+  private toPublicMediaUrl(url: string): string {
+    if (/^https?:\/\//i.test(url)) return url;
+    const base = (process.env.API_PUBLIC_URL || 'https://gate.meeshy.me').replace(/\/$/, '');
+    return `${url.startsWith('/') ? base : `${base}/`}${url}`;
+  }
+
+  /**
+   * Sous-titre « Votre {entité} » enrichi du détail du contenu visé : l'extrait
+   * texte (« Votre story : « … » ») ou, à défaut, un résumé média localisé
+   * (« Votre story · 📷 Photo »). Source unique pour réactions / partages —
+   * aligné sur le wording des commentaires. SANS date (le client l'append).
+   */
+  private buildOwnerSubtitleWithDetail(
+    lang: string,
+    postType: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
+    detail: { textPreview?: string; mediaType?: 'image' | 'video' | 'audio' },
+  ): string {
+    const label = notificationString(lang, 'comment.subtitleOwner', { postType });
+    const text = detail.textPreview?.trim();
+    if (text) return `${label} : « ${this.truncateMessage(text)} »`;
+    const mediaSummary = this.mediaSummaryString(lang, detail.mediaType);
+    return mediaSummary ? `${label} · ${mediaSummary}` : label;
+  }
+
+  /** Résumé média localisé (« 📷 Photo » / « 🎬 Vidéo » / « 🎵 Audio ») ou ''. */
+  private mediaSummaryString(lang: string, mediaType?: 'image' | 'video' | 'audio'): string {
+    const key: NotificationStringKey | null = mediaType === 'image' ? 'attachment.photo'
+      : mediaType === 'video' ? 'attachment.video'
+        : mediaType === 'audio' ? 'attachment.audio'
+          : null;
+    return key ? notificationString(lang, key) : '';
+  }
+
   // ==============================================
   // QUERIES
   // ==============================================
@@ -2978,10 +3507,49 @@ export class NotificationService {
       this.prisma.notification.count({ where }),
     ]);
 
+    const withFreshAvatars = await this.overlayLiveActorAvatars(notifications);
+
     return {
-      notifications: notifications.map((n) => this.formatNotification(n)),
+      notifications: withFreshAvatars.map((n) => this.formatNotification(n)),
       total,
     };
+  }
+
+  /**
+   * `Notification.actor` is a frozen JSON snapshot captured at creation time,
+   * so its `avatar` URL becomes a dead link as soon as the actor changes their
+   * avatar (old file deleted) — producing recurring 404s when `/notifications`
+   * renders. The avatar is a presentation asset, not historical content: it
+   * must always reflect the actor's current avatar. Re-resolve each distinct
+   * actor's avatar live from the User table in a single batched query, then
+   * overlay it onto each notification. Actors with no live record (e.g. a
+   * deleted account) keep their snapshot untouched.
+   */
+  private async overlayLiveActorAvatars(notifications: any[]): Promise<any[]> {
+    const actorIds = [
+      ...new Set(
+        notifications
+          .map((n) => n.actor?.id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    ];
+    if (actorIds.length === 0) {
+      return notifications;
+    }
+
+    const liveUsers = await this.prisma.user.findMany({
+      where: { id: { in: actorIds } },
+      select: { id: true, avatar: true },
+    });
+    const liveAvatarById = new Map(liveUsers.map((u) => [u.id, u.avatar ?? null]));
+
+    return notifications.map((n) => {
+      const actorId = n.actor?.id;
+      if (!actorId || !liveAvatarById.has(actorId)) {
+        return n;
+      }
+      return { ...n, actor: { ...n.actor, avatar: liveAvatarById.get(actorId) ?? null } };
+    });
   }
 
   /**
@@ -3208,7 +3776,9 @@ export class NotificationService {
     notificationLogger.info('✅ [SOCKET.IO] this.io configuré avec succès', {
       hasThisIo: !!this.io,
     });
-    // userSocketsMap non utilisé dans V2 (utilise io.to(userId) directement)
+    // userSocketsMap non utilisé dans V2 : les émissions user-scoped ciblent la
+    // room `ROOMS.user(userId)` (`user:${id}`) que chaque socket enregistré
+    // rejoint à l'auth — Socket.IO gère le fan-out multi-device.
   }
 
   setPushNotificationService(pushService: PushNotificationService): void {

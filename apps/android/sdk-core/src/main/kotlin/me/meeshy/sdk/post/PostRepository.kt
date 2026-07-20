@@ -2,6 +2,8 @@ package me.meeshy.sdk.post
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.transformLatest
@@ -14,6 +16,8 @@ import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateCommentRequest
 import me.meeshy.sdk.net.api.CreatePostRequest
@@ -26,8 +30,19 @@ import me.meeshy.sdk.net.api.PostViewRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
 import me.meeshy.sdk.net.api.UpdatePostRequest
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.rawApiCall
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** One cursor page of posts plus the pagination watermark to fetch the next. */
+data class PostPage(
+    val posts: List<ApiPost>,
+    val nextCursor: String?,
+    val hasMore: Boolean,
+)
+
+/** Bookmarked-posts page — the same cursor-page shape as any other post list. */
+typealias BookmarkPage = PostPage
 
 /** Posts, comments, reposts and feed variants — port of PostService (PostService.swift). */
 @Singleton
@@ -38,6 +53,13 @@ class PostRepository @Inject constructor(
     // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
     private val _feedCache = MutableStateFlow<List<ApiPost>?>(null)
     private val _feedSyncedAt = MutableStateFlow<Long?>(null)
+
+    // Cursor pagination state (port of FeedViewModel.nextCursor / hasMore).
+    private var feedCursor: String? = null
+    private val _feedHasMore = MutableStateFlow(true)
+
+    /** Whether older feed pages remain to be fetched (drives the infinite-scroll trigger). */
+    val feedHasMore: StateFlow<Boolean> = _feedHasMore.asStateFlow()
 
     /**
      * Cache-first feed stream (ARCHITECTURE.md §4). An in-memory L1 cache serves
@@ -90,8 +112,8 @@ class PostRepository @Inject constructor(
         return true
     }
 
-    private fun adjustedCount(current: Int?, wasLiked: Boolean): Int =
-        ((current ?: 0) + if (wasLiked) -1 else 1).coerceAtLeast(0)
+    private fun adjustedCount(current: Int?, wasSet: Boolean): Int =
+        ((current ?: 0) + if (wasSet) -1 else 1).coerceAtLeast(0)
 
     private fun applyLike(postId: String, liked: Boolean, likeCount: Int?) {
         _feedCache.value = _feedCache.value?.map {
@@ -99,12 +121,81 @@ class PostRepository @Inject constructor(
         }
     }
 
+    /**
+     * Optimistic bookmark toggle (ARCHITECTURE.md §4), the bookmark analogue of
+     * [toggleLike]. The viewer's own `isBookmarkedByMe` flips instantly with the
+     * count; the network confirms after and the cache rolls back on failure. The
+     * gateway later broadcasts `post:bookmarked` (a personal event) with the
+     * authoritative absolute count, which the feed reconciles. Returns true when the
+     * mutation was accepted by the gateway.
+     */
+    suspend fun toggleBookmark(postId: String): Boolean {
+        val target = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
+        val wasBookmarked = target.isBookmarkedByMe == true
+        applyBookmark(
+            postId,
+            bookmarked = !wasBookmarked,
+            bookmarkCount = adjustedCount(target.bookmarkCount, wasBookmarked),
+        )
+
+        val result = if (wasBookmarked) {
+            apiCall { postApi.removeBookmark(postId) }
+        } else {
+            apiCall { postApi.bookmark(postId) }
+        }
+        if (result is NetworkResult.Failure) {
+            applyBookmark(postId, bookmarked = wasBookmarked, bookmarkCount = target.bookmarkCount)
+            return false
+        }
+        return true
+    }
+
+    private fun applyBookmark(postId: String, bookmarked: Boolean, bookmarkCount: Int?) {
+        _feedCache.value = _feedCache.value?.map {
+            if (it.id == postId) it.copy(isBookmarkedByMe = bookmarked, bookmarkCount = bookmarkCount) else it
+        }
+    }
+
+    /**
+     * Infinite-scroll pagination (port of FeedViewModel.loadMoreIfNeeded). Fetches
+     * the page after the current cursor, deduplicates against the in-memory cache and
+     * appends it. The freshness watermark is untouched — older pages do not make the
+     * newest page fresher. Returns whether more pages remain. Silent no-op when the
+     * cursor is exhausted or the network call fails (the user can scroll again).
+     */
+    suspend fun loadMore(): Boolean {
+        val cursor = feedCursor
+        if (!_feedHasMore.value || cursor == null) return false
+        val current = _feedCache.value ?: return false
+        return when (val result = rawApiCall { postApi.getFeed(cursor, FEED_PAGE_SIZE) }) {
+            is NetworkResult.Success -> {
+                val response = result.data
+                val page = response.data
+                if (!response.success || page == null) return false
+                val existingIds = current.mapTo(HashSet()) { it.id }
+                _feedCache.value = current + page.filter { it.id !in existingIds }
+                feedCursor = response.pagination?.nextCursor
+                _feedHasMore.value = response.pagination?.hasMore ?: false
+                _feedHasMore.value
+            }
+            is NetworkResult.Failure -> false
+        }
+    }
+
     private suspend fun revalidateFeed(onError: (Throwable) -> Unit = {}) {
         try {
-            when (val result = apiCall { postApi.getFeed(null, 30) }) {
+            when (val result = rawApiCall { postApi.getFeed(null, FEED_PAGE_SIZE) }) {
                 is NetworkResult.Success -> {
-                    _feedCache.value = result.data
+                    val response = result.data
+                    val page = response.data
+                    if (!response.success || page == null) {
+                        onError(Exception(response.error ?: response.message ?: "Unknown error"))
+                        return
+                    }
+                    _feedCache.value = page
                     _feedSyncedAt.value = clock.nowMillis()
+                    feedCursor = response.pagination?.nextCursor
+                    _feedHasMore.value = response.pagination?.hasMore ?: false
                 }
                 is NetworkResult.Failure -> onError(Exception(result.error.message))
             }
@@ -115,8 +206,25 @@ class PostRepository @Inject constructor(
         }
     }
 
+    private companion object {
+        const val FEED_PAGE_SIZE = 30
+        const val BOOKMARKS_PAGE_SIZE = 20
+        const val USER_POSTS_PAGE_SIZE = 20
+    }
+
     suspend fun getFeed(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =
         apiCall { postApi.getFeed(cursor, limit) }
+
+    /**
+     * Vertical reel thread (`GET /posts/feed/reels`). [seed] is a reel touched in
+     * the Feed to anchor the affinity thread; null returns the default reel feed.
+     */
+    suspend fun getReels(
+        seed: String? = null,
+        cursor: String? = null,
+        limit: Int = 20,
+    ): NetworkResult<List<ApiPost>> =
+        apiCall { postApi.getReels(seed, cursor, limit) }
 
     suspend fun create(
         content: String? = null,
@@ -175,6 +283,68 @@ class PostRepository @Inject constructor(
 
     suspend fun getBookmarks(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =
         apiCall { postApi.getBookmarks(cursor, limit) }
+
+    /**
+     * A single cursor page of the signed-in user's bookmarked posts, carrying the
+     * pagination watermark the plain [getBookmarks] drops. The saved-posts screen
+     * owns the accumulation (there is no repository-level bookmark cache yet), so it
+     * needs `nextCursor`/`hasMore` to drive its own infinite scroll. A `success:false`
+     * or dataless envelope is folded into a [NetworkResult.Failure] like [apiCall].
+     */
+    suspend fun getBookmarksPage(
+        cursor: String? = null,
+        limit: Int = BOOKMARKS_PAGE_SIZE,
+    ): NetworkResult<PostPage> =
+        foldPostPage(rawApiCall { postApi.getBookmarks(cursor, limit) })
+
+    /**
+     * A single cursor page of the given user's authored posts (`GET /posts/user/:id`),
+     * carrying the `nextCursor`/`hasMore` watermark the plain [getUserPosts] drops. The
+     * user-profile posts screen owns the accumulation (there is no repository-level
+     * per-user cache), so it needs the watermark to drive its own infinite scroll. A
+     * `success:false` or dataless envelope folds into a [NetworkResult.Failure], exactly
+     * like [getBookmarksPage].
+     */
+    suspend fun getUserPostsPage(
+        userId: String,
+        cursor: String? = null,
+        limit: Int = USER_POSTS_PAGE_SIZE,
+    ): NetworkResult<PostPage> =
+        foldPostPage(rawApiCall { postApi.getUserPosts(userId, cursor, limit) })
+
+    /**
+     * Fold a raw list envelope into a [PostPage]: a transport [NetworkResult.Failure]
+     * passes through; a `success:false`/dataless envelope becomes a [NetworkResult.Failure];
+     * otherwise the posts plus the pagination watermark become a [PostPage] (`hasMore`
+     * defaulting to `false` when the envelope omits pagination). The single page-folding
+     * law shared by every cursor-paginated post list.
+     */
+    private fun foldPostPage(
+        result: NetworkResult<ApiResponse<List<ApiPost>>>,
+    ): NetworkResult<PostPage> =
+        when (result) {
+            is NetworkResult.Success -> {
+                val response = result.data
+                val page = response.data
+                if (!response.success || page == null) {
+                    NetworkResult.Failure(
+                        ApiError(
+                            message = response.error ?: response.message ?: "Unknown error",
+                            code = response.code,
+                        ),
+                    )
+                } else {
+                    NetworkResult.Success(
+                        PostPage(
+                            posts = page,
+                            nextCursor = response.pagination?.nextCursor,
+                            hasMore = response.pagination?.hasMore ?: false,
+                        ),
+                    )
+                }
+            }
+            is NetworkResult.Failure -> result
+        }
 
     suspend fun pinPost(postId: String): NetworkResult<Unit> =
         apiCall { postApi.pin(postId) }

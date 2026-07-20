@@ -15,11 +15,20 @@ private struct StoryPreviewAssets: Identifiable {
 
 struct StoryTrayView: View {
     @ObservedObject var viewModel: StoryViewModel
-    var onViewStory: (String) -> Void
+    /// Optionnel : surcharge de présentation. `nil` (défaut) → chemin canonique
+    /// unique via `StoryViewerCoordinator` (`.fullScreenCover(item:)` au niveau
+    /// root). Avant, chaque hôte (feeds iPad/iPhone) câblait son propre
+    /// `.fullScreenCover(isPresented:)` + variable `selectedStoryUserId` séparée :
+    /// SwiftUI évaluait le cover avec l'uid encore `nil` (capture périmée) → écran
+    /// noir « story introuvable ». Le coordinator capture la requête atomiquement.
+    var onViewStory: ((String) -> Void)? = nil
     var onAddStatus: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
+    /// U1 — namespace zoom injecté par RootView (nil hors de ce sous-arbre
+    /// ou < iOS 18 : les helpers sont no-op, transition historique).
+    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
     private var isDark: Bool { colorScheme == .dark }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet du tray. La présence est rafraîchie lors des refreshs naturels.
@@ -34,6 +43,9 @@ struct StoryTrayView: View {
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var storyPreviewAssets: StoryPreviewAssets?
+    /// Sheet « Mes stories envoyées » (gestion : ouvrir, vues, partager,
+    /// republier, supprimer). Directive user 2026-07-14.
+    @State private var showMyStories = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -51,11 +63,52 @@ struct StoryTrayView: View {
             }
         }
         .frame(height: 120)
+        .sheet(isPresented: $showMyStories) {
+            MyStoriesView(
+                viewModel: viewModel,
+                userId: AuthManager.shared.currentUser?.id ?? "",
+                statusViewModel: statusViewModel,
+                onOpen: { story in
+                    showMyStories = false
+                    let coordinator = storyViewerCoordinator
+                    let uid = AuthManager.shared.currentUser?.id ?? ""
+                    let postId = story.id
+                    // Laisse la sheet se fermer avant le fullScreenCover root
+                    // (le coordinator présente au niveau RootView).
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        coordinator.present(StoryViewerRequest(
+                            id: uid, singleGroup: true, postId: postId))
+                    }
+                },
+                onCreateStory: {
+                    showMyStories = false
+                    // Même pattern anti-course que `onOpen` : un .sheet et un
+                    // .fullScreenCover actifs en même temps depuis le même
+                    // hôte se marchent dessus.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(350))
+                        viewModel.showStoryComposer = true
+                    }
+                }
+            )
+            // Réinjection à travers la frontière de sheet : la sheet interne
+            // SharePickerView (« Transférer ») crasherait sur un env object
+            // manquant — même raison que les fullScreenCovers du viewer.
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
+        }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
+                postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -63,7 +116,7 @@ struct StoryTrayView: View {
         .fullScreenCover(isPresented: $viewModel.showStoryComposer) {
             ZStack {
                 StoryComposerView(
-                    onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility in
+                    onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
                         viewModel.publishStoryInBackground(
                             slides: slides,
                             slideImages: slideImages,
@@ -71,7 +124,8 @@ struct StoryTrayView: View {
                             loadedVideoURLs: loadedVideoURLs,
                             loadedAudioURLs: loadedAudioURLs,
                             originalLanguage: originalLanguage,
-                            visibility: visibility
+                            visibility: visibility,
+                            visibilityUserIds: visibilityUserIds
                         )
                     },
                     onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
@@ -140,16 +194,11 @@ struct StoryTrayView: View {
                 ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId && !$0.isFullyExpired() }.enumerated()), id: \.element.id) { visibleIndex, group in
                     Group {
                         if visibleIndex < staggerCap {
-                            storyRing(group: group, userId: group.id)
+                            storyRingCell(for: group)
                                 .staggeredAppear(index: visibleIndex, baseDelay: 0.05)
                         } else {
-                            storyRing(group: group, userId: group.id)
+                            storyRingCell(for: group)
                         }
-                    }
-                    .onTapGesture {
-                        HapticFeedback.medium()
-                        Logger.messages.info("[StoryTrayView] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
-                        onViewStory(group.id)
                     }
                 }
             }
@@ -172,18 +221,70 @@ struct StoryTrayView: View {
                     singleGroup: true
                 ))
             },
-            onAddStatus: onAddStatus
+            onAddStatus: onAddStatus,
+            onManageStories: { showMyStories = true }
         )
+        // U1 inc.2 — « ma story » zoome aussi (id vide jamais matché → fallback).
+        .zoomTransitionSource(id: AuthManager.shared.currentUser?.id ?? "", in: zoomNamespace)
     }
 
     // MARK: - Story Ring
 
-    private func storyRing(group: StoryGroup, userId: String) -> some View {
-        VStack(spacing: 5) {
+    /// Full-size trail ring — thin wrapper over the shared `StoryRingCell` so
+    /// the grande trail and the pinned mini-trail render an identical cell,
+    /// only differing by `context` size.
+    private func storyRingCell(for group: StoryGroup) -> some View {
+        StoryRingCell(
+            group: group,
+            onViewStory: { presentStory(userId: group.id) },
+            onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
+        )
+        // U1 — source de la transition zoom : la bulle « devient » le viewer
+        // (id = userId du groupe, apparié au sourceID du cover RootView).
+        .zoomTransitionSource(id: group.id, in: zoomNamespace)
+    }
+
+    /// Chemin de présentation unique pour toute la trail (feeds + chats). Si un
+    /// hôte fournit `onViewStory`, on le respecte ; sinon on passe par le
+    /// coordinator — `.fullScreenCover(item:)` au root capture la requête sans
+    /// race d'uid, éliminant l'écran noir « story introuvable » du chemin feeds.
+    private func presentStory(userId: String) {
+        if let onViewStory {
+            onViewStory(userId)
+        } else {
+            storyViewerCoordinator.present(
+                StoryViewerRequest(id: userId, startAtFirstUnviewed: true)
+            )
+        }
+    }
+
+}
+
+// MARK: - Story Ring Cell (shared by grande + compact pinned trail)
+
+/// One story group rendered as avatar ring + (optional) username, sharing the
+/// exact same `MeeshyAvatar` atom across the full-size trail and the compact
+/// pinned mini-trail. `context` drives the size (`.storyTray` 88pt vs
+/// `.storyTrayCompact` 44pt); all proportional metrics derive from it.
+struct StoryRingCell: View {
+    let group: StoryGroup
+    var context: AvatarContext = .storyTray
+    var showsUsername: Bool = true
+    let onViewStory: () -> Void
+    let onShowProfile: () -> Void
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private var presenceManager: PresenceManager { PresenceManager.shared }
+    @EnvironmentObject private var statusViewModel: StatusViewModel
+
+    private var isCompact: Bool { context.size <= 44 }
+
+    var body: some View {
+        VStack(spacing: isCompact ? 4 : 5) {
             ZStack {
                 MeeshyAvatar(
                     name: group.username,
-                    context: .storyTray,
+                    context: context,
                     accentColor: group.avatarColor,
                     avatarURL: latestStoryThumbnailURL(group),
                     storyState: group.hasUnviewed ? .unread : .read,
@@ -192,46 +293,56 @@ struct StoryTrayView: View {
                     onMoodTap: statusViewModel.moodTapHandler(for: group.id),
                     contextMenuItems: [
                         AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
-                            onViewStory(userId)
+                            onViewStory()
                         },
                         AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
-                            selectedProfileUser = .from(storyGroup: group)
+                            onShowProfile()
                         }
                     ]
                 )
 
-                // Story count dots (multiple stories indicator)
+                // Story count dots (multiple stories indicator) — offset scales
+                // with the avatar so it stays pinned to the bottom edge.
                 if group.stories.count > 1 {
                     storyCountDots(count: group.stories.count, unviewed: group.hasUnviewed)
-                        .offset(y: 28)
+                        .offset(y: context.size * 0.318)
                 }
             }
 
-            Text(group.username)
-                .font(.system(size: 10, weight: group.hasUnviewed ? .semibold : .medium))
-                .foregroundColor(group.hasUnviewed ? .white : theme.textMuted)
-                .lineLimit(1)
-                .frame(width: 96)
-        }
-    }
-
-    // MARK: - Story Count Dots
-
-    private func storyCountDots(count: Int, unviewed: Bool) -> some View {
-        HStack(spacing: 3) {
-            ForEach(0..<min(count, 5), id: \.self) { _ in
-                Circle()
-                    .fill(unviewed ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
-                    .frame(width: 4, height: 4)
-            }
-            if count > 5 {
-                Text("+")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundColor(.white.opacity(0.5))
+            if showsUsername {
+                Text(group.username)
+                    .font(MeeshyFont.relative(isCompact ? 9 : 10, weight: group.hasUnviewed ? .semibold : .medium))
+                    .foregroundColor(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
+                    .lineLimit(1)
+                    .frame(width: isCompact ? 56 : 96)
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            HapticFeedback.medium()
+            Logger.messages.info("[StoryRingCell] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
+            onViewStory()
+        }
     }
+}
 
+// MARK: - Story Count Dots (shared)
+
+@ViewBuilder
+fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
+    HStack(spacing: 3) {
+        ForEach(0..<min(count, 5), id: \.self) { _ in
+            Circle()
+                .fill(unviewed ? Color.white.opacity(0.85) : Color.white.opacity(0.25))
+                .frame(width: 4, height: 4)
+        }
+        if count > 5 {
+            Text("+")
+                .font(MeeshyFont.relative(8, weight: .bold))
+                .foregroundColor(.white.opacity(0.5))
+        }
+    }
+    .accessibilityHidden(true)
 }
 
 // MARK: - Thumbnail Helper
@@ -266,6 +377,7 @@ private struct MyStoryButton: View {
     let viewModel: StoryViewModel
     let onViewMyStory: () -> Void
     var onAddStatus: (() -> Void)?
+    var onManageStories: (() -> Void)?
 
     // Lecture directe sans @ObservedObject — leaf view rendue dans le tray,
     // évite que chaque changement de thème force un re-render du bouton.
@@ -294,10 +406,9 @@ private struct MyStoryButton: View {
                     avatarURL: myGroup.flatMap { latestStoryThumbnailURL($0) } ?? currentUser?.avatar,
                     storyState: storyState,
                     moodEmoji: myMoodEmoji,
-                    presenceState: .offline,
                     onTap: {
                         if hasMyStory {
-                            onViewMyStory()
+                            onManageStories?()
                         } else {
                             viewModel.showStoryComposer = true
                         }
@@ -312,6 +423,10 @@ private struct MyStoryButton: View {
                         if hasMyStory {
                             items.append(AvatarContextMenuItem(label: "Voir ma story", icon: "play.circle.fill") {
                                 onViewMyStory()
+                                HapticFeedback.medium()
+                            })
+                            items.append(AvatarContextMenuItem(label: "Gérer mes stories", icon: "rectangle.stack.fill") {
+                                onManageStories?()
                                 HapticFeedback.medium()
                             })
                         }
@@ -337,12 +452,14 @@ private struct MyStoryButton: View {
                             // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
                             // pour garder la parité avec l'emoji mood animé
                             // (cf. MeeshyAvatar.badgeSize .storyTray).
+                            // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
                             Text("\u{1F4AD}")
                                 .font(.system(size: 20))
                                 .frame(width: 32, height: 32)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
                     }
                 }
                 .overlay(alignment: .topLeading) {
@@ -357,25 +474,30 @@ private struct MyStoryButton: View {
                             viewModel.showStoryComposer = true
                             HapticFeedback.medium()
                         } label: {
-                            // x2 — user request 2026-05-27 « augmente le (+)
-                            // d'ajouter une story ». Avant : font 11 / frame
-                            // 20×20 / offset (-2,-2). Maintenant doublé pour
-                            // matcher la taille trail (avatars passés à 88pt
-                            // en ab691abaf).
+                            // User request 2026-07-04 : le (+) était COUPÉ en
+                            // haut du tray — l'offset négatif (-4,-4) le
+                            // faisait déborder du cadre de la cellule, et le
+                            // conteneur scrollable rognait tout dépassement.
+                            // Le badge est désormais ENTIÈREMENT contenu dans
+                            // les bounds de l'avatar (topLeading sans offset,
+                            // 34pt au lieu de 40) : plus rien ne peut être
+                            // rogné, quel que soit le clipping parent.
+                            // Glyphe dans un cercle de dimension FIXE : figé
+                            // (déborderait s'il scalait, doctrine 86i) ; le
+                            // bouton porte le libellé.
                             Image(systemName: "plus")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(.system(size: 19, weight: .bold))
                                 .foregroundStyle(Color.white)
-                                .frame(width: 40, height: 40)
+                                .frame(width: 34, height: 34)
                                 .background(
                                     Circle()
                                         .fill(MeeshyColors.brandGradient)
-                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 3))
+                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2.5))
                                 )
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(String(localized: "story.tray.addStory",
                                                    defaultValue: "Ajouter une story"))
-                        .offset(x: -4, y: -4)
                     }
                 }
                 .overlay {
@@ -398,17 +520,18 @@ private struct MyStoryButton: View {
                         }
                         if group.stories.count > 5 {
                             Text("+")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(MeeshyFont.relative(8, weight: .bold))
                                 .foregroundColor(.white.opacity(0.5))
                         }
                     }
                     .offset(y: 28)
+                    .accessibilityHidden(true)
                 }
             }
 
             Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
+                .font(MeeshyFont.relative(10, weight: .semibold))
+                .foregroundColor(theme.textSecondary)
         }
         .accessibilityLabel(hasMyStory ? String(localized: "story.tray.a11y.myStory", defaultValue: "Ma story", bundle: .main) : String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
     }
@@ -444,6 +567,7 @@ private struct StoryUploadOverlay: View {
                     .stroke(MeeshyColors.error, lineWidth: 3)
                     .frame(width: 50, height: 50)
 
+                // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
@@ -458,6 +582,7 @@ private struct StoryUploadOverlay: View {
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 0.3), value: upload.progress)
 
+                // Texte dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Text("\(Int(upload.progress * 100))%")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
@@ -476,5 +601,212 @@ private struct StoryUploadOverlay: View {
                 }
             }
         }
+        // While `.uploading`/`.publishing`, this overlay must NOT swallow the
+        // tap/long-press meant for the `MeeshyAvatar` underneath (which opens
+        // "Gérer mes stories" via `onManageStories`) — only `.failed` has a
+        // real gesture to offer here (retry). `allowsHitTesting(false)` makes
+        // the whole overlay click-through so both gestures fall to the avatar.
+        .allowsHitTesting(isFailed)
+    }
+}
+
+// MARK: - Pinned Mini Story Trail (revealed inside the collapsed header)
+
+/// Compact story trail pinned *inside* the header, below the title + actions.
+/// It fades/slides in as the full-size `StoryTrayView` scrolls up under the
+/// header so the stories stay reachable without taking a full row. Per product
+/// decision the connected user's avatar is replaced by a single leading "+"
+/// (add a story); everyone else's rings render at half size
+/// (`.storyTrayCompact`, 44pt) with the same design and horizontal scroll.
+struct PinnedStoryTrailBand: View {
+    /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
+    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
+    @ObservedObject var viewModel: StoryViewModel
+    /// Same negative scroll offset the `CollapsibleHeader` consumes (0 at rest,
+    /// more negative as the content scrolls up).
+    let scrollOffset: CGFloat
+    /// Optionnel : surcharge de présentation. `nil` (défaut) → coordinator (cf.
+    /// `StoryTrayView.onViewStory`), unifiant la mini-trail avec la grande trail.
+    var onViewStory: ((String) -> Void)? = nil
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    @EnvironmentObject private var statusViewModel: StatusViewModel
+    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
+    // Capturés pour réinjection sur la sheet MyStoriesView (sa sheet interne
+    // SharePickerView « Transférer » crasherait sur un env object manquant).
+    @EnvironmentObject private var router: Router
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @State private var selectedProfileUser: ProfileSheetUser?
+    /// Directive user 2026-07-14 : le tap sur son propre anneau ouvre
+    /// toujours la liste de gestion, même depuis le band épinglé replié —
+    /// même comportement que `MyStoryButton` dans la grande trail.
+    @State private var showMyStories = false
+
+    // Layout-derived: the full trail (120pt + 8 top pad) sits under the 64pt
+    // expanded header and is fully hidden behind the 44pt collapsed header after
+    // ~148pt of scroll. Reveal the mini-trail over the last ~70pt of that travel.
+    private static let revealStart: CGFloat = 78
+    private static let revealEnd: CGFloat = 148
+    private static let bandHeight: CGFloat = 80
+
+    private var reveal: CGFloat {
+        CollapsibleHeaderMetrics.pinnedAccessoryReveal(
+            scrollOffset: scrollOffset,
+            start: Self.revealStart,
+            end: Self.revealEnd
+        )
+    }
+
+    private var currentUserId: String {
+        AuthManager.shared.currentUser?.id ?? ""
+    }
+
+    /// Le groupe de l'utilisateur courant (sa propre story), non expiré.
+    /// Surfacé en tête du band replié pour un accès rapide « voir / revoir ma
+    /// story » depuis le header une fois la grande trail scrollée hors écran.
+    private var ownGroup: StoryGroup? {
+        let uid = currentUserId
+        guard !uid.isEmpty else { return nil }
+        return viewModel.storyGroups.first { $0.id == uid && !$0.isFullyExpired() }
+    }
+
+    private var visibleGroups: [StoryGroup] {
+        let uid = currentUserId
+        return viewModel.storyGroups.filter { $0.id != uid && !$0.isFullyExpired() }
+    }
+
+    var body: some View {
+        let groups = visibleGroups
+        let own = ownGroup
+        // Reveal the pinned band as soon as there is ANYTHING to reach from the
+        // collapsed header: the user's own story ring (quick access to view /
+        // re-view it once the big trail scrolled away) and/or peer stories.
+        // Previously it required a peer story, so a user with only their own
+        // story could never open it from the scrolled header.
+        if reveal > 0.001 && (!groups.isEmpty || own != nil) {
+            band(groups: groups, ownGroup: own)
+                .frame(height: Self.bandHeight * reveal, alignment: .top)
+                .opacity(Double(reveal))
+                .clipped()
+                .allowsHitTesting(reveal > 0.6)
+                .sheet(item: $selectedProfileUser) { user in
+                    UserProfileSheet(
+                        user: user,
+                        moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
+                        onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                        presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
+                        postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
+                    )
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                }
+                .sheet(isPresented: $showMyStories) {
+                    MyStoriesView(
+                        viewModel: viewModel,
+                        userId: currentUserId,
+                        statusViewModel: statusViewModel,
+                        onOpen: { story in
+                            showMyStories = false
+                            let coordinator = storyViewerCoordinator
+                            let uid = currentUserId
+                            let postId = story.id
+                            // Laisse la sheet se fermer avant le fullScreenCover
+                            // root (le coordinator présente au niveau RootView).
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(350))
+                                coordinator.present(StoryViewerRequest(
+                                    id: uid, singleGroup: true, postId: postId))
+                            }
+                        },
+                        onCreateStory: {
+                            showMyStories = false
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(350))
+                                viewModel.showStoryComposer = true
+                            }
+                        }
+                    )
+                    .environmentObject(router)
+                    .environmentObject(conversationListViewModel)
+                }
+        }
+    }
+
+    private func band(groups: [StoryGroup], ownGroup: StoryGroup?) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            // `LazyHStack` — même fix que F5 sur la grande trail : un `HStack`
+            // montait TOUS les groupes (avatars `.storyTrayCompact` animés en
+            // spring repeatForever) à CHAQUE traversée du seuil de reveal du
+            // scroll, y compris hors écran. Lazy = seuls les ~8 anneaux
+            // visibles vivent (et animent).
+            LazyHStack(alignment: .top, spacing: 12) {
+                addStoryButton
+                // Sa propre story d'abord (après le "+"), pour un accès direct
+                // « voir ma story » depuis le header replié — même anneau
+                // compact que les pairs.
+                if let ownGroup {
+                    StoryRingCell(
+                        group: ownGroup,
+                        context: .storyTrayCompact,
+                        onViewStory: { showMyStories = true },
+                        onShowProfile: { selectedProfileUser = .from(storyGroup: ownGroup) }
+                    )
+                    .zoomTransitionSource(id: ownGroup.id, in: zoomNamespace)
+                }
+                ForEach(groups, id: \.id) { group in
+                    StoryRingCell(
+                        group: group,
+                        context: .storyTrayCompact,
+                        onViewStory: { presentStory(userId: group.id) },
+                        onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
+                    )
+                    // U1 inc.2 — la mini-trail épinglée zoome aussi.
+                    .zoomTransitionSource(id: group.id, in: zoomNamespace)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
+        }
+        // No own background — this view is injected as the `CollapsibleHeader`
+        // accessory slot, so the header surface masks the content underneath.
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Même chemin de présentation que `StoryTrayView.presentStory` — unifie la
+    /// mini-trail épinglée avec la grande trail via le coordinator par défaut.
+    private func presentStory(userId: String) {
+        if let onViewStory {
+            onViewStory(userId)
+        } else {
+            storyViewerCoordinator.present(
+                StoryViewerRequest(id: userId, startAtFirstUnviewed: true)
+            )
+        }
+    }
+
+    private var addStoryButton: some View {
+        Button {
+            guard viewModel.activeUpload == nil else { return }
+            viewModel.showStoryComposer = true
+            HapticFeedback.medium()
+        } label: {
+            // Glyphe dans un cercle de dimension fixe 44×44 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Color.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle()
+                        .fill(MeeshyColors.brandGradient)
+                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.tray.addStory", defaultValue: "Ajouter une story"))
     }
 }

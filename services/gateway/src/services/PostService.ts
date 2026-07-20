@@ -1,4 +1,4 @@
-import { generateShortToken } from './TrackingLinkService';
+import { generateShortToken, TrackingLinkService } from './TrackingLinkService';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
@@ -6,18 +6,25 @@ import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
+import { buildPostVisibilityOrFilter } from './posts/postVisibility';
+import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
+import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
 interface StoryTextObjectRaw {
   id?: string;
-  content: string;
+  // The iOS composer encodes overlay text under `text`; `content` is the
+  // pre-rename legacy alias (still accepted by the SDK decoder and the web
+  // transform). Both optional — resolve via `PostService.storyTextObjectText`.
+  text?: string;
+  content?: string;
   sourceLanguage?: string;
   translations?: Record<string, string>;
   [key: string]: unknown;
@@ -56,6 +63,7 @@ function detectLanguage(text: string): string {
 
 export class PostService {
   private readonly postReactionService: PostReactionService;
+  private readonly trackingLinkService: TrackingLinkService;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -73,8 +81,13 @@ export class PostService {
     // Reference: SOTA audit Pilier 4.
     private readonly orphanCleanup?: OrphanMediaCleanupService,
     postReactionService?: PostReactionService,
+    // Source UNIQUE du mapping `metadata.trackingLinks` (URLs brutes → token
+    // `/l/<token>`), partagée avec messages/stories/commentaires. Injectable
+    // pour les tests ; défaut = instance câblée sur le même prisma.
+    trackingLinkService?: TrackingLinkService,
   ) {
     this.postReactionService = postReactionService ?? new PostReactionService(prisma);
+    this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
   }
 
   async createPost(data: {
@@ -184,7 +197,9 @@ export class PostService {
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
     if (data.type === PostType.STORY && data.content) {
-      this.triggerStoryTextTranslation(post.id, data.content, userId).catch(() => {});
+      this.triggerStoryTextTranslation(post.id, data.content, userId).catch((err: unknown) => {
+        log.error('triggerStoryTextTranslation failed', err instanceof Error ? err : new Error(String(err)));
+      });
     }
 
     // Si story avec textObjects : remplir content comme index de recherche + déclencher traductions
@@ -194,7 +209,7 @@ export class PostService {
 
     if (textObjects?.length) {
       const searchContent = textObjects
-        .map((t) => t.content)
+        .map((t) => PostService.storyTextObjectText(t))
         .filter(Boolean)
         .join(' ');
 
@@ -205,7 +220,40 @@ export class PostService {
         });
       }
 
-      this.triggerStoryTextObjectTranslation(post.id, textObjects);
+      this.triggerStoryTextObjectTranslation(post.id, textObjects, userId).catch((err: unknown) => {
+        log.error('triggerStoryTextObjectTranslation failed', err instanceof Error ? err : new Error(String(err)));
+      });
+    }
+
+    // Tracking des URLs brutes du post/story : mapping `url → token` rangé dans
+    // `metadata.trackingLinks`. Même mécanisme que les messages — le client rend
+    // le lien (texte + façade vidéo) vers `/l/<token>` SANS réécrire le contenu
+    // (aperçu vidéo + URL lisible préservés). Le texte effectif est le corps du
+    // post, le texte de la story (`content`) ou l'index de recherche des
+    // textObjects. JAMAIS bloquant : le helper avale ses erreurs (→ []) et
+    // l'écriture metadata est gardée.
+    const trackingContent =
+      data.content
+      ?? (textObjects?.length
+        ? textObjects.map((t) => PostService.storyTextObjectText(t)).filter(Boolean).join(' ')
+        : undefined);
+    if (trackingContent) {
+      try {
+        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
+          content: trackingContent,
+          createdBy: userId,
+          postId: post.id,
+        });
+        if (trackingLinks.length > 0) {
+          const existingMetadata = (post.metadata as Record<string, unknown> | null) ?? {};
+          await this.prisma.post.update({
+            where: { id: post.id },
+            data: { metadata: { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue },
+          });
+        }
+      } catch (err) {
+        log.warn('createPost: tracking link persistence failed', { postId: post.id, err });
+      }
     }
 
     // Refetch pour inclure transcription et translations après toutes les opérations media
@@ -218,21 +266,19 @@ export class PostService {
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
     try {
-      // 1. Résoudre les langues cibles depuis les contacts de l'auteur
-      const contacts = await this.prisma.participant.findMany({
-        where: {
-          conversation: { participants: { some: { userId: authorId } } },
-          userId: { not: authorId },
-        },
-        include: { user: { select: { systemLanguage: true } } },
-        take: 100,
-      });
+      // An explicit source (e.g. the language chosen when editing a post) wins
+      // over the heuristic detector, which only guesses from word patterns.
+      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
 
-      const targetLanguages: string[] = [...new Set(
-        contacts
-          .map((c) => c.user?.systemLanguage ?? undefined)
-          .filter((l): l is string => !!l && l !== 'en')
-      )].slice(0, 10);
+      // 1. Résoudre les langues cibles depuis les contacts de l'auteur, hors
+      // la langue source elle-même — même garde que le sibling
+      // `triggerStoryTextObjectTranslation`. Sans elle, un auteur écrivant
+      // dans une langue déjà parlée par (une partie de) son audience
+      // déclenche un aller-retour NLLB source→source qui réécrit
+      // `translations.<source>` avec une paraphrase de l'original au lieu de
+      // le laisser intact.
+      const allTargetLanguages = await this.resolveAudienceTargetLanguages(authorId);
+      const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
 
       if (targetLanguages.length === 0) {
         log.info('StoryTranslation: no target languages', { postId });
@@ -247,9 +293,6 @@ export class PostService {
       }
 
       const storyMessageId = `story:${postId}`;
-      // An explicit source (e.g. the language chosen when editing a post) wins
-      // over the heuristic detector, which only guesses from word patterns.
-      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
 
       log.info('StoryTranslation: sending ZMQ request', { postId, sourceLanguage, targetLanguages });
 
@@ -342,18 +385,25 @@ export class PostService {
     }
   }
 
-  private triggerStoryTextObjectTranslation(
+  private async triggerStoryTextObjectTranslation(
     postId: string,
-    textObjects: StoryTextObjectRaw[]
-  ): void {
+    textObjects: StoryTextObjectRaw[],
+    authorId: string
+  ): Promise<void> {
     // Envoie les textObjects au pipeline de traduction.
     // La persistence des résultats est gérée par le handler ZMQ Task 15
     // (story_text_object_translation_completed → storyEffects.textObjects[n].translations).
-    // TODO: query audience's actual languages (like triggerStoryTextTranslation does for message content)
-    const allTargetLanguages = this.getActiveTargetLanguages();
+    // G3 — langues RÉELLES de l'audience (mêmes règles que le pipeline
+    // `content` ci-dessus), plus la liste fixe de 10 langues : un auteur
+    // sans contact n'émet aucun job (le Prisme sert l'original au viewer).
+    const allTargetLanguages = await this.resolveAudienceTargetLanguages(authorId);
+    if (allTargetLanguages.length === 0) {
+      log.info('StoryTextObjectTranslation: no audience languages', { postId });
+      return;
+    }
 
     textObjects.forEach((obj, index) => {
-      const text = obj.content?.trim();
+      const text = PostService.storyTextObjectText(obj)?.trim();
       if (!text) return;
 
       const zmqClient = ZMQSingleton.getInstanceSync();
@@ -382,8 +432,40 @@ export class PostService {
     });
   }
 
-  private getActiveTargetLanguages(): string[] {
-    return ['en', 'fr', 'es', 'de', 'pt', 'ar', 'zh', 'ja', 'ko', 'ru'];
+  /** Résolution canonique du texte d'un overlay de story. Le composer iOS encode
+   *  désormais le texte sous `text` ; `content` est l'alias legacy pré-renommage
+   *  (encore accepté par le décodeur SDK et le transform web). On lit la clé
+   *  canonique d'abord, fallback sur la legacy — sans ça la gateway abandonnait
+   *  chaque overlay iOS de l'indexation de recherche, de l'extraction des liens
+   *  de tracking ET de la traduction (mêmes symptômes que le bug déjà corrigé
+   *  côté web dans `apps/web/lib/story-transforms.ts`). */
+  static storyTextObjectText(obj: { text?: unknown; content?: unknown }): string | undefined {
+    if (typeof obj.text === 'string') return obj.text;
+    if (typeof obj.content === 'string') return obj.content;
+    return undefined;
+  }
+
+  /** G3 — cœur PUR de la résolution d'audience (testable) : systemLanguage
+   *  des contacts, dédupliqués, hors 'en' (langue pivot), cap 10. */
+  static audienceLanguages(systemLanguages: Array<string | null | undefined>): string[] {
+    return [...new Set(
+      systemLanguages.filter((l): l is string => !!l && l !== 'en')
+    )].slice(0, 10);
+  }
+
+  /** G3 — langues cibles réelles de l'audience de `authorId` (participants de
+   *  conversations communes). Partagée par les pipelines `content`
+   *  (triggerStoryTextTranslation) et `textObjects`. */
+  private async resolveAudienceTargetLanguages(authorId: string): Promise<string[]> {
+    const contacts = await this.prisma.participant.findMany({
+      where: {
+        conversation: { participants: { some: { userId: authorId } } },
+        userId: { not: authorId },
+      },
+      include: { user: { select: { systemLanguage: true } } },
+      take: 100,
+    });
+    return PostService.audienceLanguages(contacts.map((c) => c.user?.systemLanguage));
   }
 
   /// Returns the post if and only if `viewerUserId` is allowed to see it,
@@ -402,37 +484,95 @@ export class PostService {
     });
     if (!post) return null;
 
-    const userReactions = viewerUserId
-      ? await this.prisma.postReaction.findMany({
-          where: { userId: viewerUserId, postId: post.id },
-          select: { postId: true, emoji: true },
-        })
-      : [];
+    // Anonymous read: no viewer-specific state to resolve.
+    if (!viewerUserId) {
+      return {
+        ...post,
+        currentUserReactions: [],
+        isLikedByMe: false,
+        isBookmarkedByMe: false,
+        isRepostedByMe: false,
+      };
+    }
+
+    // Personal-state enrichment, identical to PostFeedService so the post
+    // detail hydrates the SAME flags as the feed and the reel viewer
+    // (single source of truth). Without these, the detail always rendered
+    // « non liké / non bookmarké / non reposté » even when the post was
+    // liked, saved or reposted (absent field → SDK decodes `?? false`).
+    const [userReactions, viewerBookmark, viewerRepostCount] = await Promise.all([
+      this.prisma.postReaction.findMany({
+        where: { userId: viewerUserId, postId: post.id },
+        select: { postId: true, emoji: true },
+      }),
+      this.prisma.postBookmark.findFirst({
+        where: { userId: viewerUserId, postId: post.id },
+        select: { postId: true },
+      }),
+      // A repost is any non-deleted post authored by the viewer whose
+      // `repostOfId` points at this post — mirrors PostFeedService.
+      this.prisma.post.count({
+        where: { authorId: viewerUserId, repostOfId: post.id, deletedAt: NOT_DELETED },
+      }),
+    ]);
     const currentUserReactions = userReactions.map((r) => r.emoji);
 
-    // `isLikedByMe` aligné sur la table (comme le feed) : iOS lit
-    // `isLiked = isLikedByMe`. Sans ce champ, le détail de post affichait
-    // TOUJOURS « non liké » même après un like (champ absent → `?? false`).
-    return { ...post, currentUserReactions, isLikedByMe: currentUserReactions.length > 0 };
+    return {
+      ...post,
+      currentUserReactions,
+      isLikedByMe: currentUserReactions.length > 0,
+      isBookmarkedByMe: viewerBookmark !== null,
+      isRepostedByMe: viewerRepostCount > 0,
+    };
   }
 
   /// Builds the Prisma `where` fragment that enforces post visibility for a viewer.
-  /// Mirrors `PostFeedService.buildVisibilityFilter` so single-post fetches and feed
-  /// queries apply the same rules.
+  /// Mirrors `PostFeedService.buildVisibilityFilter` so single-post fetches, view
+  /// recording, and the feed apply the SAME audience rules.
   private async buildVisibilityFilter(viewerUserId?: string) {
     if (!viewerUserId) {
       return { visibility: PostVisibility.PUBLIC };
     }
-    const friendIds = await this.getFriendIdsForViewer(viewerUserId);
-    return {
-      OR: [
-        { authorId: viewerUserId },
-        { visibility: PostVisibility.PUBLIC },
-        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
-        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerUserId } } },
-        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerUserId } },
-      ],
-    };
+    const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
+      this.getFriendIdsForViewer(viewerUserId),
+      this.getDirectConversationContactIds(viewerUserId),
+      getCommunityCoMemberIds(this.prisma, viewerUserId),
+    ]);
+    // G5 — filtre canonique unique. Audience = friends ∪ contacts DM, ALIGNÉE sur
+    // `PostFeedService.buildVisibilityFilter` (résout la divergence story-sota §4).
+    // Sans cet alignement, un contact DM (non-ami strict) pouvait VOIR une story
+    // via son feed mais son `POST /view` était rejeté par ce filtre → aucun
+    // `PostView` créé, aucun `story:viewed` émis → l'auteur ne voyait jamais cette
+    // vue (ni en temps réel ni après relance). Cf. `recordView`.
+    const audienceIds = [...new Set([...friendIds, ...dmContactIds])];
+    return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds);
+  }
+
+  /// Contacts DM (autres membres actifs des conversations directes du viewer).
+  /// Miroir de `PostFeedService.getDirectConversationContactIds` (sans le cache
+  /// Redis : le seul appelant chaud est `recordView`, une fois par vue). Fait
+  /// partie de l'audience FRIENDS/EXCEPT pour matcher exactement le feed.
+  private async getDirectConversationContactIds(userId: string): Promise<string[]> {
+    try {
+      const myMemberships = await this.prisma.participant.findMany({
+        where: { userId, isActive: true, conversation: { type: 'direct' } },
+        select: { conversationId: true },
+      });
+      const conversationIds = myMemberships.map((m) => m.conversationId);
+      if (conversationIds.length === 0) return [];
+
+      const otherMembers = await this.prisma.participant.findMany({
+        where: {
+          conversationId: { in: conversationIds },
+          userId: { not: userId },
+          isActive: true,
+        },
+        select: { userId: true },
+      });
+      return [...new Set(otherMembers.map((m) => m.userId).filter(Boolean) as string[])];
+    } catch {
+      return [];
+    }
   }
 
   private async getFriendIdsForViewer(userId: string): Promise<string[]> {
@@ -544,7 +684,9 @@ export class PostService {
     if (languageChanged) {
       const content = data.content ?? post.content;
       if (content) {
-        this.triggerStoryTextTranslation(postId, content, userId, requestedLanguage).catch(() => {});
+        this.triggerStoryTextTranslation(postId, content, userId, requestedLanguage).catch((err: unknown) => {
+          log.error('triggerStoryTextTranslation failed on update', err instanceof Error ? err : new Error(String(err)));
+        });
       }
     }
 
@@ -680,37 +822,53 @@ export class PostService {
       await this.prisma.postBookmark.create({ data: { postId, userId } });
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
-        return { success: true }; // already bookmarked — idempotent no-op
+        // Already bookmarked — idempotent no-op. Return the unchanged absolute
+        // count so the broadcast stays authoritative.
+        return { success: true, bookmarkCount: (post as { bookmarkCount?: number }).bookmarkCount ?? 0 };
       }
       throw err;
     }
 
-    await this.prisma.post.update({
+    // `update` returns the post AFTER the increment → the absolute bookmarkCount
+    // that `post:bookmarked` carries so feed / reel / detail reconcile without
+    // a reload (mirrors the canonical likeCount on `post:liked`).
+    const updated = await this.prisma.post.update({
       where: { id: postId },
       data: { bookmarkCount: { increment: 1 } },
+      select: { bookmarkCount: true },
     });
 
-    return { success: true };
+    return { success: true, bookmarkCount: updated.bookmarkCount };
   }
 
   async unbookmarkPost(postId: string, userId: string) {
+    let existed = true;
     try {
       await this.prisma.postBookmark.delete({
         where: { postId_userId: { postId, userId } },
       });
     } catch {
-      // Not bookmarked — nothing to decrement.
-      return { success: true };
+      // Not bookmarked — nothing to decrement, but still surface the count.
+      existed = false;
     }
 
-    // Guarded decrement: only when the counter is still > 0, so a drifted /
-    // already-zero counter can never go negative.
-    await this.prisma.post.updateMany({
-      where: { id: postId, bookmarkCount: { gt: 0 } },
-      data: { bookmarkCount: { decrement: 1 } },
+    if (existed) {
+      // Guarded decrement: only when the counter is still > 0, so a drifted /
+      // already-zero counter can never go negative.
+      await this.prisma.post.updateMany({
+        where: { id: postId, bookmarkCount: { gt: 0 } },
+        data: { bookmarkCount: { decrement: 1 } },
+      });
+    }
+
+    // Read-after-write the absolute count for the broadcast (the guarded
+    // updateMany returns a batch count, not the new value).
+    const fresh = await this.prisma.post.findFirst({
+      where: { id: postId },
+      select: { bookmarkCount: true },
     });
 
-    return { success: true };
+    return { success: true, bookmarkCount: fresh?.bookmarkCount ?? 0 };
   }
 
   /**
@@ -864,10 +1022,17 @@ export class PostService {
 
       if (existing) {
         if (safeDuration !== undefined) {
-          await this.prisma.postView.update({
-            where: { id: existing.id },
-            data: { duration: safeDuration },
-          });
+          // Le PostView est un singleton (postId,userId) : `duration` est le
+          // signal watch-time du moteur reco/monétisation (cf. PostFeedService).
+          // Une ré-ouverture plus courte (retap + swipe immédiat) ne doit JAMAIS
+          // rétrograder la plus longue durée déjà observée — on conserve le max.
+          const nextDuration = Math.max(existing.duration ?? 0, safeDuration);
+          if (nextDuration !== existing.duration) {
+            await this.prisma.postView.update({
+              where: { id: existing.id },
+              data: { duration: nextDuration },
+            });
+          }
         }
         return false;
       }
@@ -882,8 +1047,21 @@ export class PostService {
       });
 
       return true;
-    } catch {
-      // Ignore race conditions
+    } catch (error) {
+      // P7-2 — course double-submit : l'index unique (postId,userId) fait
+      // lever P2002 sur le create concurrent. Dédup ATTENDUE → no-op
+      // silencieux ; les compteurs restent exacts (l'incrément n'a pas été
+      // atteint). Pattern miroir de recordAnonymousOpen ci-dessous.
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+        return false;
+      }
+      // Toute AUTRE erreur (Mongo injoignable, validation) était avalée en
+      // silence par l'ancien `catch {}` — loggée désormais pour ne pas
+      // masquer une vraie panne sur ce chemin (initiative 6cd1a3c47).
+      log.warn('recordView failed', {
+        postId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return false;
     }
   }
@@ -1134,12 +1312,16 @@ export class PostService {
   async getPostInteractions(postId: string, userId: string, limit: number = 50, offset: number = 0) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      select: { id: true, authorId: true, reactions: true },
+      select: { id: true, authorId: true },
     });
     if (!post) return null;
     if (post.authorId !== userId) throw new Error('FORBIDDEN');
 
-    const [views, total] = await Promise.all([
+    // Réactions dérivées de la table `PostReaction` (SSOT) — PAS du JSON legacy
+    // `post.reactions`, jamais mis à jour par le chemin socket (voir
+    // PostFeedService.enrichWithLikeStatus). Une réaction posée via
+    // `post:reaction-add` s'affichait sinon `reaction: null` pour l'auteur.
+    const [views, total, reactionRows] = await Promise.all([
       this.prisma.postView.findMany({
         where: { postId },
         include: { user: { select: authorSelect } },
@@ -1148,11 +1330,14 @@ export class PostService {
         skip: offset,
       }),
       this.prisma.postView.count({ where: { postId } }),
+      this.prisma.postReaction.findMany({
+        where: { postId },
+        select: { userId: true, emoji: true },
+      }),
     ]);
 
-    const reactions = (post.reactions as any[] | null) ?? [];
     const reactionByUser = new Map<string, string>();
-    for (const r of reactions) {
+    for (const r of reactionRows) {
       reactionByUser.set(r.userId, r.emoji);
     }
 
@@ -1205,7 +1390,16 @@ export class PostService {
 
     const expiresAt = computeExpiresAt(targetType);
 
-    const isStoryToPostRepost = original.type === PostType.STORY && targetType === PostType.POST;
+    // Snapshot the source's intrinsic content into the repost whenever the
+    // SOURCE is EPHEMERAL (STORY = 21h, STATUS = 1h). The original can expire
+    // and be deleted, so a repost that merely referenced it via `repostOfId`
+    // would render EMPTY once the source is gone — the exact "status/story
+    // vide" bug. Duplicating media + audio and copying storyEffects / moodEmoji
+    // / content makes every ephemeral repost self-contained. This is the same
+    // guarantee the story→POST path always relied on, now generalized to
+    // story→story, status→status, status→post, etc.
+    const isEphemeralSourceRepost =
+      original.type === PostType.STORY || original.type === PostType.STATUS;
 
     type SnapshotMediaCreate = {
       fileName: string;
@@ -1222,7 +1416,7 @@ export class PostService {
     let snapshotAudioUrl: string | undefined;
     let snapshotStoryEffects: Prisma.InputJsonValue | undefined;
 
-    if (isStoryToPostRepost) {
+    if (isEphemeralSourceRepost) {
       const duplicatedMedia: SnapshotMediaCreate[] = [];
       let duplicatedAudioUrl: string | undefined;
       // Outbox row IDs to release once the surrounding transaction commits.
@@ -1248,6 +1442,7 @@ export class PostService {
 
       try {
         const originalMedia = (original.media ?? []) as Array<{
+          id: string;
           fileUrl: string;
           mimeType: string;
           thumbnailUrl?: string | null;
@@ -1283,16 +1478,29 @@ export class PostService {
         snapshotMedia = duplicatedMedia;
         snapshotStoryEffects = original.storyEffects as Prisma.InputJsonValue | undefined;
 
+        // STATUS carries its text in `content` (the mood caption); STORY carries
+        // its text inside `storyEffects` (rendered on the canvas). Inherit the
+        // source body/language only for STATUS reshares with no overriding quote
+        // — otherwise a story's caption would be duplicated into the post body.
+        const inheritStatusBody = original.type === PostType.STATUS && !content;
+        const snapshotContent = content
+          ?? (inheritStatusBody ? ((original.content as string | null | undefined) ?? undefined) : undefined);
+        const snapshotOriginalLanguage = content
+          ? originalLanguage
+          : (inheritStatusBody ? ((original.originalLanguage as string | null | undefined) ?? undefined) : originalLanguage);
+        const sourceMoodEmoji = (original.moodEmoji as string | null | undefined) ?? undefined;
+
         const repost = await this.prisma.post.create({
           data: {
             authorId: userId,
             type: targetType,
             visibility: original.visibility,
-            content: content ?? undefined,
-            originalLanguage,
+            content: snapshotContent ?? undefined,
+            originalLanguage: snapshotOriginalLanguage,
             repostOfId: postId,
             originalRepostOfId,
             isQuote,
+            ...(sourceMoodEmoji !== undefined ? { moodEmoji: sourceMoodEmoji } : {}),
             ...(expiresAt !== undefined ? { expiresAt } : {}),
             ...(snapshotAudioUrl !== undefined ? { audioUrl: snapshotAudioUrl } : {}),
             ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
@@ -1300,6 +1508,44 @@ export class PostService {
           },
           include: postInclude,
         });
+
+        // The media just duplicated above got fresh `PostMedia` ids — but
+        // `snapshotStoryEffects` was copied verbatim and still references the
+        // SOURCE's media ids. Left as-is, a repost of a repost would carry
+        // forward ids from however many hops back the chain started, and the
+        // reader's plain `postMediaId` lookup (scoped to the post's own
+        // `media[]`) would never find them — the exact "contenu non affiché"
+        // bug. Rewrite them here so every repost is self-contained regardless
+        // of chain depth.
+        let finalRepost = repost;
+        if (snapshotStoryEffects !== undefined) {
+          const repostMedia = repost.media ?? [];
+          const idMap: Record<string, string> = {};
+          originalMedia.forEach((om, idx) => {
+            const newMedia = repostMedia[idx];
+            if (newMedia) {
+              idMap[om.id] = newMedia.id;
+            }
+          });
+
+          const remapped = remapStoryEffectsMediaIds(snapshotStoryEffects, idMap);
+          if (remapped.changed) {
+            try {
+              await this.prisma.post.update({
+                where: { id: repost.id },
+                data: { storyEffects: remapped.effects },
+              });
+              // Cast: `remapped.effects` is `Prisma.InputJsonValue` (write-side
+              // JSON type); `repost.storyEffects` is Prisma's read-side JSON
+              // output type. They're structurally the same data, but Prisma
+              // generates them as separate, not-mutually-assignable aliases —
+              // this cast bridges that without widening to `any`.
+              finalRepost = { ...repost, storyEffects: remapped.effects as typeof repost.storyEffects };
+            } catch (err) {
+              log.warn('repostPost: failed to correct storyEffects media ids', { repostId: repost.id, err });
+            }
+          }
+        }
 
         await this.prisma.post.update({
           where: { id: postId },
@@ -1316,7 +1562,7 @@ export class PostService {
           await this.orphanCleanup.untrackBatch(orphanRowIds);
         }
 
-        return repost;
+        return finalRepost;
       } catch (err) {
         // Inline (best-effort) compensation. Same as before — fast-path
         // cleanup. The outbox rows stay registered, so the worker provides

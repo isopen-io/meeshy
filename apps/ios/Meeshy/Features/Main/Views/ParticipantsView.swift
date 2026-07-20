@@ -72,7 +72,7 @@ struct ParticipantsView: View {
                         memberList
                         leaveGroupButton
                     }
-                    .padding(.bottom, 40)
+                    .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.sm)
                 }
             }
             .navigationTitle(String(localized: "participants.title", defaultValue: "Membres", bundle: .main))
@@ -84,7 +84,7 @@ struct ParticipantsView: View {
                         dismiss()
                     } label: {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                     }
                     .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
@@ -98,9 +98,9 @@ struct ParticipantsView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 12, weight: .bold))
+                                    .font(MeeshyFont.relative(12, weight: .bold))
                                 Text(String(localized: "participants.add", defaultValue: "Ajouter", bundle: .main))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(MeeshyFont.relative(13, weight: .semibold))
                             }
                             .foregroundColor(accent)
                         }
@@ -154,6 +154,7 @@ struct ParticipantsView: View {
                     Task { await loadParticipants() }
                 }
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
             .alert(String(localized: "participants.remove.title", defaultValue: "Retirer ce membre ?", bundle: .main), isPresented: Binding(
                 get: { confirmRemoveUserId != nil },
@@ -210,20 +211,21 @@ struct ParticipantsView: View {
     // MARK: - Member Count Header
 
     private var memberCountHeader: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "person.2.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
 
             Text("\(participants.count) \(participants.count > 1 ? String(localized: "participants.members_plural", defaultValue: "membres", bundle: .main) : String(localized: "participants.members_singular", defaultValue: "membre", bundle: .main))")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Member List
@@ -231,12 +233,12 @@ struct ParticipantsView: View {
     @ViewBuilder
     private var memberList: some View {
         if isLoading {
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 ForEach(0..<4, id: \.self) { _ in
                     skeletonRow
                 }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
         } else if participants.isEmpty {
             emptyState
         } else {
@@ -279,7 +281,7 @@ struct ParticipantsView: View {
         let isCurrentUser = participant.id == currentUserId
         let presence = presenceManager.presenceState(for: participant.id)
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: participant.name,
                 context: .userListItem,
@@ -293,7 +295,7 @@ struct ParticipantsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(isCurrentUser ? "\(participant.name) (\(String(localized: "participants.you", defaultValue: "vous", bundle: .main)))" : participant.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
@@ -306,7 +308,7 @@ struct ParticipantsView: View {
 
                 if let username = participant.username {
                     Text("@\(username)")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 }
@@ -317,24 +319,26 @@ struct ParticipantsView: View {
             if let joinedAt = participant.joinedAt {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(String(localized: "participants.since", defaultValue: "Depuis", bundle: .main))
-                        .font(.system(size: 9, weight: .medium))
+                        .font(MeeshyFont.relative(9, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     Text(shortDate(joinedAt))
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.sm + 2)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(participantAccessibilityLabel(participant, isCurrentUser: isCurrentUser, presence: presence))
     }
 
     // MARK: - Role Badge
 
     private func roleBadge(_ role: String) -> some View {
         Text(roleDisplayLabel(role))
-            .font(.system(size: 9, weight: .bold))
+            .font(MeeshyFont.relative(9, weight: .bold))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -421,22 +425,22 @@ struct ParticipantsView: View {
             HapticFeedback.medium()
             confirmLeave = true
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                 Text(String(localized: "participants.leave_group", defaultValue: "Quitter le groupe", bundle: .main))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.md + 2)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
             )
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 24)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.xxl)
         .accessibilityLabel(String(localized: "participants.leave_group", defaultValue: "Quitter le groupe", bundle: .main))
     }
 
@@ -487,6 +491,48 @@ struct ParticipantsView: View {
 
     // MARK: - Display Helpers
 
+    private func participantAccessibilityLabel(
+        _ participant: PaginatedParticipant,
+        isCurrentUser: Bool,
+        presence: PresenceState
+    ) -> String {
+        var parts: [String] = []
+
+        parts.append(isCurrentUser
+            ? "\(participant.name) (\(String(localized: "participants.you", defaultValue: "vous", bundle: .main)))"
+            : participant.name)
+
+        if let role = participant.conversationRole,
+           let memberRole = MemberRole(rawValue: role.lowercased()),
+           memberRole != .member {
+            parts.append(roleDisplayLabel(role))
+        }
+
+        if let presenceLabel = presenceAccessibilityLabel(presence) {
+            parts.append(presenceLabel)
+        }
+
+        if let username = participant.username {
+            parts.append("@\(username)")
+        }
+
+        if let joinedAt = participant.joinedAt {
+            let since = String(localized: "participants.since", defaultValue: "Depuis", bundle: .main)
+            parts.append("\(since) \(shortDate(joinedAt))")
+        }
+
+        return parts.joined(separator: ", ")
+    }
+
+    // Présence annoncée seulement quand un dot est visible (online/recent/away).
+    // `offline` reste muet — parité avec le visuel (offline = pas de dot).
+    private func presenceAccessibilityLabel(_ presence: PresenceState) -> String? {
+        switch presence {
+        case .online, .recent, .away: return presence.localizedLabel
+        case .offline: return nil
+        }
+    }
+
     private func roleDisplayLabel(_ role: String) -> String {
         let memberRole = MemberRole(rawValue: role.lowercased()) ?? .member
         return memberRole.displayName
@@ -501,29 +547,12 @@ struct ParticipantsView: View {
         }
     }
 
-    private static let shortDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM"
-        return formatter
-    }()
-
-    private static let shortDateYearFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM yy"
-        return formatter
-    }()
-
     private func relativeTime(from date: Date) -> String {
-        RelativeTimeFormatter.longString(for: date)
+        date.formatted(.relative(presentation: .numeric))
     }
 
     private func shortDate(_ date: Date) -> String {
-        let isSameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
-        return isSameYear
-            ? Self.shortDateFormatter.string(from: date)
-            : Self.shortDateYearFormatter.string(from: date)
+        date.formatted(.dateTime.day().month(.abbreviated).year(.twoDigits))
     }
 
     // MARK: - API Calls

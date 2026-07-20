@@ -18,6 +18,11 @@ const SERVER_EVENTS_MOCK = {
   MESSAGE_CONSUMED: 'message:consumed',
   SYSTEM_MESSAGE: 'system:message',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
+  MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
+  PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
+  LINK_MESSAGE_NEW: 'link:message:new',
+  MESSAGE_PINNED: 'message:pinned',
+  MESSAGE_UNPINNED: 'message:unpinned',
   MENTION_CREATED: 'mention:created',
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
@@ -54,6 +59,11 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_CONSUMED: 'message:consumed',
     SYSTEM_MESSAGE: 'system:message',
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
+    MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
+    PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
+    LINK_MESSAGE_NEW: 'link:message:new',
+    MESSAGE_PINNED: 'message:pinned',
+    MESSAGE_UNPINNED: 'message:unpinned',
     MENTION_CREATED: 'mention:created',
     AUTHENTICATED: 'authenticated',
     ERROR: 'error',
@@ -705,6 +715,85 @@ describe('MessagingService', () => {
       });
     });
 
+    describe('message:attachment-updated', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessageAttachmentUpdated(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { conversationId: 'conv-1', messageId: 'msg-1', attachment: { id: 'att-1', mimeType: 'audio/mp4', transcription: 'Hello' } };
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_ATTACHMENT_UPDATED, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
+    describe('message:pending-delivered', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onPendingMessagesDelivered(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        socket._trigger(SERVER_EVENTS_MOCK.PENDING_MESSAGES_DELIVERED, { count: 3, conversationIds: ['c-1'] });
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith({ count: 3, conversationIds: ['c-1'] });
+      });
+    });
+
+    describe('message:pinned', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessagePinned(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { messageId: 'msg-1', conversationId: 'conv-1', pinnedBy: 'user-1', pinnedAt: new Date().toISOString() };
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_PINNED, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
+    describe('message:unpinned', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessageUnpinned(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { messageId: 'msg-1', conversationId: 'conv-1' };
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_UNPINNED, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
+    describe('link:message:new', () => {
+      it('forwards link message data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onLinkMessageNew(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { message: { id: 'link-msg-1', conversationId: 'conv-1', content: 'https://example.com', messageType: 'link' } };
+        socket._trigger(SERVER_EVENTS_MOCK.LINK_MESSAGE_NEW, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
     describe('mention:created', () => {
       it('calls mention listener', async () => {
         const svc = new MessagingService();
@@ -1092,7 +1181,7 @@ describe('MessagingService', () => {
       expect((payload as any).content).toBe('[Encrypted]');
     });
 
-    it('continues without encryption when encrypt throws', async () => {
+    it('aborts send when encrypt throws to prevent plaintext leak', async () => {
       const handlers = makeEncryptionHandlers({
         getConversationMode: jest.fn().mockResolvedValue('aes-256-gcm'),
         encrypt: jest.fn().mockRejectedValue(new Error('encrypt failed')),
@@ -1107,7 +1196,8 @@ describe('MessagingService', () => {
       });
 
       const result = await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions());
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
+      expect(socket.emit).not.toHaveBeenCalled();
     });
 
     it('skips encryption when mode is null', async () => {
@@ -1631,6 +1721,66 @@ describe('MessagingService', () => {
       expect(attachListeners.size).toBe(1);
       unsub();
       expect(attachListeners.size).toBe(0);
+    });
+  });
+
+  describe('onMessageAttachmentUpdated', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onMessageAttachmentUpdated(listener);
+      const listenerSet = (svc as any).messageAttachmentUpdatedListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onPendingMessagesDelivered', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onPendingMessagesDelivered(listener);
+      const listenerSet = (svc as any).pendingDeliveredListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onLinkMessageNew', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onLinkMessageNew(listener);
+      const listenerSet = (svc as any).linkMessageNewListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onMessagePinned', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onMessagePinned(listener);
+      const listenerSet = (svc as any).messagePinnedListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onMessageUnpinned', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onMessageUnpinned(listener);
+      const listenerSet = (svc as any).messageUnpinnedListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
     });
   });
 

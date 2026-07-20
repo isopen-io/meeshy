@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
+import { useFocusTrap } from '@/hooks/use-accessibility';
 import { Input } from './Input';
 import { TagInput, TagItem } from './TagInput';
 import { Label } from './Label';
@@ -78,6 +79,10 @@ export function ConversationDrawer({
   const { t: tConv } = useI18n('conversations');
   const [localName, setLocalName] = useState(conversationName);
   const [mounted, setMounted] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Trap Tab focus inside the drawer while open and restore it on close.
+  useFocusTrap(panelRef, isOpen);
 
   useEffect(() => {
     if (isOpen) {
@@ -88,6 +93,16 @@ export function ConversationDrawer({
       return () => clearTimeout(timer);
     }
   }, [isOpen, conversationName]);
+
+  // Standard dismiss gesture: close the drawer on Escape while it is open.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
 
   // Ne rien rendre si le composant n'est pas monté
   // Cela évite les overlays fantômes qui bloquent les interactions
@@ -111,6 +126,11 @@ export function ConversationDrawer({
 
       {/* Drawer */}
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="conversation-drawer-title"
+        inert={!isOpen}
         className={`
           fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] z-50
           flex flex-col overflow-hidden
@@ -125,6 +145,7 @@ export function ConversationDrawer({
           className="flex items-center justify-between p-4 border-b border-[var(--gp-border)] transition-colors duration-300"
         >
           <h2
+            id="conversation-drawer-title"
             className="text-lg font-semibold text-[var(--gp-text-primary)] transition-colors duration-300"
             style={{ fontFamily: 'var(--font-display, inherit)' }}
           >

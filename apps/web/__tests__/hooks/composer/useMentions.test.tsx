@@ -679,5 +679,81 @@ describe('useMentions', () => {
       expect(result.current.showMentionAutocomplete).toBe(true);
       expect(result.current.mentionQuery).toBe('john_doe_123');
     });
+
+    it('should keep autocomplete open after a hyphen in the username', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('@marie-', 7);
+
+      act(() => {
+        result.current.handleTextChange('@marie-', 7, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(true);
+      expect(result.current.mentionQuery).toBe('marie-');
+    });
+
+    it('should handle hyphenated usernames', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('@marie-claire', 13);
+
+      act(() => {
+        result.current.handleTextChange('@marie-claire', 13, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(true);
+      expect(result.current.mentionQuery).toBe('marie-claire');
+    });
+
+    it('should not show autocomplete for the @ inside an email address', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('contact@ali', 11);
+
+      act(() => {
+        result.current.handleTextChange('contact@ali', 11, textarea);
+      });
+
+      // `@` glued to a preceding name char belongs to an email — not a mention.
+      // Same left boundary the SSOT (mention-parser) enforces on every mention path.
+      expect(result.current.showMentionAutocomplete).toBe(false);
+      expect(result.current.mentionQuery).toBe('');
+    });
+
+    it('should not show autocomplete when @ follows an accented name char', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('José@jo', 7);
+
+      act(() => {
+        result.current.handleTextChange('José@jo', 7, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(false);
+    });
+
+    it('should still show autocomplete for a mention after whitespace', () => {
+      const { result } = renderHook(() =>
+        useMentions({ conversationId: VALID_CONVERSATION_ID })
+      );
+
+      const textarea = createMockTextarea('contact@ali.com @jo', 19);
+
+      act(() => {
+        result.current.handleTextChange('contact@ali.com @jo', 19, textarea);
+      });
+
+      expect(result.current.showMentionAutocomplete).toBe(true);
+      expect(result.current.mentionQuery).toBe('jo');
+    });
   });
 });

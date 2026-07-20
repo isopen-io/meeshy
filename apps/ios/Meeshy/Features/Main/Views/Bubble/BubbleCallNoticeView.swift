@@ -2,31 +2,44 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Rich, actionable call-summary notice — replaces the plain centered capsule
+/// Compact, actionable call-summary notice — replaces the plain centered capsule
 /// (`BubbleSystemNoticeView`) for system messages that carry structured call
 /// metadata (`messageSource == .system` + `callSummary != nil`).
 ///
-/// State-of-the-art treatment (researched against iMessage/FaceTime, WhatsApp,
-/// Telegram, Signal):
-/// - **Double contour** + outcome-driven tint so it reads as distinct from a
-///   chat bubble (red = missed/declined, amber = interrupted, indigo = normal).
-/// - **Direction-aware glyph**: outgoing = `phone.arrow.up.right`, incoming =
-///   `phone.arrow.down.left`, missed/declined = `phone.down.fill` (red), video
-///   uses the camera family with the same semantics.
-/// - A "duration · data spent · network quality" detail line.
-/// - The whole card is a **call-back button** (FaceTime/WhatsApp redial),
-///   exposed as one combined VoiceOver element with an action hint.
+/// Design (2026-07, per product feedback):
+/// - **Single left glyph carries all meaning**: the media type (video / phone)
+///   plus a corner direction chip. Incoming arrow points **down** (`arrow.down.left`),
+///   outgoing points up (`arrow.up.right`) — the trailing call-back badge was
+///   removed so the bubble hugs its content instead of stretching wide.
+/// - **Title + metrics row** in the bubble body: the title ("Appel vidéo entrant")
+///   over a glyphed metrics line — clock glyph + duration · transfer glyph + data
+///   spent ("⏱ 00:49 · ⇅ ~9.3 MB"). Network quality still lives in the detail sheet.
+/// - **Call time bottom-right** like every other chat bubble ("18:41"), so the
+///   metrics carry the "how much" and the corner carries the "when".
+/// - **Long-press → detail sheet** (`CallSummaryDetailSheet`) surfaces the full
+///   record: type, precise timestamp, duration, data, network quality (histogram
+///   later) and a one-tap call-back.
+/// - **Tap = quick call-back** (FaceTime/WhatsApp redial), re-using the same media.
 ///
-/// Stateless leaf: all inputs are primitives / pre-resolved values (direction is
-/// resolved per-viewer at build time). The call-back closure is excluded from
-/// equality — it never affects the rendering.
+/// Stateless leaf apart from its own sheet-presentation `@State`: all rendering
+/// inputs are primitives / pre-resolved values (direction resolved per-viewer at
+/// build time). The call-back closure is excluded from equality.
 struct BubbleCallNoticeView: View, Equatable {
     let notice: BubbleContent.CallNotice
+    /// Conversation accent (hex) — mirrors `BubbleQuotedReply.accentHex`. Per
+    /// `apps/ios/CLAUDE.md` "Conversation Accent Color": ALL conversation-context
+    /// components must use the conversation's accent, never a hardcoded brand color.
+    let accentHex: String
     let isDark: Bool
     var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
+    var onLongPress: (() -> Void)? = nil
+
+    /// Drives the live-call pulsing dot (SwiftUI repeatForever — no per-cell
+    /// Timer). Pure presentation state, excluded from Equatable by nature.
+    @State private var livePulse = false
 
     static func == (lhs: BubbleCallNoticeView, rhs: BubbleCallNoticeView) -> Bool {
-        lhs.notice == rhs.notice && lhs.isDark == rhs.isDark
+        lhs.notice == rhs.notice && lhs.accentHex == rhs.accentHex && lhs.isDark == rhs.isDark
     }
 
     private var summary: CallSummaryMetadata { notice.summary }
@@ -35,8 +48,7 @@ struct BubbleCallNoticeView: View, Equatable {
     var body: some View {
         // Aligned like a chat bubble (WhatsApp call-log treatment): outgoing
         // calls hug the trailing edge, incoming/missed/declined hug the leading
-        // edge. The side itself encodes the direction, so the detail line below
-        // no longer repeats "Sortant"/"Entrant" — only stats remain.
+        // edge. The side + the glyph's direction chip encode the direction.
         HStack(spacing: 0) {
             if isOutgoing { Spacer(minLength: 48) }
             Button {
@@ -45,10 +57,28 @@ struct BubbleCallNoticeView: View, Equatable {
                 card
             }
             .buttonStyle(.plain)
+            // `.highPriorityGesture` (not `.simultaneousGesture`) so a held
+            // press that recognizes the long-press pre-empts the Button's own
+            // tap recognition — otherwise both fired on finger-lift and a
+            // long-press-to-view-details also silently placed a call-back
+            // (pocket-dial bug, found in audit 2026-07-03). A quick tap still
+            // falls through to the Button action since the long-press gesture
+            // fails to recognize before `minimumDuration` elapses.
+            .highPriorityGesture(
+                LongPressGesture(minimumDuration: 0.35).onEnded { _ in
+                    HapticFeedback.medium()
+                    onLongPress?()
+                }
+            )
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityLabel)
-            .accessibilityHint(Text(String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
+            .accessibilityHint(Text(presentation.isLive
+                ? String(localized: "bubble.call.join.a11y.hint", defaultValue: "Double-tapez pour rejoindre l'appel", bundle: .main)
+                : String(localized: "bubble.call.callback.hint", defaultValue: "Double-tapez pour rappeler", bundle: .main)))
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction(named: Text(String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main))) {
+                onLongPress?()
+            }
             if !isOutgoing { Spacer(minLength: 48) }
         }
         .padding(.horizontal, 16)
@@ -56,166 +86,143 @@ struct BubbleCallNoticeView: View, Equatable {
     }
 
     private var card: some View {
-        HStack(spacing: 11) {
-            leadingGlyph
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(ThemeManager.shared.textPrimary)
-                    .lineLimit(2)
-                if hasDetailContent {
-                    detailLine
+        VStack(alignment: .trailing, spacing: 3) {
+            HStack(spacing: 11) {
+                leadingGlyph
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundColor(ThemeManager.shared.textPrimary)
+                        .lineLimit(1)
+                    if let liveSubtitle = presentation.liveSubtitle {
+                        liveRow(subtitle: liveSubtitle)
+                    } else {
+                        metricsRow
+                    }
                 }
             }
-            Spacer(minLength: 8)
-            callBackBadge
+            Text(notice.timeString)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize - 1, weight: .medium))
+                .foregroundColor(ThemeManager.shared.textMuted)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 13)
-        .padding(.vertical, 10)
+        .padding(.vertical, 9)
         .frame(minHeight: 44)
-        .background(doubleContour)
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(simpleContour)
+        .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
     }
 
-    // MARK: - Leading direction/media glyph
+    // MARK: - Metrics row (glyphed duration + data spent)
 
+    /// Duration and data spent, each led by its glyph — clock for duration,
+    /// up/down arrows for the data transferred — separated by a middot. Absent
+    /// entirely when neither exists (missed / rejected / zero-length calls), so
+    /// those bubbles collapse to just the title. Mirrors the detail sheet's
+    /// `clock` / `arrow.up.arrow.down` glyphs for cross-surface consistency.
+    @ViewBuilder private var metricsRow: some View {
+        let duration = durationLabel
+        let data = summary.dataSpentLabel
+        if duration != nil || data != nil {
+            HStack(spacing: 5) {
+                if let duration { metric(icon: "clock", text: duration) }
+                if duration != nil, data != nil {
+                    Text("·")
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                        .foregroundColor(ThemeManager.shared.textMuted)
+                }
+                if let data { metric(icon: "arrow.up.arrow.down", text: data) }
+            }
+        }
+    }
+
+    /// Live-call sub-row: pulsing accent dot + "Toucher pour rejoindre".
+    /// Replaces the metrics row while the call is ongoing (no duration, no
+    /// data — those only exist once the call is terminal).
+    private func liveRow(subtitle: String) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
+                .opacity(livePulse ? 0.3 : 1)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: livePulse)
+                .onAppear { livePulse = true }
+                .accessibilityHidden(true)
+            Text(subtitle)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .foregroundColor(tint)
+                .lineLimit(1)
+        }
+    }
+
+    private func metric(icon: String, text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(MeeshyFont.relative(11, weight: .semibold))
+            Text(text)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                .lineLimit(1)
+        }
+        .foregroundColor(ThemeManager.shared.textMuted)
+    }
+
+    // MARK: - Leading media + direction glyph
+
+    /// Media icon (video / phone) in a tinted disc, with a small corner chip that
+    /// encodes direction: incoming arrow points **down** (`arrow.down.left`),
+    /// outgoing points up. Both media types get the same direction treatment, so
+    /// a video call's direction is now as legible as an audio call's.
     private var leadingGlyph: some View {
         ZStack {
             Circle()
-                .fill(tint.opacity(isDark ? 0.20 : 0.14))
-                .frame(width: 34, height: 34)
-            Image(systemName: glyphName)
-                .font(.subheadline.weight(.semibold))
+                .fill(tint.opacity(isDark ? 0.14 : 0.09))
+                .frame(width: 36, height: 36)
+            Image(systemName: mediaGlyph)
+                .font(MeeshyFont.relative(15, weight: .semibold))
                 .foregroundColor(tint)
         }
+        .overlay(alignment: .bottomTrailing) { directionChip }
         .accessibilityHidden(true)
     }
 
-    // MARK: - Detail line (duration · data · quality)
-
-    /// True when at least one stat segment is present. Drives whether the
-    /// detail line is rendered at all — a missed/declined call with no duration,
-    /// data, or quality shows just its title (no empty stats row).
-    private var hasDetailContent: Bool {
-        durationLabel != nil
-            || summary.dataSpentLabel != nil
-            || summary.networkQuality != nil
-    }
-
-    /// Stats only — direction is conveyed by the bubble side + the leading
-    /// glyph + the title, so it is never repeated here.
-    private var detailLine: some View {
-        HStack(spacing: 5) {
-            if let duration = durationLabel {
-                Image(systemName: "clock")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-                Text(duration)
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-            }
-
-            if let data = summary.dataSpentLabel {
-                if durationLabel != nil { dot }
-                Image(systemName: "arrow.up.arrow.down")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-                Text(data)
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-            }
-
-            if let quality = summary.networkQuality {
-                if durationLabel != nil || summary.dataSpentLabel != nil { dot }
-                Circle()
-                    .fill(qualityColor(quality))
-                    .frame(width: 6, height: 6)
-                Text(qualityWord(quality))
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-            }
-        }
-        .lineLimit(1)
-    }
-
-    private var dot: some View {
-        Text("·")
-            .font(.caption.weight(.bold))
-            .foregroundColor(ThemeManager.shared.textMuted.opacity(0.6))
-    }
-
-    // MARK: - Call-back affordance
-
-    private var callBackBadge: some View {
+    private var directionChip: some View {
         ZStack {
             Circle()
-                .fill(tint.opacity(isDark ? 0.22 : 0.16))
-                .frame(width: 34, height: 34)
-            Image(systemName: "phone.arrow.up.right.fill")
-                .font(.footnote.weight(.semibold))
+                .fill(ThemeManager.shared.backgroundPrimary)
+                .frame(width: 16, height: 16)
+            Image(systemName: directionGlyph)
+                .font(MeeshyFont.relative(8, weight: .black))
                 .foregroundColor(tint)
         }
-        .accessibilityHidden(true)
+        .offset(x: 3, y: 3)
     }
 
-    // MARK: - Double contour background
+    // MARK: - Simple contour background
 
-    private var doubleContour: some View {
+    private var simpleContour: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(tint.opacity(isDark ? 0.12 : 0.07))
-            // Outer stroke
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(tint.opacity(isDark ? 0.55 : 0.45), lineWidth: 1.5)
-            // Inner stroke, inset → the "double contour"
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(tint.opacity(isDark ? 0.28 : 0.22), lineWidth: 1)
-                .padding(3.5)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                .fill(tint.opacity(isDark ? 0.06 : 0.03))
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
+                .stroke(tint.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
         }
     }
 
     // MARK: - Derived visuals
 
-    private var tint: Color {
-        switch summary.outcome {
-        case .completed: return MeeshyColors.indigo500
-        case .missed, .rejected: return MeeshyColors.error
-        case .failed: return MeeshyColors.warning
-        }
+    private var presentation: CallNoticePresentation {
+        CallNoticePresentation(summary: summary, isOutgoing: isOutgoing, accentHex: accentHex)
     }
 
-    private var glyphName: String {
-        switch summary.outcome {
-        case .missed:
-            return summary.callType == .video ? "video.slash.fill" : "phone.down.fill"
-        case .rejected:
-            return "phone.down.fill"
-        case .failed:
-            return summary.callType == .video ? "video.slash.fill" : "phone.down.fill"
-        case .completed:
-            if summary.callType == .video { return "video.fill" }
-            return isOutgoing ? "phone.arrow.up.right.fill" : "phone.arrow.down.left.fill"
-        }
-    }
+    private var tint: Color { presentation.tint }
 
-    private var title: String {
-        switch summary.outcome {
-        case .completed:
-            return summary.callType == .video
-                ? String(localized: "bubble.call.video", defaultValue: "Appel vidéo", bundle: .main)
-                : String(localized: "bubble.call.audio", defaultValue: "Appel audio", bundle: .main)
-        case .missed:
-            return summary.callType == .video
-                ? String(localized: "bubble.call.video.missed", defaultValue: "Appel vidéo manqué", bundle: .main)
-                : String(localized: "bubble.call.audio.missed", defaultValue: "Appel audio manqué", bundle: .main)
-        case .rejected:
-            return String(localized: "bubble.call.rejected", defaultValue: "Appel refusé", bundle: .main)
-        case .failed:
-            return summary.callType == .video
-                ? String(localized: "bubble.call.video.failed", defaultValue: "Appel vidéo interrompu", bundle: .main)
-                : String(localized: "bubble.call.audio.failed", defaultValue: "Appel audio interrompu", bundle: .main)
-        }
-    }
+    /// Media type only — direction is carried by the corner chip.
+    private var mediaGlyph: String { presentation.mediaGlyph }
+
+    /// Direction arrow: incoming points down-left, outgoing points up-right.
+    private var directionGlyph: String { presentation.directionGlyph }
+
+    private var title: String { presentation.title }
 
     /// Duration chip only for connected calls that actually lasted.
     private var durationLabel: String? {
@@ -228,6 +235,388 @@ struct BubbleCallNoticeView: View, Equatable {
             ? String(localized: "bubble.call.outgoing", defaultValue: "Sortant", bundle: .main)
             : String(localized: "bubble.call.incoming", defaultValue: "Entrant", bundle: .main)
     }
+
+    // MARK: - Accessibility
+
+    private var accessibilityLabel: Text {
+        var parts: [String] = [title, directionWord, notice.timeString]
+        if let duration = durationLabel { parts.append(duration) }
+        if let data = summary.dataSpentLabel { parts.append(data) }
+        return Text(parts.joined(separator: ", "))
+    }
+}
+
+// MARK: - Shared presentation
+
+/// Shared presentation derivations for a call summary (tint, glyphs, title) — single
+/// source of truth so the compact bubble and its long-press detail sheet can never
+/// drift apart on how they describe the same call.
+///
+/// Internal (not private) for unit-testability — the live/cancelled matrix is
+/// asserted in `BubbleContentMatrixTests` without any new test file.
+struct CallNoticePresentation {
+    let summary: CallSummaryMetadata
+    let isOutgoing: Bool
+    /// Conversation accent (hex) — see `BubbleCallNoticeView.accentHex`.
+    let accentHex: String
+
+    /// Le kind se lit AVANT l'outcome : un message vivant porte un outcome
+    /// placeholder ('completed') qui ne doit jamais piloter le rendu.
+    var isLive: Bool { summary.isLive }
+
+    var tint: Color {
+        if isLive { return Color(hex: accentHex) }
+        switch summary.outcome {
+        case .completed: return Color(hex: accentHex)
+        case .missed, .rejected: return MeeshyColors.error
+        case .failed: return MeeshyColors.warning
+        }
+    }
+
+    /// Media type only — direction is carried by the corner chip.
+    var mediaGlyph: String {
+        summary.callType == .video ? "video.fill" : "phone.fill"
+    }
+
+    /// Direction arrow: incoming points down-left, outgoing points up-right.
+    var directionGlyph: String {
+        isOutgoing ? "arrow.up.right" : "arrow.down.left"
+    }
+
+    var title: String {
+        let isVideo = summary.callType == .video
+        if isLive {
+            return isVideo
+                ? String(localized: "bubble.call.video.ongoing", defaultValue: "Appel vidéo en cours", bundle: .main)
+                : String(localized: "bubble.call.audio.ongoing", defaultValue: "Appel audio en cours", bundle: .main)
+        }
+        if summary.isCancelled(viewerIsInitiator: isOutgoing) {
+            return String(localized: "bubble.call.cancelled", defaultValue: "Appel annulé", bundle: .main)
+        }
+        switch summary.outcome {
+        case .completed:
+            let type = isVideo
+                ? String(localized: "bubble.call.video", defaultValue: "Appel vidéo", bundle: .main)
+                : String(localized: "bubble.call.audio", defaultValue: "Appel audio", bundle: .main)
+            let direction = isOutgoing
+                ? String(localized: "bubble.call.outgoing.suffix", defaultValue: "sortant", bundle: .main)
+                : String(localized: "bubble.call.incoming.suffix", defaultValue: "entrant", bundle: .main)
+            return "\(type) \(direction)"
+        case .missed:
+            return isVideo
+                ? String(localized: "bubble.call.video.missed", defaultValue: "Appel vidéo manqué", bundle: .main)
+                : String(localized: "bubble.call.audio.missed", defaultValue: "Appel audio manqué", bundle: .main)
+        case .rejected:
+            return isOutgoing
+                ? String(localized: "bubble.call.rejected.sent", defaultValue: "Appel refusé", bundle: .main)
+                : String(localized: "bubble.call.rejected.received", defaultValue: "Appel rejeté", bundle: .main)
+        case .failed:
+            return isVideo
+                ? String(localized: "bubble.call.video.failed", defaultValue: "Appel vidéo interrompu", bundle: .main)
+                : String(localized: "bubble.call.audio.failed", defaultValue: "Appel audio interrompu", bundle: .main)
+        }
+    }
+
+    /// Sous-titre affiché à la place des métriques quand l'appel est EN COURS
+    /// (tap = rejoindre). `nil` pour tout état terminal.
+    var liveSubtitle: String? {
+        guard isLive else { return nil }
+        return String(localized: "bubble.call.join.hint", defaultValue: "Toucher pour rejoindre", bundle: .main)
+    }
+}
+
+// MARK: - Detail sheet
+
+/// Full record for a single call-summary notice, presented on long-press of the
+/// compact bubble: media type, precise timestamp, duration, data spent and
+/// network quality — plus a one-tap call-back. A precise quality histogram can
+/// slot into `qualitySection` later without touching the bubble.
+struct CallSummaryDetailSheet: View {
+    let summary: CallSummaryMetadata
+    let isOutgoing: Bool
+    /// Conversation accent (hex) — see `BubbleCallNoticeView.accentHex`.
+    let accentHex: String
+    let timestamp: Date
+    var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
+
+    @Environment(\.dismiss) private var dismiss
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    @State private var transcript: CallTranscript? = nil
+    @State private var showOriginalText = false
+    @State private var showDeleteConfirmation = false
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                header
+                if onCallBack != nil {
+                    callBackButton
+                }
+                details
+                if let transcript {
+                    transcriptSection(transcript)
+                }
+            }
+            .padding(20)
+            // iPad/Mac width cap — mirrors FloatingCallPillView's established
+            // 560pt ceiling: without it, `callBackButton`/`detailRow`'s Spacer()
+            // stretch edge-to-edge on a wide sheet instead of reading as a
+            // centered, compact record. Full width on iPhone (<560pt).
+            .frame(maxWidth: 560)
+            .frame(maxWidth: .infinity)
+        }
+        // Liquid Glass (iOS 26) : la conversation transparaît derrière la
+        // feuille au lieu d'un aplat opaque — même traitement que
+        // FeedCommentsSheet / MessageMoreSheet.
+        .adaptiveSheetGlassBackground()
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .task(id: summary.callId) {
+            transcript = await CallTranscriptStore.shared.transcript(for: summary.callId)
+        }
+    }
+
+    // MARK: - Transcript
+
+    private func transcriptSection(_ transcript: CallTranscript) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(String(localized: "calls.detail.transcript", defaultValue: "Transcription", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                Button {
+                    withAnimation { showOriginalText.toggle() }
+                } label: {
+                    Image(systemName: showOriginalText ? "character.bubble.fill" : "captions.bubble.fill")
+                        .foregroundColor(Color(hex: accentHex))
+                }
+                .accessibilityLabel(showOriginalText
+                    ? String(localized: "call.control.translation.showTranslated", defaultValue: "Afficher la traduction", bundle: .main)
+                    : String(localized: "call.control.translation.showOriginal", defaultValue: "Afficher le texte original", bundle: .main))
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                // id: \.offset, not \.capturedAt (recommended, plan review) — saveMerging's dedup
+                // key deliberately allows two segments to share a capturedAt (different
+                // speaker/text at the same instant), which would collide as a ForEach id.
+                ForEach(Array(transcript.segments.enumerated()), id: \.offset) { _, segment in
+                    transcriptRow(segment, callStartedAt: transcript.callStartedAt)
+                }
+            }
+            .padding(12)
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous), tint: tint.opacity(0.1))
+
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.caption2)
+                Text(String(localized: "call.transcript.disclaimer", defaultValue: "Transcription locale à cet appareil, jamais envoyée au serveur Meeshy — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main))
+                    .font(.caption2)
+            }
+            .foregroundColor(theme.textMuted)
+
+            Button(role: .destructive) {
+                showDeleteConfirmation = true
+            } label: {
+                Text(String(localized: "call.transcript.delete", defaultValue: "Supprimer ce transcript", bundle: .main))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+            }
+            .alert(String(localized: "call.transcript.delete.confirm.title", defaultValue: "Supprimer ce transcript ?", bundle: .main), isPresented: $showDeleteConfirmation) {
+                Button(String(localized: "call.transcript.delete", defaultValue: "Supprimer ce transcript", bundle: .main), role: .destructive) {
+                    Task {
+                        await CallTranscriptStore.shared.invalidate(for: transcript.callId)
+                        self.transcript = nil
+                    }
+                }
+                Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            } message: {
+                Text(String(localized: "call.transcript.delete.confirm.message", defaultValue: "Cette action est définitive.", bundle: .main))
+            }
+        }
+    }
+
+    private func transcriptRow(_ segment: CallTranscriptSegment, callStartedAt: Date) -> some View {
+        let elapsed = segment.capturedAt.timeIntervalSince(callStartedAt)
+        let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
+        let speakerColor = segment.isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
+        let displayText = segment.isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(segment.speakerName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(speakerColor)
+                Spacer()
+                Text(elapsedLabel)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundColor(theme.textMuted)
+            }
+            Text(displayText)
+                .font(.callout)
+                .foregroundColor(theme.textPrimary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(segment.speakerName), \(elapsedLabel) : \(displayText)")
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(tint.opacity(0.12))
+                    .frame(width: 64, height: 64)
+                Image(systemName: mediaGlyph)
+                    .font(MeeshyFont.relative(26, weight: .semibold))
+                    .foregroundColor(tint)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                ZStack {
+                    Circle().fill(theme.backgroundPrimary).frame(width: 26, height: 26)
+                    Image(systemName: directionGlyph)
+                        .font(MeeshyFont.relative(12, weight: .black))
+                        .foregroundColor(tint)
+                }
+                .offset(x: 4, y: 4)
+            }
+            Text(title)
+                .font(MeeshyFont.relative(20, weight: .bold))
+                .foregroundColor(theme.textPrimary)
+                .multilineTextAlignment(.center)
+            Text(timestamp.formatted(date: .abbreviated, time: .shortened))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundColor(theme.textMuted)
+        }
+        .padding(.top, 8)
+    }
+
+    // MARK: - Call back
+
+    private var callBackButton: some View {
+        Button {
+            onCallBack?(summary)
+            HapticFeedback.medium()
+            dismiss()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: mediaGlyph)
+                Text(callBackTitle).font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .adaptiveGlassProminent(in: Capsule(), tint: Color(hex: accentHex))
+        }
+        .accessibilityLabel(callBackTitle)
+    }
+
+    private var callBackTitle: String {
+        summary.callType == .video
+            ? String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main)
+            : String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main)
+    }
+
+    // MARK: - Details
+
+    private var details: some View {
+        VStack(spacing: 0) {
+            detailRow(
+                icon: mediaGlyph,
+                label: String(localized: "calls.detail.type", defaultValue: "Type", bundle: .main),
+                value: summary.callType == .video
+                    ? String(localized: "calls.type.video", defaultValue: "Appel vidéo", bundle: .main)
+                    : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
+            )
+            detailRow(
+                icon: "calendar",
+                label: String(localized: "calls.detail.date", defaultValue: "Date", bundle: .main),
+                value: timestamp.formatted(date: .abbreviated, time: .shortened)
+            )
+            if summary.outcome == .completed, summary.durationSeconds > 0 {
+                detailRow(
+                    icon: "clock",
+                    label: String(localized: "calls.detail.duration", defaultValue: "Durée", bundle: .main),
+                    value: summary.durationLabel
+                )
+            }
+            if let data = summary.dataSpentLabel {
+                detailRow(
+                    icon: "arrow.up.arrow.down",
+                    label: String(localized: "calls.detail.data", defaultValue: "Données", bundle: .main),
+                    value: data
+                )
+            }
+            if let quality = summary.networkQuality {
+                qualityRow(quality)
+            }
+        }
+        .padding(.vertical, 4)
+        .adaptiveGlass(
+            in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous),
+            tint: tint.opacity(0.14)
+        )
+    }
+
+    /// Network-quality row. A per-second quality histogram can render here later
+    /// (the metadata already exposes an ordered `NetworkQuality` scale).
+    private func qualityRow(_ quality: CallSummaryMetadata.NetworkQuality) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "waveform")
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                .foregroundColor(Color(hex: accentHex))
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            Text(String(localized: "calls.detail.quality", defaultValue: "Qualité", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                .foregroundColor(theme.textMuted)
+            Spacer()
+            Circle()
+                .fill(qualityColor(quality))
+                .frame(width: 8, height: 8)
+                .accessibilityHidden(true)
+            Text(qualityWord(quality))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+        }
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.md)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func detailRow(icon: String, label: String, value: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                .foregroundColor(Color(hex: accentHex))
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            Text(label)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
+                .foregroundColor(theme.textMuted)
+            Spacer()
+            Text(value)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+        }
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.md)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Derived visuals
+
+    private var presentation: CallNoticePresentation {
+        CallNoticePresentation(summary: summary, isOutgoing: isOutgoing, accentHex: accentHex)
+    }
+
+    private var tint: Color { presentation.tint }
+
+    private var mediaGlyph: String { presentation.mediaGlyph }
+
+    private var directionGlyph: String { presentation.directionGlyph }
+
+    private var title: String { presentation.title }
 
     private func qualityColor(_ quality: CallSummaryMetadata.NetworkQuality) -> Color {
         switch quality {
@@ -245,15 +634,5 @@ struct BubbleCallNoticeView: View, Equatable {
         case .fair: return String(localized: "bubble.call.quality.fair", defaultValue: "Moyenne", bundle: .main)
         case .poor: return String(localized: "bubble.call.quality.poor", defaultValue: "Faible", bundle: .main)
         }
-    }
-
-    // MARK: - Accessibility
-
-    private var accessibilityLabel: Text {
-        var parts: [String] = [title, directionWord]
-        if let duration = durationLabel { parts.append(duration) }
-        if let data = summary.dataSpentLabel { parts.append(data) }
-        if let quality = summary.networkQuality { parts.append(qualityWord(quality)) }
-        return Text(parts.joined(separator: ", "))
     }
 }

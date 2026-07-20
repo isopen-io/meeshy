@@ -94,6 +94,62 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(withServerId.first?.content, "Hello", "the surviving row holds the reconciled server content")
     }
 
+    /// Regression — "status-management-inconsistency" (2026-06).
+    ///
+    /// The Notification Service Extension pre-persists an offline-push message
+    /// with a PLACEHOLDER `createdAt` = the push-receipt time (when the device
+    /// came back online), because the push payload doesn't carry the real send
+    /// time. The canonical REST fetch then reconciles the row and MUST correct
+    /// `createdAt` to the authoritative server value — otherwise the bubble +
+    /// detail sheet display the data-reactivation time as the "sent" time,
+    /// contradicting the message's notification ("4h ago") and read receipts.
+    func test_upsertFromAPIMessages_correctsPlaceholderCreatedAtFromCanonicalPayload() async throws {
+        let trueSendTime = Date(timeIntervalSince1970: 1_700_000_000)         // real send
+        let pushReceiptTime = trueSendTime.addingTimeInterval(4 * 3600)        // +4h (data re-enabled)
+
+        // Simulate the NSE pre-persist: server-keyed row stamped with the
+        // push-receipt placeholder, including the derived time-string cache the
+        // bubble renders.
+        var nsePlaceholder = MessageRecordFactory.make(
+            localId: "srv_offline",
+            conversationId: "conv_offline",
+            senderId: "sender_1",
+            content: "Le Sprint 10 a ete defini",
+            state: .delivered,
+            createdAt: pushReceiptTime
+        )
+        nsePlaceholder.serverId = "srv_offline"
+        nsePlaceholder.cachedTimeString = MessageRecord.computeTimeString(for: pushReceiptTime)
+        try await actor.insertOptimistic(nsePlaceholder)
+
+        // The canonical payload (REST/socket, DB-authoritative) carries the real
+        // send time.
+        let canonical = makeAPIMessage(
+            id: "srv_offline",
+            conversationId: "conv_offline",
+            senderId: "sender_1",
+            content: "Le Sprint 10 a ete defini",
+            createdAt: trueSendTime
+        )
+        try await actor.upsertFromAPIMessages([canonical])
+
+        let row = try XCTUnwrap(
+            try actor.messages(for: "conv_offline", limit: 10)
+                .first { $0.serverId == "srv_offline" }
+        )
+        XCTAssertEqual(
+            row.createdAt.timeIntervalSince1970,
+            trueSendTime.timeIntervalSince1970,
+            accuracy: 1.0,
+            "createdAt must be corrected to the authoritative server send time, not the push-receipt placeholder"
+        )
+        XCTAssertEqual(
+            row.cachedTimeString,
+            MessageRecord.computeTimeString(for: trueSendTime),
+            "the cached time-string the bubble renders must be recomputed from the corrected createdAt"
+        )
+    }
+
     func test_applyEvent_invalidTransition_returnsNil() async throws {
         let record = MessageRecordFactory.make(localId: "temp_003", state: .read)
         try await actor.insertOptimistic(record)
@@ -212,6 +268,40 @@ final class MessagePersistenceActorTests: XCTestCase {
         let fetched = try actor.messages(for: "conv_default", limit: 10)
         XCTAssertEqual(fetched[0].content, "Edited")
         XCTAssertTrue(fetched[0].isEdited)
+    }
+
+    func test_markEdited_ignoresOutOfOrderStaleEdit() async throws {
+        let record = MessageRecordFactory.make(localId: "edit_stale", content: "Original")
+        try await actor.insertOptimistic(record)
+
+        let newer = Date()
+        let older = newer.addingTimeInterval(-60)
+
+        // Newer edit applies first, then a stale/delayed duplicate delivery
+        // of an older edit arrives — it must not clobber the newer content.
+        try await actor.markEdited(localId: "edit_stale", newContent: "Newer edit", editedAt: newer)
+        try await actor.markEdited(localId: "edit_stale", newContent: "Stale edit", editedAt: older)
+
+        let fetched = try actor.messages(for: "conv_default", limit: 10)
+        XCTAssertEqual(fetched[0].content, "Newer edit")
+    }
+
+    /// Regression: `editMessage`'s failure-rollback path calls `markEdited`
+    /// TWICE with the exact same in-memory `editedAt` (optimistic write, then
+    /// rollback to the original content on network failure). GRDB round-trips
+    /// `Date` through a millisecond-precision column, so the second call's
+    /// stored-vs-incoming comparison must tolerate that round-trip noise —
+    /// a strict `<` misfired here and silently dropped the rollback.
+    func test_markEdited_sameEditedAtReappliedTwice_stillApplies() async throws {
+        let record = MessageRecordFactory.make(localId: "edit_rollback", content: "Original")
+        try await actor.insertOptimistic(record)
+
+        let editedAt = Date()
+        try await actor.markEdited(localId: "edit_rollback", newContent: "Edited", editedAt: editedAt)
+        try await actor.markEdited(localId: "edit_rollback", newContent: "Original", editedAt: editedAt)
+
+        let fetched = try actor.messages(for: "conv_default", limit: 10)
+        XCTAssertEqual(fetched[0].content, "Original")
     }
 
     func test_markDeleted_clearsContentAndSetsTimestamp() async throws {
@@ -672,6 +762,7 @@ final class MessagePersistenceActorTests: XCTestCase {
         attachments: [[String: Any]] = [],
         reactionSummary: [String: Int]? = nil,
         currentUserReactions: [String]? = nil,
+        metadata: [String: Any]? = nil,
         createdAt: Date = Date()
     ) -> APIMessage {
         var json: [String: Any] = [
@@ -687,10 +778,147 @@ final class MessagePersistenceActorTests: XCTestCase {
         if !attachments.isEmpty { json["attachments"] = attachments }
         if let reactionSummary { json["reactionSummary"] = reactionSummary }
         if let currentUserReactions { json["currentUserReactions"] = currentUserReactions }
+        if let metadata { json["metadata"] = metadata }
         let data = try! JSONSerialization.data(withJSONObject: json)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try! decoder.decode(APIMessage.self, from: data)
+    }
+
+    // MARK: - Call notice (live → terminal, message d'appel vivant)
+
+    private func callSummaryJSON(kind: String, callId: String = "call_1", outcome: String = "completed", duration: Int = 0) -> Data {
+        let dict: [String: Any] = [
+            "kind": kind,
+            "callId": callId,
+            "initiatorId": "user_init",
+            "callType": "audio",
+            "outcome": outcome,
+            "durationSeconds": duration,
+            "bytesEstimated": false,
+        ]
+        return try! JSONSerialization.data(withJSONObject: dict)
+    }
+
+    private func callMetadataDict(kind: String, callId: String = "call_1", outcome: String = "completed", duration: Int = 0) -> [String: Any] {
+        [
+            "kind": kind,
+            "callId": callId,
+            "initiatorId": "user_init",
+            "callType": "audio",
+            "outcome": outcome,
+            "durationSeconds": duration,
+            "bytesEstimated": false,
+        ]
+    }
+
+    /// La transition serveur live → terminal (message:edited porteur d'une
+    /// métadonnée d'appel) met à jour content + callSummaryJson + updatedAt +
+    /// changeVersion SANS toucher isEdited/editedAt — une transition d'état
+    /// n'est pas une édition utilisateur, la bulle ne doit jamais porter
+    /// « modifié ».
+    func test_applyCallNoticeUpdate_updatesContentAndSummary_withoutEditFlags() async throws {
+        var record = MessageRecordFactory.make(localId: "srv_call_1", conversationId: "conv_call")
+        record.serverId = "srv_call_1"
+        record.callSummaryJson = callSummaryJSON(kind: "call-live")
+        try await actor.insertOptimistic(record)
+
+        let terminal = callSummaryJSON(kind: "call", outcome: "completed", duration: 272)
+        try await actor.applyCallNoticeUpdate(
+            localId: "srv_call_1",
+            content: "Appel audio · 04:32",
+            callSummaryJson: terminal,
+            serverUpdatedAt: Date()
+        )
+
+        let fetched = try actor.messages(for: "conv_call", limit: 10)
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].content, "Appel audio · 04:32")
+        XCTAssertEqual(fetched[0].callSummaryJson, terminal)
+        XCTAssertFalse(fetched[0].isEdited, "state transition must not brand the bubble as edited")
+        XCTAssertNil(fetched[0].editedAt)
+        XCTAssertGreaterThan(fetched[0].changeVersion, record.changeVersion)
+    }
+
+    /// Le message d'appel arrive par socket avec l'id SERVEUR ; la résolution
+    /// doit matcher `serverId` comme `markEdited` (localId OR serverId).
+    func test_applyCallNoticeUpdate_resolvesByServerId() async throws {
+        var record = MessageRecordFactory.make(localId: "cid_call_2", conversationId: "conv_call2")
+        record.serverId = "srv_call_2"
+        record.callSummaryJson = callSummaryJSON(kind: "call-live")
+        try await actor.insertOptimistic(record)
+
+        try await actor.applyCallNoticeUpdate(
+            localId: "srv_call_2",
+            content: "Appel audio manqué",
+            callSummaryJson: callSummaryJSON(kind: "call", outcome: "missed"),
+            serverUpdatedAt: Date()
+        )
+
+        let fetched = try actor.messages(for: "conv_call2", limit: 10)
+        XCTAssertEqual(fetched[0].content, "Appel audio manqué")
+    }
+
+    /// Garde anti-régression : un snapshot REST sérialisé PENDANT l'appel
+    /// (metadata live) appliqué APRÈS l'édition terminale ne doit régresser ni
+    /// la métadonnée ni le content — sinon la bulle relit « en cours » à jamais.
+    func test_upsertFromAPIMessages_staleLiveSnapshot_neverRegressesTerminalSummary() async throws {
+        var record = MessageRecordFactory.make(
+            localId: "srv_call_3",
+            conversationId: "conv_call3",
+            content: "Appel audio · 04:32",
+            state: .sent
+        )
+        record.serverId = "srv_call_3"
+        record.callSummaryJson = callSummaryJSON(kind: "call", outcome: "completed", duration: 272)
+        try await actor.insertOptimistic(record)
+
+        let staleSnapshot = makeAPIMessage(
+            id: "srv_call_3",
+            conversationId: "conv_call3",
+            content: "Appel audio en cours",
+            metadata: callMetadataDict(kind: "call-live")
+        )
+        try await actor.upsertFromAPIMessages([staleSnapshot])
+
+        let fetched = try actor.messages(for: "conv_call3", limit: 10)
+        XCTAssertEqual(fetched.count, 1)
+        XCTAssertEqual(fetched[0].content, "Appel audio · 04:32", "stale live content must not clobber the terminal label")
+        let stored = try XCTUnwrap(fetched[0].callSummaryJson)
+        let decoded = try JSONDecoder().decode(CallSummaryMetadata.self, from: stored)
+        XCTAssertFalse(decoded.isLive, "terminal summary must never regress to live")
+        XCTAssertEqual(decoded.durationSeconds, 272)
+    }
+
+    /// Le sens NORMAL passe toujours : un refresh REST portant le TERMINAL
+    /// remplace la métadonnée live stockée (conversation fermée pendant
+    /// l'appel, hydratation REST après coup).
+    func test_upsertFromAPIMessages_liveToTerminal_alwaysApplies() async throws {
+        var record = MessageRecordFactory.make(
+            localId: "srv_call_4",
+            conversationId: "conv_call4",
+            content: "Appel audio en cours",
+            state: .sent
+        )
+        record.serverId = "srv_call_4"
+        record.callSummaryJson = callSummaryJSON(kind: "call-live")
+        try await actor.insertOptimistic(record)
+
+        let terminalRefresh = makeAPIMessage(
+            id: "srv_call_4",
+            conversationId: "conv_call4",
+            content: "Appel audio · 04:32",
+            metadata: callMetadataDict(kind: "call", outcome: "completed", duration: 272)
+        )
+        try await actor.upsertFromAPIMessages([terminalRefresh])
+
+        let fetched = try actor.messages(for: "conv_call4", limit: 10)
+        XCTAssertEqual(fetched[0].content, "Appel audio · 04:32")
+        let stored = try XCTUnwrap(fetched[0].callSummaryJson)
+        let decoded = try JSONDecoder().decode(CallSummaryMetadata.self, from: stored)
+        XCTAssertFalse(decoded.isLive)
+        XCTAssertEqual(decoded.outcome, .completed)
+        XCTAssertEqual(decoded.durationSeconds, 272)
     }
 
     /// RC2.2 — a media message ingested via `upsertFromAPIMessages` must keep

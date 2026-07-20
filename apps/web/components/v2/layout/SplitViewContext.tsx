@@ -81,15 +81,15 @@ export function SplitViewProvider({
   useEffect(() => {
     // Routes that should show right panel on mobile
     const rightPanelRoutes = [
-      '/v2/chats/',      // Chat with specific conversation
-      '/v2/communities',
-      '/v2/contacts',
-      '/v2/notifications',
-      '/v2/settings',
-      '/v2/me',
-      '/v2/links',
-      '/v2/u/',          // User profile
-      '/v2/feeds',
+      '/conversations/',      // Chat with specific conversation
+      '/communities',
+      '/contacts',
+      '/notifications',
+      '/settings',
+      '/me',
+      '/links',
+      '/u/',          // User profile
+      '/feeds',
     ];
 
     const shouldShowRight = rightPanelRoutes.some(route =>
@@ -97,7 +97,7 @@ export function SplitViewProvider({
     );
 
     // On mobile, show right panel for these routes
-    if (isMobile && shouldShowRight && pathname !== '/v2/chats') {
+    if (isMobile && shouldShowRight && pathname !== '/conversations') {
       setShowRightPanel(true);
     }
   }, [pathname, isMobile]);

@@ -115,6 +115,19 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    /// Reset the freshness clock for `key` to "now" WITHOUT refetching, so a
+    /// subsequent `load` returns `.fresh` and retention is extended on access.
+    /// Bumps L1 `loadedAt` and L2 `lastFetchedAt`. No-op when no entry exists.
+    public func touch(for key: Key) async {
+        let now = Date()
+        if var l1 = memoryCache[key] {
+            l1.loadedAt = now
+            memoryCache[key] = l1
+            touchKey(key)
+        }
+        bumpLastFetchedAtInL2(to: now, for: namespacedKey(key.description))
+    }
+
     public func update(for key: Key, mutate: @Sendable ([Value]) -> [Value]) async {
         if var l1 = memoryCache[key] {
             l1.items = mutate(l1.items)
@@ -191,6 +204,38 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
             mutated = Array(mutated.suffix(max))
         }
         memoryCache[key] = L1Entry(items: mutated, loadedAt: loadedAt)
+        touchKey(key)
+        markDirty(key)
+    }
+
+    /// Prepends `item` (newest-first) to an EXISTING cached list without resetting
+    /// the freshness clock, so a real-time event can durably append to a cache the
+    /// user already populated — surviving an app restart — while a still-stale or
+    /// -expired entry keeps triggering its normal background refresh.
+    ///
+    /// Strict no-op when no entry exists in L1 or L2: fabricating a single-item
+    /// `.fresh` cache from empty would make a cache-first `load` return only that
+    /// one item and SKIP the authoritative network refresh. De-dups by `id` (an
+    /// already-present id leaves the list untouched). Trims the OLDEST (tail) past
+    /// `maxItemCount`. The freshness timestamp is preserved (existing `loadedAt`).
+    public func prependToExisting(_ item: Value, for key: Key) async {
+        let existing: [Value]
+        let loadedAt: Date
+        if let l1 = memoryCache[key], !l1.items.isEmpty {
+            existing = l1.items
+            loadedAt = l1.loadedAt
+        } else if let l2 = readFromL2(for: namespacedKey(key.description)) {
+            existing = l2.items
+            loadedAt = l2.lastFetchedAt
+        } else {
+            return
+        }
+        guard !existing.contains(where: { $0.id == item.id }) else { return }
+        var merged = [item] + existing
+        if let max = policy.maxItemCount, merged.count > max {
+            merged = Array(merged.prefix(max))
+        }
+        memoryCache[key] = L1Entry(items: merged, loadedAt: loadedAt)
         touchKey(key)
         markDirty(key)
     }
@@ -487,6 +532,18 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
             }
         } catch {
             logger.error("Failed to invalidate all L2: \(error)")
+        }
+    }
+
+    private nonisolated func bumpLastFetchedAtInL2(to date: Date, for keyStr: String) {
+        do {
+            try db.write { db in
+                guard var meta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db) else { return }
+                meta.lastFetchedAt = date
+                try meta.save(db)
+            }
+        } catch {
+            logger.error("Failed to touch L2 lastFetchedAt for key \(keyStr, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 

@@ -73,6 +73,10 @@
       "cancel": "Cancel",
       "create": "Create"
     },
+    "card": {
+      "openLabel": "Open {name}",
+      "copyIdentifier": "Copy identifier {identifier}"
+    },
     "list": {
       "communities": "Communities",
       "newCommunity": "New community",
@@ -80,6 +84,7 @@
       "filterLabel": "Filter by name, description...",
       "loading": "Loading communities",
       "loadingInProgress": "Loading communities...",
+      "loadingGroups": "Loading groups…",
       "noCommunityFound": "No community found",
       "noCommunityForSearch": "No community found for this search",
       "selectCommunity": "Select a community",
@@ -92,6 +97,7 @@
       "createdOn": "Created on",
       "conversations": "Conversations",
       "loadingConversations": "Loading conversations...",
+      "loadingGroup": "Loading group…",
       "noConversations": "No conversations",
       "noConversationsDescription": "This community doesn't have any conversations yet.",
       "lastActivity": "Last activity"

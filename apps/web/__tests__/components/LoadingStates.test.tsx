@@ -43,9 +43,9 @@ describe('LoadingStates Components', () => {
   });
 
   describe('LoadingState', () => {
-    it('should render with default message', () => {
+    it('should render with default i18n message', () => {
       render(<LoadingState />);
-      expect(screen.getByText('Chargement...')).toBeInTheDocument();
+      expect(screen.getByText('Loading...')).toBeInTheDocument();
     });
 
     it('should render with custom message', () => {
@@ -88,7 +88,7 @@ describe('LoadingStates Components', () => {
 
     it('should not render message when message is empty', () => {
       render(<LoadingState message="" />);
-      expect(screen.queryByText('Chargement...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
     });
   });
 

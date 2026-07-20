@@ -5,18 +5,26 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.decodeFromString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ApiTextTranslation
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
+import me.meeshy.sdk.net.api.TranslateRequest
+import me.meeshy.sdk.net.api.TranslateResponse
+import me.meeshy.sdk.net.api.TranslationApi
+import me.meeshy.sdk.outbox.OutboxDependencyKey
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -55,6 +63,23 @@ private class FakeMessageApi(
     override suspend fun delete(messageId: String) = ApiResponse<Unit>(success = false)
     override suspend fun search(conversationId: String, query: String, limit: Int?, cursor: String?) =
         ApiResponse<List<ApiMessage>>(success = false)
+    override suspend fun pin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = true)
+    override suspend fun unpin(conversationId: String, messageId: String) =
+        ApiResponse<Unit>(success = true)
+}
+
+private class FakeTranslationApi(
+    var response: ApiResponse<TranslateResponse> = ApiResponse(success = false, error = "no translator"),
+) : TranslationApi {
+    var lastRequest: TranslateRequest? = null
+    var calls: Int = 0
+
+    override suspend fun translate(body: TranslateRequest): ApiResponse<TranslateResponse> {
+        calls += 1
+        lastRequest = body
+        return response
+    }
 }
 
 private fun apiMessage(
@@ -101,11 +126,143 @@ class MessageRepositoryTest {
         db.close()
     }
 
-    private fun repository(api: MessageApi, clock: me.meeshy.sdk.cache.CacheClock = SystemCacheClock) =
-        MessageRepository(api, db, db.messageDao(), db.syncMetaDao(), outbox, clock)
+    private fun repository(
+        api: MessageApi,
+        translationApi: TranslationApi = FakeTranslationApi(),
+        clock: me.meeshy.sdk.cache.CacheClock = SystemCacheClock,
+    ) = MessageRepository(api, translationApi, db, db.messageDao(), db.syncMetaDao(), outbox, clock)
 
     private suspend fun streamedMessages(repo: MessageRepository, conversationId: String = "c1") =
         db.messageDao().observeForConversation(conversationId).first()
+
+    private suspend fun cachedApiMessage(id: String): ApiMessage =
+        MeeshyApi.json.decodeFromString<ApiMessage>(db.messageDao().find(id)!!.payload)
+
+    private suspend fun sentRequest(lane: String): SendMessageRequest =
+        MeeshyApi.json.decodeFromString<SendMessageRequest>(outbox.deliverable(lane).last().payload)
+
+    @Test
+    fun `requestTranslation stores the returned translation and reports success`() = runTest {
+        val translation = FakeTranslationApi(
+            ApiResponse(success = true, data = TranslateResponse(translatedText = "Bonjour")),
+        )
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            translationApi = translation,
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isTrue()
+        assertThat(translation.lastRequest?.targetLanguage).isEqualTo("fr")
+        assertThat(
+            cachedApiMessage("m1").translations
+                .single { it.targetLanguage == "fr" }.translatedContent,
+        ).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `requestTranslation returns false and stores nothing when the translator fails`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            translationApi = FakeTranslationApi(ApiResponse(success = false, error = "translator down")),
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(cachedApiMessage("m1").translations).isEmpty()
+    }
+
+    @Test
+    fun `requestTranslation on an unknown message never calls the translator`() = runTest {
+        val translation = FakeTranslationApi()
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = false, error = "down")),
+            translationApi = translation,
+        )
+
+        val stored = repo.requestTranslation("ghost", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(translation.calls).isEqualTo(0)
+    }
+
+    @Test
+    fun `requestTranslation on a deleted message is inert`() = runTest {
+        val translation = FakeTranslationApi(
+            ApiResponse(success = true, data = TranslateResponse(translatedText = "Bonjour")),
+        )
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(apiMessage("m1").copy(deletedAt = "2026-06-01T10:00:00Z")),
+                ),
+            ),
+            translationApi = translation,
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(translation.calls).isEqualTo(0)
+    }
+
+    @Test
+    fun `requestTranslation with a blank target is inert`() = runTest {
+        val translation = FakeTranslationApi()
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            translationApi = translation,
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "   ")
+
+        assertThat(stored).isFalse()
+        assertThat(translation.calls).isEqualTo(0)
+    }
+
+    @Test
+    fun `requestTranslation ignores a blank translated result`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            translationApi = FakeTranslationApi(
+                ApiResponse(success = true, data = TranslateResponse(translatedText = "   ")),
+            ),
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(cachedApiMessage("m1").translations).isEmpty()
+    }
+
+    @Test
+    fun `requestTranslation is idempotent when the translation already matches the cache`() = runTest {
+        val existing = apiMessage("m1").copy(
+            translations = listOf(
+                ApiTextTranslation(targetLanguage = "fr", translatedContent = "Bonjour"),
+            ),
+        )
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(existing))),
+            translationApi = FakeTranslationApi(
+                ApiResponse(success = true, data = TranslateResponse(translatedText = "Bonjour")),
+            ),
+        )
+        repo.refresh("c1")
+
+        val stored = repo.requestTranslation("m1", "fr")
+
+        assertThat(stored).isFalse()
+        assertThat(cachedApiMessage("m1").translations).hasSize(1)
+    }
 
     @Test
     fun `stream first emission is Empty on a cold cache`() = runTest {
@@ -160,6 +317,134 @@ class MessageRepositoryTest {
         assertThat(row.id).isEqualTo(cmid)
         assertThat(row.sendState).isEqualTo(LocalSendState.SENDING.name)
         assertThat(outbox.deliverable("message:c1").map { it.cmid }).containsExactly(cmid)
+    }
+
+    @Test
+    fun `sendOptimistic with no effects carries a clean SendMessageRequest`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val request = sentRequest("message:c1")
+        assertThat(request.clientMessageId).isEqualTo(cmid)
+        assertThat(request.effectFlags).isNull()
+        assertThat(request.isBlurred).isNull()
+        assertThat(request.isViewOnce).isNull()
+        assertThat(request.ephemeralDuration).isNull()
+        assertThat(request.expiresAt).isNull()
+    }
+
+    @Test
+    fun `sendOptimistic encodes the chosen effects onto the outbox request`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")), clock = MutableClock(0L))
+        val effects = MessageEffects(
+            flags = MessageEffectFlags.GLOW or MessageEffectFlags.VIEW_ONCE or MessageEffectFlags.EPHEMERAL,
+            ephemeralDuration = 300,
+            maxViewOnceCount = 2,
+        )
+
+        repo.sendOptimistic("c1", "secret", "fr", sender, effects = effects)
+
+        val request = sentRequest("message:c1")
+        assertThat(request.effectFlags)
+            .isEqualTo((MessageEffectFlags.GLOW or MessageEffectFlags.VIEW_ONCE or MessageEffectFlags.EPHEMERAL).toInt())
+        assertThat(request.isViewOnce).isTrue()
+        assertThat(request.ephemeralDuration).isEqualTo(300)
+        assertThat(request.expiresAt).isEqualTo("1970-01-01T00:05:00Z")
+        assertThat(request.maxViewOnceCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `sendOptimistic surfaces the effects on the optimistic bubble`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            "c1", "peekaboo", "fr", sender,
+            effects = MessageEffects(flags = MessageEffectFlags.BLURRED),
+        )
+
+        assertThat(cachedApiMessage(cmid).effects.has(MessageEffectFlags.BLURRED)).isTrue()
+    }
+
+    @Test
+    fun `sendOptimistic without attachments carries null attachmentIds and no dependency`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val row = outbox.deliverable("message:c1").single { it.cmid == cmid }
+        assertThat(OutboxDependencyKey.decode(row.dependsOn)).isEmpty()
+        assertThat(sentRequest("message:c1").attachmentIds).isNull()
+        assertThat(cachedApiMessage(cmid).messageType).isEqualTo("text")
+    }
+
+    @Test
+    fun `sendOptimistic with an upload carries the placeholder id and gates on the upload`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            "c1", "", "fr", sender,
+            messageType = "file",
+            attachmentUploadCmids = listOf("upload-cmid"),
+            attachments = listOf(
+                ApiMessageAttachment(id = "upload-cmid", fileName = "paste.txt", mimeType = "text/plain"),
+            ),
+        )
+
+        val row = outbox.deliverable("message:c1").single { it.cmid == cmid }
+        assertThat(OutboxDependencyKey.decode(row.dependsOn)).containsExactly("upload-cmid")
+        val request = sentRequest("message:c1")
+        assertThat(request.attachmentIds).containsExactly("upload-cmid")
+        assertThat(request.messageType).isEqualTo("file")
+    }
+
+    @Test
+    fun `sendOptimistic shows the attachment on the SENDING bubble instantly`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            "c1", "", "fr", sender,
+            messageType = "file",
+            attachmentUploadCmids = listOf("upload-cmid"),
+            attachments = listOf(
+                ApiMessageAttachment(id = "upload-cmid", fileName = "paste.txt", mimeType = "text/plain"),
+            ),
+        )
+
+        val bubble = cachedApiMessage(cmid)
+        assertThat(bubble.messageType).isEqualTo("file")
+        assertThat(bubble.attachments.map { it.fileName }).containsExactly("paste.txt")
+    }
+
+    @Test
+    fun `sendOptimistic dedupes blank upload cmids out of the dependency and payload`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            "c1", "hi", "fr", sender,
+            attachmentUploadCmids = listOf("  ", "u1", "u1"),
+        )
+
+        val row = outbox.deliverable("message:c1").single { it.cmid == cmid }
+        assertThat(OutboxDependencyKey.decode(row.dependsOn)).containsExactly("u1")
+        assertThat(sentRequest("message:c1").attachmentIds).containsExactly("u1")
+    }
+
+    @Test
+    fun `retrySend preserves the effects from the cached bubble`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")), clock = MutableClock(0L))
+        val cmid = repo.sendOptimistic(
+            "c1", "secret", "fr", sender,
+            effects = MessageEffects(flags = MessageEffectFlags.VIEW_ONCE),
+        )
+        outbox.markSucceeded(cmid)
+        repo.markSendFailed(cmid)
+
+        repo.retrySend(cmid)
+
+        val request = sentRequest("message:c1")
+        assertThat(request.isViewOnce).isTrue()
+        assertThat(request.effectFlags).isEqualTo(MessageEffectFlags.VIEW_ONCE.toInt())
     }
 
     @Test
@@ -239,6 +524,66 @@ class MessageRepositoryTest {
         repo.retrySend(cmid)
 
         assertThat(outbox.deliverable("message:c1").map { it.cmid }).containsExactly(cmid)
+    }
+
+    @Test
+    fun `sendOptimistic forwards carry the forwarded-from refs on the bubble and the queued request`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic(
+            conversationId = "c2",
+            content = "salut",
+            originalLanguage = "fr",
+            sender = sender,
+            forwardedFromId = "orig-msg",
+            forwardedFromConversationId = "c1",
+        )
+
+        val bubble = cachedMessage(cmid)
+        assertThat(bubble.forwardedFromId).isEqualTo("orig-msg")
+        assertThat(bubble.forwardedFromConversationId).isEqualTo("c1")
+
+        val row = outbox.deliverable("message:c2").single()
+        assertThat(row.cmid).isEqualTo(cmid)
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(row.payload)
+        assertThat(request.forwardedFromId).isEqualTo("orig-msg")
+        assertThat(request.forwardedFromConversationId).isEqualTo("c1")
+    }
+
+    @Test
+    fun `a non-forward send carries no forwarded-from refs`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "offline")))
+
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c1").single().payload,
+        )
+        assertThat(request.forwardedFromId).isNull()
+        assertThat(request.forwardedFromConversationId).isNull()
+    }
+
+    @Test
+    fun `retrySend preserves the forwarded-from refs when re-enqueuing from the cached payload`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic(
+            conversationId = "c2",
+            content = "salut",
+            originalLanguage = "fr",
+            sender = sender,
+            forwardedFromId = "orig-msg",
+            forwardedFromConversationId = "c1",
+        )
+        outbox.markSucceeded(cmid)
+        repo.markSendFailed(cmid)
+
+        repo.retrySend(cmid)
+
+        val request = MeeshyApi.json.decodeFromString<SendMessageRequest>(
+            outbox.deliverable("message:c2").single().payload,
+        )
+        assertThat(request.forwardedFromId).isEqualTo("orig-msg")
+        assertThat(request.forwardedFromConversationId).isEqualTo("c1")
     }
 
     private suspend fun cachedMessage(id: String): ApiMessage =
@@ -345,6 +690,56 @@ class MessageRepositoryTest {
     }
 
     @Test
+    fun `setPinnedOptimistic pin stamps pinnedAt and queues PIN_MESSAGE`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+            clock = MutableClock(1_700_000_000_000),
+        )
+        repo.refresh("c1")
+
+        val applied = repo.setPinnedOptimistic("m1", pin = true)
+
+        assertThat(applied).isTrue()
+        assertThat(cachedMessage("m1").pinnedAt).isNotNull()
+        val row = outbox.deliverable(OutboxLanes.PIN).single()
+        assertThat(row.kindEnum).isEqualTo(OutboxKind.PIN_MESSAGE)
+        assertThat(row.targetId).isEqualTo("m1")
+        assertThat(row.payload).contains("c1")
+    }
+
+    @Test
+    fun `setPinnedOptimistic unpin clears pinnedAt and queues UNPIN_MESSAGE`() = runTest {
+        val repo = repository(
+            FakeMessageApi(
+                ApiResponse(
+                    success = true,
+                    data = listOf(apiMessage("m1").copy(pinnedAt = "2026-07-08T10:00:00Z")),
+                ),
+            ),
+        )
+        repo.refresh("c1")
+
+        val applied = repo.setPinnedOptimistic("m1", pin = false)
+
+        assertThat(applied).isTrue()
+        assertThat(cachedMessage("m1").pinnedAt).isNull()
+        assertThat(outbox.deliverable(OutboxLanes.PIN).single().kindEnum)
+            .isEqualTo(OutboxKind.UNPIN_MESSAGE)
+    }
+
+    @Test
+    fun `setPinnedOptimistic refuses a bubble the server does not know yet`() = runTest {
+        val repo = repository(FakeMessageApi(ApiResponse(success = false, error = "n/a")))
+        val cmid = repo.sendOptimistic("c1", "salut", "fr", sender)
+
+        val applied = repo.setPinnedOptimistic(cmid, pin = true)
+
+        assertThat(applied).isFalse()
+        assertThat(cachedMessage(cmid).pinnedAt).isNull()
+        assertThat(outbox.deliverable(OutboxLanes.PIN)).isEmpty()
+    }
+
+    @Test
     fun `loadOlder pages backwards from the oldest synced message`() = runTest {
         val api = FakeMessageApi(
             response = ApiResponse(
@@ -396,7 +791,7 @@ class MessageRepositoryTest {
                 pagination = Pagination(hasMore = false),
             ),
         )
-        val repo = repository(api, clock)
+        val repo = repository(api, clock = clock)
         repo.refresh("c1")
         clock.now = 5_000
 
@@ -625,5 +1020,171 @@ class MessageRepositoryTest {
 
         assertThat(cachedMessage("m1").readCount).isEqualTo(0)
         assertThat(cachedMessage("m1").deliveredCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `applyTranslation upserts a translation into the cached message without an outbox row`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyTranslation("m1", "fr", "Bonjour")
+
+        val message = cachedMessage("m1")
+        assertThat(message.translations.map { it.targetLanguage }).containsExactly("fr")
+        assertThat(message.translations.single().translatedContent).isEqualTo("Bonjour")
+        assertThat(outbox.deliverable("message:c1")).isEmpty()
+    }
+
+    @Test
+    fun `applyTranslation replaces the existing translation for the same language`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            translations = listOf(ApiTextTranslation(targetLanguage = "fr", translatedContent = "Salut")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranslation("m1", "fr", "Bonjour")
+
+        val message = cachedMessage("m1")
+        assertThat(message.translations).hasSize(1)
+        assertThat(message.translations.single().translatedContent).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `applyTranslation is inert on an unknown message id`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyTranslation("ghost", "fr", "Bonjour")
+
+        assertThat(cachedMessage("m1").translations).isEmpty()
+    }
+
+    @Test
+    fun `applyTranslation ignores a blank translation`() = runTest {
+        val repo = repository(
+            FakeMessageApi(ApiResponse(success = true, data = listOf(apiMessage("m1")))),
+        )
+        repo.refresh("c1")
+
+        repo.applyTranslation("m1", "fr", "   ")
+
+        assertThat(cachedMessage("m1").translations).isEmpty()
+    }
+
+    @Test
+    fun `applyTranscription upserts a transcription onto the audio attachment without an outbox row`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranscription("m1", "a1", "Hello there", "en", 0.9, 4200L)
+
+        val attachment = cachedMessage("m1").attachments.single()
+        assertThat(attachment.transcription?.text).isEqualTo("Hello there")
+        assertThat(attachment.transcription?.language).isEqualTo("en")
+        assertThat(outbox.deliverable("message:c1")).isEmpty()
+    }
+
+    @Test
+    fun `applyTranscription falls back to the single audio attachment when no id is given`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranscription("m1", null, "Voice note", null, null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().transcription?.text).isEqualTo("Voice note")
+    }
+
+    @Test
+    fun `applyTranscription is inert on an unknown message id`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranscription("ghost", "a1", "Hello", "en", null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().transcription).isNull()
+    }
+
+    @Test
+    fun `applyTranscription ignores a blank transcription`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyTranscription("m1", "a1", "   ", "en", null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().transcription).isNull()
+    }
+
+    @Test
+    fun `applyAudioTranslation upserts a cloned-voice translation onto the audio attachment without an outbox row`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyAudioTranslation("m1", "a1", "es", "https://cdn/es.mp3", "hola", 5200L, "mp3", true, 0.9, "vm-1", "xtts")
+
+        val translation = cachedMessage("m1").attachments.single().translations!!.getValue("es")
+        assertThat(translation.url).isEqualTo("https://cdn/es.mp3")
+        assertThat(translation.transcription).isEqualTo("hola")
+        assertThat(translation.cloned).isTrue()
+        assertThat(outbox.deliverable("message:c1")).isEmpty()
+    }
+
+    @Test
+    fun `applyAudioTranslation falls back to the single audio attachment when no id is given`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyAudioTranslation("m1", null, "es", "https://cdn/es.mp3", "hola", null, null, false, null, null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().translations!!.getValue("es").url)
+            .isEqualTo("https://cdn/es.mp3")
+    }
+
+    @Test
+    fun `applyAudioTranslation is inert on an unknown message id`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyAudioTranslation("ghost", "a1", "es", "https://cdn/es.mp3", "hola", null, null, false, null, null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().translations).isNull()
+    }
+
+    @Test
+    fun `applyAudioTranslation ignores a blank url`() = runTest {
+        val seeded = apiMessage("m1").copy(
+            attachments = listOf(ApiMessageAttachment(id = "a1", mimeType = "audio/m4a")),
+        )
+        val repo = repository(FakeMessageApi(ApiResponse(success = true, data = listOf(seeded))))
+        repo.refresh("c1")
+
+        repo.applyAudioTranslation("m1", "a1", "es", "   ", "hola", null, null, false, null, null, null)
+
+        assertThat(cachedMessage("m1").attachments.single().translations).isNull()
     }
 }

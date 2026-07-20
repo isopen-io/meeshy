@@ -43,14 +43,14 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/anonymous.ts`
 - [ ] `packages/shared/types/api-responses.ts`
 - [~] `packages/shared/types/api-schemas.ts`
-- [ ] `packages/shared/types/attachment-audio.ts`
-- [ ] `packages/shared/types/attachment-transcription.ts`
-- [ ] `packages/shared/types/attachment.ts`
-- [ ] `packages/shared/types/audio-effects-timeline.ts`
-- [ ] `packages/shared/types/audio-transcription.ts`
+- [x] `packages/shared/types/attachment-audio.ts`
+- [x] `packages/shared/types/attachment-transcription.ts`
+- [x] `packages/shared/types/attachment.ts`
+- [x] `packages/shared/types/audio-effects-timeline.ts`
+- [x] `packages/shared/types/audio-transcription.ts`
 - [ ] `packages/shared/types/community.ts`
-- [ ] `packages/shared/types/conversation.ts`
-- [ ] `packages/shared/types/delivery-queue.ts`
+- [x] `packages/shared/types/conversation.ts`
+- [x] `packages/shared/types/delivery-queue.ts`
 - [ ] `packages/shared/types/dma.ts`
 - [ ] `packages/shared/types/encryption.ts`
 - [~] `packages/shared/types/errors.ts`
@@ -63,19 +63,19 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/messages.ts`
 - [ ] `packages/shared/types/messaging.ts`
 - [ ] `packages/shared/types/migration-utils.ts`
-- [ ] `packages/shared/types/notification.ts`
+- [x] `packages/shared/types/notification.ts`
 - [~] `packages/shared/types/participant.ts`
-- [ ] `packages/shared/types/post.ts`
+- [x] `packages/shared/types/post.ts`
 - [ ] `packages/shared/types/push-notification.ts`
-- [ ] `packages/shared/types/reaction.ts`
+- [x] `packages/shared/types/reaction.ts`
 - [ ] `packages/shared/types/report.ts`
-- [ ] `packages/shared/types/role-types.ts`
+- [x] `packages/shared/types/role-types.ts`
 - [ ] `packages/shared/types/security.ts`
 - [ ] `packages/shared/types/signal-database.ts`
 - [~] `packages/shared/types/socketio-events.ts`
-- [ ] `packages/shared/types/status-types.ts`
+- [x] `packages/shared/types/status-types.ts`
 - [ ] `packages/shared/types/tracking-link.ts`
-- [ ] `packages/shared/types/translated-audio.ts`
+- [x] `packages/shared/types/translated-audio.ts`
 - [ ] `packages/shared/types/user-preferences.ts`
 - [ ] `packages/shared/types/user.ts`
 - [~] `packages/shared/types/validation.ts`
@@ -84,31 +84,32 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## types/preferences  (0/8 have a test)
 
-- [ ] `packages/shared/types/preferences/application.ts`
-- [ ] `packages/shared/types/preferences/audio.ts`
-- [ ] `packages/shared/types/preferences/document.ts`
+- [x] `packages/shared/types/preferences/application.ts`
+- [x] `packages/shared/types/preferences/audio.ts`
+- [x] `packages/shared/types/preferences/document.ts`
 - [ ] `packages/shared/types/preferences/index.ts`
-- [ ] `packages/shared/types/preferences/message.ts`
-- [ ] `packages/shared/types/preferences/notification.ts`
-- [ ] `packages/shared/types/preferences/privacy.ts`
-- [ ] `packages/shared/types/preferences/video.ts`
+- [x] `packages/shared/types/preferences/message.ts`
+- [x] `packages/shared/types/preferences/notification.ts`
+- [x] `packages/shared/types/preferences/privacy.ts`
+- [x] `packages/shared/types/preferences/video.ts`
 
 ## types/validation  (0/2 have a test)
 
 - [ ] `packages/shared/types/validation/admin-user.ts`
 - [ ] `packages/shared/types/validation/index.ts`
 
-## utils  (10/12 have a test)
+## utils  (11/13 have a test)
 
-- [~] `packages/shared/utils/attachment-validators.ts`
-- [~] `packages/shared/utils/call-summary.ts`
-- [ ] `packages/shared/utils/client-message-id.ts`
-- [~] `packages/shared/utils/conversation-helpers.ts`
+- [x] `packages/shared/utils/attachment-validators.ts`
+- [x] `packages/shared/utils/call-summary.ts`
+- [x] `packages/shared/utils/client-message-id.ts`
+- [x] `packages/shared/utils/conversation-helpers.ts`
 - [~] `packages/shared/utils/email-validator.ts`
-- [~] `packages/shared/utils/errors.ts`
+- [x] `packages/shared/utils/errors.ts`
 - [ ] `packages/shared/utils/index.ts`
 - [~] `packages/shared/utils/language-normalize.ts`
-- [~] `packages/shared/utils/languages.ts`
+- [x] `packages/shared/utils/languages.ts`
 - [~] `packages/shared/utils/mention-parser.ts`
-- [~] `packages/shared/utils/sender-identity.ts`
+- [x] `packages/shared/utils/notification-strings.ts`
+- [x] `packages/shared/utils/sender-identity.ts`
 - [~] `packages/shared/utils/validation.ts`

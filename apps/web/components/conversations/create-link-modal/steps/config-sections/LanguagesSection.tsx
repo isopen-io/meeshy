@@ -30,8 +30,17 @@ export function LanguagesSection({
   return (
     <Card>
       <CardHeader
-        className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors"
+        role="button"
+        tabIndex={0}
+        aria-expanded={isLanguagesOpen}
+        className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors rounded-t-lg outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         onClick={() => setIsLanguagesOpen(!isLanguagesOpen)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setIsLanguagesOpen(!isLanguagesOpen);
+          }
+        }}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center">

@@ -1,5 +1,7 @@
+import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
 import type { ApiResponse, PaginationMeta, MessagesListResponse } from '@meeshy/shared/types';
+import { hasMentions as hasMentionsShared, extractMentions as extractMentionsShared } from '@meeshy/shared/types/mention';
 import { generateClientMessageId } from '@/utils/client-message-id';
 import { getCurrentInterfaceLocale } from '@/stores/language-store';
 
@@ -59,7 +61,7 @@ export const messagesService = {
       const response = await apiService.post<Message>('/messages', payload);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la création du message:', error);
+      logger.error('[Service]', 'Erreur lors de la création du message', { error });
       throw error;
     }
   },
@@ -79,7 +81,7 @@ export const messagesService = {
       const offset = (page - 1) * limit;
       return await this.getMessagesWithOffset(conversationId, offset, limit);
     } catch (error) {
-      console.error('Erreur lors de la récupération des messages:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des messages', { error });
       throw error;
     }
   },
@@ -111,7 +113,7 @@ export const messagesService = {
       // Le backend retourne directement le format MessagesListResponse
       return response.data as unknown as MessagesResponse;
     } catch (error) {
-      console.error('Erreur lors de la récupération des messages avec offset:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des messages avec offset', { error });
       throw error;
     }
   },
@@ -131,7 +133,7 @@ export const messagesService = {
       });
       return response;
     } catch (error) {
-      console.error('Erreur lors de l\'envoi du message:', error);
+      logger.error('[Service]', "Erreur lors de l'envoi du message", { error });
       throw error;
     }
   },
@@ -144,7 +146,7 @@ export const messagesService = {
       const response = await apiService.patch<Message>(`/messages/${messageId}`, updateData);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du message:', error);
+      logger.error('[Service]', 'Erreur lors de la mise à jour du message', { error });
       throw error;
     }
   },
@@ -157,7 +159,7 @@ export const messagesService = {
       const response = await apiService.delete<{ message: string }>(`/messages/${messageId}`);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la suppression du message:', error);
+      logger.error('[Service]', 'Erreur lors de la suppression du message', { error });
       throw error;
     }
   },
@@ -246,18 +248,18 @@ export const messagesService = {
   },
 
   /**
-   * Vérifie si le message contient des mentions (@username)
+   * Vérifie si le message contient des mentions (@username ou @DisplayName).
+   * Délègue à la détection partagée Unicode-aware (`@meeshy/shared`) — source de vérité unique.
    */
   hasMentions(content: string): boolean {
-    return /@\w+/.test(content);
+    return hasMentionsShared(content);
   },
 
   /**
    * Extrait les mentions d'un message
    */
   extractMentions(content: string): string[] {
-    const mentions = content.match(/@(\w+)/g);
-    return mentions ? mentions.map(mention => mention.substring(1)) : [];
+    return extractMentionsShared(content);
   },
 };
 

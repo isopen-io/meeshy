@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class ReelFeedLayoutTests: XCTestCase {
 
     // MARK: - reelCardHeight (plafond 4:5 = 1.25, plancher 4:3 = 0.75)

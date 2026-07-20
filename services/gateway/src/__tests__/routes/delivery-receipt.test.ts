@@ -52,6 +52,8 @@ const mockPrisma: any = {
   message: { findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn() },
   conversationReadCursor: {
     upsert: jest.fn(),
+    updateMany: jest.fn(),
+    create: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
     findMany: jest.fn()
@@ -97,6 +99,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
       deletedAt: null
     });
     mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+    mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
     mockPrisma.conversationReadCursor.update.mockResolvedValue({});
     mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
@@ -117,12 +120,13 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ success: true });
 
-    expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(1);
-    const upsertArg = mockPrisma.conversationReadCursor.upsert.mock.calls[0][0];
-    expect(upsertArg.update.lastDeliveredMessageId).toBe(MESSAGE_ID);
-    expect(upsertArg.create.lastDeliveredMessageId).toBe(MESSAGE_ID);
+    expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(1);
+    const updateManyArg = mockPrisma.conversationReadCursor.updateMany.mock.calls[0][0];
+    expect(updateManyArg.data.lastDeliveredMessageId).toBe(MESSAGE_ID);
 
-    expect(emitMock).toHaveBeenCalledTimes(1);
+    // 2 events: legacy READ_STATUS_UPDATED + the dual-emitted MESSAGE_READ_STATUS_UPDATED
+    // (same payload, correctly-namespaced name — see tasks/socketio-events-cleanup.md #3).
+    expect(emitMock).toHaveBeenCalledTimes(2);
     const [eventName, payload] = emitMock.mock.calls[0];
     expect(eventName).toBe(SERVER_EVENTS.READ_STATUS_UPDATED);
     expect(payload).toMatchObject({
@@ -130,6 +134,43 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
       participantId: PARTICIPANT_ID,
       type: 'received'
     });
+    // A 'received' (delivery) broadcast never advances the read cursor, so it
+    // omits the per-actor read-sync fields — they would just be dropped by the
+    // client and would disclose the actor's backlog to peers.
+    expect(payload.lastReadAt).toBeUndefined();
+    expect(payload.unreadCount).toBeUndefined();
+    const [dualEventName, dualPayload] = emitMock.mock.calls[1];
+    expect(dualEventName).toBe(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED);
+    expect(dualPayload).toEqual(payload);
+  });
+
+  it('emits the actor read frontier and unread count on a mark-as-read broadcast', async () => {
+    const frontier = new Date('2026-06-24T10:00:00.000Z');
+    mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: frontier });
+    mockPrisma.message.count.mockResolvedValue(3);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`
+    });
+
+    expect(response.statusCode).toBe(200);
+    // 3 events: READ_STATUS_UPDATED + dual-emitted MESSAGE_READ_STATUS_UPDATED
+    // (senders' checkmarks) + CONVERSATION_UNREAD_UPDATED (reader's own badge reset).
+    expect(emitMock).toHaveBeenCalledTimes(3);
+    const [eventName, payload] = emitMock.mock.calls[0];
+    expect(eventName).toBe(SERVER_EVENTS.READ_STATUS_UPDATED);
+    expect(payload.type).toBe('read');
+    // A 'read' carries the per-actor multi-device sync fields.
+    expect(payload.lastReadAt).toEqual(frontier);
+    expect(payload.unreadCount).toBe(3);
+    const [dualEventName, dualPayload] = emitMock.mock.calls[1];
+    expect(dualEventName).toBe(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED);
+    expect(dualPayload).toEqual(payload);
+    // Badge reset event goes to the reader's user room.
+    const [badgeEvent, badgePayload] = emitMock.mock.calls[2];
+    expect(badgeEvent).toBe(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED);
+    expect(badgePayload).toMatchObject({ conversationId: CONVERSATION_ID, unreadCount: 3 });
   });
 
   it('returns 404 when the conversation identifier cannot be resolved', async () => {
@@ -191,7 +232,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     const response = await app.inject({ method: 'POST', url: url() });
 
     expect(response.statusCode).toBe(200);
-    expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(1);
     expect(emitMock).not.toHaveBeenCalled();
   });
 

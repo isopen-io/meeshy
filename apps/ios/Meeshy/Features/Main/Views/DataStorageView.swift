@@ -12,7 +12,7 @@ struct DataStorageView: View {
     @State private var showClearConfirm = false
     @State private var isClearing = false
 
-    private let accentColor = "E67E22"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -43,9 +43,9 @@ struct DataStorageView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -54,7 +54,7 @@ struct DataStorageView: View {
             Spacer()
 
             Text(String(localized: "settings.data.storage.title", defaultValue: "Stockage", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -93,19 +93,20 @@ struct DataStorageView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache media", bundle: .main))
-                            .font(.system(size: 14, weight: .medium))
+                            .font(MeeshyFont.relative(14, weight: .medium))
                             .foregroundColor(theme.textPrimary)
 
                         Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et videos mis en cache", bundle: .main))
-                            .font(.system(size: 12, weight: .regular))
+                            .font(MeeshyFont.relative(12, weight: .regular))
                             .foregroundColor(theme.textMuted)
                     }
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                .accessibilityElement(children: .combine)
 
                 Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les medias plus rapidement et reduit la consommation de donnees. Les fichiers mis en cache sont automatiquement supprimes apres 7 jours.", bundle: .main))
-                    .font(.system(size: 13, weight: .regular))
+                    .font(MeeshyFont.relative(13, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .lineSpacing(3)
                     .padding(.horizontal, 14)
@@ -119,17 +120,17 @@ struct DataStorageView: View {
 
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.data.storage.section.actions", defaultValue: "Actions", bundle: .main), icon: "gear", color: "6B7280")
+            sectionHeader(title: String(localized: "settings.data.storage.section.actions", defaultValue: "Actions", bundle: .main), icon: "gear", color: MeeshyColors.neutral500Hex)
 
             Button {
                 HapticFeedback.medium()
                 showClearConfirm = true
             } label: {
                 HStack(spacing: 12) {
-                    fieldIcon("trash.fill", color: "EF4444")
+                    fieldIcon("trash.fill", color: MeeshyColors.errorHex)
 
                     Text(String(localized: "settings.data.storage.action.clear", defaultValue: "Vider le cache", bundle: .main))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
 
                     Spacer()
@@ -143,7 +144,7 @@ struct DataStorageView: View {
                 .padding(.vertical, 10)
             }
             .disabled(isClearing)
-            .background(sectionBackground(tint: "6B7280"))
+            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
             .accessibilityLabel(String(localized: "settings.data.storage.action.clear.label", defaultValue: "Vider le cache media", bundle: .main))
             .accessibilityHint(String(localized: "settings.data.storage.action.clear.hint", defaultValue: "Supprime tous les medias mis en cache localement", bundle: .main))
         }
@@ -169,10 +170,10 @@ struct DataStorageView: View {
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
@@ -190,7 +191,7 @@ struct DataStorageView: View {
 
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(14, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(

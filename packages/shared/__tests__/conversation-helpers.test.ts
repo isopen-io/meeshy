@@ -10,7 +10,6 @@ import {
   canEditMessage,
   generateDefaultConversationTitle,
   getRequiredLanguages,
-  resolveUserTranslationLanguages,
 } from '../utils/conversation-helpers';
 
 describe('resolveUserLanguage', () => {
@@ -55,6 +54,53 @@ describe('resolveUserLanguage', () => {
       systemLanguage: 'en',
     };
     expect(resolveUserLanguage(user)).toBe('en');
+  });
+
+  // F62 — case parity with resolveUserLanguagesOrdered. Prefs pass validation
+  // case-insensitively (isSupportedLanguage lowercases) but persist verbatim, so
+  // a stored 'EN' would otherwise miss the lowercase-keyed translations produced
+  // by resolveUserLanguagesOrdered → client shows original instead of translation.
+  it('should lowercase an uppercase systemLanguage', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'EN' })).toBe('en');
+  });
+
+  it('should lowercase an uppercase regionalLanguage', () => {
+    expect(resolveUserLanguage({ regionalLanguage: 'ES' })).toBe('es');
+  });
+
+  it('should lowercase a mixed-case customDestinationLanguage', () => {
+    expect(resolveUserLanguage({ customDestinationLanguage: 'De' })).toBe('de');
+  });
+
+  // In-app prefs persist verbatim (`z.string().optional()`, no normalization on
+  // write), so a BCP-47 value like 'pt-BR' or 'en-US' — which the web
+  // Accept-Language / iOS locale paths can produce — reaches the resolver. A
+  // bare `.toLowerCase()` yields 'pt-br'/'en-us', which never matches the
+  // lowercase 2-letter translation keys ('pt'/'en') → Prisme violation. In-app
+  // tiers MUST normalize identically to the deviceLocale tier.
+  it('should normalize a BCP-47 systemLanguage (pt-BR → pt)', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'pt-BR' })).toBe('pt');
+  });
+
+  it('should normalize a BCP-47 regionalLanguage (en-US → en)', () => {
+    expect(resolveUserLanguage({ regionalLanguage: 'en-US' })).toBe('en');
+  });
+
+  it('should normalize an underscore-form customDestinationLanguage (fr_FR → fr)', () => {
+    expect(resolveUserLanguage({ customDestinationLanguage: 'fr_FR' })).toBe('fr');
+  });
+
+  it('resolves a BCP-47 in-app pref identically to the same value as deviceLocale', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'pt-BR' })).toBe(
+      resolveUserLanguage({}, { deviceLocale: 'pt-BR' })
+    );
+  });
+
+  // Zero-regression guard: a value normalizeLanguageCode cannot canonicalize
+  // (unknown irreducible ISO 639-3) must still fall back to lowercase, exactly
+  // as before — never dropped to the next tier.
+  it('should preserve an unnormalizable in-app pref via lowercase fallback', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'ZZZ' })).toBe('zzz');
   });
 });
 
@@ -365,6 +411,18 @@ describe('getRequiredLanguages', () => {
     const languages = getRequiredLanguages(members);
     expect(languages).toEqual(['fr']);
   });
+
+  // F62 — a member stored 'EN' and another stored 'en' are the SAME translation
+  // destination; without case parity they inflate the target set with a duplicate
+  // ('EN' never matches a lowercase-keyed translation → wasted translation request).
+  it('should deduplicate members that differ only by pref casing', () => {
+    const members = [
+      { systemLanguage: 'EN' },
+      { systemLanguage: 'en' },
+    ];
+    const languages = getRequiredLanguages(members);
+    expect(languages).toEqual(['en']);
+  });
 });
 
 describe('resolveUserLanguage with deviceLocale (4th priority)', () => {
@@ -495,32 +553,84 @@ describe('resolveUserLanguagesOrdered', () => {
   });
 });
 
-describe('resolveUserTranslationLanguages', () => {
-  it('returns systemLanguage when only systemLanguage set', () => {
-    expect(resolveUserTranslationLanguages({ systemLanguage: 'en' })).toEqual(['en']);
+describe('canEditMessage — role case insensitivity', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-03-15T12:00:00Z'));
   });
 
-  it('returns regionalLanguage when only regionalLanguage set', () => {
-    expect(resolveUserTranslationLanguages({ regionalLanguage: 'es' })).toEqual(['es']);
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it('returns both when both are set', () => {
-    expect(
-      resolveUserTranslationLanguages({ systemLanguage: 'fr', regionalLanguage: 'es' })
-    ).toEqual(['fr', 'es']);
+  const oldMessage = new Date('2024-03-14T12:00:00Z');
+
+  it('allows admin with lowercase role (DB may store lowercase)', () => {
+    expect(canEditMessage(oldMessage, 'admin')).toEqual({ canEdit: true });
   });
 
-  it("returns ['fr'] when neither is set (fallback)", () => {
-    expect(resolveUserTranslationLanguages({})).toEqual(['fr']);
+  it('allows moderator with lowercase role', () => {
+    expect(canEditMessage(oldMessage, 'moderator')).toEqual({ canEdit: true });
   });
 
-  it("returns ['fr'] when both are undefined", () => {
-    expect(
-      resolveUserTranslationLanguages({ systemLanguage: undefined, regionalLanguage: undefined })
-    ).toEqual(['fr']);
+  it('allows bigboss with mixed-case role', () => {
+    expect(canEditMessage(oldMessage, 'BigBoss')).toEqual({ canEdit: true });
   });
 
-  it('does not include empty strings', () => {
-    expect(resolveUserTranslationLanguages({ systemLanguage: '' })).toEqual(['fr']);
+  it('allows creator with lowercase role', () => {
+    expect(canEditMessage(oldMessage, 'creator')).toEqual({ canEdit: true });
+  });
+});
+
+describe('generateDefaultConversationTitle — name edge cases', () => {
+  it('builds fullName from firstName only without trailing space', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'other', firstName: 'John' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('John');
+    expect(result.endsWith(' ')).toBe(false);
+  });
+
+  it('builds fullName from lastName only without leading space', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'other', lastName: 'Doe' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('Doe');
+    expect(result.startsWith(' ')).toBe(false);
+  });
+
+  it('2-member: uses lastName when no displayName or username', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'a', lastName: 'Smith' },
+      { id: 'b', firstName: 'Alice' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('Smith, Alice');
+  });
+
+  it('2-member: combines firstName and lastName when no displayName or username', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'a', firstName: 'John', lastName: 'Smith' },
+      { id: 'b', firstName: 'Alice', lastName: 'Jones' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('John Smith, Alice Jones');
+  });
+
+  it('3+ member: uses lastName fallback for display name', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'a', lastName: 'Smith' },
+      { id: 'b', firstName: 'Alice' },
+      { id: 'c', username: 'charlie' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('Smith, Alice and 1 other(s)');
   });
 });

@@ -2,6 +2,8 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
+import { Repeat2 } from 'lucide-react';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { TranslationToggle } from './TranslationToggle';
@@ -9,6 +11,7 @@ import { CommentList } from './CommentList';
 import type { TranslationItem } from './TranslationToggle';
 import type { Post, PostComment } from '@meeshy/shared/types/post';
 import { getLanguageName } from './flags';
+import { formatCompactNumber } from '@/utils/format-number';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -32,11 +35,7 @@ function postTranslationsToItems(translations: unknown): TranslationItem[] {
     }));
 }
 
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+const formatCount = formatCompactNumber;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -61,14 +60,18 @@ export interface PostDetailProps {
   onBookmark?: () => void;
   onUnbookmark?: () => void;
   onShare?: () => void;
+  onRepost?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
+  onTranslate?: () => void;
   onSubmitComment?: (content: string, parentId?: string) => void;
   onLoadMoreComments?: () => void;
   onLikeComment?: (commentId: string) => void;
   onUnlikeComment?: (commentId: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onShowReplies?: (commentId: string) => void;
+  /** Commentaire ciblé par une navigation depuis une notification. */
+  targetCommentId?: string | null;
   className?: string;
 }
 
@@ -95,14 +98,17 @@ function PostDetail({
   onBookmark,
   onUnbookmark,
   onShare,
+  onRepost,
   onDelete,
   onEdit,
+  onTranslate,
   onSubmitComment,
   onLoadMoreComments,
   onLikeComment,
   onUnlikeComment,
   onDeleteComment,
   onShowReplies,
+  targetCommentId,
   className,
 }: PostDetailProps) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -111,14 +117,12 @@ function PostDetail({
   const hasReactions = post.reactionSummary && Object.keys(post.reactionSummary).length > 0;
 
   const handleLikeToggle = useCallback(() => {
-    if (isLiked) onUnlike?.();
-    else onLike?.();
-  }, [isLiked, onLike, onUnlike]);
+    onLike?.();
+  }, [onLike]);
 
   const handleBookmarkToggle = useCallback(() => {
-    if (isBookmarked) onUnbookmark?.();
-    else onBookmark?.();
-  }, [isBookmarked, onBookmark, onUnbookmark]);
+    onBookmark?.();
+  }, [onBookmark]);
 
   return (
     <div className={cn('max-w-2xl mx-auto', className)} data-testid="post-detail">
@@ -182,7 +186,17 @@ function PostDetail({
                   variant="block"
                 />
               ) : (
-                <p className="text-[var(--gp-text-primary)] whitespace-pre-wrap">{post.content}</p>
+                <>
+                  <p className="text-[var(--gp-text-primary)] whitespace-pre-wrap">{post.content}</p>
+                  {onTranslate && post.originalLanguage && post.originalLanguage !== userLanguage && (
+                    <button
+                      onClick={onTranslate}
+                      className="mt-2 text-xs text-[var(--gp-terracotta)] hover:underline"
+                    >
+                      Translate post
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -193,10 +207,10 @@ function PostDetail({
               {post.media.map((m) => (
                 <div key={m.id} className="rounded-xl overflow-hidden bg-[var(--gp-parchment)]">
                   {m.mimeType.startsWith('image/') && (
-                    <img src={m.fileUrl} alt={m.alt ?? ''} className="w-full object-cover max-h-96" loading="lazy" />
+                    <img src={buildAttachmentUrl(m.fileUrl) ?? undefined} alt={m.alt ?? ''} className="w-full object-cover max-h-96" loading="lazy" />
                   )}
                   {m.mimeType.startsWith('video/') && (
-                    <video src={m.fileUrl} controls className="w-full max-h-96" />
+                    <video src={buildAttachmentUrl(m.fileUrl) ?? undefined} controls className="w-full max-h-96" />
                   )}
                 </div>
               ))}
@@ -282,6 +296,17 @@ function PostDetail({
               Share
             </button>
 
+            {onRepost && (
+              <button
+                onClick={onRepost}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
+                aria-label="Repost"
+              >
+                <Repeat2 className="w-5 h-5" />
+                Repost
+              </button>
+            )}
+
             <button
               onClick={handleBookmarkToggle}
               className={cn(
@@ -322,6 +347,7 @@ function PostDetail({
           onDeleteComment={onDeleteComment}
           onSubmitComment={onSubmitComment}
           onShowReplies={onShowReplies}
+          targetCommentId={targetCommentId}
         />
       </div>
     </div>

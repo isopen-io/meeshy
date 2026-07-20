@@ -263,33 +263,19 @@ export class NodeCryptoAdapter implements CryptoAdapter {
     const privateKeyObject = privateKey.getKeyObject() as crypto.KeyObject;
     const publicKeyObject = publicKey.getKeyObject() as crypto.KeyObject;
 
-    // Perform ECDH key agreement
-    const ecdh = crypto.createECDH('prime256v1');
-    ecdh.setPrivateKey(
-      privateKeyObject.export({ type: 'pkcs8', format: 'der' })
-    );
-
-    const publicKeyBuffer = publicKeyObject.export({
-      type: 'spki',
-      format: 'der',
+    // crypto.diffieHellman accepts KeyObject directly — avoids manual DER extraction
+    const sharedSecret = crypto.diffieHellman({
+      privateKey: privateKeyObject,
+      publicKey: publicKeyObject,
     });
-
-    // Extract raw public key from SPKI format
-    // SPKI has a header, we need to extract the actual key data
-    // For P-256, the public key is 65 bytes (0x04 + 32 bytes X + 32 bytes Y)
-    const publicKeyPoint = publicKeyBuffer.slice(
-      publicKeyBuffer.length - 65
-    );
-
-    const sharedSecret = ecdh.computeSecret(publicKeyPoint);
 
     // Derive AES key from shared secret using HKDF
     const aesKey = Buffer.from(
       crypto.hkdfSync(
         'sha256',
         sharedSecret,
-        Buffer.alloc(0), // no salt
-        Buffer.from('meeshy-e2ee'), // info
+        Buffer.alloc(0),
+        Buffer.from('meeshy-e2ee'),
         KEY_LENGTH
       )
     );

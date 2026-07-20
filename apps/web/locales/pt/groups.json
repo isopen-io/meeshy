@@ -50,10 +50,15 @@
       "myGroups": "Minhas Comunidades",
       "invitations": "Convites"
     },
+    "card": {
+      "openLabel": "Abrir {name}",
+      "copyIdentifier": "Copiar identificador {identifier}"
+    },
     "list": {
       "communities": "Comunidades",
       "loading": "Carregando...",
       "loadingInProgress": "Carregamento em andamento...",
+      "loadingGroups": "Carregando grupos…",
       "selectCommunity": "Selecione uma comunidade",
       "selectCommunityDescription": "Escolha uma comunidade para ver seus detalhes",
       "newCommunity": "Nova comunidade",
@@ -86,6 +91,7 @@
       "createdOn": "Criada em",
       "lastActivity": "Última atividade",
       "loadingConversations": "Carregando conversas...",
+      "loadingGroup": "Carregando grupo…",
       "noConversations": "Nenhuma conversa",
       "noConversationsDescription": "Seja o primeiro a iniciar uma conversa"
     },

@@ -51,6 +51,12 @@ public final class StoryNotificationTargetViewModel: ObservableObject {
     // Idempotent: callers may invoke load() multiple times safely (e.g. on
     // .task + pull-to-refresh). The state is replaced atomically each time.
     public func load() async {
+        // Drain any story post the NSE prefetched for this notification into the
+        // StoryService by-id tray BEFORE the cached read, so a cold-start tap
+        // renders from local data instead of waiting on `fetchPost`. No-op when
+        // nothing was prefetched (mirror of ConversationViewModel/PostDetailViewModel).
+        await NSEPendingPostConsumer.shared.consumeAll()
+
         if let cached = storyService.cachedPost(id: storyId) {
             state = isExpired(cached) ? .expired : .active(cached)
         }

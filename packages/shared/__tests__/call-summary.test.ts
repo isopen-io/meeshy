@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   buildCallSummary,
   buildCallSummaryMetadata,
+  buildCallSummaryWithMetadata,
+  buildLiveCallMetadata,
+  buildGarbageCollectedConversion,
   formatCallDuration,
   formatCallDataSize,
   callSummaryClientMessageId,
@@ -237,5 +240,151 @@ describe('callSummaryClientMessageId', () => {
     expect(callSummaryClientMessageId('abc123')).toBe('call-summary:abc123');
     expect(callSummaryClientMessageId('abc123')).toBe(callSummaryClientMessageId('abc123'));
     expect(callSummaryClientMessageId('a')).not.toBe(callSummaryClientMessageId('b'));
+  });
+});
+
+describe('buildCallSummaryWithMetadata', () => {
+  it('returns null when the summary is suppressed (garbageCollected)', () => {
+    const result = buildCallSummaryWithMetadata(makeMetaInput({ endReason: 'garbageCollected' }));
+    expect(result).toBeNull();
+  });
+
+  it('returns null for a non-terminal status (ringing)', () => {
+    const result = buildCallSummaryWithMetadata(makeMetaInput({ status: 'ringing', endReason: null }));
+    expect(result).toBeNull();
+  });
+
+  it('returns both summary and metadata for a completed video call', () => {
+    const result = buildCallSummaryWithMetadata(makeMetaInput({
+      callType: 'video',
+      durationSeconds: 272,
+    }));
+    expect(result).not.toBeNull();
+    expect(result?.summary.durationSeconds).toBe(272);
+    expect(result?.summary.callType).toBe('video');
+    expect(result?.metadata.outcome).toBe('completed');
+  });
+
+  it('summary in combined result matches standalone buildCallSummary', () => {
+    const input = makeMetaInput({ callType: 'audio', durationSeconds: 60 });
+    const combined = buildCallSummaryWithMetadata(input);
+    const standalone = buildCallSummary(input);
+    expect(combined?.summary).toEqual(standalone);
+  });
+
+  it('metadata in combined result matches standalone buildCallSummaryMetadata', () => {
+    const input = makeMetaInput({ callType: 'video', durationSeconds: 100, bytesSent: 500_000, bytesReceived: 300_000, networkQuality: 'good' });
+    const combined = buildCallSummaryWithMetadata(input);
+    const standalone = buildCallSummaryMetadata(input);
+    expect(combined?.metadata).toEqual(standalone);
+  });
+});
+
+describe('buildLiveCallMetadata — live (ongoing) call message', () => {
+  it('builds the live audio metadata with a neutral outcome and no measurements', () => {
+    const result = buildLiveCallMetadata({ callId: 'call_1', initiatorId: 'user_a', callType: 'audio' });
+    expect(result.metadata).toEqual({
+      kind: 'call-live',
+      callId: 'call_1',
+      initiatorId: 'user_a',
+      callType: 'audio',
+      outcome: 'completed',
+      durationSeconds: 0,
+      bytesTotal: null,
+      bytesEstimated: false,
+      networkQuality: null
+    });
+    expect(result.summary.contentKey).toBe('call_ongoing_audio');
+    expect(result.summary.content).toBe('Appel audio en cours');
+  });
+
+  it('builds the live video label from the media type', () => {
+    const result = buildLiveCallMetadata({ callId: 'call_1', initiatorId: 'user_a', callType: 'video' });
+    expect(result.metadata.kind).toBe('call-live');
+    expect(result.metadata.callType).toBe('video');
+    expect(result.summary.contentKey).toBe('call_ongoing_video');
+    expect(result.summary.content).toBe('Appel vidéo en cours');
+  });
+
+  it('treats an unknown/absent media type as audio', () => {
+    expect(buildLiveCallMetadata({ callId: 'c', initiatorId: 'u', callType: null }).metadata.callType).toBe('audio');
+    expect(buildLiveCallMetadata({ callId: 'c', initiatorId: 'u', callType: 'screenshare' }).metadata.callType).toBe('audio');
+  });
+
+  it('never carries endedByInitiator on a live message', () => {
+    const result = buildLiveCallMetadata({ callId: 'c', initiatorId: 'u', callType: 'audio' });
+    expect('endedByInitiator' in result.metadata).toBe(false);
+  });
+});
+
+describe('endedByInitiator — cancelled-by-initiator discrimination', () => {
+  const missedInput = (overrides: Partial<CallSummaryMetadataInput> = {}): CallSummaryMetadataInput =>
+    makeMetaInput({ status: 'missed', endReason: 'missed', durationSeconds: 0, ...overrides });
+
+  it('is true when a missed call was never answered and ended by the initiator', () => {
+    const meta = buildCallSummaryMetadata(missedInput({ answeredAt: null, endedById: 'user_a' }));
+    expect(meta?.outcome).toBe('missed');
+    expect(meta?.endedByInitiator).toBe(true);
+  });
+
+  it('stays a plain missed call (key ABSENT) when someone else ended it', () => {
+    const meta = buildCallSummaryMetadata(missedInput({ answeredAt: null, endedById: 'user_b' }));
+    expect(meta && 'endedByInitiator' in meta).toBe(false);
+  });
+
+  it('stays a plain missed call (key ABSENT) when nobody is recorded as having ended it', () => {
+    const meta = buildCallSummaryMetadata(missedInput({ answeredAt: null }));
+    expect(meta && 'endedByInitiator' in meta).toBe(false);
+  });
+
+  it('is never set once the call was answered', () => {
+    const meta = buildCallSummaryMetadata(missedInput({ answeredAt: new Date('2026-07-11T10:00:00Z'), endedById: 'user_a' }));
+    expect(meta && 'endedByInitiator' in meta).toBe(false);
+  });
+
+  it('is never set for non-missed outcomes even if the initiator hung up', () => {
+    for (const overrides of [
+      { status: 'ended', endReason: 'completed', durationSeconds: 30 },
+      { status: 'rejected', endReason: 'rejected' },
+      { status: 'failed', endReason: 'failed' }
+    ] satisfies Partial<CallSummaryMetadataInput>[]) {
+      const meta = buildCallSummaryMetadata(makeMetaInput({ ...overrides, answeredAt: null, endedById: 'user_a' }));
+      expect(meta && 'endedByInitiator' in meta).toBe(false);
+    }
+  });
+
+  it('keeps the canonical terminal kind (bijection: terminal is always kind call)', () => {
+    const meta = buildCallSummaryMetadata(missedInput({ answeredAt: null, endedById: 'user_a' }));
+    expect(meta?.kind).toBe('call');
+  });
+
+  it('flows through buildCallSummaryWithMetadata identically', () => {
+    const input = missedInput({ answeredAt: null, endedById: 'user_a' });
+    expect(buildCallSummaryWithMetadata(input)?.metadata).toEqual(buildCallSummaryMetadata(input));
+  });
+});
+
+describe('buildGarbageCollectedConversion — live message reaped as failed', () => {
+  it('converts a live video call to the interrupted terminal state', () => {
+    const result = buildGarbageCollectedConversion({ callId: 'call_1', initiatorId: 'user_a', callType: 'video' });
+    expect(result.metadata).toEqual({
+      kind: 'call',
+      callId: 'call_1',
+      initiatorId: 'user_a',
+      callType: 'video',
+      outcome: 'failed',
+      durationSeconds: 0,
+      bytesTotal: null,
+      bytesEstimated: false,
+      networkQuality: null
+    });
+    expect(result.summary.contentKey).toBe('call_failed_video');
+    expect(result.summary.content).toBe('Appel vidéo interrompu');
+  });
+
+  it('converts a live audio call with the audio label', () => {
+    const result = buildGarbageCollectedConversion({ callId: 'c', initiatorId: 'u', callType: 'audio' });
+    expect(result.metadata.outcome).toBe('failed');
+    expect(result.summary.content).toBe('Appel audio interrompu');
   });
 });

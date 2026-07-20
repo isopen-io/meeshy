@@ -76,7 +76,7 @@ const nextConfig: NextConfig = {
   //
   // Posts: `/feeds/post/:postId` (canonical, minted by gateway) +
   // `/post/:postId`, `/p/:postId` (short aliases). All collapse onto the
-  // single `/v2/feeds/post/[postId]` renderer.
+  // single `/feeds/post/[postId]` renderer.
   //
   // Stories: `/story/:postId` (canonical, minted by the iOS Story viewer)
   // + `/s/:postId` (short alias). Stories share the post identifier
@@ -85,9 +85,8 @@ const nextConfig: NextConfig = {
   // Users: `/users/:username` (plural alias) folds onto the existing
   // legacy public profile page `/u/[id]`.
   //
-  // Self routes: `/me` and `/links` are unauthenticated entry points
-  // claimed by AASA. The web app surfaces them under `/v2/me` and
-  // `/v2/links` (protected route group).
+  // Self routes: `/me` and `/links` are real v1 pages (`/me` lives under
+  // the app/(connected) route group, `/links` at the root) — no rewrite.
   async rewrites() {
     return [
       // Real v1 pages now exist for /feeds/post, /post, /reel, /story, /mood
@@ -105,16 +104,6 @@ const nextConfig: NextConfig = {
       {
         source: '/users/:username',
         destination: '/u/:username',
-      },
-      // Self routes — only `/me` needs a rewrite (root has no /me page).
-      // `/links` is intentionally NOT rewritten: the existing root
-      // `/links/page.tsx` is the canonical user links hub on the web and
-      // would be shadowed by a rewrite to `/v2/links`. AASA still claims
-      // both `/me` and `/links` so iOS takes over before the web is
-      // consulted.
-      {
-        source: '/me',
-        destination: '/v2/me',
       },
     ];
   },

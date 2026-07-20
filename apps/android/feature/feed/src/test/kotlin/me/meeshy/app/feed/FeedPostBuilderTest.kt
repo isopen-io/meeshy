@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.ApiRepostOf
 import org.junit.Test
 
 class FeedPostBuilderTest {
@@ -21,6 +22,8 @@ class FeedPostBuilderTest {
         author: ApiAuthor? = ApiAuthor(id = "u1", username = "alice", displayName = "Alice"),
         likeCount: Int? = 3,
         isLikedByMe: Boolean? = false,
+        bookmarkCount: Int? = 4,
+        isBookmarkedByMe: Boolean? = false,
         commentCount: Int? = 2,
         repostCount: Int? = 1,
         media: List<ApiPostMedia>? = null,
@@ -32,6 +35,8 @@ class FeedPostBuilderTest {
         author = author,
         likeCount = likeCount,
         isLikedByMe = isLikedByMe,
+        bookmarkCount = bookmarkCount,
+        isBookmarkedByMe = isBookmarkedByMe,
         commentCount = commentCount,
         repostCount = repostCount,
         media = media,
@@ -54,6 +59,25 @@ class FeedPostBuilderTest {
         val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "de"), mediaBaseUrl = null)
         assertThat(result.content).isEqualTo("Bonjour")
         assertThat(result.isTranslated).isFalse()
+    }
+
+    @Test
+    fun build_translatedPostCarriesLanguageStripAnchoringOriginalAndPreferred() {
+        val p = post(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
+        val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "en"), mediaBaseUrl = null)
+        assertThat(result.isTranslated).isTrue()
+        assertThat(result.languageStrip.map { it.code }).containsExactly("fr", "en").inOrder()
+        assertThat(result.languageStrip.first { it.code == "fr" }.isOriginal).isTrue()
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isTrue()
+    }
+
+    @Test
+    fun build_untranslatedPostHasEmptyLanguageStrip() {
+        // No preferred-language translation → Prisme shows the original → no strip to explore.
+        val p = post(translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola")))
+        val result = FeedPostBuilder.build(p, Prefs(systemLanguage = "de"), mediaBaseUrl = null)
+        assertThat(result.isTranslated).isFalse()
+        assertThat(result.languageStrip).isEmpty()
     }
 
     @Test
@@ -101,10 +125,125 @@ class FeedPostBuilderTest {
 
     @Test
     fun build_nullCountsBecomeZero() {
-        val p = post(likeCount = null, commentCount = null, repostCount = null)
+        val p = post(likeCount = null, commentCount = null, repostCount = null, bookmarkCount = null)
         val result = FeedPostBuilder.build(p, Prefs(), null)
         assertThat(result.likeCount).isEqualTo(0)
         assertThat(result.commentCount).isEqualTo(0)
         assertThat(result.repostCount).isEqualTo(0)
+        assertThat(result.bookmarkCount).isEqualTo(0)
+    }
+
+    @Test
+    fun build_bookmarkStateComesFromIsBookmarkedByMe() {
+        // A post bookmarked by others (count 4) but not by me must NOT show as bookmarked.
+        val notMine = post(bookmarkCount = 4, isBookmarkedByMe = false)
+        assertThat(FeedPostBuilder.build(notMine, Prefs(), null).isBookmarked).isFalse()
+        assertThat(FeedPostBuilder.build(notMine, Prefs(), null).bookmarkCount).isEqualTo(4)
+
+        val mine = post(bookmarkCount = 1, isBookmarkedByMe = true)
+        assertThat(FeedPostBuilder.build(mine, Prefs(), null).isBookmarked).isTrue()
+    }
+
+    // --- Prisme language switch (per-post active-language override) ---
+
+    private fun bilingualPost() = post(
+        translations = mapOf(
+            "en" to ApiPostTranslationEntry(text = "Hello"),
+            "es" to ApiPostTranslationEntry(text = "Hola"),
+        ),
+    )
+
+    // System=en, regional=es → default resolution picks en (first configured with
+    // content); both en and es are configured content languages carried by the post.
+    private val bilingualPrefs = Prefs(systemLanguage = "en", regionalLanguage = "es")
+
+    @Test
+    fun build_nullOverrideUsesDefaultPrismeResolution() {
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = null)
+        assertThat(result.content).isEqualTo("Hello")
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isTrue()
+        assertThat(result.languageStrip.first { it.code == "es" }.isActive).isFalse()
+    }
+
+    @Test
+    fun build_overrideSwitchesContentAndStripToAnotherConfiguredLanguage() {
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = "es")
+        assertThat(result.content).isEqualTo("Hola")
+        assertThat(result.languageStrip.first { it.code == "es" }.isActive).isTrue()
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isFalse()
+    }
+
+    @Test
+    fun build_overrideToOriginalShowsOriginalAndHighlightsOriginalChip() {
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = "fr")
+        assertThat(result.content).isEqualTo("Bonjour")
+        val original = result.languageStrip.first { it.code == "fr" }
+        assertThat(original.isOriginal).isTrue()
+        assertThat(original.isActive).isTrue()
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isFalse()
+    }
+
+    @Test
+    fun build_overrideToLanguageWithoutContentFallsBackToDefault() {
+        // "de" has no translation and is not configured → override ignored, default stands.
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = "de")
+        assertThat(result.content).isEqualTo("Hello")
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isTrue()
+    }
+
+    @Test
+    fun build_overrideMatchesCaseInsensitivelyAndTrims() {
+        val result = FeedPostBuilder.build(bilingualPost(), bilingualPrefs, null, activeLanguageCode = "  ES ")
+        assertThat(result.content).isEqualTo("Hola")
+        assertThat(result.languageStrip.first { it.code == "es" }.isActive).isTrue()
+    }
+
+    @Test
+    fun resolveActiveCode_overrideWithContentWins() {
+        val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), bilingualPrefs, override = "es")
+        assertThat(code).isEqualTo("es")
+    }
+
+    @Test
+    fun resolveActiveCode_overrideWithoutContentFallsBackToPreferred() {
+        val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), bilingualPrefs, override = "de")
+        assertThat(code).isEqualTo("en")
+    }
+
+    @Test
+    fun resolveActiveCode_nullOverrideFallsBackToPreferred() {
+        val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), bilingualPrefs, override = null)
+        assertThat(code).isEqualTo("en")
+    }
+
+    @Test
+    fun resolveActiveCode_nullOverrideWithNoPreferredTranslationFallsBackToOriginal() {
+        // Prefs target a language the post does not carry → no preferred translation.
+        val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), Prefs(systemLanguage = "de"), override = null)
+        assertThat(code).isEqualTo("fr")
+    }
+
+    // --- Repost embed wiring (a reposted/quoted post rendered inside the card) ---
+
+    @Test
+    fun build_plainPostHasNoRepostEmbed() {
+        assertThat(FeedPostBuilder.build(post(), Prefs(), null).repostEmbed).isNull()
+    }
+
+    @Test
+    fun build_repostPostCarriesEmbedProjectedFromRepostOf() {
+        val p = post().copy(
+            repostOf = ApiRepostOf(
+                id = "orig-1",
+                type = "POST",
+                content = "Hola",
+                author = ApiAuthor(id = "u9", username = "orig", displayName = "Origen"),
+            ),
+        )
+        val embed = FeedPostBuilder.build(p, Prefs(), null).repostEmbed
+        assertThat(embed).isNotNull()
+        assertThat(embed?.id).isEqualTo("orig-1")
+        assertThat(embed?.authorName).isEqualTo("Origen")
+        assertThat(embed?.content).isEqualTo("Hola")
     }
 }

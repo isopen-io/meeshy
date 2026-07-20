@@ -82,7 +82,15 @@ final class StatusBubbleController: ObservableObject {
 // MARK: - View Modifier
 
 private struct StatusBubbleOverlayModifier: ViewModifier {
-    @EnvironmentObject private var controller: StatusBubbleController
+    // `StatusBubbleController` is a `.shared` singleton, so reference it
+    // directly instead of via `@EnvironmentObject`. The environment-object
+    // form is fatal ("No ObservableObject of type … found") whenever
+    // `.withStatusBubble()` is evaluated outside the injected ancestor chain —
+    // notably inside a sheet's `PresentationHostingController`, which does NOT
+    // inherit the presenter's `.environmentObject(...)`. Several sheets apply
+    // `.withStatusBubble()` (ConversationInfoSheet, ForwardPickerSheet,
+    // FeedCommentsSheet, …) without re-injecting, which crashed on present.
+    @StateObject private var controller = StatusBubbleController.shared
 
     func body(content: Content) -> some View {
         ZStack {
@@ -138,7 +146,7 @@ private struct MoodReplyConfirmationOverlay: View {
 
     private var moodSummary: String {
         let date = RelativeTimeFormatter.shortString(for: entry.createdAt)
-        let content = (entry.content?.isEmpty == false) ? " \(entry.content!)" : ""
+        let content = entry.content.flatMap { $0.isEmpty ? nil : " \($0)" } ?? ""
         return "\(entry.moodEmoji)\(content) \u{00B7} \(date)"
     }
 
@@ -151,12 +159,12 @@ private struct MoodReplyConfirmationOverlay: View {
 
             VStack(spacing: 14) {
                 Text(String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main))
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(moodSummary)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
@@ -164,7 +172,7 @@ private struct MoodReplyConfirmationOverlay: View {
                 HStack(spacing: 10) {
                     Button(action: onCancel) {
                         Text(String(localized: "mood.reply.confirm.cancel", defaultValue: "Quitter", bundle: .main))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(MeeshyFont.relative(15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
@@ -176,7 +184,7 @@ private struct MoodReplyConfirmationOverlay: View {
 
                     Button(action: onReply) {
                         Text(String(localized: "mood.reply.confirm.reply", defaultValue: "Répondre", bundle: .main))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(MeeshyFont.relative(15, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)

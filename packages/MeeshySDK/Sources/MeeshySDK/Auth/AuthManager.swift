@@ -148,7 +148,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         get { keychain.load(forKey: activeUserIdUDKey, account: nil) }
         set {
             if let value = newValue {
-                try? keychain.save(value, forKey: activeUserIdUDKey, account: nil)
+                do {
+                    try keychain.save(value, forKey: activeUserIdUDKey, account: nil)
+                } catch {
+                    Logger.auth.error("Failed to save activeUserId to keychain: \(error.localizedDescription, privacy: .public)")
+                }
             } else {
                 keychain.delete(forKey: activeUserIdUDKey, account: nil)
             }
@@ -166,7 +170,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         set {
             guard let userId = activeUserId else { return }
             if let value = newValue {
-                try? keychain.save(value, forKey: tokenKey(for: userId), account: nil)
+                do {
+                    try keychain.save(value, forKey: tokenKey(for: userId), account: nil)
+                } catch {
+                    Logger.auth.error("Failed to save authToken to keychain: \(error.localizedDescription, privacy: .public)")
+                }
             } else {
                 keychain.delete(forKey: tokenKey(for: userId), account: nil)
             }
@@ -207,8 +215,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
             Logger.auth.warning("JWT payload base64 decode failed; treating as expired")
             return true
         }
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            Logger.auth.warning("JWT payload not JSON; treating as expired")
+        let json: [String: Any]
+        do {
+            guard let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                Logger.auth.warning("JWT payload not a JSON object; treating as expired")
+                return true
+            }
+            json = decoded
+        } catch {
+            Logger.auth.warning("JWT payload JSON deserialization failed: \(error.localizedDescription, privacy: .public); treating as expired")
             return true
         }
         guard let exp = json["exp"] as? TimeInterval else {
@@ -359,6 +374,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // U3 — drop any in-flight optimistic profile guard so it can't leak onto
         // the next user's profile after a re-login.
         pendingOptimisticProfile = nil
+        // T15b — HTTP cache purge AVANT le guard : l'état déconnecté ne doit
+        // jamais laisser de bodies REST (conversations, messages) d'un compte
+        // au repos sur disque, quel que soit le chemin de logout emprunté.
+        APIClient.shared.clearHTTPCache()
         guard let userId = activeUserId else {
             // Idempotent : peut être appelée plusieurs fois sans crash.
             // Garde un état cohérent même quand aucune session n'est active.
@@ -392,9 +411,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
         PushNotificationManager.shared.resetSession()
         await BlockService.shared.reset()
         StoryService.shared.reset()
+        // E9 — confidentialité multi-compte : le brouillon de story (DB GRDB
+        // dédiée + meeshy_draft_media/) et la queue de publication persistée
+        // (items + copies médias) appartiennent au compte sortant. Sans ces
+        // purges, le compte suivant retrouvait le draft du précédent ET le
+        // drain aurait PUBLIÉ ses stories en attente sous la mauvaise session.
+        StoryDraftStore.shared.clear()
+        await StoryPublishQueue.shared.clearAll()
         await ConversationStore.shared.reset()
         UserPreferencesManager.shared.resetSession()
         FriendshipCache.shared.clear()
+        // A5 — le curseur de séquence est per-user : le remettre à zéro évite
+        // un faux gap au premier event du compte suivant sur le même device.
+        Task { await SyncSeqTracker.shared.reset() }
 
         // Keychain wipe + saved account remove (existant).
         keychain.delete(forKey: tokenKey(for: userId), account: nil)
@@ -413,6 +442,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // pendant que les caches user A sont encore en RAM).
         await CacheCoordinator.shared.reset()
 
+        // T15b — seconde purge HTTP : un store disque URLCache bufferisé
+        // (réponse d'un fetch juste avant le logout) peut atterrir APRÈS la
+        // première purge et ressusciter le body. Re-purger en fin de logout
+        // ferme cette fenêtre.
+        APIClient.shared.clearHTTPCache()
+
         // En DERNIER : déclenche le router et tous les `wireAuthLogoutHook`
         // app-side (ConversationAudioCoordinator, FeedbackToastManager, etc.).
         isAuthenticated = false
@@ -428,7 +463,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         let delays: [TimeInterval] = [0, 1, 5] // total ≈ 6s wall-clock
         for delay in delays {
             if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                do {
+                    try await Task.sleep(for: .seconds(delay))
+                } catch {
+                    return // Task cancelled
+                }
             }
             do {
                 try await authService.logoutThrowing()
@@ -482,9 +521,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // below repopulates it from the server.
         if let userJSON = keychain.load(forKey: userKey(for: userId), account: nil),
            let userData = userJSON.data(using: .utf8) {
-            if let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) {
+            do {
+                let user = try JSONDecoder().decode(MeeshyUser.self, from: userData)
                 currentUser = user
-            } else {
+            } catch {
+                Logger.auth.error("Failed to decode cached user for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public) — dropping corrupt cache entry")
                 keychain.delete(forKey: userKey(for: userId), account: nil)
             }
         }
@@ -506,7 +547,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // can race in offline anyway, so deferring the refresh to the next
         // reconnect / 401 is safe. Online behaviour is unchanged.
         if isCurrentTokenExpired, sessionToken != nil, NetworkMonitor.shared.isOnline {
-            _ = try? await refreshSession(force: false)
+            do {
+                _ = try await refreshSession(force: false)
+            } catch {
+                Logger.auth.warning("Proactive session refresh failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
 
         // Background revalidation (stale-while-revalidate for the user
@@ -516,11 +561,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         Task { [weak self] in
             do {
                 let user = try await AuthService.shared.me()
-                await self?.updateUserAfterRevalidation(user, userId: userId)
+                self?.updateUserAfterRevalidation(user, userId: userId)
             } catch let error as MeeshyError {
                 switch error {
                 case .auth:
-                    await self?.requireReauthentication(userId: userId)
+                    self?.requireReauthentication(userId: userId)
                 case .network, .server, .message, .media, .forbidden, .unknown:
                     // Transient — keep session, retry on next 401 / launch.
                     break
@@ -534,7 +579,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Handle 401 (called from APIClient during active session)
 
     public func handleUnauthorized() {
-        guard let userId = activeUserId else {
+        guard activeUserId != nil else {
             // No active user at all — nothing to refresh, no state to clear.
             return
         }
@@ -543,7 +588,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
         // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
         Task { [weak self] in
-            _ = try? await self?.refreshSession(force: true)
+            do {
+                _ = try await self?.refreshSession(force: true)
+            } catch {
+                Logger.auth.error("Background session refresh after 401 failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -576,13 +625,26 @@ public final class AuthManager: ObservableObject, AuthManaging {
             newUserId: userId
         )
 
-        try? keychain.save(token, forKey: tokenKey(for: userId), account: nil)
+        do {
+            try keychain.save(token, forKey: tokenKey(for: userId), account: nil)
+        } catch {
+            Logger.auth.error("Failed to save token to keychain for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+
         if let sessionToken = sessionToken, !sessionToken.isEmpty {
-            try? keychain.save(sessionToken, forKey: sessionTokenKey(for: userId), account: nil)
+            do {
+                try keychain.save(sessionToken, forKey: sessionTokenKey(for: userId), account: nil)
+            } catch {
+                Logger.auth.error("Failed to save sessionToken to keychain for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
         saveUserToKeychain(user, userId: userId)
         let now = String(Date().timeIntervalSince1970)
-        try? keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
+        do {
+            try keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
+        } catch {
+            Logger.auth.error("Failed to save token date to keychain for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
 
         activeUserId = userId
         APIClient.shared.authToken = token
@@ -633,9 +695,16 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     private func saveUserToKeychain(_ user: MeeshyUser, userId: String) {
         let sanitized = sanitizeDataURIs(user)
-        guard let encoded = try? JSONEncoder().encode(sanitized),
-              let jsonString = String(data: encoded, encoding: .utf8) else { return }
-        try? keychain.save(jsonString, forKey: userKey(for: userId), account: nil)
+        do {
+            let encoded = try JSONEncoder().encode(sanitized)
+            guard let jsonString = String(data: encoded, encoding: .utf8) else {
+                Logger.auth.error("Failed to convert sanitized user data to UTF8 string for userId \(userId, privacy: .public)")
+                return
+            }
+            try keychain.save(jsonString, forKey: userKey(for: userId), account: nil)
+        } catch {
+            Logger.auth.error("Failed to save user to keychain for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func sanitizeDataURIs(_ user: MeeshyUser) -> MeeshyUser {
@@ -712,11 +781,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 guard let newToken = data.token, let newUser = data.user else {
                     throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
                 }
-                await self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
+                self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
                 if case .auth = error {
-                    await self.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId)
                 }
                 throw error
             } catch {
@@ -737,8 +806,16 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     private func loadSavedAccounts() {
         guard let json = keychain.load(forKey: savedAccountsUDKey, account: nil),
-              let data = json.data(using: .utf8),
-              let accounts = try? JSONDecoder().decode([SavedAccount].self, from: data) else {
+              let data = json.data(using: .utf8) else {
+            savedAccounts = []
+            return
+        }
+
+        let accounts: [SavedAccount]
+        do {
+            accounts = try JSONDecoder().decode([SavedAccount].self, from: data)
+        } catch {
+            Logger.auth.error("Failed to decode saved accounts from keychain: \(error.localizedDescription, privacy: .public)")
             savedAccounts = []
             return
         }
@@ -759,9 +836,16 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     private func persistSavedAccounts() {
-        guard let data = try? JSONEncoder().encode(savedAccounts),
-              let json = String(data: data, encoding: .utf8) else { return }
-        try? keychain.save(json, forKey: savedAccountsUDKey, account: nil)
+        do {
+            let data = try JSONEncoder().encode(savedAccounts)
+            guard let json = String(data: data, encoding: .utf8) else {
+                Logger.auth.error("Failed to convert saved accounts to UTF8 string")
+                return
+            }
+            try keychain.save(json, forKey: savedAccountsUDKey, account: nil)
+        } catch {
+            Logger.auth.error("Failed to persist saved accounts to keychain: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func upsertSavedAccount(from user: MeeshyUser) {
@@ -796,7 +880,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // 1. Migrate activeUserId from UserDefaults to Keychain
         if let legacyActiveId = userDefaults.string(forKey: activeUserIdUDKey) {
             if keychain.load(forKey: activeUserIdUDKey, account: nil) == nil {
-                try? keychain.save(legacyActiveId, forKey: activeUserIdUDKey, account: nil)
+                do {
+                    try keychain.save(legacyActiveId, forKey: activeUserIdUDKey, account: nil)
+                } catch {
+                    Logger.auth.error("Legacy migration failed for activeUserId: \(error.localizedDescription, privacy: .public)")
+                }
             }
             userDefaults.removeObject(forKey: activeUserIdUDKey)
         }
@@ -805,7 +893,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         if let legacyData = userDefaults.data(forKey: savedAccountsUDKey),
            let legacyJson = String(data: legacyData, encoding: .utf8) {
             if keychain.load(forKey: savedAccountsUDKey, account: nil) == nil {
-                try? keychain.save(legacyJson, forKey: savedAccountsUDKey, account: nil)
+                do {
+                    try keychain.save(legacyJson, forKey: savedAccountsUDKey, account: nil)
+                } catch {
+                    Logger.auth.error("Legacy migration failed for savedAccounts: \(error.localizedDescription, privacy: .public)")
+                }
             }
             userDefaults.removeObject(forKey: savedAccountsUDKey)
         }
@@ -820,19 +912,23 @@ public final class AuthManager: ObservableObject, AuthManaging {
         guard activeUserId == nil,
               let token = keychain.load(forKey: legacyTokenKey, account: nil),
               let userJSON = keychain.load(forKey: legacyUserKey, account: nil),
-              let userData = userJSON.data(using: .utf8),
-              let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) else {
+              let userData = userJSON.data(using: .utf8) else {
             return
         }
 
-        let userId = user.id
-        try? keychain.save(token, forKey: tokenKey(for: userId), account: nil)
-        try? keychain.save(userJSON, forKey: userKey(for: userId), account: nil)
-        // Use now as tokenSavedAt (we don't know the original date — within 1 year is safe)
-        let now = String(Date().timeIntervalSince1970)
-        try? keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
-        activeUserId = userId
-        upsertSavedAccount(from: user)
+        do {
+            let user = try JSONDecoder().decode(MeeshyUser.self, from: userData)
+            let userId = user.id
+            try keychain.save(token, forKey: tokenKey(for: userId), account: nil)
+            try keychain.save(userJSON, forKey: userKey(for: userId), account: nil)
+            // Use now as tokenSavedAt (we don't know the original date — within 1 year is safe)
+            let now = String(Date().timeIntervalSince1970)
+            try keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
+            activeUserId = userId
+            upsertSavedAccount(from: user)
+        } catch {
+            Logger.auth.error("Legacy user migration failed: \(error.localizedDescription, privacy: .public)")
+        }
 
         keychain.delete(forKey: legacyTokenKey, account: nil)
         keychain.delete(forKey: legacyUserKey, account: nil)

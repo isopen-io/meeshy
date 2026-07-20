@@ -29,10 +29,10 @@ export function SuccessStep({ onClose, onNavigateToLogin, t }: SuccessStepProps)
       </motion.div>
       <div>
         <h3 className="text-xl font-bold text-violet-600 dark:text-violet-400">
-          {t('magicLink.success.title') || 'Magic Link envoyé !'}
+          {t('magicLink.success.title', 'Magic Link Sent!')}
         </h3>
         <p className="text-sm text-muted-foreground mt-2">
-          {t('magicLink.success.description') || 'Consultez votre boîte email et cliquez sur le lien pour vous connecter instantanément.'}
+          {t('magicLink.success.description', 'Check your email inbox and click the link to sign in instantly.')}
         </p>
       </div>
       <Button
@@ -43,7 +43,7 @@ export function SuccessStep({ onClose, onNavigateToLogin, t }: SuccessStepProps)
         className="bg-gradient-to-r from-violet-500 to-purple-600"
       >
         <Sparkles className="w-4 h-4 mr-2" />
-        {t('register.wizard.understood') || "J'ai compris"}
+        {t('register.wizard.understood', "J'ai compris")}
       </Button>
     </motion.div>
   );

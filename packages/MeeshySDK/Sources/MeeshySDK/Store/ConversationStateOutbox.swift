@@ -122,9 +122,9 @@ public actor ConversationStateOutbox {
             try? Self.createSchema(in: disk)
             return disk
         }
-        let fallback = (try? DatabaseQueue()) ?? {
-            try! DatabaseQueue()  // swiftlint:disable:this force_try
-        }()
+        guard let fallback = try? DatabaseQueue() else {
+            fatalError("[ConversationStateOutbox] Cannot create in-memory GRDB queue — out of memory")
+        }
         try? Self.createSchema(in: fallback)
         return fallback
     }
@@ -266,16 +266,23 @@ public actor ConversationStateOutbox {
     /// `<= now()`), in FIFO order, via the provided closure. The closure
     /// returns the outcome; the outbox applies it (drop / bump retry).
     ///
+    /// Pass `force: true` to bypass the backoff gate and dispatch ALL
+    /// pending tasks immediately — use this for explicit reconnect flushes
+    /// where network availability is confirmed and backoff is no longer
+    /// appropriate.
+    ///
     /// Concurrency: tasks are dispatched sequentially. A future
     /// optimization could parallelize across distinct conversations,
     /// but the current scale (a handful of pending writes) does not
     /// justify the complexity.
     public func flush(
+        force: Bool = false,
         via dispatch: @Sendable (OutboxTask) async -> OutboxDispatchOutcome
     ) async {
         let nowDate = now()
         let ready = pending.values
             .filter { task in
+                if force { return true }
                 guard let retry = task.nextRetryAt else { return true }
                 return retry <= nowDate
             }

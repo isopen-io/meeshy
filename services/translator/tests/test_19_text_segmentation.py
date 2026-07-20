@@ -188,6 +188,35 @@ class TestEmojiExtraction:
         placeholder_pattern = re.compile(r'🔹EMOJI_\d+🔹')
         assert placeholder_pattern.search(result_text) is not None
 
+    def test_cjk_text_is_not_extracted_as_emoji(self, segmenter):
+        """Regression: EMOJI_PATTERN must NOT match CJK/Kana/Hangul. Writing the
+        enclosed-characters branch as the range "\\U000024C2-\\U0001F251" makes it
+        span U+4E00..U+9FFF (CJK), U+3040..U+30FF (Kana) and U+AC00..U+D7AF
+        (Hangul), so extract_emojis() pulled whole Chinese/Japanese/Korean
+        sentences out as fake emojis and replaced them with placeholders — the CJK
+        text was then never sent to the translation model."""
+        for text in ("你好世界", "これはテスト", "안녕하세요", "日本語のテキスト"):
+            result_text, emojis_map = segmenter.extract_emojis(text)
+            assert result_text == text
+            assert len(emojis_map) == 0
+
+    def test_cjk_with_real_emoji_extracts_only_the_emoji(self, segmenter):
+        """Mixed CJK + emoji: only the emoji is extracted, the CJK stays inline."""
+        text = "日本語 😊 english"
+        result_text, emojis_map = segmenter.extract_emojis(text)
+        assert "日本語" in result_text
+        assert "english" in result_text
+        assert len(emojis_map) == 1
+        assert emojis_map[0] == "😊"
+
+    def test_enclosed_emoji_still_extracted(self, segmenter):
+        """The intended enclosed-emoji code points must still be extracted after
+        removing the CJK-swallowing range."""
+        for glyph in ("Ⓜ", "🈵", "🅰", "🉐", "🇫🇷", "㊗"):
+            _, emojis_map = segmenter.extract_emojis(f"x {glyph}")
+            all_emojis = ''.join(emojis_map.values())
+            assert glyph in all_emojis, f"{glyph!r} should still be extracted"
+
 
 # ===============================================================
 # EMOJI RESTORATION TESTS
@@ -298,10 +327,29 @@ class TestListItemDetection:
         """Test text that is not a list item"""
         assert segmenter.is_list_item("Hello world") is False
         assert segmenter.is_list_item("This is a sentence.") is False
-        # Note: "A regular paragraph" would match Roman numeral pattern [IVXLCDM]
-        # Use text that doesn't start with those letters
         assert segmenter.is_list_item("Regular paragraph here") is False
         assert segmenter.is_list_item("Some normal text") is False
+        # "A regular paragraph" must NOT match: 'A' is not in the Roman set
+        # IVXLCDM and there is no ')'. It only ever matched because of the
+        # bullet-class range bug (see test_bullet_range_does_not_swallow_prose).
+        assert segmenter.is_list_item("A regular paragraph") is False
+
+    def test_bullet_range_does_not_swallow_prose(self, segmenter):
+        """Regression: the bullet class is a literal set {-, +, •, *, →}, NOT a
+        U+002B..U+2022 range. Prose whose first character happens to fall in that
+        range (digits, A-Z, punctuation, accents) followed by whitespace must NOT
+        be classified as a list item."""
+        assert segmenter.is_list_item("A dog") is False
+        assert segmenter.is_list_item("W hat is this") is False
+        assert segmenter.is_list_item("2 apples left") is False
+        assert segmenter.is_list_item("; punctuation lead") is False
+        assert segmenter.is_list_item("é accented word") is False
+        # The intended literal bullets still match:
+        assert segmenter.is_list_item("- dash item") is True
+        assert segmenter.is_list_item("+ plus item") is True
+        assert segmenter.is_list_item("• dot item") is True
+        assert segmenter.is_list_item("* star item") is True
+        assert segmenter.is_list_item("→ arrow item") is True
 
     def test_empty_line(self, segmenter):
         """Test empty line"""

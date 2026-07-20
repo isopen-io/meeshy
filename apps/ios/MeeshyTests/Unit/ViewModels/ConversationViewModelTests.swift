@@ -37,7 +37,7 @@ final class ConversationViewModelTests: XCTestCase {
         MessageSocketManager.shared.isConnected = true
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         // Reset singleton so other test classes don't inherit a forced
         // connected state. The default for a fresh app session is false.
         MessageSocketManager.shared.isConnected = false
@@ -47,7 +47,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockReactionService = nil
         mockReportService = nil
         mockMessageSocket = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory
@@ -58,7 +58,9 @@ final class ConversationViewModelTests: XCTestCase {
         isDirect: Bool = false,
         participantUserId: String? = nil,
         anonymousSession: AnonymousSessionContext? = nil,
-        dependencies: ConversationDependencies? = nil
+        dependencies: ConversationDependencies? = nil,
+        activeCallService: ActiveCallServiceProviding? = nil,
+        liveCallJoin: LiveCallJoinContext? = nil
     ) -> ConversationViewModel {
         let currentUser = MeeshyUser(id: testUserId, username: "testuser", displayName: "Test User")
         mockAuthManager.simulateLoggedIn(user: currentUser)
@@ -76,7 +78,9 @@ final class ConversationViewModelTests: XCTestCase {
             reactionService: mockReactionService,
             reportService: mockReportService,
             messageSocket: mockMessageSocket,
-            dependencies: deps
+            dependencies: deps,
+            activeCallService: activeCallService ?? ActiveCallService.shared,
+            liveCallJoin: liveCallJoin ?? .live
         )
         // Activate the VM as the view's `.task` does: `init` is now
         // side-effect-free, so the GRDB observation / initial load / Combine
@@ -229,6 +233,32 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertTrue(sut.hasOlderMessages)
     }
 
+    func test_loadOlderMessages_missingCursorPagination_keepsPaginationOpenOnFullPage() async {
+        // Gateway antérieur au fix de schéma Fastify : `cursorPagination` est
+        // strippé de la réponse. L'ancien `?? false` verrouillait la pagination
+        // après une seule page ; une page pleine doit la laisser ouverte.
+        let initial: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"msg-1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello","createdAt":"2026-01-02T00:00:00.000Z"}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":null,"limit":50},"hasNewer":null}
+        """)
+        mockMessageService.listResult = .success(initial)
+        let olderData = (0..<50).map { i in
+            "{\"id\":\"older-\(i)\",\"conversationId\":\"\(testConversationId)\",\"senderId\":\"\(testUserId)\",\"content\":\"m\(i)\",\"createdAt\":\"2026-01-01T00:00:\(String(format: "%02d", i)).000Z\"}"
+        }.joined(separator: ",")
+        let older: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[\(olderData)],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+        mockMessageService.listBeforeResult = .success(older)
+        let sut = makeSUT()
+        await sut.loadMessages()
+
+        await sut.loadOlderMessages()
+
+        XCTAssertTrue(sut.hasOlderMessages,
+                      "A gateway stripping cursorPagination must not latch pagination closed after a full page")
+    }
+
     func test_loadMessages_failure_keepsEmptyMessagesAndFinishesLoading() async {
         mockMessageService.listResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Server error"]))
         let sut = makeSUT()
@@ -262,8 +292,9 @@ final class ConversationViewModelTests: XCTestCase {
         let sut = makeSUT()
         // markAsRead routes through ConversationSyncEngine + the offline outbox;
         // the .conversationMarkedRead notification is its observable contract.
+        let expectedId = testConversationId
         let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
-            (notification.object as? String) == self.testConversationId
+            (notification.object as? String) == expectedId
         }
 
         await sut.loadMessages()
@@ -654,6 +685,47 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(sut.messages.first?.attachments.first?.reactionSummary?["👍"], 3)
     }
 
+    // Regression guard (GAP #1): an attachment reaction must be written through
+    // GRDB so it survives a cold reload. Before the fix the pill lived only in
+    // the in-memory `messages` array and was lost on the next conversation load.
+    func test_toggleAttachmentReaction_persistsReactionSummaryToGRDB() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        // Seed a delivered message row carrying the image attachment so the row
+        // exists for `updateAttachmentsJson` to update and surfaces in the VM.
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "m1", conversationId: testConversationId, senderId: testUserId
+        )
+        try await persistence.insertOptimistic(record)
+        let attachment = MeeshyMessageAttachment(
+            id: "a1", mimeType: "image/jpeg", fileUrl: "file:///x.jpg", uploadedBy: testUserId
+        )
+        try await persistence.updateAttachmentsJson(
+            localId: "m1", attachmentsJson: try JSONEncoder().encode([attachment])
+        )
+        _ = await MessageStoreObservationHelper.awaitMessage(in: sut) {
+            $0.id == "m1" && !$0.attachments.isEmpty
+        }
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+
+        // The write-through runs in a fire-and-forget Task; poll GRDB until it lands.
+        var persistedSummary: [String: Int]?
+        let deadline = Date().addingTimeInterval(1.5)
+        while Date() < deadline {
+            if let json = try await MessageStoreObservationHelper.fetchRecord(localId: "m1", from: pool)?.attachmentsJson,
+               let atts = try? JSONDecoder().decode([MeeshyMessageAttachment].self, from: json),
+               let summary = atts.first?.reactionSummary {
+                persistedSummary = summary
+                break
+            }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+        XCTAssertEqual(persistedSummary?["❤️"], 1, "Attachment reaction must be persisted to GRDB to survive a reload")
+    }
+
     func test_insertOptimisticMediaMessage_surfacesBubbleInViewModel() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
@@ -981,6 +1053,75 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertNotNil(updated, "removeReaction must clear reactions in GRDB")
     }
 
+    /// Modèle 1-réaction-par-user (miroir attachment-level + serveur) : poser un
+    /// emoji DIFFÉRENT remplace ma réaction précédente au lieu de l'empiler.
+    /// Les réactions des AUTRES participants ne sont jamais touchées.
+    func test_toggleReaction_differentEmoji_replacesPreviousOwnReaction() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let myPrevious = MeeshyReaction(
+            messageId: "msg-swap", participantId: testUserId, emoji: "heart"
+        )
+        let someoneElses = MeeshyReaction(
+            messageId: "msg-swap", participantId: "other-user", emoji: "heart"
+        )
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-swap", conversationId: testConversationId,
+            senderId: "other-user", content: "Swap my reaction",
+            reactions: [myPrevious, someoneElses]
+        )
+        try await persistence.insertOptimistic(record)
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "msg-swap", in: sut
+        ) { msg in msg.reactions.count == 2 }
+        XCTAssertTrue(seeded, "Seed reactions must surface via store observation")
+
+        sut.toggleReaction(messageId: "msg-swap", emoji: "thumbsup")
+
+        let updated = await MessageStoreObservationHelper.awaitRecord(
+            localId: "msg-swap", from: pool
+        ) { record in
+            let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                       from: record.reactionsJson ?? Data())) ?? []
+            let mine = reactions.filter { $0.participantId == self.testUserId }
+            return mine.map(\.emoji) == ["thumbsup"]
+        }
+        // awaitRecord returns the last-fetched record on timeout even when the
+        // predicate never matched — re-assert the swap explicitly on the result.
+        let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                   from: updated?.reactionsJson ?? Data())) ?? []
+        let mine = reactions.filter { $0.participantId == testUserId }.map(\.emoji)
+        XCTAssertEqual(mine, ["thumbsup"], "my previous emoji must be swapped out, not stacked")
+        XCTAssertTrue(
+            reactions.contains { $0.participantId == "other-user" && $0.emoji == "heart" },
+            "another participant's reaction must survive my swap"
+        )
+    }
+
+    func test_toggleReaction_systemMessage_isIgnored() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-system", conversationId: testConversationId,
+            senderId: "other-user", content: "Call ended",
+            messageSource: "system"
+        )
+        try await persistence.insertOptimistic(record)
+        _ = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == "msg-system" }
+
+        sut.toggleReaction(messageId: "msg-system", emoji: "thumbsup")
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        let stable = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-system", from: pool
+        )
+        XCTAssertNil(stable?.reactionsJson, "system messages must not accept reactions")
+    }
+
     func test_toggleReaction_doesNothingForUnknownMessageId() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
@@ -1235,8 +1376,9 @@ final class ConversationViewModelTests: XCTestCase {
 
     func test_markAsRead_postsNotification() {
         let sut = makeSUT()
+        let expectedId = testConversationId
         let expectation = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
-            (notification.object as? String) == self.testConversationId
+            (notification.object as? String) == expectedId
         }
 
         sut.markAsRead()
@@ -1444,7 +1586,7 @@ final class ConversationViewModelTests: XCTestCase {
         sut.setActiveTranslation(for: "msg-1", translation: translation)
 
         let override = sut.activeTranslationOverrides["msg-1"]
-        XCTAssertNotNil(override)
+        XCTAssertTrue(sut.activeTranslationOverrides.keys.contains("msg-1"))
         XCTAssertEqual(override??.translatedContent, "Hello")
     }
 
@@ -1454,7 +1596,7 @@ final class ConversationViewModelTests: XCTestCase {
         sut.setActiveTranslation(for: "msg-1", translation: nil)
 
         let override = sut.activeTranslationOverrides["msg-1"]
-        XCTAssertNotNil(override)
+        XCTAssertTrue(sut.activeTranslationOverrides.keys.contains("msg-1"))
         XCTAssertNil(override as? MessageTranslation)
     }
 
@@ -1531,6 +1673,166 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertTrue(sut.searchResults.isEmpty)
         XCTAssertNil(sut.currentSearchQuery)
         XCTAssertFalse(sut.isSearching)
+    }
+
+    // MARK: - Search Pagination Tests
+
+    func test_searchMessages_withHasMore_setsSearchHasMoreTrue() async {
+        let firstPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-p1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello world","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-abc123","limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(firstPageResponse)
+        let sut = makeSUT()
+
+        await sut.searchMessages(query: "Hello")
+
+        XCTAssertTrue(sut.searchHasMore, "searchHasMore must be true when server signals hasMore=true")
+        XCTAssertEqual(sut.searchResults.count, 1)
+    }
+
+    func test_loadMoreSearchResults_appendsNextPageToExistingResults() async {
+        let firstPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-page1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello page one","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-page2","limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(firstPageResponse)
+        let sut = makeSUT()
+        await sut.searchMessages(query: "Hello")
+        XCTAssertEqual(sut.searchResults.count, 1)
+        XCTAssertTrue(sut.searchHasMore)
+
+        let secondPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-page2","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello page two","createdAt":"2026-01-01T01:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchWithCursorResult = .success(secondPageResponse)
+
+        await sut.loadMoreSearchResults(query: "Hello")
+
+        XCTAssertEqual(sut.searchResults.count, 2, "loadMore must append second page results to existing ones")
+        XCTAssertFalse(sut.searchHasMore, "searchHasMore must be false when server returns hasMore=false on last page")
+        XCTAssertEqual(mockMessageService.searchWithCursorCallCount, 1, "searchWithCursor must be called exactly once for the second page")
+    }
+
+    func test_loadMoreSearchResults_whenSearchHasMoreFalse_isNoOp() async {
+        let singlePageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-only","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello only page","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(singlePageResponse)
+        let sut = makeSUT()
+        await sut.searchMessages(query: "Hello")
+        XCTAssertFalse(sut.searchHasMore)
+        let countAfterFirstPage = sut.searchResults.count
+
+        await sut.loadMoreSearchResults(query: "Hello")
+
+        XCTAssertEqual(sut.searchResults.count, countAfterFirstPage, "loadMore when no more pages must not modify results")
+        XCTAssertEqual(mockMessageService.searchWithCursorCallCount, 0, "searchWithCursor must not be called when there is no cursor")
+    }
+
+    func test_loadMoreSearchResults_setsIsSearchingFalseAfterCompletion() async {
+        let firstPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-lm1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello loadmore","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-lm2","limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(firstPageResponse)
+        let sut = makeSUT()
+        await sut.searchMessages(query: "Hello")
+
+        let emptyNextPage: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchWithCursorResult = .success(emptyNextPage)
+
+        await sut.loadMoreSearchResults(query: "Hello")
+
+        XCTAssertFalse(sut.isSearching, "isSearching must be false once loadMoreSearchResults completes")
+    }
+
+    func test_loadMoreSearchResults_onNetworkFailure_preservesExistingResultsAndHasMore() async {
+        let firstPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-fail1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello fail test","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-fail","limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(firstPageResponse)
+        let sut = makeSUT()
+        await sut.searchMessages(query: "Hello")
+        XCTAssertEqual(sut.searchResults.count, 1)
+
+        mockMessageService.searchWithCursorResult = .failure(NSError(domain: "test", code: -1009))
+        await sut.loadMoreSearchResults(query: "Hello")
+
+        XCTAssertEqual(sut.searchResults.count, 1,
+            "loadMore network failure must not remove existing search results")
+        XCTAssertTrue(sut.searchHasMore,
+            "searchHasMore must remain true after a transient loadMore failure so the user can retry by scrolling")
+        XCTAssertFalse(sut.isSearching,
+            "isSearching must be false even after a loadMore failure")
+    }
+
+    func test_searchMessages_translationMatch_surfacesTranslationAsMatchedText() async {
+        let responseWithTranslation: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {
+                "id":"sr-tr1",
+                "conversationId":"\(testConversationId)",
+                "senderId":"\(testUserId)",
+                "content":"Bonjour le monde",
+                "createdAt":"2026-01-01T00:00:00.000Z",
+                "sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"},
+                "translations":[
+                    {"id":"tl-1","messageId":"sr-tr1","targetLanguage":"en","translatedContent":"Hello world","translationModel":"nllb","confidenceScore":null,"sourceLanguage":"fr"}
+                ]
+            }
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(responseWithTranslation)
+        let sut = makeSUT()
+
+        await sut.searchMessages(query: "Hello")
+
+        XCTAssertEqual(sut.searchResults.count, 1)
+        let result = sut.searchResults.first
+        XCTAssertEqual(result?.id, "sr-tr1")
+        XCTAssertEqual(result?.matchedText, "Hello world",
+            "matchedText must use the translation when content does not match the query but a translation does")
+        XCTAssertEqual(result?.matchType, "translation",
+            "matchType must be 'translation' when the match is in a translated version of the content")
+    }
+
+    func test_searchMessages_contentMatch_usesContentAsMatchedText() async {
+        let responseWithMatchingContent: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {
+                "id":"sr-ct1",
+                "conversationId":"\(testConversationId)",
+                "senderId":"\(testUserId)",
+                "content":"Hello direct match",
+                "createdAt":"2026-01-01T00:00:00.000Z",
+                "sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"},
+                "translations":[
+                    {"id":"tl-ct1","messageId":"sr-ct1","targetLanguage":"fr","translatedContent":"Bonjour correspondance directe","translationModel":"nllb","confidenceScore":null,"sourceLanguage":"en"}
+                ]
+            }
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(responseWithMatchingContent)
+        let sut = makeSUT()
+
+        await sut.searchMessages(query: "Hello")
+
+        let result = sut.searchResults.first
+        XCTAssertEqual(result?.matchedText, "Hello direct match",
+            "matchedText must use the original content when content matches the query, even if translations are present")
+        XCTAssertEqual(result?.matchType, "content")
     }
 
     // MARK: - Translation Tests (Point 75)
@@ -1862,6 +2164,186 @@ final class ConversationViewModelTests: XCTestCase {
         } catch {
             XCTFail("Expected CancellationError, got \(error)")
         }
+    }
+
+    // MARK: - mergeIntoMessages duplicate prevention
+
+    /// When a server ACK arrives, the message's display id transitions from
+    /// localId ("cid_123") to serverId ("srv_abc") via toMessage(). Without
+    /// the pendingServerIds guard in mergeIntoMessages, both the old optimistic
+    /// row (id="cid_123") and the acked row (id="srv_abc") survive in messages,
+    /// producing a duplicate bubble. After the fix, only the server-id version
+    /// must remain.
+    func test_mergeIntoMessages_afterServerAck_noDuplicateBubble() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let tempId = "cid_merge_dedup_test"
+        let serverId = "srv_merge_dedup_test"
+
+        // Seed an optimistic row: localId=tempId, serverId=nil → id=tempId in domain
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: tempId,
+            conversationId: testConversationId,
+            senderId: testUserId,
+            state: .sending
+        )
+        try await persistence.insertOptimistic(record)
+
+        // Wait for the optimistic message to surface with id=tempId
+        let appeared = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == tempId }
+        XCTAssertNotNil(appeared, "Optimistic row must surface with id=tempId before the ACK")
+
+        // Register the tempId → serverId mapping BEFORE applyEvent (mirrors the
+        // real send path where pendingServerIds is set synchronously before the
+        // async applyEvent task).
+        sut.pendingServerIds[tempId] = serverId
+
+        // Apply serverAck: GRDB row.serverId becomes serverId → toMessage id flips
+        _ = try await persistence.applyEvent(localId: tempId, event: .serverAck(serverId: serverId, at: Date()))
+
+        // Wait until the server-id version surfaces
+        let acked = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == serverId }
+        XCTAssertNotNil(acked, "After ACK the message must surface with id=serverId")
+
+        // The critical assertion: exactly ONE bubble — no duplicate cid_* row
+        let count = sut.messages.filter {
+            $0.id == tempId || $0.id == serverId
+        }.count
+        XCTAssertEqual(count, 1,
+            "mergeIntoMessages must suppress the superseded optimistic row — expected 1 bubble, got \(count)")
+    }
+
+    // MARK: - joinOngoingCall (bulle d'appel vivante, 4 branches)
+
+    private final class MockActiveCallService: ActiveCallServiceProviding, @unchecked Sendable {
+        var result: Result<ActiveCallSession?, Error> = .success(nil)
+        private(set) var callCount = 0
+
+        func activeCall(conversationId: String) async throws -> ActiveCallSession? {
+            callCount += 1
+            return try result.get()
+        }
+    }
+
+    @MainActor
+    private final class LiveCallJoinSpy {
+        var currentCallId: String?
+        var isIdle = true
+        var pendingCallId: String?
+        var rejoinResult = true
+        private(set) var broughtUIForwardCount = 0
+        private(set) var rejoinCalls: [(callId: String, conversationId: String, remoteUserId: String, remoteUsername: String, isVideo: Bool)] = []
+
+        var context: LiveCallJoinContext {
+            LiveCallJoinContext(
+                currentCallId: { [weak self] in self?.currentCallId },
+                isIdle: { [weak self] in self?.isIdle ?? true },
+                hasPendingIncomingCall: { [weak self] in self?.pendingCallId == $0 },
+                bringCallUIForward: { [weak self] in self?.broughtUIForwardCount += 1 },
+                rejoinActiveCall: { [weak self] callId, conversationId, remoteUserId, remoteUsername, isVideo in
+                    self?.rejoinCalls.append((callId, conversationId, remoteUserId, remoteUsername, isVideo))
+                    return self?.rejoinResult ?? true
+                }
+            )
+        }
+    }
+
+    private func makeLiveCallSummary(callId: String = "call-live-1", isVideo: Bool = false) -> CallSummaryMetadata {
+        CallSummaryMetadata(
+            callId: callId,
+            initiatorId: "peer-user-1",
+            callType: isVideo ? .video : .audio,
+            outcome: .completed,
+            durationSeconds: 0,
+            bytesTotal: nil,
+            bytesEstimated: false,
+            networkQuality: nil,
+            isLive: true
+        )
+    }
+
+    func test_joinOngoingCall_alreadyOnThisCall_bringsCallUIForward() async {
+        let spy = LiveCallJoinSpy()
+        spy.currentCallId = "call-live-1"
+        spy.isIdle = false
+        let service = MockActiveCallService()
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertEqual(spy.broughtUIForwardCount, 1)
+        XCTAssertTrue(spy.rejoinCalls.isEmpty)
+        XCTAssertEqual(service.callCount, 0, "pas de round-trip serveur quand on est déjà sur l'appel")
+    }
+
+    func test_joinOngoingCall_deviceRingingOnThisCall_neverDoubleJoins() async {
+        let spy = LiveCallJoinSpy()
+        spy.pendingCallId = "call-live-1"
+        let service = MockActiveCallService()
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertTrue(spy.rejoinCalls.isEmpty, "répondre reste le geste de la bannière/CallKit")
+        XCTAssertEqual(spy.broughtUIForwardCount, 0)
+        XCTAssertEqual(service.callCount, 0)
+    }
+
+    func test_joinOngoingCall_serverStillActive_rejoinsWithRemoteParticipant() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(ActiveCallSession(
+            id: "call-live-1",
+            conversationId: testConversationId,
+            mode: "p2p",
+            status: "active",
+            participants: [
+                ActiveCallParticipant(userId: testUserId, user: nil),
+                ActiveCallParticipant(userId: "peer-user-1", user: ActiveCallParticipantUser(id: "peer-user-1", username: "peer", displayName: "Peer")),
+            ]
+        ))
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary(isVideo: true))
+
+        XCTAssertEqual(spy.rejoinCalls.count, 1)
+        XCTAssertEqual(spy.rejoinCalls.first?.callId, "call-live-1")
+        XCTAssertEqual(spy.rejoinCalls.first?.conversationId, testConversationId)
+        XCTAssertEqual(spy.rejoinCalls.first?.remoteUserId, "peer-user-1")
+        XCTAssertEqual(spy.rejoinCalls.first?.remoteUsername, "Peer")
+        XCTAssertEqual(spy.rejoinCalls.first?.isVideo, true)
+    }
+
+    func test_joinOngoingCall_callEndedServerSide_toastsAndNeverRejoins() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(nil)
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+        FeedbackToastManager.shared.dismiss()
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertTrue(spy.rejoinCalls.isEmpty)
+        XCTAssertEqual(FeedbackToastManager.shared.currentToast?.message, "L'appel est terminé")
+    }
+
+    func test_joinOngoingCall_staleSessionDifferentCallId_treatedAsEnded() async {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(ActiveCallSession(
+            id: "another-newer-call",
+            conversationId: testConversationId,
+            mode: "p2p",
+            status: "active",
+            participants: []
+        ))
+        let sut = makeSUT(isDirect: true, participantUserId: "peer-user-1", activeCallService: service, liveCallJoin: spy.context)
+
+        await sut.joinOngoingCall(makeLiveCallSummary())
+
+        XCTAssertTrue(spy.rejoinCalls.isEmpty, "une bulle périmée ne rejoint jamais un AUTRE appel")
     }
 
     // MARK: - Helpers

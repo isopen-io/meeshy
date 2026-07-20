@@ -211,9 +211,13 @@ export const SoundFeedback = {
 
 /**
  * Hook to manage focus trap within a container
- * Useful for modals, dialogs, and dropdown menus
+ * Useful for modals, dialogs, and dropdown menus.
+ *
+ * On activation, moves focus into the container; while active, Tab/Shift+Tab
+ * cycle within it. On deactivation (close/unmount), focus is restored to the
+ * element that was focused before the trap engaged (WCAG 2.4.3 — focus order).
  */
-export function useFocusTrap(containerRef: React.RefObject<HTMLElement>, isActive: boolean) {
+export function useFocusTrap(containerRef: React.RefObject<HTMLElement | null>, isActive: boolean) {
   useEffect(() => {
     if (!isActive || !containerRef.current) return;
 
@@ -226,6 +230,7 @@ export function useFocusTrap(containerRef: React.RefObject<HTMLElement>, isActiv
 
     const firstElement = focusableElements[0];
     const lastElement = focusableElements[focusableElements.length - 1];
+    const previouslyFocused = document.activeElement as HTMLElement | null;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
@@ -248,6 +253,7 @@ export function useFocusTrap(containerRef: React.RefObject<HTMLElement>, isActiv
 
     return () => {
       container.removeEventListener('keydown', handleKeyDown);
+      previouslyFocused?.focus?.();
     };
   }, [containerRef, isActive]);
 }

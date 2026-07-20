@@ -9,6 +9,7 @@ import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-even
 import { logConversationIdDebug, getConversationIdType, getConversationApiId } from '@/utils/conversation-id-utils';
 import { triggerManualUpdateCheck } from '@/utils/service-worker';
 import type { User } from '@/types';
+import { authService } from '../auth.service';
 import type {
   TypedSocket,
   ConnectionState,
@@ -37,6 +38,7 @@ export class ConnectionService {
     onAuthenticated?: (user: User) => void;
     onDisconnected?: (reason: string) => void;
     onError?: (error: any) => void;
+    onSessionRevoked?: () => void;
   } | null = null;
 
   constructor() {
@@ -156,11 +158,11 @@ export class ConnectionService {
     this.autoJoinCallback = callback;
   }
 
-  setupConnectionListeners(onAuthenticated?: (user: User) => void, onDisconnected?: (reason: string) => void, onError?: (error: any) => void): void {
+  setupConnectionListeners(onAuthenticated?: (user: User) => void, onDisconnected?: (reason: string) => void, onError?: (error: any) => void, onSessionRevoked?: () => void): void {
     const socket = this.state.socket;
     if (!socket) return;
 
-    this.listenerCallbacks = { onAuthenticated, onDisconnected, onError };
+    this.listenerCallbacks = { onAuthenticated, onDisconnected, onError, onSessionRevoked };
 
     socket.on('connect', () => {
       this.state.isConnected = true;
@@ -184,6 +186,20 @@ export class ConnectionService {
       this.emitStatusChange();
     });
 
+    socket.on('reconnect_failed', () => {
+      this.state.isConnecting = false;
+      logger.warn('[Socket]', `reconnection failed after ${this.maxReconnectAttempts} attempts`);
+      if (onError) onError(new Error('reconnect_failed'));
+      this.emitStatusChange();
+      // socket.io's built-in reconnection loop gives up permanently after
+      // `maxReconnectAttempts` — without this, a tab that's open but idle
+      // (no outbound joinConversation/sendMessage to trigger ensureConnection)
+      // stops receiving ALL realtime events (messages, typing, receipts,
+      // reactions) silently until the user takes an action or refreshes.
+      // Hand off to our own manual backoff loop so passive readers recover.
+      this.reconnect();
+    });
+
     socket.on(SERVER_EVENTS.AUTHENTICATED, (data: any) => {
       this.currentUser = data.user;
       if (onAuthenticated) onAuthenticated(data.user);
@@ -191,6 +207,24 @@ export class ConnectionService {
 
     socket.on(SERVER_EVENTS.ERROR, (error: any) => {
       this.handleConnectionError(error);
+    });
+
+    socket.on(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, () => {
+      logger.info('[Socket]', 'auth token expired — refreshing and reconnecting');
+      authService.refreshToken().then(() => {
+        const newToken = authManager.getAuthToken();
+        if (newToken && this.state.socket) {
+          (this.state.socket as any).auth = { token: newToken };
+        }
+        this.reconnect();
+      }).catch((err) => {
+        logger.warn('[Socket]', 'token refresh failed after auth:token-expired', { err });
+      });
+    });
+
+    socket.on(SERVER_EVENTS.AUTH_SESSION_REVOKED as any, () => {
+      logger.warn('[Socket]', 'auth session revoked — forcing logout');
+      if (this.listenerCallbacks?.onSessionRevoked) this.listenerCallbacks.onSessionRevoked();
     });
   }
 

@@ -91,7 +91,7 @@ public actor LinkPreviewFetcher {
     /// building one is expensive (it compiles the link-detection rules), so
     /// creating one per `firstURL` call — i.e. per text bubble's `BubbleContent`
     /// build, which runs per cell on scroll — was real CPU. Build it once.
-    private nonisolated(unsafe) static let linkDetector: NSDataDetector? =
+    private nonisolated static let linkDetector: NSDataDetector? =
         try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
     public nonisolated static func firstURL(in text: String) -> String? {
@@ -220,7 +220,11 @@ public actor LinkPreviewFetcher {
     /// Compiled HTML-metadata regexes, keyed by pattern. The set of patterns is
     /// fixed (title / og:* tags) yet `regexFirstCapture` recompiled each one on
     /// every link-preview fetch — wasted (off-main) CPU. Compile each once.
-    private nonisolated(unsafe) static let htmlMetaRegexCache = NSCache<NSString, NSRegularExpression>()
+    private nonisolated(unsafe) static let htmlMetaRegexCache: NSCache<NSString, NSRegularExpression> = {
+        let c = NSCache<NSString, NSRegularExpression>()
+        c.countLimit = 50
+        return c
+    }()
 
     private static func regexFirstCapture(in html: String, pattern: String) -> String? {
         let regex: NSRegularExpression
@@ -243,7 +247,7 @@ public actor LinkPreviewFetcher {
     }
 }
 
-private extension String {
+extension String {
     /// Decode common HTML entities and trim whitespace so preview chrome
     /// reads cleanly. Not exhaustive — we handle the high-value entities
     /// that frequently show up in og:title / og:description.
@@ -264,9 +268,31 @@ private extension String {
         for (entity, replacement) in entities {
             value = value.replacingOccurrences(of: entity, with: replacement)
         }
-        // Numeric entities: &#1234; and &#x00AE;
-        value = value.replacingOccurrences(of: #"&#x([0-9a-fA-F]+);"#, with: "", options: .regularExpression)
-        value = value.replacingOccurrences(of: #"&#([0-9]+);"#, with: "", options: .regularExpression)
+        // Numeric entities: &#1234; and &#x00AE; — decode to actual Unicode characters.
+        // Group 1 = hex digits (&#x…;), group 2 = decimal digits (&#…;).
+        if let regex = try? NSRegularExpression(pattern: #"&#(?:x([0-9a-fA-F]+)|([0-9]+));"#, options: .caseInsensitive) {
+            let nsValue = value as NSString
+            let matches = regex.matches(in: value, range: NSRange(location: 0, length: nsValue.length))
+            for match in matches.reversed() {
+                let decoded: Character?
+                if match.range(at: 1).location != NSNotFound,
+                   let r = Range(match.range(at: 1), in: value),
+                   let cp = UInt32(value[r], radix: 16),
+                   let scalar = Unicode.Scalar(cp) {
+                    decoded = Character(scalar)
+                } else if match.range(at: 2).location != NSNotFound,
+                          let r = Range(match.range(at: 2), in: value),
+                          let cp = UInt32(value[r]),
+                          let scalar = Unicode.Scalar(cp) {
+                    decoded = Character(scalar)
+                } else {
+                    decoded = nil
+                }
+                if let ch = decoded, let fullRange = Range(match.range, in: value) {
+                    value.replaceSubrange(fullRange, with: String(ch))
+                }
+            }
+        }
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

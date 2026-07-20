@@ -102,6 +102,7 @@ struct StepIllustration: View {
             Circle()
                 .fill(accentColor.opacity(0.12))
                 .frame(width: 100, height: 100)
+            // Glyphe héros décoratif ≥40pt dans un cercle fixe 100×100 : figé (doctrine 74i/86i) ; le ZStack est masqué VoiceOver
             Image(systemName: iconName)
                 .font(.system(size: 44, weight: .light))
                 .foregroundStyle(
@@ -326,6 +327,10 @@ struct StepPhoneView: View {
                     .padding(.leading, 16)
                 }
 
+                if viewModel.phoneBelongsToExistingAccount {
+                    recoveryHintCard
+                }
+
                 Button(action: { viewModel.skipCurrentStep() }) {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.right.circle").font(.subheadline)
@@ -357,11 +362,12 @@ struct StepPhoneView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "info.circle").foregroundColor(viewModel.currentStep.accentColor)
-                Text(String(localized: "onboarding.step.phone.why", defaultValue: "Pourquoi le telephone?", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.phone.why", defaultValue: "Pourquoi ton numéro?", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
-                tipRow(icon: "key.horizontal", text: String(localized: "onboarding.step.phone.tip.recovery", defaultValue: "Recuperation de compte securisee", bundle: .main))
-                tipRow(icon: "bell.badge", text: String(localized: "onboarding.step.phone.tip.alerts", defaultValue: "Alertes de securite importantes", bundle: .main))
+                tipRow(icon: "key.horizontal", text: String(localized: "onboarding.step.phone.tip.recovery", defaultValue: "Récupération de compte sécurisée", bundle: .main))
+                tipRow(icon: "person.badge.shield.checkmark", text: String(localized: "onboarding.step.phone.tip.unique", defaultValue: "Un seul compte par numéro — tes engagements sont protégés", bundle: .main))
+                tipRow(icon: "person.2.wave.2", text: String(localized: "onboarding.step.phone.tip.friends", defaultValue: "Tes proches qui ont ton numéro te retrouvent", bundle: .main))
                 tipRow(icon: "hand.raised", text: String(localized: "onboarding.step.phone.tip.optional", defaultValue: "Optionnel, tu peux passer", bundle: .main))
             }
         }
@@ -376,6 +382,34 @@ struct StepPhoneView: View {
         }
     }
 
+    @ViewBuilder
+    private var recoveryHintCard: some View {
+        let recover = viewModel.phoneRecoverySuggested
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: recover ? "person.badge.key.fill" : "info.circle")
+                    .foregroundColor(recover ? MeeshyColors.warning : viewModel.currentStep.accentColor)
+                Text(recover
+                     ? String(localized: "onboarding.step.phone.recovery.title", defaultValue: "On dirait ton ancien compte", bundle: .main)
+                     : String(localized: "onboarding.step.phone.existing.title", defaultValue: "Ce numéro est déjà lié à un compte", bundle: .main))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+            Text(recover
+                 ? String(localized: "onboarding.step.phone.recovery.body", defaultValue: "Ce numéro appartient à un compte inactif dont le nom te ressemble. Depuis l'écran de connexion, choisis « Mot de passe oublié » pour le récupérer plutôt que d'en créer un nouveau.", bundle: .main)
+                 : String(localized: "onboarding.step.phone.existing.body", defaultValue: "Si c'est le tien, récupère-le depuis « Mot de passe oublié » sur l'écran de connexion. Sinon, saisis un autre numéro ou passe cette étape.", bundle: .main))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill((recover ? MeeshyColors.warning : viewModel.currentStep.accentColor).opacity(0.1))
+        )
+    }
+
     private var countryPickerSheet: some View {
         NavigationStack {
             List(CountryPicker.countries) { country in
@@ -384,7 +418,7 @@ struct StepPhoneView: View {
                     showCountryPicker = false
                 }) {
                     HStack {
-                        Text(country.flag).font(.system(size: 24))
+                        Text(country.flag).font(MeeshyFont.relative(24))
                         Text(country.name).font(.subheadline)
                         Spacer()
                         Text(country.dialCode).font(.subheadline).foregroundColor(.secondary)
@@ -591,7 +625,7 @@ struct StepPasswordView: View {
                         if !viewModel.confirmPassword.isEmpty {
                             HStack(spacing: 10) {
                                 Image(systemName: passwordsMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                    .font(.system(size: 20))
+                                    .font(MeeshyFont.relative(20))
                                     .foregroundColor(passwordsMatch ? MeeshyColors.success : MeeshyColors.error)
                                 Text(passwordsMatch ? String(localized: "onboarding.step.password.match", defaultValue: "Les mots de passe correspondent!", bundle: .main) : String(localized: "onboarding.step.password.mismatch", defaultValue: "Les mots de passe ne correspondent pas", bundle: .main))
                                     .font(.subheadline.weight(.medium))
@@ -877,14 +911,14 @@ struct StepLanguageView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }) {
             HStack(spacing: 10) {
-                Text(lang.flag).font(.system(size: 26))
+                Text(lang.flag).font(MeeshyFont.relative(26))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(lang.name).font(.footnote.weight(.semibold)).foregroundColor(.primary)
                     Text(lang.id.uppercased()).font(.caption2.weight(.medium)).foregroundColor(.secondary)
                 }
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundColor(color)
+                    Image(systemName: "checkmark.circle.fill").font(MeeshyFont.relative(20)).foregroundColor(color)
                 }
             }
             .padding(12)
@@ -976,8 +1010,6 @@ struct StepProfileView: View {
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var photoTarget: PhotoTarget = .profile
-    @State private var profileImage: UIImage?
-    @State private var bannerImage: UIImage?
 
     enum PhotoTarget { case profile, banner }
 
@@ -986,7 +1018,7 @@ struct StepProfileView: View {
             VStack(spacing: 24) {
                 HStack {
                     Image(systemName: "sparkles").foregroundColor(MeeshyColors.warning)
-                    Text(String(localized: "onboarding.step.profile.optional", defaultValue: "Cette etape est optionnelle", bundle: .main)).font(.footnote.weight(.medium)).foregroundColor(.secondary)
+                    Text(String(localized: "onboarding.step.profile.optional", defaultValue: "Optionnelle — mais un profil soigné multiplie tes mises en relation", bundle: .main)).font(.footnote.weight(.medium)).foregroundColor(.secondary)
                 }
                 .padding(10)
                 .background(RoundedRectangle(cornerRadius: 10).fill(MeeshyColors.warning.opacity(0.1)))
@@ -1023,9 +1055,9 @@ struct StepProfileView: View {
                 if let data = try? await item?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {
                     if photoTarget == .profile {
-                        profileImage = image
+                        viewModel.profileImage = image
                     } else {
-                        bannerImage = image
+                        viewModel.bannerImage = image
                     }
                 }
             }
@@ -1035,7 +1067,7 @@ struct StepProfileView: View {
     private var profilePreviewCard: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .bottomTrailing) {
-                if let banner = bannerImage {
+                if let banner = viewModel.bannerImage {
                     Image(uiImage: banner)
                         .resizable().scaledToFill()
                         .frame(height: 100).clipped()
@@ -1060,7 +1092,7 @@ struct StepProfileView: View {
 
             HStack {
                 ZStack(alignment: .bottomTrailing) {
-                    if let photo = profileImage {
+                    if let photo = viewModel.profileImage {
                         Image(uiImage: photo)
                             .resizable().scaledToFill()
                             .frame(width: 80, height: 80).clipShape(Circle())
@@ -1070,9 +1102,11 @@ struct StepProfileView: View {
                             .fill(viewModel.currentStep.accentColor.opacity(0.2))
                             .frame(width: 80, height: 80)
                             .overlay(
+                                // Glyphe placeholder dans un cercle fixe 80×80 : figé (déborderait s'il scalait, doctrine 86i) + masqué VoiceOver (le nom sous l'aperçu porte le sens)
                                 Image(systemName: "person.fill")
                                     .font(.system(size: 32))
                                     .foregroundColor(viewModel.currentStep.accentColor.opacity(0.5))
+                                    .accessibilityHidden(true)
                             )
                             .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 4))
                     }
@@ -1165,9 +1199,11 @@ struct StepRecapView: View {
 
     private var errorView: some View {
         VStack(spacing: 16) {
+            // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver (le message d'erreur adjacent porte le sens)
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 50))
                 .foregroundColor(MeeshyColors.error)
+                .accessibilityHidden(true)
             Text(viewModel.errorMessage ?? String(localized: "common.error.unknown", defaultValue: "Erreur inconnue", bundle: .main))
                 .font(.subheadline)
                 .foregroundColor(MeeshyColors.error)

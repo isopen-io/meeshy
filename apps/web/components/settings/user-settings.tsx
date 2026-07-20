@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User as UserType } from '@/types';
-import { getUserInitials } from '@/utils/user';
+import { getUserInitials } from '@/lib/avatar-utils';
 import { toast } from 'sonner';
 import { Upload, Camera, Lock, Eye, EyeOff, Languages, Monitor, Wand2, CheckCircle2, AlertCircle, Mail, Phone, Send, Loader2, Edit, Check, X } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';

@@ -2,7 +2,7 @@ import Foundation
 
 public protocol VoiceProfileServiceProviding: Sendable {
     func getConsentStatus() async throws -> VoiceConsentStatus
-    func grantConsent(ageVerification: Bool, birthDate: String?) async throws -> VoiceConsentResponse
+    func grantConsent(voiceCloningConsent: Bool, birthDate: String?) async throws -> VoiceConsentResponse
     func revokeConsent() async throws
     func getProfile() async throws -> VoiceProfile?
     func getSamples() async throws -> [VoiceSample]
@@ -27,14 +27,21 @@ public final class VoiceProfileService: VoiceProfileServiceProviding, @unchecked
         return response.data
     }
 
-    public func grantConsent(ageVerification: Bool, birthDate: String? = nil) async throws -> VoiceConsentResponse {
-        let body = VoiceConsentRequest(consentGiven: true, ageVerification: ageVerification, birthDate: birthDate)
+    /// Accorde le consentement d'enregistrement vocal (définition du profil
+    /// vocal) et, si `voiceCloningConsent`, la traduction vocale utilisant ce
+    /// profil. `birthDate` (YYYY-MM-DD) porte la vérification d'âge.
+    public func grantConsent(voiceCloningConsent: Bool = false, birthDate: String? = nil) async throws -> VoiceConsentResponse {
+        let body = VoiceConsentRequest(
+            voiceRecordingConsent: true,
+            voiceCloningConsent: voiceCloningConsent ? true : nil,
+            birthDate: birthDate
+        )
         let response: APIResponse<VoiceConsentResponse> = try await api.post(endpoint: "/voice-profile/consent", body: body)
         return response.data
     }
 
     public func revokeConsent() async throws {
-        let body = VoiceConsentRequest(consentGiven: false, ageVerification: false)
+        let body = VoiceConsentRequest(voiceRecordingConsent: false)
         let _: APIResponse<VoiceConsentResponse> = try await api.post(endpoint: "/voice-profile/consent", body: body)
     }
 

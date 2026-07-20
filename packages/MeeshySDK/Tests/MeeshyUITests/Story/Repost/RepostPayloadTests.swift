@@ -24,4 +24,20 @@ final class RepostPayloadTests: XCTestCase {
         XCTAssertEqual(payload.sourceSlideId, "slide-1")
         XCTAssertEqual(payload.sourceStoryItemId, "story-X")
     }
+
+    /// Regression: a landscape-canvas slide's repost payload must carry the
+    /// landscape source size, not the static portrait `CanvasGeometry.designSize`
+    /// — otherwise `CanvasReprojector` rescales every reposted element assuming
+    /// the wrong source shape (see StorySlide/StoryItem.extractRepostPayload).
+    func test_extract_landscapeSlide_reportsLandscapeSourceCanvasSize() {
+        var effects = StoryEffects()
+        effects.canvasAspectRatio = StoryCanvasAspect.landscape.ratio
+        let slide = StorySlide(id: "slide-landscape", content: nil, effects: effects)
+
+        let payload = slide.extractRepostPayload(sourceStoryItemId: "story-Y")
+
+        XCTAssertEqual(payload.sourceCanvasSize, CGSize(width: CanvasGeometry.designHeight,
+                                                          height: CanvasGeometry.designWidth))
+        XCTAssertNotEqual(payload.sourceCanvasSize, CanvasGeometry.designSize)
+    }
 }

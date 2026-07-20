@@ -74,6 +74,9 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     friendRequest: {
       findMany: jest.fn(),
     },
+    communityMember: {
+      findMany: jest.fn(),
+    },
   };
 
   return {
@@ -81,10 +84,13 @@ jest.mock('@meeshy/shared/prisma/client', () => {
   };
 });
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
+  getApps: jest.fn(() => []),
   initializeApp: jest.fn(),
-  credential: { cert: jest.fn() },
-  messaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
+  cert: jest.fn(),
+}));
+jest.mock('firebase-admin/messaging', () => ({
+  getMessaging: jest.fn(() => ({ send: jest.fn().mockResolvedValue('message-id') })),
 }));
 
 jest.mock('fs', () => ({
@@ -419,6 +425,55 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(selfCall).toBeUndefined();
     });
 
+    it('test_storyComment_persistsPostExpiryInContext_forExpiredStoryAwareness', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockResolvedValue(makeNotif('story_new_comment'));
+      const createdAt = new Date('2026-06-20T08:00:00.000Z');
+      const expiresAt = new Date('2026-06-21T08:00:00.000Z');
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postCreatedAt: createdAt,
+        postExpiresAt: expiresAt,
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<
+        [{ data: { userId: string; context: { postCreatedAt?: string; postExpiresAt?: string } } }]
+      >;
+      const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
+      expect(authorCall![0].data.context.postCreatedAt).toBe(createdAt.toISOString());
+      expect(authorCall![0].data.context.postExpiresAt).toBe(expiresAt.toISOString());
+    });
+
+    it('test_storyComment_persistsPostTypeInMetadata', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockResolvedValue(makeNotif('story_new_comment'));
+
+      await service.createStoryCommentNotificationsBatch(baseParams);
+
+      const calls = prisma.notification.create.mock.calls as Array<
+        [{ data: { userId: string; metadata: { postType?: string } } }]
+      >;
+      const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
+      expect(authorCall![0].data.metadata.postType).toBe('STORY');
+    });
+
+    it('test_storyComment_REEL_authorBucketSkipped_handledByPostCommentRoute', async () => {
+      // REEL author is notified via post_comment (route), so the author bucket
+      // (story_new_comment) must be skipped to avoid a double notification.
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockResolvedValue(makeNotif('story_thread_reply'));
+
+      await service.createStoryCommentNotificationsBatch({ ...baseParams, postType: 'REEL' });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
+      expect(authorCall).toBeUndefined();
+    });
+
     it('user who is BOTH friend AND prior commenter gets ONLY STORY_THREAD_REPLY, not both', async () => {
       prisma.postComment.findMany.mockResolvedValue([{ authorId: FRIEND_1 }]);
       prisma.friendRequest.findMany.mockResolvedValue([
@@ -561,6 +616,138 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
       const threadCall = calls.find((c) => c[0].data.userId === PREV_COMMENTER_1);
       expect(threadCall).toBeDefined();
+    });
+
+    // ------------------------------------------------------------------
+    // Visibility gating — a restricted post must NOT fan a comment excerpt
+    // out to friends/thread-participants outside the post's audience.
+    // Mirrors SocialEventsHandler.getVisibilityFilteredRecipients.
+    // ------------------------------------------------------------------
+
+    it('ONLY: notifies a friend on the allow-list, NOT a friend off it', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+        { senderId: AUTHOR_ID, receiverId: FRIEND_2 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postType: 'POST',
+        visibility: 'ONLY',
+        visibilityUserIds: [FRIEND_1],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeDefined();
+      expect(calls.find((c) => c[0].data.userId === FRIEND_2)).toBeUndefined();
+    });
+
+    it('EXCEPT: does NOT notify a friend on the exclude-list', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+        { senderId: AUTHOR_ID, receiverId: FRIEND_2 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postType: 'POST',
+        visibility: 'EXCEPT',
+        visibilityUserIds: [FRIEND_2],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeDefined();
+      expect(calls.find((c) => c[0].data.userId === FRIEND_2)).toBeUndefined();
+    });
+
+    it('PRIVATE: fans out to nobody but the story author', async () => {
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        visibility: 'PRIVATE',
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeUndefined();
+      expect(calls.find((c) => c[0].data.userId === PREV_COMMENTER_1)).toBeUndefined();
+      // The story author (bucket 1) is exempt — they own the post.
+      expect(calls.find((c) => c[0].data.userId === AUTHOR_ID)?.[0].data.type).toBe('story_new_comment');
+    });
+
+    it('ONLY: also gates the thread bucket (prior commenter off the allow-list is dropped)', async () => {
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postType: 'POST',
+        visibility: 'ONLY',
+        visibilityUserIds: [FRIEND_1], // PREV_COMMENTER_1 not allowed
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === PREV_COMMENTER_1)).toBeUndefined();
+    });
+
+    it('COMMUNITY: fans out to community co-members, not the author-friend graph', async () => {
+      const CO_MEMBER = '507f1f77bcf86cd799439009';
+      // getCommunityCoMemberIds resolves memberships then co-members.
+      prisma.communityMember.findMany
+        .mockResolvedValueOnce([{ communityId: 'comm-1' }]) // author's memberships
+        .mockResolvedValueOnce([{ userId: CO_MEMBER }]);    // co-members of comm-1
+      prisma.postComment.findMany.mockResolvedValue([]);
+      // FRIEND_1 is a friend but NOT a community co-member → must be dropped.
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        postType: 'POST',
+        visibility: 'COMMUNITY',
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === CO_MEMBER)?.[0].data.type).toBe('friend_story_comment');
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeUndefined();
+    });
+
+    it('default/omitted visibility keeps the full friend fan-out (backward compatibility)', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+        { senderId: AUTHOR_ID, receiverId: FRIEND_2 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch(baseParams); // no visibility
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeDefined();
+      expect(calls.find((c) => c[0].data.userId === FRIEND_2)).toBeDefined();
     });
 
     it('uses the comment excerpt as content when present', async () => {

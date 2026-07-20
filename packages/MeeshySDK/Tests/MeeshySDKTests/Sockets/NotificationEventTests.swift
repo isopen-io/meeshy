@@ -91,6 +91,28 @@ final class NotificationEventTests: XCTestCase {
         XCTAssertEqual(event.notificationId, "notif-xyz-789")
     }
 
+    // MARK: - SyncEngine A5 — `_seq` decoding
+
+    /// Le gateway (A2.1 `emitWithSeq`) enrichit `notification:new` d'un `_seq`
+    /// monotone. Le SDK doit le décoder (clé JSON `_seq` → propriété `seq`)
+    /// pour la détection de gap multi-device — additif/backward-compat.
+    func test_socketNotificationEvent_decodesUnderscoreSeq() throws {
+        let json = """
+        { "id": "n1", "userId": "u1", "type": "system", "content": "x", "_seq": 91234 }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketNotificationEvent.self, from: json)
+        XCTAssertEqual(event.seq, 91234)
+    }
+
+    /// Backward-compat : un event SANS `_seq` (ancien gateway) décode `nil`.
+    func test_socketNotificationEvent_missingSeq_isNil() throws {
+        let json = """
+        { "id": "n1", "userId": "u1", "type": "system", "content": "x" }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketNotificationEvent.self, from: json)
+        XCTAssertNil(event.seq)
+    }
+
     // MARK: - SocketNotificationEvent: nested gateway format (actor/context/metadata)
 
     func test_socketNotificationEvent_gatewayFormat_friendRequest() throws {
@@ -151,6 +173,50 @@ final class NotificationEventTests: XCTestCase {
         XCTAssertEqual(event.postType, "POST")
         XCTAssertEqual(event.senderId, "actor2")
         XCTAssertNil(event.senderDisplayName)
+    }
+
+    func test_socketNotificationEvent_commentReply_exposesCommentIds() throws {
+        let json = """
+        {
+            "id": "notif-reply",
+            "userId": "u2",
+            "type": "comment_reply",
+            "content": "a repondu a votre commentaire",
+            "actor": { "id": "actor2", "username": "bob" },
+            "context": {
+                "postId": "post123",
+                "commentId": "reply-9",
+                "parentCommentId": "parent-3"
+            },
+            "metadata": { "postType": "POST" }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(SocketNotificationEvent.self, from: json)
+        XCTAssertEqual(event.notificationType, .commentReply)
+        XCTAssertEqual(event.postId, "post123")
+        XCTAssertEqual(event.commentId, "reply-9")
+        XCTAssertEqual(event.parentCommentId, "parent-3")
+    }
+
+    func test_socketNotificationEvent_commentId_fallsBackToMetadata() throws {
+        let json = """
+        {
+            "id": "notif-like",
+            "userId": "u2",
+            "type": "comment_like",
+            "content": "a reagi a votre commentaire",
+            "metadata": {
+                "postId": "post123",
+                "commentId": "c-77"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(SocketNotificationEvent.self, from: json)
+        XCTAssertEqual(event.postId, "post123")
+        XCTAssertEqual(event.commentId, "c-77")
+        XCTAssertNil(event.parentCommentId)
     }
 
     func test_socketNotificationEvent_gatewayFormat_noActorNoContext() throws {

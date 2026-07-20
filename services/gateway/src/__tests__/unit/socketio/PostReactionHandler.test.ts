@@ -34,6 +34,7 @@ jest.mock('../../../validation/socket-event-schemas', () => ({
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
+  isValidationFailure: jest.fn((r) => !r.success),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -285,7 +286,11 @@ describe('PostReactionHandler', () => {
           likeCount: 7,
           reactionSummary: { '❤️': 7 },
         }),
-        ANOTHER_USER_ID
+        ANOTHER_USER_ID,
+        // Visibility-aware fan-out (audit C1-bis): the post's visibility is
+        // forwarded so a non-PUBLIC post never leaks the like to all friends.
+        expect.anything(),
+        expect.anything(),
       );
       // Pas de double-émission par-emoji pour le ❤️ (sinon double-comptage client).
       expect(mockIO._toEmit).not.toHaveBeenCalledWith(
@@ -492,6 +497,70 @@ describe('PostReactionHandler', () => {
       );
     });
 
+    it('test_handleAddReaction_reactionOnStory_forwardsRealTypeAndEphemeralContext', async () => {
+      // Sibling-drift guard: the socket path must forward the real post type +
+      // ephemeral context (mirror of the REST like route), NOT hardcode 'POST'.
+      // Without it, a STORY reaction yields a generic post_like notification and
+      // loses expiry context.
+      const reactorSocketToUser = new Map<string, string>();
+      reactorSocketToUser.set(SOCKET_ID, ANOTHER_USER_ID);
+
+      const reactorConnectedUsers = new Map();
+      reactorConnectedUsers.set(ANOTHER_USER_ID, {
+        id: ANOTHER_USER_ID,
+        socketId: SOCKET_ID,
+        isAnonymous: false,
+        language: 'fr',
+        userId: ANOTHER_USER_ID,
+      });
+
+      const storyCreatedAt = new Date('2026-07-04T10:00:00.000Z');
+      const storyExpiresAt = new Date('2026-07-05T10:00:00.000Z');
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: USER_ID,
+        type: 'STORY',
+        content: 'my ephemeral story caption',
+        createdAt: storyCreatedAt,
+        expiresAt: storyExpiresAt,
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        deletedAt: null,
+      });
+
+      const storyHandler = new PostReactionHandler({
+        io: mockIO as any,
+        prisma: mockPrisma,
+        notificationService: mockNotificationService,
+        postReactionService: mockReactionService,
+        connectedUsers: reactorConnectedUsers as any,
+        socketToUser: reactorSocketToUser,
+        socialEvents: mockSocialEvents,
+      });
+
+      const socket = createMockSocket();
+      const data = { postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      const reactorUpdateEvent = { ...sampleUpdateEvent, userId: ANOTHER_USER_ID };
+      const reactorReactionData = { ...sampleReactionData, userId: ANOTHER_USER_ID };
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockReactionService.addReaction.mockResolvedValue(reactorReactionData);
+      mockReactionService.createUpdateEvent.mockResolvedValue(reactorUpdateEvent);
+
+      await storyHandler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockNotificationService.createPostLikeNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          postType: 'STORY',
+          postPreview: 'my ephemeral story caption',
+          postCreatedAt: storyCreatedAt,
+          postExpiresAt: storyExpiresAt,
+        })
+      );
+    });
+
     it('test_handleAddReaction_rateLimitExceeded_callbackError', async () => {
       const socket = createMockSocket();
       const data = { postId: POST_ID, emoji: EMOJI };
@@ -547,7 +616,11 @@ describe('PostReactionHandler', () => {
       });
     });
 
-    it('test_handleRemoveReaction_notFound_callbackError', async () => {
+    it('test_handleRemoveReaction_alreadyAbsent_isIdempotent_callbackSuccessNoBroadcast', async () => {
+      // The reaction is already gone (concurrent removal, retry of an applied
+      // remove, double-tap un-like). `{ success: false }` would make the client
+      // roll the optimistic un-like back, re-showing a like that is gone.
+      // Mirrors ReactionHandler.handleReactionRemove (message reactions).
       const socket = createMockSocket();
       const data = { postId: POST_ID, emoji: EMOJI };
       const callback = jest.fn();
@@ -559,8 +632,8 @@ describe('PostReactionHandler', () => {
 
       expect(mockIO.to).not.toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith({
-        success: false,
-        error: 'Reaction not found',
+        success: true,
+        data: { message: 'Reaction already absent' },
       });
     });
 

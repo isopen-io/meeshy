@@ -13,21 +13,24 @@ struct SecurityVerificationView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: MeeshySpacing.xxl) {
+                    // Hero glyph ≥40pt : décoratif, le titre adjacent porte le sens — masqué VoiceOver (doctrine 74i/86i)
                     Image(systemName: "lock.shield.fill")
-                        .font(.system(size: 64))
+                        .font(MeeshyFont.relative(64))
                         .foregroundColor(MeeshyColors.indigo400)
-                        .padding(.top, 40)
+                        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
+                        .accessibilityHidden(true)
 
                     Text(String(localized: "security.verify.title", defaultValue: "End-to-End Encryption", bundle: .main))
-                        .font(.title2.bold())
+                        .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
 
                     Text(String(localized: "security.verify.description", defaultValue: "Messages with \(conversationName) are end-to-end encrypted.", bundle: .main))
-                        .font(.subheadline)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
+                        .padding(.horizontal, MeeshySpacing.xxxl)
 
                     if let safetyNumber {
                         verifiedSection(safetyNumber: safetyNumber)
@@ -35,7 +38,7 @@ struct SecurityVerificationView: View {
                         pendingSection
                     }
                 }
-                .padding(.bottom, 40)
+                .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.sm)
             }
             .background(theme.backgroundPrimary.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
@@ -67,52 +70,64 @@ struct SecurityVerificationView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 200, height: 200)
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(Color.white)
-                .cornerRadius(16)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .shadow(color: theme.textPrimary.opacity(0.1), radius: 10)
+                .accessibilityLabel(String(localized: "security.verify.qr.a11y", defaultValue: "QR code of the safety number, to scan on the other device", bundle: .main))
         }
 
-        VStack(spacing: 8) {
+        // Libellé + numéro fusionnés en un seul élément VoiceOver, avec les
+        // chiffres espacés pour une lecture digit-par-digit (comparaison à voix
+        // haute lors de la vérification), plutôt que lus comme de grands nombres.
+        VStack(spacing: MeeshySpacing.sm) {
             Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main))
-                .font(.caption.weight(.medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .textCase(.uppercase)
 
             Text(formatSafetyNumber(safetyNumber))
-                .font(.body.weight(.semibold).monospaced())
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .monospaced))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main)
+                + ", " + spelledSafetyNumber(safetyNumber)
+        )
 
         Text(String(localized: "security.verify.howto", defaultValue: "To verify, compare this number with the one shown on \(conversationName)'s device, or scan their QR code.", bundle: .main))
-            .font(.caption)
+            .font(MeeshyFont.relative(MeeshyFont.captionSize))
             .foregroundColor(theme.textMuted)
             .multilineTextAlignment(.center)
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
+            .padding(.horizontal, MeeshySpacing.xxl)
+            .padding(.top, MeeshySpacing.lg)
     }
 
     // MARK: - Pending (no real Signal keys yet)
 
     private var pendingSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
+            // Glyphe d'état ≥40pt : décoratif, le titre adjacent porte le sens — masqué VoiceOver (doctrine 74i/86i)
             Image(systemName: "hourglass.circle")
-                .font(.system(size: 40))
+                .font(MeeshyFont.relative(40))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             Text(String(localized: "security.verify.unavailable.title", defaultValue: "Verification Unavailable", bundle: .main))
-                .font(.headline)
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                 .foregroundColor(theme.textSecondary)
+                .accessibilityAddTraits(.isHeader)
 
             Text(String(localized: "security.verify.unavailable.description", defaultValue: "Safety number verification will be available once both participants have exchanged their encryption keys.", bundle: .main))
-                .font(.caption)
+                .font(MeeshyFont.relative(MeeshyFont.captionSize))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
         }
-        .padding(.top, 16)
+        .padding(.top, MeeshySpacing.lg)
     }
 
     private func formatSafetyNumber(_ number: String) -> String {
@@ -125,10 +140,19 @@ struct SecurityVerificationView: View {
         return result.isEmpty ? number : result
     }
 
+    // Chaque chiffre isolé par une espace pour que VoiceOver le lise
+    // individuellement ("1 2 3 4 5") au lieu de le regrouper en grand nombre —
+    // indispensable pour comparer un safety number à voix haute.
+    private func spelledSafetyNumber(_ number: String) -> String {
+        let cleanNumber = number.filter { $0.isNumber }
+        guard !cleanNumber.isEmpty else { return number }
+        return cleanNumber.map(String.init).joined(separator: " ")
+    }
+
     // CIContext is expensive to create (it sets up the Core Image / GPU
     // pipeline) and is documented as safe to share — build one and reuse it
     // instead of a fresh context on every QR generation.
-    nonisolated(unsafe) private static let qrContext = CIContext()
+    private static let qrContext = CIContext()
 
     private static func generateQRCode(from string: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()

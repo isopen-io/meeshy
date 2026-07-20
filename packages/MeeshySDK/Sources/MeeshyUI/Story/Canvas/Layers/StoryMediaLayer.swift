@@ -41,7 +41,7 @@ public struct DiskCacheImageLoader: StoryMediaImageLoading {
 ///
 /// Position and size live in design space (1080-référentiel) before being projected
 /// through `CanvasGeometry` so output is bit-identical across device sizes.
-public final class StoryMediaLayer: CALayer, @unchecked Sendable {
+public final class StoryMediaLayer: CALayer {
     public private(set) nonisolated(unsafe) var media: StoryMediaObject?
     public private(set) nonisolated(unsafe) weak var avPlayer: AVPlayer?
     public private(set) nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
@@ -61,7 +61,59 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         }
     }
 
+    /// Drapeau de lecture levé par le canvas (`StoryCanvasUIView`) en mode
+    /// `.play` pour autoriser le démarrage de la vidéo foreground — EXACT
+    /// pendant du `StoryBackgroundLayer.isPlaybackActive`. Sans ce gate,
+    /// `attachPlayer` appelait `play()` inconditionnellement dès que l'URL
+    /// était résolue : une vidéo foreground attachée AVANT que la slide soit
+    /// prête (« GO » / content-ready) démarrait donc EN AVANCE sur la vidéo de
+    /// fond + l'audio, désynchronisant le démarrage (user 2026-06-24). Le
+    /// canvas pose ce drapeau au content-ready, en phase avec la vidéo de fond
+    /// et le mixer audio ; il est sticky pour qu'une vidéo attachée APRÈS le GO
+    /// (octets arrivés plus tard) démarre immédiatement à son tour.
+    @MainActor
+    public var isPlaybackActive: Bool = false {
+        didSet {
+            guard oldValue != isPlaybackActive else { return }
+            if isPlaybackActive {
+                alignToTimelineThenPlay()
+            } else {
+                avPlayer?.pause()
+            }
+        }
+    }
+
+    /// Playhead unifié de la slide (secondes), poussé par le canvas à chaque
+    /// rebuild + aux transitions de lecture (GO, resume). Sert au CALAGE
+    /// timeline : quand la vidéo foreground (re)démarre, on la positionne à
+    /// `max(0, slidePlayheadSeconds − startTime)`. Corrige une vidéo arrivée en
+    /// retard (réseau) ou une ouverture/scrub à `t > 0`, qui sinon démarraient à
+    /// leur frame 0 — décalées du playhead et de l'audio. JAMAIS appliqué par
+    /// frame : seul `alignToTimelineThenPlay()` (au démarrage du player) seek, et
+    /// uniquement si la dérive dépasse le seuil — un resume en place (long-press)
+    /// ou une bascule plein écran ne provoque donc aucun saut.
+    @MainActor public var slidePlayheadSeconds: Double = 0
+
+    /// Au-delà de cette dérive (secondes) entre la position du player et la cible
+    /// timeline, on seek ; en-deçà on lance la lecture telle quelle (pas de
+    /// hoquet sur un resume déjà aligné).
+    private static let timelineSeekDriftThreshold: Double = 0.30
+
     private nonisolated(unsafe) var loopObserver: NSObjectProtocol?
+
+    /// Levé par le canvas composer (`StoryCanvasUIView.playsVideoInEditMode`)
+    /// pour que les vidéos foreground JOUENT et bouclent en mode `.edit` (live
+    /// preview de l'éditeur). Hors composer (prefetcher hors-écran, défaut),
+    /// reste `false` → en `.edit` la vidéo se cale sur sa frame 0 sans jouer,
+    /// comme avant. En `.play` (reader/preview) ce drapeau est ignoré : la
+    /// lecture y est toujours active et joue une seule fois.
+    @MainActor
+    public var playsInEditMode: Bool = false {
+        didSet {
+            guard oldValue != playsInEditMode, playsInEditMode else { return }
+            avPlayer?.play()
+        }
+    }
 
     /// Image loader used by `configureImage`. Defaults to a shim that calls
     /// `CacheCoordinator.shared.images.image(for:)`. Override in tests via
@@ -93,6 +145,14 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     /// Placeholder CALayer affichant le ThumbHash décodé pendant le fetch
     /// vidéo. Retiré avec un fade out 200 ms quand l'AVPlayer est prêt.
     private nonisolated(unsafe) var placeholderLayer: CALayer?
+
+    /// URL actuellement attachée au player. Garde d'idempotence
+    /// d'`attachPlayer` : reconfigurer la layer avec la MÊME URL (cache `.edit`
+    /// qui réutilise la layer sur un changement de géométrie, rebuild du
+    /// canvas composer) ne doit PAS `replaceCurrentItem` ni re-seek — la
+    /// lecture en cours continue sans coupure (impératif user 2026-07-11 :
+    /// manipuler un élément ne fait pas sauter les vidéos qui jouent).
+    private nonisolated(unsafe) var attachedURL: URL?
 
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
@@ -144,6 +204,10 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
                           resolver: (@Sendable (String) -> URL?)? = nil,
                           imageCache: ImageCacheReader? = nil) {
         self.media = media
+        // Un layer fraîchement configuré démarre visible : la disparition d'une
+        // vidéo foreground terminée (`.play`) est posée par l'observer de fin,
+        // pas héritée d'un état masqué d'une précédente configuration.
+        isHidden = false
 
         // Design-space frame (1080-référentiel) → render-space via geometry.
         let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: media.aspectRatio)
@@ -154,7 +218,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         let renderedSize = geometry.render(scaledDesignSize)
 
         let designCenterX = geometry.designLength(forNormalized: CGFloat(media.x))
-        let designCenterY = CGFloat(media.y) * CanvasGeometry.designHeight
+        let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(media.y))
         let renderedCenter = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
 
         bounds = CGRect(origin: .zero, size: renderedSize)
@@ -193,7 +257,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     /// côté rendu. Le cadre foreground (`StoryCanvasUIView.applyForegroundFrames`)
     /// pose son `border` sur ce même layer : bordure et image héritent donc
     /// exactement du même arrondi, sans constante dupliquée.
-    static let cornerRadiusFraction: CGFloat = 0.06
+    nonisolated static let cornerRadiusFraction: CGFloat = 0.06
 
     /// Base design size (in 1080-référentiel pixels) of a media before user `scale`
     /// is layered on. Envelope is 65 % of the short canvas side, fitted to aspect.
@@ -217,6 +281,27 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         return CGSize(width: target, height: target / ratio)
     }
 
+    /// Resynchronise l'`AVPlayerLayer` hébergé (et le `cornerRadius`) sur les
+    /// `bounds` courants. `configureVideo` ne pose `avPlayerLayer.frame` qu'à la
+    /// création, et le fast-path gesture (`StoryCanvasUIView`) mute `bounds`
+    /// directement sans recréer le player (réutilisation via `replaceCurrentItem`)
+    /// — sans ça la vidéo foreground gardait son ancienne taille pendant que le
+    /// cadre/bordure grandissait : elle ne remplissait plus son cadre d'effet à
+    /// la bonne proportion (bug resize / player recyclé). `CATransaction` désactive
+    /// l'animation implicite pour ne pas introduire de tween par tick en `.play`.
+    public override nonisolated func layoutSublayers() {
+        super.layoutSublayers()
+        let targetRadius = min(bounds.width, bounds.height) * Self.cornerRadiusFraction
+        let needsRadius = abs(cornerRadius - targetRadius) > 0.01
+        let needsPlayerFrame = avPlayerLayer != nil && avPlayerLayer?.frame != bounds
+        guard needsRadius || needsPlayerFrame else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if needsRadius { cornerRadius = targetRadius }
+        if needsPlayerFrame { avPlayerLayer?.frame = bounds }
+        CATransaction.commit()
+    }
+
     // MARK: - URL resolution
 
     /// Resolves the playable URL for a foreground media object.
@@ -225,17 +310,33 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     ///  1. `resolver(media.postMediaId)` — preloaded composer-preview asset,
     ///     then the published `StoryItem.media` remote URL.
     ///  2. Fallback `media.mediaURL` — fixtures and the `file://` URL the
-    ///     composer edition embeds directly on the object.
+    ///     composer edition embeds directly on the object. A `file://` here is
+    ///     the AUTHOR's local edition asset: on another viewer's device it points
+    ///     into the author's sandbox and never exists. Honouring it would feed a
+    ///     dead path to the loader (silent blank foreground, or a video player
+    ///     wired to nothing) — the exact "foreground missing on another user's
+    ///     story" symptom. So a file URL is only used when it resolves on THIS
+    ///     device; otherwise the media is treated as unresolved and the reader's
+    ///     content-readiness failsafe takes over.
     @MainActor
     private func resolvedMediaURL(for media: StoryMediaObject,
                                   resolver: (@Sendable (String) -> URL?)?) -> URL? {
         if !media.postMediaId.isEmpty, let resolved = resolver?(media.postMediaId) {
             return resolved
         }
-        if let urlString = media.mediaURL, let url = URL(string: urlString) {
-            return url
+        guard let urlString = media.mediaURL, let url = URL(string: urlString) else {
+            return nil
         }
-        return nil
+        // The file-existence guard applies ONLY in the READER (a resolver is
+        // always provided there). A `file://` that survives a resolver miss is
+        // the AUTHOR's local edition path — dead on another viewer's device — so
+        // we honour it only when it resolves on THIS device. In the COMPOSER /
+        // edit (resolver == nil) the file:// IS the intended local asset (and
+        // fixtures use placeholder paths), so it is used as-is.
+        if resolver != nil, url.isFileURL {
+            return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        }
+        return url
     }
 
     // MARK: - Image path
@@ -354,12 +455,23 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             currentVideoLoadTask?.cancel()
             videoLoadGeneration &+= 1
             // Pas de placeholder — le bitmap réel est instantané.
-            attachPlayer(url: immediateLocalURL, mode: mode, loop: media.loop)
+            // Loop UNIQUEMENT hors lecture reader : en `.play` une vidéo
+            // foreground est un composant de timeline qui joue UNE fois puis
+            // disparaît (cf. `attachPlayer`). Seul le composer (`.edit`) boucle.
+            attachPlayer(url: immediateLocalURL, mode: mode, loop: mode != .play)
             return
         }
 
-        // Cache miss → ThumbHash placeholder pendant le fetch async.
-        applyThumbHashPlaceholder(media.thumbHash)
+        // Cache miss → ThumbHash placeholder pendant le fetch async — SAUF si
+        // ce player joue déjà cette URL distante (reconfiguration in-place du
+        // cache `.edit` sur changement de géométrie) : re-poser le placeholder
+        // recouvrirait la vidéo en cours de lecture, et `attachPlayer`
+        // (idempotent) ne le fadera jamais.
+        let isReconfiguringAttachedURL = attachedURL == remoteURL
+            && avPlayerLayer?.player?.currentItem != nil
+        if !isReconfiguringAttachedURL {
+            applyThumbHashPlaceholder(media.thumbHash)
+        }
 
         // Annule le load précédent : un layer recyclé pour un autre média
         // ne doit pas stamp l'ancienne URL une fois résolue.
@@ -374,7 +486,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // arrière-plan et swap vers un fichier local s'il devient
         // disponible — c'est une optimisation, pas une condition
         // préalable à l'existence du player.
-        attachPlayer(url: remoteURL, mode: mode, loop: media.loop)
+        attachPlayer(url: remoteURL, mode: mode, loop: mode != .play)
 
         currentVideoLoadTask = Task { @MainActor [weak self] in
             // Garantit une URL file:// avant de toucher AVURLAsset — sinon
@@ -391,7 +503,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             // différente — sinon le player déjà attaché continue de jouer
             // l'URL distante sans re-trigger un cold start.
             if localURL != remoteURL {
-                self.attachPlayer(url: localURL, mode: mode, loop: media.loop)
+                self.attachPlayer(url: localURL, mode: mode, loop: mode != .play)
             }
         }
     }
@@ -411,6 +523,18 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     /// la spec § 2.2 (A.1).
     @MainActor
     private func attachPlayer(url: URL, mode: RenderMode, loop: Bool) {
+        // Idempotence à URL constante : un player vivant qui joue déjà CETTE
+        // URL est laissé strictement intact — pas de `replaceCurrentItem`
+        // (la lecture repartirait de zéro), pas de seek, pas de ré-armement
+        // du loop observer. On re-stampe seulement mute/volume, seuls états
+        // susceptibles d'avoir changé entre deux configure d'un même média.
+        if attachedURL == url, let existing = avPlayerLayer?.player, existing.currentItem != nil {
+            existing.isMuted = isMuted
+            existing.volume = media?.volume ?? 1.0
+            return
+        }
+        attachedURL = url
+
         let item = AVPlayerItem(url: url)
         // Buffer modéré : 2 s suffit pour la plupart des vidéos courtes sans
         // gaspiller la RAM. Sur 3G/4G lent, peut être ajusté à 4 s.
@@ -458,25 +582,41 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // entre les deux — auquel cas il joue sous catégorie `.ambient`, donc
         // silencieux en simulator silent mode et sur device avec le switch
         // physique. Forcer la catégorie ici est idempotent et coûte ~0 ms.
-        if mode == .play, AVAudioSession.sharedInstance().category != .playback {
+        if (mode == .play || playsInEditMode), AVAudioSession.sharedInstance().category != .playback {
             // Pose la session de lecture via la source UNIQUE (call-aware) : idempotent,
-            // no-op pendant un appel (micro de l'appel préservé).
+            // no-op pendant un appel (micro de l'appel préservé). Couvre aussi le
+            // composer live preview (`.edit` + `playsInEditMode`) → audio des
+            // vidéos qui bouclent dans l'éditeur.
             MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
         }
 
         switch mode {
         case .play:
-            player.play()
+            // Démarrage GATÉ — symétrique à `StoryBackgroundLayer`. La vidéo
+            // foreground ne démarre PAS à l'instant où ses octets arrivent (ce
+            // qui la faisait jouer en avance sur la vidéo de fond + le mixer
+            // audio) : elle attend le « GO » du canvas (content-ready), propagé
+            // via `isPlaybackActive`. Un layer attaché APRÈS le GO voit déjà le
+            // drapeau levé et démarre immédiatement à son tour — calé sur le
+            // playhead (rattrapage d'une arrivée tardive / ouverture à t>0).
+            if isPlaybackActive { alignToTimelineThenPlay() }
         case .edit:
             player.seek(to: .zero)
+            // Composer live preview : la vidéo joue (et boucle, cf. `loop`
+            // ci-dessous) tant que `playsInEditMode` est levé par le canvas.
+            if playsInEditMode { player.play() }
         }
 
+        // Retire l'éventuel observer de fin précédent (changement d'item /
+        // reconfigure d'un layer recyclé) avant d'en réarmer un.
+        if let token = loopObserver {
+            NotificationCenter.default.removeObserver(token)
+            loopObserver = nil
+        }
         if loop {
+            // Composer (`.edit`) : la vidéo reboucle indéfiniment pour la
+            // prévisualisation live — comme le fond.
             player.actionAtItemEnd = .none
-            // Retire l'éventuel observer précédent (changement d'item).
-            if let token = loopObserver {
-                NotificationCenter.default.removeObserver(token)
-            }
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
@@ -485,11 +625,114 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
                 player?.seek(to: .zero)
                 player?.play()
             }
+        } else {
+            // Reader / preview (`.play`) : une vidéo foreground est un composant
+            // de timeline. Elle joue UNE seule fois puis s'arrête et DISPARAÎT
+            // du canvas (le layer se masque), tout comme les autres composants
+            // foreground apparaissent/disparaissent selon leur fenêtre. Seule la
+            // vidéo de FOND boucle pour remplir la durée de la slide.
+            player.actionAtItemEnd = .pause
+            // `self` (StoryMediaLayer) est `nonisolated` donc non-Sendable : on le
+            // capture via un local `nonisolated(unsafe) weak` pour satisfaire le
+            // contrôle Sendable du bloc `@Sendable` de l'observer. Sûr car le bloc
+            // fire toujours sur `queue: .main` — mêmes garanties main-thread que
+            // les accès `isHidden`/`CATransaction` qui suivent.
+            nonisolated(unsafe) weak var weakSelf = self
+            loopObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: player.currentItem,
+                queue: .main
+            ) { [weak player] _ in
+                player?.pause()
+                // Masque sans animation implicite (le rebuild 60 Hz réutilise
+                // ce même layer via le StoryRendererCache, donc l'état masqué
+                // persiste jusqu'au changement de slide).
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                weakSelf?.isHidden = true
+                CATransaction.commit()
+            }
         }
 
         // Fade out du placeholder une fois la lecture lancée. Best-effort —
         // la vidéo peut encore buffer mais l'utilisateur perçoit la transition.
         fadeOutPlaceholder(duration: 0.2)
+    }
+
+    /// Cale le player foreground sur le playhead unifié de la slide puis lance
+    /// la lecture. `seek` UNIQUEMENT si la dérive entre la position courante et
+    /// la cible (`max(0, slidePlayheadSeconds − startTime)`) dépasse le seuil :
+    /// un resume en place (long-press) ou un démarrage déjà aligné ne provoque
+    /// aucun saut. Une vidéo arrivée en retard (réseau) ou une ouverture à `t>0`
+    /// est en revanche recalée pour rester en phase avec le reste de la slide.
+    /// Thin public seam (WS3.3) routing a canvas « GO » through the single
+    /// drift-aware start path. A no-op unless `isPlaybackActive` (the slide is
+    /// past content-ready), so the canvas can call it on every foreground media
+    /// layer without re-checking each layer's state. Replaces the raw
+    /// `forEachAVPlayer { $0.play() }` at GO, which bypassed timeline alignment
+    /// and could flash frame 0 on an open-at-t>0. Idempotent: `play()` is a
+    /// no-op when already playing and the seek only fires past the drift seuil.
+    @MainActor
+    public func startAlignedIfActive() {
+        guard isPlaybackActive else { return }
+        alignToTimelineThenPlay()
+    }
+
+    /// Scrub de preview timeline : pause puis cale le player sur le playhead
+    /// unifié (`max(0, slidePlayheadSeconds − startTime)`) avec une tolérance
+    /// large — un seek frame-accurate à la cadence du scrub gèle sur la
+    /// décompression GOP. Le seek fire à chaque appel (pas de seuil de
+    /// dérive) : en pause, la frame affichée DOIT suivre le doigt.
+    @MainActor
+    public func alignPausedToSlidePlayhead() {
+        guard let player = avPlayer else { return }
+        player.pause()
+        let target = max(0, slidePlayheadSeconds - (media?.startTime ?? 0))
+        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: tolerance, toleranceAfter: tolerance)
+    }
+
+    @MainActor
+    private func alignToTimelineThenPlay() {
+        guard let player = avPlayer else { return }
+        let target = max(0, slidePlayheadSeconds - (media?.startTime ?? 0))
+        let current = player.currentTime().seconds
+        if Self.shouldSeekToAlign(current: current, target: target) {
+            player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                        toleranceBefore: .zero, toleranceAfter: .zero)
+        }
+        player.play()
+    }
+
+    /// Pure drift decision (WS3.3 / F4): the aligned start seeks the foreground
+    /// player ONLY when the gap between the current position and the timeline
+    /// `target` exceeds `timelineSeekDriftThreshold`. A resume-in-place
+    /// (long-press) or an already-aligned start stays put (no jump); a video that
+    /// arrived late (network) or an open-at-`t>0` is recaled. Non-finite inputs
+    /// never seek. Extracted (non-private) so the seek trigger is unit-testable
+    /// without a decodable `AVAsset` — `AVPlayer` seek movement on a fixture mp4
+    /// is not observable.
+    static func shouldSeekToAlign(current: Double, target: Double) -> Bool {
+        guard target.isFinite, current.isFinite else { return false }
+        return abs(current - target) > timelineSeekDriftThreshold
+    }
+
+    /// Reprise/pause transitoire sur lifecycle d'app (foreground/background),
+    /// EXACT pendant du `StoryBackgroundLayer.handleAppLifecycle`. Ne touche
+    /// PAS au drapeau d'intention `isPlaybackActive` : un retour foreground ne
+    /// relance la vidéo QUE si le canvas l'avait autorisée (slide à l'écran,
+    /// non pausée). Sans ce gate, une vidéo foreground d'une slide non visible
+    /// (canvas retenu / préempté) rejouait à la réouverture de l'app.
+    @MainActor
+    public func handleAppLifecycle(active: Bool) {
+        guard let player = avPlayer else { return }
+        if active {
+            guard isPlaybackActive else { return }
+            player.play()
+        } else {
+            player.pause()
+        }
     }
 
     // MARK: - ThumbHash placeholder
@@ -554,6 +797,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         }
         avPlayerLayer?.player = nil
         avPlayer = nil
+        attachedURL = nil
         placeholderLayer?.removeFromSuperlayer()
         placeholderLayer = nil
     }

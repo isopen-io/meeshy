@@ -57,6 +57,23 @@ export interface RepostRequest {
   readonly isQuote?: boolean;
 }
 
+/**
+ * Surface a post impression originates from. Mirrors the gateway's accepted
+ * `source` enum (`/posts/:postId/impression` + `/posts/impressions/batch`) and
+ * iOS `PostService.recordImpression(s)`. `feed` is used for both the posts feed
+ * and the reels thread; `detail` additionally bumps `postOpenCount` server-side.
+ */
+export type ImpressionSource =
+  | 'feed'
+  | 'profile'
+  | 'search'
+  | 'shared_link'
+  | 'notification'
+  | 'detail';
+
+/** Max post ids the gateway accepts per `/posts/impressions/batch` call. */
+const IMPRESSION_BATCH_LIMIT = 50;
+
 export interface FeedFilters {
   readonly cursor?: string;
   readonly limit?: number;
@@ -74,6 +91,26 @@ export interface CursorPaginatedResponse<T> {
     };
     readonly nextCursor: string | null;
   };
+}
+
+export interface ReelFeedFilters {
+  readonly cursor?: string;
+  readonly limit?: number;
+  /** Seed reel id — anchors the affinity thread when a reel is opened from the feed. */
+  readonly seed?: string;
+}
+
+// The reels feed mirrors the gateway `sendSuccess()` envelope: the cursor lives
+// at the top-level `pagination`, not under `meta` (matches `/posts/feed/reels`).
+export interface ReelsFeedResponse {
+  readonly success: boolean;
+  readonly data: Post[];
+  readonly pagination?: {
+    readonly limit: number;
+    readonly hasMore: boolean;
+    readonly nextCursor: string | null;
+  };
+  readonly meta?: { readonly mentionedUsers?: readonly unknown[] };
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +141,16 @@ export const postsService = {
 
   async getFeed(filters: FeedFilters = {}): Promise<CursorPaginatedResponse<Post>> {
     const response = await apiService.get<CursorPaginatedResponse<Post>>(`/posts/feed${buildQuery(filters)}`);
+    return unwrap(response);
+  },
+
+  async getReelsFeed(filters: ReelFeedFilters = {}): Promise<ReelsFeedResponse> {
+    const params = new URLSearchParams();
+    if (filters.cursor) params.set('cursor', filters.cursor);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    if (filters.seed) params.set('seed', filters.seed);
+    const qs = params.toString();
+    const response = await apiService.get<ReelsFeedResponse>(`/posts/feed/reels${qs ? `?${qs}` : ''}`);
     return unwrap(response);
   },
 
@@ -219,6 +266,24 @@ export const postsService = {
       `/posts/${postId}/views?limit=${limit}&offset=${offset}`,
     );
     return unwrap(response);
+  },
+
+  // ── Impressions ─────────────────────────────────────────────────────────
+  // A lightweight "this post entered the viewport" reach signal feeding
+  // `impressionCount`, distinct from `viewPost` (`viewCount`). Mirrors iOS
+  // `PostService.recordImpressions` / `recordImpression`. The batch endpoint
+  // caps at IMPRESSION_BATCH_LIMIT ids, so longer runs are chunked here.
+
+  async recordImpressions(postIds: readonly string[], source: ImpressionSource = 'feed'): Promise<void> {
+    if (postIds.length === 0) return;
+    for (let i = 0; i < postIds.length; i += IMPRESSION_BATCH_LIMIT) {
+      const chunk = postIds.slice(i, i + IMPRESSION_BATCH_LIMIT);
+      await apiService.post('/posts/impressions/batch', { postIds: chunk, source });
+    }
+  },
+
+  async recordImpression(postId: string, source: ImpressionSource = 'detail'): Promise<void> {
+    await apiService.post(`/posts/${postId}/impression`, { source });
   },
 
   // ── Translation ─────────────────────────────────────────────────────────

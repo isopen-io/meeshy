@@ -116,11 +116,17 @@ function createMockFastify() {
     user: { findUnique: jest.fn<any>() },
     participant: { create: jest.fn<any>() },
   };
+  const joinUserToConversationRoom = jest.fn<any>().mockResolvedValue(undefined);
+  const socketIOHandler = {
+    getManager: jest.fn<any>().mockReturnValue({ joinUserToConversationRoom }),
+  };
   return {
     routes,
     authenticate,
     notificationService,
     mentionService,
+    socketIOHandler,
+    joinUserToConversationRoom,
     prisma: prismaOnFastify,
     get: jest.fn<any>((path: string, options: any, handler: RouteHandler) => {
       routes.push({ method: 'GET', path, handler, options });
@@ -748,6 +754,19 @@ describe('POST /conversations/join/:linkId', () => {
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({ conversationId: CONV_ID }));
   });
 
+  it('auto-joins the joining user\'s connected sockets to the conversation room', async () => {
+    const { prisma, reply, route, fastify } = getJoinRoute();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink());
+    prisma.participant.findFirst.mockResolvedValue(null);
+    prisma.user.findUnique.mockResolvedValue({ displayName: 'Bob', username: 'bob' });
+    prisma.participant.create.mockResolvedValue({});
+    prisma.conversationShareLink.update.mockResolvedValue({});
+    prisma.participant.findMany.mockResolvedValue([]);
+    const req = makeRequest({ params: { linkId: LINK_ID } });
+    await route.handler(req, reply);
+    expect(fastify.joinUserToConversationRoom).toHaveBeenCalledWith(USER_ID, CONV_ID);
+  });
+
   it('uses username as displayName when displayName is null', async () => {
     const { prisma, reply, route, fastify } = getJoinRoute();
     prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink());
@@ -961,6 +980,17 @@ describe('POST /conversations/:id/invite', () => {
     const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
     await route.handler(req, reply);
     expect(mockSendSuccess).toHaveBeenCalled();
+  });
+
+  it('auto-joins the invited user\'s connected sockets to the conversation room', async () => {
+    const { fastify, reply, route } = getInviteRoute();
+    const inviter = makeInviterParticipant('admin');
+    fastify.prisma.conversation.findUnique.mockResolvedValue(makeConversation([inviter]));
+    fastify.prisma.user.findUnique.mockResolvedValue(makeTargetUser());
+    fastify.prisma.participant.create.mockResolvedValue({ id: 'new-part', user: makeTargetUser(), userId: INVITEE_ID });
+    const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
+    await route.handler(req, reply);
+    expect(fastify.joinUserToConversationRoom).toHaveBeenCalledWith(INVITEE_ID, CONV_ID);
   });
 
   it('allows ADMIN user role (not participant role) to invite', async () => {

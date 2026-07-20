@@ -154,4 +154,50 @@ describe('resolveParticipantLanguage', () => {
     const participant = { type: 'unknown' as string, language: 'sv' }
     expect(resolveParticipantLanguage(participant)).toBe('sv')
   })
+
+  // F62 — case parity with resolveUserLanguagesOrdered: an in-app pref stored
+  // 'EN' must resolve to 'en' so it matches the lowercase-keyed translations.
+  it('should lowercase an uppercase in-app pref', () => {
+    const participant = {
+      type: 'user' as const,
+      language: 'fr',
+      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: 'EN' },
+    }
+    expect(resolveParticipantLanguage(participant)).toBe('en')
+  })
+
+  // The docstring promises "même normalisation de casse que resolveUserLanguage"
+  // for ALL return paths, but the participant.language fallback was returned
+  // verbatim. An uppercase fallback ('FR') would miss the lowercase-keyed
+  // translations exactly like an un-lowercased in-app pref (Prisme violation),
+  // so the fallback must be lowercased too — for users without prefs and for
+  // non-user participants alike.
+  it('should lowercase an uppercase participant.language fallback for a user without preferences', () => {
+    const participant = {
+      type: 'user' as const,
+      language: 'FR',
+      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: null },
+    }
+    expect(resolveParticipantLanguage(participant)).toBe('fr')
+  })
+
+  it('should lowercase an uppercase participant.language fallback for a user with a null user object', () => {
+    const participant = { type: 'user' as const, language: 'IT', user: null }
+    expect(resolveParticipantLanguage(participant)).toBe('it')
+  })
+
+  it('should lowercase an uppercase participant.language for an anonymous participant', () => {
+    const participant = { type: 'anonymous' as const, language: 'DE' }
+    expect(resolveParticipantLanguage(participant)).toBe('de')
+  })
+
+  it('should lowercase a mixed-case region-tagged in-app pref down to its lowercase code path', () => {
+    const participant = {
+      type: 'bot' as const,
+      language: 'ES',
+      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: 'EN' },
+    }
+    // bot short-circuits to the fallback (participant.language), which must be lowercased
+    expect(resolveParticipantLanguage(participant)).toBe('es')
+  })
 })

@@ -117,4 +117,53 @@ struct BandStateMachineTests {
         sm.reset()
         #expect(sm.state == .hidden)
     }
+
+    // MARK: - Timeline is a normal band tool (2026-07-14)
+    // Presented inline via ComposerControlsLayer.resolveEffectiveBandState's
+    // override, exactly like drawing mode. The state machine itself no
+    // longer special-cases it — see ComposerControlsLayerEffectiveBandStateTests.
+
+    @Test("tapFAB(.timeline) from .hidden opens .toolPanel(.timeline)")
+    func tapFABTimelineOpensToolPanel() {
+        var sm = BandStateMachine()
+        sm.tapFAB(.timeline)
+        #expect(sm.state == .toolPanel(.timeline))
+    }
+
+    @Test("swipeUpOnFAB(.timeline) opens .toolPanel(.timeline)")
+    func swipeUpOnFABTimelineOpensToolPanel() {
+        var sm = BandStateMachine()
+        sm.swipeUpOnFAB(.timeline)
+        #expect(sm.state == .toolPanel(.timeline))
+    }
+
+    @Test("tapTile(.timeline) opens .toolPanel(.timeline)")
+    func tapTileTimelineOpensToolPanel() {
+        var sm = BandStateMachine()
+        sm.tapTile(.timeline)
+        #expect(sm.state == .toolPanel(.timeline))
+    }
+
+    @Test("tapFAB(.timeline) while another panel is open swaps to it, like any other tool")
+    func tapFABTimelineSwapsOpenPanel() {
+        var sm = BandStateMachine()
+        sm.tapFAB(.media)
+        sm.tapFAB(.timeline)
+        #expect(sm.state == .toolPanel(.timeline))
+    }
+
+    /// The switch-chip row (`ComposerToolPanelHost`) routes every tap through
+    /// `tapTile`, not `tapFAB` — this is the exact path the composer uses when
+    /// the user is already inside another tool panel and taps the Timeline
+    /// chip to switch directly. The machine itself has been generic here
+    /// since `tapTile` no longer special-cases `.timeline` (see the file
+    /// header note above) — this test locks that contract in explicitly,
+    /// mirroring `tapFABTimelineSwapsOpenPanel` for the tile-tap entry point.
+    @Test("tapTile(.timeline) while another panel is open swaps to it, like any other tool")
+    func tapTileTimelineSwapsOpenPanel() {
+        var sm = BandStateMachine()
+        sm.tapTile(.text)
+        sm.tapTile(.timeline)
+        #expect(sm.state == .toolPanel(.timeline))
+    }
 }

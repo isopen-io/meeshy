@@ -49,7 +49,7 @@ struct BubbleStandardLayout: View {
     let textTranslations: [MessageTranslation]
     let preferredTranslation: MessageTranslation?
     let showAvatar: Bool
-    let presenceState: PresenceState
+    let presenceState: PresenceState?
     let senderMoodEmoji: String?
     let senderStoryRingState: StoryRingState
     let allAudioItems: [ConversationViewModel.AudioItem]
@@ -112,6 +112,12 @@ struct BubbleStandardLayout: View {
 
     @ObservedObject var blurController: BubbleBlurRevealController
     @ObservedObject var ephemeralController: BubbleEphemeralController
+    var voiceConsentMissing: Bool = false
+    var onTapConsentNotice: (() -> Void)? = nil
+    /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
+    /// `Spacer(minLength: 50)` d'alignement de la row pour que la vue épouse la
+    /// bulle. Défaut `false` — la cellule live garde ses spacers d'alignement.
+    var standalone: Bool = false
 
     // MARK: - Playback tracking
     //
@@ -350,15 +356,15 @@ struct BubbleStandardLayout: View {
     private var replyAccessibilityLabel: String? {
         guard let reply = content.reply?.reference else { return nil }
         let author: String = reply.isMe
-            ? String(localized: "a11y.bubble.replyTo.you", defaultValue: "vous-m\u{00EA}me", bundle: .main)
+            ? String(localized: "a11y.bubble.replyTo.you", bundle: .main)
             : (reply.authorName.isEmpty
-                ? String(localized: "a11y.bubble.replyTo.unknown", defaultValue: "un message", bundle: .main)
+                ? String(localized: "a11y.bubble.replyTo.unknown", bundle: .main)
                 : reply.authorName)
         let excerpt = reply.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
         if excerpt.isEmpty {
-            return String(format: String(localized: "a11y.bubble.replyTo", defaultValue: "En r\u{00E9}ponse \u{00E0} %@", bundle: .main), author)
+            return String(format: String(localized: "a11y.bubble.replyTo", bundle: .main), author)
         }
-        return String(format: String(localized: "a11y.bubble.replyTo.excerpt", defaultValue: "En r\u{00E9}ponse \u{00E0} %@\u{00A0}: %@", bundle: .main), author, excerpt)
+        return String(format: String(localized: "a11y.bubble.replyTo.excerpt", bundle: .main), author, excerpt)
     }
 
     private var messageAccessibilityLabel: String {
@@ -366,7 +372,7 @@ struct BubbleStandardLayout: View {
         if !content.isMe, let senderName = content.senderName {
             parts.append(senderName)
         } else if !content.isMe {
-            parts.append("Inconnu")
+            parts.append(String(localized: "a11y.message.unknown_sender", bundle: .main))
         }
         if let replyLabel = replyAccessibilityLabel {
             parts.append(replyLabel)
@@ -377,29 +383,42 @@ struct BubbleStandardLayout: View {
         if !visualAttachments.isEmpty {
             let imageCount = visualAttachments.filter { $0.type == .image }.count
             let videoCount = visualAttachments.filter { $0.type == .video }.count
-            if imageCount > 0 { parts.append(imageCount == 1 ? "une image" : "\(imageCount) images") }
-            if videoCount > 0 { parts.append(videoCount == 1 ? "une video" : "\(videoCount) videos") }
+            if imageCount > 0 {
+                parts.append(String(format: String(localized: "a11y.message.images", bundle: .main), imageCount))
+            }
+            if videoCount > 0 {
+                parts.append(String(format: String(localized: "a11y.message.videos", bundle: .main), videoCount))
+            }
         }
         if !audioAttachments.isEmpty {
-            parts.append(audioAttachments.count == 1 ? "un audio" : "\(audioAttachments.count) audios")
+            parts.append(String(format: String(localized: "a11y.message.audios", bundle: .main), audioAttachments.count))
         }
         if !nonMediaAttachments.isEmpty {
             for att in nonMediaAttachments {
-                if att.type == .location { parts.append("position partagee") }
-                else { parts.append("fichier \(att.originalName)") }
+                if att.type == .location {
+                    parts.append(String(localized: "a11y.message.location", bundle: .main))
+                } else {
+                    parts.append(String(format: String(localized: "a11y.message.file", bundle: .main), att.originalName))
+                }
             }
         }
         parts.append(content.meta.timeString)
         if content.isMe {
             parts.append(deliveryStatusAccessibilityLabel)
         }
-        if content.editedAt != nil { parts.append("modifie") }
-        if content.isPinned { parts.append("epingle") }
-        if message.expiresAt != nil { parts.append("ephemere") }
+        if content.editedAt != nil {
+            parts.append(String(localized: "a11y.message.edited", bundle: .main))
+        }
+        if content.isPinned {
+            parts.append(String(localized: "a11y.message.pinned", bundle: .main))
+        }
+        if message.expiresAt != nil {
+            parts.append(String(localized: "a11y.message.ephemeral", bundle: .main))
+        }
         let summaries = content.reactions
         if !summaries.isEmpty {
             let reactionText = summaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
-            parts.append("reactions: \(reactionText)")
+            parts.append(String(format: String(localized: "a11y.message.reactions", bundle: .main), reactionText))
         }
         return parts.joined(separator: ", ")
     }
@@ -409,7 +428,7 @@ struct BubbleStandardLayout: View {
     var body: some View {
         let isMe = content.isMe
         HStack(alignment: .bottom, spacing: 0) {
-            if isMe { Spacer(minLength: 50) }
+            if isMe && !standalone { Spacer(minLength: 50) }
 
             VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
                 // Pin indicator
@@ -453,7 +472,7 @@ struct BubbleStandardLayout: View {
                             .contentShape(Rectangle())
                             .accessibilityElement(children: .combine)
                             .accessibilityLabel(String(localized: "bubble.content.hidden", defaultValue: "Hidden content", bundle: .main))
-                            .accessibilityHint("Toucher pour reveler le contenu")
+                            .accessibilityHint(String(localized: "bubble.content.hidden.hint", defaultValue: "Toucher pour révéler le contenu", bundle: .main))
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
@@ -495,8 +514,13 @@ struct BubbleStandardLayout: View {
             // `.fixedSize(horizontal: true, vertical: false)` on the bar
             // inside `textBubbleContent`).
             .frame(maxWidth: DeviceLayout.bubbleMaxWidth(containerWidth: UIScreen.main.bounds.width, sizeClass: horizontalSizeClass), alignment: isMe ? .trailing : .leading)
+            // Standalone (aperçu) : hug jusqu'au cap. `.fixedSize(horizontal:)`
+            // fait remonter la largeur idéale du contenu (clampée au cap par le
+            // `.frame(maxWidth:)` ci-dessus) → une bulle courte n'occupe plus
+            // toute la largeur du cap, un texte long wrappe toujours au cap.
+            .fixedSize(horizontal: standalone, vertical: false)
 
-            if !isMe { Spacer(minLength: 50) }
+            if !isMe && !standalone { Spacer(minLength: 50) }
         }
         .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
@@ -545,38 +569,48 @@ struct BubbleStandardLayout: View {
                     targetWidthPx: targetPx
                 )
                 let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
-                ImageFullscreen(
-                    imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
-                    accentColor: contactColor,
-                    caption: caption,
-                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                )
+                // Composant UNIFIÉ « Enregistrer » : le flow vit DANS le cover
+                // pour que la sheet de destinations se présente par-dessus.
+                SavableMediaFullscreen(attachment: attachment) { requestSave in
+                    ImageFullscreen(
+                        imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
+                        accentColor: contactColor,
+                        caption: caption,
+                        mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                        onSaveRequested: requestSave
+                    )
+                }
             case .video:
                 if !attachment.fileUrl.isEmpty {
                     let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                     let resolvedShareURL = MeeshyConfig.resolveMediaURL(attachment.fileUrl)
-                    VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
-                        MeeshyVideoPlayer(
-                            attachment: attachment,
-                            style: .fullscreen,
-                            controls: .fullscreenDefault,
-                            accentColor: contactColor,
-                            frame: .flat,
-                            availability: availability,
-                            performance: .fullscreen,
-                            author: makeFullscreenVideoAuthor(),
-                            caption: caption,
-                            fileName: attachment.originalName,
-                            mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
-                            onDownload: onDownload,
-                            onShare: resolvedShareURL.map { url in
-                                {
-                                    shareURL = url
-                                    showShareSheet = true
-                                }
-                            },
-                            onClose: { fullscreenAttachment = nil }
-                        )
+                    // Composant UNIFIÉ « Enregistrer » : flow DANS le cover
+                    // (miroir du case .image ci-dessus).
+                    SavableMediaFullscreen(attachment: attachment) { requestSave in
+                        VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                            MeeshyVideoPlayer(
+                                attachment: attachment,
+                                style: .fullscreen,
+                                controls: .fullscreenDefault,
+                                accentColor: contactColor,
+                                frame: .flat,
+                                availability: availability,
+                                performance: .fullscreen,
+                                author: makeFullscreenVideoAuthor(),
+                                caption: caption,
+                                fileName: attachment.originalName,
+                                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                                onDownload: onDownload,
+                                onShare: resolvedShareURL.map { url in
+                                    {
+                                        shareURL = url
+                                        showShareSheet = true
+                                    }
+                                },
+                                onClose: { fullscreenAttachment = nil },
+                                onSaveRequested: requestSave
+                            )
+                        }
                     }
                 } else {
                     Color.black.onAppear { fullscreenAttachment = nil }
@@ -610,8 +644,14 @@ struct BubbleStandardLayout: View {
                     carouselView
                         .background(Color.black)
                         .compositingGroup()
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        // Le pager du carrousel possède le glissement
+                        // horizontal : le BubbleSwipeContainer parent
+                        // désengage reply/forward tant que le carrousel est
+                        // ouvert (retour grille → branche démontée →
+                        // préférence retombe à false).
+                        .preference(key: BubbleInlinePagingPreferenceKey.self, value: true)
                 } else if content.visualHostsReply, let reply = content.reply {
                     // Visual-only reply : conteneur unifié citation + grille,
                     // bordure commune RR16 — aucune chat bubble parasite.
@@ -620,7 +660,7 @@ struct BubbleStandardLayout: View {
                     visualMediaGrid
                         .background(Color.black)
                         .compositingGroup()
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         .overlay(alignment: .bottomTrailing) {
                             // Footer caché pendant la lecture d'une vidéo
                             // inline : on libère le coin droit pour les
@@ -718,7 +758,10 @@ struct BubbleStandardLayout: View {
                     },
                     onShowTranslationDetail: onShowTranslationDetail,
                     onRequestTranslation: onRequestTranslation,
-                    onPlayAudio: onPlayAudio
+                    onPlayAudio: onPlayAudio,
+                    parentIsMe: content.isMe,
+                    voiceConsentMissing: voiceConsentMissing,
+                    onTapConsentNotice: onTapConsentNotice
                 )
             } else {
                 ForEach(audioAttachments) { attachment in
@@ -798,7 +841,7 @@ struct BubbleStandardLayout: View {
                 // Emoji-only intentionally renders the ORIGINAL `message.content`,
                 // not the translated text — emoji bubbles are not translated.
                 Text(message.content)
-                    .font(.system(size: emojiFontSize))
+                        .font(MeeshyFont.relative(emojiFontSize))
                     .fixedSize(horizontal: false, vertical: true)
                     .overlay(alignment: .topLeading) {
                         if content.editedAt != nil {
@@ -874,7 +917,7 @@ struct BubbleStandardLayout: View {
                         // card), pas s'etirer sur 70% de la largeur d'ecran. Le
                         // VStack parent gere deja l'alignement naturel a gauche.
                         Text(message.content)
-                            .font(.system(size: emojiFontSize))
+                            .font(MeeshyFont.relative(emojiFontSize))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         expandableTextView
@@ -884,7 +927,10 @@ struct BubbleStandardLayout: View {
                 // Inline OpenGraph preview for the first URL in the
                 // effective (possibly translated) content. Self-loading.
                 // URL précalculée dans BubbleContent (plus de NSDataDetector ici).
-                if let url = content.text?.firstLinkURL {
+                if let video = content.text?.embeddedVideo {
+                    VideoEmbedContainer(video: video, accent: Color(hex: contactColor), trackedURL: content.text?.embedTrackedURL)
+                        .padding(.top, 4)
+                } else if let url = content.text?.firstLinkURL {
                     LinkPreviewCard(
                         urlString: url,
                         accentColor: contactColor,
@@ -986,7 +1032,8 @@ struct BubbleStandardLayout: View {
             flags: showFlags
                 ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
                 : [],
-            showsTranslate: showTranslation
+            showsTranslate: showTranslation,
+            sendStartedAt: message.createdAt
         )
 
         // Le tap sur les coches n'a de sens que sur les messages envoyes
@@ -1071,7 +1118,8 @@ struct BubbleStandardLayout: View {
             mentionDisplayNames: mentionDisplayNames,
             highlightTerm: highlightSearchTerm,
             mentionTint: mentionTint,
-            linkTint: linkTint
+            linkTint: linkTint,
+            trackedLinks: content.text?.trackedLinks ?? [:]
         )
     }
 
@@ -1087,7 +1135,8 @@ struct BubbleStandardLayout: View {
                 textPrimary: theme.textPrimary,
                 mentionDisplayNames: mentionDisplayNames,
                 mentionTint: mentionTint,
-                linkTint: linkTint
+                linkTint: linkTint,
+                trackedLinks: content.text?.trackedLinks ?? [:]
             )
         }
     }
@@ -1215,7 +1264,9 @@ struct BubbleStandardLayout: View {
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
                 onPlayAudio: onPlayAudio,
-                embedsCaptionInWidget: embedsCaption
+                embedsCaptionInWidget: embedsCaption,
+                voiceConsentMissing: voiceConsentMissing,
+                onTapConsentNotice: onTapConsentNotice
             )
             .equatable()
 

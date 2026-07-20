@@ -22,6 +22,38 @@ final class StoryDraftStoreSDKTests: XCTestCase {
         super.tearDown()
     }
 
+    // MARK: - E4 inc.2 : command-history blob (opaque sidecar)
+
+    func test_commandHistoryBlob_nilWhenNeverSaved() {
+        XCTAssertNil(store.loadCommandHistoryBlob())
+    }
+
+    func test_commandHistoryBlob_roundTrip() {
+        let payload = Data(#"{"slide-1":{"commands":[],"cursor":0}}"#.utf8)
+
+        store.saveCommandHistoryBlob(payload)
+
+        XCTAssertEqual(store.loadCommandHistoryBlob(), payload,
+                       "The blob is opaque to the core store — bytes in, same bytes out")
+    }
+
+    func test_commandHistoryBlob_overwrittenByLaterSave() {
+        store.saveCommandHistoryBlob(Data("old-history".utf8))
+        store.saveCommandHistoryBlob(Data("new-history".utf8))
+
+        XCTAssertEqual(store.loadCommandHistoryBlob(), Data("new-history".utf8),
+                       "Each autosave replaces the previous history snapshot")
+    }
+
+    func test_clear_purgesCommandHistoryBlob() {
+        store.saveCommandHistoryBlob(Data("history".utf8))
+
+        store.clear()
+
+        XCTAssertNil(store.loadCommandHistoryBlob(),
+                     "Discarding the draft must discard its undo history with it")
+    }
+
     // MARK: - isEmpty
 
     func test_isEmpty_trueInitially() {
@@ -38,6 +70,61 @@ final class StoryDraftStoreSDKTests: XCTestCase {
 
     func test_load_returnsNilWhenEmpty() {
         XCTAssertNil(store.load())
+    }
+
+    // MARK: - saveMedia : cycle restore → autosave (constat « Médias indisponibles »)
+
+    /// Après `restoreDraft()`, `loadedVideoURLs` pointent DANS le media dir du
+    /// store. L'autosave suivante rappelait `saveMedia` avec ces mêmes URLs :
+    /// `removeItem(dest)` détruisait la SOURCE (source == dest) puis `copyItem`
+    /// échouait en silence — le média était perdu au resume suivant.
+    func test_saveMedia_resaveFromRestoredURL_keepsVideoFile() throws {
+        let source = tempDir.appendingPathComponent("clip.mp4")
+        try Data("fake-video-bytes".utf8).write(to: source)
+        store.saveMedia(images: [:], videoURLs: ["el-1": source], audioURLs: [:])
+
+        let restored = store.loadMedia()
+        let restoredURL = try XCTUnwrap(restored.videoURLs["el-1"])
+
+        store.saveMedia(images: [:], videoURLs: ["el-1": restoredURL], audioURLs: [:])
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restoredURL.path),
+                      "Re-sauver un média déjà dans le store ne doit pas le détruire")
+        let reloaded = store.loadMedia()
+        XCTAssertNotNil(reloaded.videoURLs["el-1"])
+        XCTAssertTrue(reloaded.lostElementIds.isEmpty)
+    }
+
+    func test_saveMedia_resaveFromRestoredURL_keepsAudioFile() throws {
+        let source = tempDir.appendingPathComponent("track.m4a")
+        try Data("fake-audio-bytes".utf8).write(to: source)
+        store.saveMedia(images: [:], videoURLs: [:], audioURLs: ["au-1": source])
+
+        let restoredURL = try XCTUnwrap(store.loadMedia().audioURLs["au-1"])
+
+        store.saveMedia(images: [:], videoURLs: [:], audioURLs: ["au-1": restoredURL])
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: restoredURL.path))
+        XCTAssertTrue(store.loadMedia().lostElementIds.isEmpty)
+    }
+
+    /// Une source disparue (tmp purgé) ne doit ni détruire la copie encore
+    /// valide du store, ni enregistrer une ligne fantôme qui deviendrait un
+    /// « média perdu » au prochain resume.
+    func test_saveMedia_missingSource_keepsPreviousCopy() throws {
+        let source = tempDir.appendingPathComponent("clip.mp4")
+        try Data("fake-video-bytes".utf8).write(to: source)
+        store.saveMedia(images: [:], videoURLs: ["el-1": source], audioURLs: [:])
+        let storedURL = try XCTUnwrap(store.loadMedia().videoURLs["el-1"])
+
+        let gone = tempDir.appendingPathComponent("purged.mp4")
+        store.saveMedia(images: [:], videoURLs: ["el-1": gone], audioURLs: [:])
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: storedURL.path),
+                      "La copie du store survit quand la nouvelle source n'existe plus")
+        let reloaded = store.loadMedia()
+        XCTAssertNotNil(reloaded.videoURLs["el-1"])
+        XCTAssertTrue(reloaded.lostElementIds.isEmpty)
     }
 
     // MARK: - save + load round-trip

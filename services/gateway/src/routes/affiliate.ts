@@ -5,6 +5,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { AffiliateTrackingService } from '../services/AffiliateTrackingService';
+import { SecuritySanitizer } from '../utils/sanitize';
 import { validatePagination } from '../utils/pagination';
 import {
   affiliateTokenSchema,
@@ -21,7 +22,7 @@ const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 const createAffiliateTokenSchema = z.object({
   name: z.string().min(1).max(100),
   maxUses: z.number().int().positive().optional(),
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: z.iso.datetime().optional(),
 });
 
 const affiliateLinkSchema = z.object({
@@ -138,7 +139,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const affiliateToken = await fastify.prisma.affiliateToken.create({
         data: {
           token,
-          name,
+          name: SecuritySanitizer.sanitizeText(name),
           createdBy: userId,
           maxUses,
           expiresAt: expiresAt ? new Date(expiresAt) : null,

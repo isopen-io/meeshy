@@ -11,9 +11,24 @@ import {
   type NotificationIcon
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
+import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
+
+/**
+ * Accent « non-lu » des notifications — source UNIQUE.
+ * Le thème est monochrome (token `accent` = gris) ; on porte ici le sens
+ * « nouveau » via un bleu sobre, réutilisé par le rail, le badge cloche et
+ * l'action « marquer lu ». Centralisé pour éviter toute divergence.
+ */
+export const NOTIFICATION_ACCENT = {
+  rail: 'border-blue-600 dark:border-blue-400',
+  badge: 'bg-blue-600 text-white dark:bg-blue-500',
+  ring: 'ring-blue-500',
+  text: 'text-blue-600 dark:text-blue-400',
+} as const;
 
 /**
  * Configuration des icônes et couleurs par type de notification
@@ -117,34 +132,193 @@ export function formatMessagePreview(content: string, attachments?: any[]): stri
 }
 
 /**
- * Retourne le lien de navigation pour une notification
+ * Types ami/contact qui pointent vers la page contacts
+ */
+const FRIEND_CONTACT_TYPES = new Set<string>([
+  NotificationTypeEnum.FRIEND_REQUEST,
+  NotificationTypeEnum.FRIEND_ACCEPTED,
+  NotificationTypeEnum.CONTACT_REQUEST,
+  NotificationTypeEnum.CONTACT_ACCEPTED,
+  NotificationTypeEnum.CONTACT_REJECTED,
+  NotificationTypeEnum.CONTACT_BLOCKED,
+  NotificationTypeEnum.CONTACT_UNBLOCKED,
+]);
+
+/**
+ * Résout la route de base d'un contenu social (post/story/mood).
+ * Priorité au discriminant `metadata.contentType` (friend_new_*), sinon
+ * dérivé du type de notification, défaut `/post`.
+ */
+function resolveContentRoute(notification: Notification): '/post' | '/story' | '/mood' | '/reel' {
+  // Le discriminant de cible vit dans metadata : `postType` (post_like/post_comment…)
+  // ou `contentType` (friend_new_*). On lit les deux.
+  const meta = notification.metadata as any;
+  const kind = (meta?.contentType ?? meta?.postType) as string | undefined;
+  if (kind === 'STORY') return '/story';
+  if (kind === 'MOOD' || kind === 'STATUS') return '/mood';
+  if (kind === 'REEL') return '/reel';
+  if (kind === 'POST') return '/post';
+
+  const type = notification.type;
+  if (typeof type === 'string') {
+    if (type === NotificationTypeEnum.STATUS_REACTION || type === NotificationTypeEnum.FRIEND_NEW_MOOD) return '/mood';
+    // Tous les types portant `story` visent une story — y compris les variantes
+    // préfixées (`friend_story_comment`) que `startsWith('story')` manquait,
+    // ce qui les routait par erreur vers `/post`.
+    if (type.includes('story')) return '/story';
+  }
+  return '/post';
+}
+
+/**
+ * Retourne le lien de navigation pour une notification.
+ * Couvre conversations, contenu social (post/story/mood + ancre commentaire)
+ * et amis/contacts. Source unique réutilisée par les toasts, le dropdown et la page.
  */
 export function getNotificationLink(notification: Notification): string | null {
-  const conversationId = notification.context?.conversationId;
-  const messageId = notification.context?.messageId;
+  const context = notification.context;
+  const metadata = notification.metadata as any;
 
+  // 1. Conversation (messages, mentions, réactions message, appels, membres)
+  const conversationId = context?.conversationId;
   if (conversationId) {
+    const messageId = context?.messageId;
     return messageId
       ? `/conversations/${conversationId}?messageId=${messageId}`
       : `/conversations/${conversationId}`;
+  }
+
+  // 2. Contenu social (posts, stories, moods, commentaires)
+  const postId = context?.postId ?? metadata?.postId ?? metadata?.originalPostId;
+  if (postId) {
+    const commentId = context?.commentId ?? metadata?.commentId;
+    const anchor = commentId ? `#comment-${commentId}` : '';
+    return `${resolveContentRoute(notification)}/${postId}${anchor}`;
+  }
+
+  // 3. Amis / contacts
+  if (typeof notification.type === 'string' && FRIEND_CONTACT_TYPES.has(notification.type)) {
+    return '/contacts';
   }
 
   return null;
 }
 
 /**
+ * Formate un timestamp de notification en libellé relatif court
+ * (« à l'instant », « 5 min », « 2h », « 3j », puis date absolue au-delà d'une semaine).
+ * Source unique réutilisée par le dropdown et la page.
+ */
+export function formatNotificationTimeAgo(
+  timestamp: Date | string | null,
+  t: TranslateFunction,
+  locale?: string
+): string {
+  if (!timestamp) return '';
+
+  const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (isNaN(date.getTime())) return '';
+
+  const bucket = classifyRelativeTime(date.getTime(), Date.now());
+
+  switch (bucket.unit) {
+    case 'now':
+      return t('timeAgo.now');
+    case 'minutes':
+      return t('timeAgo.minute').replace('{count}', String(bucket.value));
+    case 'hours':
+      return t('timeAgo.hour').replace('{count}', String(bucket.value));
+    case 'days':
+      return t('timeAgo.day').replace('{count}', String(bucket.value));
+    case 'beyond':
+      return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  }
+}
+
+/**
+ * Formate la date de publication d'un contenu social en libellé « intelligent » :
+ * relatif quand récent (« à l'instant » / « il y a 6 min » / « il y a 2h »),
+ * « hier 14:30 » la veille, puis date + heure absolues locales au-delà
+ * (« 23/06/2026 14:30 »). Locale et fuseau gérés par le navigateur — aucun
+ * format en dur. Utilisé pour décorer le sous-titre serveur côté appareil.
+ */
+export function formatContentPublishedAt(
+  iso: string | null | undefined,
+  t: TranslateFunction,
+  locale?: string
+): string {
+  if (!iso) return '';
+
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+  if (diffMinutes < 0) {
+    return date.toLocaleDateString(locale, {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }) + ' ' + date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  }
+
+  if (diffMinutes < 1) return t('timeAgo.now');
+  if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  // DST-safe : compter les jours calendaires locaux plutôt qu'un delta fixe de
+  // 24 h. Un jour de transition heure d'été/hiver dure 23 h ou 25 h, donc
+  // `startOfToday − 86_400_000` ne retombe pas sur le minuit local d'hier. On
+  // réutilise la SSOT `calendarDayDiff`, déjà employée par groupNotificationsByDate.
+  const dayDiff = calendarDayDiff(date.getTime(), now.getTime());
+  const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+
+  if (dayDiff === 0) {
+    return t('timeAgo.hour').replace('{count}', String(diffHours));
+  }
+
+  if (dayDiff === 1) {
+    return t('timeAgo.yesterdayAt').replace('{time}', time);
+  }
+
+  const absoluteDate = date.toLocaleDateString(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  return `${absoluteDate} ${time}`;
+}
+
+/**
  * Groups notifications by date period.
  * Returns entries in order: today, yesterday, this week, this month, older.
+ *
+ * Le découpage jour-à-jour (today / yesterday / this week) s'appuie sur
+ * {@link calendarDayDiff} — la SSOT DST-safe déjà utilisée par
+ * `formatContentPublishedAt` dans ce fichier — plutôt que sur une soustraction
+ * de millisecondes ancrée à un jour calendaire de la semaine.
+ *
+ * « This week » est une fenêtre glissante de 7 jours (jours J-2 à J-6), pas une
+ * semaine calendaire ancrée au dimanche. L'ancien calcul
+ * `startOfToday - getDay()*jour` s'effondrait le jour d'ancrage : `getDay()`
+ * valant 0 le dimanche, `startOfWeek` retombait sur `startOfToday`, rendant le
+ * bucket « This week » structurellement inatteignable ce jour-là et renvoyant
+ * toute notification vieille de 2 à 6 jours dans « This month ». La fenêtre
+ * glissante supprime cet effet de bord et rend le regroupement cohérent quel
+ * que soit le jour de la semaine et la locale (dimanche vs lundi).
+ *
+ * Le « maintenant » est injectable (`now`) pour rendre le regroupement
+ * déterministe en test — même convention que `calendarDayDiff(nowMs)`.
  */
 export function groupNotificationsByDate(
   notifications: Notification[],
-  labels: { today: string; yesterday: string; thisWeek: string; thisMonth: string; older: string }
+  labels: { today: string; yesterday: string; thisWeek: string; thisMonth: string; older: string },
+  now: Date = new Date()
 ): Array<{ label: string; notifications: Notification[] }> {
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
-  const startOfWeek = new Date(startOfToday.getTime() - startOfToday.getDay() * 86400000);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const nowMs = now.getTime();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
   const groups = new Map<string, Notification[]>([
     [labels.today, []],
@@ -160,14 +334,15 @@ export function groupNotificationsByDate(
       : new Date(notification.state.createdAt);
 
     const time = createdAt.getTime();
+    const dayDiff = calendarDayDiff(time, nowMs);
 
-    if (time >= startOfToday.getTime()) {
+    if (dayDiff <= 0) {
       groups.get(labels.today)!.push(notification);
-    } else if (time >= startOfYesterday.getTime()) {
+    } else if (dayDiff === 1) {
       groups.get(labels.yesterday)!.push(notification);
-    } else if (time >= startOfWeek.getTime()) {
+    } else if (dayDiff <= 6) {
       groups.get(labels.thisWeek)!.push(notification);
-    } else if (time >= startOfMonth.getTime()) {
+    } else if (time >= startOfMonth) {
       groups.get(labels.thisMonth)!.push(notification);
     } else {
       groups.get(labels.older)!.push(notification);
@@ -211,6 +386,14 @@ export function buildNotificationTitle(
   notification: Notification,
   t?: TranslateFunction
 ): string {
+  // Le serveur est la source unique : `title` est déjà localisé et conscient de
+  // l'entité. On le retourne tel quel, ne tombant sur le repli client que
+  // lorsqu'il est null/vide (types non gérés par le builder serveur).
+  const serverTitle = notification.title;
+  if (typeof serverTitle === 'string' && serverTitle.trim().length > 0) {
+    return serverTitle;
+  }
+
   const actorName = getActorDisplayName(notification.actor);
   const conversationTitle = notification.context?.conversationTitle || (t ? t('content.defaultConversation') : 'la conversation');
 
@@ -281,9 +464,94 @@ export function buildNotificationTitle(
     case NotificationTypeEnum.SYSTEM:
       return t('titles.system');
 
+    case NotificationTypeEnum.POST_LIKE:
+      return t('titles.postLike', { sender: actorName });
+    case NotificationTypeEnum.POST_COMMENT:
+      return t('titles.postComment', { sender: actorName });
+    case NotificationTypeEnum.POST_REPOST:
+      return t('titles.postRepost', { sender: actorName });
+    case NotificationTypeEnum.COMMENT_REPLY:
+      return t('titles.commentReply', { sender: actorName });
+    case NotificationTypeEnum.COMMENT_LIKE:
+      return t('titles.commentLike', { sender: actorName });
+    case NotificationTypeEnum.COMMENT_REACTION:
+      return t('titles.commentReaction', { sender: actorName });
+    case NotificationTypeEnum.STORY_REACTION:
+      return t('titles.storyReaction', { sender: actorName });
+    case NotificationTypeEnum.STATUS_REACTION:
+      return t('titles.statusReaction', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_REQUEST:
+      return t('titles.contactRequest', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_ACCEPTED:
+      return t('titles.contactAccepted', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_NEW_POST:
+      return t('titles.friendNewPost', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_NEW_STORY:
+      return t('titles.friendNewStory', { sender: actorName });
+    case NotificationTypeEnum.FRIEND_NEW_MOOD:
+      return t('titles.friendNewMood', { sender: actorName });
+    case NotificationTypeEnum.LOGIN_NEW_DEVICE:
+      return t('titles.loginNewDevice');
+
     default:
       return t('titles.default');
   }
+}
+
+/**
+ * Types de notifications « sociales » (post/story/réel/mood/commentaire) pour
+ * lesquels on affiche le sous-titre serveur enrichi de la date de publication.
+ */
+const SOCIAL_NOTIFICATION_TYPES = new Set<string>([
+  NotificationTypeEnum.POST_LIKE,
+  NotificationTypeEnum.POST_COMMENT,
+  NotificationTypeEnum.POST_REPOST,
+  NotificationTypeEnum.COMMENT_LIKE,
+  NotificationTypeEnum.COMMENT_REPLY,
+  NotificationTypeEnum.COMMENT_REACTION,
+  NotificationTypeEnum.STORY_REACTION,
+  NotificationTypeEnum.STATUS_REACTION,
+  NotificationTypeEnum.STORY_NEW_COMMENT,
+  NotificationTypeEnum.FRIEND_STORY_COMMENT,
+  NotificationTypeEnum.STORY_THREAD_REPLY,
+  NotificationTypeEnum.FRIEND_NEW_STORY,
+  NotificationTypeEnum.FRIEND_NEW_POST,
+  NotificationTypeEnum.FRIEND_NEW_MOOD,
+]);
+
+/**
+ * Construit la ligne « contexte » secondaire pour une notification sociale :
+ * le sous-titre serveur (entité/contexte localisé, sans date) décoré de la date
+ * de publication locale (`context.postCreatedAt`). Retourne `null` quand il n'y
+ * a pas de sous-titre serveur ou que le type n'est pas social — le client
+ * conserve alors son rendu existant.
+ */
+export function buildNotificationContextLine(
+  notification: Notification,
+  t: TranslateFunction,
+  locale?: string
+): string | null {
+  if (typeof notification.type !== 'string' || !SOCIAL_NOTIFICATION_TYPES.has(notification.type)) {
+    return null;
+  }
+
+  const subtitle = notification.subtitle;
+  if (typeof subtitle !== 'string' || subtitle.trim().length === 0) {
+    return null;
+  }
+
+  const publishedAt = formatContentPublishedAt(notification.context?.postCreatedAt, t, locale);
+
+  // Marqueur d'expiration (parité iOS) : une story/statut éphémère dont la date
+  // d'expiration est dépassée affiche « · expirée » → l'utilisateur comprend la
+  // perte d'accès au contenu lié.
+  const expiresAt = notification.context?.postExpiresAt;
+  const expired = typeof expiresAt === 'string' && !Number.isNaN(Date.parse(expiresAt))
+    && Date.parse(expiresAt) <= Date.now();
+
+  return [subtitle, publishedAt || null, expired ? t('context.expired') : null]
+    .filter((part): part is string => typeof part === 'string' && part.length > 0)
+    .join(' · ');
 }
 
 /**
@@ -291,10 +559,28 @@ export function buildNotificationTitle(
  * Utilise getActorDisplayName pour afficher le bon nom
  * Supporte les traductions i18n avec la fonction t fournie
  */
+/**
+ * Types dont le titre explicite (like/réaction) se suffit à lui-même :
+ * le `content` backend duplique le titre → corps vide pour éviter la redondance.
+ */
+const TITLE_SELF_SUFFICIENT_CONTENT = new Set<string>([
+  NotificationTypeEnum.POST_LIKE,
+  NotificationTypeEnum.POST_REPOST,
+  NotificationTypeEnum.COMMENT_LIKE,
+  NotificationTypeEnum.COMMENT_REACTION,
+  NotificationTypeEnum.STORY_REACTION,
+  NotificationTypeEnum.STATUS_REACTION,
+]);
+
 export function buildNotificationContent(
   notification: Notification,
   t?: TranslateFunction
 ): string {
+  // Titre déjà explicite (ex. « @X a aimé votre publication ») → pas de corps redondant.
+  if (typeof notification.type === 'string' && TITLE_SELF_SUFFICIENT_CONTENT.has(notification.type)) {
+    return '';
+  }
+
   // Pour les réactions : afficher le contenu du message original (stocké dans metadata)
   if (
     notification.type === NotificationTypeEnum.MESSAGE_REACTION ||

@@ -8,7 +8,7 @@
 import { PrismaClient, User } from '@meeshy/shared/prisma/client';
 import { getCacheStore, type CacheStore } from './CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { parseMentions, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import { parseMentions, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import type { MentionedUser } from '@meeshy/shared/types';
 
 // Logger dédié pour MentionService
@@ -33,11 +33,17 @@ export interface MentionValidationResult {
 }
 
 export class MentionService {
-  // Regex pour détecter les mentions @username (lettres, chiffres, underscore)
-  private readonly MENTION_REGEX = /@(\w+)/g;
+  // Regex pour détecter les mentions @username (lettres, chiffres, underscore, tiret).
+  // Charset aligné sur MENTION_HANDLE_CHARS (SSOT) et la validation username /^[a-zA-Z0-9_-]+$/ :
+  // `\w` seul tronquait `@marie-claire` en `marie`.
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `parseMentions`) : un `@` collé après un mot
+  // appartient à une adresse e-mail (`john@example.com`) et ne doit PAS être extrait comme
+  // mention — sinon `@example` déclenche une fausse notification. Flag `u` requis (classes `\p{...}`).
+  private readonly MENTION_REGEX = new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]+)`, 'gu');
 
-  // Regex stricte pour valider les usernames (alphanumeric + underscore, 1-30 caractères)
-  private readonly USERNAME_VALIDATION_REGEX = /^[a-z0-9_]{1,30}$/;
+  // Regex stricte pour valider les usernames (alphanumeric + underscore + tiret, 1-30 caractères),
+  // appliquée après lowercase — parité avec le charset username.
+  private readonly USERNAME_VALIDATION_REGEX = /^[a-z0-9_-]{1,30}$/;
 
   // Limite de suggestions pour l'autocomplete
   private readonly MAX_SUGGESTIONS = 10;
@@ -1039,7 +1045,12 @@ export async function resolveMentionedUsers(
   contents: readonly string[]
 ): Promise<MentionedUser[]> {
   const usernames = new Set<string>();
-  const mentionRegex = /@(\w{1,30})/g;
+  // Charset aligné sur MENTION_HANDLE_CHARS (SSOT) : inclut le tiret, sinon `@marie-claire`
+  // était résolu comme `marie` et l'utilisateur à tiret ne remontait jamais.
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `parseMentions`, flag `u` requis) : un `@`
+  // collé après un caractère de nom appartient à une adresse e-mail (`john@example.com`) et
+  // ne doit PAS être extrait — sinon un tiers nommé `example` est faussement mentionné/notifié.
+  const mentionRegex = new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]{1,30})`, 'gu');
 
   for (const content of contents) {
     if (!content) continue;
@@ -1050,9 +1061,17 @@ export async function resolveMentionedUsers(
 
   if (usernames.size === 0) return [];
 
+  // MongoDB ignores `mode: 'insensitive'` when combined with `in` (see the note
+  // in `MentionService.resolveUsernames`), so an `in` list matches case-SENSITIVELY.
+  // Parsed handles are lowercased above while stored usernames preserve case
+  // (e.g. `Alice_B`), so an `in` query silently dropped every mixed-case mention.
+  // Use OR + case-insensitive `equals`, one clause per handle — the pattern that
+  // actually resolves case-insensitively on Prisma + MongoDB.
   const users = await prisma.user.findMany({
     where: {
-      username: { in: [...usernames], mode: 'insensitive' },
+      OR: [...usernames].map((username) => ({
+        username: { equals: username, mode: 'insensitive' as const }
+      })),
       isActive: true
     },
     select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true }
@@ -1067,4 +1086,38 @@ export async function resolveMentionedUsers(
       avatar: u.avatar
     };
   });
+}
+
+/**
+ * Résout une liste de @username (déjà extraits/validés) en identifiants
+ * utilisateur. Source de vérité unique pour la résolution username→id de la
+ * couche temps réel (socket handlers, pipeline de mention agent).
+ *
+ * Ne filtre PAS sur `isActive`/`deletedAt` — parité avec
+ * {@link MentionService.resolveUsernames}, pour cohérence avec l'autocomplete
+ * (un utilisateur mentionnable via l'autocomplete doit rester résoluble).
+ *
+ * MongoDB ignore `mode: 'insensitive'` combiné à `in` (cf. la note dans
+ * {@link MentionService.resolveUsernames}), donc un `in` matche de façon
+ * SENSIBLE À LA CASSE. Les handles parsés sont lowercased alors que les
+ * usernames stockés préservent la casse (`normalizeUsername` ne lowercase
+ * jamais, ex. `Alice_B`), si bien qu'un `in` droppait silencieusement toute
+ * mention mixed-case — mention perdue, notification jamais émise. On utilise
+ * OR + `equals` insensible, une clause par handle — le pattern qui résout
+ * réellement de façon insensible à la casse sur Prisma + MongoDB.
+ */
+export async function resolveUsernamesToIds(
+  prisma: PrismaClient,
+  usernames: readonly string[]
+): Promise<string[]> {
+  if (usernames.length === 0) return [];
+  const users = await prisma.user.findMany({
+    where: {
+      OR: usernames.map((username) => ({
+        username: { equals: username, mode: 'insensitive' as const }
+      }))
+    },
+    select: { id: true }
+  });
+  return users.map((u) => u.id);
 }

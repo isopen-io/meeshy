@@ -6,11 +6,12 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import { Phone, PhoneOff, Video } from 'lucide-react';
+import { Phone, PhoneOff, Video, Mic } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useI18n } from '@/hooks/useI18n';
 import type { CallInitiatedEvent } from '@meeshy/shared/types/video-call';
+import { getInitials } from '@/utils/initials';
 
 interface CallNotificationProps {
   call: CallInitiatedEvent;
@@ -41,15 +42,6 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
     };
   }, []);
 
-  // Get caller initials for avatar fallback
-  const getInitials = (name: string) => {
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
-  };
-
   return (
     <div
       className="fixed top-4 left-4 right-4 md:left-auto md:right-4 md:max-w-[360px] z-[9999] bg-white dark:bg-gray-800 p-4 md:p-6 rounded-2xl shadow-2xl border-2 border-green-500 dark:border-green-600 animate-in slide-in-from-top-5"
@@ -78,11 +70,15 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
           </Avatar>
         </div>
 
-        {/* Video call icon */}
+        {/* Call type icon — the actual media type (audio/video), never assumed */}
         <div className="flex items-center justify-center gap-2 mb-2">
-          <Video className="w-5 h-5 text-green-600 dark:text-green-400 animate-pulse" />
+          {call.type === 'video' ? (
+            <Video className="w-5 h-5 text-green-600 dark:text-green-400 animate-pulse" />
+          ) : (
+            <Mic className="w-5 h-5 text-green-600 dark:text-green-400 animate-pulse" />
+          )}
           <span className="text-sm font-medium text-green-600 dark:text-green-400">
-            {t('calls.incoming.videoCall')}
+            {call.type === 'video' ? t('calls.incoming.videoCall') : t('calls.incoming.audioCall')}
           </span>
         </div>
 

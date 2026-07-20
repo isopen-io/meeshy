@@ -15,6 +15,7 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
+import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -40,8 +41,26 @@ import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+
+// Mirrors MessageReadStatusService's isStaleCursorMessageId (MongoDB ObjectId
+// hex strings sort chronologically). Duplicated rather than imported: several
+// test suites `jest.mock('../../services/MessageReadStatusService', ...)`
+// with a factory that only exports `MessageReadStatusService`, so a named
+// import of this helper resolves to `undefined` under those mocks.
+const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+function isStaleCursorMessageId(
+  candidateMessageId: string,
+  currentCursorMessageId: string | null | undefined
+): boolean {
+  if (!currentCursorMessageId) return false;
+  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(currentCursorMessageId)) {
+    return false;
+  }
+  return candidateMessageId.toLowerCase() < currentCursorMessageId.toLowerCase();
+}
 
 /**
  * Nested-user fields fetched for a message sender in the GET messages select.
@@ -73,10 +92,15 @@ export const SendMessageBodySchema = z.object({
       `Le message ne peut pas dépasser ${MESSAGE_LIMITS.MAX_MESSAGE_LENGTH} caractères`,
     )
     .optional(),
-  // Phase 4 §6.2 — mandatory `cid_<uuid v4 lowercase>` idempotency key.
+  // Phase 4 §6.2 — `cid_<uuid v4 lowercase>` idempotency key. OPTIONAL:
+  // only clients needing sync/dedup (app, web) send it. Scripts and
+  // integrations may omit it; the message is then simply not deduped
+  // (MessageProcessor persists clientMessageId as null). When provided it
+  // must still be well-formed.
   clientMessageId: z
     .string()
-    .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)'),
+    .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)')
+    .optional(),
   originalLanguage: CommonSchemas.language.optional(),
   messageType: CommonSchemas.messageType.optional(),
   replyToId: z.string().optional(),
@@ -85,7 +109,7 @@ export const SendMessageBodySchema = z.object({
   forwardedFromConversationId: z.string().optional(),
   encryptedContent: z.string().optional(),
   encryptionMode: z.enum(['e2ee', 'server', 'hybrid']).optional(),
-  encryptionMetadata: z.record(z.unknown())
+  encryptionMetadata: z.record(z.string(), z.unknown())
     .refine(
       (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
       { message: 'encryptionMetadata exceeds 8KB serialized' }
@@ -115,7 +139,19 @@ const logger = enhancedLogger.child({ module: 'messages' });
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly string[], currentParticipantId?: string): any[] {
+type CurrentUserConsumption = {
+  lastPlayPositionMs: number | null;
+  listenedComplete: boolean;
+  lastWatchPositionMs: number | null;
+  watchedComplete: boolean;
+};
+
+function cleanAttachmentsForApi(
+  attachments: any[],
+  languageFilter?: readonly string[],
+  currentParticipantId?: string,
+  consumptionMap?: Map<string, CurrentUserConsumption>
+): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
   }
@@ -139,6 +175,12 @@ function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly st
     cleaned.reactionSummary = __reactions.reactionSummary;
     cleaned.currentUserReactions = __reactions.currentUserReactions;
     delete cleaned.reactions;
+
+    // Phase 2 — progression de consommation PERSONNELLE (sync cross-device) :
+    // position/complétion du participant courant, pour seeder le tint waveform
+    // (audio) et la progress-bar (vidéo) dès l'ouverture. `null` = jamais
+    // consommé par ce participant. Miroir de currentUserReactions.
+    cleaned.currentUserConsumption = consumptionMap?.get(att.id) ?? null;
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
@@ -218,6 +260,27 @@ export function buildAfterWatermarkClause(after?: string): { createdAt: { gt: Da
 }
 
 /**
+ * Active-recipient denominator for a message's all-or-nothing delivery
+ * indicator: the count of active participants EXCLUDING the message's sender.
+ * Mirrors `MessageReadStatusService.totalMembers`. Returned to clients per
+ * message so the sender's ✓✓ / read tier lights up only once EVERY recipient
+ * has received / read it, using the server's authoritative count instead of a
+ * possibly-stale local member count.
+ *
+ * @param activeParticipantIds set of `Participant.id` for active members
+ * @param senderParticipantId  the message's raw `senderId` (a `Participant.id`)
+ */
+export function computeRecipientCount(
+  activeParticipantIds: Set<string>,
+  senderParticipantId: string
+): number {
+  return Math.max(
+    0,
+    activeParticipantIds.size - (activeParticipantIds.has(senderParticipantId) ? 1 : 0)
+  );
+}
+
+/**
  * Enregistre les routes de base de gestion des messages (GET, POST, mark-read, mark-unread)
  */
 export function registerMessagesRoutes(
@@ -259,13 +322,26 @@ export function registerMessagesRoutes(
     isAnonymous: boolean
   ): Promise<void> {
     try {
+      if (!socketIOHandler) return;
+      const socketIOManager = socketIOHandler.getManager?.();
+      if (!socketIOManager) return;
+      const io = socketIOManager.getIO();
+
       const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(userId, isAnonymous);
-      if (!shouldBroadcast || !socketIOHandler) return;
+
+      if (!shouldBroadcast) {
+        // Badge reset is internal multi-device sync, not a peer disclosure — always fire.
+        if (type === 'read') {
+          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+            conversationId,
+            unreadCount: 0,
+          });
+        }
+        return;
+      }
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
-      const socketIOManager = socketIOHandler.getManager?.();
-      if (!socketIOManager) return;
 
       // Fetch the summary and the list of active participants' userIds in parallel.
       // We emit to BOTH the conversation room AND each registered participant's
@@ -290,7 +366,6 @@ export function registerMessagesRoutes(
         summary
       };
 
-      const io = socketIOManager.getIO();
       const convRoom = ROOMS.conversation(conversationId);
       let emitter: any = io.to(convRoom);
       const seenRooms = new Set<string>([convRoom]);
@@ -302,6 +377,12 @@ export function registerMessagesRoutes(
         emitter = emitter.to(userRoom);
       }
       emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+      emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, payload);
+
+      io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        conversationId,
+        unreadCount: 0,
+      });
     } catch (error) {
       logger.error('Error broadcasting read status:', error);
     }
@@ -358,11 +439,34 @@ export function registerMessagesRoutes(
                 hasMore: { type: 'boolean', description: 'Whether more messages are available' }
               }
             },
+            cursorPagination: {
+              type: 'object',
+              description: 'Cursor pagination metadata (always present; authoritative for before/around modes). Must stay declared: fast-json-stringify strips undeclared fields, which silently killed client infinite scroll.',
+              properties: {
+                limit: { type: 'integer', description: 'Page size limit' },
+                hasMore: { type: 'boolean', description: 'Whether older messages are available' },
+                nextCursor: { type: ['string', 'null'], description: 'Message id to pass as `before` for the next page (null when the page is empty)' }
+              }
+            },
+            hasNewer: { type: 'boolean', description: 'Around mode only: whether messages newer than the returned window exist' },
             meta: {
               type: 'object',
               description: 'Response metadata',
               properties: {
-                userLanguage: { type: 'string', description: 'User preferred language for translations' }
+                userLanguage: { type: 'string', description: 'User preferred language for translations' },
+                mentionedUsers: {
+                  type: 'array',
+                  description: 'Users @-mentioned in the returned messages',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      userId: { type: 'string' },
+                      username: { type: 'string' },
+                      displayName: { type: ['string', 'null'] },
+                      avatar: { type: ['string', 'null'] }
+                    }
+                  }
+                }
               }
             }
           }
@@ -766,7 +870,8 @@ export function registerMessagesRoutes(
               select: {
                 systemLanguage: true,
                 regionalLanguage: true,
-                customDestinationLanguage: true
+                customDestinationLanguage: true,
+                deviceLocale: true
               }
             })
           : Promise.resolve(null)
@@ -802,9 +907,40 @@ export function registerMessagesRoutes(
       }
       timings.userReactions = performance.now() - t0;
 
+      // Phase 2 — progression de consommation média du participant courant
+      // (sync cross-device). Une seule requête bornée à la page, scopée au
+      // participant : on n'élargit pas les `select` partagés (cf.
+      // attachmentIncludes) ni les broadcasts socket.
+      const consumptionMap = new Map<string, CurrentUserConsumption>();
+      if (currentParticipantId && messages.length > 0) {
+        const attachmentIds: string[] = (messages as any[]).flatMap(m =>
+          Array.isArray(m.attachments) ? m.attachments.map((a: any) => a.id) : []
+        );
+        if (attachmentIds.length > 0) {
+          const consumptionRows = await prisma.attachmentStatusEntry.findMany({
+            where: { attachmentId: { in: attachmentIds }, participantId: currentParticipantId },
+            select: {
+              attachmentId: true,
+              lastPlayPositionMs: true,
+              listenedComplete: true,
+              lastWatchPositionMs: true,
+              watchedComplete: true,
+            },
+          });
+          for (const row of consumptionRows) {
+            consumptionMap.set(row.attachmentId, {
+              lastPlayPositionMs: row.lastPlayPositionMs ?? null,
+              listenedComplete: row.listenedComplete ?? false,
+              lastWatchPositionMs: row.lastWatchPositionMs ?? null,
+              watchedComplete: row.watchedComplete ?? false,
+            });
+          }
+        }
+      }
+
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
-        ? resolveUserLanguage(userPrefs)
+        ? resolveUserLanguage(userPrefs, { deviceLocale: userPrefs.deviceLocale ?? undefined })
         : 'fr';
 
       // DEBUG: Log détaillé pour vérifier les transcriptions audio
@@ -812,7 +948,7 @@ export function registerMessagesRoutes(
       // hot-path (GET messages). Gardé derrière LOG_AUDIO_DIAG=true — OFF par
       // défaut en prod. La boucle entière est court-circuitée quand désactivé.
       if (process.env.LOG_AUDIO_DIAG === 'true' && messages.length > 0) {
-        logger.info(`🔍 [CONVERSATIONS] Chargement de ${messages.length} messages pour conversation ${conversationId}`);
+        logger.debug(`audio-diag: loading ${messages.length} messages for conversation ${conversationId}`);
 
         // Compter les messages avec attachments audio
         let audioAttachmentCount = 0;
@@ -846,9 +982,9 @@ export function registerMessagesRoutes(
                     speakerAnalysisInfo = ' | ⚠️ AUCUN speakerAnalysis';
                   }
 
-                  logger.info(`📝 [CONVERSATIONS] Message ${msg.id} - Audio transcription: attachmentId=${att.id}, text="${transcriptionText}", lang=${att.transcription.language}, confidence=${att.transcription.confidence}, source=${att.transcription.source}, model=${att.transcription.model}, durationMs=${att.transcription.durationMs || att.transcription.audioDurationMs}, segments=${att.transcription.segments?.length || 0}, speakerCount=${att.transcription.speakerCount}, hasTranslations=${!!att.translations}${speakerAnalysisInfo}`);
+                  logger.debug(`audio-diag: msg=${msg.id} attachmentId=${att.id} text="${transcriptionText}" lang=${att.transcription.language} confidence=${att.transcription.confidence} source=${att.transcription.source} model=${att.transcription.model} durationMs=${att.transcription.durationMs || att.transcription.audioDurationMs} segments=${att.transcription.segments?.length || 0} speakerCount=${att.transcription.speakerCount} hasTranslations=${!!att.translations}${speakerAnalysisInfo}`);
                 } else {
-                  logger.info(`⚠️ [CONVERSATIONS] Message ${msg.id} - Audio SANS transcription: attachmentId=${att.id}, mimeType=${att.mimeType}, fileUrl=${att.fileUrl}`);
+                  logger.debug(`audio-diag: msg=${msg.id} attachmentId=${att.id} no-transcription mimeType=${att.mimeType}`);
                 }
 
                 // Vérifier les traductions audio (champ V2: translations au lieu de translatedAudios)
@@ -873,10 +1009,11 @@ export function registerMessagesRoutes(
       // Enrichir les messages avec les vrais statuts de lecture depuis les cursors
       // Les champs dénormalisés (deliveredCount, readCount) ne sont jamais mis à jour en DB
       // On les calcule dynamiquement ici depuis ConversationReadCursor
-      const readStatusMap = new Map<string, { deliveredCount: number; readCount: number }>();
+      const readStatusMap = new Map<string, { deliveredCount: number; readCount: number; recipientCount: number }>();
       if (messages.length > 0 && authRequest.authContext?.userId) {
         try {
-          const [activeParticipants, cursors] = await Promise.all([
+          const messageIds = (messages as any[]).map((m: any) => m.id);
+          const [activeParticipants, cursors, frozenEntries] = await Promise.all([
             prisma.participant.findMany({
               where: { conversationId, isActive: true },
               select: { id: true }
@@ -884,25 +1021,76 @@ export function registerMessagesRoutes(
             prisma.conversationReadCursor.findMany({
               where: { conversationId },
               select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
+            }),
+            // Reçus figés (write-once) par message. Sans cette union, un curseur
+            // supprimé par `cleanupObsoleteCursors` (son `lastReadMessageId` pointe
+            // vers un message effacé) ferait disparaître un reçu de livraison/lecture
+            // toujours valide — parité exacte avec `getMessageReadStatus` /
+            // `getConversationReadStatuses`, qui unissent curseur + reçu figé.
+            prisma.messageStatusEntry.findMany({
+              where: { conversationId, messageId: { in: messageIds } },
+              select: { messageId: true, participantId: true, deliveredAt: true, receivedAt: true, readAt: true }
             })
           ]);
           const activeIds = new Set(activeParticipants.map((p: any) => p.id));
           const activeCursors = cursors.filter((c: any) => activeIds.has(c.participantId));
+          const cursorByParticipant = new Map(activeCursors.map((c: any) => [c.participantId, c]));
+          const frozenByMessage = new Map<string, Map<string, any>>();
+          for (const e of (frozenEntries as any[])) {
+            let inner = frozenByMessage.get(e.messageId);
+            if (!inner) { inner = new Map(); frozenByMessage.set(e.messageId, inner); }
+            inner.set(e.participantId, e);
+          }
 
           for (const msg of (messages as any[])) {
             let deliveredCount = 0;
             let readCount = 0;
+            // Union des participants ayant un curseur actif ET de ceux ayant un reçu
+            // figé actif pour CE message (sender exclu). Un participant figé-seul
+            // (curseur nettoyé) reste compté ; un figé d'un participant inactif est
+            // ignoré — parité exacte avec les endpoints read-status.
+            const frozenForMsg = frozenByMessage.get(msg.id);
+            const evaluatedParticipantIds = new Set<string>();
             for (const cursor of activeCursors) {
-              if (cursor.participantId === msg.senderId) continue;
-              if (cursor.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt) deliveredCount++;
-              if (cursor.lastReadAt && cursor.lastReadAt >= msg.createdAt) readCount++;
+              if (cursor.participantId !== msg.senderId) evaluatedParticipantIds.add(cursor.participantId);
             }
-            readStatusMap.set(msg.id, { deliveredCount, readCount });
+            if (frozenForMsg) {
+              for (const participantId of frozenForMsg.keys()) {
+                if (participantId !== msg.senderId && activeIds.has(participantId)) {
+                  evaluatedParticipantIds.add(participantId);
+                }
+              }
+            }
+            for (const participantId of evaluatedParticipantIds) {
+              const cursor = cursorByParticipant.get(participantId);
+              const cursorDelivered = cursor?.lastDeliveredAt && cursor.lastDeliveredAt >= msg.createdAt ? cursor.lastDeliveredAt : null;
+              const cursorRead = cursor?.lastReadAt && cursor.lastReadAt >= msg.createdAt ? cursor.lastReadAt : null;
+              const frozen = frozenForMsg?.get(participantId);
+              const deliveredAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
+              const readAt = frozen?.readAt ?? cursorRead;
+              if (deliveredAt) deliveredCount++;
+              if (readAt) readCount++;
+            }
+            // Authoritative all-or-nothing denominator: active participants
+            // EXCLUDING this message's sender. Lets the client render the group
+            // ✓✓ / read tier from the real recipient count instead of a stale
+            // local memberCount.
+            const recipientCount = computeRecipientCount(activeIds, msg.senderId);
+            readStatusMap.set(msg.id, { deliveredCount, readCount, recipientCount });
           }
         } catch (err) {
           logger.warn('[CONVERSATIONS] Failed to compute read statuses:', err);
         }
       }
+
+      // Présence des expéditeurs : soumise aux préférences showOnlineStatus/
+      // showLastSeen — même règle que le broadcast user:status et le
+      // presence:snapshot (co-participation = accès déjà garanti).
+      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        messages
+          .map((message: any) => message.sender?.userId)
+          .filter((uid: string | null | undefined): uid is string => !!uid)
+      );
 
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
       const mappedMessages = messages.map((message: any) => {
@@ -959,6 +1147,10 @@ export function registerMessagesRoutes(
           readByAllAt: message.readByAllAt,
           deliveredCount: readStatusMap.get(message.id)?.deliveredCount ?? message.deliveredCount ?? 0,
           readCount: readStatusMap.get(message.id)?.readCount ?? message.readCount ?? 0,
+          // Server-authoritative active-recipient denominator (participants
+          // excluding the sender). `0` when not computed (no auth context) — the
+          // client then falls back to its local member count.
+          recipientCount: readStatusMap.get(message.id)?.recipientCount ?? 0,
 
           // Réactions (dénormalisées - toujours incluses)
           reactionSummary: message.reactionSummary,
@@ -983,12 +1175,16 @@ export function registerMessagesRoutes(
             username: message.sender.user?.username ?? message.sender.username ?? null,
             // T16 — firstName/lastName were serialized but read by no client and
             // are no longer fetched (messageSenderUserSelect trims them).
-            displayName: message.sender.displayName ?? message.sender.user?.displayName ?? null,
-            avatar: message.sender.avatar ?? message.sender.user?.avatar ?? null,
-            isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
-            lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
+            displayName: resolveParticipantDisplayName(message.sender),
+            avatar: resolveParticipantAvatar(message.sender),
+            isOnline: senderPresenceVis.get(message.sender.userId ?? '')?.showOnline === false
+              ? false
+              : (message.sender.user?.isOnline ?? message.sender.isOnline ?? null),
+            lastActiveAt: senderPresenceVis.get(message.sender.userId ?? '')?.showLastSeenTimestamp === false
+              ? null
+              : (message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null),
           } : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, consumptionMap),
           _count: message._count
         };
 
@@ -1015,8 +1211,8 @@ export function registerMessagesRoutes(
             sender: replySender ? {
               ...replySender,
               username: replySender.user?.username ?? replySender.username ?? null,
-              displayName: replySender.displayName ?? replySender.user?.displayName ?? null,
-              avatar: replySender.avatar ?? replySender.user?.avatar ?? null,
+              displayName: resolveParticipantDisplayName(replySender),
+              avatar: resolveParticipantAvatar(replySender),
             } : null,
           };
         }
@@ -1080,8 +1276,8 @@ export function registerMessagesRoutes(
                 sender: original.sender ? {
                   ...original.sender,
                   username: (original.sender as any).user?.username ?? (original.sender as any).username ?? null,
-                  displayName: (original.sender as any).displayName ?? (original.sender as any).user?.displayName ?? null,
-                  avatar: (original.sender as any).avatar ?? (original.sender as any).user?.avatar ?? null,
+                  displayName: resolveParticipantDisplayName(original.sender as any),
+                  avatar: resolveParticipantAvatar(original.sender as any),
                 } : null,
                 attachments: original.attachments
               };
@@ -1161,7 +1357,11 @@ export function registerMessagesRoutes(
       let cursorHasMore: boolean;
       if (before && messages.length > limit) {
         cursorHasMore = true;
-        messages.splice(limit); // trim to exactly `limit` rows
+        // Trim BOTH arrays: `messages` feeds the cursor meta below, but the
+        // client receives `mappedMessages` (built before this block) — only
+        // trimming `messages` shipped limit+1 rows to the client.
+        messages.splice(limit);
+        mappedMessages.splice(limit);
       } else {
         cursorHasMore = before ? false : messages.length === limit;
       }
@@ -1347,12 +1547,11 @@ export function registerMessagesRoutes(
       },
       body: {
         type: 'object',
-        required: ['clientMessageId'],
         properties: {
           content: { type: 'string', description: 'Message content' },
           clientMessageId: {
             type: 'string',
-            description: 'Phase 4 idempotency key, format cid_<uuid v4 lowercase>',
+            description: 'Optional Phase 4 idempotency key, format cid_<uuid v4 lowercase>. Only clients needing dedup/sync send it.',
             pattern: '^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
           },
           originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },
@@ -1560,7 +1759,7 @@ export function registerMessagesRoutes(
         messageId: result.data?.id
       });
 
-      return reply.send(result);
+      return sendSuccess(reply, result.data);
 
     } catch (error) {
       logger.error('Error in REST send message:', error);
@@ -1736,6 +1935,26 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Not a participant');
       }
 
+      // Guard against a race with a concurrent, fresher read: another device
+      // may have read a message newer than `latestMessage` between our read
+      // above and this write. Without this check the unconditional upsert
+      // below would roll the cursor backward past that fresher read,
+      // resurrecting already-read messages as unread (mirrors the
+      // isStaleCursorMessageId guard in MessageReadStatusService.markMessagesAsRead).
+      const currentCursor = await prisma.conversationReadCursor.findUnique({
+        where: {
+          conversation_participant_cursor: { participantId: participantForCursor.id, conversationId }
+        },
+        select: { lastReadMessageId: true }
+      });
+
+      if (isStaleCursorMessageId(latestMessage.id, currentCursor?.lastReadMessageId)) {
+        logger.info(
+          `[MARK-UNREAD] Ignoring stale mark-unread for user ${userId} in conversation ${conversationId}: cursor already advanced past message ${latestMessage.id}`
+        );
+        return sendSuccess(reply, { unreadCount: 0 });
+      }
+
       await prisma.conversationReadCursor.upsert({
         where: {
           conversation_participant_cursor: { participantId: participantForCursor.id, conversationId }
@@ -1839,11 +2058,22 @@ export function registerMessagesRoutes(
 
       // Broadcast pin event via Socket.IO
       if (socketIOHandler) {
-        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:pinned', {
+        const pinPayload = {
           messageId,
           conversationId,
           pinnedAt: now.toISOString(),
           pinnedBy: userId
+        };
+        const manager = fastify.socketIOHandler.getManager();
+        manager?.getIO().to(`conversation:${conversationId}`).emit('message:pinned', pinPayload);
+        // Replay the pin to offline participants on reconnect (parity with
+        // edit/delete/reaction offline delivery) so their pin state converges.
+        void manager?.enqueueOfflineMessageMutation({
+          conversationId,
+          actorUserId: userId,
+          eventType: 'pinned',
+          messageId,
+          payload: pinPayload
         });
       }
 
@@ -1908,9 +2138,20 @@ export function registerMessagesRoutes(
 
       // Broadcast unpin event via Socket.IO
       if (socketIOHandler) {
-        fastify.socketIOHandler.getManager()?.getIO().to(`conversation:${conversationId}`).emit('message:unpinned', {
+        const unpinPayload = {
           messageId,
           conversationId
+        };
+        const manager = fastify.socketIOHandler.getManager();
+        manager?.getIO().to(`conversation:${conversationId}`).emit('message:unpinned', unpinPayload);
+        // Replay the unpin to offline participants on reconnect (parity with
+        // edit/delete/reaction offline delivery) so their pin state converges.
+        void manager?.enqueueOfflineMessageMutation({
+          conversationId,
+          actorUserId: userId,
+          eventType: 'unpinned',
+          messageId,
+          payload: unpinPayload
         });
       }
 
@@ -2043,6 +2284,12 @@ export function registerMessagesRoutes(
         }
       });
 
+      const pinnedPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        pinnedMessages
+          .map((message: any) => message.sender?.userId)
+          .filter((uid: string | null | undefined): uid is string => !!uid)
+      );
+
       const formattedMessages = pinnedMessages.map((message: any) => {
         const sender = message.sender;
         return {
@@ -2070,13 +2317,15 @@ export function registerMessagesRoutes(
           sender: sender ? {
             id: sender.id,
             userId: sender.userId,
-            displayName: sender.displayName ?? sender.user?.displayName ?? null,
-            avatar: sender.avatar ?? sender.user?.avatar ?? null,
+            displayName: resolveParticipantDisplayName(sender),
+            avatar: resolveParticipantAvatar(sender),
             type: sender.type,
             username: sender.user?.username ?? null,
             firstName: sender.user?.firstName ?? null,
             lastName: sender.user?.lastName ?? null,
-            isOnline: sender.user?.isOnline ?? false
+            isOnline: pinnedPresenceVis.get(sender.userId ?? '')?.showOnline === false
+              ? false
+              : (sender.user?.isOnline ?? false)
           } : null,
           attachments: message.attachments || [],
           reactionCount: message._count?.reactions ?? 0,
@@ -2368,6 +2617,12 @@ export function registerMessagesRoutes(
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
+      const searchPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        results
+          .map((msg: any) => msg.sender?.userId)
+          .filter((uid: string | null | undefined): uid is string => !!uid)
+      );
+
       // Transform translations JSON → array format for SDK compatibility and
       // flatten the participant `sender` (username/isOnline come from the nested
       // `user` relation) so the userMinimalSchema serializer keeps them.
@@ -2378,10 +2633,12 @@ export function registerMessagesRoutes(
           sender: sender ? {
             id: sender.id,
             userId: sender.userId,
-            displayName: sender.displayName ?? sender.user?.displayName ?? null,
-            avatar: sender.avatar ?? sender.user?.avatar ?? null,
+            displayName: resolveParticipantDisplayName(sender),
+            avatar: resolveParticipantAvatar(sender),
             username: sender.user?.username ?? null,
-            isOnline: sender.user?.isOnline ?? false
+            isOnline: searchPresenceVis.get(sender.userId ?? '')?.showOnline === false
+              ? false
+              : (sender.user?.isOnline ?? false)
           } : null,
           translations: msg.translations
             ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)

@@ -18,7 +18,7 @@ export function ConversationEmptyState({
   t
 }: ConversationEmptyStateProps) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm rounded-r-2xl">
+    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-card/50 backdrop-blur-sm rounded-r-2xl">
       <div className="max-w-md">
         <div className="w-24 h-24 mx-auto mb-6 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center">
           <MessageSquare className="h-12 w-12 text-primary dark:text-primary" />
@@ -45,7 +45,7 @@ export function ConversationEmptyState({
       <div className="flex gap-4 justify-center">
         <Button
           onClick={onCreateConversation}
-          className="rounded-2xl px-6 py-3 bg-primary hover:bg-primary/90 text-white font-semibold shadow-md hover:shadow-lg dark:shadow-primary/20 transition-[color,background-color,box-shadow]"
+          className="rounded-2xl px-6 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md hover:shadow-lg dark:shadow-primary/20 transition-[color,background-color,box-shadow]"
         >
           <MessageSquare className="h-5 w-5 mr-2" />
           {t('createConversation')}

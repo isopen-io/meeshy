@@ -12,12 +12,9 @@ struct IncomingCallView: View {
     // Receive the manager from the parent so SwiftUI keeps the same
     // subscription throughout the view's lifetime.
     @ObservedObject var callManager: CallManager
-    @Environment(\.colorScheme) private var colorScheme
     // Audit P2-iOS-9 — see CallView; skip repeating animations for
     // motion-sensitive users.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var isDark: Bool { colorScheme == .dark }
-    private var theme: ThemeManager { ThemeManager.shared }
     @State private var ringScale: CGFloat = 0.8
     @State private var ringOpacity: Double = 1.0
     @State private var avatarBounce: Bool = false
@@ -26,22 +23,25 @@ struct IncomingCallView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Pulsing ring animation
+            // Pulsing ring animation — purely decorative; caller name announced below
             ringAnimation
+                .accessibilityHidden(true)
                 .padding(.bottom, 32)
 
             // Caller name
             Text(callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(.title, design: .rounded).weight(.bold))
-                .foregroundColor(theme.textPrimary)
+                .font(.system(.title, design: .rounded).weight(.semibold))
+                // Posé sur le fond sombre fixe de CallView → texte clair fixe
+                // (theme.textPrimary suit le système et virait au foncé en Light).
+                .foregroundColor(.white)
                 .padding(.bottom, 8)
 
             // Call type label
             Text(callManager.isVideoEnabled
                 ? String(localized: "call.incoming.video", defaultValue: "Appel video entrant", bundle: .main)
                 : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main))
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .font(.callout.weight(.medium))
+                .foregroundColor(.white.opacity(0.7))
                 .padding(.bottom, 12)
 
             // Call type badge
@@ -53,6 +53,21 @@ struct IncomingCallView: View {
             // Accept / Reject buttons
             actionButtons
                 .padding(.bottom, 80)
+        }
+        .onAppear {
+            let callerName = callManager.remoteUsername
+                ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main)
+            let callTypeLabel = callManager.isVideoEnabled
+                ? String(localized: "call.incoming.video", defaultValue: "Appel video entrant", bundle: .main)
+                : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main)
+            UIAccessibility.post(
+                notification: .screenChanged,
+                argument: String(
+                    localized: "call.incoming.a11y.announced",
+                    defaultValue: "\(callTypeLabel), \(callerName)",
+                    bundle: .main
+                )
+            )
         }
     }
 
@@ -81,8 +96,7 @@ struct IncomingCallView: View {
                     .scaleEffect(ringScale)
                     .opacity(ringOpacity - Double(index) * 0.15)
                     .animation(
-                        reduceMotion
-                            ? nil
+                        reduceMotion ? nil
                             : .easeInOut(duration: 1.2)
                                 .repeatForever(autoreverses: true)
                                 .delay(Double(index) * 0.2),
@@ -132,6 +146,8 @@ struct IncomingCallView: View {
                 .frame(width: 110, height: 110)
 
             Text(initial)
+                // doctrine 82i — initiale bornée par le cercle d'avatar fixe 110×110 ;
+                // décorative (déjà aplatie par le `.accessibilityHidden(true)` du ring parent)
                 .font(.system(size: 44, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
@@ -141,24 +157,11 @@ struct IncomingCallView: View {
     // MARK: - Call Type Badge
 
     private var callTypeBadge: some View {
-        HStack(spacing: 6) {
-            Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                .font(.system(size: 12, weight: .semibold))
-            Text(callManager.isVideoEnabled
+        CallTypeBadgeView(
+            isVideo: callManager.isVideoEnabled,
+            label: callManager.isVideoEnabled
                 ? String(localized: "call.incoming.badge.video", defaultValue: "Video", bundle: .main)
-                : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main))
-                .font(.system(size: 13, weight: .semibold))
-        }
-        .foregroundColor(MeeshyColors.indigo400)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(MeeshyColors.indigo400.opacity(0.15))
-                .overlay(
-                    Capsule()
-                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 0.5)
-                )
+                : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main)
         )
     }
 
@@ -176,18 +179,21 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: "phone.down.fill")
-                            .font(.system(size: 28, weight: .semibold))
+                            // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
+                            // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
+                            .font(.system(size: 28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
 
                         Text(String(localized: "call.incoming.decline", defaultValue: "Refuser", bundle: .main))
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(MeeshyColors.error)
                     }
                 }
                 .pressable()
                 .accessibilityLabel(String(localized: "call.incoming.decline.label", defaultValue: "Refuser l'appel", bundle: .main))
+                .accessibilityHint(String(localized: "call.incoming.decline.hint", defaultValue: "Décline l'appel entrant", bundle: .main))
 
                 // Accept
                 Button {
@@ -195,18 +201,21 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                            .font(.system(size: 28, weight: .semibold))
+                            // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
+                            // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
+                            .font(.system(size: 28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.success)
 
                         Text(String(localized: "call.incoming.accept", defaultValue: "Accepter", bundle: .main))
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(MeeshyColors.success)
                     }
                 }
                 .pressable()
                 .accessibilityLabel(String(localized: "call.incoming.accept.label", defaultValue: "Accepter l'appel", bundle: .main))
+                .accessibilityHint(String(localized: "call.incoming.accept.hint", defaultValue: "Répond à l'appel entrant", bundle: .main))
             }
         }
     }

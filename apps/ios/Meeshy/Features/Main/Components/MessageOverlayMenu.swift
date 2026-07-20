@@ -9,12 +9,10 @@ import MeeshyUI
 struct MessageOverlayMenu: View {
     let message: Message
     let contactColor: String
-    let conversationId: String
     let messageBubbleFrame: CGRect
     @Binding var isPresented: Bool
     var canDelete: Bool = false
     var canEdit: Bool = false
-    var onReply: (() -> Void)?
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
     var onPin: (() -> Void)?
@@ -23,14 +21,11 @@ struct MessageOverlayMenu: View {
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
-    var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
-    var onSelectAudioLanguage: ((String?) -> Void)? = nil
-    var onRequestTranslation: ((String, String) -> Void)? = nil
     var onReact: ((String) -> Void)?
-    var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
-    var onDeleteAttachment: ((String) -> Void)?
-    var onShowThread: (() -> Void)?
+    /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
+    /// (message à exactement un attachment enregistrable).
+    var onSaveMedia: (() -> Void)? = nil
 
     // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
     // overlay renders a REAL `ThemedMessageBubble` at the source position
@@ -46,15 +41,27 @@ struct MessageOverlayMenu: View {
     /// action bar — ouvre l'écran de détail sur l'onglet Langue côté
     /// ConversationView.
     var onShowTranslate: (() -> Void)? = nil
+    /// Ouvre la feuille « Plus… » native (MessageMoreSheet) — action `.more`
+    /// de la liste verticale.
+    var onShowMore: (() -> Void)? = nil
+    /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
+    var onExpandFullPicker: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
-    @State private var dragOffset: CGFloat = 0
-    @State private var forceTab: DetailTab? = nil
     @State private var isEmojiPickerOpen = false
+    /// Offset vertical du cluster native-lean pendant le drag (suivi du doigt,
+    /// amorti au-delà des seuils par `MessageOverlayDragLaw.displayOffset`).
+    /// `@GestureState` : reset automatique (spring) au release ET à
+    /// l'annulation système du geste (appel entrant, background) — le cluster
+    /// ne reste jamais figé hors position.
+    @GestureState(resetTransaction: Transaction(animation: .spring(response: 0.35, dampingFraction: 0.75)))
+    private var clusterDragOffset: CGFloat = 0
+    /// Haptic d'armement émis une seule fois par geste ; réarmé au release.
+    @State private var dragHapticArmed = false
 
     private let previewCharLimit = 500
     // Expanded emoji set — far more than fits in the viewport, so the
@@ -68,16 +75,6 @@ struct MessageOverlayMenu: View {
         "🤣", "✨", "👏", "🤔", "🥺", "😍",
         "🫶", "💪"
     ]
-
-    // Panel takes ~56% of screen, but grid shows 2.5 rows (scrollable)
-    // Bottom sheet height — bumped up so two full action rows are
-    // visible at rest (was 143 → 195). The pressed bubble preview is
-    // still the visual focal point because the previewer floats above
-    // the panel with shadow + scale, but the grid no longer feels
-    // hidden / "too low". Pull up via the drag handle to expand to the
-    // full MessageDetailSheet (translations, full react picker, every
-    // action).
-    private let gridVisibleHeight: CGFloat = 195
 
     // Accent couleur de la conversation — sert de teinte de marque pour
     // les lueurs, contours et ombres du chrome de l'overlay (panneau,
@@ -138,50 +135,56 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    // MARK: - Quick Action Bar (au-dessus de la bulle)
+    // MARK: - Primary Actions (liste verticale native-lean)
 
-    /// Capsule horizontale d'actions rapides affichée AU-DESSUS de la
-    /// bulle quand le long-press surfaces le menu. Réutilise les facteurs
-    /// `ContextAction.copy/edit/translate/delete`. Filtre les actions
-    /// selon le contexte (canEdit, canDelete, contenu non vide).
-    private var quickActions: [ContextAction] {
-        var actions: [ContextAction] = []
-        if !message.content.isEmpty {
-            actions.append(.copy())
+    private var menuContext: MessageMenuContext {
+        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasMedia = !message.attachments.isEmpty
+        let hasTimebased = message.attachments.contains {
+            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
         }
-        if canEdit && message.isMe {
-            actions.append(.edit())
-        }
-        actions.append(.translate())
-        if canDelete {
-            actions.append(.delete())
-        }
-        return actions
-    }
-
-    /// Palette utilisée par la quick action bar — dérivée de `contactColor`
-    /// (couleur d'accent de la conversation, règle CLAUDE.md).
-    private var quickActionPalette: ConversationColorPalette {
-        ConversationColorPalette(
-            primary: contactColor,
-            secondary: contactColor,
-            accent: contactColor,
-            saturationBoost: 0
+        return MessageMenuContext(
+            isMine: message.isMe,
+            canEdit: canEdit,
+            canDelete: canDelete,
+            hasText: hasText,
+            hasMedia: hasMedia,
+            hasTimebasedMedia: hasTimebased,
+            isPinned: message.pinnedAt != nil,
+            isStarred: isStarred,
+            isEdited: message.isEdited,
+            // Inerte ici : `menuContext` n'alimente que `primaryActions`, qui
+            // n'utilise PAS `hasEditRevisions`. Ce champ ne pilote que l'item
+            // `.history` de la feuille « Plus… », dont le contexte est construit
+            // séparément (ConversationView) avec la vraie valeur
+            // `!editRevisions(for:).isEmpty`.
+            hasEditRevisions: true,
+            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count
         )
     }
 
-    private func handleQuickAction(_ kind: ContextAction.Kind) {
-        switch kind {
-        case .copy:
-            onCopy?()
+    private var primaryActions: [PrimaryAction] {
+        MessageActionResolver.primaryActions(menuContext)
+    }
+
+    private func handlePrimaryAction(_ action: PrimaryAction) {
+        switch action {
         case .edit:
             onEdit?()
         case .translate:
             onShowTranslate?()
+        case .copy:
+            onCopy?()
+        case .saveMedia:
+            onSaveMedia?()
+        case .pin, .unpin:
+            onPin?()
+        case .star, .unstar:
+            onToggleStar?()
+        case .more:
+            onShowMore?()
         case .delete:
             onDelete?()
-        case .reply, .forward, .react, .pin, .info:
-            break
         }
         dismiss()
     }
@@ -193,15 +196,6 @@ struct MessageOverlayMenu: View {
             let safeBottom = geometry.safeAreaInsets.bottom
             let screenH = geometry.size.height
 
-            // Cluster vertical au-dessus du `dismissBackground` :
-            //   - quick action bar (capsule horizontale d'actions rapides)
-            //   - gap 12pt
-            //   - bulle (à sa position source, lift si nécessaire)
-            //   - gap 12pt
-            //   - barre d'emojis rapides
-            // Le panneau reste ANCRÉ au bas mais sa hauteur s'auto-étend
-            // pour combler l'espace entre le cluster et le bas — pas de
-            // grand vide quand le message est court / haut sur l'écran.
             let useSourceFrame = messageBubbleFrame != .zero
             let bubbleRect = messageBubbleFrame
 
@@ -213,103 +207,36 @@ struct MessageOverlayMenu: View {
             let bubblePreviewScale: CGFloat = bubbleRect.height > maxPreviewHeight
                 ? max(0.55, maxPreviewHeight / bubbleRect.height)
                 : 1.0
-            let scaledBubbleWidth = bubbleRect.width * bubblePreviewScale
             let scaledBubbleHeight = bubbleRect.height * bubblePreviewScale
 
-            // Ancrage horizontal de la bulle scaled — glué au même bord que
-            // la source : right pour `isMe` (bulles "moi" right-aligned),
-            // left pour les bulles reçues. Au scale 1 l'expression dégénère
-            // en `bubbleRect.midX` (identité, aucune régression). Au scale
-            // < 1 la bulle conserve son edge d'origine au lieu de "flotter"
-            // vers le centre — sans ça une bulle "moi" prés du bord droit
-            // se retrouve décalée vers la gauche après scale-down.
-            let bubbleAnchorX: CGFloat = message.isMe
-                ? bubbleRect.maxX - scaledBubbleWidth / 2
-                : bubbleRect.minX + scaledBubbleWidth / 2
-
-            // Mesures du cluster — gaps tightement contrôlés. Heights basées
-            // sur les rendus réels mesurés en simulateur.
-            let quickActionsCount = quickActions.count
-            // Hauteur réelle = ContextActionMenu.estimatedSize().height
-            // (buttonHeight 40 + verticalPadding 5*2 = 50pt). Source unique
-            // de vérité : changer la valeur via les statics du menu, jamais
-            // dupliquer le calcul ici.
-            let quickActionMenuHeight: CGFloat = quickActionsCount > 0
-                ? ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).height
-                : 0
-            let quickActionToBubbleGap: CGFloat = quickActionsCount > 0 ? 14 : 0
-            let bubbleToEmojiGap: CGFloat = 14
-            let emojiBarHeight: CGFloat = 44
-            let clusterClearance: CGFloat = 12
-            let clusterTotalHeight = quickActionMenuHeight + quickActionToBubbleGap
-                                   + scaledBubbleHeight
-                                   + bubbleToEmojiGap + emojiBarHeight
-
-            // Hauteur naturelle du panel (base avant resize manuel)
-            let naturalPanelBaseHeight = gridVisibleHeight + safeBottom + 60
-            let naturalPanelTopY = screenH - naturalPanelBaseHeight
-
-            // Position cible du cluster : la bulle reste à sa source. Le
-            // cluster top = bubble.minY - (quick action menu + gap). Si la
-            // bulle est trop haute pour laisser de la place à la quick
-            // action bar au-dessus de safeTop, on pousse le cluster vers le
-            // bas (la bulle décale légèrement). Si le cluster dépasse en
-            // bas dans la zone du panel, on lifte.
-            let minClusterTopY = safeTop + 24
-            let maxClusterTopY = naturalPanelTopY - clusterClearance - clusterTotalHeight
-            let desiredClusterTopY = bubbleRect.minY - (quickActionMenuHeight + quickActionToBubbleGap)
-            let clampedClusterTopY = max(minClusterTopY, min(desiredClusterTopY, maxClusterTopY))
-            let clusterBottomY = clampedClusterTopY + clusterTotalHeight
-
-            // Positions Y centrales de chaque élément du cluster (pour .position).
-            // Utilise scaledBubbleHeight pour respecter le scale-down visuel
-            // du preview (vidéos / grilles d'images / reply + grid → cap 320pt).
-            let quickActionMenuCenterY = clampedClusterTopY + quickActionMenuHeight / 2
-            let bubbleTopY = clampedClusterTopY + quickActionMenuHeight + quickActionToBubbleGap
-            let bubbleFinalMidY = bubbleTopY + scaledBubbleHeight / 2
-            let emojiBarCenterY = bubbleTopY + scaledBubbleHeight + bubbleToEmojiGap + emojiBarHeight / 2
-
-            // Position X = bubbleAnchorX (centre de la bulle scaled, alignée
-            // au même bord que la source). Action bar et emoji bar suivent
-            // ce même axe vertical avec clamp aux bords écran pour éviter le
-            // débordement quand la bulle est près d'un bord. Au scale 1
-            // `bubbleAnchorX == bubbleRect.midX`, donc pas de régression pour
-            // les bulles courtes ; au scale < 1 le cluster reste solidaire de
-            // la bulle qui ne flotte plus vers le centre.
-            let sidePadding: CGFloat = 16
-            let quickActionMenuWidth = ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).width
-            let emojiBarApproxWidth: CGFloat = 320
-            let quickActionMenuCenterX: CGFloat = max(
-                sidePadding + quickActionMenuWidth / 2,
-                min(geometry.size.width - sidePadding - quickActionMenuWidth / 2, bubbleAnchorX)
-            )
-            let emojiBarCenterX: CGFloat = max(
-                sidePadding + emojiBarApproxWidth / 2,
-                min(geometry.size.width - sidePadding - emojiBarApproxWidth / 2, bubbleAnchorX)
-            )
-
-            // Panel auto-expand : si le cluster termine plus haut que le
-            // panel naturel, le panel s'agrandit pour combler le gap (le
-            // top du panel monte jusqu'à clusterBottom + clearance).
-            let expandedPanelTopY = useSourceFrame ? (clusterBottomY + clusterClearance) : naturalPanelTopY
-            let panelBaseHeight = max(naturalPanelBaseHeight, screenH - expandedPanelTopY)
-
-            // Drag range : 0 = base, négatif = expansion vers le haut.
-            // L'utilisateur peut tirer le drag handle pour agrandir (jusqu'à
-            // safeTop + 20pt) ou laisser au repos (panel à sa base auto-
-            // étendue).
-            let maxExpandUp = -(screenH - panelBaseHeight - safeTop - 20)
-            let clampedDrag = min(0, max(maxExpandUp, dragOffset))
-            let panelHeight = panelBaseHeight - clampedDrag
-
-            // Fade out de la cluster (action bar + bulle + emoji bar) quand
-            // l'utilisateur déplie le panneau via le drag handle. Au-delà de
-            // 80pt de drag, la cluster est masquée + non-interactive pour
-            // laisser place au panneau en plein écran. Comportement type
-            // WhatsApp / iMessage.
-            let clusterFadeThreshold: CGFloat = 80
-            let clusterFadeOpacity: CGFloat = max(0, 1 - abs(clampedDrag) / clusterFadeThreshold)
-            let clusterIsInteractive = clusterFadeOpacity > 0.5
+            // ── Géométrie native-lean : barre réactions (haut) + bulle + liste verticale (bas) ──
+            let nlEmojiBarHeight: CGFloat = 52
+            let nlGap: CGFloat = 12
+            let nlSidePadding: CGFloat = 16
+            let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
+            let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
+            let nlEmojiWidth: CGFloat = 300
+            let nlAvailTop = safeTop + 12
+            let nlAvailBottom = screenH - safeBottom - 12
+            let nlAvailable = max(160, nlAvailBottom - nlAvailTop)
+            let nlChrome = nlEmojiBarHeight + nlGap * 2 + nlMenuHeight
+            let nlFitScale: CGFloat = (scaledBubbleHeight + nlChrome > nlAvailable)
+                ? max(0.4, min(bubblePreviewScale, max(60, nlAvailable - nlChrome) / max(1, bubbleRect.height)))
+                : bubblePreviewScale
+            let nlBubbleW = bubbleRect.width * nlFitScale
+            let nlBubbleH = bubbleRect.height * nlFitScale
+            let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlGap + nlMenuHeight
+            let nlAnchorX: CGFloat = message.isMe
+                ? bubbleRect.maxX - nlBubbleW / 2
+                : bubbleRect.minX + nlBubbleW / 2
+            let nlDesiredTop = bubbleRect.minY - nlEmojiBarHeight - nlGap
+            let nlClusterTop = max(nlAvailTop, min(nlDesiredTop, nlAvailBottom - nlClusterH))
+            let nlEmojiY = nlClusterTop + nlEmojiBarHeight / 2
+            let nlBubbleTop = nlClusterTop + nlEmojiBarHeight + nlGap
+            let nlBubbleMidY = nlBubbleTop + nlBubbleH / 2
+            let nlMenuY = nlBubbleTop + nlBubbleH + nlGap + nlMenuHeight / 2
+            let nlMenuX = max(nlSidePadding + nlMenuWidth / 2, min(geometry.size.width - nlSidePadding - nlMenuWidth / 2, nlAnchorX))
+            let nlEmojiX = max(nlSidePadding + nlEmojiWidth / 2, min(geometry.size.width - nlSidePadding - nlEmojiWidth / 2, nlAnchorX))
 
             ZStack {
                 dismissBackground
@@ -362,39 +289,32 @@ struct MessageOverlayMenu: View {
                         .offset(y: isVisible ? 0 : 18)
                     }
 
-                    // Le panneau de détail reste ANCRÉ au bas — le drag
-                    // handle laisse l'utilisateur l'agrandir ou le réduire à
-                    // volonté. Pas de lift artificiel : le panel s'ouvre à
-                    // la hauteur permise (`panelBaseHeight`) et le drag fait
-                    // varier `panelHeight` autour de cette base.
-                    detailPanel(safeBottom: safeBottom)
-                        .frame(height: panelHeight)
-                        .offset(y: isVisible ? 0 : panelBaseHeight + 40)
+                    // Panneau grille retiré (native-lean) — les détails
+                    // passent désormais par la feuille « Plus… » (MessageMoreSheet).
                 }
 
                 if useSourceFrame {
-                    // Quick action bar au-dessus de la bulle (iMessage-style)
-                    // — actions rapides Copier/Éditer/Traduire/Supprimer
-                    // filtrées selon le contexte. Tap fire le callback +
-                    // dismiss l'overlay. Visible uniquement si au moins une
-                    // action passe le filtre.
-                    if !quickActions.isEmpty {
-                        ContextActionMenu(
-                            actions: quickActions,
-                            palette: quickActionPalette,
-                            onAction: { kind in handleQuickAction(kind) }
-                        )
-                        .position(
-                            x: quickActionMenuCenterX,
-                            y: isVisible ? quickActionMenuCenterY : (bubbleRect.minY - 4)
-                        )
-                        .opacity(isVisible ? clusterFadeOpacity : 0)
-                        .scaleEffect(
-                            isVisible ? 1.0 : 0.85,
-                            anchor: message.isMe ? .bottomTrailing : .bottomLeading
-                        )
-                        .allowsHitTesting(clusterIsInteractive)
-                    }
+                    // Liste d'actions verticale EN-DESSOUS de la bulle
+                    // (native-lean). Icônes monochromes accent, destructif
+                    // rouge isolé. Remplace la capsule horizontale + la grille.
+                    MessageActionsMenu(
+                        actions: primaryActions,
+                        accentHex: contactColor,
+                        onSelect: { handlePrimaryAction($0) }
+                    )
+                    .position(
+                        x: nlMenuX,
+                        y: isVisible ? nlMenuY : (bubbleRect.maxY + 8)
+                    )
+                    .offset(y: clusterDragOffset)
+                    .opacity(isVisible ? 1 : 0)
+                    .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
+                    // highPriorityGesture : en `.gesture` simple, les Button
+                    // des rows gagnent les drags lents (vérifié simulateur —
+                    // un swipe faible amorcé sur « Pin » épinglait au lieu de
+                    // snap back). Le seuil minimumDistance 12 laisse les taps
+                    // simples aux rows.
+                    .highPriorityGesture(clusterDragGesture)
 
                     // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
                     // paramètres que la cellule live de la liste : rendu
@@ -432,43 +352,37 @@ struct MessageOverlayMenu: View {
                         )
                     )
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
-                    .scaleEffect(bubblePreviewScale, anchor: .center)
-                    .frame(width: scaledBubbleWidth, height: scaledBubbleHeight)
+                    .scaleEffect(nlFitScale, anchor: .center)
+                    .frame(width: nlBubbleW, height: nlBubbleH)
                     .position(
-                        x: bubbleAnchorX,
-                        y: isVisible ? bubbleFinalMidY : bubbleRect.midY
+                        x: nlAnchorX,
+                        y: isVisible ? nlBubbleMidY : bubbleRect.midY
                     )
-                    .opacity(isVisible ? clusterFadeOpacity : 0)
+                    .offset(y: clusterDragOffset)
+                    .opacity(isVisible ? 1 : 0)
                     .allowsHitTesting(false)
 
-                    // Barre d'emojis rapides — positionnée DIRECTEMENT sous
-                    // la bulle (gap ~10pt) ET ALIGNÉE au même côté que la
-                    // bulle pour rester "à portée de pouce" et créer une
-                    // continuité visuelle bubble ↔ emoji bar ↔ action bar.
+                    // Barre de réactions AU-DESSUS de la bulle (native-lean).
                     emojiQuickBar
                         .position(
-                            x: emojiBarCenterX,
-                            y: isVisible ? emojiBarCenterY : (bubbleRect.maxY + emojiBarHeight / 2)
+                            x: nlEmojiX,
+                            y: isVisible ? nlEmojiY : bubbleRect.minY
                         )
-                        .opacity(isVisible ? clusterFadeOpacity : 0)
-                        .scaleEffect(
-                            isVisible ? 1.0 : 0.7,
-                            anchor: message.isMe ? .topTrailing : .topLeading
-                        )
-                        .allowsHitTesting(clusterIsInteractive)
+                        .offset(y: clusterDragOffset)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
+                        .allowsHitTesting(true)
                 }
             }
         }
         .ignoresSafeArea()
         .onAppear {
             HapticFeedback.medium()
-            // Entree spring — courbe de reponse de qualite iMessage. Le
-            // panneau demarre REPLIE (`dragOffset = 0`) pour laisser le
-            // preview de bulle occuper la scene. La cascade d'emojis est
-            // jouee par `EmojiReactionPicker` lui-meme via `WaveTileModifier`.
+            // Entree spring — courbe de reponse de qualite iMessage. La
+            // cascade d'emojis est jouee par `EmojiReactionPicker` lui-meme
+            // via `WaveTileModifier`.
             withAnimation(.spring(response: 0.42, dampingFraction: 0.74)) {
                 isVisible = true
-                dragOffset = 0
             }
         }
     }
@@ -494,8 +408,8 @@ struct MessageOverlayMenu: View {
             },
             onExpandFullPicker: {
                 HapticFeedback.light()
-                isEmojiPickerOpen.toggle()
-                forceTab = isEmojiPickerOpen ? .react : .language
+                onExpandFullPicker?()
+                dismiss()
             }
         )
         .frame(maxWidth: 280)
@@ -531,6 +445,39 @@ struct MessageOverlayMenu: View {
         }
         .animation(.easeOut(duration: 0.26), value: isVisible)
         .onTapGesture { dismiss() }
+    }
+
+    // MARK: - Cluster Drag (swipe-up → Menu 2, swipe-down → fermeture)
+
+    private var clusterDragGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($clusterDragOffset) { value, state, _ in
+                guard isVisible else { return }
+                state = MessageOverlayDragLaw.displayOffset(for: value.translation.height)
+            }
+            .onChanged { value in
+                guard isVisible else { return }
+                if MessageOverlayDragLaw.isArmed(translation: value.translation.height),
+                   !dragHapticArmed {
+                    dragHapticArmed = true
+                    HapticFeedback.medium()
+                }
+            }
+            .onEnded { value in
+                defer { dragHapticArmed = false }
+                guard isVisible else { return }
+                switch MessageOverlayDragLaw.outcome(
+                    translation: value.translation.height,
+                    predicted: value.predictedEndTranslation.height
+                ) {
+                case .openMore:
+                    handlePrimaryAction(.more)
+                case .dismiss:
+                    dismiss()
+                case .snapBack:
+                    break // reset auto du @GestureState (spring resetTransaction)
+                }
+            }
     }
 
     // MARK: - Message Preview (aligned left/right)
@@ -582,44 +529,29 @@ struct MessageOverlayMenu: View {
             }
 
             Text(name)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(Color(hex: color))
 
             Text("·")
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(theme.textMuted)
 
             Text(formatExactDate(message.createdAt))
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
         }
     }
 
-    private static let timeOnlyFormatter = MessageOverlayMenu.frFormatter("HH:mm")
-    private static let yesterdayFormatter = MessageOverlayMenu.frFormatter("'Hier' HH:mm")
-    private static let fullDateFormatter = MessageOverlayMenu.frFormatter("dd MMM yyyy HH:mm")
-
-    private static func frFormatter(_ format: String) -> DateFormatter {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "fr_FR")
-        f.dateFormat = format
-        return f
-    }
-
     private func formatExactDate(_ date: Date) -> String {
-        // Three configured-once formatters instead of allocating + mutating a
-        // DateFormatter on every menu render (expensive ICU setup on the path
-        // that builds the preview as the overlay opens).
         let calendar = Calendar.current
-        let formatter: DateFormatter
         if calendar.isDateInToday(date) {
-            formatter = Self.timeOnlyFormatter
+            return date.formatted(.dateTime.hour().minute())
         } else if calendar.isDateInYesterday(date) {
-            formatter = Self.yesterdayFormatter
+            let timeString = date.formatted(.dateTime.hour().minute())
+            return String(format: String(localized: "date.yesterday.at", defaultValue: "Hier %@", bundle: .main), timeString)
         } else {
-            formatter = Self.fullDateFormatter
+            return date.formatted(.dateTime.day().month(.abbreviated).year().hour().minute())
         }
-        return formatter.string(from: date)
     }
 
     @ViewBuilder
@@ -710,7 +642,7 @@ struct MessageOverlayMenu: View {
 
         return VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
             Text(truncated)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .foregroundColor(message.isMe ? .white : theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14)
@@ -812,18 +744,21 @@ struct MessageOverlayMenu: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(accent.opacity(0.15))
                     .frame(width: 36, height: 36)
+                // Decorative glyph inside a fixed 36×36 badge — kept fixed so
+                // it never overflows the badge; filename text carries the label.
                 Image(systemName: "doc.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(accent)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text(formatFileSize(attachment.fileSize))
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -837,205 +772,10 @@ struct MessageOverlayMenu: View {
         )
     }
 
-    // MARK: - Detail Panel (scrollable grid, 2.5 rows visible)
-
-    private func detailPanel(safeBottom: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            panelDragHandle
-
-            // Scrollable grid showing ~2.5 rows
-            ScrollView(.vertical, showsIndicators: false) {
-                MessageDetailSheet(
-                    message: message,
-                    contactColor: contactColor,
-                    conversationId: conversationId,
-                    initialTab: .language,
-                    canDelete: canDelete,
-                    actions: overlayActions,
-                    textTranslations: textTranslations,
-                    transcription: transcription,
-                    translatedAudios: translatedAudios,
-                    onSelectTranslation: onSelectTranslation,
-                    onSelectAudioLanguage: onSelectAudioLanguage,
-                    onRequestTranslation: onRequestTranslation,
-                    onDismissAction: { dismiss() },
-                    onReact: { emoji in onReact?(emoji) },
-                    onReport: { type, reason in onReport?(type, reason) },
-                    onDelete: { onDelete?() },
-                    externalTabSelection: $forceTab
-                )
-            }
-
-            Spacer(minLength: safeBottom)
-        }
-        .background(panelBackground)
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 26,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 26,
-                style: .continuous
-            )
-        )
-        .gesture(panelDragGesture)
-    }
-
-    private var panelDragHandle: some View {
-        VStack(spacing: 0) {
-            Capsule()
-                .fill(overlayAccent.opacity(0.45))
-                .frame(width: 40, height: 5)
-                .padding(.top, 10)
-                .padding(.bottom, 5)
-        }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-    }
-
-    private var panelDragGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                withAnimation(.interactiveSpring()) {
-                    dragOffset = value.translation.height
-                }
-            }
-            .onEnded { value in
-                let velocity = value.predictedEndTranslation.height - value.translation.height
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
-                    if value.translation.height < -80 || velocity < -200 {
-                        // Expanded: pull up to max
-                        dragOffset = -400
-                    } else if value.translation.height > 80 || velocity > 200 {
-                        // Collapsed: push down to normal
-                        dragOffset = 0
-                    } else {
-                        // Snap back
-                        dragOffset = dragOffset < -100 ? -400 : 0
-                    }
-                }
-            }
-    }
-
-    private var panelBackground: some View {
-        // Chrome verre du panneau : `.ultraThinMaterial` + voile de
-        // tonalite, liseré accent en haut et lueur de marque douce. Les
-        // coins continus (26pt) et l'ombre montante donnent l'illusion
-        // d'une feuille qui monte depuis le bas de l'ecran.
-        let shape = UnevenRoundedRectangle(
-            topLeadingRadius: 26,
-            bottomLeadingRadius: 0,
-            bottomTrailingRadius: 0,
-            topTrailingRadius: 26,
-            style: .continuous
-        )
-        return shape
-            .fill(.ultraThinMaterial)
-            .overlay(
-                shape.fill(isDark ? Color.black.opacity(0.30) : Color.white.opacity(0.72))
-            )
-            .overlay(
-                shape.fill(
-                    LinearGradient(
-                        colors: [
-                            overlayAccent.opacity(isDark ? 0.16 : 0.10),
-                            Color.clear
-                        ],
-                        startPoint: .top,
-                        endPoint: .center
-                    )
-                )
-            )
-            .overlay(
-                shape.stroke(
-                    LinearGradient(
-                        colors: [
-                            overlayAccent.opacity(isDark ? 0.40 : 0.26),
-                            (isDark ? Color.white : Color.black).opacity(isDark ? 0.10 : 0.05)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    ),
-                    lineWidth: 0.75
-                )
-            )
-            .shadow(color: overlayAccent.opacity(0.20), radius: 26, y: -6)
-            .shadow(color: .black.opacity(0.22), radius: 20, y: -4)
-    }
-
-    // MARK: - Quick Actions for Grid
-
-    private var overlayActions: [MessageAction] {
-        var actions: [MessageAction] = []
-        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-        actions.append(MessageAction(
-            id: "reply", icon: "arrowshape.turn.up.left.fill",
-            label: "Repondre", color: MeeshyColors.indigo400,
-            handler: { dismissThen { onReply?() } }
-        ))
-
-        actions.append(MessageAction(
-            id: "thread", icon: "bubble.left.and.bubble.right.fill",
-            label: "Discussion", color: MeeshyColors.warning,
-            handler: { dismissThen { onShowThread?() } }
-        ))
-
-        if hasText {
-            actions.append(MessageAction(
-                id: "copy", icon: "doc.on.doc.fill",
-                label: "Copier", color: MeeshyColors.indigo500,
-                handler: { dismissThen { onCopy?() } }
-            ))
-        }
-
-        actions.append(MessageAction(
-            id: "pin",
-            icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
-            label: message.pinnedAt != nil ? "Desepingler" : "Epingler",
-            color: MeeshyColors.info,
-            handler: { dismissThen { onPin?() } }
-        ))
-
-        // Star / bookmark — local-only favourite list (see StarredMessagesView).
-        actions.append(MessageAction(
-            id: "star",
-            icon: isStarred ? "star.slash.fill" : "star.fill",
-            label: isStarred ? "Retirer des favoris" : "Ajouter aux favoris",
-            color: MeeshyColors.warning,
-            handler: { dismissThen { onToggleStar?() } }
-        ))
-
-        if canEdit && hasText {
-            actions.append(MessageAction(
-                id: "edit", icon: "pencil",
-                label: "Modifier", color: MeeshyColors.warning,
-                handler: { dismissThen { onEdit?() } }
-            ))
-        }
-
-        if canDelete && !message.attachments.isEmpty, let onDeleteAttachment {
-            if message.attachments.count == 1 {
-                let attId = message.attachments[0].id
-                actions.append(MessageAction(
-                    id: "deleteAttachment", icon: "paperclip.badge.ellipsis",
-                    label: "Supprimer le media", color: MeeshyColors.error,
-                    handler: { dismissThen { onDeleteAttachment(attId) } }
-                ))
-            }
-        }
-
-        return actions
-    }
-
     // MARK: - Helpers
 
     private func formatFileSize(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        let kb = Double(bytes) / 1024
-        if kb < 1024 { return String(format: "%.1f KB", kb) }
-        let mb = kb / 1024
-        return String(format: "%.1f MB", mb)
+        Int64(bytes).formatted(.byteCount(style: .file))
     }
 
     // MARK: - Dismiss
@@ -1053,18 +793,6 @@ struct MessageOverlayMenu: View {
         }
     }
 
-    private func dismissThen(_ action: @escaping () -> Void) {
-        HapticFeedback.light()
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
-            isVisible = false
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
-            isPresented = false
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                action()
-            }
-        }
-    }
 }
 
 // MARK: - Preview Audio Player (interactive)
@@ -1093,6 +821,8 @@ private struct PreviewAudioPlayer: View {
                                 .tint(accent)
                                 .scaleEffect(0.6)
                         } else {
+                            // Glyph inside a fixed 40×40 circle — kept fixed to
+                            // stay centred; the Button carries the a11y label.
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(accent)
@@ -1100,17 +830,19 @@ private struct PreviewAudioPlayer: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying ? "Mettre en pause" : "Lire l'audio")
-                .accessibilityHint("Audio de \(player.timeLabel(totalDuration: attachment.duration))")
+                .accessibilityLabel(player.isPlaying
+                    ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
+                    : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
+                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.timeLabel(totalDuration: attachment.duration)))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MeeshyFont.relative(13, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     Text(player.timeLabel(totalDuration: attachment.duration))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .monospacedDigit()
                 }
@@ -1132,7 +864,7 @@ private struct PreviewAudioPlayer: View {
                     }
                 } label: {
                     Text("\(String(format: "%.2g", player.playbackRate))x")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                         .foregroundColor(accent)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -1143,7 +875,7 @@ private struct PreviewAudioPlayer: View {
             HStack(spacing: 8) {
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1162,7 +894,7 @@ private struct PreviewAudioPlayer: View {
 
                 // Pourcentage d'avancement
                 Text("\(player.percentInt)%")
-                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .font(MeeshyFont.relative(11, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 36)
                     .contentTransition(.numericText())
@@ -1171,7 +903,7 @@ private struct PreviewAudioPlayer: View {
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1227,6 +959,8 @@ private struct PreviewVideoPlayer: View {
                             .fill(.black.opacity(0.5))
                             .frame(width: 52, height: 52)
                             .overlay(
+                                // Glyph inside a fixed 52×52 play circle — kept
+                                // fixed; the Button carries the a11y label.
                                 Image(systemName: "play.fill")
                                     .font(.system(size: 20))
                                     .foregroundColor(.white)
@@ -1267,23 +1001,25 @@ private struct PreviewVideoPlayer: View {
                             .frame(width: 14, height: 14)
                     } else {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(accent)
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying ? "Mettre la vidéo en pause" : "Lire la vidéo")
+                .accessibilityLabel(player.isPlaying
+                    ? String(localized: "media.pauseVideo", defaultValue: "Mettre la vidéo en pause", bundle: .main)
+                    : String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main))
 
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
 
                 Text("\(player.percentInt)%")
-                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .font(MeeshyFont.relative(10, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 32)
                     .contentTransition(.numericText())
@@ -1292,7 +1028,7 @@ private struct PreviewVideoPlayer: View {
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1301,7 +1037,7 @@ private struct PreviewVideoPlayer: View {
                 Spacer()
 
                 Text(player.timeLabel(totalDuration: attachment.duration))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(MeeshyFont.relative(10, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .monospacedDigit()
 
@@ -1332,7 +1068,7 @@ private struct PreviewVideoPlayer: View {
             }
         } label: {
             Text("\(String(format: "%.2g", player.playbackRate))x")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(accent)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)

@@ -41,6 +41,7 @@ dependencies {
     implementation(project(":sdk-ui"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -51,6 +52,8 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.work.runtime)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.coil.compose)
+    implementation(libs.androidx.browser)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

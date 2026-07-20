@@ -50,7 +50,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
   useEffect(() => {
     const verifyToken = async () => {
       if (!token) {
-        setLocalError(t('resetPassword.errors.tokenMissing') || 'Reset token is missing');
+        setLocalError(t('resetPassword.errors.tokenMissing', 'Reset token is missing'));
         setIsVerifying(false);
         return;
       }
@@ -69,15 +69,14 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
           setTokenValid(false);
           setLocalError(
             response.error ||
-              t('resetPassword.errors.tokenInvalid') ||
-              'Invalid or expired reset token'
+              t('resetPassword.errors.tokenInvalid', 'Invalid or expired reset token')
           );
         }
       } catch (error) {
         console.error('[ResetPasswordForm] Error verifying token:', error);
         setTokenValid(false);
         setLocalError(
-          t('resetPassword.errors.verificationFailed') || 'Failed to verify reset token'
+          t('resetPassword.errors.verificationFailed', 'Failed to verify reset token')
         );
       } finally {
         setIsVerifying(false);
@@ -100,7 +99,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
   const validateForm = (): boolean => {
     // Check password filled
     if (!newPassword.trim()) {
-      setLocalError(t('resetPassword.errors.passwordRequired') || 'Password is required');
+      setLocalError(t('resetPassword.errors.passwordRequired', 'Password is required'));
       return false;
     }
 
@@ -114,7 +113,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
     // Check passwords match
     if (newPassword !== confirmPassword) {
       setLocalError(
-        t('resetPassword.errors.passwordMismatch') || 'Passwords do not match'
+        t('resetPassword.errors.passwordMismatch', 'Passwords do not match')
       );
       return false;
     }
@@ -122,14 +121,14 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
     // Check 2FA code if required
     if (requires2FA && !twoFactorCode.trim()) {
       setLocalError(
-        t('resetPassword.errors.twoFactorRequired') || '2FA code is required'
+        t('resetPassword.errors.twoFactorRequired', '2FA code is required')
       );
       return false;
     }
 
     if (requires2FA && twoFactorCode.trim().length !== 6) {
       setLocalError(
-        t('resetPassword.errors.twoFactorInvalid') || '2FA code must be 6 digits'
+        t('resetPassword.errors.twoFactorInvalid', '2FA code must be 6 digits')
       );
       return false;
     }
@@ -160,12 +159,11 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
         setPasswordReset(true);
         setSuccessMessage(
           response.message ||
-            t('resetPassword.success.passwordReset') ||
-            'Password reset successfully'
+            t('resetPassword.success.passwordReset', 'Password reset successfully')
         );
 
         toast.success(
-          t('resetPassword.success.passwordReset') || 'Password reset successfully!'
+          t('resetPassword.success.passwordReset', 'Password reset successfully!')
         );
 
         // Redirect to login or call onSuccess callback
@@ -179,8 +177,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
       } else {
         const errorMessage =
           response.error ||
-          t('resetPassword.errors.resetFailed') ||
-          'Failed to reset password';
+          t('resetPassword.errors.resetFailed', 'Failed to reset password');
         setLocalError(errorMessage);
         setStoreError(errorMessage);
         toast.error(errorMessage);
@@ -190,7 +187,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
       const errorMessage =
         error instanceof Error
           ? error.message
-          : t('resetPassword.errors.resetFailed') || 'Failed to reset password';
+          : t('resetPassword.errors.resetFailed', 'Failed to reset password');
       setLocalError(errorMessage);
       setStoreError(errorMessage);
       toast.error(errorMessage);
@@ -206,7 +203,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
       <div className={cn('flex flex-col items-center justify-center py-12 space-y-4', className)}>
         <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
         <p className="text-sm text-gray-600 dark:text-gray-400">
-          {t('resetPassword.verifyingToken') || 'Verifying reset link...'}
+          {t('resetPassword.verifyingToken', 'Verifying reset link...')}
         </p>
       </div>
     );
@@ -219,21 +216,20 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
         <Alert variant="destructive">
           <AlertCircle className="h-5 w-5" />
           <AlertDescription className="ml-2">
-            {localError || t('resetPassword.errors.tokenInvalid') || 'Invalid or expired reset token'}
+            {localError || t('resetPassword.errors.tokenInvalid', 'Invalid or expired reset token')}
           </AlertDescription>
         </Alert>
 
         <div className="text-center space-y-3">
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            {t('resetPassword.tokenExpiredHelp') ||
-              'Your reset link may have expired. Please request a new one.'}
+            {t('resetPassword.tokenExpiredHelp', 'Your reset link may have expired. Please request a new one.')}
           </p>
           <Button
             variant="outline"
             onClick={() => router.push('/forgot-password')}
             className="w-full"
           >
-            {t('resetPassword.requestNewLink') || 'Request New Reset Link'}
+            {t('resetPassword.requestNewLink', 'Request New Reset Link')}
           </Button>
         </div>
       </div>
@@ -248,7 +244,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
         <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 animate-in fade-in duration-300">
           <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
           <AlertDescription className="ml-2 text-green-700 dark:text-green-300">
-            {t('resetPassword.tokenVerified') || 'Identity verified. Please enter your new password.'}
+            {t('resetPassword.tokenVerified', 'Identity verified. Please enter your new password.')}
           </AlertDescription>
         </Alert>
       )}
@@ -258,14 +254,14 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
         <Label htmlFor="newPassword" className="text-sm font-medium">
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span>{t('resetPassword.newPasswordLabel') || 'New Password'}</span>
+            <span>{t('resetPassword.newPasswordLabel', 'New Password')}</span>
           </div>
         </Label>
         <div className="relative">
           <Input
             id="newPassword"
             type={showNewPassword ? 'text' : 'password'}
-            placeholder={t('resetPassword.newPasswordPlaceholder') || 'Enter new password'}
+            placeholder={t('resetPassword.newPasswordPlaceholder', 'Enter new password')}
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             disabled={isLoading}
@@ -292,14 +288,14 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
         <Label htmlFor="confirmPassword" className="text-sm font-medium">
           <div className="flex items-center gap-2">
             <Lock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span>{t('resetPassword.confirmPasswordLabel') || 'Confirm Password'}</span>
+            <span>{t('resetPassword.confirmPasswordLabel', 'Confirm Password')}</span>
           </div>
         </Label>
         <div className="relative">
           <Input
             id="confirmPassword"
             type={showConfirmPassword ? 'text' : 'password'}
-            placeholder={t('resetPassword.confirmPasswordPlaceholder') || 'Re-enter new password'}
+            placeholder={t('resetPassword.confirmPasswordPlaceholder', 'Re-enter new password')}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             disabled={isLoading}
@@ -330,12 +326,12 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
             {newPassword === confirmPassword ? (
               <>
                 <CheckCircle2 className="w-3 h-3" />
-                {t('resetPassword.passwordsMatch') || 'Passwords match'}
+                {t('resetPassword.passwordsMatch', 'Passwords match')}
               </>
             ) : (
               <>
                 <AlertCircle className="w-3 h-3" />
-                {t('resetPassword.passwordsDontMatch') || 'Passwords do not match'}
+                {t('resetPassword.passwordsDontMatch', 'Passwords do not match')}
               </>
             )}
           </div>
@@ -351,7 +347,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
           <Label htmlFor="twoFactorCode" className="text-sm font-medium">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span>{t('resetPassword.twoFactorLabel') || '2FA Code'}</span>
+              <span>{t('resetPassword.twoFactorLabel', '2FA Code')}</span>
             </div>
           </Label>
           <Input
@@ -360,7 +356,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
             inputMode="numeric"
             pattern="[0-9]{6}"
             maxLength={6}
-            placeholder={t('resetPassword.twoFactorPlaceholder') || '000000'}
+            placeholder={t('resetPassword.twoFactorPlaceholder', '000000')}
             value={twoFactorCode}
             onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
             disabled={isLoading}
@@ -369,8 +365,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
             className="h-11 text-center text-lg tracking-widest font-mono"
           />
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            {t('resetPassword.twoFactorHelp') ||
-              'Enter the 6-digit code from your authenticator app'}
+            {t('resetPassword.twoFactorHelp', 'Enter the 6-digit code from your authenticator app')}
           </p>
         </div>
       )}
@@ -392,12 +387,12 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            {t('resetPassword.resetting') || 'Resetting Password...'}
+            {t('resetPassword.resetting', 'Resetting Password...')}
           </>
         ) : (
           <>
             <Lock className="mr-2 h-4 w-4" />
-            {t('resetPassword.submitButton') || 'Reset Password'}
+            {t('resetPassword.submitButton', 'Reset Password')}
           </>
         )}
       </Button>
@@ -408,7 +403,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
           href="/login"
           className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
         >
-          {t('resetPassword.backToLogin') || 'Back to Login'}
+          {t('resetPassword.backToLogin', 'Back to Login')}
         </Link>
       </div>
     </form>

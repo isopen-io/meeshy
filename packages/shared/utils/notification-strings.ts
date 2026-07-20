@@ -12,10 +12,11 @@ export type NotificationLanguage = typeof NOTIFICATION_LANGUAGES[number];
 export const NOTIFICATION_STRING_KEYS = [
   'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.post',
   'comment.your', 'comment.generic', 'comment.repliedIn', 'comment.reply', 'comment.replyWithParent',
+  'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
-  'mention',
+  'mention', 'someone',
   'friend.story', 'friend.post', 'friend.mood', 'friend.subtitleNew',
-  'call.missed',
+  'call.missed', 'call.incoming.title', 'call.incoming.body',
   'contact.request', 'contact.accepted',
   'repost',
   'invitation.group', 'invitation.direct',
@@ -25,7 +26,7 @@ export const NOTIFICATION_STRING_KEYS = [
 ] as const;
 export type NotificationStringKey = typeof NOTIFICATION_STRING_KEYS[number];
 
-export type NotificationPostKind = 'POST' | 'STORY' | 'MOOD' | 'STATUS';
+export type NotificationPostKind = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
 export type NotificationCallKind = 'audio' | 'video';
 
 export type NotificationStringParams = {
@@ -56,6 +57,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'a répondu {locObj}',
     'comment.reply': 'En réponse à votre commentaire',
     'comment.replyWithParent': 'En réponse à « {preview} »',
+    'comment.repliedToYours': 'a répondu à votre commentaire',
+    'someone': 'Quelqu’un',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} de {author}',
     'comment.subtitleBare': '{nounCap}',
@@ -65,6 +68,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'a publié une nouvelle humeur',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Appel {callLabel} manqué',
+    'call.incoming.title': '{actor} vous appelle',
+    'call.incoming.body': '{callBody}',
     'contact.request': 'Nouvelle demande de contact',
     'contact.accepted': 'Demande de contact acceptée',
     'repost': 'a partagé {possObj}',
@@ -89,6 +94,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'replied {locObj}',
     'comment.reply': 'Replied to your comment',
     'comment.replyWithParent': 'Replying to “{preview}”',
+    'comment.repliedToYours': 'replied to your comment',
+    'someone': 'Someone',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} from {author}',
     'comment.subtitleBare': '{nounCap}',
@@ -98,6 +105,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'shared a new mood',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Missed {callLabel} call',
+    'call.incoming.title': '{actor} is calling you',
+    'call.incoming.body': '{callBody}',
     'contact.request': 'New contact request',
     'contact.accepted': 'Contact request accepted',
     'repost': 'shared {possObj}',
@@ -122,6 +131,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'respondió {locObj}',
     'comment.reply': 'Respondió a tu comentario',
     'comment.replyWithParent': 'Respondiendo a «{preview}»',
+    'comment.repliedToYours': 'respondió a tu comentario',
+    'someone': 'Alguien',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} de {author}',
     'comment.subtitleBare': '{nounCap}',
@@ -131,6 +142,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'publicó un nuevo estado de ánimo',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Llamada {callLabel} perdida',
+    'call.incoming.title': '{actor} te está llamando',
+    'call.incoming.body': '{callBody}',
     'contact.request': 'Nueva solicitud de contacto',
     'contact.accepted': 'Solicitud de contacto aceptada',
     'repost': 'compartió {possObj}',
@@ -155,6 +168,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'respondeu {locObj}',
     'comment.reply': 'Respondeu ao seu comentário',
     'comment.replyWithParent': 'Respondendo a “{preview}”',
+    'comment.repliedToYours': 'respondeu ao seu comentário',
+    'someone': 'Alguém',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} de {author}',
     'comment.subtitleBare': '{nounCap}',
@@ -164,6 +179,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'publicou um novo humor',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chamada {callLabel} perdida',
+    'call.incoming.title': '{actor} está ligando para você',
+    'call.incoming.body': '{callBody}',
     'contact.request': 'Novo pedido de contato',
     'contact.accepted': 'Pedido de contato aceito',
     'repost': 'compartilhou {possObj}',
@@ -188,6 +205,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'hat {locObj} geantwortet',
     'comment.reply': 'Hat auf deinen Kommentar geantwortet',
     'comment.replyWithParent': 'Antwort auf „{preview}“',
+    'comment.repliedToYours': 'hat auf deinen Kommentar geantwortet',
+    'someone': 'Jemand',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} von {author}',
     'comment.subtitleBare': '{nounCap}',
@@ -197,6 +216,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'hat eine neue Stimmung geteilt',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Verpasster {callLabel}',
+    'call.incoming.title': '{actor} ruft dich an',
+    'call.incoming.body': '{callBody}',
     'contact.request': 'Neue Kontaktanfrage',
     'contact.accepted': 'Kontaktanfrage angenommen',
     'repost': 'hat {possObj} geteilt',
@@ -221,6 +242,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'ha risposto {locObj}',
     'comment.reply': 'Ha risposto al tuo commento',
     'comment.replyWithParent': 'In risposta a «{preview}»',
+    'comment.repliedToYours': 'ha risposto al tuo commento',
+    'someone': 'Qualcuno',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} di {author}',
     'comment.subtitleBare': '{nounCap}',
@@ -230,6 +253,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'ha pubblicato un nuovo stato d’animo',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} Chiamata {callLabel} persa',
+    'call.incoming.title': '{actor} ti sta chiamando',
+    'call.incoming.body': '{callBody}',
     'contact.request': 'Nuova richiesta di contatto',
     'contact.accepted': 'Richiesta di contatto accettata',
     'repost': 'ha condiviso {possObj}',
@@ -254,6 +279,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': 'ردّ {locObj}',
     'comment.reply': 'ردّ على تعليقك',
     'comment.replyWithParent': 'ردًّا على «{preview}»',
+    'comment.repliedToYours': 'ردّ على تعليقك',
+    'someone': 'شخص ما',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} من {author}',
     'comment.subtitleBare': '{nounCap}',
@@ -263,6 +290,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': 'شارك مزاجًا جديدًا',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} مكالمة {callLabel} فائتة',
+    'call.incoming.title': '{actor} يتصل بك',
+    'call.incoming.body': '{callBody}',
     'contact.request': 'طلب تواصل جديد',
     'contact.accepted': 'تم قبول طلب التواصل',
     'repost': 'شارك {possObj}',
@@ -287,6 +316,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.repliedIn': '{locObj}回复了',
     'comment.reply': '回复了你的评论',
     'comment.replyWithParent': '回复 “{preview}”',
+    'comment.repliedToYours': '回复了你的评论',
+    'someone': '有人',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{author} 的{nounCap}',
     'comment.subtitleBare': '{nounCap}',
@@ -296,6 +327,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'friend.mood': '分享了新心情',
     'friend.subtitleNew': '{friendSubtitle}',
     'call.missed': '{callIcon} 未接{callLabel}',
+    'call.incoming.title': '{actor} 来电',
+    'call.incoming.body': '{callBody}',
     'contact.request': '新的联系人请求',
     'contact.accepted': '联系人请求已接受',
     'repost': '分享了{possObj}',
@@ -314,86 +347,100 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
 
 // "votre X" (possessif) — comment.your, repost
 const POSS_OBJ: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'votre publication', STORY: 'votre story', MOOD: 'votre humeur', STATUS: 'votre statut' },
-  en: { POST: 'your post', STORY: 'your story', MOOD: 'your mood', STATUS: 'your status' },
-  es: { POST: 'tu publicación', STORY: 'tu historia', MOOD: 'tu estado de ánimo', STATUS: 'tu estado' },
-  pt: { POST: 'sua publicação', STORY: 'sua story', MOOD: 'seu humor', STATUS: 'seu status' },
-  de: { POST: 'deinen Beitrag', STORY: 'deine Story', MOOD: 'deine Stimmung', STATUS: 'deinen Status' },
-  it: { POST: 'il tuo post', STORY: 'la tua storia', MOOD: 'il tuo stato d’animo', STATUS: 'il tuo stato' },
-  ar: { POST: 'منشورك', STORY: 'قصتك', MOOD: 'مزاجك', STATUS: 'حالتك' },
-  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态' },
+  fr: { POST: 'votre publication', STORY: 'votre story', MOOD: 'votre humeur', STATUS: 'votre statut', REEL: 'votre réel' },
+  en: { POST: 'your post', STORY: 'your story', MOOD: 'your mood', STATUS: 'your status', REEL: 'your reel' },
+  es: { POST: 'tu publicación', STORY: 'tu historia', MOOD: 'tu estado de ánimo', STATUS: 'tu estado', REEL: 'tu reel' },
+  pt: { POST: 'sua publicação', STORY: 'sua story', MOOD: 'seu humor', STATUS: 'seu status', REEL: 'seu reel' },
+  de: { POST: 'deinen Beitrag', STORY: 'deine Story', MOOD: 'deine Stimmung', STATUS: 'deinen Status', REEL: 'deinen Reel' },
+  it: { POST: 'il tuo post', STORY: 'la tua storia', MOOD: 'il tuo stato d’animo', STATUS: 'il tuo stato', REEL: 'il tuo reel' },
+  ar: { POST: 'منشورك', STORY: 'قصتك', MOOD: 'مزاجك', STATUS: 'حالتك', REEL: 'ريلك' },
+  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态', REEL: '你的短视频' },
 };
 
 // "à votre X" (préposition de réaction + possessif) — reaction.post
 const REACT_OBJ: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'à votre publication', STORY: 'à votre story', MOOD: 'à votre humeur', STATUS: 'à votre statut' },
-  en: { POST: 'to your post', STORY: 'to your story', MOOD: 'to your mood', STATUS: 'to your status' },
-  es: { POST: 'a tu publicación', STORY: 'a tu historia', MOOD: 'a tu estado de ánimo', STATUS: 'a tu estado' },
-  pt: { POST: 'à sua publicação', STORY: 'à sua story', MOOD: 'ao seu humor', STATUS: 'ao seu status' },
-  de: { POST: 'auf deinen Beitrag', STORY: 'auf deine Story', MOOD: 'auf deine Stimmung', STATUS: 'auf deinen Status' },
-  it: { POST: 'al tuo post', STORY: 'alla tua storia', MOOD: 'al tuo stato d’animo', STATUS: 'al tuo stato' },
-  ar: { POST: 'على منشورك', STORY: 'على قصتك', MOOD: 'على مزاجك', STATUS: 'على حالتك' },
-  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态' },
+  fr: { POST: 'à votre publication', STORY: 'à votre story', MOOD: 'à votre humeur', STATUS: 'à votre statut', REEL: 'à votre réel' },
+  en: { POST: 'to your post', STORY: 'to your story', MOOD: 'to your mood', STATUS: 'to your status', REEL: 'to your reel' },
+  es: { POST: 'a tu publicación', STORY: 'a tu historia', MOOD: 'a tu estado de ánimo', STATUS: 'a tu estado', REEL: 'a tu reel' },
+  pt: { POST: 'à sua publicação', STORY: 'à sua story', MOOD: 'ao seu humor', STATUS: 'ao seu status', REEL: 'ao seu reel' },
+  de: { POST: 'auf deinen Beitrag', STORY: 'auf deine Story', MOOD: 'auf deine Stimmung', STATUS: 'auf deinen Status', REEL: 'auf deinen Reel' },
+  it: { POST: 'al tuo post', STORY: 'alla tua storia', MOOD: 'al tuo stato d’animo', STATUS: 'al tuo stato', REEL: 'al tuo reel' },
+  ar: { POST: 'على منشورك', STORY: 'على قصتك', MOOD: 'على مزاجك', STATUS: 'على حالتك', REEL: 'على ريلك' },
+  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态', REEL: '你的短视频' },
 };
 
 // "une X" (indéfini, accusatif) — comment.generic
 const INDEF_OBJ: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'une publication', STORY: 'une story', MOOD: 'une humeur', STATUS: 'un statut' },
-  en: { POST: 'a post', STORY: 'a story', MOOD: 'a mood', STATUS: 'a status' },
-  es: { POST: 'una publicación', STORY: 'una historia', MOOD: 'un estado de ánimo', STATUS: 'un estado' },
-  pt: { POST: 'uma publicação', STORY: 'uma story', MOOD: 'um humor', STATUS: 'um status' },
-  de: { POST: 'einen Beitrag', STORY: 'eine Story', MOOD: 'eine Stimmung', STATUS: 'einen Status' },
-  it: { POST: 'un post', STORY: 'una storia', MOOD: 'uno stato d’animo', STATUS: 'uno stato' },
-  ar: { POST: 'منشورًا', STORY: 'قصة', MOOD: 'مزاجًا', STATUS: 'حالة' },
-  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态' },
+  fr: { POST: 'une publication', STORY: 'une story', MOOD: 'une humeur', STATUS: 'un statut', REEL: 'un réel' },
+  en: { POST: 'a post', STORY: 'a story', MOOD: 'a mood', STATUS: 'a status', REEL: 'a reel' },
+  es: { POST: 'una publicación', STORY: 'una historia', MOOD: 'un estado de ánimo', STATUS: 'un estado', REEL: 'un reel' },
+  pt: { POST: 'uma publicação', STORY: 'uma story', MOOD: 'um humor', STATUS: 'um status', REEL: 'um reel' },
+  de: { POST: 'einen Beitrag', STORY: 'eine Story', MOOD: 'eine Stimmung', STATUS: 'einen Status', REEL: 'einen Reel' },
+  it: { POST: 'un post', STORY: 'una storia', MOOD: 'uno stato d’animo', STATUS: 'uno stato', REEL: 'un reel' },
+  ar: { POST: 'منشورًا', STORY: 'قصة', MOOD: 'مزاجًا', STATUS: 'حالة', REEL: 'ريلًا' },
+  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态', REEL: '短视频' },
 };
 
 // "dans une X" (locatif/datif) — comment.repliedIn
 const LOC_OBJ: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'dans une publication', STORY: 'dans une story', MOOD: 'dans une humeur', STATUS: 'dans un statut' },
-  en: { POST: 'in a post', STORY: 'in a story', MOOD: 'in a mood', STATUS: 'in a status' },
-  es: { POST: 'en una publicación', STORY: 'en una historia', MOOD: 'en un estado de ánimo', STATUS: 'en un estado' },
-  pt: { POST: 'em uma publicação', STORY: 'em uma story', MOOD: 'em um humor', STATUS: 'em um status' },
-  de: { POST: 'in einem Beitrag', STORY: 'in einer Story', MOOD: 'in einer Stimmung', STATUS: 'in einem Status' },
-  it: { POST: 'in un post', STORY: 'in una storia', MOOD: 'in uno stato d’animo', STATUS: 'in uno stato' },
-  ar: { POST: 'في منشور', STORY: 'في قصة', MOOD: 'في مزاج', STATUS: 'في حالة' },
-  'zh-Hans': { POST: '在帖子中', STORY: '在快拍中', MOOD: '在心情中', STATUS: '在状态中' },
+  fr: { POST: 'dans une publication', STORY: 'dans une story', MOOD: 'dans une humeur', STATUS: 'dans un statut', REEL: 'dans un réel' },
+  en: { POST: 'in a post', STORY: 'in a story', MOOD: 'in a mood', STATUS: 'in a status', REEL: 'in a reel' },
+  es: { POST: 'en una publicación', STORY: 'en una historia', MOOD: 'en un estado de ánimo', STATUS: 'en un estado', REEL: 'en un reel' },
+  pt: { POST: 'em uma publicação', STORY: 'em uma story', MOOD: 'em um humor', STATUS: 'em um status', REEL: 'em um reel' },
+  de: { POST: 'in einem Beitrag', STORY: 'in einer Story', MOOD: 'in einer Stimmung', STATUS: 'in einem Status', REEL: 'in einem Reel' },
+  it: { POST: 'in un post', STORY: 'in una storia', MOOD: 'in uno stato d’animo', STATUS: 'in uno stato', REEL: 'in un reel' },
+  ar: { POST: 'في منشور', STORY: 'في قصة', MOOD: 'في مزاج', STATUS: 'في حالة', REEL: 'في ريل' },
+  'zh-Hans': { POST: '在帖子中', STORY: '在快拍中', MOOD: '在心情中', STATUS: '在状态中', REEL: '在短视频中' },
 };
 
 // Nom capitalisé nu (subtitle "{nounCap} de {author}" / bare)
 const POST_NOUN_CAP: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'Publication', STORY: 'Story', MOOD: 'Humeur', STATUS: 'Statut' },
-  en: { POST: 'Post', STORY: 'Story', MOOD: 'Mood', STATUS: 'Status' },
-  es: { POST: 'Publicación', STORY: 'Historia', MOOD: 'Estado de ánimo', STATUS: 'Estado' },
-  pt: { POST: 'Publicação', STORY: 'Story', MOOD: 'Humor', STATUS: 'Status' },
-  de: { POST: 'Beitrag', STORY: 'Story', MOOD: 'Stimmung', STATUS: 'Status' },
-  it: { POST: 'Post', STORY: 'Storia', MOOD: 'Stato d’animo', STATUS: 'Stato' },
-  ar: { POST: 'منشور', STORY: 'قصة', MOOD: 'مزاج', STATUS: 'حالة' },
-  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态' },
+  fr: { POST: 'Publication', STORY: 'Story', MOOD: 'Humeur', STATUS: 'Statut', REEL: 'Réel' },
+  en: { POST: 'Post', STORY: 'Story', MOOD: 'Mood', STATUS: 'Status', REEL: 'Reel' },
+  es: { POST: 'Publicación', STORY: 'Historia', MOOD: 'Estado de ánimo', STATUS: 'Estado', REEL: 'Reel' },
+  pt: { POST: 'Publicação', STORY: 'Story', MOOD: 'Humor', STATUS: 'Status', REEL: 'Reel' },
+  de: { POST: 'Beitrag', STORY: 'Story', MOOD: 'Stimmung', STATUS: 'Status', REEL: 'Reel' },
+  it: { POST: 'Post', STORY: 'Storia', MOOD: 'Stato d’animo', STATUS: 'Stato', REEL: 'Reel' },
+  ar: { POST: 'منشور', STORY: 'قصة', MOOD: 'مزاج', STATUS: 'حالة', REEL: 'ريل' },
+  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态', REEL: '短视频' },
 };
 
 // Subtitle "Votre X" (forme nominative possessive, gérée par langue)
 const SUBTITLE_OWNER: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'Votre publication', STORY: 'Votre story', MOOD: 'Votre humeur', STATUS: 'Votre statut' },
-  en: { POST: 'Your post', STORY: 'Your story', MOOD: 'Your mood', STATUS: 'Your status' },
-  es: { POST: 'Tu publicación', STORY: 'Tu historia', MOOD: 'Tu estado de ánimo', STATUS: 'Tu estado' },
-  pt: { POST: 'Sua publicação', STORY: 'Sua story', MOOD: 'Seu humor', STATUS: 'Seu status' },
-  de: { POST: 'Dein Beitrag', STORY: 'Deine Story', MOOD: 'Deine Stimmung', STATUS: 'Dein Status' },
-  it: { POST: 'Il tuo post', STORY: 'La tua storia', MOOD: 'Il tuo stato d’animo', STATUS: 'Il tuo stato' },
-  ar: { POST: 'منشورك', STORY: 'قصتك', MOOD: 'مزاجك', STATUS: 'حالتك' },
-  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态' },
+  fr: { POST: 'Votre publication', STORY: 'Votre story', MOOD: 'Votre humeur', STATUS: 'Votre statut', REEL: 'Votre réel' },
+  en: { POST: 'Your post', STORY: 'Your story', MOOD: 'Your mood', STATUS: 'Your status', REEL: 'Your reel' },
+  es: { POST: 'Tu publicación', STORY: 'Tu historia', MOOD: 'Tu estado de ánimo', STATUS: 'Tu estado', REEL: 'Tu reel' },
+  pt: { POST: 'Sua publicação', STORY: 'Sua story', MOOD: 'Seu humor', STATUS: 'Seu status', REEL: 'Seu reel' },
+  de: { POST: 'Dein Beitrag', STORY: 'Deine Story', MOOD: 'Deine Stimmung', STATUS: 'Dein Status', REEL: 'Dein Reel' },
+  it: { POST: 'Il tuo post', STORY: 'La tua storia', MOOD: 'Il tuo stato d’animo', STATUS: 'Il tuo stato', REEL: 'Il tuo reel' },
+  ar: { POST: 'منشورك', STORY: 'قصتك', MOOD: 'مزاجك', STATUS: 'حالتك', REEL: 'ريلك' },
+  'zh-Hans': { POST: '你的帖子', STORY: '你的快拍', MOOD: '你的心情', STATUS: '你的状态', REEL: '你的短视频' },
 };
 
 // Subtitle "Nouvelle X" (forme avec accord de genre, gérée par langue)
 const FRIEND_SUBTITLE: Record<NotificationLanguage, ObjMap> = {
-  fr: { POST: 'Nouvelle publication', STORY: 'Nouvelle story', MOOD: 'Nouvelle humeur', STATUS: 'Nouveau statut' },
-  en: { POST: 'New post', STORY: 'New story', MOOD: 'New mood', STATUS: 'New status' },
-  es: { POST: 'Nueva publicación', STORY: 'Nueva historia', MOOD: 'Nuevo estado de ánimo', STATUS: 'Nuevo estado' },
-  pt: { POST: 'Nova publicação', STORY: 'Nova story', MOOD: 'Novo humor', STATUS: 'Novo status' },
-  de: { POST: 'Neuer Beitrag', STORY: 'Neue Story', MOOD: 'Neue Stimmung', STATUS: 'Neuer Status' },
-  it: { POST: 'Nuovo post', STORY: 'Nuova storia', MOOD: 'Nuovo stato d’animo', STATUS: 'Nuovo stato' },
-  ar: { POST: 'منشور جديد', STORY: 'قصة جديدة', MOOD: 'مزاج جديد', STATUS: 'حالة جديدة' },
-  'zh-Hans': { POST: '新帖子', STORY: '新快拍', MOOD: '新心情', STATUS: '新状态' },
+  fr: { POST: 'Nouvelle publication', STORY: 'Nouvelle story', MOOD: 'Nouvelle humeur', STATUS: 'Nouveau statut', REEL: 'Nouveau réel' },
+  en: { POST: 'New post', STORY: 'New story', MOOD: 'New mood', STATUS: 'New status', REEL: 'New reel' },
+  es: { POST: 'Nueva publicación', STORY: 'Nueva historia', MOOD: 'Nuevo estado de ánimo', STATUS: 'Nuevo estado', REEL: 'Nuevo reel' },
+  pt: { POST: 'Nova publicação', STORY: 'Nova story', MOOD: 'Novo humor', STATUS: 'Novo status', REEL: 'Novo reel' },
+  de: { POST: 'Neuer Beitrag', STORY: 'Neue Story', MOOD: 'Neue Stimmung', STATUS: 'Neuer Status', REEL: 'Neuer Reel' },
+  it: { POST: 'Nuovo post', STORY: 'Nuova storia', MOOD: 'Nuovo stato d’animo', STATUS: 'Nuovo stato', REEL: 'Nuovo reel' },
+  ar: { POST: 'منشور جديد', STORY: 'قصة جديدة', MOOD: 'مزاج جديد', STATUS: 'حالة جديدة', REEL: 'ريل جديد' },
+  'zh-Hans': { POST: '新帖子', STORY: '新快拍', MOOD: '新心情', STATUS: '新状态', REEL: '新短视频' },
+};
+
+// Corps du push VoIP d'appel entrant — phrase complète par type d'appel
+// (le hardcode français « Appel vidéo »/« Appel audio » violait le Prisme,
+// audit appels 2026-07-11 #11).
+const INCOMING_CALL_BODY: Record<NotificationLanguage, CallMap> = {
+  fr: { audio: 'Appel audio', video: 'Appel vidéo' },
+  en: { audio: 'Audio call', video: 'Video call' },
+  es: { audio: 'Llamada de voz', video: 'Videollamada' },
+  pt: { audio: 'Chamada de voz', video: 'Chamada de vídeo' },
+  de: { audio: 'Sprachanruf', video: 'Videoanruf' },
+  it: { audio: 'Chiamata vocale', video: 'Videochiamata' },
+  ar: { audio: 'مكالمة صوتية', video: 'مكالمة فيديو' },
+  'zh-Hans': { audio: '语音通话', video: '视频通话' },
 };
 
 const CALL_LABEL: Record<NotificationLanguage, CallMap> = {
@@ -407,16 +454,18 @@ const CALL_LABEL: Record<NotificationLanguage, CallMap> = {
   'zh-Hans': { audio: '语音通话', video: '视频通话' },
 };
 
-// Contexte de reaction.commentVerbose : " sur le post de {author}" / " sur la story de {author}"
-const COMMENT_CONTEXT: Record<NotificationLanguage, { story: string; post: string }> = {
-  fr: { story: ' sur la story de {author}', post: ' sur le post de {author}' },
-  en: { story: ' on {author}’s story', post: ' on {author}’s post' },
-  es: { story: ' en la historia de {author}', post: ' en la publicación de {author}' },
-  pt: { story: ' na story de {author}', post: ' na publicação de {author}' },
-  de: { story: ' in der Story von {author}', post: ' im Beitrag von {author}' },
-  it: { story: ' nella storia di {author}', post: ' nel post di {author}' },
-  ar: { story: ' على قصة {author}', post: ' على منشور {author}' },
-  'zh-Hans': { story: '（在 {author} 的快拍中）', post: '（在 {author} 的帖子中）' },
+// Contexte de reaction.commentVerbose : " sur le <entité> de {author}", entité-conscient.
+// Couvre les 5 NotificationPostKind — une réaction à un commentaire sur un REEL/STATUS
+// ne s'effondre plus vers « post » (symétrie avec reaction.post qui porte déjà le postType).
+const COMMENT_CONTEXT: Record<NotificationLanguage, ObjMap> = {
+  fr: { POST: ' sur le post de {author}', STORY: ' sur la story de {author}', MOOD: ' sur l’humeur de {author}', STATUS: ' sur le statut de {author}', REEL: ' sur le réel de {author}' },
+  en: { POST: ' on {author}’s post', STORY: ' on {author}’s story', MOOD: ' on {author}’s mood', STATUS: ' on {author}’s status', REEL: ' on {author}’s reel' },
+  es: { POST: ' en la publicación de {author}', STORY: ' en la historia de {author}', MOOD: ' en el estado de ánimo de {author}', STATUS: ' en el estado de {author}', REEL: ' en el reel de {author}' },
+  pt: { POST: ' na publicação de {author}', STORY: ' na story de {author}', MOOD: ' no humor de {author}', STATUS: ' no status de {author}', REEL: ' no reel de {author}' },
+  de: { POST: ' im Beitrag von {author}', STORY: ' in der Story von {author}', MOOD: ' in der Stimmung von {author}', STATUS: ' im Status von {author}', REEL: ' im Reel von {author}' },
+  it: { POST: ' nel post di {author}', STORY: ' nella storia di {author}', MOOD: ' nello stato d’animo di {author}', STATUS: ' nello stato di {author}', REEL: ' nel reel di {author}' },
+  ar: { POST: ' على منشور {author}', STORY: ' على قصة {author}', MOOD: ' على مزاج {author}', STATUS: ' على حالة {author}', REEL: ' على ريل {author}' },
+  'zh-Hans': { POST: '（在 {author} 的帖子中）', STORY: '（在 {author} 的快拍中）', MOOD: '（在 {author} 的心情中）', STATUS: '（在 {author} 的状态中）', REEL: '（在 {author} 的短视频中）' },
 };
 
 const SUPPORTED = new Set<string>(NOTIFICATION_LANGUAGES);
@@ -464,13 +513,156 @@ export function notificationString(
     tokens.ownerSubtitle = SUBTITLE_OWNER[L][params.postType];
     tokens.friendSubtitle = FRIEND_SUBTITLE[L][params.postType];
   }
-  if (params.callType) tokens.callLabel = CALL_LABEL[L][params.callType];
+  if (params.callType) {
+    tokens.callLabel = CALL_LABEL[L][params.callType];
+    tokens.callBody = INCOMING_CALL_BODY[L][params.callType];
+  }
 
   if (key === 'reaction.commentVerbose') {
+    // postType (entité réelle) prime ; `isStory` reste un repli legacy binaire.
+    const kind: NotificationPostKind = params.postType ?? (params.isStory ? 'STORY' : 'POST');
     tokens.context = params.author
-      ? interpolate(COMMENT_CONTEXT[L][params.isStory ? 'story' : 'post'], { author: params.author })
+      ? interpolate(COMMENT_CONTEXT[L][kind], { author: params.author })
       : '';
   }
 
   return interpolate(template, tokens);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Display builder — titre (headline) + sous-titre localisés (source unique)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// La liste in-app (iOS/iPadOS/macOS) et le web affichent un titre « acteur +
+// action » précis et conscient de l'entité (story / réel / publication / humeur
+// / statut). Historiquement ce titre était reconstruit côté client en français
+// codé en dur — d'où des libellés imprécis et non localisés (« a commenté votre
+// publication » même pour une réponse à un commentaire sur une story).
+//
+// `buildNotificationDisplay` centralise ce calcul côté serveur, à la langue
+// résolue du destinataire (Prisme-first). Le résultat est PERSISTÉ sur la
+// Notification puis renvoyé tel quel via REST / socket / push — donc identique
+// sur toutes les plateformes. Le client n'ajoute QUE la décoration dépendante
+// de l'appareil : la date locale (fuseau + format régional).
+//
+// Le sous-titre retourné NE contient PAS de date — le client l'append.
+// Retourne `{ title: null }` pour les types non gérés ici (messages, appels,
+// système…) : le client conserve alors son rendu de repli.
+
+export type NotificationDisplayInput = {
+  readonly type: string;
+  /** Nom affiché de l'acteur (déjà résolu). */
+  readonly actorName?: string | null;
+  /** Type d'entité sociale liée (pilote l'accord et le nom) — normalisé en interne. */
+  readonly postType?: string | null;
+  readonly emoji?: string | null;
+  /** Aperçu du commentaire parent (réponse à un commentaire). */
+  readonly parentCommentPreview?: string | null;
+};
+
+export type NotificationDisplay = {
+  /** Titre « acteur + action » localisé, conscient de l'entité, ou null. */
+  readonly title: string | null;
+  /** Base de sous-titre localisée (SANS date — le client l'append), ou null. */
+  readonly subtitle: string | null;
+};
+
+/** Normalise un postType potentiellement absent/inconnu vers une clé sûre. */
+function normalizePostKind(value?: string | null): NotificationPostKind | undefined {
+  if (!value) return undefined;
+  const up = value.toUpperCase();
+  return (['POST', 'STORY', 'MOOD', 'STATUS', 'REEL'] as const).includes(up as NotificationPostKind)
+    ? (up as NotificationPostKind)
+    : undefined;
+}
+
+export function buildNotificationDisplay(
+  lang: string | null | undefined,
+  input: NotificationDisplayInput,
+): NotificationDisplay {
+  const L = normalizeNotificationLanguage(lang);
+  const actor = (input.actorName && input.actorName.trim() !== '')
+    ? input.actorName.trim()
+    : notificationString(L, 'someone');
+  const emoji = input.emoji ?? undefined;
+  const kind = normalizePostKind(input.postType);
+  const ns = (key: NotificationStringKey, postType?: NotificationPostKind) =>
+    notificationString(L, key, { ...(emoji ? { emoji } : {}), ...(postType ? { postType } : {}) });
+  const compose = (fragment: string) => `${actor} ${fragment}`.trim();
+  const nounCap = kind ? notificationString(L, 'comment.subtitleBare', { postType: kind }) : null;
+
+  switch (input.type) {
+    // ── Réactions sur contenu (post / story / humeur / statut / réel) ──
+    case 'post_like':
+    case 'story_reaction':
+    case 'status_reaction':
+      return {
+        title: compose(ns('reaction.post', kind ?? 'POST')),
+        subtitle: kind ? notificationString(L, 'comment.subtitleOwner', { postType: kind }) : null,
+      };
+
+    // ── Commentaire sur VOTRE contenu ──
+    case 'post_comment':
+    case 'story_new_comment':
+      return {
+        title: compose(ns('comment.your', kind ?? (input.type === 'story_new_comment' ? 'STORY' : 'POST'))),
+        subtitle: notificationString(L, 'comment.subtitleOwner', { postType: kind ?? (input.type === 'story_new_comment' ? 'STORY' : 'POST') }),
+      };
+
+    // ── Commentaire sur le contenu d'un AMI (fil / engagement) ──
+    case 'friend_story_comment':
+      return {
+        title: compose(ns('comment.generic', kind ?? 'STORY')),
+        subtitle: nounCap,
+      };
+    case 'story_thread_reply':
+      return {
+        title: compose(ns('comment.repliedIn', kind ?? 'STORY')),
+        subtitle: nounCap,
+      };
+
+    // ── Réponse à VOTRE commentaire (corrige le bug « a commenté votre publication ») ──
+    case 'comment_reply': {
+      const parent = input.parentCommentPreview?.trim();
+      return {
+        title: compose(notificationString(L, 'comment.repliedToYours')),
+        subtitle: (parent && parent !== '')
+          ? notificationString(L, 'comment.replyWithParent', { preview: parent })
+          : (nounCap ?? notificationString(L, 'comment.reply')),
+      };
+    }
+
+    // ── Réaction sur VOTRE commentaire ──
+    case 'comment_like':
+    case 'comment_reaction':
+      return {
+        title: compose(ns('reaction.comment')),
+        subtitle: nounCap,
+      };
+
+    // ── Partage / repost ──
+    case 'post_repost':
+      return {
+        title: compose(ns('repost', kind ?? 'POST')),
+        subtitle: kind ? notificationString(L, 'comment.subtitleOwner', { postType: kind }) : null,
+      };
+
+    // ── Nouveau contenu d'un ami ──
+    case 'friend_new_story':
+      return { title: compose(notificationString(L, 'friend.story')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: 'STORY' }) };
+    case 'friend_new_post':
+      return { title: compose(notificationString(L, 'friend.post')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: kind === 'REEL' ? 'REEL' : 'POST' }) };
+    case 'friend_new_mood':
+      return { title: compose(notificationString(L, 'friend.mood')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: 'MOOD' }) };
+
+    // ── Mention (conversation ou commentaire) ──
+    case 'mention':
+    case 'user_mentioned':
+      return { title: compose(notificationString(L, 'mention')), subtitle: nounCap };
+
+    default:
+      // Types non gérés ici (messages, appels, contacts, système…) :
+      // le client conserve son rendu de repli.
+      return { title: null, subtitle: null };
+  }
 }

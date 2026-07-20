@@ -9,6 +9,8 @@ import {
   SignalValidation,
   UserSchemas,
   updateBannerSchema,
+  updateUserProfileSchema,
+  AuthSchemas,
   SignalProtocolLimits,
 } from '../utils/validation.js';
 import { z } from 'zod';
@@ -35,9 +37,73 @@ describe('CommonSchemas', () => {
     expect(result).toEqual({ limit: 20, offset: 0 });
   });
 
+  it('pagination parses valid numeric strings', () => {
+    expect(CommonSchemas.pagination.parse({ limit: '50', offset: '10' })).toEqual({ limit: 50, offset: 10 });
+  });
+
+  it('pagination coerces non-numeric input to safe defaults', () => {
+    expect(CommonSchemas.pagination.parse({ limit: 'abc' })).toEqual({ limit: 20, offset: 0 });
+    expect(CommonSchemas.pagination.parse({ offset: 'xyz' })).toEqual({ limit: 20, offset: 0 });
+  });
+
+  it('pagination clamps negative and zero to safe bounds', () => {
+    const result = CommonSchemas.pagination.parse({ limit: '-5', offset: '-10' });
+    expect(result.limit).toBeGreaterThanOrEqual(1);
+    expect(result.offset).toBeGreaterThanOrEqual(0);
+    expect(CommonSchemas.pagination.parse({ limit: '0' }).limit).toBeGreaterThanOrEqual(1);
+  });
+
+  it('pagination caps limit at the maximum', () => {
+    expect(CommonSchemas.pagination.parse({ limit: '9999' }).limit).toBe(100);
+  });
+
+  it('messagePagination coerces garbage/negative like pagination', () => {
+    const result = CommonSchemas.messagePagination.parse({ limit: 'abc', offset: '-3' });
+    expect(result.limit).toBe(20);
+    expect(result.offset).toBeGreaterThanOrEqual(0);
+  });
+
   it('mongoId should validate format', () => {
     expect(CommonSchemas.mongoId.safeParse('507f1f77bcf86cd799439011').success).toBe(true);
     expect(CommonSchemas.mongoId.safeParse('invalid').success).toBe(false);
+  });
+
+  describe('language', () => {
+    it('accepts ISO 639-1 two-letter codes', () => {
+      expect(CommonSchemas.language.safeParse('fr').success).toBe(true);
+      expect(CommonSchemas.language.safeParse('en').success).toBe(true);
+    });
+
+    it('accepts ISO 639-3 three-letter supported codes', () => {
+      // Cameroonian languages first-class in packages/shared/utils/languages.ts
+      // and preserved verbatim by normalizeLanguageCode — must not be rejected
+      // on sendMessage/editMessage while systemLanguage/regionalLanguage accept them.
+      for (const code of ['bas', 'ksf', 'nnh', 'dua', 'ewo']) {
+        expect(CommonSchemas.language.safeParse(code).success).toBe(true);
+      }
+    });
+
+    it('accepts a BCP-47 region subtag', () => {
+      expect(CommonSchemas.language.safeParse('en-US').success).toBe(true);
+    });
+
+    it('accepts a three-letter code WITH a region subtag', () => {
+      // `bas-CM` (639-3 body + ISO 3166-1 region) is 6 chars — the max the regex
+      // `[a-z]{2,3}(-[A-Z]{2})?` allows. The former `.max(5)` cap contradicted the
+      // regex and rejected these supported Cameroonian codes on sendMessage/edit
+      // (the same class of bug the {2}->{2,3} relax targeted, left open for the
+      // regionalized form).
+      for (const code of ['bas-CM', 'ewo-CM', 'ksf-CM']) {
+        expect(CommonSchemas.language.safeParse(code).success).toBe(true);
+      }
+    });
+
+    it('rejects malformed codes', () => {
+      expect(CommonSchemas.language.safeParse('f').success).toBe(false);
+      expect(CommonSchemas.language.safeParse('english').success).toBe(false);
+      expect(CommonSchemas.language.safeParse('EN').success).toBe(false);
+      expect(CommonSchemas.language.safeParse('fr2').success).toBe(false);
+    });
   });
 });
 
@@ -132,6 +198,45 @@ describe('UserSchemas', () => {
   it('should validate minimal user', () => {
     const user = { id: '1', username: 'u', displayName: 'd' };
     expect(UserSchemas.minimal.safeParse(user).success).toBe(true);
+  });
+});
+
+describe('language-code normalization at the write boundary', () => {
+  it('updateUserProfileSchema lowercases in-app language prefs', () => {
+    const parsed = updateUserProfileSchema.parse({
+      systemLanguage: 'EN',
+      regionalLanguage: 'Fr',
+      customDestinationLanguage: 'DE',
+    });
+    expect(parsed.systemLanguage).toBe('en');
+    expect(parsed.regionalLanguage).toBe('fr');
+    expect(parsed.customDestinationLanguage).toBe('de');
+  });
+
+  it('AuthSchemas.register lowercases system/regional language', () => {
+    const parsed = AuthSchemas.register.parse({
+      username: 'alice',
+      password: 'password123',
+      firstName: 'Alice',
+      lastName: 'Smith',
+      email: 'alice@example.com',
+      systemLanguage: 'EN',
+      regionalLanguage: 'ES',
+    });
+    expect(parsed.systemLanguage).toBe('en');
+    expect(parsed.regionalLanguage).toBe('es');
+  });
+
+  it('AuthSchemas.register still rejects unsupported codes', () => {
+    const result = AuthSchemas.register.safeParse({
+      username: 'alice',
+      password: 'password123',
+      firstName: 'Alice',
+      lastName: 'Smith',
+      email: 'alice@example.com',
+      systemLanguage: 'zz',
+    });
+    expect(result.success).toBe(false);
   });
 });
 

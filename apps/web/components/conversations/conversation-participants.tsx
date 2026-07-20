@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Loader2, Ghost } from 'lucide-react';
 import { SocketIOUser as User, MemberRole } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
-import { getUserStatus } from '@/lib/user-status';
+import { getUserStatus, isPresenceActive } from '@/lib/user-status';
 import { useUserStore, useUserStatusTick } from '@/stores/user-store';
 
 /** Type-safe accessor for participant.user which is typed as `unknown` in the shared schema */
@@ -55,14 +55,14 @@ export function ConversationParticipants({
   const getUserById = useUserStore(state => state.getUserById);
   const _tick = useUserStatusTick();
 
-  // Listes en ligne / hors-ligne via getUserStatus (temps reel)
+  // Listes actifs (vert : online + recent) / inactifs via getUserStatus (temps reel)
   const onlineAll = participants.filter(p => {
     const storeUser = p.userId ? getUserById(p.userId) : undefined;
-    return getUserStatus(storeUser || p.user as ParticipantUser) === 'online';
+    return isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
   });
   const _offlineAll = participants.filter(p => {
     const storeUser = p.userId ? getUserById(p.userId) : undefined;
-    return getUserStatus(storeUser || p.user as ParticipantUser) !== 'online';
+    return !isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));
   });
   const _recentActiveParticipants = onlineAll.slice(0, 3);
 

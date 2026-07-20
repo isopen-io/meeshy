@@ -190,7 +190,11 @@ services:
     networks:
       - meeshy-network
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      # Liveness léger (/live = réponse instantanée, sans await DB/ZMQ/modèles).
+      # /health faisait des awaits DB+ZMQ+modèles sur le même event-loop que
+      # l'inférence ML : sous charge CPU il dépassait le timeout → flapping
+      # unhealthy → conteneur sorti du routing. /live ne flappe jamais.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/live', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -271,7 +275,7 @@ services:
       - AGENT_HOST=agent
       - TURN_SECRET=${TURN_SECRET}
       - TURN_SERVERS=${TURN_SERVERS:-meeshy.me:3478}
-      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-3600}
+      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-86400}
       # QUEUED IMPROVEMENT — session config + branding (deploy via surgical patch when sessions feature lands)
       - SESSION_EXPIRY_MOBILE_DAYS=${SESSION_EXPIRY_MOBILE_DAYS:-365}
       - SESSION_EXPIRY_DESKTOP_DAYS=${SESSION_EXPIRY_DESKTOP_DAYS:-30}

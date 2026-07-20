@@ -4,27 +4,27 @@ import XCTest
 
 private let stubUser = MeeshyUser(id: "user-stub-id", username: "stubuser", displayName: "Stub User")
 
-private let stubChangeEmailResponse: ChangeEmailResponse = JSONStub.decode("""
+nonisolated(unsafe) private let stubChangeEmailResponse: ChangeEmailResponse = JSONStub.decode("""
 {"message":"Verification email sent","pendingEmail":"new@example.com"}
 """)
 
-private let stubVerifyEmailChangeResponse: VerifyEmailChangeResponse = JSONStub.decode("""
+nonisolated(unsafe) private let stubVerifyEmailChangeResponse: VerifyEmailChangeResponse = JSONStub.decode("""
 {"message":"Email changed successfully","newEmail":"new@example.com"}
 """)
 
-private let stubChangePhoneResponse: ChangePhoneResponse = JSONStub.decode("""
+nonisolated(unsafe) private let stubChangePhoneResponse: ChangePhoneResponse = JSONStub.decode("""
 {"message":"Verification code sent","pendingPhoneNumber":"+15551234567"}
 """)
 
-private let stubVerifyPhoneChangeResponse: VerifyPhoneChangeResponse = JSONStub.decode("""
+nonisolated(unsafe) private let stubVerifyPhoneChangeResponse: VerifyPhoneChangeResponse = JSONStub.decode("""
 {"message":"Phone changed successfully","newPhoneNumber":"+15551234567"}
 """)
 
-private let emptySearchResponse: OffsetPaginatedAPIResponse<[UserSearchResult]> = JSONStub.decode("""
+nonisolated(unsafe) private let emptySearchResponse: OffsetPaginatedAPIResponse<[UserSearchResult]> = JSONStub.decode("""
 {"success":true,"data":[],"pagination":null,"error":null}
 """)
 
-final class MockUserService: UserServiceProviding {
+final class MockUserService: UserServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 

@@ -27,6 +27,10 @@ public struct ProfileSheetUser: Identifiable, Equatable {
     public let registrationCountry: String?
     public let profileCompletionRate: Int?
     public let hasE2EE: Bool
+    public let voicePublic: Bool?
+    public let voiceSampleUrl: String?
+    public let voiceSampleDurationMs: Int?
+    public let voiceQuality: Double?
 
     public init(
         userId: String? = nil, username: String, displayName: String? = nil,
@@ -35,7 +39,9 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         isOnline: Bool? = nil, lastActiveAt: Date? = nil,
         createdAt: Date? = nil, bannerURL: String? = nil,
         timezone: String? = nil, registrationCountry: String? = nil,
-        profileCompletionRate: Int? = nil, hasE2EE: Bool = false
+        profileCompletionRate: Int? = nil, hasE2EE: Bool = false,
+        voicePublic: Bool? = nil, voiceSampleUrl: String? = nil,
+        voiceSampleDurationMs: Int? = nil, voiceQuality: Double? = nil
     ) {
         self.userId = userId
         self.username = username
@@ -53,6 +59,10 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         self.registrationCountry = registrationCountry
         self.profileCompletionRate = profileCompletionRate
         self.hasE2EE = hasE2EE
+        self.voicePublic = voicePublic
+        self.voiceSampleUrl = voiceSampleUrl
+        self.voiceSampleDurationMs = voiceSampleDurationMs
+        self.voiceQuality = voiceQuality
     }
 
     public var resolvedDisplayName: String {
@@ -166,7 +176,11 @@ extension ProfileSheetUser {
             timezone: user.timezone,
             registrationCountry: user.registrationCountry,
             profileCompletionRate: user.profileCompletionRate,
-            hasE2EE: user.signalIdentityKeyPublic != nil
+            hasE2EE: user.signalIdentityKeyPublic != nil,
+            voicePublic: user.voicePublic,
+            voiceSampleUrl: user.voiceSampleUrl,
+            voiceSampleDurationMs: user.voiceSampleDurationMs,
+            voiceQuality: user.voiceQuality
         )
     }
 }

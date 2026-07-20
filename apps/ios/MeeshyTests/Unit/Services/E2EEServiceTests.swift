@@ -2,6 +2,7 @@ import XCTest
 import CryptoKit
 @testable import Meeshy
 
+@MainActor
 final class E2EEServiceTests: XCTestCase {
 
     private var service: E2EEService { E2EEService.shared }
@@ -114,13 +115,21 @@ final class E2EEServiceTests: XCTestCase {
         XCTAssertEqual(signature.count, 64, "Ed25519 signature should be 64 bytes")
     }
 
-    func test_signData_signingSameDataProducesSameResult() throws {
+    func test_signData_signingSameData_bothSignaturesValidateAgainstKey() throws {
         let data = Data("deterministic test".utf8)
         let sig1 = try service.signData(data: data)
         let sig2 = try service.signData(data: data)
 
-        // Ed25519 signatures are deterministic for same key + message
-        XCTAssertEqual(sig1, sig2, "Signing same data should produce same signature")
+        // CryptoKit's Curve25519.Signing is RANDOMIZED (it injects a random
+        // nonce, unlike the RFC 8032 deterministic Ed25519 variant). Signing the
+        // SAME data twice therefore yields DIFFERENT bytes — both of which must
+        // still verify against the public key. The contract is validity, not
+        // byte-equality; asserting equality was a false premise about CryptoKit.
+        let publicKey = try service.getOrGenerateSigningKey().publicKey
+        XCTAssertTrue(publicKey.isValidSignature(sig1, for: data),
+                      "First signature must validate against the signing public key")
+        XCTAssertTrue(publicKey.isValidSignature(sig2, for: data),
+                      "Second signature must validate against the signing public key")
     }
 
     func test_signData_signingDifferentDataProducesDifferentResult() throws {

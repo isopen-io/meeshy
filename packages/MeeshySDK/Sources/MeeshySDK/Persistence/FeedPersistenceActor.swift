@@ -107,6 +107,77 @@ public actor FeedPersistenceActor {
         postFeedStoreRefresh()
     }
 
+    /// Met à jour le compteur d'UNE réaction emoji d'un post dans le cache local
+    /// (`reactionSummaryJson`, un dict `[emoji: count]`). Reçu via
+    /// `post:reaction-added` / `post:reaction-removed` : le payload porte le compte
+    /// ABSOLU de cet emoji après l'action, donc l'écriture est idempotente — une
+    /// double livraison réécrit exactement la même valeur. `count <= 0` retire
+    /// l'emoji du dict. Sans ce write, le compteur de réactions revenait à sa
+    /// valeur cache au redémarrage de l'app. Miroir de `upsertPostTranslation`.
+    public func updatePostReactionSummary(postId: String, emoji: String, count: Int) throws {
+        try dbWriter.write { db in
+            let existingData = try Data.fetchOne(db, sql: "SELECT reactionSummaryJson FROM feed_posts WHERE id = ?", arguments: [postId])
+            var summary: [String: Int] = [:]
+            if let existingData {
+                summary = (try? JSONDecoder().decode([String: Int].self, from: existingData)) ?? [:]
+            }
+            if count > 0 { summary[emoji] = count } else { summary.removeValue(forKey: emoji) }
+            let updatedData = try? JSONEncoder().encode(summary)
+            try db.execute(
+                sql: """
+                    UPDATE feed_posts SET reactionSummaryJson = ?,
+                    changeVersion = changeVersion + 1 WHERE id = ?
+                    """,
+                arguments: [updatedData, postId]
+            )
+        }
+        postFeedStoreRefresh()
+    }
+
+    /// Met à jour le compteur d'UNE réaction emoji d'un commentaire dans le cache
+    /// local (`reactionSummaryJson`, un dict `[emoji: count]`). Reçu via
+    /// `comment:reaction-added` / `comment:reaction-removed` : le payload porte le
+    /// compte ABSOLU de cet emoji après l'action, donc l'écriture est idempotente —
+    /// une double livraison (feed room + post room) réécrit la même valeur. `count
+    /// <= 0` retire l'emoji du dict. Miroir exact de `updatePostReactionSummary`.
+    public func updateCommentReactionSummary(commentId: String, emoji: String, count: Int) throws {
+        try dbWriter.write { db in
+            let existingData = try Data.fetchOne(db, sql: "SELECT reactionSummaryJson FROM feed_comments WHERE id = ?", arguments: [commentId])
+            var summary: [String: Int] = [:]
+            if let existingData {
+                summary = (try? JSONDecoder().decode([String: Int].self, from: existingData)) ?? [:]
+            }
+            if count > 0 { summary[emoji] = count } else { summary.removeValue(forKey: emoji) }
+            let updatedData = try? JSONEncoder().encode(summary)
+            try db.execute(
+                sql: """
+                    UPDATE feed_comments SET reactionSummaryJson = ?,
+                    changeVersion = changeVersion + 1 WHERE id = ?
+                    """,
+                arguments: [updatedData, commentId]
+            )
+        }
+        postFeedStoreRefresh()
+    }
+
+    /// Remplace l'INTÉGRALITÉ du dict de réactions d'un commentaire — reçu via le
+    /// `comment:reaction-request-sync` ACK qui porte l'état autoritaire complet
+    /// (toutes les agrégations emoji). Les emoji à 0 sont écartés. Idempotent.
+    public func replaceCommentReactionSummary(commentId: String, counts: [String: Int]) throws {
+        let cleaned = counts.filter { $0.value > 0 }
+        try dbWriter.write { db in
+            let updatedData = cleaned.isEmpty ? nil : (try? JSONEncoder().encode(cleaned))
+            try db.execute(
+                sql: """
+                    UPDATE feed_comments SET reactionSummaryJson = ?,
+                    changeVersion = changeVersion + 1 WHERE id = ?
+                    """,
+                arguments: [updatedData, commentId]
+            )
+        }
+        postFeedStoreRefresh()
+    }
+
     public func upsertPostTranslation(postId: String, language: String, translatedText: String) throws {
         try dbWriter.write { db in
             let existingData = try Data.fetchOne(db, sql: "SELECT translationsJson FROM feed_posts WHERE id = ?", arguments: [postId])

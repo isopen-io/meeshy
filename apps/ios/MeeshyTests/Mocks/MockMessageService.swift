@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-final class MockMessageService: MessageServiceProviding {
+final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 
@@ -132,7 +132,7 @@ final class MockMessageService: MessageServiceProviding {
             lastListIncludeTranslations = includeTranslations
             lastListLanguages = languages
         }
-        return try await MainActor.run { try listResult.get() }
+        return try listResult.get()
     }
 
     nonisolated func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
@@ -142,7 +142,7 @@ final class MockMessageService: MessageServiceProviding {
             lastListBeforeCursor = before
             lastListBeforeLanguages = languages
         }
-        return try await MainActor.run { try listBeforeResult.get() }
+        return try listBeforeResult.get()
     }
 
     nonisolated func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
@@ -164,7 +164,7 @@ final class MockMessageService: MessageServiceProviding {
             lastListAroundMessageId = around
             lastListAroundLanguages = languages
         }
-        return try await MainActor.run { try listAroundResult.get() }
+        return try listAroundResult.get()
     }
 
     nonisolated func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData {
@@ -173,7 +173,7 @@ final class MockMessageService: MessageServiceProviding {
             lastSendConversationId = conversationId
             lastSendRequest = request
         }
-        return try await MainActor.run { try sendResult.get() }
+        return try sendResult.get()
     }
 
     nonisolated func edit(messageId: String, content: String) async throws -> APIMessage {
@@ -182,7 +182,7 @@ final class MockMessageService: MessageServiceProviding {
             lastEditMessageId = messageId
             lastEditContent = content
         }
-        return try await MainActor.run { try editResult.get() }
+        return try editResult.get()
     }
 
     nonisolated func delete(conversationId: String, messageId: String) async throws {
@@ -191,7 +191,7 @@ final class MockMessageService: MessageServiceProviding {
             lastDeleteConversationId = conversationId
             lastDeleteMessageId = messageId
         }
-        try await MainActor.run { try deleteResult.get() }
+        try deleteResult.get()
     }
 
     nonisolated func pin(conversationId: String, messageId: String) async throws {
@@ -200,7 +200,7 @@ final class MockMessageService: MessageServiceProviding {
             lastPinConversationId = conversationId
             lastPinMessageId = messageId
         }
-        try await MainActor.run { try pinResult.get() }
+        try pinResult.get()
     }
 
     nonisolated func unpin(conversationId: String, messageId: String) async throws {
@@ -209,7 +209,7 @@ final class MockMessageService: MessageServiceProviding {
             lastUnpinConversationId = conversationId
             lastUnpinMessageId = messageId
         }
-        try await MainActor.run { try unpinResult.get() }
+        try unpinResult.get()
     }
 
     nonisolated func consumeViewOnce(conversationId: String, messageId: String) async throws -> ConsumeViewOnceResponse {
@@ -218,7 +218,7 @@ final class MockMessageService: MessageServiceProviding {
             lastConsumeViewOnceConversationId = conversationId
             lastConsumeViewOnceMessageId = messageId
         }
-        return try await MainActor.run { try consumeViewOnceResult.get() }
+        return try consumeViewOnceResult.get()
     }
 
     nonisolated func search(conversationId: String, query: String, limit: Int) async throws -> MessagesAPIResponse {
@@ -228,7 +228,7 @@ final class MockMessageService: MessageServiceProviding {
             lastSearchQuery = query
             lastSearchLimit = limit
         }
-        return try await MainActor.run { try searchResult.get() }
+        return try searchResult.get()
     }
 
     nonisolated func searchWithCursor(conversationId: String, query: String, cursor: String) async throws -> MessagesAPIResponse {
@@ -238,7 +238,7 @@ final class MockMessageService: MessageServiceProviding {
             lastSearchWithCursorQuery = query
             lastSearchWithCursorCursor = cursor
         }
-        return try await MainActor.run { try searchWithCursorResult.get() }
+        return try searchWithCursorResult.get()
     }
 
     // MARK: - Reset

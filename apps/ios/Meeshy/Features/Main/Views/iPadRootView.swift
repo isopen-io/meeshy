@@ -27,7 +27,12 @@ struct iPadRootView: View {
     @StateObject var toastManager = FeedbackToastManager.shared
     @StateObject var storyViewModel = StoryViewModel()
     @StateObject var statusViewModel = StatusViewModel()
-    @StateObject var conversationViewModel = ConversationListViewModel()
+    // Possédé sans être observé (cf. ConversationListVMOwner, RootView.swift) :
+    // évite le re-render de iPadRootView à chaque churn du VM (presence,
+    // reloadFromCache). Exposé via la propriété calculée `conversationViewModel`,
+    // consommée telle quelle par les extensions (+Sheets, +Navigation).
+    @StateObject var conversationVMOwner = ConversationListVMOwner()
+    var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
     @StateObject var router = Router()
     /// Hoisted at the iPad root so deep-stack screens (e.g.
     /// `StoryNotificationTargetScreen` → `StoryActiveBridge`) can present
@@ -36,7 +41,9 @@ struct iPadRootView: View {
     /// (iPhone) coordinator wiring; the cover is wired in
     /// `iPadRootView+Sheets.swift`.
     @StateObject var storyViewerCoordinator = StoryViewerCoordinator()
-    @ObservedObject var callManager = CallManager.shared
+    // CallManager n'est PLUS observé ici : la présentation d'appel passe par
+    // `.modifier(CallPresentationLayer())` (partagé avec RootView) qui isole le
+    // churn d'appel hors de `iPadRootView.body`. Cf. watchdog 0x8BADF00D.
     @ObservedObject var networkMonitor = NetworkMonitor.shared
     @ObservedObject var notificationManager = NotificationToastManager.shared
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
@@ -58,6 +65,9 @@ struct iPadRootView: View {
     /// Swallows the toast Button's release tap that can fire right after the
     /// long-press / drag opened the preview (prevents double action).
     @State var suppressToastTap = false
+
+    /// U1 inc.2 — namespace zoom tray→viewer (parité RootView iPhone).
+    @Namespace var storyZoomNamespace
 
     private var isConversationOpen: Bool {
         activeConversation != nil
@@ -87,7 +97,7 @@ struct iPadRootView: View {
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
             .environmentObject(storyViewerCoordinator)
-            .environmentObject(StatusBubbleController.shared)
+            .environment(\.zoomTransitionNamespace, storyZoomNamespace)
             // Propagate story viewer presentation state — same role as
             // RootView (cf. ConnectionBanner sync pill chevauchement fix
             // 2026-05-27).

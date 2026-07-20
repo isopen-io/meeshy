@@ -42,7 +42,7 @@ object ConversationFilters {
     }
 
     private fun ApiConversation.matches(filter: ConversationFilter): Boolean {
-        val prefs = preferences
+        val prefs = resolvedPreferences
         if (prefs?.deletedForUserAt != null) return false
         val archived = prefs?.isArchived == true
         val active = isActive ?: true
@@ -66,7 +66,7 @@ object ConversationFilters {
     }
 
     private fun ApiConversation.searchableTitle(currentUserId: String?): String {
-        preferences?.customName?.takeIf { it.isNotBlank() }?.let { return it }
+        resolvedPreferences?.customName?.takeIf { it.isNotBlank() }?.let { return it }
         title?.takeIf { it.isNotBlank() }?.let { return it }
         val others = participants.filter { it.userId != currentUserId }
         return others

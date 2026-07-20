@@ -11,14 +11,14 @@ final class TwoFactorViewModelTests: XCTestCase {
 
     // MARK: - Lifecycle
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         mockService = MockTwoFactorService()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         mockService = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory

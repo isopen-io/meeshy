@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_status_incoming">Incoming call…</string>
+    <string name="call_status_ringing">Ringing…</string>
+    <string name="call_status_connecting">Connecting…</string>
+    <string name="call_status_connected">Connected</string>
+    <string name="call_status_reconnecting">Reconnecting (%1$d)…</string>
+    <string name="call_ended">Call ended</string>
+    <string name="call_ended_missed">Missed call</string>
+    <string name="call_ended_declined">Call declined</string>
+    <string name="call_ended_connection_lost">Connection lost</string>
+    <string name="call_ended_failed">Call failed</string>
+    <string name="call_action_accept">Accept</string>
+    <string name="call_action_decline">Decline</string>
+    <string name="call_action_hang_up">Hang up</string>
+    <string name="call_action_mute">Mute</string>
+    <string name="call_action_camera">Camera</string>
+    <string name="call_action_close">Close</string>
+    <string name="call_action_retry">Retry</string>
+    <string name="call_action_minimize">Minimize call</string>
+    <string name="call_pill_ongoing">Ongoing call with %1$s</string>
+    <string name="call_pill_reopen">Return to call</string>
+    <string name="call_start_audio">Audio call</string>
+    <string name="call_start_video">Video call</string>
+    <string name="call_history_title">Calls</string>
+    <string name="call_history_filter_all">All</string>
+    <string name="call_history_filter_missed">Missed</string>
+    <string name="call_history_empty">No calls yet</string>
+    <string name="call_history_empty_missed">No missed calls</string>
+    <string name="call_history_yesterday">Yesterday</string>
+    <string name="call_history_incoming">Incoming call</string>
+    <string name="call_history_outgoing">Outgoing call</string>
+    <string name="call_history_missed">Missed call</string>
+    <string name="call_history_retry">Retry</string>
+    <string name="call_quality_excellent">Excellent connection</string>
+    <string name="call_quality_good">Good connection</string>
+    <string name="call_quality_fair">Fair connection</string>
+    <string name="call_quality_poor">Poor connection</string>
+    <string name="call_waiting_subtitle">Incoming call…</string>
+    <string name="call_waiting_banner_a11y">Incoming call from %1$s</string>
+    <string name="call_waiting_reject_a11y">Decline call from %1$s</string>
+    <string name="call_waiting_answer_a11y">End current call and answer %1$s</string>
+    <string name="call_peer_quality_degraded">%1$s\'s connection is unstable</string>
+    <string name="call_peer_screen_capturing">%1$s is capturing the screen</string>
+    <string name="call_peer_muted">%1$s\'s microphone is off</string>
+    <string name="call_peer_camera_off">%1$s\'s camera is off</string>
+</resources>

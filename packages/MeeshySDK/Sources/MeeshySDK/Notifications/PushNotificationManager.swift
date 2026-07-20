@@ -318,8 +318,24 @@ public struct NotificationPayload {
     public let senderAvatar: String?
     public let postId: String?
     public let postType: String?
+    /// Commentaire ciblé par la notification (like/réponse/commentaire). Permet
+    /// d'ouvrir l'entité puis de défiler/surligner le commentaire exact.
+    public let commentId: String?
+    /// Commentaire parent quand `commentId` est une réponse — déplie le fil parent
+    /// avant de défiler jusqu'à la réponse.
+    public let parentCommentId: String?
     public let title: String?
     public let body: String?
+    /// Guideline 5 (MIIT) — China-region incoming-call push (routed via the
+    /// standard 'apns' alert type, not PushKit VoIP, so it arrives as a
+    /// regular tappable notification). Non-nil only for `type == "call"`.
+    public let callId: String?
+    public let callerUserId: String?
+    public let callerName: String?
+    public let isVideoCall: Bool
+    /// JSON-encoded ICE servers, same shape `VoIPPushManager.parseIceServers`
+    /// already decodes for the PushKit path — decode with that same helper.
+    public let iceServersJSON: String?
 
     public init(userInfo: [AnyHashable: Any]) {
         self.type = userInfo["type"] as? String
@@ -335,6 +351,10 @@ public struct NotificationPayload {
         self.postId = rawPostId.isEmpty ? nil : rawPostId
         let rawPostType = userInfo["postType"] as? String ?? ""
         self.postType = rawPostType.isEmpty ? nil : rawPostType
+        let rawCommentId = userInfo["commentId"] as? String ?? ""
+        self.commentId = rawCommentId.isEmpty ? nil : rawCommentId
+        let rawParentCommentId = userInfo["parentCommentId"] as? String ?? ""
+        self.parentCommentId = rawParentCommentId.isEmpty ? nil : rawParentCommentId
 
         if let aps = userInfo["aps"] as? [String: Any],
            let alert = aps["alert"] as? [String: Any] {
@@ -344,5 +364,19 @@ public struct NotificationPayload {
             self.title = nil
             self.body = nil
         }
+
+        self.callId = userInfo["callId"] as? String
+        self.callerUserId = userInfo["callerUserId"] as? String
+        self.callerName = userInfo["callerName"] as? String
+        // Backend sends `isVideo` as a string ("true"/"false") because APNs
+        // custom payload keys must be JSON-serializable primitives.
+        if let b = userInfo["isVideo"] as? Bool {
+            self.isVideoCall = b
+        } else if let s = userInfo["isVideo"] as? String {
+            self.isVideoCall = s.lowercased() == "true"
+        } else {
+            self.isVideoCall = false
+        }
+        self.iceServersJSON = userInfo["iceServers"] as? String
     }
 }

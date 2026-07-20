@@ -28,4 +28,21 @@ final class StoryTextFontResolverTests: XCTestCase {
         let font = StoryTextFontResolver.resolveFont(forTextObject: makeText(style: "classic"), size: 18)
         XCTAssertEqual(font.pointSize, 18, accuracy: 0.01)
     }
+
+    func test_resolveFont_weightOverride_overridesStyleDerivedWeight() {
+        // Style "bold" derives .black; an explicit "thin" override must win.
+        let text = StoryTextObject(id: "t1", text: "Hi", textStyle: "bold", fontWeight: "thin")
+        let font = StoryTextFontResolver.resolveFont(forTextObject: text, size: 40)
+        let traits = font.fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any]
+        let weight = traits?[.weight] as? CGFloat ?? 0
+        XCTAssertEqual(weight, UIFont.Weight.thin.rawValue, accuracy: 0.01)
+    }
+
+    func test_resolveFont_noWeightOverride_keepsStyleWeight() {
+        // Without an override, "bold" stays .black (legacy behavior preserved).
+        let font = StoryTextFontResolver.resolveFont(forTextObject: makeText(style: "bold"), size: 40)
+        let traits = font.fontDescriptor.object(forKey: .traits) as? [UIFontDescriptor.TraitKey: Any]
+        let weight = traits?[.weight] as? CGFloat ?? 0
+        XCTAssertEqual(weight, UIFont.Weight.black.rawValue, accuracy: 0.01)
+    }
 }

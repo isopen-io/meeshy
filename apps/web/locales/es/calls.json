@@ -64,6 +64,13 @@
       "videoBitrate": "Tasa de bits de vídeo:",
       "updated": "Actualizado:"
     },
+    "remoteAlerts": {
+      "qualityDegraded": "La conexión de {name} es inestable",
+      "screenCapturing": "Es posible que {name} esté grabando la pantalla"
+    },
+    "captions": {
+      "region": "Subtítulos traducidos en directo"
+    },
     "stream": {
       "disconnected": "Desconectado",
       "participantLeft": "{name} ha salido",
@@ -81,8 +88,12 @@
       "cameraSwitched": "Cámara cambiada",
       "cameraSwitchFailed": "Error al cambiar la cámara",
       "joinFailed": "Error al unirse a la llamada",
+      "callAlreadyEnded": "La llamada ha terminado",
       "videoSuspendedPoorConnection": "Conexión débil — vídeo en pausa para mantener la llamada",
-      "videoResumed": "Conexión recuperada — vídeo reactivado"
+      "videoResumed": "Conexión recuperada — vídeo reactivado",
+      "connectTimeout": "No se pudo establecer la conexión — llamada finalizada",
+      "callFailed": "Error de conexión de la llamada",
+      "retry": "Reintentar"
     },
     "permissions": {
       "title": {
@@ -117,6 +128,7 @@
     },
     "incoming": {
       "videoCall": "Videollamada",
+      "audioCall": "Llamada de audio",
       "subtitle": "Llamada entrante...",
       "accept": "Aceptar",
       "decline": "Rechazar",
@@ -126,6 +138,17 @@
     "waiting": {
       "forParticipant": "Esperando al participante...",
       "noVideo": "Sin vídeo"
+    },
+    "callWaiting": {
+      "title": "Llamada en espera",
+      "reject": "Rechazar",
+      "endAndAnswer": "Colgar y responder",
+      "rejectLabel": "Rechazar la llamada en espera",
+      "endAndAnswerLabel": "Colgar la llamada actual y responder"
+    },
+    "info": {
+      "participant": "{count} participante",
+      "participants": "{count} participantes"
     }
   }
 }

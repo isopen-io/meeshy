@@ -50,7 +50,10 @@ const mockGetSocketRateLimiter = jest.fn(() => ({
 }));
 jest.mock('../../../utils/socket-rate-limiter', () => ({
   getSocketRateLimiter: () => mockGetSocketRateLimiter(),
-  SOCKET_RATE_LIMITS: { MESSAGE_SEND: { maxRequests: 20, windowMs: 60000 } },
+  SOCKET_RATE_LIMITS: {
+    MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
+    MESSAGE_SEND_PER_CONVERSATION: { maxRequests: 10, windowMs: 10000, keyPrefix: 'socket:message:send-conv' },
+  },
 }));
 
 const mockIsBlockedBetween = jest.fn() as jest.Mock<any>;
@@ -78,8 +81,10 @@ jest.mock('../../../services/CacheStore', () => ({
 }));
 
 const mockResolveMentionedUsers = jest.fn() as jest.Mock<any>;
+const mockResolveUsernamesToIds = jest.fn() as jest.Mock<any>;
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a),
+  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
 }));
 
 const mockBuildPostReplyTo = jest.fn() as jest.Mock<any>;
@@ -676,6 +681,29 @@ describe('MessageHandler', () => {
       expect(deps.io.to).toHaveBeenCalledWith(`user:${USER_ID}`);
     });
 
+    it('exposes the sender User.id (not Participant.id) in the message:new senderId — matches the REST/ZMQ writer contract (regression)', async () => {
+      // Clients compare `message:new.senderId` against their own User.id
+      // (apps/web use-socket-cache-sync.ts) to detect own messages and
+      // reconcile the optimistic bubble across devices. The REST/ZMQ writer
+      // (MeeshySocketIOManager.broadcastMessage) already resolves this to
+      // `sender.userId`; the WS `message:send` path must emit the same
+      // id-space, otherwise the sender's other devices never match and the
+      // message renders twice / as an incoming bubble.
+      const msg = makeMessage();
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const messageNewPayloads = (toResult.emit.mock.calls as [string, { senderId?: string }][])
+        .filter((c) => c[0] === 'message:new')
+        .map((c) => c[1]);
+
+      expect(messageNewPayloads.length).toBeGreaterThan(0);
+      for (const payload of messageNewPayloads) {
+        expect(payload.senderId).toBe(USER_ID);
+        expect(payload.senderId).not.toBe(PARTICIPANT_ID);
+      }
+    });
+
     it('uses senderSocket.broadcast.to for anonymous user (no userId)', async () => {
       const msg = makeMessage({ sender: { id: PARTICIPANT_ID, userId: null, displayName: 'Anon', type: 'anonymous' } });
       await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
@@ -733,6 +761,43 @@ describe('MessageHandler', () => {
       await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
 
       expect(mockResolveMentionedUsers).toHaveBeenCalledWith(deps.prisma, ['@bob hello']);
+    });
+
+    it('emits mention:created to each mentioned user\'s personal room (WS path parity with REST)', async () => {
+      // @mentions sent over the PRIMARY WebSocket message:send path must reach a
+      // recipient who is online but not inside the conversation room — exactly
+      // what mention:created (fanned to ROOMS.user) is for. Regression guard:
+      // this event was previously only emitted on the REST/ZMQ path.
+      const BOB = 'bobUserId000000000000001';
+      mockResolveUsernamesToIds.mockResolvedValue([BOB]);
+      const msg = makeMessage({ validatedMentions: ['bob'], content: '@bob hi' });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      expect(deps.io.to).toHaveBeenCalledWith(`user:${BOB}`);
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const mentionPayloads = (toResult.emit.mock.calls as [string, Record<string, unknown>][])
+        .filter((c) => c[0] === 'mention:created')
+        .map((c) => c[1]);
+      expect(mentionPayloads.length).toBe(1);
+      expect(mentionPayloads[0]).toMatchObject({
+        messageId: 'msg-broadcast-1',
+        conversationId: VALID_CONV_ID,
+        senderId: USER_ID,
+        mentionedUserId: BOB,
+      });
+    });
+
+    it('does not emit mention:created back to the sender on a self-mention', async () => {
+      mockResolveUsernamesToIds.mockResolvedValue([USER_ID]);
+      const msg = makeMessage({ validatedMentions: ['alice'], content: '@alice note-to-self' });
+
+      await handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      const toResult: any = (deps.io.to as jest.Mock).mock.results[0]?.value;
+      const mentionCalls = (toResult.emit.mock.calls as [string, unknown][])
+        .filter((c) => c[0] === 'mention:created');
+      expect(mentionCalls.length).toBe(0);
     });
 
     it('uses language filter when SOCKET_LANG_FILTER=true', async () => {
@@ -1084,7 +1149,7 @@ describe('MessageHandler', () => {
         conversationId: VALID_CONV_ID, content: 'img', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
       }, callback);
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['image'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['image'], null, expect.anything()
       );
     });
 
@@ -1094,7 +1159,7 @@ describe('MessageHandler', () => {
         conversationId: VALID_CONV_ID, content: 'audio', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
       }, callback);
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['audio'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['audio'], null, expect.anything()
       );
     });
 
@@ -1104,7 +1169,7 @@ describe('MessageHandler', () => {
         conversationId: VALID_CONV_ID, content: 'vid', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
       }, callback);
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['video'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['video'], null, expect.anything()
       );
     });
 
@@ -1114,7 +1179,7 @@ describe('MessageHandler', () => {
         conversationId: VALID_CONV_ID, content: 'doc', attachmentIds: ['a1b2c3d4e5f6a1b2c3d4e5f0']
       }, callback);
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null, expect.anything()
       );
     });
   });
@@ -1289,14 +1354,19 @@ describe('MessageHandler', () => {
       (agentDeps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
       (agentDeps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue(null);
       (agentDeps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
-      (agentDeps.prisma.user.findMany as jest.Mock<any>).mockResolvedValue([{ id: 'alice-id' }]);
+      // Delegates to the canonical resolveUsernamesToIds (SSOT). Case-insensitive
+      // resolution against case-preserved usernames is asserted in that helper's
+      // own unmocked unit test (MentionService.test.ts); here we assert the
+      // handler delegates and forwards the resolved ids to the agent.
+      mockResolveUsernamesToIds.mockResolvedValue(['alice-id']);
       mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID });
       const agentHandler = new MessageHandler(agentDeps);
 
       await agentHandler.handleMessageSend(socket, makeValidSendData(), callback);
 
-      expect(agentDeps.prisma.user.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { username: { in: ['alice'] } } })
+      expect(mockResolveUsernamesToIds).toHaveBeenCalledWith(expect.anything(), ['alice']);
+      expect(agentClient.sendEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ mentionedUserIds: ['alice-id'] })
       );
     });
 
@@ -1316,7 +1386,7 @@ describe('MessageHandler', () => {
       (agentDeps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
       (agentDeps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue(null);
       (agentDeps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
-      (agentDeps.prisma.user.findMany as jest.Mock<any>).mockRejectedValue(new Error('DB error'));
+      mockResolveUsernamesToIds.mockRejectedValue(new Error('DB error'));
       mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID });
       const agentHandler = new MessageHandler(agentDeps);
 
@@ -1655,7 +1725,7 @@ describe('MessageHandler', () => {
 
     it('uses username as displayName fallback when displayName is null (?? branch, line 260)', async () => {
       const { agentClient, handler: h } = buildAgentDeps({
-        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: null, username: 'alice_u' }
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: null, username: 'alice_u', user: { username: 'alice_u' } }
       });
 
       await h.handleMessageSend(socket, makeValidSendData(), callback);
@@ -1685,7 +1755,7 @@ describe('MessageHandler', () => {
 
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
         expect.anything(), expect.anything(), 'anon-stats-0011',
-        expect.anything(), expect.anything(), null
+        expect.anything(), expect.anything(), null, expect.anything()
       );
     });
   });
@@ -1816,7 +1886,7 @@ describe('MessageHandler', () => {
       await handler.handleMessageSendWithAttachments(socket, data as any, callback);
 
       expect(mockConversationMessageStatsOnNew).toHaveBeenCalledWith(
-        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null
+        expect.anything(), expect.anything(), expect.anything(), expect.anything(), ['file'], null, expect.anything()
       );
     });
   });
@@ -1893,8 +1963,52 @@ describe('MessageHandler', () => {
 
       await new MessageHandler(localDeps).broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
 
+      // No LOCAL room sockets → per-language grouping is skipped …
       expect(mockGroupSocketsByLanguage).not.toHaveBeenCalled();
+      // … but the message must STILL fan out across the cluster: a node with
+      // zero local room members can be the sender's node while every recipient
+      // sits on other nodes. The full payload is broadcast to the room.
+      const toResult = (io.to as jest.Mock).mock.results[0]?.value as { except: jest.Mock; emit: jest.Mock };
+      expect(io.to).toHaveBeenCalledWith('conversation:' + VALID_CONV_ID);
+      expect(toResult.emit).toHaveBeenCalledWith('message:new', expect.objectContaining({ id: 'msg-empty' }));
       delete process.env.SOCKET_LANG_FILTER;
+    });
+  });
+
+  // ── Multi-node (Redis adapter) delivery: remote-node recipients ────────────
+
+  describe('_emitMessageNewByLanguage — cross-node delivery', () => {
+    afterEach(() => { delete process.env.SOCKET_LANG_FILTER; });
+
+    it('broadcasts the full payload to the room excepting local + sender sockets so remote-node recipients still receive message:new', async () => {
+      process.env.SOCKET_LANG_FILTER = 'true';
+      mockGroupSocketsByLanguage.mockReturnValue([{ socketIds: ['s1'], languages: ['fr'] }]);
+      const localRoomSockets = new Set(['s1']);
+      const io = makeIO({
+        sockets: { adapter: { rooms: new Map([['conversation:' + VALID_CONV_ID, localRoomSockets]]) } }
+      });
+      const localDeps = makeDeps({ io });
+      localDeps.socketToUser.set('s1', 'other-local-user');
+      localDeps.connectedUsers.set(USER_ID, makeSocketUser());
+      (localDeps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([]);
+      (localDeps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+      const h = new MessageHandler(localDeps);
+
+      const msg = {
+        id: 'msg-crossnode', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
+        content: 'hi', originalLanguage: 'fr', messageType: 'text',
+        createdAt: new Date(), sender: { id: PARTICIPANT_ID, userId: USER_ID }, attachments: [], translations: []
+      };
+      await h.broadcastNewMessage(msg as any, VALID_CONV_ID, socket);
+
+      // The cross-node fan-out targets the conversation room (adapter-propagated)
+      // and excepts every LOCAL room socket (already served a trimmed copy) plus
+      // the sender's user room (served the cid-aware senderPayload separately).
+      const toResult = (io.to as jest.Mock).mock.results[0].value as { except: jest.Mock; emit: jest.Mock };
+      expect(io.to).toHaveBeenCalledWith('conversation:' + VALID_CONV_ID);
+      expect(toResult.except).toHaveBeenCalledWith(
+        expect.arrayContaining(['s1', 'user:' + USER_ID])
+      );
     });
   });
 
@@ -1997,8 +2111,7 @@ describe('MessageHandler', () => {
     it('uses participant.id as ROOMS.user target when userId is null', async () => {
       const partId = 'anon-part-unread-xx1';
       (deps.prisma.participant.findMany as jest.Mock<any>)
-        .mockResolvedValueOnce([{ userId: USER_ID }]) // conversation:updated
-        .mockResolvedValueOnce([{ id: partId, userId: null, joinedAt: new Date() }]) // _updateUnreadCounts: null userId
+        .mockResolvedValueOnce([{ id: partId, userId: null, joinedAt: new Date() }]) // sharedParticipants (single query for CONVERSATION_UPDATED + _updateUnreadCounts)
         .mockResolvedValue([]); // _autoDeliver
       (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(
         new Map([[partId, 2]])
@@ -2012,6 +2125,136 @@ describe('MessageHandler', () => {
 
       await expect(handler.broadcastNewMessage(msg as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
       expect(deps.io.to).toHaveBeenCalledWith(`user:${partId}`);
+    });
+  });
+
+  // ── Offline delivery queue — WS message:send path parity with REST ─────────
+
+  describe('broadcastNewMessage — offline delivery queue enqueue', () => {
+    const offlineUserId = 'user-offline-0011223344556677';
+    const offlinePartId = 'part-offline-0011223344556677';
+    const onlineUserId = 'user-online-0011223344556677';
+    const onlinePartId = 'part-online-0011223344556677';
+
+    function makeMsg(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'msg-dq', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
+        content: 'hi', originalLanguage: 'fr', messageType: 'text',
+        createdAt: new Date(), sender: { userId: USER_ID }, attachments: [], translations: [],
+        ...overrides,
+      };
+    }
+
+    it('enqueues the message for a participant who is not connected', async () => {
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const d = makeDeps({ deliveryQueue: { enqueue } as any });
+      d.socketToUser.set('socket-1', USER_ID);
+      d.connectedUsers.set(USER_ID, makeSocketUser());
+      d.connectedUsers.set(onlineUserId, makeSocketUser({ id: onlineUserId, userId: onlineUserId }));
+      const h = new MessageHandler(d);
+
+      (d.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: onlinePartId, userId: onlineUserId, joinedAt: new Date() },
+          { id: offlinePartId, userId: offlineUserId, joinedAt: new Date() },
+        ]) // sharedParticipants (CONVERSATION_UPDATED + _updateUnreadCounts)
+        .mockResolvedValue([]); // _autoDeliverToOnlineRecipients
+      (d.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await h.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket);
+
+      expect(enqueue).toHaveBeenCalledTimes(1);
+      expect(enqueue).toHaveBeenCalledWith(offlineUserId, expect.objectContaining({
+        messageId: 'msg-dq',
+        conversationId: VALID_CONV_ID,
+        payload: expect.objectContaining({ id: 'msg-dq' }),
+        enqueuedAt: expect.any(String),
+      }));
+    });
+
+    it('does not enqueue for the sender or for already-connected recipients', async () => {
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const d = makeDeps({ deliveryQueue: { enqueue } as any });
+      d.socketToUser.set('socket-1', USER_ID);
+      d.connectedUsers.set(USER_ID, makeSocketUser());
+      d.connectedUsers.set(onlineUserId, makeSocketUser({ id: onlineUserId, userId: onlineUserId }));
+      const h = new MessageHandler(d);
+
+      (d.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: onlinePartId, userId: onlineUserId, joinedAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+      (d.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await h.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket);
+
+      expect(enqueue).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when no delivery queue is configured', async () => {
+      (deps.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: offlinePartId, userId: offlineUserId, joinedAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+      (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await expect(handler.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
+    });
+
+    it('enqueues for an offline anonymous participant keyed by participant id', async () => {
+      const anonPartId = 'anonpart0011223344556677';
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const d = makeDeps({ deliveryQueue: { enqueue } as any });
+      d.socketToUser.set('socket-1', USER_ID);
+      d.connectedUsers.set(USER_ID, makeSocketUser());
+      const h = new MessageHandler(d);
+
+      (d.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: anonPartId, userId: null, joinedAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+      (d.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await h.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket);
+
+      expect(enqueue).toHaveBeenCalledTimes(1);
+      expect(enqueue).toHaveBeenCalledWith(anonPartId, expect.objectContaining({
+        messageId: 'msg-dq',
+        conversationId: VALID_CONV_ID,
+        payload: expect.objectContaining({ id: 'msg-dq' }),
+        enqueuedAt: expect.any(String),
+      }));
+    });
+
+    it('does not enqueue for a connected anonymous participant (connectedUsers keyed by participant id)', async () => {
+      const anonPartId = 'anonpart8899aabbccddeeff';
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const d = makeDeps({ deliveryQueue: { enqueue } as any });
+      d.socketToUser.set('socket-1', USER_ID);
+      d.connectedUsers.set(USER_ID, makeSocketUser());
+      d.connectedUsers.set(anonPartId, makeSocketUser({
+        id: anonPartId, userId: undefined, participantId: anonPartId, isAnonymous: true,
+      }));
+      const h = new MessageHandler(d);
+
+      (d.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: anonPartId, userId: null, joinedAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+      (d.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await h.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket);
+
+      expect(enqueue).not.toHaveBeenCalled();
     });
   });
 
@@ -2117,6 +2360,133 @@ describe('MessageHandler', () => {
       expect(callback).toHaveBeenCalledWith(
         expect.objectContaining({ success: false, error: 'Failed to send message' })
       );
+    });
+
+    it('does not propagate when ACK callback throws — socket connection preserved', async () => {
+      (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
+        success: true,
+        data: {
+          id: 'msg-throwing-cb', conversationId: VALID_CONV_ID,
+          createdAt: new Date(), senderId: PARTICIPANT_ID, clientMessageId: VALID_CID,
+        },
+      });
+
+      const throwingCallback = jest.fn<any>().mockImplementation(() => {
+        throw new Error('client-side callback error');
+      });
+
+      // Must resolve without throwing even though the callback throws
+      await expect(
+        handler.handleMessageSend(socket, makeValidSendData(), throwingCallback)
+      ).resolves.toBeUndefined();
+
+      expect(throwingCallback).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ── Per-conversation rate limiting ────────────────────────────────────────
+
+  describe('per-conversation rate limit', () => {
+    beforeEach(() => {
+      mockValidateSocketEvent.mockImplementation((_schema: unknown, data: unknown) => ({
+        success: true,
+        data: { ...(data as object), clientMessageId: VALID_CID },
+      }));
+      mockValidateMessageLength.mockReturnValue({ isValid: true });
+      mockIsBlockedBetween.mockResolvedValue(false);
+      mockResolveParticipant.mockResolvedValue({
+        participantId: PARTICIPANT_ID,
+        userId: USER_ID,
+        isAnonymous: false,
+        displayName: 'Test',
+      });
+    });
+
+    it('blocks handleMessageSend when per-conversation limit exceeded', async () => {
+      // Global limit passes, per-conversation limit fails
+      mockCheckLimit
+        .mockResolvedValueOnce(true)   // global MESSAGE_SEND
+        .mockResolvedValueOnce(false); // per-conversation MESSAGE_SEND_PER_CONVERSATION
+
+      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Rate limit exceeded' })
+      );
+      expect(socket.emit).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: expect.stringContaining('conversation') })
+      );
+    });
+
+    it('blocks handleMessageSendWithAttachments when per-conversation limit exceeded', async () => {
+      mockCheckLimit
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+
+      await handler.handleMessageSendWithAttachments(socket, makeValidSendData(), callback);
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Rate limit exceeded' })
+      );
+    });
+
+    it('uses composite userId:conversationId key for per-conversation check', async () => {
+      mockCheckLimit.mockResolvedValue(true);
+      mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID, userId: USER_ID, isAnonymous: false, displayName: 'T' });
+      (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({ success: true, data: { id: 'msg-1', conversationId: VALID_CONV_ID } });
+      mockGroupSocketsByLanguage.mockReturnValue(new Map());
+
+      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+
+      const calls = (mockCheckLimit as jest.Mock<any>).mock.calls;
+      const convCall = calls.find((c: any[]) => {
+        const key: string = c[0];
+        return key.includes(VALID_CONV_ID);
+      });
+      expect(convCall).toBeDefined();
+    });
+  });
+
+  // ── Participant ID cache ──────────────────────────────────────────────────
+
+  describe('invalidateParticipantCache', () => {
+    it('removes specific conversation entry', () => {
+      // Prime the cache via a successful send
+      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, PARTICIPANT_ID);
+
+      handler.invalidateParticipantCache(USER_ID, VALID_CONV_ID);
+
+      expect((handler as any).participantIdCache.has(`${USER_ID}:${VALID_CONV_ID}`)).toBe(false);
+    });
+
+    it('removes all entries for user when conversationId omitted', () => {
+      const conv2 = 'b2c3d4e5f6a1b2c3d4e5f6a1';
+      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, PARTICIPANT_ID);
+      (handler as any).participantIdCache.set(`${USER_ID}:${conv2}`, PARTICIPANT_ID);
+
+      handler.invalidateParticipantCache(USER_ID);
+
+      expect((handler as any).participantIdCache.size).toBe(0);
+    });
+
+    it('leaves other users unaffected', () => {
+      const OTHER_USER = 'other0011223344556677889900';
+      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, PARTICIPANT_ID);
+      (handler as any).participantIdCache.set(`${OTHER_USER}:${VALID_CONV_ID}`, 'other-participant');
+
+      handler.invalidateParticipantCache(USER_ID);
+
+      expect((handler as any).participantIdCache.has(`${OTHER_USER}:${VALID_CONV_ID}`)).toBe(true);
+    });
+
+    it('hard-bounds memory: cache never exceeds its size cap under unbounded distinct senders', () => {
+      const cap = (handler.constructor as any).PARTICIPANT_CACHE_MAX_SIZE as number;
+      const cache = (handler as any).participantIdCache;
+      for (let i = 0; i < cap + 500; i++) {
+        cache.set(`user-${i}:${VALID_CONV_ID}`, `participant-${i}`);
+      }
+      expect(cache.size).toBeLessThanOrEqual(cap);
     });
   });
 });

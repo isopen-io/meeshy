@@ -19,6 +19,7 @@ import {
   formatUserResponse,
   formatSessionResponse
 } from './types';
+import type { AuthResult } from '../../services/AuthService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import {
   sendSuccess,
@@ -157,7 +158,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         });
       }
 
-      const permissions = authService.getUserPermissions(user as any);
+      const permissions = authService.getUserPermissions(user);
 
       return sendSuccess(reply, {
         user: formatUserResponse(user, permissions),
@@ -226,7 +227,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         return sendUnauthorized(reply, result.error);
       }
 
-      const authResult = result as { user: any; sessionToken: string; session: any };
+      const authResult = result as AuthResult;
       const { user, sessionToken, session } = authResult;
 
       logger.info('Connexion 2FA réussie', { username: user.username });
@@ -270,7 +271,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       }
 
       const expiresIn = rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60;
-      const twoFAPermissions = authService.getUserPermissions(user as any);
+      const twoFAPermissions = authService.getUserPermissions(user);
 
       return sendSuccess(reply, {
         user: formatUserResponse(user, twoFAPermissions),

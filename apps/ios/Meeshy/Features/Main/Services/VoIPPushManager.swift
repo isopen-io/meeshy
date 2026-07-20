@@ -40,6 +40,15 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// evicts genuine entries and resurfaces phantom cards.
     fileprivate var dedupRing = VoIPDedupRing()
 
+    /// Evicts `callId` from the dedup ring. Called by `CallManager` when a
+    /// reported incoming call is torn down because CallKit genuinely refused
+    /// the `reportNewIncomingCall` transaction — without this, a legitimate
+    /// APNs retry for the same call within the dedup TTL would be silently
+    /// phantom-acked instead of re-ringing the callee.
+    func clearDedup(callId: String) {
+        dedupRing.remove(callId)
+    }
+
     /// Audit P2-CC-1 — pending token to register once the user is logged in.
     /// Without this, a VoIP token delivered before login completes was
     /// silently dropped (`authToken == nil` short-circuit in
@@ -99,12 +108,28 @@ final class VoIPPushManager: NSObject, ObservableObject {
         }
     }
 
+    /// Guideline 5 (MIIT) — CallKit must be inactive in China. Apple's PushKit
+    /// contract forces `reportNewIncomingCall` (CallKit) on EVERY VoIP push
+    /// received, with no way to opt out per-push — the only way to guarantee
+    /// CallKit never activates in the background/killed-app state is to never
+    /// register for the VoIP push type at all on China-region devices. The
+    /// gateway compensates by routing incoming-call pushes to those users via
+    /// a standard 'apns' alert instead (see CallEventsHandler.ts).
+    nonisolated static func shouldRegisterVoIPPush(isiOSAppOnMac: Bool, regionIdentifier: String?) -> Bool {
+        !isiOSAppOnMac && regionIdentifier != "CN"
+    }
+
     func register() {
         // P0-1 — VoIP push is iOS-only: Apple does not deliver PushKit pushes to
         // iOS-app-on-Mac ("Designed for iPad"), and PKPushRegistry on Mac causes
         // silent failures + unexpected CallKit errors. Gate the full registration.
-        guard !ProcessInfo.processInfo.isiOSAppOnMac else {
-            logger.info("VoIP push registration skipped (iOS-app-on-Mac)")
+        // Also skipped entirely for China-region devices (Guideline 5 / MIIT —
+        // see shouldRegisterVoIPPush above).
+        guard Self.shouldRegisterVoIPPush(
+            isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac,
+            regionIdentifier: Locale.current.region?.identifier
+        ) else {
+            logger.info("VoIP push registration skipped (iOS-app-on-Mac or China region)")
             return
         }
         guard voipRegistry == nil else { return }
@@ -122,13 +147,58 @@ final class VoIPPushManager: NSObject, ObservableObject {
         logger.info("VoIP push unregistered")
     }
 
+    /// Full teardown for logout: tears down PushKit AND purges the
+    /// keychain-backed registration record + in-memory cooldown snapshot.
+    /// `unregister()` alone leaves the persisted token record intact, so a
+    /// different user logging in on the same device would inherit the
+    /// previous account's VoIP registration until the cooldown naturally
+    /// expired — a cross-account privacy leak on shared devices.
+    func unregisterAndClearToken() async {
+        unregister()
+        await tokenStore.clear()
+        lastRegisteredRecord = nil
+        pendingTokenToRegister = nil
+        logger.info("VoIP push unregistered and token store cleared (logout)")
+    }
+
     /// Forces a fresh PushKit registration cycle, which delivers a new token
     /// via `pushRegistry(_:didUpdate:for:)`. Use this after a token has been
     /// invalidated (e.g., the leaked-push bug burned tokens, or the gateway
     /// has marked the device row inactive). The gateway upserts by
     /// (userId, token, type) so a new register call reactivates a deactivated
     /// row server-side.
+    /// #13 — true when the CURRENT token is unchanged and was registered inside
+    /// the cooldown window, so `forceReregister` can skip tearing down + rebuilding
+    /// PKPushRegistry (which nils the token and re-delivers it = churn). Returns
+    /// false when the token was invalidated (`currentToken == nil`) or went stale,
+    /// so a genuine re-registration still proceeds.
+    nonisolated static func shouldSkipForceReregister(
+        lastRecord: VoIPTokenRecord?,
+        currentToken: String?,
+        now: Date,
+        cooldown: TimeInterval
+    ) -> Bool {
+        guard let last = lastRecord, last.token == currentToken else { return false }
+        return now.timeIntervalSince(last.at) < cooldown
+    }
+
     func forceReregister() {
+        // #13 — this used to tear down + rebuild PKPushRegistry UNCONDITIONALLY,
+        // bypassing the cooldown dedup that guards the server POST
+        // (`registerTokenWithBackend`). On repeated logins/foregrounds within the
+        // cooldown that churned PushKit (nil'd the token, re-delivered it) for no
+        // gain — the token + gateway row are already active. Skip when the current
+        // token is unchanged and fresh; a real invalidation (voipToken == nil) or
+        // a stale token still forces a full cycle.
+        if Self.shouldSkipForceReregister(
+            lastRecord: lastRegisteredRecord,
+            currentToken: voipToken,
+            now: Date(),
+            cooldown: Self.voipRegistrationCooldown
+        ) {
+            logger.debug("Skipping VoIP force re-register: token registered recently")
+            return
+        }
         unregister()
         register()
         // G4c — a token whose backend POST failed earlier is parked in
@@ -213,7 +283,15 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // need a phantom-call report to keep PushKit happy when the dedup
         // ring already covers the callId, because PushKit demands a call
         // report per delivery. Use a phantom that ends immediately.
-        let alreadyReported = MainActor.assumeIsolated { Self.shared.dedupRing.contains(callId, now: Date()) }
+        //
+        // The contains-check and insert are performed in a single MainActor
+        // block to prevent a check-then-act race if PushKit ever delivers two
+        // pushes concurrently on different threads.
+        let alreadyReported = MainActor.assumeIsolated {
+            let seen = Self.shared.dedupRing.contains(callId, now: Date())
+            if !seen { Self.shared.dedupRing.insert(callId, now: Date()) }
+            return seen
+        }
         if alreadyReported {
             logger.info("VoIP push duplicate detected (callId=\(callId)) — phantom-acking")
             let phantomUUID = UUID()
@@ -221,16 +299,18 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             update.localizedCallerName = ""
             update.hasVideo = false
             MainActor.assumeIsolated {
-                CallManager.shared.reportPhantomVoIPCall(uuid: phantomUUID, update: update)
+                CallManager.shared.reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)
             }
             completion()
             return
         }
-        MainActor.assumeIsolated {
-            Self.shared.dedupRing.insert(callId, now: Date())
-        }
 
         let callerUserId = data["callerUserId"] as? String ?? ""
+
+        // Conversation (DM) hosting the call, when the push payload carries it.
+        // Optional: older gateway builds omit it — the in-call "open
+        // conversation" affordance simply hides itself when it is absent.
+        let conversationId = (data["conversationId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
 
         // Backend sends `isVideo` as a string ("true"/"false") because APNs
         // payloads are Record<string,string>, but older builds may still send
@@ -273,7 +353,8 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                 callerUserId: callerUserId,
                 callerName: displayName,
                 isVideo: isVideo,
-                iceServers: iceServers
+                iceServers: iceServers,
+                conversationId: conversationId
             )
         }
 
@@ -303,15 +384,24 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         guard let decoded = try? JSONDecoder().decode([SocketIceServer].self, from: data) else {
             return nil
         }
-        return decoded.map { server in
-            IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
+        // Credential length guard: TURN credentials from a malformed or hostile
+        // payload could be arbitrarily long, causing memory pressure or overflow
+        // in libwebrtc's auth header construction. Drop any server that exceeds
+        // a generous-but-finite bound (1 KB per field). See QualityThresholds.turnCredentialMaxLength.
+        return decoded.compactMap { server in
+            guard (server.username?.count ?? 0) <= QualityThresholds.turnCredentialMaxLength,
+                  (server.credential?.count ?? 0) <= QualityThresholds.turnCredentialMaxLength else {
+                logger.error("[VOIP] TURN credential too long — dropping ICE server")
+                return nil
+            }
+            return IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
         }
     }
 
     // MARK: - Caller Name Resolution
 
     /// Resolve caller name synchronously from payload fields.
-    /// Priority: callerName > callerUsername > "Appel entrant"
+    /// Priority: callerName > callerUsername > localized fallback
     /// Audit P1-15 — `internal` (was `private`) for unit-test access.
     nonisolated static func resolveCallerName(callerName: String?, callerUsername: String?) -> String {
         if let name = callerName, !name.isEmpty {
@@ -320,7 +410,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         if let username = callerUsername, !username.isEmpty {
             return username
         }
-        return "Appel entrant"
+        return String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
     }
 
     /// Resolve caller name asynchronously from the persisted conversations cache.
@@ -344,11 +434,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.voipToken = nil
-            // Re-arm desiredPushTypes so PushKit emits a fresh
-            // didUpdatePushCredentials with a new token. Without this, the
-            // user has no working VoIP token until next cold start.
-            self.voipRegistry?.desiredPushTypes = []
-            self.voipRegistry?.desiredPushTypes = [.voIP]
+            self.forceReregister()
         }
     }
 
@@ -404,7 +490,11 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             do {
                 try await tokenStore.save(token: token, at: now)
             } catch {
-                logger.error("Failed to persist VoIP token record: \(error.localizedDescription)")
+                // Keychain write failure is not fatal — the token is already
+                // registered server-side and the in-memory cooldown snapshot
+                // (`lastRegisteredRecord`) prevents a duplicate next-cycle POST.
+                // Log at error level so Crashlytics captures the OSStatus.
+                logger.error("VoIP token keychain save failed (non-fatal): \(error.localizedDescription, privacy: .public)")
             }
             lastRegisteredRecord = record
             pendingTokenToRegister = nil

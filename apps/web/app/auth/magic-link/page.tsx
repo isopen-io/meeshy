@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -14,6 +14,8 @@ import { Label } from '@/components/ui/label';
 import { Sparkles, Mail, CheckCircle, ArrowLeft, Clock, RefreshCw, AlertTriangle, Shield } from 'lucide-react';
 import { usePasswordResetStore } from '@/stores/password-reset-store';
 import { safeInternalPath } from '@/utils/safe-redirect';
+import { isValidEmail } from '@meeshy/shared/utils/email-validator';
+import { formatDuration } from '@/utils/audio-formatters';
 
 // Constants
 const MAGIC_LINK_EXPIRY_SECONDS = 600; // 10 minutes
@@ -85,22 +87,22 @@ function MagicLinkPageContent() {
 
         // Check if 2FA is required
         if (result.data.requires2FA && result.data.twoFactorToken) {
-          toast.success(t('magicLink.validate.success.title') || 'Lien validé !');
+          toast.success(t('magicLink.validate.success.title', 'Login Successful!'));
           router.push(`/auth/verify-2fa?token=${result.data.twoFactorToken}&returnUrl=${encodeURIComponent(safeReturnUrl)}`);
         } else {
           // Successfully authenticated
-          toast.success(t('magicLink.validate.success.title') || 'Connexion réussie !');
+          toast.success(t('magicLink.validate.success.title', 'Login Successful!'));
           // Use window.location.href to force a full page reload so the
           // auth state is properly loaded before rendering. The path is
           // already validated as same-origin above.
           window.location.href = safeReturnUrl;
         }
       } else {
-        setTokenError(result.error || t('magicLink.validate.error.description') || 'Lien invalide ou expiré');
+        setTokenError(result.error || t('magicLink.validate.error.description', 'This magic link is invalid or has expired'));
       }
     } catch (err) {
       console.error('[MagicLink] Token validation error:', err);
-      setTokenError(t('magicLink.errors.requestFailed') || 'Erreur de connexion');
+      setTokenError(t('magicLink.errors.requestFailed', 'Failed to send magic link'));
     } finally {
       setIsValidatingToken(false);
     }
@@ -144,16 +146,6 @@ function MagicLinkPageContent() {
 
     return () => clearInterval(timer);
   }, [isEmailSent, countdown]);
-
-  const formatCountdown = useCallback((seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  }, []);
-
-  const isValidEmail = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -283,11 +275,11 @@ function MagicLinkPageContent() {
                 </div>
 
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  {t('magicLink.validate.validating.title') || 'Vérification du lien magique'}
+                  {t('magicLink.validate.validating.title', 'Verifying Magic Link')}
                 </h2>
 
                 <p className="text-gray-600 dark:text-gray-400 text-sm">
-                  {t('magicLink.validate.validating.description') || 'Veuillez patienter pendant la vérification...'}
+                  {t('magicLink.validate.validating.description', 'Please wait while we verify your login link...')}
                 </p>
               </div>
             </div>
@@ -342,7 +334,7 @@ function MagicLinkPageContent() {
                 </div>
 
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  {t('magicLink.validate.error.title') || 'Lien invalide ou expiré'}
+                  {t('magicLink.validate.error.title', 'Invalid Magic Link')}
                 </h2>
 
                 <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
@@ -351,18 +343,18 @@ function MagicLinkPageContent() {
 
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
                   <p className="text-sm text-amber-700 dark:text-amber-300">
-                    {t('magicLink.validate.error.hint') || 'Les liens magiques expirent après quelques minutes pour des raisons de sécurité.'}
+                    {t('magicLink.validate.error.hint', 'Magic links expire after 1 minute and can only be used once.')}
                   </p>
                 </div>
 
                 <div className="space-y-3">
                   <Button className="w-full" onClick={() => router.push('/auth/magic-link')}>
                     <Sparkles className="h-4 w-4" />
-                    {t('magicLink.validate.requestNewLink') || 'Demander un nouveau lien'}
+                    {t('magicLink.validate.requestNewLink', 'Request New Magic Link')}
                   </Button>
                   <Button variant="outline" className="w-full" onClick={() => router.push('/login')}>
                     <ArrowLeft className="h-4 w-4" />
-                    {t('magicLink.validate.backToLogin') || 'Retour à la connexion'}
+                    {t('magicLink.validate.backToLogin', 'Back to Login')}
                   </Button>
                 </div>
               </div>
@@ -378,15 +370,15 @@ function MagicLinkPageContent() {
           >
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
               <a href="/terms" className="hover:text-foreground transition-colors">
-                {t('register.termsOfService') || 'Conditions'}
+                {t('register.termsOfService', 'Terms of Service')}
               </a>
               <span className="hidden sm:inline">•</span>
               <a href="/privacy" className="hover:text-foreground transition-colors">
-                {t('register.privacyPolicy') || 'Confidentialité'}
+                {t('register.privacyPolicy', 'Privacy Policy')}
               </a>
               <span className="hidden sm:inline">•</span>
               <a href="/contact" className="hover:text-foreground transition-colors">
-                {t('register.contactUs') || 'Contact'}
+                {t('register.contactUs', 'Contact us')}
               </a>
             </div>
           </motion.div>
@@ -440,26 +432,26 @@ function MagicLinkPageContent() {
                 </div>
 
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  {t('magicLink.checkEmail.blocked.title') || 'Trop de tentatives'}
+                  {t('magicLink.checkEmail.blocked.title', 'Magic Link Temporarily Disabled')}
                 </h2>
 
                 <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                  {t('magicLink.checkEmail.blocked.description') || 'Vous avez atteint le nombre maximum de tentatives.'}
+                  {t('magicLink.checkEmail.blocked.description', 'You have reached the maximum number of resend attempts.')}
                 </p>
 
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-6">
                   <p className="text-sm text-amber-700 dark:text-amber-300">
-                    {t('magicLink.checkEmail.blocked.useAnotherMethod') || 'Utilisez une autre méthode de connexion.'}
+                    {t('magicLink.checkEmail.blocked.useAnotherMethod', 'Please use another login method (password or other).')}
                   </p>
                 </div>
 
                 <div className="space-y-3">
                   <Button className="w-full" onClick={handleBackToLogin}>
-                    {t('magicLink.checkEmail.blocked.loginWithPassword') || 'Se connecter avec mot de passe'}
+                    {t('magicLink.checkEmail.blocked.loginWithPassword', 'Login with Password')}
                   </Button>
                   <Button variant="outline" className="w-full" onClick={() => router.push('/')}>
                     <ArrowLeft className="h-4 w-4" />
-                    {t('featureGate.backToHome') || 'Retour à l\'accueil'}
+                    {t('magicLink.backToHome', 'Back to Home')}
                   </Button>
                 </div>
               </div>
@@ -523,16 +515,16 @@ function MagicLinkPageContent() {
                 </div>
 
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                  {t('magicLink.checkEmail.title') || 'Vérifiez votre email'}
+                  {t('magicLink.checkEmail.title', 'Check Your Email')}
                 </h2>
 
                 <p className="text-gray-600 dark:text-gray-400 text-sm mb-6">
-                  {t('magicLink.checkEmail.description') || 'Un lien magique a été envoyé à votre adresse email.'}
+                  {t('magicLink.checkEmail.description', 'We\'ve sent you a magic link to sign in')}
                 </p>
 
                 <div className="backdrop-blur-sm bg-white/30 dark:bg-gray-800/30 rounded-lg p-4 mb-6 border border-white/20 dark:border-gray-700/30">
                   <p className="text-sm text-gray-700 dark:text-gray-300 font-medium mb-1">
-                    {t('magicLink.checkEmail.emailSentTo') || 'Email envoyé à'}
+                    {t('magicLink.checkEmail.emailSentTo', 'Email sent to')}
                   </p>
                   <p className="text-purple-600 dark:text-purple-400 font-medium">{email}</p>
                 </div>
@@ -544,7 +536,7 @@ function MagicLinkPageContent() {
                       <span className="text-xs font-bold text-purple-600 dark:text-purple-400">1</span>
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {t('magicLink.checkEmail.step1') || 'Ouvrez votre boîte de réception'}
+                      {t('magicLink.checkEmail.step1', 'Check your inbox for an email from Meeshy')}
                     </p>
                   </div>
                   <div className="flex items-start gap-3">
@@ -552,7 +544,7 @@ function MagicLinkPageContent() {
                       <span className="text-xs font-bold text-purple-600 dark:text-purple-400">2</span>
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {t('magicLink.checkEmail.step2') || 'Cliquez sur le lien dans l\'email'}
+                      {t('magicLink.checkEmail.step2', 'Click the magic link to sign in instantly')}
                     </p>
                   </div>
                 </div>
@@ -563,10 +555,10 @@ function MagicLinkPageContent() {
                 }`}>
                   <Clock className="h-4 w-4" />
                   {isExpired ? (
-                    <span>{t('magicLink.checkEmail.linkExpired') || 'Le lien a expiré'}</span>
+                    <span>{t('magicLink.checkEmail.linkExpired', 'The link has expired')}</span>
                   ) : (
                     <span>
-                      {t('magicLink.checkEmail.expiresIn', { time: formatCountdown(countdown) }) || `Expire dans ${formatCountdown(countdown)}`}
+                      {t('magicLink.checkEmail.expiresIn', { time: formatDuration(countdown) })}
                     </span>
                   )}
                 </div>
@@ -583,30 +575,30 @@ function MagicLinkPageContent() {
                       {isResending ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                          <span>{t('magicLink.checkEmail.resending') || 'Renvoi en cours...'}</span>
+                          <span>{t('magicLink.checkEmail.resending', 'Sending...')}</span>
                         </>
                       ) : (
                         <>
                           <RefreshCw className="h-4 w-4" />
-                          {t('magicLink.checkEmail.resendButton') || 'Renvoyer le lien'}
+                          {t('magicLink.checkEmail.resendButton', 'Resend a new link')}
                         </>
                       )}
                     </Button>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                      {t('magicLink.checkEmail.retriesRemaining', { count: remainingRetries }) || `${remainingRetries} essais restants`}
+                      {t('magicLink.checkEmail.retriesRemaining', { count: remainingRetries })}
                     </p>
                   </div>
                 )}
 
                 {/* Spam warning */}
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-6">
-                  {t('magicLink.checkEmail.spamWarning') || 'Vérifiez vos spams si vous ne trouvez pas l\'email.'}
+                  {t('magicLink.checkEmail.spamWarning', 'Can\'t find the email? Check your spam or junk folder')}
                 </p>
               </div>
 
               <Button variant="outline" className="w-full" onClick={handleBackToLogin}>
                 <ArrowLeft className="h-4 w-4" />
-                {t('magicLink.checkEmail.backToLogin') || 'Retour à la connexion'}
+                {t('magicLink.checkEmail.backToLogin', 'Back to Login')}
               </Button>
             </div>
           </motion.div>
@@ -620,15 +612,15 @@ function MagicLinkPageContent() {
           >
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
               <a href="/terms" className="hover:text-foreground transition-colors">
-                {t('register.termsOfService') || 'Conditions'}
+                {t('register.termsOfService', 'Terms of Service')}
               </a>
               <span className="hidden sm:inline">•</span>
               <a href="/privacy" className="hover:text-foreground transition-colors">
-                {t('register.privacyPolicy') || 'Confidentialité'}
+                {t('register.privacyPolicy', 'Privacy Policy')}
               </a>
               <span className="hidden sm:inline">•</span>
               <a href="/contact" className="hover:text-foreground transition-colors">
-                {t('register.contactUs') || 'Contact'}
+                {t('register.contactUs', 'Contact us')}
               </a>
             </div>
           </motion.div>
@@ -686,10 +678,10 @@ function MagicLinkPageContent() {
                 </div>
               </div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {t('magicLink.title') || 'Connexion magique'}
+                {t('magicLink.title', 'Magic Link Login')}
               </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-2">
-                {t('magicLink.description') || 'Recevez un lien de connexion par email'}
+                {t('magicLink.description', 'Enter your email address and we\'ll send you a secure login link')}
               </p>
             </div>
 
@@ -703,7 +695,7 @@ function MagicLinkPageContent() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-gray-700 dark:text-gray-300">
-                  {t('magicLink.emailLabel') || 'Adresse email'}
+                  {t('magicLink.emailLabel', 'Email Address')}
                 </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -712,13 +704,13 @@ function MagicLinkPageContent() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder={t('magicLink.emailPlaceholder') || 'vous@exemple.com'}
+                    placeholder={t('magicLink.emailPlaceholder', 'your.email@example.com')}
                     disabled={isLoading}
                     className="pl-10"
                   />
                 </div>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t('magicLink.emailHelp') || 'Utilisez l\'email associé à votre compte'}
+                  {t('magicLink.emailHelp', 'Enter the email address associated with your account')}
                 </p>
               </div>
 
@@ -735,7 +727,7 @@ function MagicLinkPageContent() {
                   className="text-sm font-medium leading-none cursor-pointer flex items-center gap-1.5 text-gray-700 dark:text-gray-300"
                 >
                   <Shield className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-                  {t('login.rememberDevice') || 'Se souvenir de cet appareil'}
+                  {t('login.rememberDevice', 'Remember this device (long session)')}
                 </Label>
               </div>
 
@@ -743,12 +735,12 @@ function MagicLinkPageContent() {
                 {isLoading ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-                    <span>{t('magicLink.sending') || 'Envoi en cours...'}</span>
+                    <span>{t('magicLink.sending', 'Sending...')}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    {t('magicLink.submitButton') || 'Envoyer le lien magique'}
+                    {t('magicLink.submitButton', 'Send Magic Link')}
                   </>
                 )}
               </Button>
@@ -758,7 +750,7 @@ function MagicLinkPageContent() {
             <div className="mt-6 pt-4 border-t border-gray-200/50 dark:border-gray-700/50">
               <Button variant="ghost" onClick={handleBackToLogin} className="w-full">
                 <ArrowLeft className="h-4 w-4" />
-                {t('magicLink.backToLogin') || 'Retour à la connexion'}
+                {t('magicLink.backToLogin', 'Back to Login')}
               </Button>
             </div>
           </div>
@@ -771,7 +763,7 @@ function MagicLinkPageContent() {
           transition={{ duration: 0.5, delay: 0.3 }}
           className="mt-4 text-center text-xs text-gray-500 dark:text-gray-400 max-w-md"
         >
-          {t('magicLink.securityNote') || 'Le lien de connexion expire après quelques minutes pour votre sécurité.'}
+          {t('magicLink.securityNote', 'For security reasons, the magic link will expire in 1 minute and can only be used once.')}
         </motion.p>
 
         {/* Footer links */}
@@ -783,15 +775,15 @@ function MagicLinkPageContent() {
         >
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
             <a href="/terms" className="hover:text-foreground transition-colors">
-              {t('register.termsOfService') || 'Conditions'}
+              {t('register.termsOfService', 'Terms of Service')}
             </a>
             <span className="hidden sm:inline">•</span>
             <a href="/privacy" className="hover:text-foreground transition-colors">
-              {t('register.privacyPolicy') || 'Confidentialité'}
+              {t('register.privacyPolicy', 'Privacy Policy')}
             </a>
             <span className="hidden sm:inline">•</span>
             <a href="/contact" className="hover:text-foreground transition-colors">
-              {t('register.contactUs') || 'Contact'}
+              {t('register.contactUs', 'Contact us')}
             </a>
           </div>
         </motion.div>

@@ -7,7 +7,7 @@ export const createUserValidationSchema = z.object({
   username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/),
   firstName: z.string().min(1).max(50),
   lastName: z.string().min(1).max(50),
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8),
   displayName: z.string().max(50).nullable().optional(),
   bio: z.string().max(500).optional(),
@@ -21,7 +21,7 @@ export const createUserValidationSchema = z.object({
  * Schéma pour changer l'email
  */
 export const updateEmailValidationSchema = z.object({
-  newEmail: z.string().email(),
+  newEmail: z.email(),
   password: z.string().min(1)
 });
 
@@ -54,7 +54,7 @@ export const resetPasswordValidationSchema = z.object({
  * Fonction utilitaire pour formater les erreurs Zod
  */
 export function formatZodErrors(errors: z.ZodError) {
-  return errors.errors.map((err) => ({
+  return errors.issues.map((err) => ({
     path: err.path.join('.'),
     message: err.message
   }));
@@ -72,11 +72,11 @@ export const updateUserProfileValidationSchema = z.object({
   bio: z.string().max(500).optional(),
 
   // Médias
-  avatar: z.string().url().nullable().optional(),
-  banner: z.string().url().nullable().optional(),
+  avatar: z.url().nullable().optional(),
+  banner: z.url().nullable().optional(),
 
   // Contact
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   phoneNumber: z.string().max(20).nullable().optional(),
   phoneCountryCode: z.string().length(2).nullable().optional(), // ISO 3166-1 alpha-2
 

@@ -9,8 +9,8 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
 
     private var cancellables: Set<AnyCancellable>!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         cancellables = []
     }
 
@@ -298,5 +298,210 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         let coordinator = ConversationAudioCoordinator(engine: mockEngine)
         XCTAssertNil(coordinator.engineForBubble,
                      "engineForBubble must be nil under a mock engine — the cast to AudioPlaybackManager fails")
+    }
+
+    // MARK: - playPrevious — Now Playing "previous track"
+
+    /// Past the restart threshold, `playPrevious()` restarts the CURRENT track
+    /// (standard media-player convention): it seeks to 0 and does NOT start a
+    /// different audio.
+    func test_playPrevious_pastThreshold_restartsCurrentTrack() async {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a"),
+                 tail: [], conversationName: "T", conversationArtworkURL: nil)
+        let playsBefore = engine.playCallCount
+        engine.duration = 30
+        engine.currentTime = ConversationAudioCoordinator.previousRestartThreshold + 1
+        await Task.yield()
+
+        sut.playPrevious()
+        await Task.yield()
+
+        XCTAssertEqual(engine.seekFractions.last, 0)
+        XCTAssertEqual(engine.playCallCount, playsBefore,
+                       "restart must not start a different track")
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a1")
+    }
+
+    /// A transport "previous" must RESUME playback, not just rewind: past the
+    /// threshold while paused, `playPrevious()` seeks to 0 AND restarts the
+    /// engine (otherwise the lock-screen button appears to do nothing).
+    func test_playPrevious_pastThreshold_whilePaused_resumesPlayback() async {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a"),
+                 tail: [], conversationName: "T", conversationArtworkURL: nil)
+        engine.duration = 30
+        engine.currentTime = ConversationAudioCoordinator.previousRestartThreshold + 1
+        engine.isPlaying = false   // user paused on the lock screen
+        await Task.yield()
+
+        let togglesBefore = engine.togglePlayPauseCallCount
+        sut.playPrevious()
+        await Task.yield()
+
+        XCTAssertEqual(engine.seekFractions.last, 0)
+        XCTAssertEqual(engine.togglePlayPauseCallCount, togglesBefore + 1,
+                       "restart while paused must resume playback")
+    }
+
+    /// Below the threshold with history present, `playPrevious()` re-heads the
+    /// previously played track and keeps the just-left one available as next.
+    func test_playPrevious_belowThreshold_replaysPreviousTrack() async {
+        let (sut, engine) = makeSUT()
+        let a1 = makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a")
+        let a2 = makeQueuedAudio(attachmentId: "a2", fileUrl: "https://cdn/a2.m4a")
+        sut.play(current: a1, tail: [a2], conversationName: "T", conversationArtworkURL: nil)
+
+        sut.playNext()              // advance a1 -> a2, pushing a1 onto history
+        await Task.yield()
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a2")
+
+        engine.duration = 30
+        engine.currentTime = 1      // below threshold
+        await Task.yield()
+
+        let playsBefore = engine.playCallCount
+        sut.playPrevious()
+        await Task.yield()
+
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a1",
+                       "previous must re-head the prior track")
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/a1.m4a")
+        XCTAssertEqual(engine.playCallCount, playsBefore + 1)
+        XCTAssertFalse(sut.hasPrevious, "history is consumed by stepping back")
+    }
+
+    /// With no history (still on the first track), below-threshold
+    /// `playPrevious()` falls back to restarting the current track.
+    func test_playPrevious_noHistory_restartsCurrentTrack() async {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a"),
+                 tail: [], conversationName: "T", conversationArtworkURL: nil)
+        let playsBefore = engine.playCallCount
+        engine.duration = 30
+        engine.currentTime = 1
+        await Task.yield()
+
+        sut.playPrevious()
+        await Task.yield()
+
+        XCTAssertEqual(engine.seekFractions.last, 0)
+        XCTAssertEqual(engine.playCallCount, playsBefore)
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a1")
+    }
+
+    func test_hasPrevious_falseInitially_trueAfterAdvance() async {
+        let (sut, _) = makeSUT()
+        let a1 = makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a")
+        let a2 = makeQueuedAudio(attachmentId: "a2", fileUrl: "https://cdn/a2.m4a")
+        sut.play(current: a1, tail: [a2], conversationName: "T", conversationArtworkURL: nil)
+        XCTAssertFalse(sut.hasPrevious)
+
+        sut.playNext()
+        await Task.yield()
+        XCTAssertTrue(sut.hasPrevious)
+    }
+
+    // MARK: - consumedAttachmentIds invariant
+
+    /// `appendUpcoming` must silently skip an id that `advanceQueue` already
+    /// consumed this session. Without this guard a $messages re-emission could
+    /// add a just-finished audio back into the tail before the VM's
+    /// `listenedAttachmentIds` set updates, looping the queue indefinitely.
+    func test_appendUpcoming_skipsConsumedAttachmentId() async {
+        let (sut, _) = makeSUT()
+        sut.play(
+            current: makeQueuedAudio(attachmentId: "a1"),
+            tail: [makeQueuedAudio(attachmentId: "a2")],
+            conversationName: "T", conversationArtworkURL: nil
+        )
+        sut.playNext()      // a1 leaves head, enters consumedAttachmentIds
+        await Task.yield()
+        XCTAssertEqual(sut.queueCount, 1)
+
+        sut.appendUpcoming(makeQueuedAudio(attachmentId: "a1"))
+        XCTAssertEqual(sut.queueCount, 1, "consumed id must not be re-queued")
+    }
+
+    /// A fresh `play()` call clears the consumed-id set so tracks from a prior
+    /// session can be replayed.
+    func test_freshPlay_clearsConsumedIds_allowsPriorTrackReappend() async {
+        let (sut, _) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [],
+                 conversationName: "T", conversationArtworkURL: nil)
+        sut.playNext()      // a1 consumed
+        await Task.yield()
+
+        // New session — a1 must be appendable again
+        sut.play(current: makeQueuedAudio(attachmentId: "b1"), tail: [],
+                 conversationName: "T", conversationArtworkURL: nil)
+        sut.appendUpcoming(makeQueuedAudio(attachmentId: "a1"))
+        XCTAssertEqual(sut.queueCount, 2, "fresh play() must clear consumed ids")
+    }
+
+    /// After `playPrevious()` re-inserts a prior track as the new head, its id
+    /// must be removed from the consumed set so the queue can advance through
+    /// it again (otherwise the re-advanced track would be permanently skipped by
+    /// a subsequent `appendUpcoming`).
+    func test_playPrevious_removesIdFromConsumed_allowsSubsequentAdvance() async {
+        let (sut, engine) = makeSUT()
+        let a1 = makeQueuedAudio(attachmentId: "a1")
+        let a2 = makeQueuedAudio(attachmentId: "a2")
+        sut.play(current: a1, tail: [a2], conversationName: "T", conversationArtworkURL: nil)
+
+        sut.playNext()      // a1 consumed, a2 active
+        await Task.yield()
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a2")
+
+        engine.duration = 30
+        engine.currentTime = 1      // below previousRestartThreshold
+        await Task.yield()
+
+        sut.playPrevious()          // pops a1 from history, removes from consumed
+        await Task.yield()
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a1")
+
+        // Advance past a1 a second time — should emit normally and not be blocked
+        var finished: [String] = []
+        sut.attachmentFinishedPublisher
+            .sink { finished.append($0.attachmentId) }
+            .store(in: &cancellables)
+        sut.playNext()
+        await Task.yield()
+        XCTAssertEqual(finished, ["a1"], "a1 must be re-consumable after playPrevious")
+    }
+
+    // MARK: - CallKit guard — togglePlayPause and playPrevious
+
+    func test_togglePlayPause_whileCallActive_isNoOp() {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [],
+                 conversationName: "T", conversationArtworkURL: nil)
+        CallManager.shared.testOverrideCallActive = true
+        defer { CallManager.shared.testOverrideCallActive = false }
+
+        sut.togglePlayPause()
+        XCTAssertEqual(engine.togglePlayPauseCallCount, 0,
+                       "togglePlayPause must be a no-op while a CallKit call is active")
+    }
+
+    func test_playPrevious_whileCallActive_isNoOp() async {
+        let (sut, engine) = makeSUT()
+        let a1 = makeQueuedAudio(attachmentId: "a1")
+        let a2 = makeQueuedAudio(attachmentId: "a2")
+        sut.play(current: a1, tail: [a2], conversationName: "T", conversationArtworkURL: nil)
+        sut.playNext()
+        await Task.yield()
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a2")
+        let playsBefore = engine.playCallCount
+
+        CallManager.shared.testOverrideCallActive = true
+        defer { CallManager.shared.testOverrideCallActive = false }
+
+        sut.playPrevious()
+        await Task.yield()
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a2",
+                       "playPrevious must not change track while a CallKit call is active")
+        XCTAssertEqual(engine.playCallCount, playsBefore)
     }
 }

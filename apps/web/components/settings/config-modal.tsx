@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/hooks/use-i18n';
 import styles from './config-modal.module.css';
 import {
   User,
@@ -37,42 +38,43 @@ interface TabConfig {
 }
 
 export function ConfigModal({ isOpen, onClose, currentUser, onUserUpdate }: ConfigModalProps) {
+  const { t } = useI18n('settings');
   const [activeTab, setActiveTab] = useState('user');
 
   const tabs: TabConfig[] = [
     {
       id: 'user',
-      label: 'Profil utilisateur',
+      label: t('configModal.tabs.user', 'User profile'),
       icon: <User className="h-4 w-4" />,
       component: <UserSettings user={currentUser} onUserUpdate={onUserUpdate} />
     },
     {
       id: 'language',
-      label: 'Langues & Traduction',
+      label: t('configModal.tabs.language', 'Languages & Translation'),
       icon: <Globe className="h-4 w-4" />,
       component: <LanguageSettings user={currentUser} onUserUpdate={onUserUpdate} />
     },
     {
       id: 'theme',
-      label: 'Apparence',
+      label: t('configModal.tabs.theme', 'Appearance'),
       icon: <Palette className="h-4 w-4" />,
       component: <ThemeSettings />
     },
     {
       id: 'stats',
-      label: 'Statistiques',
+      label: t('configModal.tabs.stats', 'Statistics'),
       icon: <BarChart3 className="h-4 w-4" />,
       component: <TranslationStats />
     },
     {
       id: 'notifications',
-      label: 'Notifications',
+      label: t('configModal.tabs.notifications', 'Notifications'),
       icon: <Bell className="h-4 w-4" />,
       component: <NotificationSettings />
     },
     {
       id: 'privacy',
-      label: 'Confidentialité',
+      label: t('configModal.tabs.privacy', 'Privacy'),
       icon: <Shield className="h-4 w-4" />,
       component: <PrivacySettings />
     }
@@ -85,7 +87,7 @@ export function ConfigModal({ isOpen, onClose, currentUser, onUserUpdate }: Conf
         showCloseButton={true}
       >
         <DialogHeader className={`px-4 py-3 border-b sm:px-6 sm:py-4 ${styles.configModalHeader}`}>
-          <DialogTitle className="text-lg sm:text-xl font-semibold">Paramètres et Configuration</DialogTitle>
+          <DialogTitle className="text-lg sm:text-xl font-semibold">{t('configModal.title', 'Settings & Configuration')}</DialogTitle>
         </DialogHeader>
         
         <div className={`flex flex-1 min-h-0 overflow-hidden ${styles.configModalMain}`}>
@@ -114,13 +116,13 @@ export function ConfigModal({ isOpen, onClose, currentUser, onUserUpdate }: Conf
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {/* Menu déroulant pour mobile et tablette */}
             <div className="lg:hidden p-3 sm:p-4 border-b bg-background flex-shrink-0">
-              <label htmlFor="settings-tab-select" className="sr-only">Sélectionner une section</label>
+              <label htmlFor="settings-tab-select" className="sr-only">{t('configModal.selectSection', 'Select a section')}</label>
               <select
                 id="settings-tab-select"
                 value={activeTab}
                 onChange={(e) => setActiveTab(e.target.value)}
                 className="w-full p-2 sm:p-3 border rounded-lg bg-background text-sm sm:text-base focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 outline-none"
-                aria-label="Section des paramètres"
+                aria-label={t('configModal.sectionLabel', 'Settings section')}
               >
                 {tabs.map((tab) => (
                   <option key={tab.id} value={tab.id}>

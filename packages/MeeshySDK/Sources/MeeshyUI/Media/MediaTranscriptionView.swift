@@ -65,22 +65,42 @@ public struct MediaTranscriptionView: View {
     /// existing callers that always pass a synchronized `currentTime` keep
     /// their behavior; callers that can be idle pass the real state.
     public var isPlaying: Bool = true
+    /// Progression globale (0…1) du moteur. Sert UNIQUEMENT de repli quand la
+    /// transcription n'a aucun timing exploitable (`startTime == endTime == 0`) :
+    /// le karaoké avance alors proportionnellement au lieu de rester figé (aucun
+    /// segment n'aurait jamais `currentTime < endTime`). Défaut 0 pour la
+    /// rétro-compat des appelants à segments réellement timés.
+    public var progress: Double = 0
+    /// Taille de police des segments. Défaut 14 (bulle / fullscreen). Le hero
+    /// d'un réel audio passe une valeur plus grande (texte immersif).
+    public var fontSize: CGFloat = 14
 
     @ObservedObject private var theme = ThemeManager.shared
     private var isDark: Bool { theme.mode.isDark }
+    /// Respecte Réduire les animations : le karaoké « vague » (scale + lift +
+    /// glow rebondi) est désactivé, on garde le simple changement couleur/poids.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(segments: [TranscriptionDisplaySegment], currentTime: Double,
                 accentColor: String = MeeshyColors.brandPrimaryHex, maxHeight: CGFloat = 200,
-                isPlaying: Bool = true,
+                isPlaying: Bool = true, progress: Double = 0, fontSize: CGFloat = 14,
                 onSeek: ((Double) -> Void)? = nil) {
         self.segments = segments; self.currentTime = currentTime
         self.accentColor = accentColor; self.maxHeight = maxHeight
-        self.isPlaying = isPlaying; self.onSeek = onSeek
+        self.isPlaying = isPlaying; self.progress = progress
+        self.fontSize = fontSize; self.onSeek = onSeek
     }
 
+    /// Index du segment actif — résolu par le helper PUR partagé avec
+    /// `AudioPlayerView` : timing réel si disponible, sinon repli proportionnel
+    /// sur `progress`. Source unique de vérité du karaoké (détail ET réel).
     private var activeIndex: Int? {
-        guard isPlaying else { return nil }
-        return segments.firstIndex { currentTime >= $0.startTime && currentTime < $0.endTime }
+        AudioPlayerView.activeSegmentIndex(
+            segments: segments,
+            currentTime: currentTime,
+            progress: progress,
+            isPlaying: isPlaying
+        )
     }
 
     public var body: some View {
@@ -117,23 +137,35 @@ public struct MediaTranscriptionView: View {
     private func segmentSpan(_ segment: TranscriptionDisplaySegment, index: Int) -> some View {
         let isActive = index == activeIndex
         let isPast = activeIndex != nil && index < activeIndex!
+        // « Vague » : le segment qui devient actif monte et grossit avec un ressort
+        // rebondi (overshoot) — la surbrillance déferle de segment en segment. Effet
+        // purement visuel (scaleEffect/offset ne reflowent pas le FlowLayout) et
+        // discret (déclenché au seul changement de segment, pas à chaque frame).
+        let wave = isActive && !reduceMotion
 
         return Button {
             onSeek?(segment.startTime)
             HapticFeedback.light()
         } label: {
             Text(segment.text + " ")
-                .font(.system(size: 14, weight: isActive ? .bold : .regular))
+                .font(.system(size: fontSize, weight: isActive ? .bold : .regular))
                 .foregroundColor(segmentColor(isActive: isActive, isPast: isPast))
-                .padding(.horizontal, isActive ? 2 : 0)
+                .padding(.horizontal, isActive ? 3 : 0)
                 .padding(.vertical, isActive ? 1 : 0)
                 .background(
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color(hex: accentColor).opacity(isActive ? 0.16 : 0))
                 )
+                .shadow(color: wave ? Color(hex: accentColor).opacity(0.55) : .clear,
+                        radius: wave ? 9 : 0)
+                .scaleEffect(wave ? 1.14 : 1.0, anchor: .bottom)
+                .offset(y: wave ? -3 : 0)
         }
         .buttonStyle(.plain)
-        .animation(.easeInOut(duration: 0.15), value: isActive)
+        .animation(reduceMotion
+            ? .easeInOut(duration: 0.15)
+            : .spring(response: 0.34, dampingFraction: 0.52),
+            value: isActive)
     }
 
     // MARK: - Colors

@@ -3,6 +3,7 @@ import GRDB
 @testable import MeeshySDK
 @testable import Meeshy
 
+@MainActor
 final class MessagePipelineIntegrationTests: XCTestCase {
 
     private var dbQueue: DatabaseQueue!
@@ -12,6 +13,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
         dbQueue = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: dbQueue)
         actor = MessagePersistenceActor(dbWriter: dbQueue)
+        await actor.start()
     }
 
     @MainActor
@@ -120,6 +122,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     /// enforces: socket handlers write through persistence; views read from store.
     @MainActor
     func test_bufferIncoming_surfacesInStore_withoutPathAWrite() async throws {
+
         let store = MessageStore(conversationId: "conv_t14_incoming", persistence: actor)
         store.startObserving(dbPool: dbQueue)
 
@@ -132,7 +135,13 @@ final class MessagePipelineIntegrationTests: XCTestCase {
             computedState: .delivered
         )
         await actor.bufferIncoming([incoming])
-        try await Task.sleep(for: .milliseconds(150))
+        // Bounded wait for the async stream worker to write + post the
+        // NotificationCenter refresh. Exits as soon as the row lands (typically
+        // <50 ms locally); 3 s ceiling guards against CI load spikes.
+        let deadline = Date().addingTimeInterval(3.0)
+        while store.messages.isEmpty && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
 
         XCTAssertEqual(store.messages.count, 1, "message must appear in store via observation alone")
         XCTAssertEqual(store.messages.first?.localId, "t14_msg_001")
@@ -232,12 +241,13 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     }
 
     func test_100ConcurrentInserts_allPersisted() async throws {
+        let actor = self.actor!
         try await withThrowingTaskGroup(of: Void.self) { group in
             for i in 0..<100 {
                 group.addTask {
                     let record = MessageRecordFactory.make(
                         localId: "stress_\(i)", conversationId: "conv_stress")
-                    try await self.actor.insertOptimistic(record)
+                    try await actor.insertOptimistic(record)
                 }
             }
             try await group.waitForAll()

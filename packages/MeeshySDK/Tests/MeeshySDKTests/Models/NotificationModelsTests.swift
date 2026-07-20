@@ -21,6 +21,18 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(MeeshyNotificationType.legacyPostLike.rawValue, "POST_LIKE")
     }
 
+    /// Guideline 5 (MIIT) — CallEventsHandler.ts always sends `data.type: "call"`
+    /// for the incoming-call push (both the 'voip' and China-region 'apns'
+    /// routing share this payload). Distinct raw value from `.incomingCall`
+    /// ("incoming_call") because VoIPPushManager already depends on the exact
+    /// literal "call" to validate PushKit payloads — the string can't be
+    /// unified without breaking that unrelated, functioning path.
+    func test_MeeshyNotificationType_rawValueCall_isRecognized() {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "call"), .incomingCallAlert)
+        XCTAssertEqual(MeeshyNotificationType.incomingCallAlert.rawValue, "call")
+        XCTAssertNotEqual(MeeshyNotificationType.incomingCallAlert, .incomingCall)
+    }
+
     func testNotificationTypeSystemIcon() {
         XCTAssertEqual(MeeshyNotificationType.newMessage.systemIcon, "bubble.left.fill")
         XCTAssertEqual(MeeshyNotificationType.friendRequest.systemIcon, "person.badge.plus")
@@ -85,6 +97,26 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(context.postId, "post1")
         XCTAssertNil(context.friendRequestId)
         XCTAssertNil(context.callSessionId)
+    }
+
+    func testNotificationContextDecodesCommentNavigationIds() throws {
+        let json = """
+        {"postId":"post1","commentId":"reply-9","parentCommentId":"parent-3"}
+        """.data(using: .utf8)!
+
+        let context = try JSONDecoder().decode(NotificationContext.self, from: json)
+        XCTAssertEqual(context.commentId, "reply-9")
+        XCTAssertEqual(context.parentCommentId, "parent-3")
+    }
+
+    func testNotificationMetadataDecodesParentCommentId() throws {
+        let json = """
+        {"postId":"post1","commentId":"reply-9","parentCommentId":"parent-3","action":"view_post"}
+        """.data(using: .utf8)!
+
+        let metadata = try JSONDecoder().decode(NotificationMetadata.self, from: json)
+        XCTAssertEqual(metadata.commentId, "reply-9")
+        XCTAssertEqual(metadata.parentCommentId, "parent-3")
     }
 
     // MARK: - NotificationState
@@ -208,6 +240,83 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(metadata.location, "Paris, France")
     }
 
+    func testNotificationMetadataDecodesPostThumbnailAndMediaType() throws {
+        let json = """
+        {
+            "action": "view_post",
+            "postId": "post1",
+            "emoji": "❤️",
+            "postType": "STORY",
+            "mediaType": "image",
+            "postThumbnailUrl": "https://cdn.meeshy.me/story-thumb.jpg"
+        }
+        """.data(using: .utf8)!
+
+        let metadata = try JSONDecoder().decode(NotificationMetadata.self, from: json)
+        XCTAssertEqual(metadata.mediaType, "image")
+        XCTAssertEqual(metadata.postThumbnailUrl, "https://cdn.meeshy.me/story-thumb.jpg")
+    }
+
+    func test_storyReaction_mediaOnly_exposesThumbnailAndContextLabel() throws {
+        // Story photo réagie sans texte : pas de body (la vignette porte le
+        // visuel) ; la vignette est exposée et la ligne de contexte décrit
+        // l'entité (« Votre story · 📷 Photo », sous-titre serveur).
+        let json = """
+        {
+            "id": "notif-story-react",
+            "userId": "user1",
+            "type": "story_reaction",
+            "subtitle": "Votre story · 📷 Photo",
+            "content": "a réagi ❤️ à votre story",
+            "actor": {"id":"s1","username":"windie","displayName":"Windie Nh"},
+            "context": {"postId":"post1"},
+            "metadata": {"action":"view_post","postId":"post1","emoji":"❤️","postType":"STORY","mediaType":"image","postThumbnailUrl":"https://cdn.meeshy.me/t.jpg"},
+            "state": {"isRead":false,"readAt":null,"createdAt":"2026-06-25T10:30:00.000Z","expiresAt":null},
+            "delivery": {"emailSent":false,"pushSent":true}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+        XCTAssertNil(notification.formattedBody)
+        XCTAssertEqual(notification.postThumbnailURLString, "https://cdn.meeshy.me/t.jpg")
+        XCTAssertEqual(notification.formattedContext, "Votre story · 📷 Photo")
+    }
+
+    func test_postLike_withTextPreview_bodyKeepsTextOverMediaSummary() throws {
+        let json = """
+        {
+            "id": "notif-post-like",
+            "userId": "user1",
+            "type": "post_like",
+            "content": "a réagi 😍 à votre publication",
+            "actor": {"id":"s1","username":"windie","displayName":"Windie Nh"},
+            "context": {"postId":"post1"},
+            "metadata": {"action":"view_post","postId":"post1","emoji":"😍","postType":"POST","postPreview":"Mon plus beau voyage","mediaType":"image"},
+            "state": {"isRead":false,"readAt":null,"createdAt":"2026-06-25T10:30:00.000Z","expiresAt":null},
+            "delivery": {"emailSent":false,"pushSent":true}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+        XCTAssertEqual(notification.formattedBody, "Mon plus beau voyage")
+    }
+
+    func test_postThumbnailURLString_isNilWhenAbsentOrEmpty() throws {
+        let json = """
+        {
+            "id": "n", "userId": "u", "type": "post_like", "content": "x",
+            "actor": {"id":"s1","username":"w"},
+            "context": {"postId":"p"},
+            "metadata": {"action":"view_post","postId":"p","emoji":"❤️","postThumbnailUrl":""},
+            "state": {"isRead":false,"readAt":null,"createdAt":"2026-06-25T10:30:00.000Z","expiresAt":null},
+            "delivery": {"emailSent":false,"pushSent":true}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+        XCTAssertNil(notification.postThumbnailURLString)
+    }
+
     func testNotificationMetadataDecodesWithoutLoginFields() throws {
         let json = """
         {"messagePreview":"Hello!","action":"view_message"}
@@ -328,5 +437,182 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(MeeshyNotificationType.friendNewMood.rawValue, "friend_new_mood")
         XCTAssertEqual(MeeshyNotificationType.friendNewMood.systemIcon, "face.smiling.fill")
         XCTAssertEqual(MeeshyNotificationType.friendNewMood.accentHex, "6366F1")
+    }
+
+    // MARK: - Rich context: body, entity context & lifecycle
+
+    private func decodeNotification(_ json: String) throws -> APINotification {
+        try JSONDecoder().decode(APINotification.self, from: json.data(using: .utf8)!)
+    }
+
+    func test_postComment_formattedBody_isCommentText() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"post_comment","content":"Trop belle cette photo !",
+         "actor":{"id":"a","username":"marie","displayName":"Marie"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"Trop belle cette photo !","postType":"STORY","postPreview":"Coucher de soleil"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Trop belle cette photo !")
+        XCTAssertEqual(n.formattedContext, "Story · « Coucher de soleil »")
+    }
+
+    func test_commentReply_formattedContext_referencesParentComment() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"comment_reply","content":"Carrément d'accord",
+         "actor":{"id":"a","username":"jo"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"Carrément d'accord","parentCommentPreview":"Le meilleur épisode"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Carrément d'accord")
+        XCTAssertEqual(n.formattedContext, "En réponse à « Le meilleur épisode »")
+    }
+
+    func test_reaction_formattedBody_showsReactedEntityPreview() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"story_reaction","content":"a réagi 😍 à votre story",
+         "actor":{"id":"a","username":"lea"},
+         "context":{"postId":"p1"},
+         "metadata":{"emoji":"😍","postType":"STORY","postPreview":"Ma rando du dimanche"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Ma rando du dimanche")
+        XCTAssertEqual(n.formattedContext, "Story · « Ma rando du dimanche »")
+    }
+
+    func test_friendNewStory_REEL_kindLabelIsReel() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"friend_new_post","content":"Regarde ça",
+         "actor":{"id":"a","username":"sam"},
+         "context":{"postId":"p1"},
+         "metadata":{"contentType":"REEL","excerpt":"Regarde ça"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Regarde ça")
+        XCTAssertEqual(n.socialKindLabel, "Réel")
+    }
+
+    func test_friendNewStory_mediaOnly_usesMediaSummary() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"friend_new_story","content":"a publié une nouvelle story",
+         "actor":{"id":"a","username":"sam"},
+         "context":{"postId":"p1"},
+         "metadata":{"contentType":"STORY","mediaType":"image"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "📷 Photo")
+        XCTAssertEqual(n.socialKindLabel, "Story")
+    }
+
+    func test_expiredStory_context_marksExpiredAndShowsPublication() throws {
+        // Story published well in the past with an expiry already elapsed.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"friend_new_story","content":"a publié une nouvelle story",
+         "actor":{"id":"a","username":"sam"},
+         "context":{"postId":"p1","postCreatedAt":"2020-01-01T10:00:00.000Z","postExpiresAt":"2020-01-02T10:00:00.000Z"},
+         "metadata":{"contentType":"STORY","mediaType":"image"},
+         "state":{"isRead":false,"createdAt":"2020-01-01T10:00:00.000Z"}}
+        """)
+        XCTAssertTrue(n.isLinkedContentExpired)
+        let context = try XCTUnwrap(n.formattedContext)
+        XCTAssertTrue(context.contains("Story"))
+        XCTAssertTrue(context.contains("expirée"), "expired story must be flagged: \(context)")
+    }
+
+    func test_storyComment_onExpiredStory_contextFlagsExpiry() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"story_new_comment","content":"Magnifique",
+         "actor":{"id":"a","username":"ines"},
+         "context":{"postId":"p1","postExpiresAt":"2020-01-02T10:00:00.000Z"},
+         "metadata":{"commentPreview":"Magnifique","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2020-01-01T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedBody, "Magnifique")
+        let context = try XCTUnwrap(n.formattedContext)
+        XCTAssertTrue(context.contains("expirée"), "expired story comment must flag expiry: \(context)")
+    }
+
+    func test_nonExpiredStory_context_doesNotFlagExpiry() throws {
+        let future = ISO8601DateFormatter().string(from: Date().addingTimeInterval(3600))
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"story_reaction","content":"a réagi",
+         "actor":{"id":"a","username":"ines"},
+         "context":{"postId":"p1","postExpiresAt":"\(future)"},
+         "metadata":{"emoji":"👍","postType":"STORY","postPreview":"Soleil"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertFalse(n.isLinkedContentExpired)
+        XCTAssertEqual(n.formattedContext, "Story · « Soleil »")
+    }
+
+    // MARK: - Server-built title/subtitle (single source) + content date
+
+    func test_formattedTitle_prefersServerTitle() throws {
+        // Le titre serveur (localisé, conscient de l'entité) prime sur le repli client.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"comment_reply","title":"Belva Tano a répondu à votre commentaire",
+         "content":"Mon premier combat",
+         "actor":{"id":"a","username":"belva","displayName":"Belva Tano"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"Mon premier combat","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedTitle, "Belva Tano a répondu à votre commentaire")
+    }
+
+    func test_formattedTitle_fallsBackWhenNoServerTitle() throws {
+        // Anciennes notifs sans `title` serveur → repli client (commentReply corrigé).
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"comment_reply","content":"ok",
+         "actor":{"id":"a","username":"jo","displayName":"Jo"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"ok"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedTitle, "Jo a repondu a votre commentaire")
+    }
+
+    func test_formattedContext_prefersServerSubtitle() throws {
+        // Le sous-titre serveur (entité localisée) devient la base de la ligne contexte.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"comment_reply","title":"Belva a répondu à votre commentaire",
+         "subtitle":"Story","content":"ok",
+         "actor":{"id":"a","username":"belva"},
+         "context":{"postId":"p1"},
+         "metadata":{"commentPreview":"ok","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.formattedContext, "Story")
+    }
+
+    func test_formattedContext_appendsContentPublishedDate() throws {
+        // Complaint #3 : « a commenté une story du JJ/MM/AAAA HH:MM » — la date de
+        // publication du contenu (postCreatedAt, ancienne) est ajoutée au sous-titre.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"friend_story_comment","title":"Belva a commenté une story",
+         "subtitle":"Story","content":"Magnifique",
+         "actor":{"id":"a","username":"belva"},
+         "context":{"postId":"p1","postCreatedAt":"2020-01-01T09:00:00.000Z"},
+         "metadata":{"commentPreview":"Magnifique","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2020-01-02T10:00:00.000Z"}}
+        """)
+        let context = try XCTUnwrap(n.formattedContext)
+        XCTAssertTrue(context.hasPrefix("Story · "), "entity base then date: \(context)")
+        XCTAssertTrue(context.contains("2020"), "absolute content date expected: \(context)")
+    }
+
+    func test_message_attachmentDetails_decoded() throws {
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"new_message","content":"🎵 Audio · 0:34",
+         "actor":{"id":"a","username":"tom"},
+         "context":{"conversationId":"c1","messageId":"m1"},
+         "metadata":{"messagePreview":"🎵 Audio","attachments":{"count":1,"firstType":"audio","firstFilename":"vocal.m4a","firstDurationMs":34000,"firstFileSize":1200000}},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertEqual(n.metadata?.attachments?.firstType, "audio")
+        XCTAssertEqual(n.metadata?.attachments?.firstDurationMs, 34000)
+        XCTAssertEqual(n.metadata?.attachments?.firstFileSize, 1200000)
+        XCTAssertEqual(n.formattedBody, "🎵 Audio · 0:34")
     }
 }

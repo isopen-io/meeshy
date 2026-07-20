@@ -1,5 +1,7 @@
 import SwiftUI
 import UIKit
+import PhotosUI
+import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
@@ -86,7 +88,7 @@ struct StoryGestureOverlayView: View {
             .contentShape(Rectangle())
             .accessibilityElement()
             .accessibilityLabel(String(localized: "story.viewer.label", defaultValue: "Stories viewer", bundle: .main))
-            .accessibilityHint("Toucher à gauche pour la story précédente, à droite pour la suivante, maintenir pour mettre en pause")
+            .accessibilityHint(String(localized: "story.viewer.navigation.hint", defaultValue: "Tap left for the previous story, right for the next, hold to pause", bundle: .main))
             // `DragGesture(minimumDistance: 0)` capture LE PREMIER touch-down
             // ainsi que le release. C'est le seul moyen fiable en SwiftUI de
             // distinguer un tap court d'un hold long sur la même hit-area —
@@ -201,8 +203,14 @@ struct StoryGestureOverlayView: View {
                             holdActive = false
                             HapticFeedback.medium()
                         case .navigatePrevious:
+                            // Tick UNIQUE par navigation manuelle — les
+                            // chemins goToNext/goToPrevious et le onChange
+                            // de slide ne vibrent plus (l'auto-advance passe
+                            // par eux et doit rester silencieux).
+                            HapticFeedback.light()
                             onPrevious()
                         case .navigateNext:
+                            HapticFeedback.light()
                             onNext()
                         case .resumeFromPause:
                             break  // décidé au touchDown, pas au touchUp
@@ -342,29 +350,25 @@ struct StoryComposerBarView: View {
 
     /// `parentId` non-nil quand l'utilisateur répond à un commentaire (via
     /// `replyingToStoryComment` set par l'overlay). Sinon nil → commentaire
-    /// top-level sur la story.
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
+    /// top-level sur la story. `pendingMedia` non-nil = commentaire avec UN média.
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
+
+    // Comment attachments + real voice capture (parity with feed/reels composer).
+    @State private var commentAttachments: [ComposerAttachment] = []
+    @State private var showCommentPhotoPicker: Bool = false
+    @State private var commentPhotoItems: [PhotosPickerItem] = []
+    @State private var showCommentFilePicker: Bool = false
+    @StateObject private var audioRecorder = AudioRecorderManager()
 
     var body: some View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
             accentColor: replyingToStoryComment?.authorColor ?? accentColor,
+            forceShowAttachment: true,
+            forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
-            onSend: { text in
-                let effects = commentEffects
-                let blur = commentBlurEnabled
-                commentEffects = .none
-                commentBlurEnabled = false
-                let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
-                let effectFlags = flags > 0 ? Int(flags) : nil
-                // Capture le parentId AVANT de clear le reply context, sinon
-                // la closure async perd la référence et envoie nil.
-                let parentId = replyingToStoryComment?.id
-                replyingToStoryComment = nil
-                sendComment(text, effectFlags, parentId)
-            },
             onFocusChange: { focused in
                 if focused {
                     isComposerEngaged = true
@@ -381,6 +385,7 @@ struct StoryComposerBarView: View {
                     }
                 }
             },
+            onSendMessage: { text, attachments, _ in submitStoryComment(text: text, attachments: attachments) },
             replyBanner: replyingToStoryComment.map { reply in
                 AnyView(
                     HStack(spacing: 8) {
@@ -391,14 +396,14 @@ struct StoryComposerBarView: View {
                         VStack(alignment: .leading, spacing: 1) {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
-                                    .font(.system(size: 9, weight: .semibold))
+                                    .font(MeeshyFont.relative(9, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                                 Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(MeeshyFont.relative(11, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                             }
                             Text(reply.displayContent)
-                                .font(.system(size: 11))
+                                .font(MeeshyFont.relative(11))
                                 .foregroundColor(.white.opacity(0.6))
                                 .lineLimit(1)
                         }
@@ -411,11 +416,13 @@ struct StoryComposerBarView: View {
                             }
                         } label: {
                             Image(systemName: "xmark")
+                                // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white.opacity(0.6))
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Color.white.opacity(0.12)))
                         }
+                        .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la r\u{00E9}ponse", bundle: .main))
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -427,6 +434,30 @@ struct StoryComposerBarView: View {
                         alignment: .bottom
                     )
                 )
+            },
+            customAttachmentsPreview: commentAttachments.isEmpty
+                ? nil
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                    commentAttachments.removeAll { $0.id == id }
+                  }),
+            onStartRecording: { audioRecorder.startRecording(); HapticFeedback.medium() },
+            onStopRecordingToAttachment: { stopRecordingToAttachment() },
+            onSendRecording: { if stopRecordingToAttachment() { submitStoryComment(text: "", attachments: commentAttachments) } },
+            onCancelRecording: { audioRecorder.cancelRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onFilePicker: { showCommentFilePicker = true },
+            onShowAttachments: {
+                // Attachment carousel opening → dismiss the emoji panel so the
+                // two bottom surfaces never stack.
+                if showTextEmojiPicker {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showTextEmojiPicker = false
+                    }
+                }
             },
             onRequestTextEmoji: {
                 isComposerEngaged = true
@@ -467,6 +498,61 @@ struct StoryComposerBarView: View {
                 hasComposerContent = hasContent
             }
         )
+        .photosPicker(
+            isPresented: $showCommentPhotoPicker,
+            selection: $commentPhotoItems,
+            maxSelectionCount: 1,
+            matching: .any(of: [.images, .videos])
+        )
+        .fileImporter(
+            isPresented: $showCommentFilePicker,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result {
+                commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
+            }
+        }
+        .adaptiveOnChange(of: commentPhotoItems) { _, items in
+            Task {
+                commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
+                await MainActor.run { commentPhotoItems = [] }
+            }
+        }
+    }
+
+    /// Construit le média éventuel (un seul) + appelle le `sendComment` injecté avec
+    /// le pendingMedia. Capture `parentId` AVANT de clear le reply context.
+    private func submitStoryComment(text: String, attachments: [ComposerAttachment]) {
+        let media = CommentComposerStaging.firstPendingMedia(in: attachments)
+        commentAttachments.removeAll()
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || media != nil else { return }
+        let effects = commentEffects
+        let blur = commentBlurEnabled
+        commentEffects = .none
+        commentBlurEnabled = false
+        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+        let effectFlags = flags > 0 ? Int(flags) : nil
+        // Réponse plate à 2 niveaux : répondre à une réponse rattache au MÊME parent
+        // racine (sinon la réponse-de-réponse atterrissait dans un bucket jamais rendu
+        // → commentaire invisible). L'auteur ciblé est notifié via la @mention injectée
+        // à l'ouverture de la réponse (cf. makeStoryCommentRow).
+        let parentId = replyingToStoryComment?.parentId ?? replyingToStoryComment?.id
+        replyingToStoryComment = nil
+        sendComment(trimmed, effectFlags, parentId, media)
+    }
+
+    @discardableResult
+    private func stopRecordingToAttachment() -> Bool {
+        guard audioRecorder.duration > 0.5 else {
+            audioRecorder.cancelRecording()
+            return false
+        }
+        let duration = audioRecorder.duration
+        guard let url = audioRecorder.stopRecording() else { return false }
+        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
+        return true
     }
 }
 
@@ -550,6 +636,11 @@ struct StoryCardView: View {
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
+    /// Présence d'un audio de fond sur la slide — pilote la note musicale du
+    /// header (`StoryHeaderView`). Primitive calculée par le viewer parent
+    /// (`StoryViewerView.storyHasBackgroundAudio`) et descendue en `let`
+    /// jusqu'à la leaf view, comme `storyHasAudibleSound` juste au-dessus.
+    let storyHasBackgroundAudio: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
     let onReplyToStory: ((ReplyContext) -> Void)?
@@ -634,15 +725,32 @@ struct StoryCardView: View {
     /// rend instantanément.
     @State private var showProgressOverlay: Bool = false
 
+    /// R3 — indicateur discret de buffering MID-SLIDE : visible quand la
+    /// timeline est gelée par le stall gate (vidéo qui bufferise, audio/image
+    /// en cours de cache — R1/R2) APRÈS le chargement initial. Le gel était
+    /// jusqu'ici une frame figée muette, indistinguable d'un freeze.
+    @State private var showStallIndicator: Bool = false
+
+    /// Délai de grâce avant d'afficher l'indicateur : un micro-stall (< 350 ms,
+    /// fréquent sur un seek/loop vidéo) ne doit pas faire flasher un spinner.
+    /// La DISPARITION, elle, est immédiate à la reprise. Miroir du pattern
+    /// `showProgressOverlay` (200 ms) du loader initial.
+    @State private var stallIndicatorGraceTask: Task<Void, Never>?
+
     // Closures — actions on the parent view
     let triggerStoryReaction: (String) -> Void
     let pauseTimer: () -> Void
     let resumeTimer: () -> Void
+    /// Unified-timeline gate : the canvas reports whether its PRIMARY video is
+    /// actually progressing (`true`) or stalled/buffering (`false`). The parent
+    /// owns `slideTimer` and forwards this to `setPlaybackStalled(!progressing)`
+    /// — the stall decision stays app-side (the SDK only emits the raw signal).
+    let onPlaybackProgressing: (Bool) -> Void
     let loadStoryComments: () -> Void
     let dismissComposer: () -> Void
     let goToPrevious: () -> Void
     let goToNext: () -> Void
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?) -> Void
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
@@ -673,11 +781,19 @@ struct StoryCardView: View {
     /// attendu). La sidebar droite tombait alors hors écran à x=389+w=46
     /// → out of 402 (bug 2026-05-27). On force ici les dimensions explicites
     /// par calcul direct du fit ratio.
+    /// Ratio (largeur / hauteur) du canvas de la story courante. L'auteur a figé
+    /// la forme à la composition (« l'import de l'image de fond impose le cadre et
+    /// forme du Canvas ») : un fond paysage → 16:9 horizontal, sinon 9:16 vertical
+    /// par défaut. Fallback portrait pour toutes les stories antérieures.
+    private var readerCanvasRatio: CGFloat {
+        CGFloat(currentStory?.storyEffects?.canvasAspect.ratio ?? Double(CanvasGeometry.portraitRatio))
+    }
+
     private var canvasFitSize: CGSize {
         // Source de vérité partagée avec le composer (`CanvasGeometry.aspectFitSize`)
-        // pour garantir la parité 9:16 composer ↔ reader. Math identique à
-        // l'ancien calcul inline `min(w, h * 9/16)`.
-        CanvasGeometry.aspectFitSize(in: geometry.size)
+        // pour garantir la parité composer ↔ reader — même ratio (9:16 par défaut,
+        // 16:9 si l'auteur a importé un fond paysage).
+        CanvasGeometry.aspectFitSize(in: geometry.size, ratio: readerCanvasRatio)
     }
 
     /// Cadrage « carte → plein écran » du canvas reader, MUTUALISÉ avec le composer
@@ -711,7 +827,15 @@ struct StoryCardView: View {
             bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
             state: canvasPresentation,
-            cardedCornerRadius: 22))
+            cardedCornerRadius: 22,
+            // Portrait : la carte se place DIRECTEMENT sous la ligne
+            // d'expiration (directive 2026-07-04) — le mou vertical va en bas.
+            // Paysage (16:9) : la carte est CENTRÉE dans la région libre
+            // (directive 2026-07-13 « la position des vidéos landscape doit
+            // être au centre ») — collée au header elle laissait tout le vide
+            // en bas de l'écran.
+            verticalAlignment: readerCanvasRatio > 1 ? .center : .top,
+            canvasRatio: readerCanvasRatio))
     }
 
     var body: some View {
@@ -785,9 +909,20 @@ struct StoryCardView: View {
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
                     // Canvas sortant suit la carte (même cadrage) pendant le cross-fade.
+                    // clipShape AVANT scale/offset : appliqué après, le clip
+                    // restait sur les bounds NON déplacés — le contenu décalé
+                    // vers le bas gardait un bord HAUT brut (coins carrés) et
+                    // se faisait rogner en bas par les coins arrondis du rect
+                    // d'origine (bug user 2026-07-11 « haut carré, bas à
+                    // moitié arrondi »). Rayon compensé : le clip vit en
+                    // espace non-scalé.
+                    .clipShape(RoundedRectangle(
+                        cornerRadius: readerCanvasFraming.scale > 0
+                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
+                            : readerCanvasFraming.cornerRadius,
+                        style: .continuous))
                     .scaleEffect(readerCanvasFraming.scale)
                     .offset(y: readerCanvasFraming.offset.height)
-                    .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -799,6 +934,12 @@ struct StoryCardView: View {
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs,
+                                      // Le mute est une préférence VIEWER persistante (`isGlobalMuted`,
+                                      // @State qui survit aux avances). Le canvas est recréé à chaque
+                                      // story (`.id(story.id)`) → sans passer l'état ici, chaque
+                                      // nouvelle story repartait à `mute: false` (bug : on remute
+                                      // chaque story). On sème donc l'état persistant à l'init.
+                                      mute: isGlobalMuted,
                                       isPaused: isCanvasPlaybackPaused,
                                       onContentReady: { isContentReady = true },
                                       onContentProgress: { p in
@@ -816,8 +957,49 @@ struct StoryCardView: View {
                                               return
                                           }
                                           slideContentProgress = p
+                                      },
+                                      // Timeline unifiée : la progress bar + l'auto-advance
+                                      // (pilotés par `slideTimer`) gèlent EN PHASE quand la
+                                      // lecture du média primaire stalle (buffer), et reprennent
+                                      // sans saut dès qu'elle rejoue. Input INDÉPENDANT de
+                                      // `setPaused` (long-press / sheets) — ils ne se clobberent
+                                      // jamais. No-op pour les slides sans vidéo (le canvas
+                                      // n'émet alors jamais). Décision produit câblée app-side ;
+                                      // le SDK n'expose que le signal `onPlaybackProgressing`.
+                                      onPlaybackProgressing: { progressing in
+                                          onPlaybackProgressing(progressing)
+                                          handleStallIndicatorSignal(progressing: progressing)
                                       })
                     .id(story.id)
+                    // U6 inc.2 — la navigation prev/next est une gesture
+                    // SPATIALE (position x du tap dans le canvas) que VoiceOver
+                    // ne peut pas produire : on l'expose en actions custom du
+                    // rotor. Le label donne une identité au canvas (le contenu
+                    // visuel est du CALayer, invisible d'UIAccessibility).
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(
+                        localized: "story.viewer.a11y.canvas",
+                        defaultValue: "Story en cours de lecture"
+                    ))
+                    .accessibilityAction(named: String(
+                        localized: "story.viewer.a11y.next",
+                        defaultValue: "Story suivante"
+                    )) {
+                        // Rotor VoiceOver = navigation MANUELLE au même titre
+                        // qu'un tap — sans ce tick, un utilisateur VoiceOver
+                        // perdait tout retour haptique de navigation (post-revue
+                        // 2026-07-13 : seuls les deux gestes tactiles avaient
+                        // été raccordés au tick unique).
+                        HapticFeedback.light()
+                        goToNext()
+                    }
+                    .accessibilityAction(named: String(
+                        localized: "story.viewer.a11y.previous",
+                        defaultValue: "Story précédente"
+                    )) {
+                        HapticFeedback.light()
+                        goToPrevious()
+                    }
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, `geometry.size.height` étirait le canvas
                     // hors ratio design et décalait visuellement le contenu.
@@ -839,9 +1021,15 @@ struct StoryCardView: View {
                     )
                     // Carte → plein écran (mutualisé composer). Visuel pur (la frame
                     // reste `canvasFitSize` → projection design→render intacte).
+                    // clipShape AVANT scale/offset (cf. canvas sortant ci-dessus :
+                    // après, le haut restait carré et le bas à moitié arrondi).
+                    .clipShape(RoundedRectangle(
+                        cornerRadius: readerCanvasFraming.scale > 0
+                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
+                            : readerCanvasFraming.cornerRadius,
+                        style: .continuous))
                     .scaleEffect(readerCanvasFraming.scale)
                     .offset(y: readerCanvasFraming.offset.height)
-                    .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
                     // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
                     // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
                     // (demande user 2026-06-02 « bords arrondis + ThumbHash en fond »).
@@ -889,12 +1077,32 @@ struct StoryCardView: View {
                     .clipped()
                     // Le loader suit la carte (même cadrage) → pas de saut entre le
                     // placeholder ThumbHash carté et le canvas carté.
+                    // clipShape AVANT scale/offset (même correctif que le canvas).
+                    .clipShape(RoundedRectangle(
+                        cornerRadius: readerCanvasFraming.scale > 0
+                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
+                            : readerCanvasFraming.cornerRadius,
+                        style: .continuous))
                     .scaleEffect(readerCanvasFraming.scale)
                     .offset(y: readerCanvasFraming.offset.height)
-                    .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)
+                }
+
+                // R3 — buffering MID-SLIDE : spinner discret centré sur la
+                // carte, UNIQUEMENT après le chargement initial (le loader
+                // ThumbHash ci-dessus couvre `slideContentProgress < 0.95`).
+                // Apparition différée (grâce 350 ms), disparition immédiate à
+                // la reprise — cf. `handleStallIndicatorSignal`.
+                if showStallIndicator && slideContentProgress >= 0.95 {
+                    StoryPlaybackStallIndicator()
+                        .frame(width: canvasFitSize.width,
+                               height: canvasFitSize.height)
+                        .scaleEffect(readerCanvasFraming.scale)
+                        .offset(y: readerCanvasFraming.offset.height)
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
                 }
             }
 
@@ -903,7 +1111,7 @@ struct StoryCardView: View {
                 VStack {
                     Spacer()
                     Text(transcription)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
@@ -1033,6 +1241,7 @@ struct StoryCardView: View {
                     currentGroup: currentGroup,
                     currentStory: currentStory,
                     isOwnStory: isOwnStory,
+                    hasBackgroundAudio: storyHasBackgroundAudio,
                     selectedProfileUser: $selectedProfileUser,
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
@@ -1066,6 +1275,7 @@ struct StoryCardView: View {
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible)
             .animation(.spring(response: 0.32, dampingFraction: 0.78), value: chromeVisible)
+            .environment(\.colorScheme, readerChromeScheme)
 
             // === Layer 7.5: Floating comments overlay (Instagram-style) ===
             // Rendered BEFORE the sidebar / composer / bigReaction blocks so
@@ -1151,7 +1361,11 @@ struct StoryCardView: View {
             // tout débordement (bug 2026-05-27). Le Spacer + l'alignement
             // .trailing dans le HStack interne suffisent pour pousser le
             // sidebar VStack au bord droit visible.
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
+            // `.bottomTrailing` (2026-07-10) : le rail s'ancre au BAS de sa
+            // bande utile (juste au-dessus du composer) au lieu d'être centré
+            // verticalement — les actions restent « à portée de pouce » et le
+            // vide perçu au-dessus du composer disparaît (IMG_0984).
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottomTrailing)
             .clipped()
             // Glissement vers la DROITE à la disparition + fondu. L'offset
             // de 110pt couvre largement la largeur du chip (max 48pt) + son
@@ -1161,10 +1375,13 @@ struct StoryCardView: View {
             .offset(x: chromeVisible ? 0 : 110)
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible)
+            .environment(\.colorScheme, readerChromeScheme)
 
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
             if let emoji = bigReactionEmoji {
                 Text(emoji)
+                    // Doctrine 84i : emoji de réaction hero décoratif (100pt) animé en burst
+                    // (scaleEffect/offset) → taille figée ; déjà accessibilityHidden ci-dessous.
                     .font(.system(size: 100))
                     .scaleEffect(bigReactionPhase == 1 ? 1.5 : (bigReactionPhase == 2 ? 0.5 : 0.05))
                     .opacity(bigReactionPhase == 2 ? 0 : (bigReactionPhase == 1 ? 1 : 0))
@@ -1192,7 +1409,15 @@ struct StoryCardView: View {
                 // commentaires est ouvert et qu'on tape « Répondre » sur un
                 // commentaire, la reply banner apparaît au-dessus de CETTE
                 // rangée de saisie via le binding `replyingToStoryComment`.
-                if !isOwnStory {
+                //
+                // **Auteur de sa propre story** : pas de composer permanent (on
+                // ne répond pas à sa propre story), MAIS il doit pouvoir
+                // répondre aux commentaires reçus. Le composer apparaît donc
+                // dès que `replyingToStoryComment` est posé (tap « Répondre »
+                // dans l'overlay), avec la reply banner, puis se referme à
+                // l'envoi (`sendComment` remet le binding à nil) ou à la
+                // fermeture de la banner (spec user 2026-06-25).
+                if !isOwnStory || replyingToStoryComment != nil {
                     StoryComposerBarView(
                         accentColor: currentGroup?.avatarColor ?? "6366F1",
                         storyId: currentStory?.id,
@@ -1336,6 +1561,12 @@ struct StoryCardView: View {
         .task(id: currentStory?.id) {
             showProgressOverlay = false
             slideContentProgress = 0
+            // R3 — nouvelle slide = état neuf : le canvas repart « progressant »
+            // SANS émettre (resetPlaybackHealthState n'émet pas) ; sans ce reset
+            // un indicateur de stall de la slide précédente resterait affiché.
+            stallIndicatorGraceTask?.cancel()
+            stallIndicatorGraceTask = nil
+            showStallIndicator = false
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
             if slideContentProgress < 0.20 {
@@ -1343,6 +1574,28 @@ struct StoryCardView: View {
                     showProgressOverlay = true
                 }
             }
+        }
+    }
+
+    /// R3 — pilote l'indicateur de stall mid-slide depuis le signal
+    /// `onPlaybackProgressing` du canvas : apparition DIFFÉRÉE (grâce 350 ms —
+    /// un micro-stall de seek/loop ne flashe pas de spinner), disparition
+    /// IMMÉDIATE à la reprise. Indépendant du forward vers `slideTimer`
+    /// (le gel de la barre, lui, est toujours instantané et en phase).
+    private func handleStallIndicatorSignal(progressing: Bool) {
+        stallIndicatorGraceTask?.cancel()
+        stallIndicatorGraceTask = nil
+        if progressing {
+            withAnimation(.easeOut(duration: 0.15)) { showStallIndicator = false }
+            return
+        }
+        stallIndicatorGraceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            // Signal VISUEL uniquement : les haptics de stall/reprise
+            // s'empilaient sur celle de navigation et hachaient la lecture
+            // (retour user 2026-07-13) — le spinner suffit.
+            withAnimation(.easeIn(duration: 0.2)) { showStallIndicator = true }
         }
     }
 
@@ -1359,6 +1612,17 @@ struct StoryCardView: View {
         guard let story = currentStory else { return false }
         return renderableSlideCache.slide(for: story, chain: resolvedViewerLanguageChain)
             .effects.hasVisualBackgroundMedia
+    }
+
+    /// Scheme épinglé sur le chrome du reader (header + sidebar) : suit la
+    /// luminance du FOND de la slide affichée, pas le thème de l'app — même
+    /// règle que le composer (`CanvasChromeScheme`, capture user 2026-07-11 :
+    /// icônes glass illisibles selon la couleur de fond).
+    private var readerChromeScheme: ColorScheme {
+        CanvasChromeScheme.scheme(
+            background: currentStory?.storyEffects?.background,
+            hasMediaBackground: currentSlideHasMediaBackground
+        )
     }
 
     private var storyBackground: some View {
@@ -1453,14 +1717,14 @@ struct StoryCardView: View {
     private func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "music.note")
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
             Text(audio.title)
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let uploader = audio.uploaderName {
                 Text("· \(uploader)")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .opacity(0.7)
                     .lineLimit(1)
             }
@@ -1480,10 +1744,10 @@ struct StoryCardView: View {
     private var translationBadge: some View {
         HStack(spacing: 4) {
             Image(systemName: "translate")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
             if let lang = resolvedViewerLanguage {
                 Text(lang.uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
             }
         }
         .foregroundColor(.white.opacity(0.8))
@@ -1572,9 +1836,9 @@ struct StoryViewerContentView: View {
                             radius: 40, y: 15
                         )
 
-                    if let neighbor = neighborGroup, neighborDirection != 0 {
+                    if neighborGroup != nil, neighborDirection != 0 {
                         let incomingX = totalSlideX + (neighborDirection == 1 ? cubeWidth : -cubeWidth)
-                        NeighborGroupCubeFace(group: neighbor, entryStory: neighborEntryStory)
+                        NeighborGroupCubeFace(entryStory: neighborEntryStory)
                             .frame(width: geometry.size.width, height: geometry.size.height)
                             .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
                             .offset(x: incomingX, y: cardOffsetY)
@@ -1596,6 +1860,7 @@ struct StoryViewerContentView: View {
                                     isPresented = false
                                 } label: {
                                     Image(systemName: "xmark")
+                                        // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 36×36 → figé.
                                         .font(.system(size: 16, weight: .semibold))
                                         .foregroundColor(.white)
                                         .frame(width: 36, height: 36)
@@ -1619,15 +1884,21 @@ struct StoryViewerContentView: View {
 // MARK: - Neighbor Group Cube Face (Lot 3)
 
 /// Face entrante du cube inter-groupes : aperçu statique LÉGER du groupe
-/// voisin (thumbHash flouté du slide d'entrée + avatar + nom) — jamais une
-/// seconde `StoryCardView` interactive (les états du viewer sont mono-slide,
-/// et rendre deux piles complètes pendant un geste 60-120 Hz coûterait un
-/// frame budget entier). Parité reels : la face entrante est un rendu du
-/// média, le swap vers la vraie carte se fait au commit, masqué par l'arête
-/// à 90°. Le vrai canvas du voisin est déjà chaud (prefetch inter-groupes),
-/// donc la première frame réelle suit instantanément.
+/// voisin (thumbHash flouté du slide d'entrée SEUL, jamais d'identité) —
+/// jamais une seconde `StoryCardView` interactive (les états du viewer sont
+/// mono-slide, et rendre deux piles complètes pendant un geste 60-120 Hz
+/// coûterait un frame budget entier). Parité reels : la face entrante est un
+/// rendu du média, le swap vers la vraie carte se fait au commit, masqué par
+/// l'arête à 90°. Le vrai canvas du voisin est déjà chaud (prefetch
+/// inter-groupes), donc la première frame réelle suit instantanément.
+///
+/// AUCUN bloc identité (avatar/nom) ici — directive user 2026-07-14 : le
+/// double affichage (cet aperçu PUIS `StoryGroupIntroOverlay` juste après le
+/// commit) montrait deux cartes quasi-identiques à la suite. La seule carte
+/// d'identité de la transition inter-groupes est désormais
+/// `StoryGroupIntroOverlay` — cet aperçu reste un simple indice visuel
+/// transitoire pendant que le doigt bouge.
 struct NeighborGroupCubeFace: View {
-    let group: StoryGroup
     let entryStory: StoryItem?
 
     private var backdrop: UIImage? {
@@ -1651,6 +1922,14 @@ struct NeighborGroupCubeFace: View {
                     .scaledToFill()
                     .blur(radius: 24)
                     .scaleEffect(1.1)
+                    // `.scaledToFill()` + `.blur()` peut proposer une taille
+                    // intrinsèque plus grande que le viewport, gonflant ce
+                    // ZStack de façon asymétrique selon le ratio du
+                    // ThumbHash — l'avatar/nom centrés dedans dérivent alors
+                    // visuellement du centre réel de la carte (piège déjà
+                    // documenté dans `StoryReaderLoadingOverlay`). Verrouiller
+                    // la taille AVANT le `.clipped()` ci-dessous.
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 LinearGradient(
                     colors: [MeeshyColors.indigo950, MeeshyColors.indigo900],
@@ -1659,20 +1938,34 @@ struct NeighborGroupCubeFace: View {
                 )
             }
             Color.black.opacity(0.35)
-            VStack(spacing: 12) {
-                MeeshyAvatar(
-                    name: group.username,
-                    context: .storyTray,
-                    accentColor: group.avatarColor,
-                    avatarURL: group.avatarURL,
-                    storyState: group.hasUnviewed ? .unread : .read
-                )
-                Text(group.username)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - R3 : indicateur de buffering mid-slide
+
+/// Spinner discret style Instagram affiché au CENTRE de la carte quand la
+/// timeline unifiée est gelée par le stall gate (vidéo qui bufferise, audio /
+/// image bg en cours de cache — R1/R2) après le chargement initial. Pas de
+/// plein écran, pas de voile : le média figé reste visible, seul un petit
+/// disque glass signale l'attente. `colorScheme .dark` épinglé : sur verre en
+/// Light, le spinner blanc serait illisible (règle mémoire « texte blanc
+/// illisible Light sur verre »).
+private struct StoryPlaybackStallIndicator: View {
+    var body: some View {
+        ProgressView()
+            .progressViewStyle(.circular)
+            .tint(.white)
+            .scaleEffect(1.15)
+            .frame(width: 52, height: 52)
+            .background(.ultraThinMaterial, in: Circle())
+            .environment(\.colorScheme, .dark)
+            .accessibilityLabel(
+                String(localized: "story.reader.buffering",
+                       defaultValue: "Chargement de la story en cours")
+            )
     }
 }

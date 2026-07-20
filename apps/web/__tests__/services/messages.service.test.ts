@@ -91,6 +91,14 @@ describe('MessagesService', () => {
   });
 
   describe('getMessagesByConversation', () => {
+    it('should propagate error from getMessagesWithOffset', async () => {
+      mockApiService.get.mockRejectedValue(new Error('Server error'));
+
+      await expect(
+        messagesService.getMessagesByConversation('conv-123', 1, 20)
+      ).rejects.toThrow('Server error');
+    });
+
     it('should fetch messages with pagination', async () => {
       const mockMessages = [
         { id: 'msg-1', content: 'Message 1' },
@@ -153,6 +161,32 @@ describe('MessagesService', () => {
   });
 
   describe('getMessagesWithOffset', () => {
+    it('should propagate error from apiService.get', async () => {
+      mockApiService.get.mockRejectedValue(new Error('Timeout'));
+
+      await expect(
+        messagesService.getMessagesWithOffset('conv-123', 0, 20)
+      ).rejects.toThrow('Timeout');
+    });
+
+    it('should use default offset=0 and limit=20 when not provided', async () => {
+      mockApiService.get.mockResolvedValue({
+        data: {
+          success: true,
+          data: [],
+          pagination: { total: 0, offset: 0, limit: 20, hasMore: false },
+        },
+        success: true,
+      });
+
+      await messagesService.getMessagesWithOffset('conv-123');
+
+      expect(mockApiService.get).toHaveBeenCalledWith(
+        '/conversations/conv-123/messages',
+        { limit: 20, offset: 0 }
+      );
+    });
+
     it('should fetch messages with direct offset', async () => {
       mockApiService.get.mockResolvedValue({
         data: {
@@ -175,6 +209,14 @@ describe('MessagesService', () => {
   });
 
   describe('sendMessageToConversation', () => {
+    it('should propagate error from apiService.post', async () => {
+      mockApiService.post.mockRejectedValue(new Error('Unauthorized'));
+
+      await expect(
+        messagesService.sendMessageToConversation('conv-123', 'Hello')
+      ).rejects.toThrow('Unauthorized');
+    });
+
     it('should send message to conversation', async () => {
       mockApiService.post.mockResolvedValue({
         success: true,
@@ -276,6 +318,12 @@ describe('MessagesService', () => {
       const oldDate = new Date('2024-01-01T10:00:00Z').toISOString();
       const result = messagesService.formatMessageDate(oldDate);
       expect(result).toMatch(/Jan \d+/);
+    });
+
+    it('should include year when message is from a previous year', () => {
+      const lastYearDate = new Date('2023-06-15T10:00:00Z').toISOString();
+      const result = messagesService.formatMessageDate(lastYearDate);
+      expect(result).toMatch(/2023/);
     });
   });
 
@@ -481,6 +529,11 @@ describe('MessagesService', () => {
 
     it('should return false for @ without username', () => {
       expect(messagesService.hasMentions('Email: test@ domain.com')).toBe(false);
+    });
+
+    it('should detect an accented @DisplayName (Unicode parity with parseMentions)', () => {
+      expect(messagesService.hasMentions('Salut @Éric')).toBe(true);
+      expect(messagesService.hasMentions('Bonjour @François Dupont')).toBe(true);
     });
   });
 

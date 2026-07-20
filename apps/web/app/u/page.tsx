@@ -21,7 +21,9 @@ import {
 } from 'lucide-react';
 import { User } from '@/types';
 import { usersService } from '@/services';
-import { getUserInitials } from '@/utils/user';
+import { getUserInitials } from '@/lib/avatar-utils';
+import { OnlineIndicator } from '@/components/ui/online-indicator';
+import { getUserStatus } from '@/lib/user-status';
 import { AuthGuard } from '@/components/auth/AuthGuard';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { authManager } from '@/services/auth-manager.service';
@@ -33,12 +35,14 @@ function ProfilePageContent() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [userOnlineStatus, setUserOnlineStatus] = useState<boolean>(false);
+  const [userLastActiveAt, setUserLastActiveAt] = useState<Date | string | null>(null);
 
   // Hook pour écouter les changements de statut en temps réel
   const { } = useSocketIOMessaging({
-    onUserStatus: (statusUserId: string, username: string, isOnline: boolean) => {
+    onUserStatus: (statusUserId: string, username: string, isOnline: boolean, lastActiveAt?: Date | null) => {
       if (statusUserId === user?.id) {
         setUserOnlineStatus(isOnline);
+        setUserLastActiveAt(prev => lastActiveAt ?? (isOnline ? new Date() : prev));
       }
     }
   });
@@ -60,6 +64,7 @@ function ProfilePageContent() {
       const response = await usersService.getMyProfile();
       setUser(response.data ?? null);
       setUserOnlineStatus(response.data?.isOnline ?? false);
+      setUserLastActiveAt(response.data?.lastActiveAt ?? null);
     } catch (error) {
       console.error('Error loading profile:', error);
       toast.error(t('errors.loadProfileError'));
@@ -77,8 +82,9 @@ function ProfilePageContent() {
   useEffect(() => {
     if (user) {
       setUserOnlineStatus(user.isOnline);
+      setUserLastActiveAt(user.lastActiveAt ?? null);
     }
-  }, [user?.isOnline]);
+  }, [user?.isOnline, user?.lastActiveAt]);
 
 
   const formatDate = (dateString: string) => {
@@ -133,6 +139,8 @@ function ProfilePageContent() {
     return null;
   }
 
+  const presenceStatus = getUserStatus({ isOnline: userOnlineStatus, lastActiveAt: userLastActiveAt });
+
   return (
     <DashboardLayout title={t('title')} className="!bg-none !bg-transparent !h-auto !max-w-none !px-0">
       <div className="w-full px-4 md:px-8 space-y-6">
@@ -169,7 +177,11 @@ function ProfilePageContent() {
                 </div>
 
                 <div className="flex items-center space-x-1 mb-4">
-                  <div className={`w-3 h-3 rounded-full ${userOnlineStatus ? 'bg-green-500' : 'bg-gray-400'}`} />
+                  <OnlineIndicator
+                    isOnline={presenceStatus === 'online'}
+                    status={presenceStatus}
+                    size="md"
+                  />
                   <span className="text-sm text-gray-600">
                     {userOnlineStatus ? t('online') : t('offline')}
                   </span>

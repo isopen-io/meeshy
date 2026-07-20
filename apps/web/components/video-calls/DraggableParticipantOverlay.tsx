@@ -26,7 +26,7 @@ interface DraggableParticipantOverlayProps {
 }
 
 export function DraggableParticipantOverlay({
-  _participantId,
+  participantId: _participantId,
   stream,
   participantName,
   isAudioEnabled = true,
@@ -130,10 +130,20 @@ export function DraggableParticipantOverlay({
       {/* Fullscreen button (on hover) */}
       {isHovered && !isDisconnected && (
         <div
-          className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm p-2 rounded-full cursor-pointer hover:bg-black/80 transition-colors"
+          role="button"
+          tabIndex={0}
+          aria-label={t('calls.stream.fullscreen')}
+          className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm p-2 rounded-full cursor-pointer hover:bg-black/80 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-black/40"
           onClick={(e) => {
             e.stopPropagation();
             onDoubleClick?.();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              onDoubleClick?.();
+            }
           }}
           title={t('calls.stream.fullscreen')}
         >

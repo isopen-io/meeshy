@@ -107,6 +107,7 @@ const OTPInput = ({
   onChange: (value: string) => void;
   disabled?: boolean;
 }) => {
+  const { t } = useI18n('auth');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   const CODE_LENGTH = 6;
 
@@ -149,7 +150,7 @@ const OTPInput = ({
   };
 
   return (
-    <div className="flex justify-center gap-2">
+    <div className="flex justify-center gap-2" role="group" aria-label={t('otp.groupLabel', { length: CODE_LENGTH })}>
       {Array.from({ length: CODE_LENGTH }).map((_, index) => (
         <input
           key={index}
@@ -162,6 +163,8 @@ const OTPInput = ({
           onKeyDown={(e) => handleKeyDown(index, e)}
           onPaste={handlePaste}
           disabled={disabled}
+          aria-label={t('otp.digitLabel', { index: index + 1, total: CODE_LENGTH })}
+          autoComplete="one-time-code"
           className="w-12 h-14 text-center text-2xl font-bold bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-2 border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
         />
       ))}
@@ -202,7 +205,7 @@ function VerifyPhoneContent() {
 
   const handleSendCode = async () => {
     if (!phoneNumber.trim()) {
-      setError(t('verifyPhone.errors.phoneRequired') || 'Veuillez entrer votre numéro de téléphone.');
+      setError(t('verifyPhone.errors.phoneRequired', 'Please enter your phone number.'));
       return;
     }
 
@@ -223,16 +226,16 @@ function VerifyPhoneContent() {
 
       if (response.ok && data.success) {
         console.log('[VERIFY_PHONE] ✅ Code envoyé');
-        toast.success(t('verifyPhone.codeSent') || 'Code envoyé par SMS !');
+        toast.success(t('verifyPhone.codeSent', 'Code sent by SMS!'));
         setStep('verify');
         setCountdown(60); // 60 secondes avant renvoi
       } else {
         console.error('[VERIFY_PHONE] ❌ Échec:', data.error);
-        setError(data.error || t('verifyPhone.errors.sendFailed') || 'Impossible d\'envoyer le code.');
+        setError(data.error || t('verifyPhone.errors.sendFailed', 'Could not send the code.'));
       }
     } catch (err) {
       console.error('[VERIFY_PHONE] Erreur réseau:', err);
-      setError(t('verifyPhone.errors.networkError') || 'Erreur de connexion.');
+      setError(t('verifyPhone.errors.networkError', 'Connection error.'));
     } finally {
       setIsSending(false);
     }
@@ -240,7 +243,7 @@ function VerifyPhoneContent() {
 
   const handleVerifyCode = async () => {
     if (code.length !== 6) {
-      setError(t('verifyPhone.errors.codeRequired') || 'Veuillez entrer le code à 6 chiffres.');
+      setError(t('verifyPhone.errors.codeRequired', 'Please enter the 6-digit code.'));
       return;
     }
 
@@ -261,16 +264,16 @@ function VerifyPhoneContent() {
 
       if (response.ok && data.success) {
         console.log('[VERIFY_PHONE] ✅ Téléphone vérifié');
-        toast.success(t('verifyPhone.success') || 'Numéro vérifié avec succès !');
+        toast.success(t('verifyPhone.success', 'Number verified successfully!'));
         setStep('success');
       } else {
         console.error('[VERIFY_PHONE] ❌ Code invalide:', data.error);
-        setError(data.error || t('verifyPhone.errors.invalidCode') || 'Code invalide ou expiré.');
+        setError(data.error || t('verifyPhone.errors.invalidCode', 'Invalid or expired code.'));
         setCode(''); // Reset le code
       }
     } catch (err) {
       console.error('[VERIFY_PHONE] Erreur réseau:', err);
-      setError(t('verifyPhone.errors.networkError') || 'Erreur de connexion.');
+      setError(t('verifyPhone.errors.networkError', 'Connection error.'));
     } finally {
       setIsVerifying(false);
     }
@@ -292,16 +295,16 @@ function VerifyPhoneContent() {
               </div>
               <div>
                 <h2 className="text-2xl font-semibold text-green-700 dark:text-green-400">
-                  {t('verifyPhone.successTitle') || 'Numéro vérifié !'}
+                  {t('verifyPhone.successTitle', 'Number verified!')}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {t('verifyPhone.successDescription') || 'Votre numéro de téléphone a été vérifié avec succès.'}
+                  {t('verifyPhone.successDescription', 'Your phone number has been verified successfully.')}
                 </p>
               </div>
 
               <div className="space-y-3 pt-2">
                 <SimpleButton onClick={() => router.push('/dashboard')}>
-                  {t('verifyPhone.continue') || 'Continuer'}
+                  {t('verifyPhone.continue', 'Continue')}
                 </SimpleButton>
               </div>
             </div>
@@ -327,10 +330,10 @@ function VerifyPhoneContent() {
                   <PhoneIcon />
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {t('verifyPhone.enterCode') || 'Entrez le code'}
+                  {t('verifyPhone.enterCode', 'Enter the code')}
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {t('verifyPhone.codeSentTo') || 'Un code à 6 chiffres a été envoyé au'}
+                  {t('verifyPhone.codeSentTo', 'A 6-digit code was sent to')}
                 </p>
                 <p className="font-medium text-indigo-600 dark:text-indigo-400">{phoneNumber}</p>
               </div>
@@ -357,10 +360,10 @@ function VerifyPhoneContent() {
                 {isVerifying ? (
                   <span className="flex items-center justify-center space-x-2">
                     <LoadingSpinner size="sm" />
-                    <span>{t('verifyPhone.verifying') || 'Vérification...'}</span>
+                    <span>{t('verifyPhone.verifying', 'Verifying…')}</span>
                   </span>
                 ) : (
-                  t('verifyPhone.verifyButton') || 'Vérifier le code'
+                  t('verifyPhone.verifyButton', 'Verify code')
                 )}
               </SimpleButton>
 
@@ -368,7 +371,7 @@ function VerifyPhoneContent() {
               <div className="text-center">
                 {countdown > 0 ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {t('verifyPhone.resendIn') || 'Renvoyer dans'} {countdown}s
+                    {t('verifyPhone.resendIn', 'Resend in')} {countdown}s
                   </p>
                 ) : (
                   <button
@@ -376,7 +379,7 @@ function VerifyPhoneContent() {
                     disabled={isSending}
                     className="text-sm text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium"
                   >
-                    {isSending ? (t('verifyPhone.sending') || 'Envoi...') : (t('verifyPhone.resendCode') || 'Renvoyer le code')}
+                    {isSending ? (t('verifyPhone.sending', 'Sending…')) : (t('verifyPhone.resendCode', 'Resend code'))}
                   </button>
                 )}
               </div>
@@ -390,7 +393,7 @@ function VerifyPhoneContent() {
                   setError(null);
                 }}
               >
-                {t('verifyPhone.changeNumber') || 'Changer de numéro'}
+                {t('verifyPhone.changeNumber', 'Change number')}
               </SimpleButton>
             </div>
           </SimpleCard>
@@ -406,7 +409,7 @@ function VerifyPhoneContent() {
         <div className="text-center">
           <LargeLogo href="/" />
           <p className="text-gray-600 dark:text-gray-400 text-lg mt-2">
-            {t('verifyPhone.subtitle') || 'Vérifiez votre numéro de téléphone'}
+            {t('verifyPhone.subtitle', 'Verify your phone number')}
           </p>
         </div>
 
@@ -417,23 +420,23 @@ function VerifyPhoneContent() {
                 <PhoneIcon />
               </div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                {t('verifyPhone.title') || 'Vérification téléphone'}
+                {t('verifyPhone.title', 'Phone verification')}
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mt-2">
-                {t('verifyPhone.description') || 'Entrez votre numéro pour recevoir un code de vérification par SMS.'}
+                {t('verifyPhone.description', 'Enter your number to receive a verification code by SMS.')}
               </p>
             </div>
 
             {/* Input numéro */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {t('verifyPhone.phoneLabel') || 'Numéro de téléphone'}
+                {t('verifyPhone.phoneLabel', 'Phone number')}
               </label>
               <SimpleInput
                 type="tel"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder={t('verifyPhone.phonePlaceholder') || '+33 6 12 34 56 78'}
+                placeholder={t('verifyPhone.phonePlaceholder', '+33 6 12 34 56 78')}
                 disabled={isSending}
               />
             </div>
@@ -453,15 +456,15 @@ function VerifyPhoneContent() {
               {isSending ? (
                 <span className="flex items-center justify-center space-x-2">
                   <LoadingSpinner size="sm" />
-                  <span>{t('verifyPhone.sending') || 'Envoi...'}</span>
+                  <span>{t('verifyPhone.sending', 'Sending…')}</span>
                 </span>
               ) : (
-                t('verifyPhone.sendCode') || 'Envoyer le code'
+                t('verifyPhone.sendCode', 'Send code')
               )}
             </SimpleButton>
 
             <SimpleButton variant="ghost" onClick={() => router.push('/login')}>
-              {t('verifyPhone.backToLogin') || 'Retour à la connexion'}
+              {t('verifyPhone.backToLogin', 'Back to login')}
             </SimpleButton>
           </div>
         </SimpleCard>
@@ -471,11 +474,12 @@ function VerifyPhoneContent() {
 }
 
 function LoadingFallback() {
+  const { t } = useI18n('common');
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="text-center space-y-3">
         <LoadingSpinner size="lg" />
-        <p className="text-sm text-gray-600 dark:text-gray-400">Chargement...</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{t('loading', 'Loading…')}</p>
       </div>
     </div>
   );

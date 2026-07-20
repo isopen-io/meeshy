@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
+import os
 
 // MARK: - Extracted from RootView.swift
 
@@ -9,6 +10,8 @@ import MeeshyUI
 struct ThemedActionButton: View {
     let icon: String
     let color: String
+    let label: String
+    let hint: String
     var badge: Int = 0
     var size: CGFloat = 46
     let action: () -> Void
@@ -42,19 +45,19 @@ struct ThemedActionButton: View {
                     .frame(width: size, height: size)
                     .shadow(
                         color: Color(hex: color).opacity(isGlowing ? 0.65 : 0.45),
-                        radius: isGlowing ? 14 : 10,
+                        radius: isGlowing ? MeeshyShadow.strong.radius : MeeshyShadow.medium.radius,
                         y: 4
                     )
 
                 Image(systemName: icon)
-                    .font(.system(size: iconSize, weight: .semibold))
+                    .font(MeeshyFont.relative(iconSize, weight: .semibold))
                     .foregroundColor(.white)
                     .scaleEffect(isPressed ? 1.2 : 1.0)
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
 
                 if badge > 0 {
                     Text("\(min(badge, 99))")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(MeeshyFont.relative(9, weight: .bold))
                         .foregroundColor(Color(hex: color))
                         .frame(width: 16, height: 16)
                         .background(Circle().fill(Color.white))
@@ -64,6 +67,8 @@ struct ThemedActionButton: View {
             }
             .scaleEffect(isPressed ? 0.82 : 1)
         }
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
         .onAppear {
             // Reduce Motion: keep the static base shadow, no breathing glow.
             guard !reduceMotion else { return }
@@ -93,17 +98,20 @@ struct ThemedFeedOverlay: View {
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    /// Présentation unifiée du story viewer (`.fullScreenCover(item:)` au root).
+    /// Remplace l'ancien cover local `(isPresented:)` + `selectedStoryUserId`
+    /// séparé, dont la capture périmée d'uid provoquait l'écran noir « introuvable ».
+    @EnvironmentObject var storyViewerCoordinator: StoryViewerCoordinator
     @State private var composerText = ""
     @FocusState private var isComposerFocused: Bool
-    @State private var showStoryViewer = false
-    @State private var selectedStoryUserId: String?
-    /// `true` quand le viewer est ouvert depuis l'avatar d'un auteur de post
-    /// (contexte « personne précise ») ; `false` depuis le tray (flux).
-    @State private var storyViewerSingleGroup = false
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
     @State private var pendingAttachmentType: String?
     @State private var quoteOriginalPost: FeedPost?
+    /// Negative scroll offset of the feed (0 at rest, more negative scrolling
+    /// up) — drives the collapsing header and the reveal of the compact story
+    /// trail integrated in the header's accessory slot. Mirrors `FeedView`.
+    @State private var headerScrollOffset: CGFloat = 0
 
     // Post reaction state — socket-driven, mirrors FeedView pattern.
     @State private var postLikedIds: Set<String> = []
@@ -204,7 +212,9 @@ struct ThemedFeedOverlay: View {
                             postBookmarkedIds.insert(p.id)
                         }
                     }
-                } catch { }
+                } catch {
+                    Logger.network.error("bookmarks refresh failed: \(error.localizedDescription)")
+                }
             }
             return
         }
@@ -344,14 +354,14 @@ struct ThemedFeedOverlay: View {
     private var feedHeader: some View {
         CollapsibleHeader(
             title: "Meeshy Feed",
-            scrollOffset: 0,
+            scrollOffset: headerScrollOffset,
             showBackButton: false,
             titleColor: theme.textPrimary,
             backArrowColor: MeeshyColors.indigo500,
             backgroundColor: theme.backgroundPrimary,
             titleView: {
                 Text("Meeshy Feed")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
@@ -362,12 +372,25 @@ struct ThemedFeedOverlay: View {
                     ReelsPresenter.shared.presentFresh()
                 } label: {
                     Image(systemName: "play.rectangle.on.rectangle.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(MeeshyFont.relative(18, weight: .semibold))
                         .foregroundColor(MeeshyColors.indigo500)
                         .frame(width: 40, height: 40)
                         .adaptiveGlass(in: Circle(), interactive: true)
                 }
                 .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
+                .accessibilityIdentifier("feed.header.reels")
+            },
+            // Compact story trail integrated inside the header (accessory slot,
+            // below the title/actions bar) — reveals as the full Story Tray
+            // scrolls up under the header. Mirrors `FeedView` and the chats list.
+            accessory: {
+                AnyView(
+                    // Lancement unifié via StoryViewerCoordinator (chemin unique trail).
+                    PinnedStoryTrailBand(
+                        viewModel: storyViewModel,
+                        scrollOffset: headerScrollOffset
+                    )
+                )
             }
         )
     }
@@ -434,7 +457,7 @@ struct ThemedFeedOverlay: View {
         // Marge latérale plus serrée que les posts standards (`FeedPostCard` = 16)
         // → la carte Réel est un peu plus large sur iPhone, tout en gardant une
         // séparation nette des bords.
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MeeshySpacing.md)
     }
 
     // MARK: - Standard post card
@@ -494,9 +517,10 @@ struct ThemedFeedOverlay: View {
             },
             authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
             onViewAuthorStory: {
-                selectedStoryUserId = post.authorId
-                storyViewerSingleGroup = true
-                showStoryViewer = true
+                // Contexte « personne précise » → singleGroup, via le coordinator unique.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
             }
         )
     }
@@ -529,16 +553,26 @@ struct ThemedFeedOverlay: View {
             // centré (iOS 16-compatible). Identique à `FeedView.feedScrollView`.
             GeometryReader { viewportProxy in
                 let viewportFrame = viewportProxy.frame(in: .global)
-                ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 14) {
-                    Spacer().frame(height: 70)
-
-                    // Story Tray
-                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
-                        selectedStoryUserId = userId
-                        storyViewerSingleGroup = false
-                        showStoryViewer = true
-                    }, onAddStatus: {
+                // Branded pull-to-refresh + scroll-offset tracking (drives the
+                // collapsing header and the compact story-trail reveal). The
+                // `topPadding` reserves the header height so the full Story Tray
+                // glides up under the header on scroll. Mirrors `FeedView`.
+                MeeshyRefreshableScroll(
+                    onRefresh: {
+                        await viewModel.refresh()
+                        await storyViewModel.loadStories()
+                        await statusViewModel.loadStatuses()
+                    },
+                    coordinateSpaceName: "feedScroll",
+                    onScrollOffsetChange: { offset in
+                        headerScrollOffset = offset
+                    },
+                    topPadding: CollapsibleHeaderMetrics.expandedHeight
+                ) {
+                LazyVStack(spacing: MeeshySpacing.md) {
+                    // Story Tray — lancement unifié via StoryViewerCoordinator
+                    // (même chemin que la liste de conversations), pas de cover local.
+                    StoryTrayView(viewModel: storyViewModel, onAddStatus: {
                         showStatusComposer = true
                     })
 
@@ -554,27 +588,28 @@ struct ThemedFeedOverlay: View {
                             )
 
                             Text(String(localized: "composer.placeholder.share", defaultValue: "Share something…", bundle: .main))
-                                .font(.footnote)
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                 .foregroundColor(theme.textMuted)
 
                             Spacer()
 
                             Image(systemName: "photo.on.rectangle.angled")
-                                .font(.system(size: 16))
+                                .font(MeeshyFont.relative(16))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
-                        .padding(12)
+                        .padding(MeeshySpacing.md)
                         .background(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .fill(theme.inputBackground)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                         .stroke(theme.inputBorder, lineWidth: 1)
                                 )
                         )
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .accessibilityIdentifier("feed.composer.placeholder")
 
                     // Feed posts with infinite scroll. Les Réels (`type == REEL`)
                     // rendent plein-cadre via `reelFeedCardView` ; les autres via
@@ -603,12 +638,7 @@ struct ThemedFeedOverlay: View {
                             .padding()
                     }
                 }
-                .padding(.bottom, 100)
-                }
-                .refreshable {
-                    await viewModel.refresh()
-                    await storyViewModel.loadStories()
-                    await statusViewModel.loadStatuses()
+                .padding(.bottom, 100) // Clear floating button / tab bar area
                 }
                 .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
                     reelAutoplay.update(
@@ -620,8 +650,10 @@ struct ThemedFeedOverlay: View {
             }
         }
         .overlay(alignment: .top) {
-            // Header « Meeshy Feed » épinglé (le ScrollView réserve déjà ~70pt en
-            // tête via le Spacer initial pour qu'il glisse dessous au scroll).
+            // Header « Meeshy Feed » épinglé : le `MeeshyRefreshableScroll`
+            // réserve `CollapsibleHeaderMetrics.expandedHeight` en tête (topPadding)
+            // pour que le contenu glisse dessous au scroll et que la trail compacte
+            // se révèle dans le slot accessory.
             feedHeader
         }
         .task {
@@ -707,26 +739,13 @@ struct ThemedFeedOverlay: View {
                 onDismiss: { editingPost = nil }
             )
         }
-        .fullScreenCover(isPresented: $showStoryViewer) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: selectedStoryUserId,
-                isPresented: $showStoryViewer,
-                onReplyToStory: { replyContext in
-                    showStoryViewer = false
-                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
-                },
-                singleGroup: storyViewerSingleGroup,
-                startAtFirstUnviewed: true,
-                presentationSource: "FeedOverlay"
-            )
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
-        }
+        // Story viewer : présentation unifiée via StoryViewerCoordinator au root
+        // (`.fullScreenCover(item:)`). L'ancien cover local `(isPresented:)` +
+        // `selectedStoryUserId` séparé est supprimé (capture périmée d'uid → écran noir).
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullComposer) {
             FeedComposerSheet(

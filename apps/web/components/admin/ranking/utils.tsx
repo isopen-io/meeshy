@@ -29,14 +29,14 @@ export function getTypeIcon(type: string | undefined): string {
   }
 }
 
-export function getTypeLabel(type: string | undefined): string {
-  switch (type) {
-    case 'direct': return 'Directe';
-    case 'group': return 'Groupe';
-    case 'public': return 'Publique';
-    case 'broadcast': return 'Diffusion';
-    default: return type || 'Inconnu';
-  }
+export function getTypeLabel(type: string | undefined, t: (key: string) => string): string {
+  const mapped: Record<string, string> = {
+    direct: t('ranking.conversationType.direct'),
+    group: t('ranking.conversationType.group'),
+    public: t('ranking.conversationType.public'),
+    broadcast: t('ranking.conversationType.broadcast'),
+  };
+  return (type && mapped[type]) ?? type ?? t('ranking.conversationType.unknown');
 }
 
 export function getMessageTypeIcon(type: string | undefined): string {

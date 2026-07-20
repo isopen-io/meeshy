@@ -19,6 +19,34 @@ struct UploadProgressBar: View {
         progress.files.first(where: { $0.status == .uploading })?.fileName
     }
 
+    private var isUploading: Bool { percentage < 100 }
+
+    private var filesCountLabel: String {
+        String(
+            localized: "upload.progress.files-count",
+            defaultValue: "\(progress.completedFiles)/\(progress.totalFiles) fichiers",
+            bundle: .main
+        )
+    }
+
+    private var accessibilityLabelText: String {
+        String(
+            localized: "upload.progress.a11y-label",
+            defaultValue: "Envoi des fichiers",
+            bundle: .main
+        )
+    }
+
+    private var accessibilityValueText: String {
+        let progressPhrase = String(
+            localized: "upload.progress.a11y-value",
+            defaultValue: "\(percentage) %, \(progress.completedFiles) fichiers sur \(progress.totalFiles) envoyés",
+            bundle: .main
+        )
+        guard let name = currentFileName else { return progressPhrase }
+        return "\(progressPhrase), \(name)"
+    }
+
     var body: some View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
@@ -39,7 +67,7 @@ struct UploadProgressBar: View {
                 Spacer()
 
                 Text("\(percentage)%")
-                    .font(.system(.caption, design: .monospaced).weight(.bold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .monospaced))
                     .foregroundColor(Color(hex: accentColor))
                     .contentTransition(.numericText())
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: percentage)
@@ -66,12 +94,12 @@ struct UploadProgressBar: View {
             .frame(height: 6)
 
             HStack {
-                Text("\(progress.completedFiles)/\(progress.totalFiles) fichiers")
-                    .font(.caption2.weight(.medium))
+                Text(filesCountLabel)
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                 Spacer()
                 Text(formatBytes(progress.uploadedBytes) + " / " + formatBytes(progress.totalBytes))
-                    .font(.system(.caption2, design: .monospaced).weight(.medium))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium, design: .monospaced))
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -85,11 +113,13 @@ struct UploadProgressBar: View {
                         .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityValue(accessibilityValueText)
+        .accessibilityAddTraits(isUploading ? .updatesFrequently : [])
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return String(format: "%.0f KB", Double(bytes) / 1024) }
-        return String(format: "%.1f MB", Double(bytes) / (1024 * 1024))
+        bytes.formatted(.byteCount(style: .file))
     }
 }

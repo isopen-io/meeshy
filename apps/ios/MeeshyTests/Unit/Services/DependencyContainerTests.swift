@@ -2,6 +2,7 @@ import XCTest
 import GRDB
 @testable import Meeshy
 
+@MainActor
 final class DependencyContainerTests: XCTestCase {
 
     /// Regression test for a Swift 6 isolation crash on `GRDB.DatabasePool.reader.1`.

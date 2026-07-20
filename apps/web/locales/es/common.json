@@ -181,6 +181,7 @@
       "messageDeletedByOther": "Un mensaje ha sido eliminado",
       "modifyError": "Error al modificar el mensaje",
       "editError": "Error al modificar el mensaje",
+      "contentRequired": "Contenido obligatorio",
       "deleteError": "Error al eliminar el mensaje",
       "replyTo": "Responder a este mensaje",
       "messageFound": "¡Mensaje encontrado!",
@@ -201,7 +202,10 @@
       "title": "¡Vaya! Algo salió mal",
       "description": "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
       "details": "Detalles del error",
-      "reload": "Recargar página"
+      "reload": "Recargar página",
+      "featureError": "Algo salió mal en {feature}",
+      "featureUnavailable": "Esta sección no está disponible en este momento.",
+      "retry": "Reintentar"
     },
     "download": "Descargar",
     "play": "Reproducir",
@@ -213,6 +217,11 @@
     "zoomIn": "Acercar",
     "zoomOut": "Alejar",
     "rotate": "Rotar",
+    "imageViewer": "Visor de imágenes",
+    "imageLoadError": "No se puede cargar la imagen",
+    "downloadAnyway": "Descargar de todos modos",
+    "lightboxKeyboardHelp": "Usa las flechas ← → para navegar • +/- para hacer zoom • R para rotar • Esc para cerrar",
+    "videoLightboxKeyboardHelp": "Usa las flechas ← → para navegar • Espacio para reproducir/pausar • M para silenciar • F para pantalla completa • Esc para cerrar",
     "clearSearch": "Borrar búsqueda",
     "backToList": "Volver a la lista",
     "backToConversations": "Volver a conversaciones",
@@ -260,8 +269,33 @@
     "storyVisibility": {
       "public": "Público",
       "friends": "Amigos",
+      "community": "Comunidad",
+      "except": "Todos excepto…",
+      "only": "Solo…",
       "private": "Privado"
     },
+    "audiencePicker": {
+      "searchPlaceholder": "Buscar personas…",
+      "exceptHint": "Tu historia se ocultará a las personas seleccionadas.",
+      "onlyHint": "Solo las personas seleccionadas verán tu historia.",
+      "empty": "Nadie encontrado",
+      "remove": "Quitar"
+    },
+    "postComposer": {
+      "contentLabel": "Contenido de la publicación",
+      "addPhoto": "Añadir foto",
+      "addVideo": "Añadir vídeo",
+      "changeVisibility": "Cambiar visibilidad",
+      "visibility": {
+        "public": "Público",
+        "friends": "Amigos",
+        "except": "Amigos excepto...",
+        "only": "Solo...",
+        "private": "Privado"
+      }
+    },
+    "audioUnavailable": "URL de audio no disponible",
+    "audioProgress": "Progreso del audio",
     "statusComposer": {
       "title": "¿Cuál es tu mood?",
       "placeholder": "¿Qué estás haciendo?",
@@ -275,5 +309,14 @@
     "anonymousUser": "Usuario anónimo"
   },
   "copied": "Copiado",
-  "never": "Nunca"
+  "never": "Nunca",
+  "offlineMessage": "Estás sin conexión — los mensajes se enviarán al reconectar",
+  "updateAvailable": "¡Hay una nueva versión de Meeshy disponible!",
+  "updateNow": "Actualizar",
+  "wait": "Esperar",
+  "languageSelector": {
+    "selectLanguage": "Seleccionar un idioma",
+    "searchLanguage": "Buscar idioma...",
+    "noLanguageFound": "No se encontró ningún idioma"
+  }
 }

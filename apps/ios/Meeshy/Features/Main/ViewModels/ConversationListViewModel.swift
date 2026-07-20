@@ -131,7 +131,7 @@ class ConversationListViewModel: ObservableObject {
             for (i, c) in conversations.enumerated() { index[c.id] = i }
             _convIdIndex = index
         }
-        return _convIdIndex![id]
+        return _convIdIndex?[id]
     }
 
     // MARK: - List Mutators (centralised write surface)
@@ -422,7 +422,7 @@ class ConversationListViewModel: ObservableObject {
         // → filter + group in one pass → single @Published update (groupedConversations).
         // Eliminates the old 3-broadcast chain ($conversations → $filteredConversations → $groupedConversations).
         Publishers.CombineLatest4($conversations, $searchText, $selectedFilter, $userCategories)
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
             .sink { [weak self] (convs, text, filter, categories) in
                 guard let self else { return }
                 let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
@@ -724,13 +724,36 @@ class ConversationListViewModel: ObservableObject {
                 // that carries lastMessageAt, so we want the row data fresh
                 // BEFORE we bump it to position 0 (otherwise the bumped
                 // row would render stale title for one frame).
-                if let title = event.title { self.conversations[index].title = title }
+                // Un DM n'est jamais renommable : son `title` client est le
+                // nom du participant, dérivé à la conversion REST
+                // (`toConversation` écarte le titre DB). Le payload socket
+                // porte le titre BRUT — le greffer sur un DM écrase le nom
+                // affiché (« sandra raveloson » → « Sany » au premier
+                // pin/mute, vu 2026-07-04). Greffe réservée aux
+                // conversations renommables.
+                if let title = event.title, self.conversations[index].type != .direct {
+                    self.conversations[index].title = title
+                }
                 if let description = event.description { self.conversations[index].description = description }
                 if let avatar = event.avatar { self.conversations[index].avatar = avatar }
                 if let banner = event.banner { self.conversations[index].banner = banner }
                 if let isAnnouncement = event.isAnnouncementChannel {
                     self.conversations[index].isAnnouncementChannel = isAnnouncement
                 }
+                if let writeRole = event.defaultWriteRole {
+                    self.conversations[index].defaultWriteRole = writeRole
+                }
+                if let slowMode = event.slowModeSeconds {
+                    self.conversations[index].slowModeSeconds = slowMode
+                }
+                if let autoTranslate = event.autoTranslateEnabled {
+                    self.conversations[index].autoTranslateEnabled = autoTranslate
+                }
+                // Message-driven bump also carries the new preview text so
+                // the row shows the latest message without waiting for the
+                // next full sync (lastMessageTranslations arrive separately).
+                if let msgId = event.lastMessageId { self.conversations[index].lastMessageId = msgId }
+                if let preview = event.lastMessagePreview { self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated }
 
                 // Bump the row to the top when the gateway tells us a new
                 // message advanced lastMessageAt. We compare strictly
@@ -1166,10 +1189,19 @@ class ConversationListViewModel: ObservableObject {
 
         do {
             let userId = currentUserId
+            // Curseur de secours quand aucun `nextCursor` n'est connu (full
+            // sync partiel, curseur jamais persisté) : la conversation
+            // chargée la plus ancienne par `lastMessageAt` — même sémantique
+            // que le curseur gateway (`before` pagine par lastMessageAt
+            // strictement plus ancien). Sans lui, on refetcherait la page 1
+            // déjà affichée et le zero-progress guard ci-dessous forcerait
+            // `.exhausted`, bloquant l'infinite scroll sur les comptes dont
+            // le full sync s'est arrêté en cours de route.
             let previousCursor = nextCursor
+                ?? conversations.min(by: { $0.lastMessageAt < $1.lastMessageAt })?.id
             let knownIds = Set(conversations.map(\.id))
             let page = try await conversationService.listPage(
-                before: nextCursor,
+                before: previousCursor,
                 limit: pageLimit,
                 currentUserId: userId
             )
@@ -1294,14 +1326,13 @@ class ConversationListViewModel: ObservableObject {
     /// (forceRefresh), pour que les tests unitaires puissent vérifier
     /// la liste exacte des stores touchés.
     ///
-    /// Couvre 11 caches pertinents pour la home :
+    /// Couvre 9 caches de métadonnées pertinents pour la home :
     /// - Listing + pagination (re-fetché immédiatement par forceRefresh)
     /// - Stories (re-fetché actif par StoryViewModel.loadStories forceNetwork)
     /// - Messages cached par conversation (l'ouverture d'une conv après
     ///   refresh re-fetchera depuis le serveur)
     /// - Préférences user/conversation, catégories, tags
     /// - Profils (mood, presence, last seen)
-    /// - Assets visuels (avatars, bannières, thumbs)
     /// - Caches mémoire de traduction/transcription : re-traduction
     ///   garantie après refresh (utile si modèle NLLB côté serveur a
     ///   été mis à jour ou si l'utilisateur a changé sa langue préférée)
@@ -1309,8 +1340,15 @@ class ConversationListViewModel: ObservableObject {
     /// Stores intentionnellement laissés intacts (autres écrans ou
     /// coût bande passante prohibitif) : feed, comments, stats,
     /// notifications, friends, friendRequests, blockedUsers, userSearch,
-    /// timeline, audio, video, affiliateTokens, shareLinks,
-    /// trackingLinks, communityLinks.
+    /// timeline, affiliateTokens, shareLinks, trackingLinks, communityLinks.
+    ///
+    /// Les stores MÉDIA (images, thumbnails, audio, video) ne sont JAMAIS
+    /// invalidés ici : exigence local-first « téléchargé une fois = jamais
+    /// re-téléchargé tant que l'app est installée ». Les URLs médias sont
+    /// immuables côté gateway (max-age=1 an) — si un avatar change, son URL
+    /// change, donc invalider les octets ne rafraîchit rien de plus que le
+    /// refetch des métadonnées ci-dessus. (Audit 2026-07-10 : chaque pull
+    /// re-téléchargeait l'intégralité des avatars/covers, ~3 Mo minimum.)
     private func invalidatePullRefreshScope() async {
         // Listing + pagination (re-fetché immédiatement par forceRefresh)
         await CacheCoordinator.shared.conversations.invalidateAll()
@@ -1332,11 +1370,6 @@ class ConversationListViewModel: ObservableObject {
         await CacheCoordinator.shared.userTags.invalidateAll()
         // Profils (mood, presence cachée, dernière vue)
         await CacheCoordinator.shared.profiles.invalidateAll()
-        // Assets visuels (avatars + bannières partagent le store images,
-        // les thumbs de message ont leur propre store). Re-download au
-        // prochain rendu des AsyncImage.
-        await CacheCoordinator.shared.images.invalidateAll()
-        await CacheCoordinator.shared.thumbnails.invalidateAll()
         // Caches in-memory de traduction/transcription/audio + DB. Force
         // une retraduction si le serveur a publié de nouvelles versions
         // ou si l'utilisateur a changé sa langue préférée entre temps.
@@ -1373,6 +1406,28 @@ class ConversationListViewModel: ObservableObject {
         guard let index = convIndex(for: conversationId) else { return }
         let newValue = !conversations[index].userState.isMuted
         try? await store.apply(.setMuted(newValue), for: conversationId)
+    }
+
+    // MARK: - Rename
+
+    /// Renomme une conversation (groupes / communautés). Enqueue via l'outbox
+    /// (`PUT /conversations/:id`) ; le nouveau nom se propage au retour serveur
+    /// via l'event socket `conversationUpdated` déjà observé par ce VM.
+    func renameConversation(conversationId: String, title: String) async {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let payload = UpdateConversationPayload(
+            clientMutationId: ClientMutationId.generate(),
+            conversationId: conversationId,
+            title: trimmed,
+            description: nil,
+            avatarUrl: nil
+        )
+        do {
+            try await OfflineQueue.shared.enqueue(.updateConversation, payload: payload, conversationId: conversationId)
+        } catch {
+            Logger.messages.error("[Rename] enqueue failed id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Mark as Read
@@ -1422,6 +1477,23 @@ class ConversationListViewModel: ObservableObject {
         // disappears because `filterConversations` hides deletedForUserAt != nil;
         // on a 4xx the store clears deletedForUserAt and the row reappears.
         try? await store.apply(.deleteForUser, for: conversationId)
+        await sweepLocalCallTranscripts(forConversation: conversationId)
+    }
+
+    /// Every local call transcript for this conversation, swept alongside the
+    /// (optimistic, rollback-capable) conversation delete. No secondary index
+    /// needed — the existing local messages cache already carries each call
+    /// message's `callSummary.callId`, which IS the join from "this
+    /// conversation" to "its calls". Accepted, low-severity edge case: a
+    /// rolled-back delete (4xx) doesn't un-sweep already-invalidated
+    /// transcripts — same risk class already accepted for other local-cache-only
+    /// invalidations elsewhere in the app. See
+    /// docs/superpowers/specs/2026-07-11-call-transcript-history-design.md.
+    private func sweepLocalCallTranscripts(forConversation conversationId: String) async {
+        let messages = await CacheCoordinator.shared.messages.load(for: conversationId).snapshot() ?? []
+        for callId in messages.compactMap(\.callSummary?.callId) {
+            await CallTranscriptStore.shared.invalidate(for: callId)
+        }
     }
 
     // MARK: - Move to Section
@@ -1471,7 +1543,9 @@ class ConversationListViewModel: ObservableObject {
             let username = AuthManager.shared.currentUser?.username
             let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: username) }
             previewMessages[conversationId] = msgs
-        } catch { }
+        } catch {
+            Logger.messages.warning("[ConversationList] previewMessages fetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Précharge les messages des top 20 conversations qui n'ont pas encore de cache.
@@ -1514,7 +1588,9 @@ class ConversationListViewModel: ObservableObject {
                                 }
                                 try? await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
                             }
-                        } catch { }
+                        } catch {
+                            Logger.messages.warning("[ConversationList] prefetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        }
                     }
                 }
             }

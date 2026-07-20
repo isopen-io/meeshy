@@ -1,18 +1,36 @@
 # Configuration d'environnement
-python-dotenv==1.1.1
+python-dotenv==1.2.2
 
 # Framework web
-fastapi==0.131.0
-uvicorn[standard]==0.34.0
-pydantic-settings==2.13.1
-pydantic==2.10.5
+fastapi==0.139.2
+uvicorn[standard]==0.51.0
+pydantic-settings==2.14.2
+pydantic==2.13.4
 
 # Communication gRPC et ZeroMQ
-grpcio==1.69.0
-grpcio-tools==1.69.0
-grpcio-reflection==1.69.0
-protobuf==5.29.3
-pyzmq==26.2.0
+# PIN EXACT lockstep (verified against PyPI metadata + `uv pip install --dry-run`).
+# Dependabot proposed grpcio-reflection==1.82.0, but the entire 1.82.0 grpcio-family
+# release (grpcio/grpcio-tools/grpcio-reflection) is YANKED on PyPI — "Bad protobuf
+# dependency version specified; only 7.x should be supported"
+# (https://github.com/grpc/grpc/issues/42906). The next non-yanked release
+# (1.78.0+) tightens grpcio-tools' setuptools requirement to >=77.0.1, which
+# conflicts with espnet==202412 below (requires setuptools<74.0.0) — confirmed via
+# `uv pip install -r requirements.txt --dry-run` ("espnet==202412 and
+# grpcio-tools==1.81.1 are incompatible"). Pinning the whole family to 1.76.0
+# instead: not yanked, no setuptools conflict, and matches the version already
+# resolved in uv.lock (used by the passing CI test suite). protobuf bumped to
+# 6.33.6 because grpcio-tools/grpcio-reflection 1.76.0 both require
+# protobuf>=6.31.1,<7.0.0 — the previous protobuf==5.29.3 pin is unsatisfiable
+# with any of these grpcio-reflection releases (1.76.0, 1.81.1 or 1.82.0 alike
+# require protobuf>=6.3x).
+# DO NOT bump protobuf to 7.x while grpcio-tools/grpcio-reflection are pinned to
+# 1.76.0 (they cap protobuf<7.0.0). Dependabot's semver-major bump to 7.35.1
+# (PR #2080) broke the Docker build — reject any future protobuf 7.x PR the same way.
+grpcio==1.82.1
+grpcio-tools==1.76.0
+grpcio-reflection==1.76.0
+protobuf==6.33.6
+pyzmq==27.1.0
 
 # Machine Learning et NLP
 # Versions gérées par chatterbox-tts pour compatibilité
@@ -20,37 +38,43 @@ pyzmq==26.2.0
 # CRITICAL: numpy<1.24 pour compatibilité ESPnet 202412
 # ESPnet 202412 nécessite numpy<1.24, chatterbox-tts <1.26 → contrainte commune <1.24
 numpy>=1.21.0,<1.24.0
-accelerate>=1.0.0
-datasets>=3.0.0
+# PIN EXACT — versions résolues conjointement avec torch==2.6.0 (cf. Dockerfile) : une
+# borne `>=` sur ces libs ML activement maintenues dérive vers une release qui exige un
+# torch/numpy plus récent (ex: pyannote.audio 3.4.0→4.0.7 == torch>=2.8.0) et casse le
+# build translator de façon non déterministe (3 échecs consécutifs CI release.yml,
+# conflit "numpy>=2.2.6,<2.3.0 vs numpy<2.0.0"). Revalider ces pins avec
+# `uv pip compile requirements.txt` (+ torch==2.6.0 en tête) avant de les élargir.
+accelerate==1.14.0
+datasets==5.0.0
 # sentencepiece: version gérée par ESPnet (0.1.97 pour espnet 202412)
-huggingface_hub>=0.20.0
-safetensors>=0.4.0
-peft>=0.7.0
-# PIN EXACT — chatterbox-tts 0.1.6 requiert transformers==4.46.3 (cf. uv.lock + pyproject.toml).
+huggingface_hub==1.22.0
+safetensors==0.8.0
+peft==0.19.1
+# PIN EXACT — chatterbox-tts 0.1.6 requiert transformers==5.14.1 (cf. uv.lock + pyproject.toml).
 # NE PAS élargir : transformers>=4.55 référence torch.float8_e8m0fnu (dtype MXFP4) absent de
 # torch 2.6.0 (épinglé dans Dockerfile) → AttributeError à l'import de chatterbox au build.
-transformers==4.46.3
+transformers==5.14.1
 # librosa: version gérée par ESPnet (0.9.2 pour espnet 202412) et chatterbox-tts
 
 # Cache et base de données
-redis==5.2.1
+redis==8.0.1
 asyncpg==0.30.0
 aiosqlite==0.20.0
-dnspython==2.7.0
+dnspython==2.8.0
 
 # Détection de langue et analyse de texte
 langdetect==1.0.9
-nltk==3.9.1
+nltk==3.10.0
 textstat==0.7.13
 
 # Utilitaires système
-psutil==6.1.1
+psutil==7.2.2
 # numpy version managed by dependencies (chatterbox-tts requires numpy<1.26.0)
 # pandas 2.0.x works with numpy<1.26.0 on Python 3.12
-pandas>=2.0.0,<2.1.0
-aiohttp==3.11.11
-python-multipart==0.0.22
-aiofiles==24.1.0
+pandas>=2.0.0,<2.4.0
+aiohttp==3.14.1
+python-multipart==0.0.32
+aiofiles==25.1.0
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # VOICE FEATURES - MANDATORY FOR MEESHY PLATFORM
@@ -84,14 +108,14 @@ faster-whisper==1.2.1
 # NOTE: Installé séparément avec --no-deps dans Dockerfile (conflit numpy)
 # Dépendances manuelles de chatterbox-tts (pour installation --no-deps):
 resampy==0.4.3
-s3tokenizer
-diffusers==0.29.0
+s3tokenizer==0.3.0
+diffusers==0.39.0
 resemble-perth==1.0.1
-omegaconf==2.3.0
+omegaconf==2.3.1
 conformer==0.3.2
-spacy>=3.4.0
-einops
-soxr  # Requis par transformers/audio_utils pour chatterbox-tts
+spacy==3.8.14
+einops==0.8.2
+soxr==1.1.0  # Requis par transformers/audio_utils pour chatterbox-tts
 # chatterbox-tts==0.1.6 (installé dans Dockerfile avec --no-deps)
 
 # HIGGS AUDIO V2 (OPTIONAL) - State-of-the-art quality
@@ -104,7 +128,8 @@ soxr  # Requis par transformers/audio_utils pour chatterbox-tts
 # ✓ Python 3.11-3.13 compatible
 # ✓ Used for languages not supported by Chatterbox (e.g., Lingala)
 # Set TTS_MODEL=vits
-# Note: 202412 est la dernière version compatible numpy<2.0 (avant 202509 qui nécessite numpy>=2.2)
+# Note: 202412 est la dernière version compatible numpy<2.0 (202509+ et 202511 nécessitent numpy>=2.0).
+# NE PAS bumper : conflit avec le pin numpy<1.24.0 ci-dessus → build translator KO (cf. CI Docker #2074).
 espnet==202412
 espnet-model-zoo==0.1.7
 
@@ -129,29 +154,39 @@ espnet-model-zoo==0.1.7
 # Audio Processing utilities
 pydub==0.25.1
 # librosa version managed by espnet (0.9.2) - use utils/audio_utils.py for compat
-soundfile>=0.12.1
-scipy>=1.10.0
+soundfile==0.14.0
+scipy==1.15.3
 ffmpeg-python==0.2.0
 
 # ─────────────────────────────────────────────────────────────────────────────────
 # SPEAKER DIARIZATION - Identification des locuteurs
 # ─────────────────────────────────────────────────────────────────────────────────
 # Priorité 1: pyannote.audio (précision ~95%, nécessite HF_TOKEN)
-pyannote.audio>=3.4.0  # ✅ ACTIVÉ - Compatible torch 2.6.0
+# NE PAS BUMPER vers 4.x : pyannote-audio>=4.0 → pyannote-core>=6.0.1 → numpy>=2.0
+# et torch>=2.8.0, incompatibles avec les pins numpy<1.24 (ESPnet 202412) et
+# torch==2.6.0 (Dockerfile). Le bump Dependabot #1674 (4.0.7) a rendu le build
+# Docker translator insoluble ("your requirements are unsatisfiable") — revalider
+# via `uv pip compile requirements.txt --python-version 3.11` avant tout bump.
+pyannote.audio==3.4.0  # ✅ ACTIVÉ - Compatible torch 2.6.0 (4.0+ exige torch>=2.8.0)
 
 # Priorité 2: SpeechBrain - Alternative à pyannote (SANS token HuggingFace requis)
-speechbrain>=1.0.0  # ✅ ACTIVÉ - Fallback si pyannote indisponible
-scikit-learn>=1.3.0  # Requis pour clustering et nettoyage (DiarizationCleaner)
+speechbrain==1.1.0  # ✅ ACTIVÉ - Fallback si pyannote indisponible
+scikit-learn==1.7.2  # Requis pour clustering et nettoyage (DiarizationCleaner)
 # librosa déjà inclus dans requirements.txt via chatterbox-tts
 
 # Logging et monitoring
 loguru==0.7.3
-prometheus-client==0.21.1
+prometheus-client==0.25.0
 
 # Tests
+# pytest-asyncio MUST stay on 0.25.x while pytest is pinned to 8.3.4: 0.25.x
+# requires pytest>=8.2,<9, whereas pytest-asyncio 1.x requires pytest>=8.4 (and
+# renames asyncio_mode semantics). Dependabot's bump to 1.4.0 (PR #2081) made the
+# set unsatisfiable — same recurrence as the pytest 9.1.1 revert in ded481979.
+# Reject future pytest-asyncio 1.x PRs unless pytest itself moves off 8.3.4.
 pytest==8.3.4
 pytest-asyncio==0.25.2
-pytest-cov==6.0.0
+pytest-cov==7.1.0
 # FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
 httpx==0.24.1
 httpcore==0.17.3

@@ -8,7 +8,12 @@ options:
 settings:
   SWIFT_VERSION: "6.0"
   IPHONEOS_DEPLOYMENT_TARGET: "16.0"
-  PRODUCT_NAME: Meeshy
+  # NOTE: PRODUCT_NAME is intentionally NOT set globally. As a project-wide
+  # setting it propagates to every target, so MeeshyWidgets and
+  # MeeshyNotificationExtension would both build as "Meeshy.appex" and Xcode
+  # fails with "Multiple commands produce …/Meeshy.appex". Each target's
+  # PRODUCT_NAME defaults to $(TARGET_NAME), which is correct
+  # (Meeshy.app, MeeshyWidgets.appex, MeeshyNotificationExtension.appex).
   TARGETED_DEVICE_FAMILY: "1,2"
   # Swift 6.2 Approachable Concurrency (WWDC25).
   # - SWIFT_APPROACHABLE_CONCURRENCY umbrella flag (includes Sendable
@@ -22,6 +27,41 @@ settings:
   SWIFT_APPROACHABLE_CONCURRENCY: "YES"
   SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
   SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: "YES"
+
+  # Apple-generic versioning — REQUIS par fastlane (get_build_number /
+  # increment_build_number / increment_version_number, qui appellent agvtool).
+  # Le projet n'avait AUCUN système de versioning configuré dans le pbxproj →
+  # `agvtool what-version -terse` sortait en code 6 ("setup your project
+  # properly") au lancement de la lane `beta`/`release`. Les valeurs miroir
+  # Configuration/*.xcconfig (non câblés au projet). Les lanes prennent
+  # max(version locale, dernier build TestFlight) + 1, donc le "1" littéral
+  # n'est qu'un plancher — le build réel reste strictement croissant.
+  VERSIONING_SYSTEM: apple-generic
+  CURRENT_PROJECT_VERSION: "1"
+  MARKETING_VERSION: "1.0.0"
+
+  # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
+  # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
+  # automatique ne peut pas résoudre le profil → BUILD/sign FAILED. La valeur
+  # ne vivait QUE dans le pbxproj committé (résidu d'un réglage Xcode local) →
+  # perdue à chaque `xcodegen generate`. Désormais source de vérité ici.
+  # Sans impact CI (build simulateur = pas de signature device requise).
+  DEVELOPMENT_TEAM: D72UK7R5RE
+
+# Swift package graph. Only two packages are referenced directly by the
+# Xcode project: Firebase (remote) and the local MeeshySDK. GRDB, Socket.IO
+# and WebRTC are transitive dependencies of MeeshySDK
+# (declared in packages/MeeshySDK/Package.swift) and are imported through it,
+# so they must NOT be listed here. Mirrors the package refs that were in the
+# committed pbxproj before XcodeGen owned generation.
+# On-device speech recognition uses Apple's Speech framework (no third-party
+# dep) — WhisperKit was linked but never imported, removed 2026-07-10.
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk.git
+    from: 12.12.1
+  MeeshySDK:
+    path: ../../packages/MeeshySDK
 
 targets:
   # G7 (2026-07-20) — FirebaseMessaging was removed from the Meeshy target's
@@ -47,6 +87,32 @@ targets:
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
+      # MeeshyShareExtension is intentionally NOT embedded yet — see its target
+      # definition below. Embedding it makes `fastlane build_production` fail the
+      # distribution archive ("No profiles for 'me.meeshy.app.share-extension'")
+      # because that bundle id is not registered for signing. Re-add this line
+      # only after the App-ID + App-Group + App-Store profile exist (and the id
+      # is added to Fastfile/Matchfile `app_identifier`).
+      - package: MeeshySDK
+        product: MeeshySDK
+      - package: MeeshySDK
+        product: MeeshyUI
+      - package: Firebase
+        product: FirebaseCore
+      - package: Firebase
+        product: FirebaseAnalytics
+      - package: Firebase
+        product: FirebaseCrashlytics
+      - package: Firebase
+        product: FirebasePerformance
+    # Target-level scheme so `xcodegen generate` emits a shared "Meeshy"
+    # scheme wired to run the MeeshyTests bundle. CI invokes this via
+    # `xcodebuild -scheme Meeshy -only-testing:MeeshyTests`. A top-level
+    # `scheme:` key is NOT valid XcodeGen and is silently ignored, which
+    # would drop the shared scheme on regeneration.
+    scheme:
+      testTargets:
+        - MeeshyTests
 
   MeeshyWidgets:
     type: app-extension
@@ -71,6 +137,39 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-service
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements
+    dependencies:
+      # NotificationService.swift imports MeeshySDK (and GRDB transitively).
+      - package: MeeshySDK
+        product: MeeshySDK
+
+  # Share Extension — "Share to Meeshy" depuis d'autres apps. ShareViewController
+  # est auto-contenu (frameworks système + container App Group group.me.meeshy.apps) ;
+  # aucune dépendance SDK. Recâblé 2026-06-24 (présent sur disque mais absent de
+  # project.yml → jamais compilé). Info.plist : NSExtensionPrincipalClass
+  # (ShareViewController programmatique, pas de storyboard).
+  #
+  # SIGNING PENDING — ce target est DÉFINI mais PAS embarqué dans l'app (retiré
+  # des `dependencies` de Meeshy ci-dessus). Le bundle id
+  # `me.meeshy.app.share-extension` n'est PAS enregistré côté Apple Developer :
+  # `fastlane build_production` échouait l'archive de distribution
+  # ("No profiles for 'me.meeshy.app.share-extension' were found"). Pour finir le
+  # recâblage et l'expédier : (1) enregistrer l'App ID + l'App Group
+  # `group.me.meeshy.apps` dans le portail, (2) ajouter le bundle id à
+  # `app_identifier` dans fastlane/Fastfile (lanes `match`) + fastlane/Matchfile,
+  # (3) `bundle exec fastlane match appstore`, (4) remettre `- target:
+  # MeeshyShareExtension` dans les dependencies de l'app. Tant que ces étapes ne
+  # sont pas faites, le target reste compilable isolément mais hors archive.
+  MeeshyShareExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: MeeshyShareExtension
+    settings:
+      INFOPLIST_FILE: MeeshyShareExtension/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.share-extension
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: MeeshyShareExtension/MeeshyShareExtension.entitlements
 
   # P4.3 step 1 — MeeshyTests is the unit-test bundle that previously was
   # only declared inside Meeshy.xcodeproj/project.pbxproj (via 20+ Ruby
@@ -92,18 +191,40 @@ targets:
       - path: MeeshyTests
         excludes:
           - "**/*.md"
+          # XCUITest — instantiates XCUIApplication() and drives the running
+          # app. It cannot live in this hosted unit-test bundle: there is no
+          # UI-testing target (the project deliberately ships UI-flavoured
+          # coverage as integration XCTests, cf. StoryNotificationFlowTests),
+          # so `xcodebuild test -only-testing:MeeshyTests` aborts the whole
+          # suite at construction ("No target application path specified" →
+          # NSInternalInconsistencyException from -[XCUIApplication init]).
+          - "UI/BubbleExpandableTextUITests.swift"
+      # NSE pure helpers compiled INTO the test bundle (they are unreachable
+      # through `@testable import Meeshy` — they live in the app-extension
+      # target). Foundation/CryptoKit-only files, no UNNotification runtime.
+      # This is what makes NotificationPayloadHelpersTests + NSEDecryptorTests
+      # buildable (the former was deleted 0c550facc for being unreachable —
+      # resurrected now that the sources are shared).
+      - path: MeeshyNotificationExtension/NotificationPayloadHelpers.swift
+      - path: MeeshyNotificationExtension/NSEDecryptor.swift
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.tests
       CODE_SIGN_STYLE: Automatic
       GENERATE_INFOPLIST_FILE: YES
       SWIFT_VERSION: "6.0"
+      # The project-wide SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor (SE-0466)
+      # targets UI-centric production code. Applied to an XCTest bundle it makes
+      # every `XCTestCase` subclass main-actor-isolated, so the synthesised
+      # init()/init(invocation:)/init(selector:) conflict with XCTestCase's own
+      # `nonisolated` initialisers and the compiler rejects every test class.
+      # The SDK's Package.swift does the same: its test targets use
+      # `coreSwiftSettings` (no `.defaultIsolation(MainActor)`) precisely because
+      # `uiSwiftSettings` "breaks every XCTestCase subclass". Test classes opt
+      # into `@MainActor` explicitly when they exercise main-actor code.
+      SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
       # Host the tests inside the Meeshy.app process so they can hit
       # UIKit-bound APIs (UIApplication, UNUserNotificationCenter, etc.).
       BUNDLE_LOADER: "$(TEST_HOST)"
       TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Meeshy.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Meeshy"
     dependencies:
       - target: Meeshy
-
-scheme:
-  testTargets:
-    - MeeshyTests

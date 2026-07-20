@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
+import { getUserStatus } from '@/lib/user-status';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Badge } from './Badge';
@@ -17,6 +18,7 @@ export interface Participant {
   avatar?: string;
   role: 'admin' | 'moderator' | 'member';
   isOnline: boolean;
+  lastActiveAt?: Date | string | null;
 }
 
 export interface ConversationStats {
@@ -294,6 +296,7 @@ export function ConversationSettings({
                       name={participant.name}
                       size="md"
                       isOnline={participant.isOnline}
+                      presence={getUserStatus({ isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt })}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate text-[var(--gp-text-primary)] transition-colors duration-300">

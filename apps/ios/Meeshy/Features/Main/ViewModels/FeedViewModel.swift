@@ -327,7 +327,9 @@ class FeedViewModel: ObservableObject {
                             content: c.content, timestamp: c.createdAt,
                             likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                             parentId: c.parentId,
-                            originalLanguage: c.originalLanguage, translatedContent: translatedContent
+                            originalLanguage: c.originalLanguage, translatedContent: translatedContent,
+                            currentUserReactions: c.currentUserReactions,
+                            media: (c.media ?? []).map { $0.toFeedMedia() }
                         )
                     }
                 }.value
@@ -1022,6 +1024,11 @@ class FeedViewModel: ObservableObject {
                 guard let self else { return }
                 if let index = self.posts.firstIndex(where: { $0.id == payload.postId }) {
                     self.posts[index].isBookmarkedByMe = payload.bookmarked
+                    // Absolute count (when the gateway provides it) is authoritative
+                    // → the feed reconciles the displayed count live, no reload.
+                    if let count = payload.bookmarkCount {
+                        self.posts[index].bookmarkCount = count
+                    }
                 }
                 self.debouncedCacheSave()
             }

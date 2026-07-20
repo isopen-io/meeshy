@@ -82,8 +82,10 @@ final class MediaPostCell: UICollectionViewCell {
         likeButton.setTitle("  \(record.likeCount)", for: .normal)
         likeButton.setImage(UIImage(systemName: record.isLikedByMe ? "heart.fill" : "heart"), for: .normal)
         likeButton.tintColor = record.isLikedByMe ? .systemRed : .secondaryLabel
+        likeButton.accessibilityLabel = PostStatAccessibility.likesLabel(record.likeCount)
         commentButton.setTitle("  \(record.commentCount)", for: .normal)
         commentButton.setImage(UIImage(systemName: "bubble.right"), for: .normal)
+        commentButton.accessibilityLabel = PostStatAccessibility.commentsLabel(record.commentCount)
     }
 
     override func prepareForReuse() {

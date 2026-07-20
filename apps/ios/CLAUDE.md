@@ -6,9 +6,9 @@
 - Swift Package Manager (SPM)
 - Firebase 12.12 (Analytics, Crashlytics, Messaging, Performance)
 - Socket.IO Client 16.1
-- WebRTC 141.0 (calls)
+- WebRTC 146.0.0 (calls)
 - Image caching: AsyncImage (SwiftUI native iOS 15+) + CachedAsyncImage + CacheCoordinator 3-tier (no Kingfisher — removed 2026-05)
-- WhisperKit 0.9 (on-device speech recognition)
+- Apple Speech framework (`SFSpeechRecognizer`) for on-device speech recognition, via `MeeshySDK.EdgeTranscriptionService` (WhisperKit removed 2026-07-10 — it was declared but never imported)
 
 ## Project Structure
 ```
@@ -40,8 +40,44 @@ Le build utilise le dossier `Build/` relatif au workspace (`apps/ios/Build/`). X
 ./meeshy.sh clean              # Clean artifacts (--deep for global)
 ./meeshy.sh test               # Unit tests (--ui for UI tests)
 ```
+
+### `meeshy.sh test` — exécution phasée (2026-07-04)
+Le run se déroule en 3 phases (`build-for-testing` une fois, puis 3 × `test-without-building`) et **se termine toujours avec l'app connectée au compte de test** :
+1. **Phase 1 — suites isolées** : infra, appels/WebRTC, média, value-logic (~190 classes).
+2. **Phase 2 — connexion & manipulation de contenu** : auth/session, stories, posts/feed/reels, traduction, brouillons locaux, UI/UX produit (~175 classes). Contient les 13 suites qui mutent l'état persistant réel (dont `AuthServiceTests` et ses vrais `AuthManager.shared.logout()`) — d'où leur passage AVANT la phase 3.
+3. **Phase 3 — `ZZEndStateConnectedSessionTests`** : login réel avec `DEMO_USER`/`DEMO_PASSWORD` (sourcés de `fastlane/.env`, injectés via `TEST_RUNNER_*`). `MeeshyTests` étant hébergé dans Meeshy.app, la session Keychain écrite par ce test survit au run : l'app relancée démarre connectée. Ne JAMAIS ajouter de logout/tearDown à cette suite, ni de suite qui s'exécuterait après elle.
+
+La répartition 1/2 est dérivée dynamiquement des noms de classes (`FINAL_PHASE_CLASS_PATTERN` dans `meeshy.sh`) : toute nouvelle suite dont le nom matche un token produit (Story, Post, Feed, Draft, Language, Auth, Session, Bubble, Conversation, Message…) rejoint automatiquement la phase 2. Un échec de phase n'empêche pas les phases suivantes de tourner (la phase 3 s'exécute toujours) ; le script sort non-zéro si une phase est rouge. Résultats : `test-results/phase{1-isolated,2-content,3-connected}.xcresult`.
+
+Les tests SPM du SDK (`MeeshySDKTests`, `MeeshyUITests` via le scheme `MeeshySDK-Package`) tournent dans leur propre hôte xctest, hors du conteneur de Meeshy.app — ils ne peuvent pas affecter l'état de session de l'app et restent hors du phasage.
 - Simulator: iPhone 16 Pro (UDID: 30BFD3A6-C80B-489D-825E-5D14D6FCCAB5)
 - Bundle ID: `me.meeshy.app`
+
+## Gestion de projet Xcode — XcodeGen (source de vérité)
+**`apps/ios/project.yml` est la source de vérité du projet** (XcodeGen). Le `Meeshy.xcodeproj/project.pbxproj` et les `xcshareddata/xcschemes/*.xcscheme` committés sont des **artefacts générés**, potentiellement périmés par rapport à `project.yml` et aux fichiers sur disque.
+
+- **Sources en globbing récursif** : `sources: - path: Meeshy` avec `excludes: "**/*.md"`. Tout nouveau `.swift` sous `Meeshy/` est **auto-inclus** par `xcodegen generate` — **jamais d'édition manuelle du pbxproj** (le projet a migré du pbxproj hand-edité vers XcodeGen). Les `.md` sont exclus du build (mais matchent quand même le filtre de chemins CI `apps/ios/**` → un edit de ce CLAUDE.md retrigge « iOS Tests »).
+- **CI régénère le projet** : les workflows iOS lancent `cd apps/ios && xcodegen generate` AVANT de builder → CI compile toujours le vrai jeu de fichiers issu de `project.yml`. **`meeshy.sh` ne lance PAS xcodegen** → il build le pbxproj committé (potentiellement périmé). C'est la cause racine des « passe en local, casse en CI » (et l'inverse).
+- Le scheme partagé `Meeshy` provient de la clé `scheme.testTargets` du target (une clé `scheme:` top-level est silencieusement ignorée par XcodeGen et ferait disparaître le scheme à la régénération).
+
+### Reproduire la CI « iOS Tests » fidèlement en local
+`meeshy.sh` suffit pour le dev courant. Pour **reproduire un échec CI de compile/tests**, répliquer la CI exactement (NE PAS se fier à `meeshy.sh` seul) :
+```bash
+cd apps/ios && xcodegen generate && cd -                              # 1. régénérer comme CI (sinon divergence)
+xcodebuild build-for-testing -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
+  -destination "generic/platform=iOS Simulator" -derivedDataPath apps/ios/Build   # 2. compile app + tests
+SIM=$(xcrun simctl create tmp182 "iPhone 16 Pro" com.apple.CoreSimulator.SimRuntime.iOS-18-2)
+xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
+  -destination "platform=iOS Simulator,id=$SIM" -only-testing:MeeshyTests \
+  -derivedDataPath apps/ios/Build                                     # 3. run sur 18.2 (réutilise la compile)
+```
+- **Compile = Xcode 26.1.1 (Swift 6.2)**, **run = simu iOS 18.2** (18.5+/26.x crashent au teardown xctest `swift_task_deinitOnExecutorMainActorBackDeploy` ; baselines snapshot enregistrées sur 18.2).
+- `build-for-testing` puis `test-without-building` = compile une fois, exécute sans recompiler (réutilise `apps/ios/Build`, plus rapide que `meeshy.sh test`).
+- **Nettoyer après** : `xcodegen generate` réécrit `project.pbxproj` + `Meeshy.xcscheme` ; la résolution SPM réécrit `Package.resolved` (tracké malgré `.gitignore`). Ce sont des artefacts → `git checkout --` dessus. **Ne jamais committer ce churn** depuis une repro locale (worktree partagé).
+
+### « TEST FAILED » / exit 65 = échec de COMPILE, pas un test flaky
+`** TEST FAILED **` + `Testing cancelled because the build failed` (exit 65) = le bundle de tests n'a pas compilé/linké. Lire la ligne `error:` juste au-dessus et corriger la compile — ne pas fouiller la logique des tests.
+- **Piège accès cross-file** : un `@State private var` d'une `View` SwiftUI est **inaccessible depuis un fichier d'extension `View+Xxx.swift`** (même module). Symptôme CI : `'<prop>' is inaccessible due to 'private' protection level`. Fix : retirer `private` (internal par défaut) sur toute propriété stockée touchée par un fichier extension frère. Cas vécu `composerFocusTrigger` (StoryViewerView ↔ StoryViewerView+Content.swift), corrigé 2026-06-23.
 
 ## Naming Conventions
 
@@ -213,7 +249,7 @@ ThemedMessageBubble
   ├── secondaryContent → Contenu traduit/original pour la langue secondaire selectionnee
   └── secondaryContentView → Panneau inline (fond pastel, separateur colore, texte)
 
-MessageDetailSheet (onglet Language)
+MessageMoreSheet → vue detail Langue (MessageLanguageDetailView)
   ├── Listing des langues avec preview de chaque traduction
   ├── Indicateurs de disponibilite (checkmark / bouton Traduire)
   ├── Selection d'une langue → callback vers ViewModel → mise a jour bulle
@@ -235,15 +271,15 @@ Toute évolution de la logique de normalisation doit toucher les **trois** sites
 - **Drapeaux** : Bande de drapeaux en bas du texte (original + systeme + regional/custom + deviceLocale, max 4, dedupliques)
 - **Tap drapeau** : Affiche le contenu secondaire inline (fond pastel couleur langue, separateur colore)
 - **Tap meme drapeau** : Masque le contenu secondaire avec animation
-- **Long press** : Ouvre le MessageDetailSheet sur l'onglet Language (previews, langues, retraduction)
-- **Tap icone translate** : Ouvre directement l'onglet Language
+- **Long press** : Ouvre le menu unifie (`MessageOverlayMenu` : barre de reactions + bulle elevee + liste d'actions glass) ; « Traduire » ouvre la vue Langue du menu complet (`MessageMoreSheet`) ; swipe-up fort = « Plus… » (menu complet), swipe-down = fermeture (loi : `MessageOverlayDragLaw`)
+- **Tap icone translate** : Ouvre directement la vue Langue
 - **Selection langue** : Met a jour la bulle via `activeTranslationOverrides` dans le ViewModel
 
 ### Regles
 - Ne JAMAIS afficher de popup ou banniere pour indiquer une traduction — c'est un indicateur subtil dans le meta row
 - Le contenu traduit doit s'afficher EXACTEMENT comme du contenu natif (meme style, meme layout)
 - La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
-- L'onglet Language du MessageDetailSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
+- La vue Langue du MessageMoreSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
 
 ## Attachment Size Display Before Download
 
@@ -398,10 +434,19 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
 - `apps/ios/.../Features/Stories/Notifications/*` (independant story-specific)
 
 ## App Extensions
-- MeeshyNotificationExtension (rich push)
-- MeeshyShareExtension (share to Meeshy)
-- MeeshyWidgets (home screen)
-- MeeshyIntents (Siri/Shortcuts)
+- **MeeshyNotificationExtension** (rich push) — cible `app-extension` dans `project.yml`.
+- **MeeshyWidgets** (home screen) — cible `app-extension` (iOS 17+).
+- **MeeshyShareExtension** (« Share to Meeshy ») — cible `app-extension` recâblée 2026-06-24
+  (était sur disque mais absente de `project.yml` → jamais compilée). `ShareViewController`
+  est programmatique (héberge SwiftUI), Info.plist via `NSExtensionPrincipalClass` (pas de
+  storyboard), auto-contenu (frameworks système + App Group `group.me.meeshy.apps`,
+  entitlements `MeeshyShareExtension/MeeshyShareExtension.entitlements`).
+- **App Intents (Siri/Shortcuts)** — `Meeshy/Features/Intents/MeeshyAppIntents.swift`,
+  compilé **dans le target app** (pas d'extension séparée : les `AppIntent` définis par
+  l'app sont exposés à Siri/Shortcuts automatiquement). Recâblé 2026-06-24 depuis l'ancien
+  dossier orphelin `MeeshyIntents/` (Info.plist SiriKit legacy incohérent, supprimé). Les 4
+  intents deep-link (`meeshy://`) + `MeeshyAppShortcuts` sont gatés `@available(iOS 18.0, *)`
+  car ils utilisent `OpenURLIntent` (iOS 18+) ; l'app garde son plancher iOS 16.
 
 ## Configuration (xcconfig)
 | Config | API URL | Features |

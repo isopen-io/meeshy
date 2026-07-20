@@ -174,6 +174,28 @@ public struct AvailabilityResponse: Decodable {
     }
 }
 
+// MARK: - Phone Ownership Check (récupération de compte)
+
+public struct PhoneOwnerMaskedInfo: Decodable, Sendable, Equatable {
+    public let displayName: String?
+    public let username: String?
+    public let email: String?
+}
+
+/// Réponse de `/auth/phone-transfer/check`. Quand `recoverySuggested` est vrai,
+/// le numéro appartient à un compte dormant dont l'identité déclarée matche —
+/// le client oriente alors vers la récupération de compte plutôt que la
+/// création d'un doublon.
+public struct PhoneOwnershipResponse: Decodable, Sendable, Equatable {
+    public let exists: Bool
+    public let maskedInfo: PhoneOwnerMaskedInfo?
+    public let dormant: Bool?
+    public let dormantSince: String?
+    /// "exact" | "similar" | "different" | nil
+    public let nameSimilarity: String?
+    public let recoverySuggested: Bool?
+}
+
 // MARK: - Refresh Token
 
 public struct RefreshTokenRequest: Encodable {
@@ -237,6 +259,13 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let profileCompletionRate: Int?
     public let signalIdentityKeyPublic: String?
 
+    // Voice profile (from GET /users/:id). Optional — rollout-safe: older
+    // responses omit these fields, which decode to `nil` via synthesized Codable.
+    public let voicePublic: Bool?
+    public let voiceSampleUrl: String?
+    public let voiceSampleDurationMs: Int?
+    public let voiceQuality: Double?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -256,7 +285,11 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         timezone: String? = nil,
         registrationCountry: String? = nil,
         profileCompletionRate: Int? = nil,
-        signalIdentityKeyPublic: String? = nil
+        signalIdentityKeyPublic: String? = nil,
+        voicePublic: Bool? = nil,
+        voiceSampleUrl: String? = nil,
+        voiceSampleDurationMs: Int? = nil,
+        voiceQuality: Double? = nil
     ) {
         self.id = id
         self.username = username
@@ -291,6 +324,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.registrationCountry = registrationCountry
         self.profileCompletionRate = profileCompletionRate
         self.signalIdentityKeyPublic = signalIdentityKeyPublic
+        self.voicePublic = voicePublic
+        self.voiceSampleUrl = voiceSampleUrl
+        self.voiceSampleDurationMs = voiceSampleDurationMs
+        self.voiceQuality = voiceQuality
     }
 
     /// Returns a new MeeshyUser with the specified profile fields replaced.
@@ -329,7 +366,11 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             timezone: timezone,
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
-            signalIdentityKeyPublic: signalIdentityKeyPublic
+            signalIdentityKeyPublic: signalIdentityKeyPublic,
+            voicePublic: voicePublic,
+            voiceSampleUrl: voiceSampleUrl,
+            voiceSampleDurationMs: voiceSampleDurationMs,
+            voiceQuality: voiceQuality
         )
     }
 
@@ -366,7 +407,17 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         return preferred
     }
 
-    /// Normalise un identifier de langue vers ISO 639-1 (2 lettres lowercase).
+    /// Normalise un identifier de langue vers un code supporté par Meeshy.
+    ///
+    /// Préserve les codes supportés tels quels — y compris les codes ISO 639-3
+    /// des langues sans équivalent 639-1 (`"bas"`, `"dua"`, `"ewo"`), qui NE
+    /// doivent jamais être tronqués à 2 lettres (`"bas"` → `"ba"` = Bachkir,
+    /// langue sans rapport, casserait la résolution du Prisme Linguistique).
+    /// Un ISO 639-2/639-3 sans entrée Meeshy est réduit à son ISO 639-1 via la
+    /// table EXPLICITE `iso639ReductionMap` (`"eng"` → `"en"`, `"spa"` → `"es"`,
+    /// `"swe"` → `"sv"`), JAMAIS par troncature aveugle : `"swe"` (Suédois) ne
+    /// devient pas `"sw"` (Swahili) et `"fil"` (Filipino, sans équivalent 639-1)
+    /// n'est PAS mappé sur `"fi"` (Finnois) mais rejeté (`nil`).
     ///
     /// Miroir Swift de `normalizeLanguageCode` :
     /// - `packages/shared/utils/language-normalize.ts` (source de vérité TS)
@@ -385,8 +436,45 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
               primary.allSatisfy({ $0.isLetter && $0.isASCII }) else {
             return nil
         }
-        return String(primary.prefix(2))
+
+        // Un code supporté (2 ou 3 lettres, ex. "bas") est renvoyé tel quel.
+        if LanguageData.supportedCodeSet.contains(primary) {
+            return primary
+        }
+
+        // ISO 639-2/639-3 sans entrée Meeshy directe : réduction via table
+        // EXPLICITE (jamais par troncature — `"fil"` → `"fi"`, `"swe"` → `"sw"`
+        // étaient des collisions silencieuses). Cible re-validée contre les codes
+        // supportés. Miroir de `ISO_639_3_TO_1` (language-normalize.ts, TS SSOT).
+        if primary.count > 2 {
+            guard let reduced = Self.iso639ReductionMap[primary],
+                  LanguageData.supportedCodeSet.contains(reduced) else { return nil }
+            return reduced
+        }
+
+        // Code 2-lettres inconnu : conservé (comportement historique).
+        return primary
     }
+
+    /// Table de réduction ISO 639-2/639-3 → ISO 639-1 (miroir de `ISO_639_3_TO_1`
+    /// dans `packages/shared/utils/language-normalize.ts`). Couvre les variantes
+    /// 639-2/T ET 639-2/B qui diffèrent (`deu`/`ger`, `fra`/`fre`, `zho`/`chi`…).
+    /// Tout code 3-lettres absent (dont `"fil"`, `"tgl"`) est rejeté — jamais
+    /// tronqué. Toute évolution DOIT toucher les deux sites (TS + Swift).
+    private static let iso639ReductionMap: [String: String] = [
+        "afr": "af", "amh": "am", "ara": "ar", "ben": "bn", "bul": "bg",
+        "ces": "cs", "cze": "cs", "dan": "da", "deu": "de", "ger": "de",
+        "ell": "el", "gre": "el", "eng": "en", "ewe": "ee", "fas": "fa", "per": "fa",
+        "fin": "fi", "fra": "fr", "fre": "fr", "hau": "ha", "heb": "he", "hin": "hi",
+        "hrv": "hr", "hun": "hu", "hye": "hy", "arm": "hy", "ibo": "ig", "ind": "id",
+        "ita": "it", "jpn": "ja", "kin": "rw", "kor": "ko", "lin": "ln", "lit": "lt",
+        "lug": "lg", "mlg": "mg", "msa": "ms", "may": "ms", "nld": "nl", "dut": "nl",
+        "nor": "no", "nya": "ny", "orm": "om", "pol": "pl", "por": "pt", "ron": "ro",
+        "rum": "ro", "run": "rn", "rus": "ru", "sna": "sn", "som": "so", "spa": "es",
+        "swa": "sw", "swe": "sv", "tha": "th", "tir": "ti", "tur": "tr", "ukr": "uk",
+        "urd": "ur", "vie": "vi", "wol": "wo", "xho": "xh", "yor": "yo", "zho": "zh",
+        "chi": "zh", "zul": "zu"
+    ]
 }
 
 // MARK: - /auth/me Response

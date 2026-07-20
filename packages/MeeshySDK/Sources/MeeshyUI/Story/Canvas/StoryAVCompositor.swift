@@ -139,7 +139,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                          renderSize: renderContext.size,
                                          into: buffer,
                                          cache: cache,
-                                         backdropCapture: backdropCapture)
+                                         backdropCapture: backdropCapture,
+                                         watermark: instruction.watermark)
                     request.finish(withComposedVideoFrame: buffer)
                 } catch {
                     request.finish(with: error)
@@ -183,7 +184,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      renderSize: CGSize,
                                      into buffer: CVPixelBuffer,
                                      cache: StoryRendererCache,
-                                     backdropCapture: any BackdropCapturing) throws {
+                                     backdropCapture: any BackdropCapturing,
+                                     watermark: StoryExportWatermark? = nil) throws {
         // Scope check: flush the cache if the slide / languages / mode this
         // compositor is now processing differs from the previous frame's
         // scope.
@@ -331,6 +333,28 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         }
 
         layer.render(in: cg)
+
+        if let watermark {
+            drawWatermark(watermark, in: cg,
+                          renderSize: CGSize(width: width, height: height))
+        }
+    }
+
+    /// Dessine le watermark par-dessus la frame composée, ancré bas-droite.
+    /// Dernière passe du pipeline : rien ne doit se dessiner au-dessus.
+    @MainActor
+    private static func drawWatermark(_ watermark: StoryExportWatermark,
+                                      in cg: CGContext,
+                                      renderSize: CGSize) {
+        let rect = watermark.frame(in: renderSize)
+        cg.saveGState()
+        cg.setAlpha(watermark.opacity)
+        // Même compensation top-down que paintAspectFill : le contexte est
+        // flippé pour CALayer.render(in:), CGContext.draw dessine bottom-up.
+        cg.translateBy(x: rect.origin.x, y: rect.origin.y + rect.height)
+        cg.scaleBy(x: 1, y: -1)
+        cg.draw(watermark.image, in: CGRect(origin: .zero, size: rect.size))
+        cg.restoreGState()
     }
 
     /// Applies the static state of an opening transition to `rootLayer` at
@@ -471,15 +495,19 @@ public final class StoryCompositionInstruction: NSObject,
     public let slide: StorySlide
     public let languages: [String]
     public let timeRange: CMTimeRange
+    public let watermark: StoryExportWatermark?
     public let enablePostProcessing: Bool = false
     public let containsTweening: Bool = true
     public let requiredSourceTrackIDs: [NSValue]? = nil
     public let passthroughTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
 
-    public nonisolated init(slide: StorySlide, languages: [String] = [], timeRange: CMTimeRange) {
+    public nonisolated init(slide: StorySlide, languages: [String] = [],
+                            timeRange: CMTimeRange,
+                            watermark: StoryExportWatermark? = nil) {
         self.slide = slide
         self.languages = languages
         self.timeRange = timeRange
+        self.watermark = watermark
         super.init()
     }
 }

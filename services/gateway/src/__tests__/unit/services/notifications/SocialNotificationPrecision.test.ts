@@ -95,6 +95,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
   describe('createPostCommentNotification', () => {
     it('met la cible typée + extrait du post en subtitle, le commentaire en body', async () => {
+      const createdAt = new Date('2026-06-23T09:00:00.000Z');
       await service.createPostCommentNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
@@ -103,6 +104,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         commentPreview: 'Trop drôle !',
         postType: 'STATUS',
         postPreview: 'Journée de ouf au bureau',
+        postCreatedAt: createdAt,
       });
 
       const payload = payloadOfType(mockIO, 'post_comment');
@@ -110,6 +112,8 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payload.title).toBe('Bob Commentateur');
       expect(payload.subtitle).toBe('Votre statut : « Journée de ouf au bureau »');
       expect(payload.content).toBe('Trop drôle !');
+      // postCreatedAt voyage en contexte → le client en dérive « du JJ/MM/AAAA HH:MM ».
+      expect(payload.context.postCreatedAt).toBe(createdAt.toISOString());
     });
 
     it('retombe sur le label typé seul quand le post n\'a pas de texte', async () => {
@@ -138,8 +142,13 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
     });
   });
 
+  const createdDataOfType = (type: string): any | undefined =>
+    prisma.notification.create.mock.calls
+      .map((c: any[]) => c[0]?.data)
+      .find((d: any) => d?.type === type);
+
   describe('createCommentReplyNotification', () => {
-    it('met le commentaire parent en subtitle (« En réponse à « … » »)', async () => {
+    it('persiste le titre « a répondu à votre commentaire » + sous-titre typé sur l\'entité (story)', async () => {
       await service.createCommentReplyNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
@@ -147,14 +156,20 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         commentId: COMMENT_ID,
         replyPreview: 'Complètement d\'accord',
         parentCommentPreview: 'Le meilleur resto de la ville',
+        postType: 'STORY',
       });
 
-      const payload = payloadOfType(mockIO, 'comment_reply');
-      expect(payload.subtitle).toBe('En réponse à « Le meilleur resto de la ville »');
-      expect(payload.content).toBe('Complètement d\'accord');
+      // Titre persisté (source unique liste/web) : corrige le bug « a commenté
+      // votre publication » pour une réponse à un commentaire.
+      const created = createdDataOfType('comment_reply');
+      expect(created.title).toBe('Bob Commentateur a répondu à votre commentaire');
+      // Sous-titre = l'ENTITÉ portant le commentaire (« Story »), le client y
+      // append la date locale. Le body reste la réponse.
+      expect(created.subtitle).toBe('Story');
+      expect(payloadOfType(mockIO, 'comment_reply').content).toBe('Complètement d\'accord');
     });
 
-    it('retombe sur un libellé générique précis sans extrait parent', async () => {
+    it('replie sur « Publication » quand le type de contenu n\'est pas précisé', async () => {
       await service.createCommentReplyNotification({
         actorId: ACTOR_ID,
         postId: POST_ID,
@@ -163,7 +178,46 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         replyPreview: 'Oui !',
       });
 
-      expect(payloadOfType(mockIO, 'comment_reply').subtitle).toBe('En réponse à votre commentaire');
+      expect(createdDataOfType('comment_reply').subtitle).toBe('Publication');
+    });
+
+    it('porte commentId + parentCommentId en contexte ET metadata (navigation jusqu\'à la réponse)', async () => {
+      const PARENT_COMMENT_ID = 'dddddddddddddddddddddddd';
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        parentCommentId: PARENT_COMMENT_ID,
+        replyPreview: 'Complètement d\'accord',
+        parentCommentPreview: 'Le meilleur resto de la ville',
+        postType: 'POST',
+      });
+
+      const created = createdDataOfType('comment_reply');
+      // Contexte : le client ouvre le post (postId), déplie le fil du parent
+      // (parentCommentId) puis défile/surligne la réponse (commentId).
+      expect(created.context.postId).toBe(POST_ID);
+      expect(created.context.commentId).toBe(COMMENT_ID);
+      expect(created.context.parentCommentId).toBe(PARENT_COMMENT_ID);
+      // Metadata : mêmes identifiants, pour le repli web/iOS qui lit metadata.
+      expect(created.metadata.commentId).toBe(COMMENT_ID);
+      expect(created.metadata.parentCommentId).toBe(PARENT_COMMENT_ID);
+    });
+
+    it('omet parentCommentId quand il n\'est pas fourni (réponse sans parent connu)', async () => {
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        replyPreview: 'Oui !',
+      });
+
+      const created = createdDataOfType('comment_reply');
+      expect(created.context.commentId).toBe(COMMENT_ID);
+      expect(created.context.parentCommentId).toBeUndefined();
+      expect(created.metadata.parentCommentId).toBeUndefined();
     });
   });
 
@@ -187,6 +241,51 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'comment_like');
       expect(payload.content).toBe('a réagi 🔥 à votre commentaire');
       expect(payload.subtitle).toBe('« Mon avis sur la question »');
+    });
+  });
+
+  // Réagir à un commentaire est le MÊME geste produit que « liker » un
+  // commentaire — seul le transport diffère (socket `comment:reaction-add` →
+  // type `comment_reaction` ; REST `POST .../like` → type `comment_like`). Les
+  // deux DOIVENT honorer la même préférence `commentLikeEnabled`. Sinon un
+  // destinataire ayant coupé les notifs de like-commentaire les reçoit quand
+  // même par le chemin socket (le type `comment_reaction` retombait sur
+  // `default: return true`).
+  describe('createCommentReactionNotification — gating préférence', () => {
+    it('respecte commentLikeEnabled:false (aucune notification émise)', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({
+        notification: { commentLikeEnabled: false },
+      });
+
+      await service.createCommentReactionNotification({
+        commentAuthorId: RECIPIENT_ID,
+        reactorUserId: ACTOR_ID,
+        commentId: COMMENT_ID,
+        postId: POST_ID,
+        reactionEmoji: '🔥',
+        commentPreview: 'Mon avis sur la question',
+      });
+
+      expect(payloadOfType(mockIO, 'comment_reaction')).toBeUndefined();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('émet quand la préférence est active (défaut produit)', async () => {
+      prisma.userPreferences.findUnique.mockResolvedValue({
+        notification: { commentLikeEnabled: true },
+      });
+
+      await service.createCommentReactionNotification({
+        commentAuthorId: RECIPIENT_ID,
+        reactorUserId: ACTOR_ID,
+        commentId: COMMENT_ID,
+        postId: POST_ID,
+        reactionEmoji: '🔥',
+        postType: 'REEL',
+      });
+
+      const payload = payloadOfType(mockIO, 'comment_reaction');
+      expect(payload).toBeDefined();
     });
   });
 
@@ -217,6 +316,44 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'post_repost');
       expect(payload.content).toBe('a partagé votre publication');
       expect(payload.subtitle).toBeUndefined();
+    });
+
+    it('persiste postExpiresAt/postCreatedAt en contexte (story partagée expirée)', async () => {
+      const createdAt = new Date('2026-06-20T10:00:00.000Z');
+      const expiresAt = new Date('2026-06-21T10:00:00.000Z');
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        repostId: 'cccccccccccccccccccccccc',
+        postType: 'STORY',
+        postCreatedAt: createdAt,
+        postExpiresAt: expiresAt,
+      });
+
+      const ctx = prisma.notification.create.mock.calls[0][0].data.context;
+      expect(ctx.postCreatedAt).toBe(createdAt.toISOString());
+      expect(ctx.postExpiresAt).toBe(expiresAt.toISOString());
+    });
+  });
+
+  describe('createPostLikeNotification — contexte expiry', () => {
+    it('persiste postExpiresAt pour une réaction sur une story expirée', async () => {
+      const expiresAt = new Date('2026-06-21T10:00:00.000Z');
+      await service.createPostLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        postAuthorId: RECIPIENT_ID,
+        emoji: '😍',
+        postType: 'STORY',
+        postPreview: 'Coucher de soleil',
+        postExpiresAt: expiresAt,
+      });
+
+      const ctx = prisma.notification.create.mock.calls[0][0].data.context;
+      expect(ctx.postExpiresAt).toBe(expiresAt.toISOString());
+      const meta = prisma.notification.create.mock.calls[0][0].data.metadata;
+      expect(meta.postPreview).toBe('Coucher de soleil');
     });
   });
 

@@ -3,7 +3,7 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
-import { Server as SocketIOServer } from 'socket.io';
+import { Server as SocketIOServer, type Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
@@ -39,6 +39,7 @@ import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
+import { getBlockedUserIdsAmong } from '../utils/blocking';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
@@ -48,17 +49,38 @@ import type {
   SocketIOResponse,
   TranslationEvent,
   MessageType,
+  TranslationFailedEventData,
+  AudioTranslationFailedEventData,
+  TranscriptionFailedEventData,
+  AudioTranslationEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
-import { MentionService } from '../services/MentionService';
+import { MentionService, resolveUsernamesToIds } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
+import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
+import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
+
+// Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
+// event replayed on reconnect for that offline-queue entry.
+function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string {
+  if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
+  if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
+  if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
+  if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
+  if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
+  if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
+  if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
+  if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
+  return SERVER_EVENTS.MESSAGE_NEW;
+}
 
 export interface SocketUser {
   id: string;
@@ -99,6 +121,21 @@ export class MeeshySocketIOManager {
     return this.io;
   }
 
+  /// RC-4 — exposes the shared CallService instance so CallCleanupService's
+  /// heartbeat GC tier observes the same in-memory heartbeat/ringing-timeout
+  /// state that CallEventsHandler and AuthHandler write to, instead of an
+  /// unwired second instance that always looks empty.
+  getCallService(): CallService {
+    return this.callService;
+  }
+
+  /// Exposes the shared CallEventsHandler so CallCleanupService's GC tiers
+  /// can post the call-summary system message on calls they force-end —
+  /// mirrors `getCallService()` above.
+  getCallEventsHandler(): CallEventsHandler {
+    return this.callEventsHandler;
+  }
+
   private prisma: PrismaClient;
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
@@ -113,6 +150,7 @@ export class MeeshySocketIOManager {
   private agentClient: ZmqAgentClient | null = null;
   private mentionService: MentionService;
   private deliveryQueue: RedisDeliveryQueue | null = null;
+  private readStatusService!: MessageReadStatusService;
 
   private authHandler!: AuthHandler;
   private messageHandler!: MessageHandler;
@@ -133,9 +171,9 @@ export class MeeshySocketIOManager {
   // Rate limiter in-memory par socket (clé → timestamps des requêtes)
   private socketRateLimits: Map<string, number[]> = new Map();
 
-  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries LRU)
-  private conversationIdCache = new Map<string, string>();
+  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries FIFO)
   private readonly CONVERSATION_ID_CACHE_MAX = 2000;
+  private conversationIdCache = new BoundedTtlCache<string, string>({ maxSize: this.CONVERSATION_ID_CACHE_MAX });
 
   // Cache presence snapshot par userId — évite 2 queries Prisma par reconnexion (TTL 60s)
   private presenceSnapshotCache = new Map<string, { users: Array<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }>; cachedAt: number }>();
@@ -173,13 +211,23 @@ export class MeeshySocketIOManager {
     this.notificationService = new NotificationService(prisma);
     this.mentionService = new MentionService(prisma);
     this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
-    this.callEventsHandler = new CallEventsHandler(prisma);
+    // RC-4 — construct the shared CallService BEFORE CallEventsHandler so both
+    // it and AuthHandler observe the same in-memory ringingTimeouts/heartbeats/
+    // backgroundedParticipants maps (previously two independent instances,
+    // silently desyncing disconnect-cleanup from the ringing-timeout/heartbeat
+    // state actually being written by the socket handlers).
+    this.callService = new CallService(prisma);
+    this.callEventsHandler = new CallEventsHandler(prisma, this.callService);
     // P3 — let the call handler post the call-summary system message through
     // the canonical message broadcast path when a call ends.
     this.callEventsHandler.setMessageBroadcaster(
       (message, conversationId) => this.broadcastMessage(message as Message, conversationId)
     );
-    this.callService = new CallService(prisma);
+    // Live-call message — let the terminal upsert EDIT the live message
+    // in-place (message:edited full payload + preview + offline enqueue).
+    this.callEventsHandler.setMessageUpdateBroadcaster(
+      (message, conversationId) => this.broadcastMessageEdited(message as Message, conversationId)
+    );
 
     // CORRECTION: Configurer le callback de broadcast pour le MaintenanceService
     this.maintenanceService.setStatusBroadcastCallback(
@@ -239,13 +287,13 @@ export class MeeshySocketIOManager {
 
     // Initialiser le SocialEventsHandler pour les broadcasts feed
     this.socialEventsHandler = new SocialEventsHandler({
-      io: this.io as any,
+      io: this.io as SocketIOServer,
       prisma: this.prisma,
     });
 
     // Initialiser le LocationHandler pour les événements de partage de localisation
     this.locationHandler = new LocationHandler({
-      io: this.io as any,
+      io: this.io as SocketIOServer,
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
@@ -256,7 +304,7 @@ export class MeeshySocketIOManager {
     PostAudioService.init(this.prisma, this.socialEventsHandler);
 
     // Initialiser le StoryTextObjectTranslationService singleton
-    StoryTextObjectTranslationService.init(this.prisma, this.io as any);
+    StoryTextObjectTranslationService.init(this.prisma, this.io as SocketIOServer);
 
     this.authHandler = new AuthHandler({
       prisma: this.prisma,
@@ -276,7 +324,8 @@ export class MeeshySocketIOManager {
     });
 
     const reactionService = new ReactionService(prisma);
-    const readStatusService = new MessageReadStatusService(prisma);
+    this.readStatusService = new MessageReadStatusService(prisma);
+    const readStatusService = this.readStatusService;
 
     this.messageHandler = new MessageHandler({
       io: this.io,
@@ -300,6 +349,7 @@ export class MeeshySocketIOManager {
       privacyPreferencesService: this.privacyPreferencesService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
+      userSockets: this.userSockets,
     });
 
     this.reactionHandler = new ReactionHandler({
@@ -346,26 +396,201 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
+      readStatusService,
     });
   }
 
   setDeliveryQueue(queue: RedisDeliveryQueue): void {
     this.deliveryQueue = queue;
+    // The WS `message:send` path (MessageHandler) enqueues offline recipients
+    // itself, in parallel with this REST-path queue — same shared instance.
+    this.messageHandler.setDeliveryQueue(queue);
+    // ReactionHandler enqueues reaction add/remove for offline peers on the
+    // same instance, so their reaction state converges on reconnect.
+    this.reactionHandler.setDeliveryQueue(queue);
+    // Same for per-attachment reactions — without this an attachment reaction
+    // toggled while a peer is offline was only broadcast to the live room and
+    // was lost forever (their cached reactionSummary stayed stale).
+    this.attachmentReactionHandler.setDeliveryQueue(queue);
   }
 
-  private async _drainPendingMessages(socket: any, userId: string): Promise<void> {
+  private async _drainPendingMessages(userId: string, isAnonymous: boolean): Promise<void> {
     if (!this.deliveryQueue) return;
     try {
       const pending = await this.deliveryQueue.drain(userId);
       if (pending.length === 0) return;
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
+      // Emit to the user room so EVERY currently-connected device of this user
+      // receives the replay (the drain is destructive — a single-socket emit
+      // would lose the messages for the user's other devices). Safe because
+      // AuthHandler joins ROOMS.user(...) BEFORE registering the socket and
+      // before the presence-snapshot/drain call, for both JWT and anonymous
+      // paths (anonymous personal rooms use the participant id).
+      // Replayed payloads are stored as opaque JSON in the queue — they were
+      // shaped at enqueue time, so re-checking them against ServerToClientEvents
+      // here is impossible (loose emit, same as the previous raw-Socket path).
+      const userRoom = this.io.to(ROOMS.user(userId)) as unknown as { emit: (event: string, payload: unknown) => void };
       for (const entry of pending) {
-        socket.emit(SERVER_EVENTS.MESSAGE_NEW, entry.payload);
+        userRoom.emit(_drainedEventName(entry.eventType), entry.payload);
       }
-      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length });
+      const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
+      userRoom.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
+
+      // Delivery receipts require a registered userId (participant lookup is
+      // keyed on Participant.userId, null for anonymous) — skip for anonymous.
+      if (isAnonymous) return;
+
+      // Emit delivery receipts to senders so their checkmarks advance from
+      // "sent" (single tick) to "delivered" (double tick) as soon as the
+      // messages land on the recipient's device — matching WhatsApp / iMessage
+      // behaviour instead of waiting for the user to open the conversation.
+      this._emitDeliveryForDrainedMessages(userId, pending).catch(err => {
+        logger.warn('Failed to emit delivery receipts for drained messages', { userId, error: err });
+      });
     } catch (error) {
       logger.warn('Failed to drain pending messages', { userId, error });
+    }
+  }
+
+  /**
+   * After draining queued messages to a reconnecting user, mark those
+   * messages as "received" on their behalf and broadcast `read-status:updated`
+   * to the conversation rooms so senders see the delivery checkmark advance.
+   *
+   * Respects the user's `showReadReceipts` privacy preference.
+   * Batches the participant lookup across all affected conversations in a
+   * single Prisma query to minimise round-trips on the reconnect path.
+   */
+  private async _emitDeliveryForDrainedMessages(
+    userId: string,
+    pending: QueuedMessagePayload[]
+  ): Promise<void> {
+    // Delivery receipts only make sense for actual new messages — an edited
+    // or deleted entry replays its own event (see `_drainedEventName`) but
+    // was never awaiting a "delivered" checkmark in the first place.
+    const newEntries = pending.filter((entry) => (entry.eventType ?? 'new') === 'new');
+    if (newEntries.length === 0) return;
+
+    // Check privacy preference first — single cheap cached call.
+    const prefMap = await this.privacyPreferencesService.getPreferencesForUsers([
+      { id: userId, isAnonymous: false },
+    ]);
+    if (!prefMap.get(userId)?.showReadReceipts) return;
+
+    // Group by conversationId, keeping the last (newest) messageId per conv
+    // so we call markMessagesAsReceived once per conversation.
+    const convLatest = new Map<string, string>();
+    for (const entry of newEntries) {
+      convLatest.set(entry.conversationId, entry.messageId);
+    }
+
+    // Batch-resolve ALL active participants for the affected conversations in a
+    // single query. We need two things from it: (a) the reconnecting user's own
+    // participantId per conversation (to mark received), and (b) every
+    // participant's userId, so the receipt fans out to each sender's user room —
+    // a sender who left the conversation view (socket dropped `conversation:<id>`
+    // but stays in `user:<id>`) must still see their checkmark advance.
+    const participantRows = await this.prisma.participant.findMany({
+      where: { conversationId: { in: [...convLatest.keys()] }, isActive: true },
+      select: { id: true, userId: true, conversationId: true },
+    });
+
+    // conversationId → the reconnecting user's participantId (drives markReceived)
+    const ownParticipant = new Map<string, string>();
+    // conversationId → every participant's userId (drives the user-room fanout)
+    const convUserIds = new Map<string, string[]>();
+    for (const row of participantRows) {
+      if (row.userId === userId) ownParticipant.set(row.conversationId, row.id);
+      if (row.userId) {
+        const list = convUserIds.get(row.conversationId) ?? [];
+        list.push(row.userId);
+        convUserIds.set(row.conversationId, list);
+      }
+    }
+
+    await Promise.allSettled(
+      [...ownParticipant].map(async ([conversationId, participantId]) => {
+        const latestMessageId = convLatest.get(conversationId);
+        if (!latestMessageId) return;
+
+        await this.readStatusService.markMessagesAsReceived(participantId, conversationId, latestMessageId);
+
+        const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
+        const drainPayload = {
+          conversationId,
+          participantId,
+          userId,
+          type: 'received' as const,
+          updatedAt: new Date(),
+          summary,
+        };
+        // Chain the conversation room + each participant's user room, deduped so
+        // Socket.IO delivers the event at most once per socket. Mirrors the two
+        // sibling emitters of this same event — `autoDeliverToOnlineRecipients`
+        // and `broadcastReadStatusUpdate` — which fan out identically so authors
+        // never get stuck on a single "sent" tick after navigating away.
+        const convRoom = ROOMS.conversation(conversationId);
+        let emitter = this.io.to(convRoom);
+        const seenRooms = new Set<string>([convRoom]);
+        for (const pUserId of convUserIds.get(conversationId) ?? []) {
+          const userRoom = ROOMS.user(pUserId);
+          if (seenRooms.has(userRoom)) continue;
+          seenRooms.add(userRoom);
+          emitter = emitter.to(userRoom);
+        }
+        emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, drainPayload);
+        emitter.emit(SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED, drainPayload);
+        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId, rooms: [...seenRooms] });
+      })
+    );
+  }
+
+  /**
+   * Queue a message-aggregate mutation (currently pin/unpin, driven by the REST
+   * pin routes) for every OFFLINE conversation participant so their pin state
+   * converges on reconnect — the same offline-replay guarantee `MessageHandler`
+   * gives edits/deletes and `ReactionHandler` gives reactions. Without this a
+   * `message:pinned`/`message:unpinned` emitted only to the live conversation
+   * room is lost for anyone offline at that moment: their cached pin state
+   * stays stale until an unrelated full conversation refetch happens.
+   *
+   * The actor is excluded by userId (the REST pin routes run under
+   * `requiredAuth`, so the actor is always a registered user) and online
+   * participants are skipped — they already got the live emit. The default
+   * (messageId) dedup identity is correct here: `pinned` and `unpinned` carry
+   * distinct eventTypes so a pin-then-unpin keeps both entries in enqueue
+   * order, while a repeated same-direction toggle supersedes in place. Pin
+   * entries never bear a delivery receipt (`_emitDeliveryForDrainedMessages`
+   * already filters to `eventType === 'new'`).
+   */
+  async enqueueOfflineMessageMutation(params: {
+    conversationId: string;
+    actorUserId: string | null | undefined;
+    eventType: 'pinned' | 'unpinned' | 'edited';
+    messageId: string;
+    payload: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.deliveryQueue) return;
+    const { conversationId, actorUserId, eventType, messageId, payload } = params;
+    try {
+      const participants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true },
+        select: { id: true, userId: true }
+      });
+      for (const p of participants) {
+        const queueKey = p.userId ?? p.id;
+        if ((actorUserId && p.userId === actorUserId) || this.connectedUsers.has(queueKey)) continue;
+        this.deliveryQueue.enqueue(queueKey, {
+          messageId,
+          conversationId,
+          payload,
+          enqueuedAt: new Date().toISOString(),
+          eventType,
+        }).catch((err) => logger.warn('Failed to enqueue offline message mutation', { userId: queueKey, eventType, error: err }));
+      }
+    } catch (err) {
+      logger.warn('Failed to fetch participants for offline mutation enqueue', { conversationId, eventType, error: err });
     }
   }
 
@@ -383,11 +608,6 @@ export class MeeshySocketIOManager {
         select: { id: true, identifier: true }
       });
       if (conversation) {
-        // Evict oldest entry when cap reached (simple FIFO bounded LRU)
-        if (this.conversationIdCache.size >= this.CONVERSATION_ID_CACHE_MAX) {
-          const firstKey = this.conversationIdCache.keys().next().value;
-          if (firstKey !== undefined) this.conversationIdCache.delete(firstKey);
-        }
         this.conversationIdCache.set(conversationId, conversation.id);
         return conversation.id;
       }
@@ -403,6 +623,17 @@ export class MeeshySocketIOManager {
    */
   public getNotificationService(): NotificationService {
     return this.notificationService;
+  }
+
+  /**
+   * Invalidate the in-process participant-ID cache for a user.
+   * Called by REST routes that change participant membership or role so that
+   * the next socket `message:send` re-validates against the DB instead of
+   * serving a stale cached entry (e.g. a kicked user still appearing as
+   * member for up to 5 minutes without this invalidation).
+   */
+  public invalidateParticipantCache(userId: string, conversationId?: string): void {
+    this.messageHandler.invalidateParticipantCache(userId, conversationId);
   }
 
   /**
@@ -438,78 +669,130 @@ export class MeeshySocketIOManager {
    * Permet au client de seed son store sans attendre qu'un changement d'état arrive
    * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
    */
-  private async _emitPresenceSnapshot(socket: any, userId: string, isAnonymous: boolean): Promise<void> {
+  /**
+   * Masque la présence des contacts selon leurs préférences privacy (cascade
+   * showOnlineStatus maître + showLastSeen) ET le blocage bidirectionnel avec
+   * `viewerId` — même règle que `GET /users/presence` (`PresenceVisibilityService`).
+   * Anonymes → défaut (montrés, non-bloquables). Appliqué à l'émission (pas au
+   * cache) pour couvrir aussi le cache-hit.
+   */
+  private async _applyPresencePrefs(
+    viewerId: string,
+    users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
+  ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
+    if (users.length === 0) return users;
+    const [prefsMap, blockedUserIds] = await Promise.all([
+      this.privacyPreferencesService.getPreferencesForUsers(
+        users.map(u => ({ id: u.userId, isAnonymous: false })),
+      ),
+      getBlockedUserIdsAmong(this.prisma, viewerId, users.map(u => u.userId)),
+    ]);
+    return users.map(u => {
+      if (blockedUserIds.has(u.userId)) return { ...u, isOnline: false, lastActiveAt: null };
+      const p = prefsMap.get(u.userId);
+      if (p && !p.showOnlineStatus) return { ...u, isOnline: false, lastActiveAt: null };
+      return { ...u, lastActiveAt: p && !p.showLastSeen ? null : u.lastActiveAt };
+    });
+  }
+
+  private async _emitPresenceSnapshot(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
-        const users = cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) }));
+        const users = await this._applyPresencePrefs(
+          userId,
+          cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
+        );
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
         logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
-        return;
-      }
+      } else {
+        // Trouver toutes les conversations du user/participant
+        const participantRows = isAnonymous
+          ? await this.prisma.participant.findMany({
+              where: { id: userId, isActive: true },
+              select: { conversationId: true }
+            })
+          : await this.prisma.participant.findMany({
+              where: { userId: userId, isActive: true },
+              select: { conversationId: true }
+            });
 
-      // Trouver toutes les conversations du user/participant
-      const participantRows = isAnonymous
-        ? await this.prisma.participant.findMany({
-            where: { id: userId, isActive: true },
-            select: { conversationId: true }
-          })
-        : await this.prisma.participant.findMany({
-            where: { userId: userId, isActive: true },
-            select: { conversationId: true }
+        if (participantRows.length > 0) {
+          const conversationIds = participantRows.map(p => p.conversationId);
+
+          // Lister tous les autres participants (registered + anonymes) de ces conversations
+          const contacts = await this.prisma.participant.findMany({
+            where: {
+              conversationId: { in: conversationIds },
+              isActive: true,
+              NOT: isAnonymous
+                ? { id: userId }
+                : { userId: userId }
+            },
+            select: {
+              id: true,
+              userId: true,
+              displayName: true,
+              type: true,
+              lastActiveAt: true,
+              user: { select: { id: true, username: true, displayName: true, lastActiveAt: true } }
+            }
           });
 
-      if (participantRows.length === 0) {
-        return;
+          // Dédupliquer par userId (un même user peut être dans plusieurs conversations)
+          const seen = new Set<string>();
+          const users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[] = [];
+
+          for (const c of contacts) {
+            const presenceKey = c.userId ?? c.id; // userId pour registered, id pour anonyme
+            if (seen.has(presenceKey)) continue;
+            seen.add(presenceKey);
+
+            const isOnline = this.connectedUsers.has(presenceKey);
+            const username = c.user?.username ?? c.user?.displayName ?? c.displayName ?? presenceKey;
+            const lastActiveAt = c.user?.lastActiveAt ?? c.lastActiveAt ?? null;
+
+            users.push({ userId: presenceKey, username, isOnline, lastActiveAt });
+          }
+
+          this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
+          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: await this._applyPresencePrefs(userId, users) });
+          logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
+        }
       }
 
-      const conversationIds = participantRows.map(p => p.conversationId);
-
-      // Lister tous les autres participants (registered + anonymes) de ces conversations
-      const contacts = await this.prisma.participant.findMany({
-        where: {
-          conversationId: { in: conversationIds },
-          isActive: true,
-          NOT: isAnonymous
-            ? { id: userId }
-            : { userId: userId }
-        },
-        select: {
-          id: true,
-          userId: true,
-          displayName: true,
-          type: true,
-          lastActiveAt: true,
-          user: { select: { id: true, username: true, displayName: true, lastActiveAt: true } }
-        }
+      // Drain offline delivery queue regardless of snapshot cache hit/miss.
+      // Previously this only ran on the non-cached path — on quick reconnects
+      // (within the 30s TTL) queued messages were silently dropped.
+      // Anonymous users drain too: their queue is keyed by participant id
+      // (same key as connectedUsers / ROOMS.user for anonymous identities).
+      this._drainPendingMessages(userId, isAnonymous).catch(err => {
+        logger.warn('Failed to drain pending messages on connect', { userId, error: err });
       });
-
-      // Dédupliquer par userId (un même user peut être dans plusieurs conversations)
-      const seen = new Set<string>();
-      const users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[] = [];
-
-      for (const c of contacts) {
-        const presenceKey = c.userId ?? c.id; // userId pour registered, id pour anonyme
-        if (seen.has(presenceKey)) continue;
-        seen.add(presenceKey);
-
-        const isOnline = this.connectedUsers.has(presenceKey);
-        const username = c.user?.username ?? c.user?.displayName ?? c.displayName ?? presenceKey;
-        const lastActiveAt = c.user?.lastActiveAt ?? c.lastActiveAt ?? null;
-
-        users.push({
-          userId: presenceKey,
-          username,
-          isOnline,
-          lastActiveAt
+      if (!isAnonymous) {
+        this._emitUnreadCountsSnapshot(socket, userId).catch(err => {
+          logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, error: err });
         });
       }
-
-      this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
-      socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
-      logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
     } catch (error) {
       logger.error('❌ [PRESENCE_SNAPSHOT] Failed to build snapshot', error);
+    }
+  }
+
+  private async _emitUnreadCountsSnapshot(socket: Socket, userId: string): Promise<void> {
+    try {
+      const participantRows = await this.prisma.participant.findMany({
+        where: { userId, isActive: true },
+        select: { conversationId: true },
+      });
+      if (participantRows.length === 0) return;
+      const conversationIds = participantRows.map(p => p.conversationId);
+      const unreadCounts = await this.readStatusService.getUnreadCountsForUser(userId, conversationIds);
+      for (const [conversationId, unreadCount] of unreadCounts) {
+        socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId, unreadCount });
+      }
+    } catch (error) {
+      logger.warn('unread counts snapshot failed on reconnect', { userId, error });
     }
   }
 
@@ -559,6 +842,9 @@ export class MeeshySocketIOManager {
       // Initialiser le service de notifications pour CallEventsHandler
       this.callEventsHandler.setNotificationService(this.notificationService);
       this.callEventsHandler.setPushNotificationService(pushService);
+      if (zmqClient) {
+        this.callEventsHandler.setZmqClient(zmqClient);
+      }
 
       // Écouter les événements de transcription seule prêtes
       this.translationService.on('transcriptionReady', this._handleTranscriptionReady.bind(this));
@@ -573,6 +859,11 @@ export class MeeshySocketIOManager {
 
       // Écouter les traductions de textObjects de story
       this.translationService.on('storyTextObjectTranslationCompleted', this._handleStoryTextObjectTranslationCompleted.bind(this));
+
+      // Propager les erreurs de traduction aux clients — empêche les spinners "translating…" permanents
+      this.translationService.on('translationFailed', this._handleTranslationFailed.bind(this));
+      this.translationService.on('audioTranslationError', this._handleAudioTranslationFailed.bind(this));
+      this.translationService.on('transcriptionError', this._handleTranscriptionFailed.bind(this));
 
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
@@ -624,6 +915,14 @@ export class MeeshySocketIOManager {
         try { await this.messageHandler.handleMessageSendWithAttachments(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND_WITH_ATTACHMENTS] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
+      socket.on(CLIENT_EVENTS.MESSAGE_EDIT, async (data, callback) => {
+        try { await this.messageHandler.handleMessageEdit(socket, data, callback); } catch (error) { logger.error('[MESSAGE_EDIT] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
+      });
+
+      socket.on(CLIENT_EVENTS.MESSAGE_DELETE, async (data, callback) => {
+        try { await this.messageHandler.handleMessageDelete(socket, data, callback); } catch (error) { logger.error('[MESSAGE_DELETE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
+      });
+
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
         // Rate limit: 10 requêtes/min par userId (multi-device inclus) pour éviter la saturation ZMQ
         const translationUserId = this.socketToUser.get(socket.id);
@@ -666,23 +965,33 @@ export class MeeshySocketIOManager {
         }
       );
 
-      socket.on(CLIENT_EVENTS.FEED_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
-        const userId = this.socketToUser.get(socket.id);
-        if (userId) {
-          this.socialEventsHandler.handleFeedSubscribe(socket, userId);
-          if (callback) callback({ success: true });
-        } else {
-          if (callback) callback({ success: false, error: 'Not authenticated' });
+      socket.on(CLIENT_EVENTS.FEED_SUBSCRIBE, async (callback?: (response: SocketIOResponse) => void) => {
+        try {
+          const userId = this.socketToUser.get(socket.id);
+          if (!userId) {
+            callback?.({ success: false, error: 'Not authenticated' });
+            return;
+          }
+          await this.socialEventsHandler.handleFeedSubscribe(socket, userId);
+          callback?.({ success: true });
+        } catch (error) {
+          logger.error('[FEED_SUBSCRIBE] Error:', error);
+          callback?.({ success: false, error: 'Failed to subscribe to feed' });
         }
       });
 
-      socket.on(CLIENT_EVENTS.FEED_UNSUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
-        const userId = this.socketToUser.get(socket.id);
-        if (userId) {
-          this.socialEventsHandler.handleFeedUnsubscribe(socket, userId);
-          if (callback) callback({ success: true });
-        } else {
-          if (callback) callback({ success: false, error: 'Not authenticated' });
+      socket.on(CLIENT_EVENTS.FEED_UNSUBSCRIBE, async (callback?: (response: SocketIOResponse) => void) => {
+        try {
+          const userId = this.socketToUser.get(socket.id);
+          if (!userId) {
+            callback?.({ success: false, error: 'Not authenticated' });
+            return;
+          }
+          await this.socialEventsHandler.handleFeedUnsubscribe(socket, userId);
+          callback?.({ success: true });
+        } catch (error) {
+          logger.error('[FEED_UNSUBSCRIBE] Error:', error);
+          callback?.({ success: false, error: 'Failed to unsubscribe from feed' });
         }
       });
 
@@ -694,8 +1003,8 @@ export class MeeshySocketIOManager {
         this.statusHandler.handleTypingStop(socket, data).catch((error) => logger.error('[TYPING_STOP] Error:', error));
       });
 
-      socket.on(CLIENT_EVENTS.HEARTBEAT, () => {
-        this.authHandler.handleHeartbeat(socket).catch((error) => logger.error('[HEARTBEAT] Error:', error));
+      socket.on(CLIENT_EVENTS.HEARTBEAT, (data?: { clientTime?: number }) => {
+        this.authHandler.handleHeartbeat(socket, data).catch((error) => logger.error('[HEARTBEAT] Error:', error));
       });
 
       socket.on(CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
@@ -703,7 +1012,12 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
-        this.adminAgentHandler.handleUnsubscribe(socket, callback);
+        try {
+          this.adminAgentHandler.handleUnsubscribe(socket, callback);
+        } catch (error) {
+          logger.error('[ADMIN_AGENT_UNSUBSCRIBE] Error:', error);
+          callback?.({ success: false, error: 'Internal server error' });
+        }
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
@@ -774,12 +1088,49 @@ export class MeeshySocketIOManager {
         try { await this.locationHandler.handleLiveLocationStop(socket, data); } catch (error) { logger.error('[LOCATION_LIVE_STOP] Error:', error); }
       });
 
+      socket.on('disconnecting', (_reason: string) => {
+        const disconnectingUserId = this.socketToUser.get(socket.id);
+        if (disconnectingUserId) {
+          // Build the set of OTHER sockets for this user (excluding the one
+          // that is disconnecting). Passed to handleSocketDisconnecting so it
+          // can suppress typing:stop broadcasts for conversations where the
+          // user is still typing on another device — prevents false indicator
+          // flicker when a user has multiple active sessions.
+          const allUserSockets = this.userSockets.get(disconnectingUserId) ?? new Set<string>();
+          const otherSocketIds = new Set([...allUserSockets].filter(sid => sid !== socket.id));
+          void this.statusHandler.handleSocketDisconnecting(
+            socket.id,
+            (room, event, data, exceptSocketIds) => {
+              // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
+              const emitter = exceptSocketIds && exceptSocketIds.length > 0
+                ? this.io.to(room).except(exceptSocketIds)
+                : this.io.to(room);
+              emitter.emit(event as keyof ServerToClientEvents, data as any);
+            },
+            otherSocketIds.size > 0 ? otherSocketIds : undefined
+          ).catch((error) => {
+            // Defense-in-depth: handleSocketDisconnecting already swallows its
+            // own failures, but keep the fire-and-forget call symmetric with
+            // every other `void`-launched handler here (all attach .catch) so a
+            // future refactor can never leak an unhandled rejection.
+            logger.error('handleSocketDisconnecting failed', { error, socketId: socket.id });
+          });
+        }
+      });
+
       socket.on('disconnect', (reason: string) => {
         logger.debug('socket disconnect', { socketId: socket.id, reason });
         const disconnectedUserId = this.socketToUser.get(socket.id);
         if (disconnectedUserId) {
+          // typing:stop-on-disconnect is broadcast exclusively by the
+          // 'disconnecting' handler above (StatusHandler.handleSocketDisconnecting):
+          // it is the authoritative path — per-socket precision (activeTypers),
+          // multi-device suppression (no false stop when another device is still
+          // typing), blocked-viewer exclusion, and throttle-map cleanup. Emitting
+          // again here from the per-user throttle map re-broadcast the stop
+          // without any of those guarantees, producing duplicate and false
+          // typing:stop events on multi-device disconnects.
           this.statusHandler.invalidateIdentityCache(disconnectedUserId);
-          this.statusHandler.clearTypingThrottle(disconnectedUserId);
           // Invalider le snapshot de présence pour forcer un recalcul à la prochaine connexion
           this.presenceSnapshotCache.delete(disconnectedUserId);
           // Nettoyage du rate limiter in-memory (keyed by userId — purge si dernier socket)
@@ -797,7 +1148,7 @@ export class MeeshySocketIOManager {
   }
 
 
-  private async _handleTranslationRequest(socket: any, data: { messageId: string; targetLanguage: string }) {
+  private async _handleTranslationRequest(socket: Socket, data: { messageId: string; targetLanguage: string }) {
     try {
       const userId = this.socketToUser.get(socket.id);
       if (!userId) {
@@ -806,9 +1157,44 @@ export class MeeshySocketIOManager {
       }
       
       
+      // Charger le message pour connaître sa conversation, PUIS vérifier
+      // l'appartenance AVANT de servir toute traduction (cache OU on-demand).
+      // Sans cette garde en amont, la branche cache divulguait le contenu
+      // traduit à un non-participant : le contrôle n'existait que côté on-demand,
+      // donc un message déjà mis en cache fuitait vers n'importe quel socket
+      // connaissant son id (IDOR / message-content disclosure).
+      const message = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
+      });
+
+      if (!message || !message.content) {
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: 'Message not found or empty'
+        });
+        return;
+      }
+
+      // Verify requesting user is a participant of the message's conversation
+      const connectedUser = this.connectedUsers.get(userId);
+      const membershipCheck = connectedUser?.isAnonymous
+        ? await this.prisma.participant.findFirst({
+            where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
+            select: { id: true },
+          })
+        : await this.prisma.participant.findFirst({
+            where: { userId, conversationId: message.conversationId, isActive: true },
+            select: { id: true },
+          });
+
+      if (!membershipCheck) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
+        return;
+      }
+
       // Récupérer la traduction (depuis le cache ou la base de données)
       const translation = await this.translationService.getTranslation(data.messageId, data.targetLanguage);
-      
+
       if (translation) {
         socket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, {
           messageId: data.messageId,
@@ -822,18 +1208,6 @@ export class MeeshySocketIOManager {
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
         try {
-          const message = await this.prisma.message.findUnique({
-            where: { id: data.messageId },
-            select: { id: true, conversationId: true, content: true, originalLanguage: true, senderId: true, encryptionMode: true }
-          });
-
-          if (!message || !message.content) {
-            socket.emit(SERVER_EVENTS.ERROR, {
-              message: 'Message not found or empty'
-            });
-            return;
-          }
-
           await this.translationService.handleNewMessage({
             id: message.id,
             conversationId: message.conversationId,
@@ -857,6 +1231,86 @@ export class MeeshySocketIOManager {
       logger.error(`❌ Erreur demande traduction: ${error}`);
       this.stats.errors++;
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Failed to get translation' });
+    }
+  }
+
+  private _handleTranslationFailed(data: TranslationFailedEventData): void {
+    try {
+      const room = ROOMS.conversation(data.conversationId);
+      this.io.to(room).emit(SERVER_EVENTS.TRANSLATION_FAILED, data);
+      logger.warn('translation:failed broadcast', {
+        messageId: data.messageId,
+        conversationId: data.conversationId,
+        error: data.error,
+      });
+    } catch (error) {
+      logger.error('failed to broadcast translation:failed', { data, error });
+    }
+  }
+
+  private async _handleAudioTranslationFailed(data: {
+    taskId?: string;
+    messageId: string;
+    attachmentId: string;
+    error: string;
+    errorCode?: string;
+  }): Promise<void> {
+    try {
+      const msg = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true },
+      });
+      if (!msg) return;
+      const payload: AudioTranslationFailedEventData = {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+        errorCode: data.errorCode,
+        taskId: data.taskId,
+      };
+      this.io.to(ROOMS.conversation(msg.conversationId)).emit(SERVER_EVENTS.AUDIO_TRANSLATION_FAILED, payload);
+      logger.warn('audio:translation-failed broadcast', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+      });
+    } catch (error) {
+      logger.error('failed to broadcast audio:translation-failed', { data, error });
+    }
+  }
+
+  private async _handleTranscriptionFailed(data: {
+    taskId?: string;
+    messageId: string;
+    attachmentId: string;
+    error: string;
+    errorCode?: string;
+  }): Promise<void> {
+    try {
+      const msg = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true },
+      });
+      if (!msg) return;
+      const payload: TranscriptionFailedEventData = {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+        errorCode: data.errorCode,
+        taskId: data.taskId,
+      };
+      this.io.to(ROOMS.conversation(msg.conversationId)).emit(SERVER_EVENTS.TRANSCRIPTION_FAILED, payload);
+      logger.warn('audio:transcription-failed broadcast', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+      });
+    } catch (error) {
+      logger.error('failed to broadcast audio:transcription-failed', { data, error });
     }
   }
 
@@ -909,54 +1363,13 @@ export class MeeshySocketIOManager {
         const clientCount = roomClients ? roomClients.size : 0;
         
         
-        // Log des clients dans la room pour debug
-        if (clientCount > 0 && roomClients) {
-          const clientSocketIds = Array.from(roomClients);
-        }
-        
         this.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
         this.stats.translations_sent += clientCount;
         
       } else {
-        logger.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${result.messageId}`);
-        
-        // Fallback UNIQUEMENT si pas de room: Envoi direct aux utilisateurs connectés pour cette langue
-        const targetUsers = this._findUsersForLanguage(targetLanguage);
-        let directSendCount = 0;
-        
-        for (const user of targetUsers) {
-          const userSocket = this.io.sockets.sockets.get(user.socketId);
-          if (userSocket) {
-            userSocket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
-            directSendCount++;
-          }
-        }
-        
-        if (directSendCount > 0) {
-        }
+        logger.warn(`⚠️ [SocketIOManager] No conversation found for message ${result.messageId} — translation dropped (no room to broadcast to)`);
       }
-      
-      // Envoyer les notifications de traduction pour les utilisateurs non connectés
-      if (conversationIdForBroadcast) {
-        setImmediate(async () => {
-          try {
-            // Construire les traductions pour les trois langues de base
-            const translations: { fr?: string; en?: string; es?: string } = {};
-            if (targetLanguage === 'fr') {
-              translations.fr = result.translatedText;
-            } else if (targetLanguage === 'en') {
-              translations.en = result.translatedText;
-            } else if (targetLanguage === 'es') {
-              translations.es = result.translatedText;
-            }
-            
-            // Note: Les notifications de traduction sont gérées directement dans routes/notifications.ts
-          } catch (error) {
-            logger.error(`❌ Erreur envoi notification traduction ${result.messageId}:`, error);
-          }
-        });
-      }
-      
+
     } catch (error) {
       logger.error(`❌ Erreur envoi traduction: ${error}`);
       this.stats.errors++;
@@ -1016,13 +1429,7 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      logger.info(`📝 [SocketIOManager] ======== DIFFUSION TRANSCRIPTION VERS CLIENTS ========`);
-      logger.info(`📝 [SocketIOManager] Transcription ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
-      logger.info(`   📝 Transcription ID: ${data.transcription.id}`);
-      logger.info(`   📝 Texte: "${data.transcription.text?.substring(0, 100)}..."`);
-      logger.info(`   📝 Langue: ${data.transcription.language}`);
-      logger.info(`   📝 Confiance: ${data.transcription.confidence}`);
-      logger.info(`   📝 Segments: ${data.transcription.segments?.length || 0} segments`);
+      logger.debug(`transcription:ready msg=${data.messageId} attach=${data.attachmentId} lang=${data.transcription.language} segments=${data.transcription.segments?.length ?? 0}`);
 
       // Récupérer la conversation du message pour broadcast
       let conversationId: string | null = null;
@@ -1047,7 +1454,7 @@ export class MeeshySocketIOManager {
       const roomClients = this.io.sockets.adapter.rooms.get(roomName);
       const clientCount = roomClients ? roomClients.size : 0;
 
-      logger.info(`📢 [SocketIOManager] Diffusion transcription vers room ${roomName} (${clientCount} clients)`);
+      logger.debug(`transcription:ready room=${roomName} clients=${clientCount}`);
 
       // Préparer les données au format TranscriptionReadyEventData
       const transcriptionData = {
@@ -1059,17 +1466,14 @@ export class MeeshySocketIOManager {
       };
 
       // Diffuser dans la room de conversation
-      logger.info(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.TRANSCRIPTION_READY}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
+      logger.info('transcription:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.transcription.language });
 
       // Generic attachment-updated delta : clients atomically replace the
       // attachment in their store and refresh derived metadata
       // (transcription dictionaries, audio language listings) without a
       // round-trip. See spec 2026-05-25-audio-instant-render-and-attachment-size-design.md.
       await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
-
-      logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRANSCRIPTION DIFFUSÉ ========`);
-      logger.info(`✅ [SocketIOManager] Transcription diffusée vers ${clientCount} client(s)`);
 
     } catch (error) {
       logger.error(`❌ [SocketIOManager] Erreur envoi transcription:`, error);
@@ -1120,15 +1524,7 @@ export class MeeshySocketIOManager {
    * Helper générique pour broadcaster les événements de traduction audio.
    */
   private async _broadcastTranslationEvent(
-    data: {
-      taskId: string;
-      messageId: string;
-      attachmentId: string;
-      language: string;
-      translatedAudio: any;
-      phase?: string;
-      transcription?: any;
-    },
+    data: AudioTranslationEventData & { taskId?: string; phase?: string; transcription?: unknown },
     eventName: string,
     eventConstant:
       | typeof SERVER_EVENTS.AUDIO_TRANSLATION_READY
@@ -1137,10 +1533,7 @@ export class MeeshySocketIOManager {
     logPrefix: string
   ) {
     try {
-      logger.info(`${logPrefix} [SocketIOManager] ======== DIFFUSION TRADUCTION VERS CLIENTS ========`);
-      logger.info(`${logPrefix} [SocketIOManager] Translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
-      logger.info(`   🔊 Langue: ${data.language || 'UNDEFINED'}`);
-      logger.info(`   📝 Segments: ${data.translatedAudio?.segments?.length || 0}`);
+      logger.debug(`${logPrefix} audio-translation:ready msg=${data.messageId} attach=${data.attachmentId} lang=${data.language} segments=${data.translatedAudio?.segments?.length ?? 0}`);
 
       // Récupérer la conversation du message pour broadcast
       let conversationId: string | null = null;
@@ -1165,7 +1558,7 @@ export class MeeshySocketIOManager {
       const roomClients = this.io.sockets.adapter.rooms.get(roomName);
       const clientCount = roomClients ? roomClients.size : 0;
 
-      logger.info(`📢 [SocketIOManager] Diffusion traduction ${data.language} vers room ${roomName} (${clientCount} clients)`);
+      logger.debug(`audio-translation:ready room=${roomName} clients=${clientCount} lang=${data.language}`);
 
       // Vérifier que translatedAudio existe
       if (!data.translatedAudio) {
@@ -1185,8 +1578,8 @@ export class MeeshySocketIOManager {
           id: data.translatedAudio.id || `${data.attachmentId}_${data.language}`,
           targetLanguage: data.translatedAudio.targetLanguage || data.language,
           url: data.translatedAudio.url,
-          transcription: data.translatedAudio.translatedText || data.translatedAudio.transcription || '',
-          durationMs: data.translatedAudio.durationMs || data.translatedAudio.duration || 0,
+          transcription: (data.translatedAudio as unknown as { translatedText?: string }).translatedText || data.translatedAudio.transcription || '',
+          durationMs: data.translatedAudio.durationMs || (data.translatedAudio as unknown as { duration?: number }).duration || 0,
           format: data.translatedAudio.format || 'mp3',
           cloned: data.translatedAudio.cloned || false,
           quality: data.translatedAudio.quality || 0,
@@ -1197,27 +1590,19 @@ export class MeeshySocketIOManager {
         processingTimeMs: data.phase ? undefined : 0
       };
 
-      // Vérification et log des segments
-      if (translationData.translatedAudio.segments && translationData.translatedAudio.segments.length > 0) {
-        logger.info(`   ✅ Segments inclus: ${translationData.translatedAudio.segments.length}`);
-        const firstSeg = translationData.translatedAudio.segments[0];
-        logger.info(`   📝 Premier segment: "${firstSeg.text}" (${firstSeg.startMs}ms-${firstSeg.endMs}ms, speaker=${firstSeg.speakerId}, score=${firstSeg.voiceSimilarityScore})`);
-      } else {
-        logger.warn(`   ⚠️ Aucun segment dans translatedAudio!`);
+      if (!translationData.translatedAudio.segments?.length) {
+        logger.debug(`audio-translation:ready no segments lang=${data.language} msg=${data.messageId}`);
       }
 
       // Diffuser dans la room de conversation
-      logger.info(`📡 [SocketIOManager] Émission événement '${eventConstant}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(eventConstant, translationData);
+      logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
 
       // Generic attachment-updated delta : same rationale as the
       // transcription-ready branch. Clients receive the FULL re-serialized
       // attachment (with the freshly-added translation language merged into
       // `translations`) and refresh their derived state atomically.
       await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
-
-      logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRADUCTION DIFFUSÉ ========`);
-      logger.info(`✅ [SocketIOManager] Traduction ${data.language} diffusée vers ${clientCount} client(s)`);
 
     } catch (error) {
       logger.error(`❌ [SocketIOManager] Erreur envoi traduction:`, error);
@@ -1229,7 +1614,7 @@ export class MeeshySocketIOManager {
    * Gère un événement de traduction audio unique (1 seule langue demandée).
    * Format unifié: translatedAudio (singulier) — cohérent avec progressive/completed.
    */
-  private async _handleAudioTranslationReady(data: any) {
+  private async _handleAudioTranslationReady(data: AudioTranslationEventData & { taskId?: string; transcription?: unknown; phase?: string }) {
     if (!data.translatedAudio) {
       logger.error(`❌ [SocketIOManager] _handleAudioTranslationReady: translatedAudio manquant`, {
         keys: Object.keys(data),
@@ -1239,15 +1624,7 @@ export class MeeshySocketIOManager {
     }
 
     await this._broadcastTranslationEvent(
-      {
-        taskId: data.taskId,
-        messageId: data.messageId,
-        attachmentId: data.attachmentId,
-        language: data.language || data.translatedAudio.targetLanguage,
-        translatedAudio: data.translatedAudio,
-        transcription: data.transcription,
-        phase: data.phase
-      },
+      data,
       'audioTranslationReady',
       SERVER_EVENTS.AUDIO_TRANSLATION_READY,
       '🎯'
@@ -1258,7 +1635,7 @@ export class MeeshySocketIOManager {
    * Gère un événement de traduction progressive (multi-langues, pas la dernière).
    * Format unifié: translatedAudio (singulier).
    */
-  private async _handleAudioTranslationsProgressive(data: any) {
+  private async _handleAudioTranslationsProgressive(data: AudioTranslationEventData & { taskId?: string; phase?: string }) {
     await this._broadcastTranslationEvent(
       data,
       'audioTranslationsProgressive',
@@ -1271,7 +1648,7 @@ export class MeeshySocketIOManager {
    * Gère un événement de dernière traduction terminée (multi-langues).
    * Format unifié: translatedAudio (singulier).
    */
-  private async _handleAudioTranslationsCompleted(data: any) {
+  private async _handleAudioTranslationsCompleted(data: AudioTranslationEventData & { taskId?: string; phase?: string }) {
     await this._broadcastTranslationEvent(
       data,
       'audioTranslationsCompleted',
@@ -1305,12 +1682,28 @@ export class MeeshySocketIOManager {
    * delegated to `filterMessagePayloadForLanguages` (unit-tested).
    */
   private _emitMessageNewByLanguage(room: string, payload: Record<string, any>): void {
-    const socketIds = this.io.sockets.adapter.rooms.get(room);
-    if (!socketIds || socketIds.size === 0) return;
+    // `adapter.rooms` + `connectedUsers`/`socketToUser` only see THIS node's
+    // sockets. On a multi-node deployment (the 100k+ msg/s topology runs the
+    // Socket.IO Redis adapter) a recipient on another gateway node is never
+    // enumerated here, so the per-language loop below — which can only resolve
+    // locally-connected sockets — would silently never deliver `message:new` to
+    // them. Broadcast the FULL payload to the room across the cluster first (the
+    // Redis adapter propagates `io.to(room)`), excepting every LOCAL room socket
+    // (each served a trimmed copy by the loop). Remote sockets get exactly one
+    // (unfiltered) message:new; local sockets get exactly one trimmed copy. On a
+    // single node every room socket is local, so the except-set covers the whole
+    // room and this broadcast reaches nobody — behavior unchanged.
+    const localSocketIds = this.io.sockets.adapter.rooms.get(room);
+    const remoteEmitter: ReturnType<SocketIOServer['to']> = this.io
+      .to(room)
+      .except(localSocketIds ? [...localSocketIds] : []);
+    remoteEmitter.emit(SERVER_EVENTS.MESSAGE_NEW, payload);
+
+    if (!localSocketIds || localSocketIds.size === 0) return;
 
     const originalLanguage = String(payload.originalLanguage || 'fr').toLowerCase();
     const socketsByLanguageKey = new Map<string, { socketIds: string[]; langs: string[] }>();
-    for (const socketId of socketIds) {
+    for (const socketId of localSocketIds) {
       const userId = this.socketToUser.get(socketId);
       const socketUser = userId ? this.connectedUsers.get(userId) : undefined;
       const langs: string[] =
@@ -1324,9 +1717,11 @@ export class MeeshySocketIOManager {
     }
 
     for (const { socketIds: socketsForLangs, langs } of socketsByLanguageKey.values()) {
+      if (socketsForLangs.length === 0) continue;
       const filtered = filterMessagePayloadForLanguages(payload, [...langs, originalLanguage]);
-      let emitter: any = this.io;
-      for (const socketId of socketsForLangs) emitter = emitter.to(socketId);
+      const [firstSid, ...restSids] = socketsForLangs;
+      let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
+      for (const socketId of restSids) emitter = emitter.to(socketId);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
   }
@@ -1402,7 +1797,23 @@ export class MeeshySocketIOManager {
           // Broadcaster dans toutes les conversations de l'utilisateur (batch: 1 emit au lieu de N)
           const rooms = participantRows.map(p => ROOMS.conversation(p.conversationId));
           if (rooms.length > 0) {
-            this.io.to(rooms).emit(SERVER_EVENTS.USER_STATUS, {
+            // PRIVACY: exclure les sockets des viewers en relation de blocage
+            // bidirectionnel avec ce user — même règle que GET /users/presence
+            // (PresenceVisibilityService). Un socket.id est aussi une room
+            // Socket.IO (auto-join), donc .except(socketId) l'exclut du
+            // broadcast même s'il est par ailleurs membre de `rooms`.
+            const onlineOtherUserIds = [...this.connectedUsers.keys()].filter(id => id !== user.id);
+            const blockedUserIds = onlineOtherUserIds.length > 0
+              ? await getBlockedUserIdsAmong(this.prisma, user.id, onlineOtherUserIds)
+              : new Set<string>();
+            const blockedSocketIds = [...blockedUserIds].flatMap(
+              id => [...(this.userSockets.get(id) ?? [])],
+            );
+
+            const emitter = blockedSocketIds.length > 0
+              ? this.io.to(rooms).except(blockedSocketIds)
+              : this.io.to(rooms);
+            emitter.emit(SERVER_EVENTS.USER_STATUS, {
               userId: user.id,
               username: displayName,
               isOnline,
@@ -1425,150 +1836,99 @@ export class MeeshySocketIOManager {
    * 
    * OPTIMISATION: Le calcul des stats est fait de manière asynchrone (non-bloquant)
    */
-  private async _broadcastNewMessage(message: Message, conversationId: string, senderSocket?: any): Promise<void> {
+  private async _broadcastNewMessage(message: Message, conversationId: string, senderSocket?: Socket): Promise<void> {
     try {
-      // Normaliser l'ID de conversation pour le broadcast ET le payload
       const normalizedId = await this.normalizeConversationId(conversationId);
 
-
-      // CORRECTION CRITIQUE: Remplacer message.conversationId par l'ObjectId normalisé
-      // car le message en base peut contenir l'identifier au lieu de l'ObjectId
-      (message as any).conversationId = normalizedId;
-      
-      // OPTIMISATION: Récupérer les traductions et déclencher le calcul des stats
-      // en parallèle. Les stats ne sont plus embarquées dans le payload
-      // message:new — elles sont diffusées via l'event dédié `conversation:stats`.
-      // L'appel reste pour son side-effect (update du cache stats).
+      // Translation transform is synchronous (field reshape from MongoDB JSON object
+      // to array). Call directly — no DB query, no await needed.
       let messageTranslations: any[] = [];
-
-      // Lancer les 2 requêtes en parallèle
-      const [translationsResult, statsResult] = await Promise.allSettled([
-        // Utiliser les traductions déjà présentes sur l'objet message (pas de query DB)
-        (async () => {
-          if (!message.id) return [];
-          try {
-            // `message.translations` est déjà le champ JSON MongoDB — éviter un findUnique redondant
-            return transformTranslationsToArray(
-              message.id,
-              (message as any).translations as Record<string, any>
-            );
-          } catch (error) {
-            logger.warn(`⚠️ [DEBUG] Erreur transformation traductions pour ${message.id}:`, error);
-            return [];
-          }
-        })(),
-        // OPTIMISATION: Calculer les stats de manière asynchrone
-        // Si c'est long, le broadcast du message ne sera pas bloqué
-        conversationStatsService.updateOnNewMessage(
-          this.prisma,
-          conversationId,  // Utiliser l'ID original (ObjectId) pour Prisma
-          message.originalLanguage || 'fr',
-          () => this.getConnectedUsers()
-        ).catch(error => {
-          logger.warn(`⚠️ [PERF] Erreur calcul stats (non-bloquant): ${error}`);
-          return null; // Continuer même si les stats échouent
-        })
-      ]);
-
-      // Extraire les résultats
-      if (translationsResult.status === 'fulfilled') {
-        messageTranslations = translationsResult.value;
+      if (message.id) {
+        try {
+          messageTranslations = transformTranslationsToArray(
+            message.id,
+            message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
+          );
+        } catch (error) {
+          logger.warn(`Translation transform failed for message ${message.id}`, { error });
+        }
       }
 
-      if (statsResult.status !== 'fulfilled') {
-        logger.warn(`⚠️ [PERF] Calcul stats échoué (non-bloquant), cache non rafraîchi`);
-      }
+      // Fire stats update as true fire-and-forget — it is a non-critical DB side-effect
+      // (cache warm-up for `conversation:stats`). Previously awaited via Promise.allSettled,
+      // which blocked the broadcast by the full duration of the MongoDB write (~10–50ms).
+      conversationStatsService.updateOnNewMessage(
+        this.prisma,
+        conversationId,
+        message.originalLanguage || 'fr',
+        () => this.getConnectedUsers()
+      ).catch(error => {
+        logger.warn(`⚠️ [PERF] Erreur calcul stats (non-bloquant): ${error}`);
+      });
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
       // CORRECTION CRITIQUE: Utiliser l'ObjectId normalisé pour cohérence client-serveur
-      const s = message.sender as any;
+      const senderParticipant = message.sender;
       // CORRECTION senderId: message.senderId = participant ID, mais les clients comparent
       // senderId avec leur userId. On expose sender.userId (= User.id) en priorité.
-      const resolvedSenderId = s?.userId || s?.user?.id || message.senderId || undefined;
+      const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
       const messagePayload = {
         id: message.id,
         conversationId: normalizedId,  // ← FIX: Toujours utiliser l'ObjectId normalisé
         senderId: resolvedSenderId,
         content: message.content,
         originalLanguage: message.originalLanguage || 'fr',
-        originalContent: (message as any).originalContent || message.content,
+        originalContent: (message as unknown as Record<string, unknown>)['originalContent'] as string | undefined || message.content,
         messageType: (message.messageType || 'text') as MessageType,
-        // Message origin (user/system/...) so clients render system notices
-        // (e.g. call summaries) in real time, not only after a REST reload.
-        messageSource: (message as any).messageSource || undefined,
-        // Structured per-type payload (call-summary facts for system messages)
-        metadata: (message as any).metadata || undefined,
+        messageSource: message.messageSource || undefined,
+        metadata: message.metadata || undefined,
         isEdited: Boolean(message.isEdited),
         deletedAt: message.deletedAt || undefined,
-        isBlurred: Boolean((message as any).isBlurred),
-        isViewOnce: Boolean((message as any).isViewOnce),
-        effectFlags: (message as any).effectFlags ?? 0,
-        expiresAt: (message as any).expiresAt || undefined,
+        isBlurred: Boolean(message.isBlurred),
+        isViewOnce: Boolean(message.isViewOnce),
+        effectFlags: (message as unknown as Record<string, unknown>)['effectFlags'] ?? 0,
+        expiresAt: message.expiresAt || undefined,
         createdAt: message.createdAt || new Date(),
         updatedAt: message.updatedAt || new Date(),
-        // CORRECTION CRITIQUE: Inclure validatedMentions pour rendre les mentions cliquables en temps réel
-        validatedMentions: (message as any).validatedMentions || [],
-        // CORRECTION CRITIQUE: Inclure les traductions dans le payload
+        validatedMentions: message.validatedMentions ?? [],
         translations: messageTranslations,
-        // Unified Participant sender
-        sender: message.sender ? (() => {
-          const s = message.sender as any;
-          const u = s.user;
-          return {
-            id: s.id,
-            displayName: s.nickname || s.displayName,
-            avatar: s.avatar || u?.avatar,
-            type: s.type,
-            userId: s.userId,
-            username: u?.username,
-            firstName: u?.firstName || '',
-            lastName: u?.lastName || '',
-          };
-        })() : undefined,
-        // CORRECTION: Inclure les attachments dans le payload avec metadata brut
-        attachments: (message as any).attachments || [],
-        // CORRECTION: Inclure l'objet replyTo complet ET replyToId
+        sender: senderParticipant ? {
+          id: senderParticipant.id,
+          displayName: senderParticipant.nickname || senderParticipant.displayName,
+          avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
+          type: senderParticipant.type,
+          userId: senderParticipant.userId,
+          username: senderParticipant.user?.username,
+          firstName: senderParticipant.user?.firstName || '',
+          lastName: senderParticipant.user?.lastName || '',
+        } : undefined,
+        attachments: message.attachments ?? [],
         replyToId: message.replyToId || undefined,
-        replyTo: (message as any).replyTo ? {
-          id: (message as any).replyTo.id,
+        replyTo: message.replyTo ? {
+          id: message.replyTo.id,
           conversationId: normalizedId,
-          senderId: (message as any).replyTo.senderId || undefined,
-          content: (message as any).replyTo.content,
-          originalLanguage: (message as any).replyTo.originalLanguage || 'fr',
-          messageType: ((message as any).replyTo.messageType || 'text') as MessageType,
-          createdAt: (message as any).replyTo.createdAt || new Date(),
-          sender: (message as any).replyTo.sender ? {
-            id: (message as any).replyTo.sender.id,
-            displayName: (message as any).replyTo.sender.nickname || (message as any).replyTo.sender.displayName,
-            avatar: (message as any).replyTo.sender.avatar,
-            type: (message as any).replyTo.sender.type,
-            userId: (message as any).replyTo.sender.userId,
-            username: (message as any).replyTo.sender.user?.username,
-            firstName: (message as any).replyTo.sender.user?.firstName || '',
-            lastName: (message as any).replyTo.sender.user?.lastName || '',
+          senderId: message.replyTo.senderId || undefined,
+          content: message.replyTo.content,
+          originalLanguage: message.replyTo.originalLanguage || 'fr',
+          messageType: (message.replyTo.messageType || 'text') as MessageType,
+          createdAt: message.replyTo.createdAt || new Date(),
+          sender: message.replyTo.sender ? {
+            id: message.replyTo.sender.id,
+            displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
+            avatar: message.replyTo.sender.avatar,
+            type: message.replyTo.sender.type,
+            userId: message.replyTo.sender.userId,
+            username: message.replyTo.sender.user?.username,
+            firstName: message.replyTo.sender.user?.firstName || '',
+            lastName: message.replyTo.sender.user?.lastName || '',
           } : undefined
         } : undefined,
       };
 
-      // DEBUG: Log pour vérifier les attachments et metadata
-      if ((message as any).attachments && (message as any).attachments.length > 0) {
-        logger.info('🔍 [WEBSOCKET] Broadcasting message avec attachments:', {
-          messageId: message.id,
-          attachmentCount: (message as any).attachments.length,
-          firstAttachment: {
-            id: (message as any).attachments[0].id,
-            hasMetadata: !!(message as any).attachments[0].metadata,
-            metadata: (message as any).attachments[0].metadata,
-            metadataType: typeof (message as any).attachments[0].metadata,
-            metadataKeys: (message as any).attachments[0].metadata ? Object.keys((message as any).attachments[0].metadata) : []
-          },
-          payloadAttachments: messagePayload.attachments,
-          payloadFirstAttachment: messagePayload.attachments && messagePayload.attachments[0] ? {
-            id: messagePayload.attachments[0].id,
-            hasMetadata: !!(messagePayload.attachments[0] as any).metadata,
-            metadataKeys: (messagePayload.attachments[0] as any).metadata ? Object.keys((messagePayload.attachments[0] as any).metadata) : []
-          } : null
-        });
+      if (message.attachments && message.attachments.length > 0) {
+        const first = message.attachments[0] as unknown as Record<string, unknown>;
+        const firstMeta = typeof first['metadata'] === 'object' && first['metadata'] ? first['metadata'] as Record<string, unknown> : null;
+        logger.debug(`message:new broadcast messageId=${message.id} attachments=${message.attachments.length}`);
       }
 
       // COMPORTEMENT SIMPLE ET FIABLE DE L'ANCIENNE MÉTHODE
@@ -1592,47 +1952,81 @@ export class MeeshySocketIOManager {
       } else {
       }
 
-      // 2b. Emit mention:created to each mentioned user's personal room
-      const mentions = (message as any).validatedMentions as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
-      if (mentions && mentions.length > 0) {
-        for (const mention of mentions) {
-          const targetUserId = mention.userId;
-          if (targetUserId && targetUserId !== message.senderId) {
-            this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
-              messageId: message.id,
-              conversationId: normalizedId,
-              senderId: message.senderId,
-              mentionedUserId: targetUserId,
-              mentionedParticipantId: mention.participantId,
-              content: (message as any).content,
-              timestamp: new Date().toISOString(),
-            });
+      // 2b. Emit mention:created to each mentioned user's personal room.
+      // validatedMentions is persisted as String[] of usernames (schema.prisma), NOT objects —
+      // resolve them to User.ids before emitting. The self-mention guard compares against
+      // resolvedSenderId (the sender's User.id); message.senderId is a Participant.id and would
+      // never match a resolved User.id. Resolution is wrapped so a lookup failure never blocks
+      // the message broadcast (parity with MessageHandler._resolveMentionUserIds on the socket path).
+      const mentionUsernames = (message.validatedMentions ?? []) as unknown as string[];
+      if (mentionUsernames.length > 0) {
+        try {
+          const mentionedUserIds = await resolveUsernamesToIds(this.prisma, mentionUsernames);
+          for (const targetUserId of mentionedUserIds) {
+            if (targetUserId && targetUserId !== resolvedSenderId) {
+              this.io.to(ROOMS.user(targetUserId)).emit(SERVER_EVENTS.MENTION_CREATED, {
+                messageId: message.id,
+                conversationId: normalizedId,
+                senderId: resolvedSenderId,
+                mentionedUserId: targetUserId,
+                content: message.content,
+                timestamp: new Date().toISOString(),
+              });
+            }
           }
+        } catch (error) {
+          logger.warn(`⚠️ [MENTION] Failed to resolve mention usernames for broadcast (mentions skipped): ${error}`);
         }
       }
 
       const roomClients = this.io.sockets.adapter.rooms.get(room);
 
-      // 3. Mettre à jour le unreadCount pour tous les participants (sauf l'expéditeur)
-      // Cela permet d'incrémenter le badge en temps réel pour les conversations non ouvertes
+      // 3. Synchronisation temps réel de la liste des conversations. Deux signaux
+      //    par destinataire, partageant une SEULE requête participants :
+      //    - CONVERSATION_UPDATED (bump lastMessageAt) → liste se re-trie et les
+      //      conversations toutes neuves apparaissent même quand MESSAGE_NEW
+      //      n'atteint aucun socket hors de ROOMS.conversation(id). Émis à TOUS
+      //      les participants (expéditeur inclus — sa propre liste remonte aussi).
+      //    - CONVERSATION_UNREAD_UPDATED (badge) → destinataires uniquement
+      //      (l'expéditeur n'a pas de non-lu sur son propre message).
+      //    Parité avec MessageHandler.broadcastNewMessage (chemin socket).
       try {
         const senderId = message.senderId;
         if (senderId) {
-          // Récupérer tous les participants de la conversation (Participant model)
-          const participants = await this.prisma.participant.findMany({
+          // Une seule requête : superset (id + userId + joinedAt) pour les deux signaux
+          const allParticipants = await this.prisma.participant.findMany({
             where: {
               conversationId: normalizedId,
-              isActive: true,
-              id: { not: senderId }
+              isActive: true
             },
             select: { id: true, userId: true, joinedAt: true }
           });
 
-          // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
-          const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
-          const readStatusService = new MessageReadStatusService(this.prisma);
+          // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
+          // `updatedBy` est requis par ConversationUpdatedEventData (this.io est typé,
+          // contrairement à MessageHandler) : c'est l'auteur du message qui déclenche
+          // le bump (resolvedSenderId = User.id du sender, fallback participant id).
+          const updatePayload = {
+            conversationId: normalizedId,
+            updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
+            lastMessageAt: message.createdAt || new Date(),
+            lastMessageId: message.id,
+            lastMessagePreview: message.content,
+            senderId: message.senderId,
+            updatedAt: new Date().toISOString()
+          };
+          for (const p of allParticipants) {
+            if (!p.userId) continue;
+            this.io.to(ROOMS.user(p.userId)).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+          }
 
-          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId, senderId);
+          // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process)
+          const participants = allParticipants.filter((p) => p.id !== senderId);
+
+          // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
+          const readStatusService = this.readStatusService;
+
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId);
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
@@ -1647,11 +2041,14 @@ export class MeeshySocketIOManager {
 
             // 5.3 SCOPE — le filtre SOCKET_LANG_FILTER s'applique au message:new
             // ONLINE uniquement. L'enqueue offline ci-dessous stocke le payload
-            // complet (multi-traduit), NON filtré par langue. Acceptable car
-            // (a) le chemin principal `message:send` (MessageHandler) n'enqueue pas
-            // offline, et (b) le drain `_drainPendingMessages` est actuellement du
-            // code mort (jamais appelé) — sujet pré-existant à traiter séparément,
-            // hors périmètre 5.3.
+            // complet (multi-traduit), NON filtré par langue. Acceptable car les
+            // DEUX transports d'envoi enqueuent le payload complet offline de façon
+            // identique : le chemin WS `message:send` (MessageHandler.broadcastNewMessage,
+            // qui enqueue son `broadcastPayload` cid-strippé) et ce chemin REST/ZMQ.
+            // Un message ne traverse qu'un seul transport, donc pas de double-enqueue.
+            // Le drain (`_drainPendingMessages`) EST câblé : il s'exécute sur
+            // connexion (post-auth, post-room-join) — voir l'appel ~ligne 521.
+            // Le destinataire reconnecté rejoue donc ces messages au prochain login.
             if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
               this.deliveryQueue.enqueue(roomTarget, {
                 messageId: message.id,
@@ -1662,9 +2059,23 @@ export class MeeshySocketIOManager {
             }
           }
         }
-      } catch (unreadError) {
-        logger.warn('⚠️ [UNREAD_COUNT] Erreur calcul unreadCount (non-bloquant):', unreadError);
+      } catch (syncError) {
+        logger.warn('⚠️ [CONV_SYNC] Erreur sync liste conversations (non-bloquant):', syncError);
       }
+
+      // Auto-mark delivered for online-but-away recipients on the REST/ZMQ broadcast
+      // path too — parity with the WS `message:send` path (which does this via
+      // MessageHandler.broadcastNewMessage → autoDeliverToOnlineRecipients). Without
+      // this, a message sent through the REST route (POST /conversations/:id/messages →
+      // broadcastMessage) never upgrades the sender's checkmark from "sent" to
+      // "delivered" for a recipient who is connected but viewing another conversation,
+      // because `message:new` only reaches sockets already in `conversation:<id>`.
+      // Delegates to the single shared implementation on the message handler (same
+      // io / connectedUsers / read-status + privacy services), so both transports
+      // produce identical receipt behavior. Fire-and-forget, like the WS path.
+      this.messageHandler.autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
+        logger.warn('auto-deliver (REST/ZMQ broadcast) background failure', { error: err });
+      });
 
       // Envoyer les notifications de message pour les utilisateurs non connectés à la conversation
       if (message.senderId) {
@@ -1694,15 +2105,113 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Public wrapper: invalide l'identité de frappe mise en cache d'un user
+   * (`username` / `displayName`) après un changement de profil pertinent, afin
+   * que l'indicateur « en train d'écrire » affiche le nouveau nom immédiatement
+   * au lieu d'attendre l'expiration du TTL du cache d'identité du StatusHandler.
+   *
+   * Sans cet appel, un utilisateur qui renomme son displayName (ou change de
+   * username) puis se remet à taper apparaîtrait sous son ANCIEN nom à ses
+   * pairs pendant toute la fenêtre TTL — alors que sa vue de profil, elle, est
+   * déjà mise à jour en temps réel via `emitUserUpdated`. Miroir de la même
+   * invalidation faite au `disconnect` et jumeau REST de
+   * `refreshUserResolvedLanguages` ci-dessus. Best-effort.
+   */
+  public refreshUserTypingIdentity(userId: string): void {
+    this.statusHandler.invalidateIdentityCache(userId);
+  }
+
+  /**
    * Public wrapper pour broadcaster un nouveau message depuis une route REST.
    * Permet aux routes HTTP de déclencher le broadcast socket sans accéder aux méthodes privées.
    */
   public async broadcastMessage(message: Message, conversationId: string): Promise<void> {
     const messageWithTimestamp = {
       ...message,
-      timestamp: (message as any).createdAt || (message as any).timestamp || new Date()
-    } as any;
-    await this._broadcastNewMessage(messageWithTimestamp, conversationId);
+      timestamp: message.createdAt || (message as unknown as { timestamp?: Date })['timestamp'] || new Date()
+    };
+    await this._broadcastNewMessage(messageWithTimestamp as Message, conversationId);
+  }
+
+  /**
+   * Server-authored in-place edition of a SYSTEM message — the live call
+   * message ("Appel … en cours") becoming its terminal summary. Emits
+   * `message:edited` to the conversation room with the FULL payload.
+   * Invariants relied upon by clients:
+   *   - `metadata` is ALWAYS present (the web cache merge `{...m, ...msg}`
+   *     only replaces metadata when the key exists in the payload);
+   *   - `editedAt = updatedAt` (never null — clients use it as the
+   *     stale-edit ordering guard);
+   *   - `isEdited` is NOT forced true: a state transition is not a user edit.
+   * Also fans the conversation-list preview to `user:<id>` rooms (NO unread
+   * bump — that was already paid when the live message was posted) and
+   * enqueues the edition for offline participants, so a callee offline for
+   * the whole call still receives the "Appel manqué" terminal state at
+   * reconnect. Best-effort: never throws.
+   */
+  public async broadcastMessageEdited(message: Message, conversationId: string): Promise<void> {
+    try {
+      const normalizedId = await this.normalizeConversationId(conversationId);
+
+      let messageTranslations: unknown[] = [];
+      if (message.id) {
+        try {
+          messageTranslations = transformTranslationsToArray(
+            message.id,
+            message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
+          );
+        } catch (error) {
+          logger.warn(`Translation transform failed for edited message ${message.id}`, { error });
+        }
+      }
+
+      const senderParticipant = message.sender;
+      const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
+      const updatedAt = message.updatedAt || new Date();
+      const editedPayload = {
+        id: message.id,
+        conversationId: normalizedId,
+        senderId: resolvedSenderId,
+        content: message.content,
+        originalLanguage: message.originalLanguage || 'fr',
+        messageType: (message.messageType || 'text') as MessageType,
+        messageSource: message.messageSource || undefined,
+        metadata: message.metadata ?? {},
+        isEdited: Boolean(message.isEdited),
+        editedAt: updatedAt,
+        createdAt: message.createdAt || new Date(),
+        updatedAt,
+        translations: messageTranslations,
+        sender: senderParticipant ? {
+          id: senderParticipant.id,
+          displayName: senderParticipant.nickname || senderParticipant.displayName,
+          avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
+          type: senderParticipant.type,
+          userId: senderParticipant.userId,
+          username: senderParticipant.user?.username,
+          firstName: senderParticipant.user?.firstName || '',
+          lastName: senderParticipant.user?.lastName || '',
+        } : undefined,
+        attachments: message.attachments ?? [],
+      };
+
+      this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+
+      await emitConversationPreviewUpdate(
+        this.prisma, this.io, normalizedId, resolvedSenderId ?? '',
+        (err) => logger.warn('conversation preview fanout (call edit) failed', { error: err })
+      );
+
+      await this.enqueueOfflineMessageMutation({
+        conversationId: normalizedId,
+        actorUserId: null,
+        eventType: 'edited',
+        messageId: message.id,
+        payload: editedPayload as unknown as Record<string, unknown>,
+      });
+    } catch (error) {
+      logger.error('broadcast message:edited (call) failed', error);
+    }
   }
 
 
@@ -1789,6 +2298,25 @@ export class MeeshySocketIOManager {
     return Array.from(this.connectedUsers.keys());
   }
 
+  /**
+   * Joins all active sockets of a user to a conversation room.
+   * Called when a user is added to a conversation while already connected
+   * (e.g. group invite mid-session) so they immediately receive message:new
+   * events without requiring a reconnect.
+   */
+  async joinUserToConversationRoom(userId: string, conversationId: string): Promise<void> {
+    const socketIds = this.userSockets.get(userId);
+    if (!socketIds || socketIds.size === 0) return;
+    const room = ROOMS.conversation(conversationId);
+    await Promise.all(
+      Array.from(socketIds).map(async (socketId) => {
+        const socket = this.io.sockets.sockets.get(socketId);
+        if (!socket) return;
+        await socket.join(room);
+      })
+    );
+  }
+
 
 
   async healthCheck(): Promise<boolean> {
@@ -1838,12 +2366,9 @@ export class MeeshySocketIOManager {
       // Resolve mentionedUsernames to mentionedUserIds for the full mention pipeline
       let mentionedUserIds: string[] | undefined;
       if (response.mentionedUsernames && response.mentionedUsernames.length > 0) {
-        const users = await this.prisma.user.findMany({
-          where: { username: { in: response.mentionedUsernames.map((u) => u.toLowerCase()) } },
-          select: { id: true },
-        });
-        if (users.length > 0) {
-          mentionedUserIds = users.map((u) => u.id);
+        const ids = await resolveUsernamesToIds(this.prisma, response.mentionedUsernames);
+        if (ids.length > 0) {
+          mentionedUserIds = ids;
         }
       } else if (response.content?.includes('@')) {
         // Résolution @DisplayName depuis les participants de la conversation
@@ -1873,9 +2398,22 @@ export class MeeshySocketIOManager {
         metadata: { source: 'api' as const },
       };
 
+      // Résout le Participant.id du sender AVANT d'appeler handleMessage — mirroring
+      // handleAgentReaction just below. MessagingService attend un Participant.id ;
+      // lui passer asUserId (un User.id) ne fonctionnait que via son fallback
+      // DEPRECATED (query supplémentaire + log d'erreur à chaque réponse d'agent).
+      const senderParticipant = await this.prisma.participant.findFirst({
+        where: { userId: response.asUserId, conversationId: response.conversationId, isActive: true },
+        select: { id: true },
+      });
+      if (!senderParticipant) {
+        logger.warn(`[Agent] No active participant for userId=${response.asUserId} in conv=${response.conversationId}`);
+        return;
+      }
+
       const result = await this.messagingService.handleMessage(
         messageRequest,
-        response.asUserId
+        senderParticipant.id
       );
 
       if (!result.success || !result.data) {
@@ -1885,7 +2423,7 @@ export class MeeshySocketIOManager {
 
       // Broadcast to all members (translation arrives asynchronously via translationReady event)
       // Note: Notifications are already triggered inside messagingService.handleMessage -> processor.triggerAllNotifications
-      const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as any;
+      const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as Message;
       await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
 
       logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
@@ -1952,6 +2490,14 @@ export class MeeshySocketIOManager {
         return;
       }
 
+      if (result.unchanged) {
+        // Idempotent no-op: the agent already had exactly this emoji on the
+        // message. Skip the REACTION_ADDED broadcast and author notification —
+        // nothing changed. Parity with the human socket/REST add paths.
+        logger.info(`[Agent] Reaction unchanged (already present) — conv=${reaction.conversationId} msg=${reaction.targetMessageId}`);
+        return;
+      }
+
       const updateEvent = await reactionService.createUpdateEvent(
         reaction.targetMessageId,
         reaction.emoji,
@@ -1967,6 +2513,18 @@ export class MeeshySocketIOManager {
 
       if (message) {
         const normalizedConversationId = message.conversationId;
+        // Swap 1-réaction-par-user : broadcast du retrait de l'ancien emoji de
+        // l'agent avant l'ajout du nouveau.
+        for (const removedEmoji of result.replacedEmojis) {
+          const removeEvent = await reactionService.createUpdateEvent(
+            reaction.targetMessageId,
+            removedEmoji,
+            'remove',
+            participant.id,
+            normalizedConversationId
+          );
+          this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
+        }
         this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
 
         const authorParticipant = message.senderId
@@ -2000,11 +2558,7 @@ export class MeeshySocketIOManager {
   private async _resolveMentionUserIds(usernames: string[]): Promise<string[]> {
     if (usernames.length === 0) return [];
     try {
-      const users = await this.prisma.user.findMany({
-        where: { username: { in: usernames.map((u) => u.toLowerCase()) } },
-        select: { id: true },
-      });
-      return users.map((u) => u.id);
+      return await resolveUsernamesToIds(this.prisma, usernames);
     } catch {
       return [];
     }

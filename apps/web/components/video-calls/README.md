@@ -44,8 +44,7 @@ components/video-calls/
 ├── CallErrorBoundary.tsx        # Error boundary component
 ├── PermissionRequest.tsx        # Permission request UI
 ├── hooks/
-│   ├── useWebRTC.ts            # WebRTC logic hook
-│   └── useCallSignaling.ts     # Socket.IO signaling hook
+│   └── useWebRTC.ts            # WebRTC logic hook
 ├── index.ts                     # Export index
 └── README.md                    # This file
 
@@ -131,62 +130,18 @@ interface CallStatusIndicatorProps {
 
 ## Custom Hooks
 
-### useWebRTC
-Manages WebRTC media streams and browser compatibility:
+There is intentionally no `useWebRTC` hook in this directory: an earlier one was written
+but never wired into the mounted tree (media is acquired/switched via `useWebRTCP2P`,
+`@/hooks/use-webrtc-p2p.ts`, and `VideoCallInterface.handleSwitchCamera`), and has been
+removed to avoid misleading future audits (see `tasks/calls-fonctionnel-todo.md`, wave 33).
 
-```typescript
-const {
-  localStream,
-  isInitializing,
-  error,
-  checkBrowserSupport,
-  getLocalStream,
-  switchCamera,
-  toggleAudio,
-  toggleVideo,
-  stopLocalStream,
-} = useWebRTC({ onError });
-```
-
-**Features:**
-- Browser compatibility checks
-- HTTPS requirement validation
-- Camera/microphone access
-- Camera switching (mobile)
-- Track enable/disable
-
-### useCallSignaling
-Handles Socket.IO signaling for WebRTC:
-
-```typescript
-const {
-  sendSignal,
-  joinCall,
-  leaveCall,
-  toggleAudio,
-  toggleVideo,
-} = useCallSignaling({
-  callId,
-  userId,
-  onSignal,
-  onParticipantJoined,
-  onParticipantLeft,
-  onCallEnded,
-  onMediaToggle,
-  onError,
-});
-```
-
-**Socket.IO Events:**
-- `call:signal` - WebRTC signaling (offer/answer/ICE)
-- `call:join` - Join call
-- `call:leave` - Leave call
-- `call:toggle-audio` - Toggle audio state
-- `call:toggle-video` - Toggle video state
-- `call:initiated` - Call started
-- `call:participant-joined` - Participant joined
-- `call:participant-left` - Participant left
-- `call:ended` - Call ended
+Socket.IO signaling (`call:signal`, `call:join`, `call:leave`, `call:toggle-audio`,
+`call:toggle-video`, `call:initiated`, `call:participant-joined`, `call:participant-left`,
+`call:ended`) is orchestrated directly inside `components/video-call/CallManager.tsx` — the
+component actually mounted at `app/call/[callId]/page.tsx`. There is intentionally no
+`useCallSignaling` hook in this directory: an earlier one was written but never wired into
+the mounted tree and has been removed to avoid misleading future audits (see
+`tasks/calls-fonctionnel-todo.md`, wave 10).
 - `call:media-toggled` - Remote participant toggled media
 
 ## Usage

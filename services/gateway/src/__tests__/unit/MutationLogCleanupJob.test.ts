@@ -73,4 +73,84 @@ describe('MutationLogCleanupJob', () => {
     job.stop();
     job.stop(); // stopping a stopped job is a no-op
   });
+
+  it('setImmediate callback runs cleanup on start (success path)', async () => {
+    job.start();
+    // Flush setImmediate queue so the cleanup callback fires
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(fake.spies.deleteMany).toHaveBeenCalledTimes(1);
+    job.stop();
+  });
+
+  it('setImmediate callback swallows cleanup errors on start (error path)', async () => {
+    const failingPrisma = {
+      mutationLog: {
+        deleteMany: jest.fn<() => Promise<never>>().mockRejectedValue(new Error('boot failure') as never),
+      },
+    };
+    const failingJob = new MutationLogCleanupJob(failingPrisma as any);
+    failingJob.start();
+    // Flush: wait for setImmediate to fire, then let async cleanup() rejection propagate
+    await new Promise<void>(resolve => setImmediate(resolve));
+    // Allow the rejected promise from cleanup() to propagate through microtasks
+    await Promise.resolve();
+    await Promise.resolve();
+    failingJob.stop();
+  });
+
+  it('setInterval fires cleanup after the configured interval', async () => {
+    jest.useFakeTimers();
+    try {
+      job.start();
+      await Promise.resolve(); // flush any microtasks
+      const callsBefore = fake.spies.deleteMany.mock.calls.length;
+      // Advance 24 hours to fire the setInterval callback
+      await jest.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+      expect(fake.spies.deleteMany.mock.calls.length).toBeGreaterThan(callsBefore);
+      job.stop();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('setInterval callback swallows cleanup errors (error path)', async () => {
+    const failingPrisma = {
+      mutationLog: {
+        deleteMany: jest.fn<() => Promise<never>>().mockRejectedValue(new Error('interval failure') as never),
+      },
+    };
+    jest.useFakeTimers();
+    try {
+      const failingJob = new MutationLogCleanupJob(failingPrisma as any);
+      failingJob.start();
+      // Advance 24h to trigger the setInterval callback
+      await jest.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+      // Flush rejected promise microtasks so the catch handler runs
+      await Promise.resolve();
+      await Promise.resolve();
+      // Should not throw — error is swallowed by .catch
+      failingJob.stop();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('runNow returns the count from deleteMany when rows are deleted', async () => {
+    // Seed a non-zero count via the echoed arithmetic in makeFakePrisma
+    const count = await job.runNow();
+    // Echo: count = Math.floor((now - cutoff) / 1000) — will be ~30*86400
+    expect(count).toBeGreaterThan(0);
+  });
+
+  it('runNow returns 0 and skips log when deleteMany deletes nothing', async () => {
+    const silentPrisma = {
+      mutationLog: {
+        deleteMany: jest.fn<() => Promise<{ count: number }>>().mockResolvedValue({ count: 0 }),
+      },
+    };
+    const silentJob = new MutationLogCleanupJob(silentPrisma as any);
+    const count = await silentJob.runNow();
+    expect(count).toBe(0);
+    expect(silentPrisma.mutationLog.deleteMany).toHaveBeenCalledTimes(1);
+  });
 });

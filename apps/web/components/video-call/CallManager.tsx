@@ -10,6 +10,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
 import { CallNotification } from './CallNotification';
+import { CallWaitingBanner } from './CallWaitingBanner';
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
@@ -21,10 +22,22 @@ import type {
   CallEndedEvent,
   CallMediaToggleEvent,
   CallError,
+  CallSession,
 } from '@meeshy/shared/types/video-call';
+import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
+import { callsService } from '@/services/calls.service';
+import { isRetryableCallFailure } from '@/lib/calls/call-retry-policy';
 
-const CALL_TIMEOUT_MS = 30000; // 30 seconds
+// Caller/callee no-answer timeout. The gateway has its own 60s server-side
+// ringing timeout (CallService.RINGING_TIMEOUT_MS), and iOS deliberately
+// rings for 45s client-side (WebRTCTypes.outgoingRingTimeoutSeconds — "15s
+// headroom under the gateway's hard cap"). Web used to cut off at 30s, 15s
+// tighter than iOS for the exact same call: a callee who would have answered
+// between 30s-45s connects fine from an iOS caller but gets hung up on by a
+// web caller. Aligned to 45s (2026-07-11, Vague 38) to match that convention.
+const CALL_TIMEOUT_MS = 45000; // 45 seconds
 
 export function CallManager() {
   const { t } = useI18n('calls');
@@ -41,10 +54,33 @@ export function CallManager() {
     reset,
     removeRemoteStream,
     removePeerConnection,
+    startHeartbeat,
+    stopHeartbeat,
+    joinRequest,
+    clearJoinRequest,
   } = useCallStore();
 
   const [incomingCall, setIncomingCall] = useState<CallInitiatedEvent | null>(null);
   const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Call-waiting (busy-path): a SECOND incoming call arriving while already in
+  // an active call. Kept separate from `incomingCall` so it renders a compact
+  // CallWaitingBanner (Decline / End & answer) OVER the live call instead of the
+  // full-screen fresh-incoming CallNotification. Parity iOS/Android.
+  const [waitingCall, setWaitingCall] = useState<CallInitiatedEvent | null>(null);
+  const waitingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Re-entrancy guard: `incomingCall` (and the Accept button it renders)
+  // isn't cleared until the getUserMedia + call:join ack round-trip settles,
+  // so a double-click/double-tap on Accept before then reaches
+  // handleAcceptCall twice concurrently — each acquiring its own
+  // MediaStream. Both overwrite `window.__preauthorizedMediaStream`; the
+  // loser's stream is never referenced again and its tracks are never
+  // stopped, leaving a mic/camera hot with nothing consuming it.
+  const acceptingCallIdRef = useRef<string | null>(null);
+  // CALL-RESILIENCE — tracks whether we've already observed this effect's
+  // first `connect`. Any subsequent `connect` is a genuine reconnect
+  // (network blip or gateway restart) that must re-enter the call room —
+  // see rejoinActiveCallAfterReconnect below.
+  const hasConnectedRef = useRef(false);
 
   /**
    * Clear call timeout
@@ -58,7 +94,7 @@ export function CallManager() {
   }, []);
 
   /**
-   * Start call timeout - auto-cleanup after 30s if no one joins
+   * Start call timeout - auto-cleanup after 45s if no one joins
    */
   const startCallTimeout = useCallback((callId: string) => {
     // Clear any existing timeout
@@ -66,6 +102,18 @@ export function CallManager() {
 
     // Start new timeout
     callTimeoutRef.current = setTimeout(() => {
+      // Bug fix (2026-07-09, sibling of the 2026-07-06 initiator-timeout fix,
+      // Vague 30): the callee branch of `handleIncomingCall` only calls
+      // `setIncomingCall` + `startCallTimeout` — it never sets
+      // `currentCall`/`isInCall` (those are only set by `handleAcceptCall`).
+      // The guard below can therefore never see an unanswered incoming call,
+      // and previously left the ringing banner stuck forever whenever the
+      // server's own `call:ended`/`call:missed` broadcast didn't reach this
+      // socket (e.g. a reconnect gap). Clear the callee's own stale banner
+      // here, independent of that guard — a no-op for the initiator (whose
+      // `incomingCall` is never set in the first place).
+      setIncomingCall((current) => (current?.callId === callId ? null : current));
+
       const { currentCall, isInCall } = useCallStore.getState();
 
       // Only cleanup if:
@@ -96,6 +144,93 @@ export function CallManager() {
 
     logger.debug('[CallManager]', `Call timeout started - ${CALL_TIMEOUT_MS/1000}s`);
   }, [clearCallTimeout, reset]);
+
+  const clearWaitingTimeout = useCallback(() => {
+    if (waitingTimeoutRef.current) {
+      clearTimeout(waitingTimeoutRef.current);
+      waitingTimeoutRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Decline the waiting call: end it on the wire (keyed by ITS own callId, so
+   * the active call is untouched) and dismiss the banner. Mirrors iOS
+   * `rejectWaiting` / the gateway's callee-busy semantics — a call:end
+   * reason=rejected frees the second caller immediately.
+   */
+  const rejectWaitingCall = useCallback((callId: string) => {
+    const socket = meeshySocketIOService.getSocket();
+    if (socket) {
+      (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_END, {
+        callId,
+        reason: 'rejected',
+      });
+    }
+  }, []);
+
+  /**
+   * Auto-decline the waiting call if the user ignores the banner for the full
+   * ring window — same duration as a normal no-answer (the second caller's own
+   * ring times out around then). Without this the banner could linger after the
+   * caller already gave up.
+   */
+  const startWaitingTimeout = useCallback((callId: string) => {
+    if (waitingTimeoutRef.current) clearTimeout(waitingTimeoutRef.current);
+    waitingTimeoutRef.current = setTimeout(() => {
+      logger.info('[CallManager]', 'Call-waiting banner timed out — auto-declining ' + callId);
+      rejectWaitingCall(callId);
+      setWaitingCall((w) => (w?.callId === callId ? null : w));
+    }, CALL_TIMEOUT_MS);
+  }, [rejectWaitingCall]);
+
+  const handleRejectWaiting = useCallback(() => {
+    if (!waitingCall) return;
+    logger.debug('[CallManager]', 'Rejecting waiting call - callId: ' + waitingCall.callId);
+    clearWaitingTimeout();
+    rejectWaitingCall(waitingCall.callId);
+    setWaitingCall(null);
+  }, [waitingCall, clearWaitingTimeout, rejectWaitingCall]);
+
+  /**
+   * Bug fix (2026-07-06, follow-up to the 682c35279 P0 fix) — the initiator's
+   * own outgoing call never reaches this component via `call:initiated`: the
+   * gateway deliberately never re-emits that event back to the initiator's
+   * own socket, so `startCall`'s ack handler (use-video-call.ts) sets
+   * `currentCall` directly instead. That path has no reference to
+   * `startCallTimeout`, so the initiator's 45s no-answer auto-cleanup never
+   * armed for the caller — only the callee (via `handleIncomingCall`) had
+   * one. Arm it here, reactively, the moment the initiator's own call
+   * becomes current in `initiated` status; `handleParticipantJoined` already
+   * clears it the instant someone actually joins.
+   */
+  useEffect(() => {
+    if (!user || !currentCall) return;
+    if (currentCall.status !== 'initiated') return;
+    if (currentCall.initiatorId !== user.id) return;
+    startCallTimeout(currentCall.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCall?.id, currentCall?.status, currentCall?.initiatorId, user?.id]);
+
+  /**
+   * CALL-RESILIENCE — client heartbeat liveness contract (audit Vague 26,
+   * sibling drift). `CallCleanupService`'s gateway GC tier force-ends any
+   * call whose participants show no fresh heartbeat for >120s, using
+   * `call:heartbeat` (15s interval, `startHeartbeat`/`stopHeartbeat` in
+   * call-store.ts) as the liveness signal — iOS emits it for every call via
+   * `CallManager.startHeartbeat()`. This component never called the store's
+   * `startHeartbeat` action anywhere: a web↔web call had zero heartbeat
+   * entries from either side, which the GC's post-restart DB fallback
+   * treats identically to a genuine zombie once the one-time boot grace
+   * window passes — a healthy P2P call longer than ~2 minutes would be
+   * force-ended server-side with `endReason: heartbeatTimeout`. Starts the
+   * moment a call becomes active, stops the moment it ends (both driven by
+   * `isInCall`, which `setCurrentCall`/`reset` already toggle).
+   */
+  useEffect(() => {
+    if (!isInCall || !currentCall?.id) return;
+    startHeartbeat(currentCall.id);
+    return () => stopHeartbeat();
+  }, [isInCall, currentCall?.id, startHeartbeat, stopHeartbeat]);
 
   /**
    * Handle incoming call
@@ -162,6 +297,23 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     } else {
+      // Busy-path parity (iOS CallManager busy-path, Android onIncomingOffer):
+      // a second incoming call while already in a DIFFERENT active call must not
+      // naively setIncomingCall. The render mounts CallNotification and
+      // VideoCallInterface independently, so an ungated notification renders
+      // OVER the live call and tapping Accept runs setCurrentCall(secondCall),
+      // clobbering the active call and orphaning its RTCPeerConnection. Surface a
+      // compact CallWaitingBanner (Decline / End & answer) instead — the user
+      // stays in control of the live call and can either free the second caller
+      // or swap to them. Auto-declines on timeout if ignored (busy for real).
+      const { isInCall: busyInCall, currentCall: busyCall } = useCallStore.getState();
+      if (busyInCall && busyCall && busyCall.id !== event.callId) {
+        logger.info('[CallManager]', 'Busy in another call — showing call-waiting banner for ' + event.callId);
+        setWaitingCall(event);
+        startWaitingTimeout(event.callId);
+        return;
+      }
+
       // I am being called - show notification
       console.log('📞 [CallManager] Setting incomingCall state - should show CallNotification', {
         callId: event.callId,
@@ -174,7 +326,7 @@ export function CallManager() {
       startCallTimeout(event.callId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout]);
+  }, [user?.id, setCurrentCall, setInCall, isInCall, currentCall, startCallTimeout, startWaitingTimeout]);
 
   /**
    * Handle participant joined
@@ -250,8 +402,53 @@ export function CallManager() {
     (event: CallEndedEvent) => {
       logger.info('[CallManager]', 'Call ended - callId: ' + event.callId + ', duration: ' + event.duration);
 
+      // Call-waiting: the SECOND (waiting) call ended — its caller cancelled or
+      // it timed out. Dismiss the banner ONLY; the active call and its retry
+      // policy are untouched. This guard MUST run before the reset() below,
+      // which is otherwise callId-agnostic and would tear down the healthy
+      // active call on a waiting call's teardown.
+      if (waitingCall && waitingCall.callId === event.callId) {
+        clearWaitingTimeout();
+        setWaitingCall(null);
+        return;
+      }
+
       // Clear timeout
       clearCallTimeout();
+
+      // A call ending in a TRANSIENT failure (failed/connectionLost) gets a
+      // « Réessayer » offer — same policy VideoCallInterface's connect
+      // watchdog already applies to the narrower never-connected case, now
+      // also covering the server-authoritative call:ended path (the majority
+      // real-world drop scenario for an already-established call). Read from
+      // the store BEFORE reset() wipes currentCall/controls.
+      // …unless a call is WAITING: it is about to be promoted to a fresh
+      // incoming ring (below), which is the user's next action. Stacking a
+      // « Réessayer » offer for the just-dropped active call behind that ring
+      // is conflicting UI, so the promotion path owns the teardown and no retry
+      // is offered.
+      if (!waitingCall && isRetryableCallFailure(event.reason)) {
+        const { currentCall, controls, offerCallRetry } = useCallStore.getState();
+        if (currentCall?.conversationId) {
+          offerCallRetry({
+            conversationId: currentCall.conversationId,
+            type: controls.videoEnabled ? 'video' : 'audio',
+          });
+        }
+      }
+
+      // The ACTIVE call ended while a call was WAITING: promote the waiting call
+      // to a normal incoming ring (parity iOS re-present-after-teardown) instead
+      // of leaving a stale banner floating with no active call behind it.
+      if (waitingCall) {
+        clearWaitingTimeout();
+        reset();
+        const promoted = waitingCall;
+        setWaitingCall(null);
+        setIncomingCall(promoted);
+        startCallTimeout(promoted.callId);
+        return;
+      }
 
       // Reset call state - CallInterface will handle WebRTC cleanup
       reset();
@@ -261,7 +458,31 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [reset, clearCallTimeout]
+    [reset, clearCallTimeout, clearWaitingTimeout, startCallTimeout, waitingCall]
+  );
+
+  /**
+   * Handle "answered elsewhere" (multi-device ring-stop)
+   */
+  const handleAnsweredElsewhere = useCallback(
+    (event: { callId: string }) => {
+      // Un autre device de CE user a décroché : le serveur passe l'appel en
+      // `active` (jamais `ended` à cet instant) et émet call:already-answered
+      // vers les user-rooms — sans ce listener, la carte d'appel entrant du
+      // tab sonnait indéfiniment (audit appels 2026-07-11, finding #1).
+      // Scopé au callId qui sonne : ne touche ni le ring d'un autre appel ni
+      // un appel déjà établi sur CE tab.
+      if (!incomingCall || incomingCall.callId !== event.callId) return;
+
+      logger.info('[CallManager]', 'Call answered on another device - dismissing ring - callId: ' + event.callId);
+
+      import('@/utils/ringtone').then(({ stopRingtone }) => {
+        stopRingtone();
+      });
+      clearCallTimeout();
+      setIncomingCall(null);
+    },
+    [incomingCall, clearCallTimeout]
   );
 
   /**
@@ -300,15 +521,116 @@ export function CallManager() {
       return;
     }
 
+    // Sibling-drift fix (2026-07-05): iOS's call:error subscriber whitelists
+    // these 3 codes as transient/non-fatal, each backed by a real prod
+    // incident (CallManager.swift ~3480-3510) — RATE_LIMIT_EXCEEDED throttles
+    // a single ICE candidate (redundant by design, gateway cap is 50/5s vs. a
+    // legitimate gathering flush of 15-25/ms) and killed a live call 382ms
+    // after connect when treated as fatal; TARGET_NOT_FOUND is the peer's
+    // socket momentarily missing from the call room during churn/reconnect
+    // and killed a healthy call while the peer re-joined seconds later;
+    // INVALID_SIGNAL is a per-message relay rejection, not an operation
+    // error. The gateway emits all 3 to web the same way it does to iOS
+    // (CallEventsHandler.ts call:signal/call:toggle-*), so an unrelated web
+    // call showed a scary, self-healing "error" mid-call with no fix here.
+    if (error?.code === 'RATE_LIMIT_EXCEEDED' || error?.code === 'TARGET_NOT_FOUND' || error?.code === 'INVALID_SIGNAL') {
+      logger.debug('[CallManager]', `Ignoring transient call:error (${error.code}): ${errorMessage}`);
+      return;
+    }
+
     logger.error('[CallManager]', 'Call error: ' + errorMessage, { error });
     toast.error(errorMessage);
   }, []);
+
+  /**
+   * Shared join path — used by BOTH the incoming-call Accept button and the
+   * live-bubble join (cold rehydration via `useCallStore.requestJoin`).
+   *
+   * Privacy fix (audit 2026-07-07): acquire local media BEFORE joining,
+   * gated on the call's ACTUAL type — mirrors the caller's own
+   * pre-authorization in use-video-call.ts's startCall. Handing the stream
+   * off via `__preauthorizedMediaStream` reuses the same Safari-compatible
+   * path VideoCallInterface already checks on mount.
+   *
+   * Vague 19 — the join must be confirmed via its ack before the UI commits
+   * to "in call": the gateway can reject call:join at any point right up to
+   * the moment the caller hangs up (already-ended call, no-longer-a-
+   * participant, rate limit, etc.). A failure anywhere after getUserMedia
+   * succeeded must not leave the mic/camera hot — the stream is stopped
+   * before rethrowing to the caller (which owns the user-facing toast).
+   */
+  const acceptOrJoinCall = useCallback(async (params: {
+    callId: string;
+    conversationId: string;
+    mode: CallSession['mode'];
+    initiatorId: string;
+    participants: CallSession['participants'];
+    isVideo: boolean;
+  }) => {
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(
+        getCallMediaConstraints(params.isVideo ? 'video' : 'audio')
+      );
+      (window as any).__preauthorizedMediaStream = stream;
+
+      // Join call via Socket.IO - CallInterface will initialize local stream
+      const socket = meeshySocketIOService.getSocket();
+      if (!socket) {
+        throw new Error('No socket connection');
+      }
+
+      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve) => {
+        (socket as unknown).emit(
+          CLIENT_EVENTS.CALL_JOIN,
+          {
+            callId: params.callId,
+            settings: {
+              audioEnabled: true,
+              videoEnabled: params.isVideo,
+            },
+          },
+          resolve
+        );
+      });
+
+      if (!ack?.success) {
+        throw new Error('Failed to join call');
+      }
+
+      // Apply the server-provided ICE servers (STUN + time-limited TURN) so
+      // the RTCPeerConnection is built with TURN credentials before any SDP
+      // is answered/offered.
+      if (ack.data?.iceServers?.length) {
+        setIceServers(ack.data.iceServers);
+      }
+
+      // Create call session in store
+      setCurrentCall({
+        id: params.callId,
+        conversationId: params.conversationId,
+        mode: params.mode,
+        status: 'active',
+        initiatorId: params.initiatorId,
+        startedAt: new Date(),
+        participants: params.participants,
+      } as CallSession);
+
+      // Set call as active
+      setInCall(true);
+    } catch (error) {
+      stopPreauthorizedStream(stream);
+      throw error;
+    }
+  }, [setCurrentCall, setInCall, setIceServers]);
 
   /**
    * Accept incoming call
    */
   const handleAcceptCall = useCallback(async () => {
     if (!incomingCall) return;
+    if (acceptingCallIdRef.current === incomingCall.callId) return;
+    acceptingCallIdRef.current = incomingCall.callId;
 
     logger.debug('[CallManager]', 'Accepting call - callId: ' + incomingCall.callId);
 
@@ -319,57 +641,75 @@ export function CallManager() {
       // Stop ringtone immediately
       import('@/utils/ringtone').then(({ stopRingtone }) => {
         stopRingtone();
+      }).catch((error) => {
+        logger.error('[CallManager]', 'Failed to load ringtone module: ' + error?.message);
       });
 
-      // Join call via Socket.IO - CallInterface will initialize local stream
-      const socket = meeshySocketIOService.getSocket();
-      if (!socket) {
-        throw new Error('No socket connection');
-      }
-
-      (socket as unknown).emit(
-        CLIENT_EVENTS.CALL_JOIN,
-        {
-          callId: incomingCall.callId,
-          settings: {
-            audioEnabled: true,
-            videoEnabled: true,
-          },
-        },
-        // Apply the server-provided ICE servers (STUN + time-limited TURN) so
-        // the callee's RTCPeerConnection is built with TURN credentials before
-        // the incoming SDP offer is answered.
-        (ack: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
-          if (ack?.success && ack.data?.iceServers?.length) {
-            setIceServers(ack.data.iceServers);
-          }
-        }
-      );
-
-      // Create call session in store
-      setCurrentCall({
-        id: incomingCall.callId,
+      await acceptOrJoinCall({
+        callId: incomingCall.callId,
         conversationId: incomingCall.conversationId,
         mode: incomingCall.mode,
-        status: 'active',
         initiatorId: incomingCall.initiator.userId,
-        startedAt: new Date(),
-        participants: incomingCall.participants,
+        participants: incomingCall.participants as CallSession['participants'],
+        isVideo: incomingCall.type === 'video',
       });
-
-      // Set call as active
-      setInCall(true);
 
       // Clear incoming call notification
       setIncomingCall(null);
 
       logger.info('[CallManager]', 'Call accepted - callId: ' + incomingCall.callId);
     } catch (error: unknown) {
-      logger.error('[CallManager]', 'Failed to accept call: ' + (error?.message || 'Unknown error'));
+      logger.error('[CallManager]', 'Failed to accept call: ' + ((error as Error)?.message || 'Unknown error'));
       toast.error(t('calls.toasts.joinFailed'));
       setIncomingCall(null);
+    } finally {
+      acceptingCallIdRef.current = null;
     }
-  }, [incomingCall, setCurrentCall, setInCall, setIceServers, clearCallTimeout]);
+  }, [incomingCall, acceptOrJoinCall, clearCallTimeout, t]);
+
+  /**
+   * End & answer (call-waiting swap): hang up the ACTIVE call, then answer the
+   * WAITING one. Parity iOS `endCurrentAndAnswerPending` / Android
+   * `acceptWaitingSwap` (both hang up → settle → answer). reset() closes the
+   * active call's peer connections and stops its tracks (call-store.ts), so no
+   * orphaned RTCPeerConnection survives the swap.
+   */
+  const handleEndAndAnswerWaiting = useCallback(async () => {
+    if (!waitingCall) return;
+    const swapTo = waitingCall;
+    logger.info('[CallManager]', 'End & answer — swapping active call for waiting call ' + swapTo.callId);
+
+    clearWaitingTimeout();
+    setWaitingCall(null);
+
+    // 1. End the ACTIVE call on the wire (call:leave, like VideoCallInterface's
+    //    hangup) so the gateway ends it and notifies the peer.
+    const { currentCall: active } = useCallStore.getState();
+    const socket = meeshySocketIOService.getSocket();
+    if (socket && active?.id) {
+      (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_LEAVE, {
+        callId: active.id,
+      });
+    }
+
+    // 2. Tear down the active call's WebRTC before answering the waiting one.
+    reset();
+
+    // 3. Answer the waiting call — same flow as accepting a fresh incoming call.
+    try {
+      await acceptOrJoinCall({
+        callId: swapTo.callId,
+        conversationId: swapTo.conversationId,
+        mode: swapTo.mode,
+        initiatorId: swapTo.initiator.userId,
+        participants: swapTo.participants as CallSession['participants'],
+        isVideo: swapTo.type === 'video',
+      });
+    } catch (error: unknown) {
+      logger.error('[CallManager]', 'End & answer failed to join waiting call: ' + ((error as Error)?.message || 'Unknown error'));
+      toast.error(t('calls.toasts.joinFailed'));
+    }
+  }, [waitingCall, clearWaitingTimeout, reset, acceptOrJoinCall, t]);
 
   /**
    * Reject incoming call
@@ -385,13 +725,20 @@ export function CallManager() {
     // Stop ringtone immediately
     import('@/utils/ringtone').then(({ stopRingtone }) => {
       stopRingtone();
+    }).catch((error) => {
+      logger.error('[CallManager]', 'Failed to load ringtone module: ' + error?.message);
     });
 
-    // Emit leave event
+    // call:end avec reason=rejected (et non call:leave) : le leave pré-décroché
+    // terminait bien l'appel 1:1 mais le serveur le résolvait en « missed » —
+    // le journal de l'appelant mentait sur un refus explicite. Le end est
+    // permis à tout participant actif (P2P, spec C4) et broadcast call:ended
+    // immédiatement à l'appelant.
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, {
+      (socket as unknown).emit(CLIENT_EVENTS.CALL_END, {
         callId: incomingCall.callId,
+        reason: 'rejected',
       });
     }
 
@@ -401,11 +748,97 @@ export function CallManager() {
     // Toast métier désactivé - utiliser le système de notifications v2
   }, [incomingCall, clearCallTimeout]);
 
+  /**
+   * CALL-RESILIENCE — re-enter the call room after the signaling socket
+   * reconnects (network blip or gateway restart). Call media is direct P2P
+   * (RTCPeerConnection) and survives such a drop untouched; only the
+   * signaling socket needs to rejoin the gateway's call room before its
+   * reconnect-grace window expires and force-ends an otherwise-healthy call
+   * (services/gateway CallEventsHandler DISCONNECT_GRACE_MS). Without this,
+   * the socket reconnects and its listeners re-attach, but the gateway never
+   * sees it back in the call room, so grace extensions run out and the call
+   * is ended server-side even though both peers' media is fine. Mirrors iOS
+   * CallManager.didReconnect.
+   */
+  const rejoinActiveCallAfterReconnect = useCallback((socket: unknown) => {
+    const { isInCall: activeInCall, currentCall: activeCall } = useCallStore.getState();
+    if (!socket || !activeInCall || !activeCall?.id) return;
+
+    const callId = activeCall.id;
+    logger.info('[CallManager]', 'Socket reconnected — re-joining call room', { callId });
+
+    (socket as unknown).emit(
+      CLIENT_EVENTS.CALL_JOIN,
+      { callId, settings: { audioEnabled: true, videoEnabled: true } },
+      (ack: { success?: boolean; error?: { code?: string; message?: string } }) => {
+        if (ack?.success) return;
+        if (ack?.error?.code === 'CALL_ENDED') {
+          logger.warn('[CallManager]', 'Call ended while disconnected — tearing down', { callId });
+          handleCallEndedRef.current({
+            callId,
+            duration: 0,
+            endedBy: '',
+            reason: 'completed',
+          } as CallEndedEvent);
+          return;
+        }
+        logger.warn('[CallManager]', 'Re-join after reconnect failed', { callId, error: ack?.error });
+      }
+    );
+  }, []);
+
+  /**
+   * Live call bubble → join (cold-rehydration path). The bubble
+   * (`CallSystemMessage`, message kind 'call-live') owns no media/UI: it
+   * poses a `requestJoin` on the call store, consumed here. The call is
+   * revalidated via REST (`GET /conversations/:id/active-call`) — no
+   * dependency on a previously received `call:initiated` socket event, so a
+   * page reloaded mid-call can still join. A call that ended in the meantime
+   * surfaces a toast instead of a broken join.
+   */
+  useEffect(() => {
+    if (!joinRequest) return;
+    const request = joinRequest;
+    clearJoinRequest();
+
+    // Guard: already in a call — the store's requestJoin also refuses this,
+    // but the state may have changed between the tap and this effect.
+    if (useCallStore.getState().isInCall) return;
+
+    void (async () => {
+      try {
+        const response = await callsService.getActiveCall(request.conversationId);
+        const session = response.success ? response.data : null;
+        const isJoinable = !!session
+          && session.id === request.callId
+          && !CALL_TERMINAL_STATUSES.includes(session.status);
+        if (!isJoinable) {
+          toast.info(t('calls.toasts.callAlreadyEnded'));
+          return;
+        }
+
+        logger.info('[CallManager]', 'Joining ongoing call from live bubble', { callId: session.id });
+        await acceptOrJoinCall({
+          callId: session.id,
+          conversationId: request.conversationId,
+          mode: session.mode,
+          initiatorId: session.initiatorId,
+          participants: session.participants ?? [],
+          isVideo: request.callType === 'video',
+        });
+      } catch (error: unknown) {
+        logger.error('[CallManager]', 'Failed to join ongoing call from bubble: ' + ((error as Error)?.message || 'Unknown error'));
+        toast.error(t('calls.toasts.joinFailed'));
+      }
+    })();
+  }, [joinRequest, clearJoinRequest, acceptOrJoinCall, t]);
+
   // Stable refs for all handlers - prevents useEffect re-fires on every render
   const handleIncomingCallRef = useRef(handleIncomingCall);
   const handleParticipantJoinedRef = useRef(handleParticipantJoined);
   const handleParticipantLeftRef = useRef(handleParticipantLeft);
   const handleCallEndedRef = useRef(handleCallEnded);
+  const handleAnsweredElsewhereRef = useRef(handleAnsweredElsewhere);
   const handleMediaToggleRef = useRef(handleMediaToggle);
   const handleCallErrorRef = useRef(handleCallError);
 
@@ -415,6 +848,7 @@ export function CallManager() {
     handleParticipantJoinedRef.current = handleParticipantJoined;
     handleParticipantLeftRef.current = handleParticipantLeft;
     handleCallEndedRef.current = handleCallEnded;
+    handleAnsweredElsewhereRef.current = handleAnsweredElsewhere;
     handleMediaToggleRef.current = handleMediaToggle;
     handleCallErrorRef.current = handleCallError;
   });
@@ -428,17 +862,28 @@ export function CallManager() {
 
     let isSubscribed = true;
     let debugListenerRef: ((eventName: string, ...args: unknown[]) => void) | null = null;
+    // Regression: `socket.off(EVENT)` with no handler argument removes EVERY
+    // listener registered for that event name — not just this component's
+    // own. `attachListeners` re-runs on every reconnect while a call is
+    // active, so this used to silently delete a sibling component's listener
+    // for the same event (VideoCallInterface also listens for
+    // CALL_PARTICIPANT_LEFT). Track our own bound functions so cleanup only
+    // ever removes exactly those.
+    let attachedListeners: Record<string, (...args: unknown[]) => void> | null = null;
 
     const attachListeners = (socket: unknown) => {
       if (!isSubscribed || !socket?.connected) return;
 
-      // Cleanup existing listeners to avoid duplicates
-      socket.off(SERVER_EVENTS.CALL_INITIATED);
-      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED);
-      socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT);
-      socket.off(SERVER_EVENTS.CALL_ENDED);
-      socket.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED);
-      socket.off(SERVER_EVENTS.CALL_ERROR);
+      // Cleanup this component's OWN previously-attached listeners only.
+      if (attachedListeners) {
+        socket.off(SERVER_EVENTS.CALL_INITIATED, attachedListeners[SERVER_EVENTS.CALL_INITIATED]);
+        socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
+        socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
+        socket.off(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
+        socket.off(SERVER_EVENTS.CALL_ALREADY_ANSWERED, attachedListeners[SERVER_EVENTS.CALL_ALREADY_ANSWERED]);
+        socket.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
+        socket.off(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
+      }
       if (debugListenerRef) socket.offAny(debugListenerRef);
 
       // Debug listener for call events
@@ -450,31 +895,72 @@ export function CallManager() {
       socket.onAny(debugListenerRef);
 
       // Attach via refs (stable references that don't cause re-fires)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Socket.IO listener args are typed by the handler ref
-      socket.on(SERVER_EVENTS.CALL_INITIATED, (data: any) => handleIncomingCallRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, (data: unknown) => handleParticipantJoinedRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, (data: unknown) => handleParticipantLeftRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_ENDED, (data: unknown) => handleCallEndedRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, (data: unknown) => handleMediaToggleRef.current(data));
-      socket.on(SERVER_EVENTS.CALL_ERROR, (data: unknown) => handleCallErrorRef.current(data));
+      attachedListeners = {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Socket.IO listener args are typed by the handler ref
+        [SERVER_EVENTS.CALL_INITIATED]: (data: any) => handleIncomingCallRef.current(data),
+        [SERVER_EVENTS.CALL_PARTICIPANT_JOINED]: (data: unknown) => handleParticipantJoinedRef.current(data),
+        [SERVER_EVENTS.CALL_PARTICIPANT_LEFT]: (data: unknown) => handleParticipantLeftRef.current(data),
+        [SERVER_EVENTS.CALL_ENDED]: (data: unknown) => handleCallEndedRef.current(data),
+        [SERVER_EVENTS.CALL_ALREADY_ANSWERED]: (data: unknown) => handleAnsweredElsewhereRef.current(data as { callId: string }),
+        [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: unknown) => handleMediaToggleRef.current(data),
+        [SERVER_EVENTS.CALL_ERROR]: (data: unknown) => handleCallErrorRef.current(data),
+      };
+      socket.on(SERVER_EVENTS.CALL_INITIATED, attachedListeners[SERVER_EVENTS.CALL_INITIATED]);
+      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
+      socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
+      socket.on(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
+      socket.on(SERVER_EVENTS.CALL_ALREADY_ANSWERED, attachedListeners[SERVER_EVENTS.CALL_ALREADY_ANSWERED]);
+      socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
+      socket.on(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
 
       console.log('✅ [CallManager] All call listeners registered', {
         socketId: socket.id,
         userId: user?.id,
-        listenersCount: 6
+        listenersCount: 7
       });
+    };
+
+    // Ask the server to replay any in-progress (ringing) call this socket
+    // missed — a call that started while the tab was reloading, asleep, or
+    // between a brief WebSocket drop and its reconnect. The live
+    // `call:initiated` broadcast only reaches sockets already in the user's
+    // room at the moment of `call:initiate`; without this, a web callee whose
+    // socket (re)connects mid-ring never sees the incoming-call banner and
+    // the call silently rings out to `missed`. Fired on EVERY connect
+    // (first or reconnect) — mirrors iOS `MessageSocketManager`'s
+    // unconditional `call:check-active` emit on connect. Idempotent: the
+    // gateway scopes the replay to the 60s ringing window and the client
+    // dedups by callId (see CallEventsHandler.ts `call:check-active`).
+    const checkForActiveCall = (socket: unknown) => {
+      // Only ever invoked from an already-established `connect` context
+      // (initial-connected branch, the `connect` event itself, or the
+      // socket-becomes-available poll below), so `.connected` is implied —
+      // mirrors how `attachListeners` is invoked from the same call sites.
+      if (socket) socket.emit(CLIENT_EVENTS.CALL_CHECK_ACTIVE);
     };
 
     // Try immediately if socket already connected
     const socket = meeshySocketIOService.getSocket();
+    // This effect instance hasn't observed a connect yet; if the socket is
+    // already connected, that counts as the initial connect (nothing to
+    // rejoin — the call was joined explicitly via handleAcceptCall/initiate).
+    hasConnectedRef.current = socket?.connected === true;
     if (socket?.connected) {
       attachListeners(socket);
+      checkForActiveCall(socket);
     }
 
     // Listen for future connections (instead of polling with setTimeout)
     const onConnect = () => {
       const s = meeshySocketIOService.getSocket();
       if (s) attachListeners(s);
+      checkForActiveCall(s);
+
+      if (!hasConnectedRef.current) {
+        hasConnectedRef.current = true;
+        return;
+      }
+      rejoinActiveCallAfterReconnect(s);
     };
 
     // If socket exists, listen for connect event
@@ -493,7 +979,9 @@ export function CallManager() {
           socketPollInterval = null;
           s.on('connect', onConnect);
           if (s.connected) {
+            hasConnectedRef.current = true;
             attachListeners(s);
+            checkForActiveCall(s);
           }
         }
       }, 1000);
@@ -506,12 +994,14 @@ export function CallManager() {
       if (s) {
         s.off('connect', onConnect);
         if (debugListenerRef) s.offAny(debugListenerRef);
-        s.off(SERVER_EVENTS.CALL_INITIATED);
-        s.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED);
-        s.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT);
-        s.off(SERVER_EVENTS.CALL_ENDED);
-        s.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED);
-        s.off(SERVER_EVENTS.CALL_ERROR);
+        if (attachedListeners) {
+          s.off(SERVER_EVENTS.CALL_INITIATED, attachedListeners[SERVER_EVENTS.CALL_INITIATED]);
+          s.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
+          s.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_LEFT]);
+          s.off(SERVER_EVENTS.CALL_ENDED, attachedListeners[SERVER_EVENTS.CALL_ENDED]);
+          s.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
+          s.off(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
+        }
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -553,6 +1043,15 @@ export function CallManager() {
           call={incomingCall}
           onAccept={handleAcceptCall}
           onReject={handleRejectCall}
+        />
+      )}
+
+      {/* Call-waiting banner — a second incoming call while already busy */}
+      {waitingCall && (
+        <CallWaitingBanner
+          call={waitingCall}
+          onReject={handleRejectWaiting}
+          onEndAndAnswer={handleEndAndAnswerWaiting}
         />
       )}
 

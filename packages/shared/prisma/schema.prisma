@@ -118,6 +118,14 @@ model User {
   /// (2 lettres lowercase) par le middleware gateway X-Device-Locale.
   /// Null = pas encore propagee (comportement legacy preserve).
   deviceLocale              String?
+  /// Pays appareil (Locale.current.region iOS) propage sur CHAQUE requete via
+  /// X-Meeshy-Country, persiste par le middleware gateway deviceCountry.
+  /// Signal continu (contrairement a registrationCountry, capture une seule
+  /// fois a l'inscription) utilise pour la conformite Guideline 5 (MIIT) :
+  /// router le push d'appel entrant hors du type PushKit/CallKit ('voip')
+  /// pour les appareils en Chine. Stocke ISO 3166-1 alpha-2 uppercase (ex. "CN").
+  /// Null = pas encore propage.
+  deviceCountry             String?
 
   /// Rôle global de l'utilisateur (enum typé fort)
   role          UserRole  @default(USER)
@@ -357,6 +365,16 @@ model Conversation {
 
   /// Auto-translation (disabled for E2EE mode)
   autoTranslateEnabled Boolean @default(true)
+
+  /// Atomic claim on the CallSession currently "owning" this conversation's
+  /// call slot. Set only via a conditional `updateMany({ activeCallId: null })`
+  /// in CallService.initiateCall — MongoDB's single-document atomicity makes
+  /// that claim race-free without a multi-document transaction. Cleared back
+  /// to null by every call-termination path (see `releaseActiveCallClaim`).
+  /// Closes a TOCTOU window where two near-simultaneous `initiateCall` calls
+  /// for the same conversation could each pass the "no active call" read
+  /// check before either had committed its `CallSession`.
+  activeCallId String? @db.ObjectId
 
   preferences           ConversationPreference[]
   shareLinks            ConversationShareLink[]
@@ -1055,7 +1073,13 @@ model AttachmentReaction {
   message     Message           @relation("MessageAttachmentReactions", fields: [messageId], references: [id], onDelete: Cascade)
   participant Participant       @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@unique([attachmentId, participantId, emoji], name: "attachment_participant_reaction")
+  // Single-reaction-per-user model: the key omits `emoji` on purpose so the DB
+  // itself enforces "at most one row per (attachment, participant)". This makes
+  // AttachmentReactionService.addAttachmentReaction's upsert atomic — two
+  // concurrent adds with different emojis now race on the SAME document instead
+  // of each inserting their own row (mirrors Reaction, see
+  // 2026-07-04-attachment-reaction-single-per-user-unique-index.mongodb.js).
+  @@unique([attachmentId, participantId], name: "attachment_participant_reaction")
   @@index([attachmentId])
   @@index([messageId])
   @@index([participantId])
@@ -1108,7 +1132,12 @@ model Reaction {
   message     Message     @relation("MessageReactions", fields: [messageId], references: [id], onDelete: Cascade)
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, participantId, emoji], name: "participant_reaction_unique")
+  // Single-reaction-per-user model: the key omits `emoji` on purpose so the DB
+  // itself enforces "at most one row per (message, participant)". This makes
+  // ReactionService.addReaction's upsert atomic — two concurrent adds with
+  // different emojis now race on the SAME document instead of each inserting
+  // their own row (see 2026-07-04-reaction-single-per-user-unique-index.mongodb.js).
+  @@unique([messageId, participantId], name: "participant_reaction_unique")
   @@index([messageId])
   @@index([participantId])
   @@index([emoji])
@@ -1217,12 +1246,18 @@ model NotificationPreference {
 }
 
 /// Notification pour un utilisateur - Structure groupée
-/// IMPORTANT: Le titre est construit dynamiquement côté frontend via i18n
+/// `title`/`subtitle` sont calculés côté serveur (langue du destinataire,
+/// conscients de l'entité) via buildNotificationDisplay puis persistés —
+/// source unique pour push, liste in-app (iOS/iPadOS/macOS) et web.
 model Notification {
   id       String   @id @default(auto()) @map("_id") @db.ObjectId
   userId   String   @db.ObjectId
-  /// Type de notification (new_message, missed_call, etc.) - utilisé pour construire le titre via i18n
+  /// Type de notification (new_message, missed_call, etc.)
   type     String
+  /// Titre « acteur + action » localisé, conscient de l'entité (null → repli client)
+  title    String?
+  /// Base de sous-titre localisée, SANS date (le client append la date locale)
+  subtitle String?
   /// Contenu principal ou preview du message
   content  String
   priority String   @default("normal")
@@ -1722,8 +1757,19 @@ model CallParticipant {
   role ParticipantRole @default(participant)
 
   /// Timestamps
-  joinedAt DateTime  @default(now())
-  leftAt   DateTime?
+  joinedAt        DateTime  @default(now())
+  leftAt          DateTime?
+  /// Updated on every heartbeat flush (debounced every 30s). Survives gateway
+  /// restarts so CallCleanupService can detect zombie calls without in-memory state.
+  lastHeartbeatAt DateTime?
+
+  /// End-of-call telemetry emitted by THIS participant's client
+  /// (`call:analytics` payload, Zod-validated): setupTimeMs,
+  /// negotiationTimeMs, reconnectionCount, qualityDistribution, codec,
+  /// platform… One row per participant — concurrent end-of-call emitters
+  /// never clobber each other. Null when the client never reported
+  /// (missed call, old build, crash).
+  analytics Json?
 
   /// Media state
   isAudioEnabled Boolean @default(true)
@@ -2619,6 +2665,9 @@ model UserVoiceModel {
   /// Prochaine recalibration prévue (mensuelle)
   nextRecalibrationAt DateTime?
 
+  /// Profil vocal rendu public par l'utilisateur (null = privé ; non-null = public + horodatage)
+  voicePublicAt DateTime?
+
   /// Relation vers l'utilisateur
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -2768,6 +2817,12 @@ model Post {
   /// }
   /// Chaque langue est ajoutée au premier accès d'un viewer dans cette langue.
   translations     Json?
+
+  /// Métadonnées structurées libres (parité avec Message.metadata). Contient
+  /// notamment `trackingLinks: [{ url, token }]` — mapping des URLs brutes du
+  /// contenu vers leur token `/l/<token>` (clic tracé + redirection) sans
+  /// réécrire le contenu (aperçu vidéo + URL lisible préservés).
+  metadata         Json?
 
   // ============================================
   // CONTEXTE
@@ -2934,6 +2989,11 @@ model StoryBackgroundAudio {
 model PostMedia {
   id           String  @id @default(auto()) @map("_id") @db.ObjectId
   postId       String? @db.ObjectId
+  /// Quand non-null, ce média appartient à un commentaire (PostComment) et non à
+  /// un post. `postId` et `commentId` sont mutuellement exclusifs : permet de
+  /// réutiliser tout le pipeline média (upload TUS, transcription/traduction audio,
+  /// viewers) pour les commentaires. Un commentaire ne porte QU'UN SEUL média.
+  commentId    String? @db.ObjectId
 
   // Fichier
   fileName     String
@@ -3000,9 +3060,11 @@ model PostMedia {
 
   createdAt    DateTime @default(now())
 
-  post Post? @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  post    Post?        @relation(fields: [postId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  comment PostComment? @relation("CommentMedia", fields: [commentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
 
   @@index([postId, order])
+  @@index([commentId, order])
 }
 
 /// Commentaire sur un post (hiérarchique — réponses imbriquées)
@@ -3021,6 +3083,10 @@ model PostComment {
   /// Chaque langue est ajoutée au premier accès d'un viewer dans cette langue.
   /// { "en": { text, translationModel, confidenceScore, createdAt }, ... }
   translations     Json?
+
+  /// Métadonnées structurées libres (parité avec Message.metadata / Post.metadata).
+  /// Contient `trackingLinks: [{ url, token }]` (clic tracé `/l/<token>` sans réécriture).
+  metadata         Json?
 
   /// Compteurs dénormalisés
   likeCount     Int @default(0)
@@ -3045,6 +3111,10 @@ model PostComment {
   replies   PostComment[]    @relation("CommentReplies")
   reactions CommentReaction[] @relation("PostCommentReactions")
   mentions  CommentMention[]  @relation("CommentMentions")
+  /// Média unique attaché au commentaire (image/vidéo/audio). Réutilise PostMedia
+  /// via le FK nullable `commentId`. Relation array pour cohérence Prisma mais la
+  /// couche API/app n'en lie jamais plus d'un.
+  media     PostMedia[]       @relation("CommentMedia")
 
   @@index([postId, createdAt])
   @@index([parentId])
@@ -3714,6 +3784,20 @@ model MutationLog {
   @@unique([userId, clientMutationId])
   @@index([createdAt])
   @@map("mutation_logs")
+}
+
+/// SyncEngine unifié (spec §5, sous-tâche A1) — compteur de séquence monotone
+/// PAR utilisateur. `SequenceService.nextSeq(userId)` incrémente atomiquement
+/// `lastSeq` (upsert `increment`) et retourne la nouvelle valeur, tamponnée sur
+/// chaque event Socket.IO user-scoped (`_seq`) pour la détection EXACTE des gaps
+/// (« vu 91230, serveur à 91234 → 4 events manqués ») — supérieure au gap
+/// recovery temporel actuel (watermarks `updatedSince`/`after`), notamment pour
+/// l'ordering multi-device. Une ligne par utilisateur.
+model UserEventSeq {
+  userId  String @id @map("_id") @db.ObjectId
+  lastSeq BigInt @default(0)
+
+  @@map("user_event_seq")
 }
 
 /// Mention d'un utilisateur dans un commentaire de post

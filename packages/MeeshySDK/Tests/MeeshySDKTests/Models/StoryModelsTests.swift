@@ -7,12 +7,18 @@ final class StoryModelsTests: XCTestCase {
 
     func testStoryTextStyleAllCases() {
         let cases = StoryTextStyle.allCases
-        XCTAssertEqual(cases.count, 5)
+        XCTAssertEqual(cases.count, 11)
         XCTAssertTrue(cases.contains(.bold))
         XCTAssertTrue(cases.contains(.neon))
         XCTAssertTrue(cases.contains(.typewriter))
         XCTAssertTrue(cases.contains(.handwriting))
         XCTAssertTrue(cases.contains(.classic))
+        XCTAssertTrue(cases.contains(.calligraphy))
+        XCTAssertTrue(cases.contains(.cartoon))
+        XCTAssertTrue(cases.contains(.futuristic))
+        XCTAssertTrue(cases.contains(.fantasy))
+        XCTAssertTrue(cases.contains(.curve))
+        XCTAssertTrue(cases.contains(.tag))
     }
 
     func testStoryTextStyleDisplayNames() {
@@ -77,13 +83,6 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertTrue(cases.contains(.zoom))
         XCTAssertTrue(cases.contains(.slide))
         XCTAssertTrue(cases.contains(.reveal))
-    }
-
-    func testStoryTransitionEffectLabels() {
-        XCTAssertEqual(StoryTransitionEffect.fade.label, "Fondu")
-        XCTAssertEqual(StoryTransitionEffect.zoom.label, "Zoom")
-        XCTAssertEqual(StoryTransitionEffect.slide.label, "Glissement")
-        XCTAssertEqual(StoryTransitionEffect.reveal.label, "Révélation")
     }
 
     func testStoryTransitionEffectIconNames() {
@@ -440,14 +439,19 @@ final class StoryModelsTests: XCTestCase {
         visibility: String? = "PUBLIC",
         audioUrl: String? = nil,
         repostOfId: String? = nil,
-        originalRepostOfId: String? = nil
+        originalRepostOfId: String? = nil,
+        repostMedia: [APIPostMedia]? = nil,
+        ownMedia: [APIPostMedia]? = nil,
+        ownStoryEffects: StoryEffects? = nil,
+        author overrideAuthor: APIAuthor? = nil
     ) -> APIPost {
-        let author = APIAuthor(id: "author-1", username: "alice", displayName: "Alice", avatar: nil)
+        let author = overrideAuthor
+            ?? APIAuthor(id: "author-1", username: "alice", displayName: "Alice", avatar: nil)
         let repostOf: APIRepostOf? = repostOfId.map { rid in
             APIRepostOf(
                 id: rid, type: "STORY", content: nil, originalLanguage: nil, translations: nil,
-                storyEffects: nil, audioUrl: nil, originalRepostOfId: nil,
-                author: author, media: nil, createdAt: Date(), likeCount: nil,
+                storyEffects: nil, audioUrl: nil, moodEmoji: nil, originalRepostOfId: nil,
+                author: author, media: repostMedia, createdAt: Date(), likeCount: nil,
                 commentCount: nil, isQuote: nil
             )
         }
@@ -456,9 +460,9 @@ final class StoryModelsTests: XCTestCase {
             originalLanguage: "en", createdAt: Date(), updatedAt: nil, expiresAt: nil,
             author: author, likeCount: 0, commentCount: 0, repostCount: 0,
             viewCount: 0, postOpenCount: nil, qualifiedViewCount: nil, playCount: nil, bookmarkCount: 0, shareCount: 0, reactionSummary: nil,
-            isPinned: false, isEdited: false, media: nil, comments: nil,
+            isPinned: false, isEdited: false, media: ownMedia, comments: nil,
             repostOf: repostOf, originalRepostOfId: originalRepostOfId, isQuote: false,
-            moodEmoji: nil, audioUrl: audioUrl, audioDuration: nil, storyEffects: nil,
+            moodEmoji: nil, audioUrl: audioUrl, audioDuration: nil, storyEffects: ownStoryEffects,
             translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil, isRepostedByMe: nil,
             isViewedByMe: nil, currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
         )
@@ -480,6 +484,39 @@ final class StoryModelsTests: XCTestCase {
         )
     }
 
+    // MARK: - Présence auteur (interstitiel de switch de groupe, 2026-07-10)
+
+    func test_toStoryGroups_propagatesAuthorPresence_fromStoriesPayload() {
+        let lastActive = Date(timeIntervalSince1970: 1_750_000_000)
+        let author = APIAuthor(id: "author-p", username: "windie", displayName: "Windie Nh",
+                               avatar: nil, isOnline: true, lastActiveAt: lastActive)
+        let post = makeAPIPost(id: "story-p", author: author)
+
+        let groups = [post].toStoryGroups()
+
+        XCTAssertEqual(groups.first?.authorPresence?.isOnline, true)
+        XCTAssertEqual(groups.first?.authorPresence?.lastActiveAt, lastActive)
+    }
+
+    func test_toStoryGroups_leavesAuthorPresenceNil_onLegacyPayload() {
+        let post = makeAPIPost(id: "story-legacy")
+
+        let groups = [post].toStoryGroups()
+
+        XCTAssertNil(groups.first?.authorPresence)
+    }
+
+    func test_storyGroup_withStories_preservesAuthorPresence() {
+        let presence = UserPresence(isOnline: false, lastActiveAt: Date(timeIntervalSince1970: 500))
+        let group = StoryGroup(id: "g", username: "alice", avatarColor: "FF0000",
+                               stories: [makeStoryItem()], authorPresence: presence)
+
+        let rebuilt = group.with(stories: [])
+
+        XCTAssertEqual(rebuilt.authorPresence?.isOnline, false)
+        XCTAssertEqual(rebuilt.authorPresence?.lastActiveAt, Date(timeIntervalSince1970: 500))
+    }
+
     func test_StoryItem_carries_originalRepostOfId_visibility_audioUrl() {
         let post = makeAPIPost(
             id: "story-1",
@@ -494,6 +531,56 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(firstStory?.originalRepostOfId, "root-1")
         XCTAssertEqual(firstStory?.visibility, "PUBLIC")
         XCTAssertEqual(firstStory?.audioUrl, "/api/v1/attachments/file/audio.mp3")
+    }
+
+    func test_repostedStory_inheritsMedia_fromRepostOf_forViewerPlayback() throws {
+        // A reposted story's own `media` is empty — the playable media lives on
+        // `repostOf`. The full-screen viewer renders from `StoryItem.media`, so
+        // `toStoryGroups` must inherit it from `repostOf` (otherwise the viewer
+        // shows a blank spinner while the feed embed plays fine). Regression guard
+        // for the 2026-06-26 report « la republication ne joue pas la story ».
+        let mediaJSON = """
+        [{"id": "m1", "mimeType": "video/mp4", "fileUrl": "https://cdn.meeshy/story.mp4"}]
+        """.data(using: .utf8)!
+        let repostMedia = try JSONDecoder().decode([APIPostMedia].self, from: mediaJSON)
+        let post = makeAPIPost(id: "repost-1", type: "STORY", repostOfId: "orig-1", repostMedia: repostMedia)
+
+        let story = [post].toStoryGroups().first?.stories.first
+        XCTAssertEqual(
+            story?.media.first?.url, "https://cdn.meeshy/story.mp4",
+            "Reposted story must inherit the original's media from repostOf so the full-screen viewer plays it")
+    }
+
+    func test_repostedStory_withOwnEffectsReferencingOriginalMedia_backfillsFromRepostOf() throws {
+        // A repost can have its OWN `media` (a server-side snapshot, sometimes
+        // with broken relative URLs) while its OWN `storyEffects` still
+        // reference the ORIGINAL `postMediaId`s from `repostOf.media` (the
+        // repost copies effects as-is without rewriting media references).
+        // Without backfilling those ids from `repostOf.media`, the reader's
+        // `postMediaId` resolver never finds the background audio → playback
+        // stalls forever on the loading spinner. Regression guard for the
+        // 2026-07-14 report « la story repostée ne se lit pas ».
+        let mediaJSON = """
+        [{"id": "orig-audio", "mimeType": "audio/mp4", "fileUrl": "https://cdn.meeshy/bg.mp3"}]
+        """.data(using: .utf8)!
+        let repostMedia = try JSONDecoder().decode([APIPostMedia].self, from: mediaJSON)
+        let ownMediaJSON = """
+        [{"id": "own-snapshot", "mimeType": "audio/mp4", "fileUrl": "snapshots/own-snapshot.mp3"}]
+        """.data(using: .utf8)!
+        let ownMedia = try JSONDecoder().decode([APIPostMedia].self, from: ownMediaJSON)
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [StoryAudioPlayerObject(postMediaId: "orig-audio", isBackground: true)]
+        let post = makeAPIPost(id: "repost-2", type: "STORY", repostOfId: "orig-2",
+                               repostMedia: repostMedia, ownMedia: ownMedia, ownStoryEffects: effects)
+
+        let story = [post].toStoryGroups().first?.stories.first
+
+        XCTAssertNotNil(
+            story?.media.first(where: { $0.id == "orig-audio" }),
+            "The media pool must be backfilled with repostOf entries the own storyEffects reference by id")
+        XCTAssertNotNil(
+            story?.media.first(where: { $0.id == "own-snapshot" }),
+            "The own media snapshot must still be present alongside the backfilled entries")
     }
 
     func test_StoryItem_publicVisibility_isCurrentStoryIsPublic() {

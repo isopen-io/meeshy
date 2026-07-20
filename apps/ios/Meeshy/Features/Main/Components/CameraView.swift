@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import AVFoundation
+import MeeshySDK
 import MeeshyUI
 
 enum CameraResult {
@@ -55,6 +56,7 @@ struct CameraView: View {
         HStack {
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
+                    // doctrine 82i — glyphe borné par le cadre tap fixe 44×44
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
@@ -66,6 +68,7 @@ struct CameraView: View {
 
             Button { cycleFlash() } label: {
                 Image(systemName: flashIcon)
+                    // doctrine 82i — glyphe borné par le cadre tap fixe 44×44
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(flashMode == .off ? .white.opacity(0.6) : .yellow)
                     .frame(width: 44, height: 44)
@@ -119,6 +122,7 @@ struct CameraView: View {
 
                 Button { camera.switchCamera() } label: {
                     Image(systemName: "camera.rotate.fill")
+                        // doctrine 82i — glyphe borné par le cadre tap fixe 50×50
                         .font(.system(size: 22))
                         .foregroundColor(.white)
                         .frame(width: 50, height: 50)
@@ -134,11 +138,11 @@ struct CameraView: View {
 
     private var modeSwitcher: some View {
         HStack(spacing: 24) {
-            modeTab("Photo", selected: !isVideoMode) {
+            modeTab(String(localized: "camera.mode.photo", defaultValue: "Photo", bundle: .main), selected: !isVideoMode) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isVideoMode = false }
                 HapticFeedback.light()
             }
-            modeTab("Video", selected: isVideoMode) {
+            modeTab(String(localized: "camera.mode.video", defaultValue: "Vidéo", bundle: .main), selected: isVideoMode) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isVideoMode = true }
                 HapticFeedback.light()
             }
@@ -148,9 +152,10 @@ struct CameraView: View {
     private func modeTab(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 14, weight: selected ? .bold : .medium))
+                .font(MeeshyFont.relative(14, weight: selected ? .bold : .medium))
                 .foregroundColor(selected ? .white : .white.opacity(0.5))
         }
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     @ViewBuilder
@@ -176,6 +181,7 @@ struct CameraView: View {
                     .frame(width: 60, height: 60)
             }
         }
+        .accessibilityLabel(String(localized: "camera.capture.photo", defaultValue: "Prendre une photo", bundle: .main))
     }
 
     private var videoRecordButton: some View {
@@ -202,6 +208,9 @@ struct CameraView: View {
                 }
             }
         }
+        .accessibilityLabel(camera.isRecordingVideo
+            ? String(localized: "camera.record.stop", defaultValue: "Arrêter l'enregistrement", bundle: .main)
+            : String(localized: "camera.record.start", defaultValue: "Démarrer l'enregistrement", bundle: .main))
     }
 
     private var recordingIndicator: some View {
@@ -210,12 +219,15 @@ struct CameraView: View {
                 .fill(MeeshyColors.error)
                 .frame(width: 10, height: 10)
             Text(formatDuration(camera.recordingDuration))
-                .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                .font(MeeshyFont.relative(16, weight: .semibold, design: .monospaced))
                 .foregroundColor(.white)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Capsule().fill(.black.opacity(0.5)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "camera.recording", defaultValue: "Enregistrement en cours", bundle: .main))
+        .accessibilityValue(formatDuration(camera.recordingDuration))
     }
 
     private func formatDuration(_ t: TimeInterval) -> String {
@@ -243,6 +255,21 @@ final class CameraModel: NSObject, ObservableObject {
     private var currentDevice: AVCaptureDevice?
     private var currentPosition: AVCaptureDevice.Position = .back
     private var recordingTimer: Timer?
+
+    // Camera-switch-mid-recording (bug fix 2026-07-09): `AVCaptureMovieFileOutput`'s
+    // active recording connection breaks when its video input is removed, even
+    // transiently inside a single beginConfiguration()/commitConfiguration()
+    // transaction — swapping cameras used to silently end the recording early
+    // (didFinishRecordingTo fires, the view dismisses with a truncated clip).
+    // Fix: on a mid-recording switch, cleanly close the current segment, swap
+    // cameras once truly stopped, then open a NEW segment on the new camera —
+    // the user sees one continuous recording (duration keeps counting, the
+    // `isRecordingVideo` indicator never drops). All segments are stitched into
+    // one file via `mergeSegments` when the user finally stops.
+    private var recordedSegmentURLs: [URL] = []
+    private var isSwitchingCameraDuringRecording = false
+    private var pendingSwitchPosition: AVCaptureDevice.Position?
+    private var pendingStopRequested = false
 
     func configure() {
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized ||
@@ -291,10 +318,25 @@ final class CameraModel: NSObject, ObservableObject {
         currentPosition = position
     }
 
+    /// Switches the active camera. While recording, this cannot reconfigure the
+    /// input in place without losing the capture (see the property doc-comment
+    /// on `recordedSegmentURLs`) — it closes the current segment, swaps once
+    /// stopped, and reopens a new segment on the new camera. A no-op while a
+    /// previous switch is still settling (guards rapid double-taps).
     func switchCamera() {
+        guard !isSwitchingCameraDuringRecording else { return }
+        if isRecordingVideo {
+            isSwitchingCameraDuringRecording = true
+            pendingSwitchPosition = currentPosition == .back ? .front : .back
+            videoOutput.stopRecording()
+            return
+        }
+        performCameraSwitch(to: currentPosition == .back ? .front : .back)
+    }
+
+    private func performCameraSwitch(to position: AVCaptureDevice.Position) {
         session.beginConfiguration()
-        let newPosition: AVCaptureDevice.Position = currentPosition == .back ? .front : .back
-        addVideoInput(position: newPosition)
+        addVideoInput(position: position)
         session.commitConfiguration()
         HapticFeedback.light()
     }
@@ -309,11 +351,12 @@ final class CameraModel: NSObject, ObservableObject {
     }
 
     func startRecording() {
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("video_\(UUID().uuidString).mov")
-        videoOutput.startRecording(to: tempURL, recordingDelegate: self)
-        isRecordingVideo = true
+        recordedSegmentURLs = []
+        isSwitchingCameraDuringRecording = false
+        pendingSwitchPosition = nil
+        pendingStopRequested = false
         recordingDuration = 0
+        startSegment()
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.recordingDuration += 0.5
@@ -321,10 +364,25 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    /// Starts (or restarts, after a mid-recording camera switch) recording to a
+    /// fresh temp file. Does not touch `recordingDuration`/`recordingTimer` so a
+    /// segment restart is invisible to the recording-duration UI.
+    private func startSegment() {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("video_\(UUID().uuidString).mov")
+        videoOutput.startRecording(to: tempURL, recordingDelegate: self)
+        isRecordingVideo = true
+    }
+
+    /// Ends the recording. If a camera switch is mid-flight, the stop is queued
+    /// and honored the instant the new segment opens — otherwise the user's tap
+    /// could race the switch and be silently dropped.
     func stopRecording() {
+        guard !isSwitchingCameraDuringRecording else {
+            pendingStopRequested = true
+            return
+        }
         videoOutput.stopRecording()
-        recordingTimer?.invalidate()
-        recordingTimer = nil
     }
 
     func stop() {
@@ -332,6 +390,114 @@ final class CameraModel: NSObject, ObservableObject {
         Task.detached { [weak self] in
             self?.session.stopRunning()
         }
+    }
+
+    /// Handles every `fileOutput(didFinishRecordingTo:...)` callback — both the
+    /// intermediate segment closes from a mid-recording camera switch and the
+    /// final stop. See `recordedSegmentURLs`'s doc-comment for the overall design.
+    private func handleSegmentFinished(url: URL, error: Error?) async {
+        guard error == nil else {
+            // A genuine recording error (not a deliberate mid-switch stop, which
+            // always completes with error == nil) — end cleanly, discard segments.
+            isSwitchingCameraDuringRecording = false
+            isRecordingVideo = false
+            recordingTimer?.invalidate()
+            recordingTimer = nil
+            for segment in recordedSegmentURLs { try? FileManager.default.removeItem(at: segment) }
+            recordedSegmentURLs = []
+            return
+        }
+        recordedSegmentURLs.append(url)
+
+        if isSwitchingCameraDuringRecording {
+            isSwitchingCameraDuringRecording = false
+            if let position = pendingSwitchPosition {
+                performCameraSwitch(to: position)
+                pendingSwitchPosition = nil
+            }
+            if pendingStopRequested {
+                pendingStopRequested = false
+                videoOutput.stopRecording()
+            } else {
+                startSegment()
+            }
+            return
+        }
+
+        // Final stop.
+        isRecordingVideo = false
+        recordingTimer?.invalidate()
+        recordingTimer = nil
+
+        let segments = recordedSegmentURLs
+        recordedSegmentURLs = []
+
+        guard let finalURL = segments.count > 1 ? await Self.mergeSegments(segments) : segments.first else {
+            // Merge failed (or there was nothing to merge) — fail soft to the
+            // last recorded segment rather than losing the whole capture.
+            if let lastSegment = segments.last {
+                capturedVideoURL = lastSegment
+                capturedVideoId = UUID().uuidString
+                Task { await PhotoLibraryManager.shared.saveVideo(at: lastSegment) }
+            }
+            return
+        }
+        capturedVideoURL = finalURL
+        capturedVideoId = UUID().uuidString
+        Task { await PhotoLibraryManager.shared.saveVideo(at: finalURL) }
+        if segments.count > 1 {
+            for segment in segments where segment != finalURL {
+                try? FileManager.default.removeItem(at: segment)
+            }
+        }
+    }
+
+    /// Concatenates ordered video segments (each a camera-switch boundary) into
+    /// one continuous file via `AVMutableComposition` + export. `nonisolated`
+    /// so the composition/export work (CPU-bound, can take a few seconds for
+    /// longer recordings) never blocks the main actor.
+    ///
+    /// Covered by `CameraModelSegmentMergeTests` (the real empty-input fast
+    /// path — no AVFoundation asset loading involved) and source-reflection
+    /// guards for the rest (`CameraModelSwitchDuringRecordingTests`):
+    /// synthesizing throwaway H.264 clips with `AVAssetWriter` purely to
+    /// round-trip them back through `AVURLAsset`/`AVAssetExportSession` proved
+    /// too fragile in CI (encoder/container edge cases unrelated to this
+    /// method's own logic caused spurious failures), so the merge/export
+    /// behavior itself is pinned structurally instead of via synthetic media.
+    nonisolated static func mergeSegments(_ urls: [URL]) async -> URL? {
+        guard !urls.isEmpty else { return nil }
+        let composition = AVMutableComposition()
+        guard let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let audioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        else { return nil }
+
+        var cursor = CMTime.zero
+        for url in urls {
+            let asset = AVURLAsset(url: url)
+            guard let duration = try? await asset.load(.duration), duration.isValid, duration > .zero else { continue }
+            let range = CMTimeRange(start: .zero, duration: duration)
+            if let assetVideoTrack = try? await asset.loadTracks(withMediaType: .video).first {
+                try? videoTrack.insertTimeRange(range, of: assetVideoTrack, at: cursor)
+            }
+            if let assetAudioTrack = try? await asset.loadTracks(withMediaType: .audio).first {
+                try? audioTrack.insertTimeRange(range, of: assetAudioTrack, at: cursor)
+            }
+            cursor = cursor + duration
+        }
+        guard cursor > .zero,
+              let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
+        else { return nil }
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("video_merged_\(UUID().uuidString).mov")
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = .mov
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            exportSession.exportAsynchronously { continuation.resume() }
+        }
+        return exportSession.status == .completed ? outputURL : nil
     }
 }
 
@@ -348,6 +514,11 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
             self.capturedPhoto = image
             self.capturedPhotoId = UUID().uuidString
         }
+        // Persist the ORIGINAL encoded bytes (HEIC/JPEG as captured), not a
+        // re-encoded UIImage. `PhotoLibraryManager` is deliberately non-@MainActor
+        // so its `performChanges` block runs on Photos' own queue without the
+        // executor-isolation SIGTRAP the previous inline save hit.
+        Task { await PhotoLibraryManager.shared.saveImage(data) }
     }
 }
 
@@ -357,11 +528,7 @@ extension CameraModel: AVCaptureFileOutputRecordingDelegate {
     nonisolated func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL,
                                 from connections: [AVCaptureConnection], error: Error?) {
         Task { @MainActor in
-            self.isRecordingVideo = false
-            if error == nil {
-                self.capturedVideoURL = outputFileURL
-                self.capturedVideoId = UUID().uuidString
-            }
+            await self.handleSegmentFinished(url: outputFileURL, error: error)
         }
     }
 }

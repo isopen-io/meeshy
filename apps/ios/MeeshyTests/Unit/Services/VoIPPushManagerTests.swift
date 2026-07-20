@@ -39,6 +39,21 @@ final class VoIPPushManagerTests: XCTestCase {
         sut.forceReregister()
     }
 
+    // MARK: - Dedup ring eviction (CallManager calls this when CallKit refuses
+    // reportNewIncomingCall, so a genuine APNs retry for the same callId isn't
+    // silently phantom-acked as a duplicate).
+
+    func test_clearDedup_unknownCallId_doesNotCrash() {
+        let sut = VoIPPushManager.shared
+        sut.clearDedup(callId: "not-previously-reported")
+    }
+
+    func test_clearDedup_isIdempotent() {
+        let sut = VoIPPushManager.shared
+        sut.clearDedup(callId: "some-call-id")
+        sut.clearDedup(callId: "some-call-id")
+    }
+
     // MARK: - parseIceServers (P2-CC-4 surface)
 
     func test_parseIceServers_nilInput_returnsNil() {
@@ -77,6 +92,46 @@ final class VoIPPushManagerTests: XCTestCase {
         XCTAssertNil(VoIPPushManager.parseIceServers(42))
     }
 
+    func test_parseIceServers_tooLongUsername_dropsServer() {
+        let longUsername = String(repeating: "x", count: 1025)
+        let json = """
+        [{"urls":"turn:turn.meeshy.me:3478","username":"\(longUsername)","credential":"abc=="}]
+        """
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 0, "Server with oversized username must be dropped.")
+    }
+
+    func test_parseIceServers_tooLongCredential_dropsServer() {
+        let longCredential = String(repeating: "y", count: 1025)
+        let json = """
+        [{"urls":"turn:turn.meeshy.me:3478","username":"u","credential":"\(longCredential)"}]
+        """
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 0, "Server with oversized credential must be dropped.")
+    }
+
+    func test_parseIceServers_exactlyMaxLengthCredential_keepsServer() {
+        let maxCredential = String(repeating: "z", count: 1024)
+        let json = """
+        [{"urls":"turn:turn.meeshy.me:3478","username":"u","credential":"\(maxCredential)"}]
+        """
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 1, "Server with credential at exactly 1024 chars must be kept.")
+    }
+
+    func test_parseIceServers_mixedValidAndOversizedServers_returnsOnlyValid() {
+        let longCredential = String(repeating: "y", count: 1025)
+        let json = """
+        [
+          {"urls":"turn:valid:3478","username":"u","credential":"ok"},
+          {"urls":"turn:bad:3478","username":"u","credential":"\(longCredential)"}
+        ]
+        """
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 1)
+        XCTAssertEqual(result?.first?.urls.first, "turn:valid:3478")
+    }
+
     // MARK: - resolveCallerName priorities
 
     func test_resolveCallerName_prefersDisplayNameOverUsername() {
@@ -108,7 +163,10 @@ final class VoIPPushManagerTests: XCTestCase {
             callerName: nil,
             callerUsername: nil
         )
-        XCTAssertEqual(name, "Appel entrant")
+        // Result is a locale-aware localized string — assert it is non-empty
+        // rather than a specific French literal so the test stays green on
+        // all simulator locales (CI typically runs in English).
+        XCTAssertFalse(name.isEmpty, "The fallback caller name must not be empty")
     }
 
     func test_resolveCallerName_finalFallbackOnEmptyStrings() {
@@ -116,7 +174,7 @@ final class VoIPPushManagerTests: XCTestCase {
             callerName: "",
             callerUsername: ""
         )
-        XCTAssertEqual(name, "Appel entrant")
+        XCTAssertFalse(name.isEmpty, "The fallback caller name must not be empty")
     }
 
     // MARK: - VoIP token storage migration (P1.2)
@@ -180,6 +238,40 @@ final class VoIPPushManagerTests: XCTestCase {
         withExtendedLifetime(sut) {}
     }
 
+    // MARK: - parseIceServers credential length guard (security S1-1)
+
+    func test_parseIceServers_credentialTooLong_dropsServer() {
+        let longCredential = String(repeating: "x", count: 1025)
+        let json = "[{\"urls\":\"turn:turn.example.com\",\"username\":\"user\",\"credential\":\"\(longCredential)\"}]"
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertTrue(result?.isEmpty ?? true,
+            "A TURN credential exceeding 1024 chars must be silently dropped to prevent " +
+            "memory pressure in libwebrtc's auth header construction.")
+    }
+
+    func test_parseIceServers_usernameTooLong_dropsServer() {
+        let longUsername = String(repeating: "u", count: 1025)
+        let json = "[{\"urls\":\"turn:turn.example.com\",\"username\":\"\(longUsername)\",\"credential\":\"secret\"}]"
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertTrue(result?.isEmpty ?? true,
+            "A TURN username exceeding 1024 chars must be dropped.")
+    }
+
+    func test_parseIceServers_validCredentials_areKept() {
+        let json = "[{\"urls\":\"turn:turn.example.com\",\"username\":\"user\",\"credential\":\"secret\"}]"
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 1,
+            "An ICE server with valid-length credentials must be retained.")
+    }
+
+    func test_parseIceServers_mixedValidity_dropsOnlyInvalidServer() {
+        let longCredential = String(repeating: "x", count: 1025)
+        let json = "[{\"urls\":\"stun:stun.example.com\",\"username\":null,\"credential\":null},{\"urls\":\"turn:turn.example.com\",\"username\":\"user\",\"credential\":\"\(longCredential)\"}]"
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 1,
+            "Only the server with an oversized credential should be dropped; the valid STUN server must survive.")
+    }
+
     /// Idempotence guard: when the keychain already holds a matching token
     /// inside the cooldown window, calling `registerToken` is a no-op.
     /// This test asserts via the debug snapshot since the actual POST flow
@@ -197,6 +289,189 @@ final class VoIPPushManagerTests: XCTestCase {
         try await Task.sleep(nanoseconds: 50_000_000)
 
         XCTAssertEqual(sut.debug_lastRegisteredRecord?.token, "priorToken")
+    }
+
+    // MARK: - unregisterAndClearToken (logout teardown)
+
+    /// Regression test: on logout, the device's VoIP registration must be
+    /// fully purged so a different user logging in on the same device does
+    /// not inherit the previous account's VoIP push registration. Prior to
+    /// this fix, only `unregister()` (PushKit registry teardown) was ever
+    /// called, and only from the login path — the keychain-backed token
+    /// record and in-memory cooldown snapshot survived logout untouched.
+    func test_unregisterAndClearToken_purgesTokenStoreAndCooldownSnapshot() async {
+        let priorRecord = VoIPTokenRecord(token: "userAToken", at: Date())
+        let store = MockVoIPTokenStore(initial: priorRecord)
+        let sut = VoIPPushManager(tokenStore: store)
+        sut.debug_setLastRegisteredRecord(priorRecord)
+
+        await sut.unregisterAndClearToken()
+
+        XCTAssertEqual(store.clearCallCount, 1, "The persisted VoIP token record must be cleared from the keychain-backed store")
+        XCTAssertNil(sut.debug_lastRegisteredRecord, "The in-memory cooldown snapshot must not survive logout")
+        XCTAssertNil(sut.voipToken, "The published token must be nilled out")
+    }
+
+    func test_unregisterAndClearToken_withNoPriorRegistration_doesNotCrash() async {
+        let store = MockVoIPTokenStore()
+        let sut = VoIPPushManager(tokenStore: store)
+
+        await sut.unregisterAndClearToken()
+
+        XCTAssertEqual(store.clearCallCount, 1)
+        XCTAssertNil(sut.debug_lastRegisteredRecord)
+    }
+
+    // MARK: - Phantom-call dedup eviction on CallKit rejection (audit finding)
+
+    /// Audit finding: the dedup-hit phantom path (a duplicate VoIP push for a
+    /// callId already recorded in `VoIPDedupRing`) called
+    /// `reportPhantomVoIPCall(uuid:update:)` without the callId, so if CallKit
+    /// refused the synthetic report (e.g. `maximumCallGroups` already
+    /// saturated), the dedup ring still marked the callId "reported" — a
+    /// genuine APNs retry for that same callId within the dedup TTL would be
+    /// silently phantom-acked again with no CallKit UI ever surfacing. These
+    /// are source-level guards (same technique as `CallManagerTests`):
+    /// `pushRegistry(didReceiveIncomingPushWith:)` cannot be driven from a
+    /// unit test without a synthesizable `PKPushPayload`.
+    private func voipPushManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/VoIPPushManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_duplicatePushPhantomPath_passesCallIdToReportPhantomVoIPCall() throws {
+        let source = try voipPushManagerSource()
+        guard let dedupRange = source.range(of: "VoIP push duplicate detected") else {
+            XCTFail("Expected the dedup-hit log line in VoIPPushManager")
+            return
+        }
+        let followingBody = String(source[dedupRange.upperBound...].prefix(400))
+        XCTAssertTrue(
+            followingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update, callId: callId)"),
+            "The dedup-hit phantom-call path must pass `callId` to reportPhantomVoIPCall so a CallKit " +
+            "rejection can evict the dedup entry — otherwise a genuine retry is silently swallowed."
+        )
+    }
+
+    func test_malformedPayloadPhantomPath_doesNotClaimADedupCallId() throws {
+        let source = try voipPushManagerSource()
+        guard let malformedRange = source.range(of: "VoIP push without valid call payload") else {
+            XCTFail("Expected the malformed-payload log line in VoIPPushManager")
+            return
+        }
+        let precedingBody = String(source[..<malformedRange.lowerBound].suffix(400))
+        XCTAssertTrue(
+            precedingBody.contains("reportPhantomVoIPCall(uuid: phantomUUID, update: update)") &&
+            !precedingBody.contains("callId: callId"),
+            "The malformed-payload path never inserted into the dedup ring, so it must not pass a callId " +
+            "(there's nothing to evict)."
+        )
+    }
+
+    func test_reportPhantomVoIPCall_clearsDedupOnCallKitFailure() throws {
+        let source = try callManagerSource()
+        guard let start = source.range(of: "func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate, callId: String? = nil) {"),
+              let end = source.range(of: "callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)", range: start.upperBound..<source.endIndex) else {
+            XCTFail("Expected reportPhantomVoIPCall(uuid:update:callId:) in CallManager.swift")
+            return
+        }
+        let body = String(source[start.lowerBound..<end.upperBound])
+        XCTAssertTrue(
+            body.contains("guard let error, let callId else { return }") &&
+            body.contains("VoIPPushManager.shared.clearDedup(callId: callId)"),
+            "reportPhantomVoIPCall must clear the dedup ring entry when CallKit refuses the synthetic report, " +
+            "mirroring the failure handling in reportIncomingVoIPCall."
+        )
+    }
+
+    // MARK: - #13 — forceReregister cooldown (anti PushKit churn)
+
+    private func makeRecord(token: String, at seconds: TimeInterval) -> VoIPTokenRecord {
+        VoIPTokenRecord(token: token, at: Date(timeIntervalSince1970: seconds))
+    }
+
+    func test_shouldSkipForceReregister_sameTokenWithinCooldown_skips() {
+        let skip = VoIPPushManager.shouldSkipForceReregister(
+            lastRecord: makeRecord(token: "tok", at: 1000),
+            currentToken: "tok",
+            now: Date(timeIntervalSince1970: 1100),   // 100s < 300s cooldown
+            cooldown: 300)
+        XCTAssertTrue(skip, "an unchanged token registered inside the cooldown must NOT churn PushKit")
+    }
+
+    func test_shouldSkipForceReregister_invalidatedToken_proceeds() {
+        let skip = VoIPPushManager.shouldSkipForceReregister(
+            lastRecord: makeRecord(token: "tok", at: 1000),
+            currentToken: nil,   // didInvalidatePushTokenFor nil'd it
+            now: Date(timeIntervalSince1970: 1100),
+            cooldown: 300)
+        XCTAssertFalse(skip, "a nil (invalidated) token must force a fresh registration cycle")
+    }
+
+    func test_shouldSkipForceReregister_changedToken_proceeds() {
+        let skip = VoIPPushManager.shouldSkipForceReregister(
+            lastRecord: makeRecord(token: "old", at: 1000),
+            currentToken: "new",
+            now: Date(timeIntervalSince1970: 1100),
+            cooldown: 300)
+        XCTAssertFalse(skip, "a changed token must force a fresh registration cycle")
+    }
+
+    func test_shouldSkipForceReregister_staleToken_proceeds() {
+        let skip = VoIPPushManager.shouldSkipForceReregister(
+            lastRecord: makeRecord(token: "tok", at: 1000),
+            currentToken: "tok",
+            now: Date(timeIntervalSince1970: 1400),   // 400s > 300s cooldown
+            cooldown: 300)
+        XCTAssertFalse(skip, "past the cooldown, force a fresh cycle (reactivation net)")
+    }
+
+    // MARK: - Guideline 5 (MIIT) — shouldRegisterVoIPPush (China CallKit compliance)
+
+    func test_shouldRegisterVoIPPush_iPhoneNonChina_returnsTrue() {
+        XCTAssertTrue(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: false, regionIdentifier: "FR")
+        )
+    }
+
+    func test_shouldRegisterVoIPPush_iPhoneChina_returnsFalse() {
+        XCTAssertFalse(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: false, regionIdentifier: "CN"),
+            "PushKit VoIP must never be registered for China-region devices — Apple forces " +
+            "reportNewIncomingCall (CallKit) on every VoIP push with no per-push opt-out."
+        )
+    }
+
+    func test_shouldRegisterVoIPPush_iosAppOnMac_returnsFalse_regardlessOfRegion() {
+        XCTAssertFalse(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: true, regionIdentifier: "FR")
+        )
+        XCTAssertFalse(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: true, regionIdentifier: "CN")
+        )
+    }
+
+    func test_shouldRegisterVoIPPush_nilRegion_returnsTrue() {
+        // Conservative default: an indeterminate region (simulator, region
+        // unavailable) must not silently disable VoIP push outside China.
+        XCTAssertTrue(
+            VoIPPushManager.shouldRegisterVoIPPush(isiOSAppOnMac: false, regionIdentifier: nil)
+        )
     }
 
     // MARK: - G4c — POST failure queues the token for retry

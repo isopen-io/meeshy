@@ -8,7 +8,25 @@ public struct APIAuthor: Codable, Sendable {
     public let displayName: String?
     public let avatar: String?
 
+    /// Présence auteur — servie UNIQUEMENT par le chemin stories du gateway
+    /// (`storyAuthorSelect` : feed complet + projection tray) pour que
+    /// l'interstitiel d'identité du viewer résolve la présence AU moment du
+    /// switch de groupe. `nil` sur tous les autres payloads (posts, comments,
+    /// viewers) et sur les caches antérieurs — décodage rétro-compatible.
+    public let isOnline: Bool?
+    public let lastActiveAt: Date?
+
     public var name: String { displayName ?? username ?? "Anonymous" }
+
+    public init(id: String, username: String?, displayName: String?, avatar: String?,
+                isOnline: Bool? = nil, lastActiveAt: Date? = nil) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+        self.isOnline = isOnline
+        self.lastActiveAt = lastActiveAt
+    }
 }
 
 public struct APIPostMedia: Codable, Sendable {
@@ -66,6 +84,7 @@ public struct APIRepostOf: Codable, Sendable {
     public let translations: [String: APIPostTranslationEntry]?
     public let storyEffects: StoryEffects?
     public let audioUrl: String?
+    public let moodEmoji: String?
     public let originalRepostOfId: String?
     public let author: APIAuthor
     public let media: [APIPostMedia]?
@@ -87,6 +106,10 @@ public struct APIPostComment: Decodable, Sendable {
     public let createdAt: Date
     public let author: APIAuthor
     public let currentUserReactions: [String]?
+    /// Média unique attaché au commentaire (image/vidéo/audio). Réutilise le modèle
+    /// `APIPostMedia` (mêmes champs Prisme : transcription/translations). Un commentaire
+    /// ne porte qu'un seul média ; le tableau reste pour parité avec les posts.
+    public let media: [APIPostMedia]?
 }
 
 public struct APIPostTranslationEntry: Codable, Sendable {
@@ -96,7 +119,7 @@ public struct APIPostTranslationEntry: Codable, Sendable {
     public let createdAt: String?
 }
 
-public struct APIPost: Decodable, Sendable {
+public struct APIPost: Sendable {
     public let id: String
     public let type: String?
     public let visibility: String?
@@ -140,6 +163,94 @@ public struct APIPost: Decodable, Sendable {
     public let currentUserReactions: [String]?
     public let mentionedUsers: [MentionedUser]?
     public let viaUsername: String?
+    /// Outbound-link tracking mappings minted by the gateway. Parsed from the
+    /// top-level `trackingLinks` (socket `post:created` / `story:created` /
+    /// `comment:added`) OR from `metadata.trackingLinks` (REST / feed). `nil`
+    /// when the payload predates the feature — renderer falls back to raw URLs.
+    public var trackingLinks: [TrackedLink]? = nil
+
+    /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when none.
+    public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
+}
+
+extension APIPost: Decodable {
+    private enum CodingKeys: String, CodingKey {
+        case id, type, visibility, content, originalLanguage, createdAt, updatedAt, expiresAt
+        case author, likeCount, commentCount, repostCount, viewCount
+        case postOpenCount, qualifiedViewCount, playCount, impressionCount
+        case bookmarkCount, shareCount, reactionSummary, isPinned, isEdited
+        case media, comments, repostOf, originalRepostOfId, isQuote, moodEmoji
+        case audioUrl, audioDuration, storyEffects, translations
+        case isLikedByMe, isBookmarkedByMe, isRepostedByMe, isViewedByMe
+        case currentUserReactions, mentionedUsers, viaUsername
+        case trackingLinks, metadata
+    }
+
+    /// Minimal `metadata` envelope to recover `trackingLinks` on REST/feed
+    /// payloads (socket payloads hoist it top-level). Decoded tolerantly.
+    private struct PostMetadataEnvelope: Decodable {
+        let trackingLinks: [TrackedLink]?
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        type = try c.decodeIfPresent(String.self, forKey: .type)
+        visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
+        content = try c.decodeIfPresent(String.self, forKey: .content)
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt)
+        expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
+        author = try c.decode(APIAuthor.self, forKey: .author)
+        likeCount = try c.decodeIfPresent(Int.self, forKey: .likeCount)
+        commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount)
+        repostCount = try c.decodeIfPresent(Int.self, forKey: .repostCount)
+        viewCount = try c.decodeIfPresent(Int.self, forKey: .viewCount)
+        postOpenCount = try c.decodeIfPresent(Int.self, forKey: .postOpenCount)
+        qualifiedViewCount = try c.decodeIfPresent(Int.self, forKey: .qualifiedViewCount)
+        playCount = try c.decodeIfPresent(Int.self, forKey: .playCount)
+        impressionCount = try c.decodeIfPresent(Int.self, forKey: .impressionCount)
+        bookmarkCount = try c.decodeIfPresent(Int.self, forKey: .bookmarkCount)
+        shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount)
+        reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
+        isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned)
+        isEdited = try c.decodeIfPresent(Bool.self, forKey: .isEdited)
+        media = try c.decodeIfPresent([APIPostMedia].self, forKey: .media)
+        comments = try c.decodeIfPresent([APIPostComment].self, forKey: .comments)
+        repostOf = try c.decodeIfPresent(APIRepostOf.self, forKey: .repostOf)
+        originalRepostOfId = try c.decodeIfPresent(String.self, forKey: .originalRepostOfId)
+        isQuote = try c.decodeIfPresent(Bool.self, forKey: .isQuote)
+        moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
+        audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
+        audioDuration = try c.decodeIfPresent(Int.self, forKey: .audioDuration)
+        // Resilience: a single malformed `storyEffects` payload (a type mismatch
+        // on a present nested field of another user's story) must NOT fail the
+        // whole `APIPost` decode — the story feed is decoded as a strict array,
+        // so one throwing post would drop the ENTIRE batch ("0 stories loaded").
+        // Degrade this post to no effects (it still renders content/media) and
+        // keep the rest of the list intact.
+        do {
+            storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        } catch {
+            storyEffects = nil
+        }
+        translations = try c.decodeIfPresent([String: APIPostTranslationEntry].self, forKey: .translations)
+        isLikedByMe = try c.decodeIfPresent(Bool.self, forKey: .isLikedByMe)
+        isBookmarkedByMe = try c.decodeIfPresent(Bool.self, forKey: .isBookmarkedByMe)
+        isRepostedByMe = try c.decodeIfPresent(Bool.self, forKey: .isRepostedByMe)
+        isViewedByMe = try c.decodeIfPresent(Bool.self, forKey: .isViewedByMe)
+        currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
+        mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
+        viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
+        // Outbound-link tracking: prefer hoisted top-level `trackingLinks`
+        // (socket), else recover from the REST `metadata` envelope. Tolerant.
+        if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
+            trackingLinks = topLevel
+        } else {
+            trackingLinks = (try? c.decodeIfPresent(PostMetadataEnvelope.self, forKey: .metadata))??.trackingLinks
+        }
+    }
 }
 
 public struct APIPostViewer: Decodable, Sendable {
@@ -176,72 +287,75 @@ private func formatFileSize(_ bytes: Int) -> String {
     return String(format: "%.1f MB", Double(bytes) / 1048576)
 }
 
+extension APIPostMedia {
+    /// Single source of truth `APIPostMedia → FeedMedia` mapping, shared by post
+    /// media, repost media AND comment media. Carries the full Prisme Linguistique
+    /// payload (transcription + per-language TTS variants) so a comment's inline
+    /// media plays + switches language exactly like a message bubble or a reel.
+    public func toFeedMedia() -> FeedMedia {
+        let transcription: MessageTranscription? = self.transcription.map { t in
+            let segments: [MessageTranscriptionSegment] = (t.segments ?? []).map { seg in
+                MessageTranscriptionSegment(
+                    text: seg.text,
+                    startTime: seg.startTime,
+                    endTime: seg.endTime,
+                    speakerId: seg.speakerId
+                )
+            }
+            return MessageTranscription(
+                attachmentId: id,
+                text: t.resolvedText,
+                language: t.language ?? "und",
+                confidence: t.confidence,
+                durationMs: t.durationMs,
+                segments: segments,
+                speakerCount: t.speakerCount
+            )
+        }
+        let translatedAudios: [MessageTranslatedAudio] = (translations ?? [:]).compactMap { (lang, trans) in
+            guard let url = trans.url, !url.isEmpty else { return nil }
+            let segments = (trans.segments ?? []).map {
+                MessageTranscriptionSegment(
+                    text: $0.text,
+                    startTime: $0.startTime,
+                    endTime: $0.endTime,
+                    speakerId: $0.speakerId
+                )
+            }
+            return MessageTranslatedAudio(
+                id: "\(id)_\(lang)",
+                attachmentId: id,
+                targetLanguage: lang,
+                url: url,
+                transcription: trans.transcription ?? "",
+                durationMs: trans.durationMs ?? 0,
+                format: trans.format ?? "mp3",
+                cloned: trans.cloned ?? false,
+                quality: trans.quality ?? 0,
+                voiceModelId: trans.voiceModelId,
+                ttsModel: trans.ttsModel ?? "xtts",
+                segments: segments
+            )
+        }
+        return FeedMedia(
+            id: id, type: mediaType, url: fileUrl,
+            thumbnailUrl: thumbnailUrl, thumbHash: thumbHash,
+            thumbnailColor: thumbnailColorForMime(mimeType),
+            width: width, height: height,
+            duration: duration.map { $0 / 1000 },
+            fileName: originalName ?? fileName,
+            fileSize: fileSize.map { formatFileSize($0) },
+            transcription: transcription,
+            translatedAudios: translatedAudios
+        )
+    }
+}
+
 extension APIPost {
     public func toFeedPost(userLanguage: String? = nil, preferredLanguages: [String] = []) -> FeedPost {
         let langs = preferredLanguages.isEmpty ? (userLanguage.map { [$0] } ?? []) : preferredLanguages
 
-        let feedMedia: [FeedMedia] = (media ?? []).map { m in
-            let transcription: MessageTranscription? = m.transcription.map { t in
-                let segments: [MessageTranscriptionSegment] = (t.segments ?? []).map { seg in
-                    MessageTranscriptionSegment(
-                        text: seg.text,
-                        startTime: seg.startTime,
-                        endTime: seg.endTime,
-                        speakerId: seg.speakerId
-                    )
-                }
-                return MessageTranscription(
-                    attachmentId: m.id,
-                    text: t.resolvedText,
-                    language: t.language ?? "und",
-                    confidence: t.confidence,
-                    durationMs: t.durationMs,
-                    segments: segments,
-                    speakerCount: t.speakerCount
-                )
-            }
-            // Prisme Linguistique — per-language TTS variants of an audio media.
-            // The gateway sends `PostMedia.translations` as a [lang: AudioTranslation]
-            // map (translated transcription text + synthesized audio URL + timing
-            // segments). Mirror the message-bubble mapping so a reel audio player can
-            // switch language → transcript + translated audio, exactly like a bubble.
-            let translatedAudios: [MessageTranslatedAudio] = (m.translations ?? [:]).compactMap { (lang, trans) in
-                guard let url = trans.url, !url.isEmpty else { return nil }
-                let segments = (trans.segments ?? []).map {
-                    MessageTranscriptionSegment(
-                        text: $0.text,
-                        startTime: $0.startTime,
-                        endTime: $0.endTime,
-                        speakerId: $0.speakerId
-                    )
-                }
-                return MessageTranslatedAudio(
-                    id: "\(m.id)_\(lang)",
-                    attachmentId: m.id,
-                    targetLanguage: lang,
-                    url: url,
-                    transcription: trans.transcription ?? "",
-                    durationMs: trans.durationMs ?? 0,
-                    format: trans.format ?? "mp3",
-                    cloned: trans.cloned ?? false,
-                    quality: trans.quality ?? 0,
-                    voiceModelId: trans.voiceModelId,
-                    ttsModel: trans.ttsModel ?? "xtts",
-                    segments: segments
-                )
-            }
-            return FeedMedia(
-                id: m.id, type: m.mediaType, url: m.fileUrl,
-                thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
-                thumbnailColor: thumbnailColorForMime(m.mimeType),
-                width: m.width, height: m.height,
-                duration: m.duration.map { $0 / 1000 },
-                fileName: m.originalName ?? m.fileName,
-                fileSize: m.fileSize.map { formatFileSize($0) },
-                transcription: transcription,
-                translatedAudios: translatedAudios
-            )
-        }
+        let feedMedia: [FeedMedia] = (media ?? []).map { $0.toFeedMedia() }
 
         let feedComments: [FeedComment] = (comments ?? []).map { c in
             let commentTranslatedContent: String? = Self.resolveTranslation(
@@ -257,7 +371,8 @@ extension APIPost {
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
-                        currentUserReactions: c.currentUserReactions)
+                        currentUserReactions: c.currentUserReactions,
+                        media: (c.media ?? []).map { $0.toFeedMedia() })
         }
 
         var repost: RepostContent?
@@ -285,6 +400,7 @@ extension APIPost {
                                    type: r.type,
                                    originalLanguage: r.originalLanguage,
                                    audioUrl: r.audioUrl,
+                                   moodEmoji: r.moodEmoji,
                                    storyEffects: r.storyEffects,
                                    media: repostMedia,
                                    translations: repostTranslations,
@@ -332,6 +448,12 @@ extension APIPost {
         feedPost.impressionCount = impressionCount ?? 0
         feedPost.qualifiedViewCount = qualifiedViewCount ?? 0
         feedPost.playCount = playCount ?? 0
+        // Story canvas + legacy audio (top-level story posts). The init keeps a
+        // stable signature, so we set these post-construction like the counters.
+        feedPost.storyEffects = storyEffects
+        feedPost.audioUrl = audioUrl
+        // Outbound-link tracking map (runtime-only, like the counters above).
+        feedPost.trackedLinkMap = trackedLinkMap
         return feedPost
     }
 

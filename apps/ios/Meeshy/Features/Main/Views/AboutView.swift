@@ -19,6 +19,19 @@ struct AboutView: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
+    private var versionString: String {
+        String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main)
+    }
+
+    private var copyLabel: String {
+        String(localized: "common.copy", defaultValue: "Copy", bundle: .main)
+    }
+
+    private func copyValue(_ value: String) {
+        UIPasteboard.general.string = value
+        HapticFeedback.success()
+    }
+
     var body: some View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
@@ -38,11 +51,11 @@ struct AboutView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -51,7 +64,7 @@ struct AboutView: View {
             Spacer()
 
             Text(String(localized: "about.title", defaultValue: "A propos", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -60,32 +73,32 @@ struct AboutView: View {
             Color.clear.frame(width: 60, height: 24)
                 .accessibilityHidden(true)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Scroll Content
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 appHeaderSection
                 informationsSection
                 descriptionSection
                 fonctionnalitesSection
                 liensSection
                 copyrightSection
-                Spacer().frame(height: 40)
+                Spacer().frame(height: MeeshySpacing.xxxl + MeeshySpacing.sm)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.lg)
         }
     }
 
     // MARK: - App Header
 
     private var appHeaderSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             AnimatedLogoView(
                 color: isDark ? .white : Color(hex: "1C1917"),
                 lineWidth: 10,
@@ -94,23 +107,31 @@ struct AboutView: View {
             .frame(width: 80, height: 80)
             .accessibilityHidden(true)
 
-            Text("Meeshy")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+            Text(String(localized: "about.app_name", defaultValue: "Meeshy", bundle: .main))
+                .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main))
-                .font(.system(size: 13, weight: .medium))
+            Text(versionString)
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
+                .contextMenu {
+                    Button {
+                        copyValue(versionString)
+                    } label: {
+                        Label(copyLabel, systemImage: "doc.on.doc")
+                    }
+                }
+                .accessibilityAction(named: Text(copyLabel)) { copyValue(versionString) }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        .padding(.vertical, MeeshySpacing.xl)
         .background(sectionBackground(tint: accentColor))
     }
 
     // MARK: - Informations
 
     private var informationsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "about.section.informations", defaultValue: "Informations", bundle: .main), icon: "info.circle.fill", color: accentColor)
 
             VStack(spacing: 0) {
@@ -125,16 +146,16 @@ struct AboutView: View {
     // MARK: - Description
 
     private var descriptionSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "about.section.description", defaultValue: "Description", bundle: .main), icon: "text.quote", color: MeeshyColors.indigo600Hex)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "about.description.body", defaultValue: "Meeshy est une plateforme de messagerie en temps reel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.", bundle: .main))
-                    .font(.system(size: 14, weight: .regular))
+                    .font(MeeshyFont.relative(14, weight: .regular))
                     .foregroundColor(theme.textPrimary)
                     .lineSpacing(4)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, MeeshySpacing.md + 2)
+                    .padding(.vertical, MeeshySpacing.md)
             }
             .background(sectionBackground(tint: MeeshyColors.indigo600Hex))
         }
@@ -143,7 +164,7 @@ struct AboutView: View {
     // MARK: - Fonctionnalites
 
     private var fonctionnalitesSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "about.section.features", defaultValue: "Fonctionnalites", bundle: .main), icon: "star.fill", color: "F8B500")
 
             VStack(spacing: 0) {
@@ -160,7 +181,7 @@ struct AboutView: View {
     // MARK: - Liens
 
     private var liensSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "about.section.links", defaultValue: "Liens", bundle: .main), icon: "link", color: MeeshyColors.infoHex)
 
             VStack(spacing: 0) {
@@ -176,105 +197,119 @@ struct AboutView: View {
 
     private var copyrightSection: some View {
         Text(String(localized: "about.copyright", defaultValue: "2024-2026 Meeshy. Tous droits reserves.", bundle: .main))
-            .font(.system(size: 12, weight: .medium))
+            .font(MeeshyFont.relative(12, weight: .medium))
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity)
-            .padding(.top, 8)
+            .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Helpers
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xs + 2) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
-        .padding(.leading, 4)
+        .padding(.leading, MeeshySpacing.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(14, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm - 2)
                     .fill(Color(hex: color).opacity(0.12))
             )
     }
 
     private func infoRow(icon: String, title: String, value: String, color: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             fieldIcon(icon, color: color)
 
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Text(value)
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md + 2)
+        .padding(.vertical, MeeshySpacing.sm + 2)
         .accessibilityElement(children: .combine)
+        .contextMenu {
+            Button {
+                copyValue(value)
+            } label: {
+                Label(copyLabel, systemImage: "doc.on.doc")
+            }
+        }
+        .accessibilityAction(named: Text(copyLabel)) { copyValue(value) }
     }
 
     private func featureRow(title: String, icon: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             fieldIcon(icon, color: "F8B500")
 
             Text(title)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 16))
-                .foregroundColor(Color(hex: "4ADE80"))
+                .font(MeeshyFont.relative(16))
+                .foregroundColor(MeeshyColors.success)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md + 2)
+        .padding(.vertical, MeeshySpacing.sm + 2)
         .accessibilityElement(children: .combine)
     }
 
+    @ViewBuilder
     private func linkRow(icon: String, title: String, url: String, color: String) -> some View {
-        Link(destination: URL(string: url)!) {
-            HStack(spacing: 12) {
-                fieldIcon(icon, color: color)
+        if let destination = URL(string: url) {
+            Link(destination: destination) {
+                HStack(spacing: MeeshySpacing.md) {
+                    fieldIcon(icon, color: color)
 
-                Text(title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    Text(title)
+                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
 
-                Spacer()
+                    Spacer()
 
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    Image(systemName: "arrow.up.right")
+                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .foregroundColor(Color(hex: color))
+                }
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.vertical, MeeshySpacing.sm + 2)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .accessibilityLabel(title)
+            .accessibilityHint(String(localized: "about.link.hint", defaultValue: "Ouvre \(title) dans Safari", bundle: .main))
         }
-        .accessibilityLabel(title)
-        .accessibilityHint(String(localized: "about.link.hint", defaultValue: "Ouvre \(title) dans Safari", bundle: .main))
     }
 }

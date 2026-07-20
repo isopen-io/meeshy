@@ -181,7 +181,7 @@ const routePreloadMap: Record<string, () => Promise<unknown>[]> = {
     import('@/app/groups/page'),
   ],
   '/contacts': () => [
-    import('@/app/contacts/page'),
+    import('@/app/(connected)/contacts/page'),
   ],
   '/settings': () => [
     import('@/app/settings/page'),

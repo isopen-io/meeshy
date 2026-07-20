@@ -18,6 +18,14 @@ public struct UserProfileSheet: View {
     public var onSendMessage: (() -> Void)?
     public var moodEmoji: String? = nil
     public var onMoodTap: ((CGPoint) -> Void)? = nil
+    /// Source temps réel de présence injectée par l'app (paramètre opaque —
+    /// le SDK n'encode aucune règle produit). Appelée avec le userId résolu ;
+    /// retourner `nil` (utilisateur non suivi) fait retomber l'avatar sur le
+    /// snapshot REST `isOnline` du profil chargé. `nil` (défaut) conserve le
+    /// comportement legacy (snapshot uniquement). Doit pointer vers la MÊME
+    /// source que la liste de conversations (PresenceManager côté app) pour
+    /// que la pastille du profil reste synchronisée avec celle de la liste.
+    public var presenceProvider: ((String) -> PresenceState?)? = nil
     /// État réel de l'anneau story de l'utilisateur, fourni par l'app
     /// (paramètre opaque — le SDK n'encode aucune règle produit). `nil`
     /// conserve l'anneau décoratif historique du sheet.
@@ -25,16 +33,16 @@ public struct UserProfileSheet: View {
     /// Tap sur l'anneau → l'app présente son viewer de story.
     public var onViewStory: (() -> Void)? = nil
 
-    @State private var isBlocked: Bool = false
-    @State private var isBlockedByTarget: Bool = false
-    @State private var connectionStatus: ConnectionStatus = .none
+    @State var isBlocked: Bool = false
+    @State var isBlockedByTarget: Bool = false
+    @State var connectionStatus: ConnectionStatus = .none
     @State private var pendingRequestId: String?
 
-    private var currentUserId: String {
+    var currentUserId: String {
         AuthManager.shared.currentUser?.id ?? ""
     }
 
-    private var isCurrentUser: Bool {
+    var isCurrentUser: Bool {
         guard !currentUserId.isEmpty else { return false }
         if user.userId == currentUserId { return true }
         if let currentUsername = AuthManager.shared.currentUser?.username,
@@ -42,12 +50,23 @@ public struct UserProfileSheet: View {
         return false
     }
 
-    @ObservedObject private var theme = ThemeManager.shared
-    @Environment(\.dismiss) private var dismiss
-    @State private var selectedTab: ProfileTab = .profile
+    /// Injected by the app (Phase E) to render the rich posts list
+    /// (`FeedPostCard`). Param = resolved userId. `nil` (default) keeps the
+    /// minimal SDK fallback list so the SDK stays self-contained and the
+    /// existing call-sites are unaffected.
+    public var postsContent: ((String) -> AnyView)? = nil
+
+    @ObservedObject var theme = ThemeManager.shared
+    @Environment(\.dismiss) var dismiss
+    @State var selectedTab: ProfileTab = .details
     @State private var showFullscreenImage = false
     @State private var fullscreenImageURL: String? = nil
     @State private var fullscreenImageFallback: String = ""
+    @State var showReportSheet = false
+    /// Signed scroll offset feeding `ProfileHeaderMetrics.progress`. Negative
+    /// while scrolling content down. Updated by the iOS 16-17 preference path
+    /// and the iOS 18+ `trackScrollContentOffset` path simultaneously.
+    @State var scrollOffset: CGFloat = 0
     @State private var internalFullUser: MeeshyUser?
     @State private var internalUserStats: UserStats?
     @State private var internalConversations: [MeeshyConversation] = []
@@ -62,8 +81,10 @@ public struct UserProfileSheet: View {
         onSendMessage: (() -> Void)? = nil,
         moodEmoji: String? = nil,
         onMoodTap: ((CGPoint) -> Void)? = nil,
+        presenceProvider: ((String) -> PresenceState?)? = nil,
         storyRingState: StoryRingState? = nil,
-        onViewStory: (() -> Void)? = nil
+        onViewStory: (() -> Void)? = nil,
+        postsContent: ((String) -> AnyView)? = nil
     ) {
         self.user = user
         self.onDismiss = onDismiss
@@ -71,34 +92,36 @@ public struct UserProfileSheet: View {
         self.onSendMessage = onSendMessage
         self.moodEmoji = moodEmoji
         self.onMoodTap = onMoodTap
+        self.presenceProvider = presenceProvider
         self.storyRingState = storyRingState
         self.onViewStory = onViewStory
+        self.postsContent = postsContent
     }
 
-    private var resolvedAccent: String {
+    var resolvedAccent: String {
         user.accentColor
     }
 
-    private var displayUser: ProfileSheetUser {
+    var displayUser: ProfileSheetUser {
         if let loaded = internalFullUser {
             return ProfileSheetUser.from(user: loaded, accentColor: user.accentColor)
         }
         return user
     }
 
-    private var effectiveIsLoading: Bool {
+    var effectiveIsLoading: Bool {
         internalIsLoading
     }
 
-    private var effectiveUserStats: UserStats? {
+    var effectiveUserStats: UserStats? {
         internalUserStats
     }
 
-    private var effectiveIsLoadingStats: Bool {
+    var effectiveIsLoadingStats: Bool {
         internalIsLoadingStats
     }
 
-    private var effectiveConversations: [MeeshyConversation] {
+    var effectiveConversations: [MeeshyConversation] {
         internalConversations
     }
 
@@ -106,23 +129,11 @@ public struct UserProfileSheet: View {
         ZStack {
             if isBlockedByTarget {
                 Color.clear.onAppear { onDismiss?(); dismiss() }
+            } else if isBlocked {
+                blockedLayout
             } else {
-            VStack(spacing: 0) {
-                bannerSection
-                identitySection
-                    .padding(.top, -40)
-
-                if isBlocked {
-                    blockedByMeCard
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                    Spacer()
-                } else {
-                    tabSection
-                }
+                collapsibleLayout
             }
-            .background(theme.backgroundPrimary)
-            .ignoresSafeArea(edges: .top)
 
             if showFullscreenImage {
                 FullscreenImageView(
@@ -138,7 +149,6 @@ public struct UserProfileSheet: View {
                     }
                 }
             }
-            } // else (not blocked by target)
         }
         .task {
             await resolveInitialState()
@@ -146,208 +156,92 @@ public struct UserProfileSheet: View {
         .onReceive(FriendshipCache.shared.objectWillChange) { _ in
             resolveConnectionStatus()
         }
+        .adaptiveWideSheet()
     }
 
-    // MARK: - Banner
-
-    private var bannerSection: some View {
-        ZStack(alignment: .bottom) {
-            if let bannerURL = displayUser.bannerURL, !bannerURL.isEmpty, let url = URL(string: bannerURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        defaultBannerGradient
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 130)
-                            .clipped()
-                            .onTapGesture {
-                                openFullscreenImage(url: bannerURL, fallback: displayUser.resolvedDisplayName)
-                            }
-                    case .failure:
-                        defaultBannerGradient
-                    @unknown default:
-                        defaultBannerGradient
-                    }
-                }
-                .frame(height: 130)
-            } else {
-                defaultBannerGradient
-            }
-        }
-    }
-
-    private var defaultBannerGradient: some View {
-        LinearGradient(
-            colors: isBlockedByTarget
-                ? [Color.gray.opacity(0.5), Color.gray.opacity(0.3)]
-                : [Color(hex: resolvedAccent).opacity(0.6), Color(hex: resolvedAccent).opacity(0.2)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .frame(height: 130)
-        .overlay(
-            ZStack {
-                Circle()
-                    .fill(Color(hex: resolvedAccent).opacity(0.15))
-                    .frame(width: 200)
-                    .offset(x: -80, y: -30)
-                Circle()
-                    .fill(Color(hex: resolvedAccent).opacity(0.1))
-                    .frame(width: 150)
-                    .offset(x: 100, y: 20)
-            }
-        )
-        .clipped()
-        .onTapGesture {
-            openFullscreenImage(url: displayUser.bannerURL, fallback: displayUser.resolvedDisplayName)
-        }
-    }
-
-    // MARK: - Identity
-
-    private var identitySection: some View {
-        VStack(spacing: 6) {
-            profileAvatar
-                .bounceOnAppear()
-                .onTapGesture {
-                    openFullscreenImage(url: displayUser.avatarURL, fallback: displayUser.resolvedDisplayName)
-                }
-
-            Text(displayUser.resolvedDisplayName)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-
-            Text("@\(displayUser.username)")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: resolvedAccent))
-
-            if !isBlockedByTarget {
-                presenceText
-            }
-        }
-        .padding(.top, 4)
-    }
-
+    /// Layout shown when the current user blocked the target — no tabs, just
+    /// the (greyed) header + the unblock card, preserving prior behavior.
     @ViewBuilder
-    private var profileAvatar: some View {
-        let avatarName = displayUser.resolvedDisplayName
-        let showRing = !isBlockedByTarget && !isBlocked
-        // App câblée → état réel (pas d'anneau sans story active) ;
-        // call site legacy (nil) → anneau décoratif historique.
-        let ringState: StoryRingState = showRing ? (storyRingState ?? .read) : .none
-
-        MeeshyAvatar(
-            name: avatarName,
-            context: .profileSheet,
-            accentColor: isBlockedByTarget ? "888888" : resolvedAccent,
-            avatarURL: displayUser.avatarURL,
-            storyState: ringState,
-            moodEmoji: isBlockedByTarget ? nil : moodEmoji,
-            presenceState: isBlockedByTarget ? .offline : presenceFromUser,
-            onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
-            onMoodTap: isBlockedByTarget ? nil : onMoodTap
-        )
-    }
-
-    @ViewBuilder
-    private var presenceText: some View {
-        if displayUser.isOnline == true {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(Color(hex: "2ECC71"))
-                    .frame(width: 8, height: 8)
-                Text(String(localized: "profile.presence.online", defaultValue: "En ligne", bundle: .module))
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(hex: "2ECC71"))
-            }
-        } else if let lastActive = displayUser.lastActiveAt {
-            Text(lastActiveText(from: lastActive))
-                .font(.system(size: 12))
-                .foregroundColor(theme.textMuted)
-        }
-    }
-
-    private var presenceFromUser: PresenceState {
-        displayUser.isOnline == true ? .online : .offline
-    }
-
-    // MARK: - Tab Section
-
-    @ViewBuilder
-    private var tabSection: some View {
+    private var blockedLayout: some View {
         VStack(spacing: 0) {
-            // Tab Picker
-            HStack(spacing: 0) {
-                ForEach(ProfileTab.allCases, id: \.self) { tab in
-                    Button {
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            selectedTab = tab
-                        }
-                    } label: {
-                        VStack(spacing: 4) {
-                            HStack(spacing: 4) {
-                                Image(systemName: tab.icon)
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text(tab.title)
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundColor(selectedTab == tab ? Color(hex: resolvedAccent) : theme.textMuted)
-                            .padding(.vertical, 10)
-
-                            if selectedTab == tab {
-                                Rectangle()
-                                    .fill(Color(hex: resolvedAccent))
-                                    .frame(height: 2)
-                            } else {
-                                Rectangle()
-                                    .fill(Color.clear)
-                                    .frame(height: 2)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .background(theme.backgroundPrimary)
-
-            Divider()
-                .opacity(0.3)
-
-            // Tab Content
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 16) {
-                    if effectiveIsLoading {
-                        loadingPlaceholder
-                            .padding(.horizontal, 20)
-                            .padding(.top, 16)
-                    } else {
-                        switch selectedTab {
-                        case .profile:
-                            profileTabContent
-                        case .conversations:
-                            conversationsTabContent
-                        case .stats:
-                            statsTabContent
-                        }
-                    }
-
-                    Spacer(minLength: 40)
-                }
+            bannerSection
+            identitySection
+                .padding(.top, -40)
+            blockedByMeCard
+                .padding(.horizontal, 20)
                 .padding(.top, 16)
+            Spacer()
+        }
+        .background(theme.backgroundPrimary)
+        .ignoresSafeArea(edges: .top)
+    }
+
+    /// The redesigned single-scroll layout: a big collapsible header scrolls
+    /// away while the tab bar pins, with a compact identity bar fading in.
+    @ViewBuilder
+    private var collapsibleLayout: some View {
+        ScrollView(showsIndicators: false) {
+            LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                bigCollapsibleHeader
+
+                Section {
+                    tabContent
+                        .padding(.top, 16)
+                } header: {
+                    pinnedTabBar
+                }
+
+                Color.clear.frame(height: 40)
             }
+
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ScrollOffsetPreferenceKey.self,
+                    value: geo.frame(in: .named("profileScroll")).minY
+                )
+            }
+            .frame(height: 0)
+        }
+        .coordinateSpace(name: "profileScroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
+        .trackScrollContentOffset { scrollOffset = -$0 }
+        .background(theme.backgroundPrimary)
+        .ignoresSafeArea(edges: .top)
+        .overlay(alignment: .top) {
+            compactPinnedBar
+                .opacity(Double(ProfileHeaderMetrics.progress(offset: scrollOffset)))
+                .allowsHitTesting(ProfileHeaderMetrics.progress(offset: scrollOffset) > 0.5)
+                // Hide the compact identity from VoiceOver while the header is
+                // still mostly expanded — the expanded identity is the primary
+                // and reads name/@username; avoids a duplicate identity element.
+                .accessibilityHidden(ProfileHeaderMetrics.progress(offset: scrollOffset) <= 0.5)
+        }
+        // Always-on close affordance over the (reduced) banner, top-leading.
+        .overlay(alignment: .topLeading) {
+            closeButton
         }
         .task {
-            // Auto-load full user data if not provided
             await loadDataIfNeeded()
-            // Auto-load shared conversations
             await loadConversationsIfNeeded()
+        }
+    }
+
+    /// Tab content switch — each tab content is defined in its own extension
+    /// file. Loading placeholder shown only on cold cache.
+    @ViewBuilder
+    var tabContent: some View {
+        if effectiveIsLoading {
+            loadingPlaceholder
+                .padding(.horizontal, 20)
+        } else {
+            switch selectedTab {
+            case .posts:
+                postsTab
+            case .conversations:
+                conversationsTab
+            case .details:
+                detailsTab
+            }
         }
     }
 
@@ -369,6 +263,13 @@ public struct UserProfileSheet: View {
             internalIsLoading = internalFullUser == nil
             await fetchAndCacheProfile(identifier)
         }
+        // Every profile visit extends the 30-day TTL (cache-first behavior):
+        // touch under both the lookup identifier and the resolved id so the
+        // entry survives a month of inactivity regardless of which key was used.
+        await CacheCoordinator.shared.profiles.touch(for: identifier)
+        if let resolvedId = resolvedUserId, resolvedId != identifier {
+            await CacheCoordinator.shared.profiles.touch(for: resolvedId)
+        }
         resolveConnectionStatus()
     }
 
@@ -378,8 +279,17 @@ public struct UserProfileSheet: View {
             let fetchedUser = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
             internalFullUser = fetchedUser
             UserDisplayNameCache.shared.trackFromUser(fetchedUser)
-            let cacheKey = fetchedUser.id ?? idOrUsername
+            // `MeeshyUser.id` is non-optional — save under the resolved id.
+            let cacheKey = fetchedUser.id
             try await CacheCoordinator.shared.profiles.save([fetchedUser], for: cacheKey)
+            // When opened by username, the lookup key differs from the resolved
+            // id. Persist under the username too so a future username-open hits
+            // the cache instead of cold-fetching, and touch both keys so the
+            // 30-day TTL is extended on the entry that actually holds the data.
+            if idOrUsername != cacheKey {
+                try? await CacheCoordinator.shared.profiles.save([fetchedUser], for: idOrUsername)
+            }
+            await CacheCoordinator.shared.profiles.touch(for: cacheKey)
             await SearchIndex.shared.indexUsers([fetchedUser])
         } catch let error as APIError {
             if case .serverError(403, _) = error {
@@ -388,11 +298,11 @@ public struct UserProfileSheet: View {
         } catch {}
     }
 
-    private var resolvedUserId: String? {
+    var resolvedUserId: String? {
         user.userId ?? internalFullUser?.id
     }
 
-    private func loadStatsIfNeeded() async {
+    func loadStatsIfNeeded() async {
         guard let userId = resolvedUserId else { return }
         internalIsLoadingStats = true
         do {
@@ -407,7 +317,13 @@ public struct UserProfileSheet: View {
         internalIsLoadingConversations = true
         do {
             let apiConversations = try await ConversationService.shared.listSharedWith(userId: userId)
-            internalConversations = apiConversations.map { $0.toConversation(currentUserId: currentUserId) }
+            let mapped = apiConversations.map { $0.toConversation(currentUserId: currentUserId) }
+            internalConversations = mapped
+            // Extend the TTL of the shared conversations we just surfaced so a
+            // returning visitor keeps them warm in the conversations cache.
+            for conv in mapped {
+                await CacheCoordinator.shared.conversations.touch(for: conv.id)
+            }
         } catch {}
         internalIsLoadingConversations = false
     }
@@ -439,7 +355,7 @@ public struct UserProfileSheet: View {
 
     // MARK: - Toast Helper
 
-    private func postToast(_ message: String, isSuccess: Bool) {
+    func postToast(_ message: String, isSuccess: Bool) {
         NotificationCenter.default.post(
             name: Notification.Name("meeshy.showToast"),
             object: nil,
@@ -449,7 +365,7 @@ public struct UserProfileSheet: View {
 
     // MARK: - Connection Actions
 
-    private func sendConnectionRequest() async {
+    func sendConnectionRequest() async {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
         do {
             let request = try await FriendService.shared.sendFriendRequest(receiverId: userId)
@@ -464,7 +380,7 @@ public struct UserProfileSheet: View {
         }
     }
 
-    private func cancelRequest() async {
+    func cancelRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
         FriendshipCache.shared.didCancelRequest(to: userId)
         pendingRequestId = nil
@@ -480,14 +396,14 @@ public struct UserProfileSheet: View {
         }
     }
 
-    private func resendRequest() async {
+    func resendRequest() async {
         if let requestId = pendingRequestId {
             try? await FriendService.shared.deleteRequest(requestId: requestId)
         }
         await sendConnectionRequest()
     }
 
-    private func acceptRequest() async {
+    func acceptRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
         FriendshipCache.shared.didAcceptRequest(from: userId)
         connectionStatus = .connected
@@ -504,7 +420,7 @@ public struct UserProfileSheet: View {
         }
     }
 
-    private func declineRequest() async {
+    func declineRequest() async {
         guard let requestId = pendingRequestId, let userId = resolvedUserId else { return }
         FriendshipCache.shared.didRejectRequest(from: userId)
         connectionStatus = .none
@@ -523,7 +439,7 @@ public struct UserProfileSheet: View {
 
     // MARK: - Block Actions
 
-    private func blockUser() async {
+    func blockUser() async {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
         do {
             try await BlockService.shared.blockUser(userId: userId)
@@ -535,7 +451,7 @@ public struct UserProfileSheet: View {
         }
     }
 
-    private func unblockUser() async {
+    func unblockUser() async {
         guard let userId = resolvedUserId, !userId.isEmpty else { return }
         do {
             try await BlockService.shared.unblockUser(userId: userId)
@@ -548,380 +464,12 @@ public struct UserProfileSheet: View {
         }
     }
 
-    // MARK: - Profile Tab
-
-    @ViewBuilder
-    private var profileTabContent: some View {
-        VStack(spacing: 16) {
-            if let bio = displayUser.bio, !bio.isEmpty {
-                bioCard(bio)
-                    .padding(.horizontal, 20)
-            }
-
-            languagePills
-                .padding(.horizontal, 20)
-
-            // Profile completion ring
-            if let completionRate = displayUser.profileCompletionRate {
-                ProfileCompletionRing(progress: Double(completionRate) / 100.0)
-                    .padding(.vertical, 8)
-            }
-
-            // Timezone + Country chips
-            if displayUser.timezone != nil || displayUser.registrationCountry != nil {
-                HStack(spacing: 8) {
-                    if let tz = displayUser.timezone {
-                        infoChip(icon: "clock.fill", text: tz)
-                    }
-                    if let country = displayUser.registrationCountry {
-                        let countryName = CountryFlag.name(for: country) ?? country
-                        let flag = CountryFlag.emoji(for: country)
-                        infoChip(icon: flag, text: countryName)
-                    }
-                }
-                .padding(.horizontal, 20)
-            }
-
-            // E2EE badge
-            if displayUser.hasE2EE {
-                e2eeBadge
-                    .padding(.horizontal, 20)
-            }
-
-            if !isCurrentUser {
-                actionButtons
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var actionButtons: some View {
-        VStack(spacing: 10) {
-            switch connectionStatus {
-            case .none:
-                profileActionButton(
-                    icon: "person.badge.plus.fill",
-                    label: String(localized: "profile.action.connectionRequest", defaultValue: "Demande de connexion", bundle: .module),
-                    color: Color(hex: resolvedAccent),
-                    action: { Task { await sendConnectionRequest() } }
-                )
-            case .pendingSent:
-                profileActionButton(
-                    icon: "xmark.circle.fill",
-                    label: String(localized: "profile.action.cancelRequest", defaultValue: "Annuler la demande", bundle: .module),
-                    color: theme.textMuted,
-                    action: { Task { await cancelRequest() } }
-                )
-                profileActionButton(
-                    icon: "arrow.clockwise.circle.fill",
-                    label: String(localized: "profile.action.resendRequest", defaultValue: "Renvoyer la demande", bundle: .module),
-                    color: Color(hex: resolvedAccent),
-                    action: { Task { await resendRequest() } }
-                )
-            case .pendingReceived:
-                profileActionButton(
-                    icon: "checkmark.circle.fill",
-                    label: String(localized: "profile.action.acceptConnection", defaultValue: "Accepter la connexion", bundle: .module),
-                    color: MeeshyColors.success,
-                    action: { Task { await acceptRequest() } }
-                )
-                profileActionButton(
-                    icon: "xmark.circle.fill",
-                    label: String(localized: "profile.action.declineConnection", defaultValue: "Refuser la connexion", bundle: .module),
-                    color: theme.textMuted,
-                    action: { Task { await declineRequest() } }
-                )
-            case .connected:
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(MeeshyColors.success)
-                    Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(MeeshyColors.success)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(MeeshyColors.success.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-
-            if isBlocked {
-                profileActionButton(
-                    icon: "hand.raised.slash.fill",
-                    label: String(localized: "profile.action.unblockUser", defaultValue: "Debloquer l'utilisateur", bundle: .module),
-                    color: MeeshyColors.warning,
-                    action: { Task { await unblockUser() } }
-                )
-            } else {
-                profileActionButton(
-                    icon: "hand.raised.fill",
-                    label: String(localized: "profile.action.blockUser", defaultValue: "Bloquer cet utilisateur", bundle: .module),
-                    color: theme.error,
-                    action: { Task { await blockUser() } }
-                )
-            }
-        }
-    }
-
-    private func profileActionButton(icon: String, label: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button {
-            HapticFeedback.medium()
-            action()
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                Text(label)
-                    .font(.system(size: 14, weight: .semibold))
-            }
-            .foregroundColor(color)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(color.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(color.opacity(0.3), lineWidth: 1.5)
-            )
-        }
-        .pressable()
-    }
-
-    // MARK: - Conversations Tab
-
-    private var isInteractionDisabled: Bool {
-        isBlocked || isBlockedByTarget
-    }
-
-    @ViewBuilder
-    private var conversationsTabContent: some View {
-        if effectiveConversations.isEmpty {
-            VStack(spacing: 10) {
-                Image(systemName: isInteractionDisabled ? "nosign" : "bubble.left.and.bubble.right")
-                    .font(.system(size: 28))
-                    .foregroundColor(theme.textMuted.opacity(isInteractionDisabled ? 0.3 : 0.5))
-
-                if !isCurrentUser, !isInteractionDisabled {
-                    sendMessageButtonCompact
-                }
-
-                Text(isInteractionDisabled
-                     ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions desactivees", bundle: .module)
-                     : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module))
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted.opacity(0.7))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 24)
-        } else {
-            VStack(spacing: 0) {
-                if !isCurrentUser {
-                    sendMessageButton
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                        .padding(.bottom, 16)
-                        .opacity(isInteractionDisabled ? 0.35 : 1)
-                        .allowsHitTesting(!isInteractionDisabled)
-                }
-
-                ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
-                    HStack(spacing: 12) {
-                        MeeshyAvatar(
-                            name: conv.name,
-                            context: .conversationList,
-                            accentColor: conv.accentColor,
-                            avatarURL: conv.avatar ?? conv.participantAvatarURL
-                        )
-
-                        Text(conv.name)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        guard !isInteractionDisabled else { return }
-                        HapticFeedback.light()
-                        if let onNavigateToConversation {
-                            onNavigateToConversation(conv)
-                        } else {
-                            dismiss()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                NotificationCenter.default.post(
-                                    name: Notification.Name("navigateToConversation"),
-                                    object: conv
-                                )
-                            }
-                        }
-                    }
-                    .staggeredAppear(index: index)
-                    .opacity(isInteractionDisabled ? 0.35 : 1)
-
-                    if index < effectiveConversations.count - 1 {
-                        Divider()
-                            .padding(.leading, 64)
-                            .opacity(0.3)
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Stats Tab
-
-    @ViewBuilder
-    private var statsTabContent: some View {
-        VStack(spacing: 12) {
-            // Stats de base (toujours visibles)
-            if let createdAt = displayUser.createdAt {
-                statCard(
-                    icon: "calendar",
-                    label: String(localized: "profile.stats.memberSince", defaultValue: "Membre depuis", bundle: .module),
-                    value: formatRegistrationDate(createdAt)
-                )
-                .padding(.horizontal, 20)
-            }
-
-            // Stats détaillées (si chargées)
-            if let stats = effectiveUserStats {
-                detailedStatsSection(stats: stats)
-            } else if effectiveIsLoadingStats {
-                loadingStatsPlaceholder
-                    .padding(.horizontal, 20)
-            } else {
-                // Trigger load on appear
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear {
-                        Task {
-                            await loadStatsIfNeeded()
-                        }
-                    }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func detailedStatsSection(stats: UserStats) -> some View {
-        VStack(spacing: 12) {
-            // Stats cards
-            StatsCard(
-                icon: "paperplane.fill",
-                label: String(localized: "profile.stats.messagesSent", defaultValue: "Messages envoyés", bundle: .module),
-                value: "\(stats.totalMessages)",
-                accentColor: resolvedAccent
-            )
-            .padding(.horizontal, 20)
-
-            StatsCard(
-                icon: "character.book.closed.fill",
-                label: String(localized: "profile.stats.translations", defaultValue: "Traductions", bundle: .module),
-                value: "\(stats.totalTranslations)",
-                accentColor: resolvedAccent
-            )
-            .padding(.horizontal, 20)
-
-            StatsCard(
-                icon: "globe",
-                label: String(localized: "profile.stats.languagesUsed", defaultValue: "Langues utilisées", bundle: .module),
-                value: "\(stats.languagesUsed)",
-                accentColor: resolvedAccent
-            )
-            .padding(.horizontal, 20)
-
-            StatsCard(
-                icon: "calendar.badge.checkmark",
-                label: String(localized: "profile.stats.memberDays", defaultValue: "Jours d'ancienneté", bundle: .module),
-                value: "\(stats.memberDays)",
-                accentColor: resolvedAccent
-            )
-            .padding(.horizontal, 20)
-
-            // Achievements section
-            if !stats.achievements.isEmpty {
-                achievementsSection(achievements: stats.achievements)
-                    .padding(.top, 8)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func achievementsSection(achievements: [Achievement]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "profile.stats.achievements", defaultValue: "Succès", bundle: .module))
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-                .padding(.horizontal, 20)
-
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ],
-                spacing: 16
-            ) {
-                ForEach(Array(achievements.enumerated()), id: \.element.id) { index, achievement in
-                    AchievementBadge(achievement: achievement)
-                        .staggeredAppear(index: index)
-                }
-            }
-            .padding(.horizontal, 20)
-        }
-    }
-
-    private var loadingStatsPlaceholder: some View {
-        VStack(spacing: 12) {
-            ForEach(0..<3, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
-                    .frame(height: 60)
-                    .shimmer()
-            }
-        }
-    }
-
-    private func statCard(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(Color(hex: resolvedAccent))
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-
-                Text(value)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-            }
-
-            Spacer()
-        }
-        .padding(14)
-        .background(theme.surfaceGradient(tint: resolvedAccent))
-        .glassCard(cornerRadius: 12)
-    }
-
     // MARK: - Bio Card
 
-    private func bioCard(_ bio: String) -> some View {
+    func bioCard(_ bio: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(bio)
-                .font(.system(size: 14))
+                .font(.callout)
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(5)
         }
@@ -933,7 +481,7 @@ public struct UserProfileSheet: View {
 
     // MARK: - Info Chip
 
-    private func infoChip(icon: String, text: String) -> some View {
+    func infoChip(icon: String, text: String) -> some View {
         HStack(spacing: 6) {
             if icon.count > 1 {
                 // Emoji flag
@@ -960,30 +508,30 @@ public struct UserProfileSheet: View {
 
     // MARK: - E2EE Badge
 
-    private var e2eeBadge: some View {
+    var e2eeBadge: some View {
         HStack(spacing: 8) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(hex: "2ECC71"))
+                .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "2ECC71"))
+                .foregroundColor(MeeshyColors.success)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color(hex: "2ECC71").opacity(0.12))
+        .background(MeeshyColors.success.opacity(0.12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(hex: "2ECC71").opacity(0.3), lineWidth: 1.5)
+                .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1.5)
         )
     }
 
     // MARK: - Language Pills
 
     @ViewBuilder
-    private var languagePills: some View {
+    var languagePills: some View {
         let sysLang = LanguageDisplay.from(code: displayUser.systemLanguage)
         let regLang = LanguageDisplay.from(code: displayUser.regionalLanguage)
 
@@ -999,7 +547,7 @@ public struct UserProfileSheet: View {
         }
     }
 
-    private func languagePill(_ lang: LanguageDisplay) -> some View {
+    func languagePill(_ lang: LanguageDisplay) -> some View {
         HStack(spacing: 4) {
             Text(lang.flag)
                 .font(.system(size: 14))
@@ -1018,11 +566,11 @@ public struct UserProfileSheet: View {
 
     // MARK: - Send Message Button
 
-    private var sendMessageButton: some View {
+    var sendMessageButton: some View {
         sendMessageButtonContent(compact: false)
     }
 
-    private var sendMessageButtonCompact: some View {
+    var sendMessageButtonCompact: some View {
         sendMessageButtonContent(compact: true)
     }
 
@@ -1053,20 +601,20 @@ public struct UserProfileSheet: View {
             .padding(.vertical, compact ? 10 : 14)
             .background(
                 LinearGradient(
-                    colors: [MeeshyColors.pink, MeeshyColors.cyan],
+                    colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: compact ? 20 : 14))
-            .shadow(color: MeeshyColors.pink.opacity(0.3), radius: compact ? 4 : 8, y: compact ? 2 : 4)
+            .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: compact ? 4 : 8, y: compact ? 2 : 4)
         }
         .pressable()
     }
 
     // MARK: - Loading Placeholder
 
-    private var loadingPlaceholder: some View {
+    var loadingPlaceholder: some View {
         VStack(spacing: 12) {
             RoundedRectangle(cornerRadius: 12)
                 .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
@@ -1151,14 +699,14 @@ public struct UserProfileSheet: View {
         return "Vu il y a \(seconds / 86400)j"
     }
 
-    private func formatRegistrationDate(_ date: Date) -> String {
+    func formatRegistrationDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .long
         formatter.locale = Locale(identifier: "fr_FR")
         return formatter.string(from: date)
     }
 
-    private func openFullscreenImage(url: String?, fallback: String) {
+    func openFullscreenImage(url: String?, fallback: String) {
         fullscreenImageURL = url
         fullscreenImageFallback = fallback
         withAnimation(.easeIn(duration: 0.2)) {
@@ -1170,23 +718,21 @@ public struct UserProfileSheet: View {
 // MARK: - Profile Tab Enum
 
 enum ProfileTab: String, CaseIterable {
-    case profile = "Profil"
-    case conversations = "Conversations"
-    case stats = "Stats"
+    case posts, conversations, details
 
     var title: String {
         switch self {
-        case .profile: return String(localized: "profile.tab.profile", defaultValue: "Profil", bundle: .module)
+        case .posts: return String(localized: "profile.tab.posts", defaultValue: "Postes", bundle: .module)
         case .conversations: return String(localized: "profile.tab.conversations", defaultValue: "Conversations", bundle: .module)
-        case .stats: return String(localized: "profile.tab.stats", defaultValue: "Stats", bundle: .module)
+        case .details: return String(localized: "profile.tab.details", defaultValue: "Détails", bundle: .module)
         }
     }
 
     var icon: String {
         switch self {
-        case .profile: return "person.fill"
+        case .posts: return "square.text.square.fill"
         case .conversations: return "bubble.left.and.bubble.right.fill"
-        case .stats: return "chart.bar.fill"
+        case .details: return "person.text.rectangle.fill"
         }
     }
 }

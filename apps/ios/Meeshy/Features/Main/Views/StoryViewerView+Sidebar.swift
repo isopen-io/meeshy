@@ -10,6 +10,58 @@ import MeeshyUI
 // type. Real structs (vs AnyView) break the type while preserving SwiftUI
 // structural identity.
 
+// MARK: - Story Action Rail Plan
+
+/// Plan du rail d'actions — CALCULÉ D'UN BLOC À L'ENTRÉE DU SLIDE puis FIGÉ
+/// pendant toute sa lecture (directive user 2026-07-10 : « le calcul des
+/// boutons à afficher doit se faire avant affichage, même contenant toutes
+/// les informations de compteur — pas des apparitions en second temps »).
+///
+/// Toutes les entrées proviennent du payload feed déjà en main (compteurs
+/// inclus) : aucune résolution réseau n'est nécessaire pour décider du set.
+/// Les VALEURS de compteurs affichées sur les boutons restent vivantes
+/// (realtime), mais l'APPARTENANCE d'un bouton au rail ne change jamais en
+/// cours de slide — un compteur réconcilié après coup ne fait plus surgir
+/// un bouton au milieu de la lecture.
+///
+/// `nonisolated` : rule engine pur sans état partagé (parité
+/// StoryCanvasFraming / BandStateMachine) — le target app compile en
+/// defaultIsolation MainActor, sans ce modificateur le bundle de tests
+/// (nonisolated) ne peut ni appeler `resolve` ni lire les propriétés
+/// (échec CI ios-tests 2026-07-10, exit 65 = échec de COMPILE).
+nonisolated struct StoryActionRailPlan: Equatable {
+    let showsReact: Bool
+    let showsReply: Bool
+    let showsForward: Bool
+    let showsRepost: Bool
+    let showsViews: Bool
+    let showsExport: Bool
+    let showsSound: Bool
+    let showsComments: Bool
+    let showsTranslations: Bool
+
+    static func resolve(
+        isOwnStory: Bool,
+        canReply: Bool,
+        isPublicStory: Bool,
+        hasAudibleSound: Bool,
+        commentCount: Int,
+        hasTranslatableContent: Bool
+    ) -> StoryActionRailPlan {
+        StoryActionRailPlan(
+            showsReact: !isOwnStory,
+            showsReply: !isOwnStory && canReply,
+            showsForward: true,
+            showsRepost: !isOwnStory && isPublicStory,
+            showsViews: isOwnStory,
+            showsExport: isOwnStory,
+            showsSound: hasAudibleSound,
+            showsComments: commentCount > 0,
+            showsTranslations: !isOwnStory && hasTranslatableContent
+        )
+    }
+}
+
 // MARK: - Story Action Sidebar
 
 /// Right-side action sidebar of the story viewer. Hosts the heart / reply /
@@ -65,6 +117,27 @@ struct StoryActionSidebarView: View {
     /// Transient scale of the heart button — driven only by `bounceHeart()`.
     @State private var heartScale: CGFloat = 1.0
 
+    /// Plan du rail FIGÉ à l'entrée du slide (voir `StoryActionRailPlan`).
+    /// Re-résolu UNIQUEMENT au changement de story — jamais sur une mise à
+    /// jour de compteur mid-slide, donc aucun bouton n'apparaît/disparaît
+    /// pendant la lecture.
+    @State private var frozenRailPlan: StoryActionRailPlan?
+
+    /// Résolution depuis les entrées courantes (payload déjà seedé de manière
+    /// synchrone par `startTimer()` avant le rendu du slide).
+    private var liveRailPlan: StoryActionRailPlan {
+        StoryActionRailPlan.resolve(
+            isOwnStory: isOwnStory,
+            canReply: onReplyToStory != nil,
+            isPublicStory: currentStory?.isPublic == true,
+            hasAudibleSound: storyHasAudibleSound,
+            commentCount: storyCommentCount,
+            hasTranslatableContent: storyHasTranslatableContent
+        )
+    }
+
+    private var railPlan: StoryActionRailPlan { frozenRailPlan ?? liveRailPlan }
+
     /// Quick pop on the heart button that confirms the user just sent a
     /// reaction. Phased spring, matching the style of `triggerStoryReaction`'s
     /// own multi-phase animation.
@@ -87,13 +160,27 @@ struct StoryActionSidebarView: View {
         // controller stays reachable. The parent (StoryCardView) bounds
         // `maxHeight` to the safe canvas-content slot so ViewThatFits has
         // a real constraint to evaluate against.
+        //
+        // Densité resserrée (directive user 2026-07-10 « rapprocher les FABs,
+        // on y voit trop d'espace ») : spacing 8/6 au lieu de 20/14 — le rail
+        // retrouve la compacité TikTok/IG, chaque action reste ≥ 44pt de zone
+        // tappable via le padding du bouton.
         ViewThatFits(in: .vertical) {
-            sidebarContent(spacing: 20)
-            sidebarContent(spacing: 14)
+            sidebarContent(spacing: 8)
+            sidebarContent(spacing: 6)
             ScrollView(.vertical, showsIndicators: false) {
-                sidebarContent(spacing: 14)
+                sidebarContent(spacing: 6)
                     .padding(.vertical, 4)
             }
+        }
+        // Plan figé posé à l'apparition puis re-résolu au CHANGEMENT de slide
+        // uniquement — les mises à jour de compteurs mid-slide ne re-déclenchent
+        // jamais la composition du rail (directive 2026-07-10).
+        .onAppear {
+            if frozenRailPlan == nil { frozenRailPlan = liveRailPlan }
+        }
+        .adaptiveOnChange(of: currentStory?.id) { _, _ in
+            frozenRailPlan = liveRailPlan
         }
     }
 
@@ -101,10 +188,10 @@ struct StoryActionSidebarView: View {
     private func sidebarContent(spacing: CGFloat) -> some View {
         VStack(spacing: spacing) {
             // 1. Reaction (heart) — primary action, brand-colored when active
-            if !isOwnStory {
+            if railPlan.showsReact {
                 StoryActionButton(
                     icon: "heart.fill",
-                    label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
+                    label: storyReactionCount > 0 ? "\(storyReactionCount)" : String(localized: "story.viewer.action.react", defaultValue: "Réagir", bundle: .main),
                     isActive: showEmojiStrip || storyCurrentUserHasReacted,
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500,
@@ -154,10 +241,10 @@ struct StoryActionSidebarView: View {
             }
 
             // 2. Reply privately (opens DM with story context)
-            if !isOwnStory, onReplyToStory != nil {
+            if railPlan.showsReply {
                 StoryActionButton(
                     icon: "arrowshape.turn.up.left.fill",
-                    label: "Répondre"
+                    label: String(localized: "story.viewer.action.reply", defaultValue: "Répondre", bundle: .main)
                 ) {
                     HapticFeedback.light()
                     guard let story = currentStory, let group = currentGroup else { return }
@@ -183,7 +270,7 @@ struct StoryActionSidebarView: View {
             // envoyer uniquement » pour le non-auteur).
             StoryActionButton(
                 icon: "paperplane.fill",
-                label: storyShareCount > 0 ? "\(storyShareCount)" : "Envoyer"
+                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main)
             ) {
                 HapticFeedback.light()
                 pauseTimer()
@@ -193,27 +280,55 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 4. Reshare (republish to own story) — hidden for own stories.
-            // Visibility-gated on `currentStory?.isPublic` (B.2 helper) so we never
-            // expose Partager for non-public visibility (FRIENDS / PRIVATE).
-            if !isOwnStory, currentStory?.isPublic == true {
+            // 4. Reshare (republier la story) — non-auteur + story publique.
+            // Réintroduit 2026-06-18 après finalisation du flux serveur : route
+            // via le snapshot de repost (`PostService.repost` targetType .story).
+            // Le gateway duplique le média + l'audio source et copie storyEffects
+            // dans une STORY fraîche, self-contenue, liée via repostOfId. Remplace
+            // l'ancien chemin composer qui produisait une story VIDE (il forçait
+            // repostOfId: nil et ne dupliquait jamais le média source).
+            if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
-                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : "Partager"
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Partager", bundle: .main)
                 ) {
+                    guard let story = currentStory else { return }
                     HapticFeedback.light()
-                    pauseTimer()
-                    if let story = currentStory, let group = currentGroup {
-                        repostStoryComposerSource = RepostStorySourceWrapper(
-                            story: story,
-                            authorHandle: group.username
-                        )
+                    Task {
+                        do {
+                            _ = try await PostService.shared.repost(
+                                postId: story.id,
+                                targetType: .story,
+                                content: nil,
+                                isQuote: false
+                            )
+                            await MainActor.run {
+                                HapticFeedback.success()
+                                FeedbackToastManager.shared.show(
+                                    String(localized: "story.viewer.repost.success", defaultValue: "Story republiée", bundle: .main))
+                            }
+                        } catch APIError.serverError(404, _) {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "story.viewer.repost.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
+                            }
+                        } catch APIError.serverError(403, _) {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "story.viewer.repost.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
+                            }
+                        } catch {
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "story.viewer.repost.error", defaultValue: "Échec de la republication", bundle: .main))
+                            }
+                        }
                     }
                 }
-            } else if isOwnStory {
+            } else if railPlan.showsViews {
                 StoryActionButton(
                     icon: "eye.fill",
-                    label: storyViewCount > 0 ? "\(storyViewCount)" : "Vues"
+                    label: storyViewCount > 0 ? "\(storyViewCount)" : String(localized: "story.viewer.action.views", defaultValue: "Vues", bundle: .main)
                 ) {
                     HapticFeedback.light()
                     pauseTimer()
@@ -227,10 +342,10 @@ struct StoryActionSidebarView: View {
             // compositor synthétise un substrat pour les statiques).
             // NEVER uploads to the Meeshy backend (stories publish RAW,
             // see CLAUDE.md "Story Architecture").
-            if isOwnStory {
+            if railPlan.showsExport {
                 StoryActionButton(
                     icon: "square.and.arrow.up.fill",
-                    label: "Exporter"
+                    label: String(localized: "story.viewer.action.export", defaultValue: "Exporter", bundle: .main)
                 ) {
                     HapticFeedback.light()
                     pauseTimer()
@@ -241,10 +356,12 @@ struct StoryActionSidebarView: View {
             // 4. Mute/Unmute — only shown when the story has genuinely audible
             // sound (voice note, background audio, or a video carrying a real
             // audio track). Silent videos keep the button hidden.
-            if storyHasAudibleSound {
+            if railPlan.showsSound {
                 StoryActionButton(
                     icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                    label: isGlobalMuted ? "Mute" : "Son",
+                    label: isGlobalMuted
+                        ? String(localized: "story.viewer.action.mute", defaultValue: "Muet", bundle: .main)
+                        : String(localized: "story.viewer.action.sound", defaultValue: "Son", bundle: .main),
                     isActive: !isGlobalMuted,
                     activeColor: MeeshyColors.indigo400,
                     activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
@@ -263,12 +380,18 @@ struct StoryActionSidebarView: View {
                 )
             }
 
-            // 5. Comments toggle — visible only when count > 0. Below the
-            // sidebar the composer pill already gives an obvious affordance
-            // to write the first comment, so an extra empty button would just
-            // be visual noise (user spec 2026-05-28: « Inutile d'afficher à
-            // 0 […] la zone d'écriture en bas permet déjà de commenter »).
-            if storyCommentCount > 0 {
+            // 5. Comments toggle — visible UNIQUEMENT quand au moins un
+            // commentaire existe sur la story (pour TOUS, auteur inclus). Sous
+            // la sidebar, la zone d'écriture en bas permet déjà de laisser le
+            // premier commentaire, donc un bouton à 0 ne serait que du bruit
+            // visuel (user spec 2026-05-28 + 2026-06-23 : ne pas afficher
+            // l'icône commentaire si aucun commentaire n'est laissé).
+            // MEMBERSHIP FIGÉE À L'ENTRÉE DU SLIDE (directive 2026-07-10) : la
+            // réconciliation `loadStoryCommentCount()` (+Content) met toujours
+            // le COMPTEUR à jour (label + prochains slides), mais ne fait plus
+            // APPARAÎTRE ce bouton en cours de lecture — le set est décidé
+            // avant affichage, depuis le payload feed.
+            if railPlan.showsComments {
                 StoryActionButton(
                     icon: "bubble.left.fill",
                     label: "\(storyCommentCount)",
@@ -287,10 +410,10 @@ struct StoryActionSidebarView: View {
             }
 
             // 6. Translate — brand cyan when active (only for stories with text/audio)
-            if !isOwnStory && storyHasTranslatableContent {
+            if railPlan.showsTranslations {
                 StoryActionButton(
                     icon: "textformat.abc",
-                    label: "Traductions",
+                    label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
                     isActive: showLanguageOptions,
                     activeColor: MeeshyColors.indigo400,
                     activeGlow: MeeshyColors.indigo400
@@ -342,6 +465,7 @@ struct StoryActionSidebarView: View {
                                     )
                                 }
                             } label: {
+                                // Drapeau dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                                 Text(lang.flag)
                                     .font(.system(size: 22))
                                     .frame(width: 38, height: 38)
@@ -369,6 +493,7 @@ struct StoryActionSidebarView: View {
                     Circle()
                         .fill(Color.white.opacity(0.15))
                         .frame(width: 38, height: 38)
+                    // Glyphe dans un cercle de dimension fixe 38×38 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                     Image(systemName: "plus")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(.white.opacity(0.85))
@@ -399,6 +524,9 @@ struct StoryHeaderView: View {
     let currentGroup: StoryGroup?
     let currentStory: StoryItem?
     let isOwnStory: Bool
+    /// Primitive passée par le parent (règle « Zero Unnecessary Re-render » —
+    /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
+    let hasBackgroundAudio: Bool
 
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
@@ -435,7 +563,8 @@ struct StoryHeaderView: View {
             shareableStoryLink = ShareableLink(url: fallback)
             HapticFeedback.light()
         } else {
-            FeedbackToastManager.shared.showError("Lien indisponible")
+            FeedbackToastManager.shared.showError(
+                String(localized: "story.viewer.share.link.unavailable", defaultValue: "Lien indisponible", bundle: .main))
         }
     }
 
@@ -457,6 +586,28 @@ struct StoryHeaderView: View {
     @Binding var chromeVisible: Bool
 
     @State private var avatarLongPressGlow = false
+    /// Cache du label VoiceOver du bouton profil auteur — recalculé
+    /// UNIQUEMENT au changement de slide (`.onChange(of: currentStory?.id)`),
+    /// jamais inline dans `body`. `StoryHeaderView` est reconstruit à chaque
+    /// tick de la barre de progression (jusqu'à 60 Hz, cf.
+    /// `StoryViewerView.storyCard(geometry:)`) — sans ce cache, `String
+    /// (format:)` + plusieurs `String(localized:)` s'exécutaient des
+    /// dizaines de fois par seconde pour un contenu inchangé (post-revue
+    /// 2026-07-13, angle optimisation).
+    @State private var cachedProfileLabel: String = ""
+
+    /// Label VoiceOver du bouton profil auteur — inclut l'attribution de
+    /// republication (icône + @handle visuels que ce label unique remplace).
+    private func computeProfileLabel(for group: StoryGroup) -> String {
+        guard let story = currentStory, story.repostOfId != nil,
+              let handle = story.repostAuthorUsername ?? story.repostAuthorName else {
+            return String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main)
+        }
+        return String(
+            format: String(localized: "story.viewer.a11y.profileOf.repost", defaultValue: "Profil de %@, republication de @%@", bundle: .main),
+            group.username, handle
+        )
+    }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -500,7 +651,10 @@ struct StoryHeaderView: View {
                                 avatarURL: group.avatarURL,
                                 onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                                 contextMenuItems: [
-                                    AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                                    AvatarContextMenuItem(
+                                        label: String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main),
+                                        icon: "person.fill"
+                                    ) {
                                         selectedProfileUser = .from(storyGroup: group)
                                     }
                                 ]
@@ -520,35 +674,54 @@ struct StoryHeaderView: View {
                         }
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(group.username)
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundColor(.white)
+                            HStack(spacing: 5) {
+                                Text(group.username)
+                                    .font(MeeshyFont.relative(15, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+
+                                // Republication : icône repost + "@handle" à la
+                                // SUITE du nom, en graisse normale, SANS « via »
+                                // (l'icône dit déjà la republication — directive
+                                // user 2026-07-13, IMG_1154).
+                                if let story = currentStory, story.repostOfId != nil {
+                                    Image(systemName: "arrow.2.squarepath")
+                                        .font(MeeshyFont.relative(10, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.6))
+                                    if let handle = story.repostAuthorUsername ?? story.repostAuthorName {
+                                        Text("@\(handle)")
+                                            .font(MeeshyFont.relative(12, weight: .regular))
+                                            .foregroundColor(.white.opacity(0.65))
+                                            .lineLimit(1)
+                                    }
+                                }
+                            }
 
                             if let story = currentStory {
                                 HStack(spacing: 4) {
                                     Text(story.timeAgo)
-                                        .font(.system(size: 12, weight: .medium))
+                                        .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
 
-                                    if story.repostOfId != nil {
-                                        Image(systemName: "arrow.2.squarepath")
-                                            .font(.system(size: 10, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.6))
-                                        if let authorName = story.repostAuthorName {
-                                            Text(String(localized: "story.viewer.via", defaultValue: "via @\(authorName)", bundle: .main))
-                                                .font(.system(size: 11, weight: .medium))
-                                                .foregroundColor(.white.opacity(0.55))
-                                        }
+                                    // Note musicale juste après la date : signale la
+                                    // PRÉSENCE d'un audio de fond sur la story — pas
+                                    // son état de lecture (ni mute, ni timing de la
+                                    // timeline). Directive user 2026-07-13.
+                                    if hasBackgroundAudio {
+                                        Image(systemName: "music.note")
+                                            .font(MeeshyFont.relative(10, weight: .semibold))
+                                            .foregroundColor(.white.opacity(0.7))
+                                            .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
                                     }
 
                                     if let expiresAt = story.expiresAt, expiresAt.timeIntervalSinceNow > 0 {
                                         Text("\u{00B7}")
                                             .foregroundColor(.white.opacity(0.4))
                                         Image(systemName: "clock")
-                                            .font(.system(size: 9, weight: .semibold))
+                                            .font(MeeshyFont.relative(9, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.5))
                                         Text(storyTimeRemaining(expiresAt))
-                                            .font(.system(size: 12, weight: .medium))
+                                            .font(MeeshyFont.relative(12, weight: .medium))
                                             .foregroundColor(.white.opacity(0.55))
                                     }
                                 }
@@ -559,8 +732,16 @@ struct StoryHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(minHeight: 44)
-                .accessibilityLabel(String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main))
+                // Le bouton porte un SEUL accessibilityLabel qui remplace tout
+                // le contenu de son label closure (icône repost + @handle
+                // inclus) — VoiceOver ne lirait jamais la republication sans
+                // l'inclure explicitement ici (post-revue 2026-07-13).
+                .accessibilityLabel(cachedProfileLabel)
                 .accessibilityHint(String(localized: "story.viewer.a11y.profileOf.hint", defaultValue: "Ouvre le profil de \(group.username)", bundle: .main))
+                .onAppear { cachedProfileLabel = computeProfileLabel(for: group) }
+                .adaptiveOnChange(of: currentStory?.id) { _, _ in
+                    cachedProfileLabel = computeProfileLabel(for: group)
+                }
             }
 
             Spacer()
@@ -664,6 +845,7 @@ struct StoryHeaderView: View {
                     }
                 }
             } label: {
+                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "ellipsis")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))
@@ -684,6 +866,7 @@ struct StoryHeaderView: View {
                 HapticFeedback.light()
                 dismissViewer()
             } label: {
+                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))
@@ -701,9 +884,17 @@ struct StoryHeaderView: View {
             .accessibilityHint(String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main))
         }
         .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(user: user)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            UserProfileSheet(
+                user: user,
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
+                postsContent: { uid in AnyView(ProfileUserPostsList(
+                    userId: uid,
+                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
+                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
+                )) }
+            )
+            .presentationDetents([.large, .medium])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showReportSheet) {
             ReportMessageSheet(accentColor: currentGroup?.avatarColor ?? "FF2D55") { type, reason in

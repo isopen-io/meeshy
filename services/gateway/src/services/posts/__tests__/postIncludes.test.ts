@@ -2,6 +2,7 @@ import {
   authorSelect,
   mediaSelect,
   mediaInclude,
+  commentMediaInclude,
   commentsPreviewInclude,
   repostOfInclude,
   postInclude,
@@ -123,6 +124,18 @@ describe('posts/postIncludes — canonical shared selects', () => {
         }),
       );
     });
+
+    it('embeds the comment media preview so a comment attachment survives reload', () => {
+      // The comments-with-media bug: a comment attachment (image/video/audio,
+      // incl. its transcription + per-language TTS variants) showed live (via
+      // the comment:added / comment:media-updated socket payloads, which DO
+      // carry media) but vanished on reload, because the post-embedded comment
+      // preview — the ONLY source the feed/reels comments sheet reads for
+      // top-level comments — dropped the media relation. It also stripped media
+      // from the post:updated broadcast contacts receive. Reuse the canonical
+      // commentMediaInclude so the preview decodes identically to getComments.
+      expect(commentsPreviewInclude.select.media).toBe(commentMediaInclude);
+    });
   });
 
   describe('repostOfInclude — Prisme on reposts', () => {
@@ -152,6 +165,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
           'translations',
           'storyEffects',
           'audioUrl',
+          'moodEmoji',
           'originalRepostOfId',
           'author',
           'media',

@@ -72,51 +72,45 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private var queue: [QueuedAudio] = []
-    /// BUG C — ids of attachments that have already finished/failed and been
-    /// removed from the head in `advanceQueue()`. `appendUpcoming` skips these
-    /// in addition to the live `queue`, closing the narrow window where a
-    /// re-emitted `$messages` could re-queue a just-finished audio before the
-    /// VM-side `listenedAttachmentIds` set updates. Cleared on a fresh
-    /// `play(...)` so replaying a track later in a new session still works.
+    /// Ids of attachments that finished or failed this session. `appendUpcoming`
+    /// skips these to close the race window where a re-emitted `$messages` could
+    /// re-queue an audio before the VM's `listenedAttachmentIds` set updates.
+    /// Cleared on fresh `play()` so prior tracks can be replayed in a new session.
     private var consumedAttachmentIds: Set<String> = []
+    /// Already-played tracks enabling `playPrevious()` — the queue is forward-only.
+    /// Most-recent is `history.last`. Capped at `Self.maxHistory`; reset on `close()`.
+    private var history: [QueuedAudio] = []
     private var currentName: String = ""
     private var currentArtwork: String?
     private var cancellables = Set<AnyCancellable>()
-    /// Defensive guard: `assign(to: &$)` does NOT auto-cancel a previous
-    /// subscription. If a future refactor accidentally calls
-    /// `wireEngineForwarding()` twice (e.g. after swapping engines), two
-    /// publishers would race to write the same `@Published` properties and
-    /// trigger value loops. The init is the single legitimate caller — any
-    /// subsequent call is a programmer error and must crash in DEBUG.
+    // `assign(to: &$)` does not cancel a prior subscription — a second call to
+    // `wireEngineForwarding()` would race two publishers on the same @Published
+    // properties. The precondition below enforces single-wire.
     private var isEngineWired = false
 
-    // MARK: - NowPlaying bridge state (Phase 8)
-    // Accessed from `ConversationAudioCoordinator+NowPlaying.swift` (same
-    // module, separate file) — internal access required so the extension can
-    // read/write these. The `_` prefix signals extension-only usage.
+    // MARK: - NowPlaying bridge state
+    // Written by `ConversationAudioCoordinator+NowPlaying.swift` (same-module extension).
+    // `internal` access + `_` prefix signals extension-only usage.
     var _isNowPlayingActivated = false
     var _nowPlayingCancellables = Set<AnyCancellable>()
-    /// Opaque tokens returned by `MPRemoteCommand.addTarget`. Stored for
-    /// future `deactivateNowPlayingBridge()` symmetry — currently unused
-    /// since the bridge is process-long (`activateNowPlayingBridge` is
-    /// called once at root mount and never torn down). The storage locks
-    /// the contract so a future deactivation path can call `removeTarget(_:)`
-    /// without first re-discovering the handlers.
+    // Opaque tokens from MPRemoteCommand.addTarget, kept for future deactivation symmetry.
     var _remoteCommandTokens: [Any] = []
 
     private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-coordinator")
+
+    /// Beyond this elapsed time, `playPrevious()` restarts the CURRENT track
+    /// (standard media-player convention) instead of jumping to the prior one.
+    static let previousRestartThreshold: TimeInterval = 3.0
+    /// Cap on the played-history stack (lock-screen "previous" depth).
+    private static let maxHistory = 100
 
     // MARK: - Init
 
     public init(engine: AudioPlaybackEngineDriving = AudioPlaybackManager()) {
         self.engine = engine
-        // BUG A (round 4) — wire the app-side CallKit policy into the raw
-        // engine the bubbles talk to directly (`engineForBubble`). The bubble
-        // tap (and the lock-screen remote command) resolve to this concrete
-        // `AudioPlaybackManager` and call `togglePlayPause()` / `play()`
-        // straight on it, routing around the coordinator's own guards. Setting
-        // an opaque predicate on the engine closes that gap WITHOUT the SDK
-        // ever depending on `CallManager`.
+        // Bubble taps and lock-screen commands call the engine directly, bypassing
+        // the coordinator's guards. Setting playbackPermissionGuard closes that gap
+        // without the SDK ever depending on CallManager.
         if let manager = engine as? AudioPlaybackManager {
             manager.playbackPermissionGuard = { !CallManager.shared.isCallActiveForAudioGuard }
         }
@@ -137,18 +131,15 @@ public final class ConversationAudioCoordinator: ObservableObject {
         }
         queue = [current] + tail
         queueCount = queue.count
-        // BUG C — a fresh play session starts a new lifecycle: previously
-        // consumed ids must be forgotten so the user can replay them.
+        // Fresh session: clear consumed ids so prior tracks can be replayed.
         consumedAttachmentIds = []
+        history = []
         currentName = conversationName
         currentArtwork = conversationArtworkURL
         startCurrentHead()
     }
 
     public func togglePlayPause() {
-        // BUG E fix — same CallKit guard as `play()`. Without it, toggling
-        // play on an already-loaded engine steals the VoIP audio session
-        // during a call.
         guard !CallManager.shared.isCallActiveForAudioGuard else {
             Self.log.info("togglePlayPause() ignored: a CallKit call is active")
             return
@@ -157,10 +148,53 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
     public func playNext() { advanceQueue() }
 
+    /// `true` when a prior track is available to jump back to. Drives the
+    /// lock-screen `previousTrackCommand` enablement.
+    public var hasPrevious: Bool { !history.isEmpty }
+
+    /// Lock-screen / AirPods "previous". Mirrors the standard media convention:
+    /// past `previousRestartThreshold` it restarts the current track; otherwise
+    /// it pops the played-history stack and re-heads the prior track. With no
+    /// history it falls back to restarting the current track from 0.
+    public func playPrevious() {
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("playPrevious() ignored: a CallKit call is active")
+            return
+        }
+        guard activeContext != nil else { return }
+
+        if currentTime > Self.previousRestartThreshold {
+            restartCurrent()
+            return
+        }
+
+        guard let previous = history.popLast() else {
+            restartCurrent()
+            return
+        }
+
+        // Re-insert the current head so the just-left track becomes "next"
+        // again, then head the popped previous track.
+        queue.insert(previous, at: 0)
+        queueCount = queue.count
+        consumedAttachmentIds.remove(previous.attachmentId)
+        startCurrentHead()
+    }
+
+    /// Restarts the current track from the beginning. As a transport command
+    /// (lock screen / AirPods), it must also RESUME playback if the engine was
+    /// paused — seeking alone would leave a paused track silently rewound, so
+    /// "previous" would appear to do nothing.
+    private func restartCurrent() {
+        engine.seek(to: 0)
+        if !isPlaying { engine.togglePlayPause() }
+    }
+
     public func close() {
         engine.stop()
         queue = []
         queueCount = 0
+        history = []
         activeContext = nil
     }
 
@@ -170,8 +204,6 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public func appendUpcoming(_ audio: QueuedAudio) {
         guard !queue.contains(where: { $0.attachmentId == audio.attachmentId }) else { return }
-        // BUG C — also skip ids already consumed (finished/failed) this session,
-        // even if they've already been removed from the live `queue`.
         guard !consumedAttachmentIds.contains(audio.attachmentId) else { return }
         queue.append(audio)
         queueCount = queue.count
@@ -184,10 +216,6 @@ public final class ConversationAudioCoordinator: ObservableObject {
     // MARK: - Internals
 
     private func startCurrentHead() {
-        // BUG E fix — guard auto-advance + initial play here (the single
-        // engine-start chokepoint reached by both `play()` and
-        // `advanceQueue()`). Without it, a track finishing during a call would
-        // auto-advance and steal the VoIP audio session.
         guard !CallManager.shared.isCallActiveForAudioGuard else {
             Self.log.info("startCurrentHead() ignored: a CallKit call is active")
             return
@@ -204,28 +232,23 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private func advanceQueue() {
-        // B1 — capture the id + conversationId of the audio leaving the
-        // head BEFORE we mutate the queue so the VM-side subscribers can
-        // record exactly the attachment that just finished/failed in
-        // their `listenedAttachmentIds` set. Without this enrichment the
-        // auto-built queues would loop on the same audios indefinitely.
+        // Capture before removal so the publisher reports the audio that finished,
+        // not the next head.
         let finishedHead = queue.first
         if !queue.isEmpty { queue.removeFirst() }
         queueCount = queue.count
         if let finishedHead {
-            // BUG C — record the consumed id so a re-emitted `$messages` can't
-            // re-`appendUpcoming` it before the VM updates `listenedAttachmentIds`.
+            // Guard against $messages re-emitting before the VM records the listen.
             consumedAttachmentIds.insert(finishedHead.attachmentId)
+            history.append(finishedHead)
+            if history.count > Self.maxHistory { history.removeFirst() }
             attachmentFinishedSubject.send(AttachmentFinishedEvent(
                 attachmentId: finishedHead.attachmentId,
                 conversationId: finishedHead.conversationId
             ))
         }
         if queue.isEmpty {
-            // B2 fix — when the queue empties, the engine was still alive
-            // and would play the just-loaded audio to natural end while the
-            // mini-player vanished. Explicitly stop it so playback halts
-            // atomically with the UI dismissal.
+            // Stop engine explicitly — without this, audio continues after the mini-player vanishes.
             engine.stop()
             activeContext = nil
         } else {
@@ -287,11 +310,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
 #if DEBUG
 extension ConversationAudioCoordinator {
-    /// Test seam: directly seed `activeContext` so unit tests can exercise
-    /// router/observer behavior without driving the full play() + queue
-    /// machinery. `internal` + DEBUG-only so it's never reachable from a
-    /// release binary. The setter writes to the same `private(set)` storage
-    /// via this same-file extension, preserving production immutability.
+    /// Seeds `activeContext` for tests without driving the full `play()` + queue path.
     func test_setActiveContext(
         attachmentId: String,
         conversationId: String = "test-conv",
@@ -309,31 +328,19 @@ extension ConversationAudioCoordinator {
         )
     }
 
-    /// Storage backing the test override. `nonisolated(unsafe)` because the
-    /// coordinator is `@MainActor` and we want a synchronous setter from
-    /// tests already running on the main actor without crossing actor hops.
-    /// The override is only read by `sharedForTesting`, also `@MainActor`.
+    // `nonisolated(unsafe)` so tests running on @MainActor can set it synchronously.
     nonisolated(unsafe) private static var _testOverride: ConversationAudioCoordinator?
 
-    /// Install an alternate instance as the "shared" coordinator visible to
-    /// the background-transition lifecycle. Call `testResetShared()` from
-    /// `tearDown` so the next test starts from a clean slate.
     @MainActor
     static func testSetShared(_ instance: ConversationAudioCoordinator) {
         _testOverride = instance
     }
 
-    /// Drops any installed test override so production code goes back to
-    /// reading the real `.shared` instance.
     @MainActor
     static func testResetShared() {
         _testOverride = nil
     }
 
-    /// Single accessor used by the app-side background lifecycle so that
-    /// tests can substitute the engine without forking the production code
-    /// path. Returns the installed override when present, otherwise the
-    /// canonical `.shared` instance.
     @MainActor
     static var sharedForTesting: ConversationAudioCoordinator {
         _testOverride ?? .shared
@@ -341,11 +348,7 @@ extension ConversationAudioCoordinator {
 }
 #else
 extension ConversationAudioCoordinator {
-    /// Release builds never substitute the coordinator — `sharedForTesting`
-    /// is a pure alias for `.shared` and the override storage doesn't exist.
     @MainActor
-    static var sharedForTesting: ConversationAudioCoordinator {
-        .shared
-    }
+    static var sharedForTesting: ConversationAudioCoordinator { .shared }
 }
 #endif

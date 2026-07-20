@@ -6,6 +6,7 @@ import MeeshySDK
 /// `DeepLink`. Pure function: conversation → join (token = linkId), post/reel/
 /// status → postDetail, story → storyDetail, profile → userProfile; unknown /
 /// expired / missing id → join fallback (backward compatible).
+@MainActor
 final class DeepLinkRouterTrackedDestinationTests: XCTestCase {
 
     private func resolved(kind: String? = nil, type: String? = nil,

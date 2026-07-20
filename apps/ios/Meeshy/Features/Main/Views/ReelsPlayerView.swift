@@ -17,6 +17,12 @@ final class ReelsPresenter: ObservableObject {
         let id = UUID()
         var seedPosts: [FeedPost]
         var startId: String?
+        /// Comment targeted by a notification — when set, the reel auto-opens its
+        /// comments sheet and scrolls to / highlights this comment.
+        var commentId: String?
+        /// Parent comment when `commentId` is a reply — the sheet expands the
+        /// parent thread before scrolling to the reply.
+        var parentCommentId: String?
         static func == (lhs: Launch, rhs: Launch) -> Bool { lhs.id == rhs.id }
     }
 
@@ -25,8 +31,10 @@ final class ReelsPresenter: ObservableObject {
     private init() {}
 
     /// Opens the reels seeded from posts already on screen, starting on `startId`.
-    func present(posts: [FeedPost], startId: String?) {
-        launch = Launch(seedPosts: posts, startId: startId)
+    /// `commentId` (optional) opens the comments sheet on the seed reel and scrolls
+    /// to that comment — used by tapped reel comment notifications.
+    func present(posts: [FeedPost], startId: String?, commentId: String? = nil, parentCommentId: String? = nil) {
+        launch = Launch(seedPosts: posts, startId: startId, commentId: commentId, parentCommentId: parentCommentId)
     }
 
     /// Opens the reels with no seed (long-press launch); the view fetches a page.
@@ -48,6 +56,11 @@ final class ReelsPresenter: ObservableObject {
 struct ReelsPlayerView: View {
     let seedPosts: [FeedPost]
     let startId: String?
+    /// Comment targeted by a notification — when set, the seed reel auto-opens
+    /// its comments sheet and scrolls to / highlights this comment.
+    var commentTargetId: String? = nil
+    /// Parent comment when `commentTargetId` is a reply (expands the parent thread).
+    var commentParentTargetId: String? = nil
     /// `true` once the liquid reveal disc has reached full screen. Gates the
     /// first reel's playback: the video stays on its poster (PAUSED) during the
     /// reveal and only starts when this flips true (driven by RootView).
@@ -70,11 +83,23 @@ struct ReelsPlayerView: View {
 
     @StateObject private var viewModel = ReelsViewModel()
     @State private var commentsReel: FeedPost?
+    /// Comment target carried into the comments sheet when it auto-opens from a
+    /// notification. Cleared when the user opens comments manually so a later tap
+    /// never re-scrolls to the old target.
+    @State private var pendingCommentTargetId: String?
+    @State private var pendingCommentParentTargetId: String?
     @State private var edgeDrag: CGFloat = 0
     /// Immersive mode: when `true`, ALL chrome (back button, info overlay,
     /// action rail, scrub) is hidden for distraction-free viewing. Toggled on
     /// by a long-press; any tap restores it (mirrors the Story viewer).
     @State private var chromeHidden = false
+    /// Set once `ReelsViewModel.shareLink(for:)` returns — the `.sheet(item:)`
+    /// presents the system share UI (the same `meeshy.me/l/<token>` link the
+    /// feed shares) and clears it on dismiss. Aligns the reel share with the feed.
+    @State private var shareableLink: ShareableLink?
+    /// Reel ids whose share request is currently in flight, so a double-tap of the
+    /// share button can't fire two mints (mirrors the feed's `postShareInFlightIds`).
+    @State private var shareInFlightIds: Set<String> = []
 
     var body: some View {
         ZStack {
@@ -89,7 +114,20 @@ struct ReelsPlayerView: View {
             backControls
         }
         .offset(x: max(0, edgeDrag))
-        .task { viewModel.seed(posts: seedPosts, startId: startId) }
+        .task {
+            viewModel.seed(posts: seedPosts, startId: startId)
+            // Reel comment notification: auto-open the comments sheet on the seed
+            // reel and scroll to the targeted comment. Brief delay so the reel is
+            // on screen first (the reveal disc settles), then present.
+            guard let cid = commentTargetId, !cid.isEmpty else { return }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            let reel = seedPosts.first(where: { $0.id == startId }) ?? seedPosts.first ?? viewModel.reels.first
+            if let reel {
+                pendingCommentTargetId = cid
+                pendingCommentParentTargetId = commentParentTargetId
+                commentsReel = reel
+            }
+        }
         // Cycle de vie de la post room du réel actif (real-time du like). Idempotent
         // côté serveur : rejoindre/quitter une room déjà (non) jointe est un no-op,
         // donc une disparition transitoire du reveal se ré-auto-corrige. Le `leave`
@@ -121,8 +159,15 @@ struct ReelsPlayerView: View {
             CommentsSheetView(
                 post: reel,
                 accentColor: reel.authorColor,
+                targetCommentId: pendingCommentTargetId,
+                targetParentCommentId: pendingCommentParentTargetId,
                 onCommentSent: { postId in viewModel.didSendComment(postId: postId) }
             )
+        }
+        .sheet(item: $shareableLink) { link in
+            // Same `meeshy.me/l/<token>` URL the feed shares — the gateway already
+            // recorded the (deduplicated) share + minted the caller's TrackingLink.
+            ShareSheet(activityItems: [link.url])
         }
         // Call-aware : un appel entrant pendant un réel ouvert doit le mettre en
         // pause (vidéo + audio) — la session audio appartient alors à l'appel. Le
@@ -168,6 +213,28 @@ struct ReelsPlayerView: View {
             mediaDurationMs: durMs, completed: completed, samples: drained.samples)
     }
 
+    // MARK: Share
+
+    /// Reel share — mirrors the feed's `sharePostWithLink`. Guards against a
+    /// double-tap, fires haptic immediately, then mints the deduplicated tracking
+    /// link via the view-model and presents the system share sheet. On failure it
+    /// still surfaces the raw post URL so the user always has something to share.
+    @MainActor
+    private func shareReel(_ reel: FeedPost) {
+        guard !shareInFlightIds.contains(reel.id) else { return }
+        shareInFlightIds.insert(reel.id)
+        HapticFeedback.light()
+        Task {
+            defer { Task { @MainActor in shareInFlightIds.remove(reel.id) } }
+            if let shortUrl = await viewModel.shareLink(for: reel),
+               let url = URL(string: shortUrl) {
+                shareableLink = ShareableLink(url: url)
+            } else if let raw = ShareableLink.fallback(forPostId: reel.id) {
+                shareableLink = raw
+            }
+        }
+    }
+
     // MARK: Pager
 
     private var pager: some View {
@@ -178,8 +245,14 @@ struct ReelsPlayerView: View {
                 revealCompleted: revealCompleted,
                 viewModel: viewModel,
                 chromeHidden: $chromeHidden,
-                onComment: { commentsReel = reel },
-                onShare: { viewModel.share(reel) },
+                onComment: {
+                    // Manual open: drop any notification target so we don't
+                    // re-scroll to a stale comment.
+                    pendingCommentTargetId = nil
+                    pendingCommentParentTargetId = nil
+                    commentsReel = reel
+                },
+                onShare: { shareReel(reel) },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) }
             )
@@ -219,9 +292,11 @@ struct ReelsPlayerView: View {
     private var emptyState: some View {
         if viewModel.hasLoadedOnce {
             VStack(spacing: 14) {
+                // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver (le texte porte le sens)
                 Image(systemName: "play.rectangle.on.rectangle")
                     .font(.system(size: 44))
                     .foregroundColor(.white.opacity(0.7))
+                    .accessibilityHidden(true)
                 Text(String(localized: "reels.empty", defaultValue: "Aucun réel pour le moment", bundle: .main))
                     .font(.headline)
                     .foregroundColor(.white)
@@ -258,6 +333,7 @@ struct ReelsPlayerView: View {
                 )
 
             Button(action: onClose) {
+                // Glyphe chrome dans un cadre de tap fixe 40×40 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "chevron.backward")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
@@ -275,6 +351,30 @@ struct ReelsPlayerView: View {
             .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
+
+// MARK: - Reel media open-autostart gate (pure)
+
+/// The single open-autostart gate shared by a reel's audio AND video paths
+/// (WS3.1): an active reel starts its media only once the liquid reveal has
+/// completed and no call owns the audio session. Extracted as a pure function so
+/// the truth table is unit-testable. `ReelVideoView.drive()` encodes the
+/// identical condition for the video engine, so both media kinds start in
+/// lockstep.
+enum ReelMediaAutostart {
+    nonisolated static func shouldStart(isActive: Bool, revealCompleted: Bool, isCallActive: Bool) -> Bool {
+        isActive && revealCompleted && !isCallActive
+    }
+
+    /// Idempotency guard for the audio open-autostart (F4/F6): only (re)start the
+    /// engine when it is not already loaded with this url. `currentUrl` and `url`
+    /// MUST be compared in the SAME normalized form the engine stores — for a
+    /// `file://` url `AudioPlaybackManager.playLocal` stores `URL.absoluteString`,
+    /// which can differ from the raw string, so the caller normalizes first. Keeps
+    /// a re-render / reveal flip from restarting in-place audio.
+    nonisolated static func shouldLoadAudio(currentUrl: String?, url: String) -> Bool {
+        currentUrl != url
     }
 }
 
@@ -300,6 +400,7 @@ struct ReelPageView: View {
     var onTapAvatar: () -> Void
 
     @State private var descriptionExpanded = false
+    @State private var audioFullscreen: AudioFullscreenSource?
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
     @State private var selectedLanguage: String?
@@ -397,9 +498,22 @@ struct ReelPageView: View {
                 // is tappable and fades in immersive mode. Driven by
                 // `selectedLanguage` so a flag tap plays that language's TTS.
                 if let audioMedia, isActive {
-                    ReelAudioControl(media: audioMedia, selectedLanguage: $selectedLanguage, player: audioPlayer)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
+                    ReelAudioControl(
+                        media: audioMedia,
+                        selectedLanguage: $selectedLanguage,
+                        player: audioPlayer,
+                        onFullscreen: {
+                            audioFullscreen = .fromFeed(
+                                media: audioMedia,
+                                author: ProfileSheetUser.from(feedPost: reel),
+                                originalLanguage: reel.originalLanguage,
+                                caption: reel.content,
+                                createdAt: reel.timestamp
+                            )
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
                 }
 
                 HStack(alignment: .bottom, spacing: 12) {
@@ -428,11 +542,91 @@ struct ReelPageView: View {
             .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { autoSelectPreferredAudioLanguage() }
+        .onAppear {
+            autoSelectPreferredAudioLanguage()
+            startActiveAudioIfNeeded()
+        }
         // Cut the previous reel's audio the moment we page away from it (the
         // video engine is left alone — the incoming video reel drives its own).
+        // Becoming active (re)starts this reel's audio through the SAME open-
+        // autostart gate `ReelVideoView.drive()` uses for the video engine.
         .adaptiveOnChange(of: isActive) { _, active in
-            if !active { PlaybackCoordinator.shared.stopAllAudio() }
+            if active { startActiveAudioIfNeeded() }
+            else { PlaybackCoordinator.shared.stopAllAudio() }
+        }
+        // The first reel holds on its poster (audio paused) until the liquid
+        // reveal completes; start audio when the disc reaches full screen —
+        // mirror of `ReelVideoView.drive`'s `revealCompleted` trigger.
+        .adaptiveOnChange(of: revealCompleted) { _, _ in startActiveAudioIfNeeded() }
+        // F3 — resume this reel's audio when a call ENDS. The call-start (true)
+        // edge is paused by `ReelsPlayerView`'s `$callState` subscription, but the
+        // in-process WebRTC teardown posts no system interruption-ended, so a reel
+        // opened during a call would stay silent. Re-run the open-autostart gate
+        // on the false edge (`startActiveAudioIfNeeded` is gated on
+        // `!isCallActive` + idempotent on the loaded url). `.receive(on: .main)`
+        // so `MediaSessionCoordinator.isCallActive` is already cleared (set in
+        // `callState.didSet`) by the time the gate re-checks it.
+        .onReceive(
+            CallManager.shared.$callState
+                .map(\.isActive)
+                .removeDuplicates()
+                .receive(on: DispatchQueue.main)
+        ) { callActive in
+            if !callActive { startActiveAudioIfNeeded() }
+        }
+        .audioFullscreenCover($audioFullscreen, accentColor: reel.authorColor)
+    }
+
+    // MARK: Audio open-autostart (WS3.1)
+
+    /// Single open-autostart gate shared by this reel's audio and video paths:
+    /// an active reel starts its media only once the liquid reveal has completed
+    /// and no call owns the audio session. `ReelVideoView.drive` encodes the
+    /// identical condition for the video engine, so both media kinds start in
+    /// lockstep. Backed by the pure `ReelMediaAutostart.shouldStart` truth table.
+    private var shouldStartActiveMedia: Bool {
+        ReelMediaAutostart.shouldStart(
+            isActive: isActive,
+            revealCompleted: revealCompleted,
+            isCallActive: MediaSessionCoordinator.shared.isCallActive
+        )
+    }
+
+    /// The audio URL to play for the active audio reel, honoring the explored
+    /// language (translated TTS) — mirrors `AudioPlayerView.currentAudioUrl`.
+    private func resolvedAudioUrl(for media: FeedMedia) -> String {
+        if let sel = selectedLanguage?.lowercased(),
+           let translated = media.translatedAudios.first(where: { $0.targetLanguage.lowercased() == sel }) {
+            return translated.url
+        }
+        return media.toMessageAttachment().fileUrl
+    }
+
+    /// Starts the per-page audio engine for an audio reel on open — the audio
+    /// analogue of `ReelVideoView.drive()` (there was none, so audio reels opened
+    /// paused). No-ops for non-audio reels, when the open-autostart gate is not
+    /// met (inactive / reveal pending / call active), or when the engine is
+    /// already loaded with this URL (so a re-render or reveal flip never restarts
+    /// it). Uses the SAME play path `AudioPlayerView` uses: `file://` →
+    /// `playLocal`, else `play(urlString:)`. `PlaybackCoordinator` keeps a single
+    /// audio reel playing (the inactive page's `stopAllAudio()` cuts the previous
+    /// one); the `isCallActive` gate keeps the call's audio session intact.
+    private func startActiveAudioIfNeeded() {
+        guard shouldStartActiveMedia, let audioMedia else { return }
+        let attachment = audioMedia.toMessageAttachment()
+        let url = resolvedAudioUrl(for: audioMedia)
+        // F6 — compare against the value the engine WILL store, not the raw url:
+        // `playLocal` stores `URL.absoluteString` (normalized), so a raw `file://`
+        // string never matches `currentUrl` and the guard would restart on every
+        // re-render. Normalize the local case here so the idempotency holds.
+        let localURL: URL? = url.hasPrefix("file://") ? URL(string: url) : nil
+        let storedUrl = localURL?.absoluteString ?? url
+        guard ReelMediaAutostart.shouldLoadAudio(currentUrl: audioPlayer.currentUrl, url: storedUrl) else { return }
+        audioPlayer.attachmentId = attachment.id
+        if let localURL {
+            audioPlayer.playLocal(url: localURL)
+        } else {
+            audioPlayer.play(urlString: url)
         }
     }
 
@@ -523,7 +717,7 @@ struct ReelPageView: View {
                 statInline(icon: "chart.bar.fill", count: reel.impressionCount,
                            a11yLabel: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
                 metaDot
-                statInline(icon: "eye.fill", count: reel.postOpenCount,
+                statInline(icon: "eye.fill", count: reel.viewCount,
                            a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
             }
         }
@@ -535,7 +729,7 @@ struct ReelPageView: View {
 
     private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
             Text(ReelActionButton.compact(count)).font(.caption2.weight(.medium))
         }
         .foregroundColor(.white.opacity(0.85))
@@ -678,7 +872,7 @@ private struct ReelActionRail: View {
                 systemName: isBookmarked ? "bookmark.fill" : "bookmark",
                 outline: "bookmark",
                 tint: isBookmarked ? MeeshyColors.warning : .white,
-                count: nil,
+                count: viewModel.bookmarkCount(reel),
                 participated: isBookmarked,
                 accentHex: reel.authorColor,
                 action: { viewModel.toggleBookmark(reel) }
@@ -713,6 +907,8 @@ private struct ReelActionButton: View {
         Button(action: action) {
             VStack(spacing: 5) {
                 ZStack {
+                    // Glyphes du rail d'actions (like/comment/bookmark/share) : taille figée pour
+                    // la cohérence de la colonne fixe width:48 (doctrine 86i) ; le bouton porte le libellé
                     Image(systemName: systemName)
                         .font(.system(size: 26, weight: .semibold))
                         .foregroundColor(tint)
@@ -731,6 +927,17 @@ private struct ReelActionButton: View {
                 }
             }
             .frame(width: 48)
+            // Élargit la zone sensible autour du glyph + compteur. La pile
+            // d'actions flotte au-dessus du `mediaLayer` qui porte le tap
+            // play/pause (`handleContentTap`) : sans cette extension, un tap qui
+            // manquait le glyph de quelques pixels traversait jusqu'au média et
+            // togglait la lecture au lieu d'activer le bouton (bug user
+            // 2026-06-28). `contentShape(Rectangle())` rend tout le rectangle
+            // élargi (padding inclus) sensible, et le padding vertical comble les
+            // gaps entre les boutons du rail.
+            .padding(.vertical, 6)
+            .padding(.horizontal, 6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -955,6 +1162,21 @@ private struct ReelVideoView: View {
             }
             .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
             .adaptiveOnChange(of: revealCompleted) { _, _ in drive(ready: ready) }
+            // F3 — re-drive the video when a call ENDS. The call-start (true) edge
+            // pauses via `ReelsPlayerView`'s `$callState` subscription; the
+            // in-process WebRTC teardown posts no system interruption-ended, so a
+            // reel opened during a call would stay frozen on its poster. `drive`
+            // is gated on `!isCallActive` + a no-op once already playing.
+            // `.receive(on: .main)` so `isCallActive` is already cleared when the
+            // guard re-checks it.
+            .onReceive(
+                CallManager.shared.$callState
+                    .map(\.isActive)
+                    .removeDuplicates()
+                    .receive(on: DispatchQueue.main)
+            ) { callActive in
+                if !callActive { drive(ready: ready) }
+            }
             .onDisappear {
                 // Releasing only when this page actually owns the engine avoids
                 // tearing down the next reel that has already loaded during paging.
@@ -1233,39 +1455,50 @@ private struct ReelImageCell: View {
     }
 }
 
-/// Ambient blurred fill behind a `.fit` carousel image — the media's small
-/// thumbnail (or its thumbHash when there is no thumbnail) scaled to fill,
-/// blurred and slightly dimmed. NEVER loads the full image (`fullUrl: nil`): a
-/// 28pt blur hides the low resolution, and the full image is already fetched by
-/// the `.fit` foreground — loading it twice would double the fullscreen network
-/// + bitmap cost. Falls back to the media's tint colour.
+/// Ambient blurred fill behind a `.fit` carousel image/video — the media's
+/// **thumbHash** decoded locally, scaled to fill, blurred and slightly dimmed.
+/// Falls back to the media's tint colour when no thumbHash exists.
+///
+/// Deliberately renders ONLY the thumbHash (via `UIImage.fromThumbHash`) — it
+/// NEVER loads the thumbnail URL. A sharp thumbnail popping into the blurred
+/// letterbox fill reads as a rendering glitch (user report 2026-07-08 : « le
+/// thumbnail donne l'impression d'un bogue »). This mirrors the story letterbox
+/// backdrop (`storyBlurredBackdrop`), which is thumbHash-only too. The full
+/// image is already fetched by the `.fit` foreground; a 60pt blur over the
+/// upscaled thumbHash hides its low resolution at zero extra network cost.
 private struct ReelImageBackdrop: View, Equatable {
     let media: FeedMedia
 
-    /// Equatable so `.equatable()` memoizes the expensive 28pt blur across the
-    /// parent's 10 Hz playback-time re-renders. The backdrop depends only on the
-    /// media identity + the thumbnail inputs it actually reads, so SwiftUI reuses
-    /// the rasterized blur as long as those are unchanged (the real GPU heat win).
+    /// Decoded lazily inside `body` (≈16×16 → upscaled, < 0.5 ms). Because the
+    /// view is `.equatable()`, `body` — and thus this decode — only runs when the
+    /// media identity / thumbHash actually changes, not on the parent's 10 Hz
+    /// playback-time re-renders (the real GPU/CPU heat win).
+    private var backdropImage: UIImage? {
+        guard let hash = media.thumbHash, !hash.isEmpty else { return nil }
+        return UIImage.fromThumbHash(hash)
+    }
+
     static func == (lhs: ReelImageBackdrop, rhs: ReelImageBackdrop) -> Bool {
         lhs.media.id == rhs.media.id
             && lhs.media.thumbHash == rhs.media.thumbHash
-            && lhs.media.thumbnailUrl == rhs.media.thumbnailUrl
             && lhs.media.thumbnailColor == rhs.media.thumbnailColor
     }
 
     var body: some View {
-        ProgressiveCachedImage(
-            thumbHash: media.thumbHash,
-            thumbnailUrl: media.thumbnailUrl,
-            fullUrl: nil,
-            autoLoad: true
-        ) {
+        ZStack {
             Color(hex: media.thumbnailColor)
+            if let img = backdropImage {
+                Image(uiImage: img)
+                    .resizable()
+                    .interpolation(.low)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .scaleEffect(1.18)
+                    .blur(radius: 60)
+                    .opacity(0.85)
+            }
         }
-        .aspectRatio(contentMode: .fill)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .scaleEffect(1.15)
-        .blur(radius: 28)
         .clipped()
         .overlay(Color.black.opacity(0.22))
     }
@@ -1319,10 +1552,12 @@ private struct ReelAudioView: View {
             .ignoresSafeArea()
 
             // Subtle large waveform watermark behind the transcript.
+            // Glyphe décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver
             Image(systemName: "waveform")
                 .font(.system(size: 220, weight: .semibold))
                 .foregroundColor(.white.opacity(0.05))
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
 
             heroLayer
         }
@@ -1333,10 +1568,12 @@ private struct ReelAudioView: View {
         if displaySegments.isEmpty {
             // No transcript yet — keep a prominent waveform glyph as the hero so
             // the screen never reads as empty.
+            // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver
             Image(systemName: "waveform")
                 .font(.system(size: 84, weight: .semibold))
                 .foregroundColor(.white.opacity(0.92))
                 .shadow(color: .black.opacity(0.35), radius: 10)
+                .accessibilityHidden(true)
         } else {
             // Karaoke transcript: the active segment ([startTime, endTime) of the
             // live `player.currentTime`) is highlighted + auto-scrolled to centre.
@@ -1348,6 +1585,8 @@ private struct ReelAudioView: View {
                 accentColor: accentColor,
                 maxHeight: 360,
                 isPlaying: player.isPlaying,
+                progress: player.progress,
+                fontSize: 22,
                 onSeek: { time in player.seekToTime(time) }
             )
             .padding(.horizontal, 20)
@@ -1376,6 +1615,7 @@ private struct ReelAudioControl: View {
     /// Shared engine (owned by `ReelPageView`) so the hero transcript
     /// (`ReelAudioView` → `MediaTranscriptionView`) tracks the SAME playback.
     let player: AudioPlaybackManager
+    var onFullscreen: () -> Void = {}
 
     private var attachment: MeeshyMessageAttachment { media.toMessageAttachment() }
 
@@ -1386,6 +1626,7 @@ private struct ReelAudioControl: View {
                 context: .messageBubble,
                 accentColor: media.thumbnailColor,
                 translatedAudios: media.translatedAudios,
+                onFullscreen: onFullscreen,
                 externalLanguage: $selectedLanguage,
                 availability: availability,
                 onDownload: onDownload,

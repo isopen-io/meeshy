@@ -14,6 +14,7 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { WebRTCService } from '@/services/webrtc-service';
 
 // Mock Socket.IO service
 const mockGetSocket = jest.fn();
@@ -77,10 +78,11 @@ const mockAddPeerConnection = jest.fn();
 const mockRemovePeerConnection = jest.fn();
 const mockSetError = jest.fn();
 const mockSetConnecting = jest.fn();
+const mockSetIceServersStore = jest.fn();
 let mockIceServers: RTCIceServer[] | null = null;
 
-jest.mock('@/stores/call-store', () => ({
-  useCallStore: () => ({
+jest.mock('@/stores/call-store', () => {
+  const buildState = () => ({
     localStream: null,
     iceServers: mockIceServers,
     setLocalStream: mockSetLocalStream,
@@ -89,8 +91,11 @@ jest.mock('@/stores/call-store', () => ({
     removePeerConnection: mockRemovePeerConnection,
     setError: mockSetError,
     setConnecting: mockSetConnecting,
-  }),
-}));
+    setIceServers: mockSetIceServersStore,
+  });
+  const useCallStore = Object.assign(buildState, { getState: buildState });
+  return { useCallStore };
+});
 
 // Mock logger
 jest.mock('@/utils/logger', () => ({
@@ -147,6 +152,8 @@ describe('useWebRTCP2P', () => {
     mockCreatePeerConnection.mockReturnValue(mockPeerConnection);
     mockCreateOffer.mockResolvedValue({ type: 'offer', sdp: 'offer-sdp' });
     mockCreateAnswer.mockResolvedValue({ type: 'answer', sdp: 'answer-sdp' });
+    mockHandleRenegotiationOffer.mockResolvedValue(undefined);
+    mockSetRemoteAnswer.mockResolvedValue(undefined);
 
     // Suppress console warnings
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -298,6 +305,25 @@ describe('useWebRTCP2P', () => {
       expect(onError).toHaveBeenCalled();
     });
 
+    // P1 leak fix: the peer connection was already created + registered
+    // (createPeerConnection/addPeerConnection above) by the time
+    // service.createOffer() throws — without cleanup it stays open and
+    // registered forever.
+    it('closes and deregisters the orphaned peer connection when offer creation fails', async () => {
+      mockCreateOffer.mockRejectedValue(new Error('Offer failed'));
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+    });
+
     it('should throw error if userId not available', async () => {
       const { result } = renderHook(() =>
         useWebRTCP2P({ callId: mockCallId, userId: undefined })
@@ -400,6 +426,76 @@ describe('useWebRTCP2P', () => {
         expect.objectContaining({ candidate: 'candidate:early' })
       );
     });
+
+    // P1 leak fix: handleOffer's peer connection is already created +
+    // registered (createPeerConnection/addPeerConnection) by the time
+    // service.createAnswer() throws.
+    it('closes and deregisters the orphaned peer connection when answering an incoming offer fails', async () => {
+      mockCreateAnswer.mockRejectedValue(new Error('Answer failed'));
+
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+
+      const signalHandler = getSignalHandler();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp' },
+        });
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+    });
+  });
+
+  describe('Participant cleanup on rejoin (removeParticipant)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    it('closes the service, clears buffered ICE candidates/remote-description state, and deregisters the peer connection', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      // Establish a real connection + buffer a candidate before the answer,
+      // so there is queued/established state to actually verify gets cleared.
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      const signalHandler = getSignalHandler();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: {
+            type: 'ice-candidate', from: mockTargetUserId, to: mockUserId,
+            candidate: 'candidate:queued', sdpMLineIndex: 0, sdpMid: '0',
+          },
+        });
+      });
+      expect(mockAddIceCandidate).not.toHaveBeenCalled(); // confirms it's queued, not yet applied
+
+      act(() => {
+        result.current.removeParticipant(mockTargetUserId);
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+
+      // A rejoin's answer must NOT drain the old queue against the fresh
+      // service — the candidate above must have been dropped, not carried
+      // over to whatever connection gets created next for this participant.
+      mockAddIceCandidate.mockClear();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp' },
+        });
+      });
+      expect(mockAddIceCandidate).not.toHaveBeenCalled();
+    });
   });
 
   describe('Renegotiation routing (A/V switch / ICE restart)', () => {
@@ -470,6 +566,51 @@ describe('useWebRTCP2P', () => {
       expect(mockSetRemoteAnswer).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'answer', sdp: 'reanswer-sdp' })
       );
+    });
+  });
+
+  describe('Duplicate initial offer (reconnect-replay race)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    it('drops a second initial offer from the same peer that arrives while the first is still awaiting local media', async () => {
+      // The gateway relays an offer live AND buffers it for replay on the
+      // sender's next call:join (socket-churn reconnect recovery) — the same
+      // tab can receive the same initial offer twice. Simulate that by
+      // holding getLocalStream pending so handleOffer hasn't yet reached
+      // createPeerConnection when the duplicate arrives.
+      let resolveStream: (stream: MediaStream) => void = () => {};
+      mockGetLocalStream.mockReturnValue(
+        new Promise<MediaStream>((resolve) => {
+          resolveStream = resolve;
+        })
+      );
+
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+      const signalHandler = getSignalHandler();
+
+      act(() => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp' },
+        });
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp-dup' },
+        });
+      });
+
+      await act(async () => {
+        resolveStream(mockMediaStream);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Only one RTCPeerConnection must ever be created for this peer — a
+      // second call would silently orphan the first (never-closed) one.
+      expect(mockCreatePeerConnection).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -575,6 +716,178 @@ describe('useWebRTCP2P', () => {
 
       // Should not throw
       expect(mockOn).not.toHaveBeenCalled();
+    });
+  });
+
+  // Gap fix (2026-07-07): web never had a call site for
+  // call:request-ice-servers/call:ice-servers-refreshed — a call outliving
+  // the TURN credential TTL had no way to get fresh ones.
+  describe('TURN credential refresh', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('listens for call:ice-servers-refreshed and arms a periodic refresh timer on mount', () => {
+      jest.useFakeTimers();
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+
+      expect(mockOn).toHaveBeenCalledWith(SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED, expect.any(Function));
+
+      // Default fallback TTL is 3600s, refreshed at 80% = 2880s.
+      act(() => {
+        jest.advanceTimersByTime(2880 * 1000);
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS,
+        { callId: mockCallId }
+      );
+    });
+
+    it('requests fresh TURN credentials immediately when ICE connection state becomes disconnected', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockEmit.mockClear();
+
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        lastCallOptions.onIceConnectionStateChange('disconnected');
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS,
+        { callId: mockCallId }
+      );
+    });
+
+    // --- call:reconnecting / call:reconnected — le serveur suit le restart ---
+    // (parité iOS/Android : sans ces emits, un restart ICE web laissait le
+    // statut serveur `active` et l'analytics aveugle à la reconnexion)
+
+    const driveIce = async (states: string[]) => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockEmit.mockClear();
+      const lastCallOptions = (WebRTCService as unknown as jest.Mock).mock.calls.at(-1)![0];
+      act(() => {
+        for (const state of states) lastCallOptions.onIceConnectionStateChange(state);
+      });
+    };
+
+    it('émet call:reconnecting une seule fois par stall mid-call', async () => {
+      await driveIce(['connected', 'disconnected', 'disconnected', 'failed']);
+
+      const reconnecting = mockEmit.mock.calls.filter(
+        ([event]) => event === CLIENT_EVENTS.CALL_RECONNECTING
+      );
+      expect(reconnecting).toHaveLength(1);
+      expect(reconnecting[0][1]).toEqual({
+        callId: mockCallId,
+        participantId: mockUserId,
+        attempt: 1,
+      });
+    });
+
+    it('émet call:reconnected quand le média revient après un stall', async () => {
+      await driveIce(['connected', 'disconnected', 'connected']);
+
+      expect(mockEmit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_RECONNECTED, {
+        callId: mockCallId,
+        participantId: mockUserId,
+      });
+    });
+
+    it('un flottement ICE pré-connexion n’est jamais un stall', async () => {
+      await driveIce(['checking', 'disconnected']);
+
+      const reconnectEvents = mockEmit.mock.calls.filter(
+        ([event]) =>
+          event === CLIENT_EVENTS.CALL_RECONNECTING || event === CLIENT_EVENTS.CALL_RECONNECTED
+      );
+      expect(reconnectEvents).toHaveLength(0);
+    });
+
+    it('chaque cycle de stall porte une tentative incrémentée', async () => {
+      await driveIce(['connected', 'disconnected', 'connected', 'failed']);
+
+      const attempts = mockEmit.mock.calls
+        .filter(([event]) => event === CLIENT_EVENTS.CALL_RECONNECTING)
+        .map(([, payload]) => (payload as { attempt: number }).attempt);
+      expect(attempts).toEqual([1, 2]);
+    });
+
+    it('applies a refreshed ICE server list to the store and every existing peer connection, then reschedules using the real TTL', async () => {
+      jest.useFakeTimers();
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      const refreshedHandler = mockOn.mock.calls.find(
+        (c) => c[0] === SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED
+      )![1];
+
+      const freshServers = [{ urls: 'turn:fresh.example.com', username: 'u', credential: 'c' }];
+      act(() => {
+        refreshedHandler({ callId: mockCallId, iceServers: freshServers, ttl: 600 });
+      });
+
+      expect(mockSetIceServersStore).toHaveBeenCalledWith(freshServers);
+      expect(mockSetIceServers).toHaveBeenCalledWith(freshServers);
+
+      // Rescheduled at 80% of the REAL ttl (600s), not the 3600s default.
+      mockEmit.mockClear();
+      act(() => {
+        jest.advanceTimersByTime(480 * 1000);
+      });
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS,
+        { callId: mockCallId }
+      );
+    });
+
+    it('ignores a refresh event for a different callId', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      const refreshedHandler = mockOn.mock.calls.find(
+        (c) => c[0] === SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED
+      )![1];
+
+      act(() => {
+        refreshedHandler({ callId: 'some-other-call', iceServers: [{ urls: 'turn:x' }], ttl: 600 });
+      });
+
+      expect(mockSetIceServersStore).not.toHaveBeenCalled();
+    });
+
+    it('clears the refresh timer on unmount', () => {
+      jest.useFakeTimers();
+      const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+      const { unmount } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      unmount();
+
+      expect(clearTimeoutSpy).toHaveBeenCalled();
     });
   });
 

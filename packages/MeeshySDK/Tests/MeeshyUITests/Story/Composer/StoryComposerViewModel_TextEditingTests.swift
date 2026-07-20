@@ -94,7 +94,8 @@ final class StoryComposerViewModel_TextEditingTests: XCTestCase {
         XCTAssertEqual(vm.textEditingMode, .inactive)
     }
 
-    func test_textEditTool_hasSixCases() {
-        XCTAssertEqual(TextEditTool.allCases.count, 6)
+    func test_textEditTool_hasAllCases() {
+        // style, weight, color, size, align, background, frame, border
+        XCTAssertEqual(TextEditTool.allCases.count, 8)
     }
 }

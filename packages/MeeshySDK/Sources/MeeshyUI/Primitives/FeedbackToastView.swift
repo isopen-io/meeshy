@@ -9,9 +9,9 @@ public enum FeedbackToastType {
 
     public var color: Color {
         switch self {
-        case .success: return MeeshyColors.green
-        case .error: return MeeshyColors.coral
-        case .info: return MeeshyColors.cyan
+        case .success: return MeeshyColors.success
+        case .error: return MeeshyColors.error
+        case .info: return MeeshyColors.indigo400
         }
     }
 
@@ -91,5 +91,41 @@ public struct FeedbackToastView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(toast.message)
         .accessibilityAddTraits(toast.isTappable ? .isButton : [])
+    }
+}
+
+// MARK: - Notch Reveal
+
+/// Geometry of the "emerge from the notch" reveal used to present the in-app
+/// FeedbackToast (action feedback: "post sent", "changes saved"…).
+///
+/// The toast starts collapsed and slightly pulled up toward the Dynamic Island
+/// / notch, then grows down into its resting position; on dismissal it retracts
+/// back up toward the notch and fades — a Dynamic-Island-style "pop".
+///
+/// Constants are `nonisolated` so the (non-`@MainActor`) tests and the
+/// `AnyTransition` builder read them under MeeshyUI's MainActor default
+/// isolation. `notchOffset` mirrors the toast's top padding (`MeeshySpacing.xxl`
+/// = 24) so the collapsed origin lands at the top of the safe area — just under
+/// the notch — on every device, with or without a physical notch.
+public enum FeedbackToastReveal {
+    /// Scale of the collapsed (entering / leaving) state. `< 1` so the toast grows.
+    public nonisolated static let collapsedScale: CGFloat = 0.2
+    /// Scale anchor: top-center, where the notch / Dynamic Island sits.
+    public nonisolated static let anchor: UnitPoint = .top
+    /// Upward pull (points), applied as `-notchOffset` on the Y axis, lifting the
+    /// collapsed toast toward the notch. Mirrors the toast's top padding.
+    public nonisolated static let notchOffset: CGFloat = 24
+}
+
+public extension AnyTransition {
+    /// Dynamic-Island-style reveal for the in-app FeedbackToast: the toast
+    /// emerges from under the notch, grows into place, then retracts back toward
+    /// the notch on dismissal. Pair with `.meeshyAnimation(.springBouncy, value:)`
+    /// at the call site so the motion is suppressed under Reduce Motion.
+    nonisolated static var feedbackToastReveal: AnyTransition {
+        .scale(scale: FeedbackToastReveal.collapsedScale, anchor: FeedbackToastReveal.anchor)
+            .combined(with: .opacity)
+            .combined(with: .offset(y: -FeedbackToastReveal.notchOffset))
     }
 }

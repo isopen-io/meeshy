@@ -474,6 +474,23 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(project.mediaObjects.first?.duration, 3.0)
     }
 
+    func test_addClipCommand_apply_video_preservesAspectRatio() throws {
+        var project = makeEmptyProject()
+        let cmd = AddClipCommand(
+            clipId: "v1", postMediaId: "pm-v1",
+            kind: .video, startTime: 0, duration: 3.0,
+            aspectRatio: 16.0 / 9.0
+        )
+        try cmd.apply(to: &project)
+        XCTAssertEqual(project.mediaObjects.first?.aspectRatio ?? 0, 16.0 / 9.0, accuracy: 0.0001)
+    }
+
+    func test_addClipCommand_decode_legacyWithoutAspectRatio_defaultsTo1() throws {
+        let json = #"{"id":"c1","timestamp":0,"clipId":"v1","postMediaId":"pm","kind":"video","startTime":0,"duration":1}"#
+        let decoded = try JSONDecoder().decode(AddClipCommand.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.aspectRatio, 1.0)
+    }
+
     func test_addClipCommand_apply_addsToCorrectCollection_audio() throws {
         var project = makeEmptyProject()
         let cmd = AddClipCommand(
@@ -1319,5 +1336,37 @@ final class StoryModelsExtensionsTests: XCTestCase {
             XCTAssertEqual(after, baselineJSON,
                 "Command \(any.typeTag) is not apply-revert idempotent")
         }
+    }
+
+    // MARK: - Clip name (persisted optional field)
+
+    func test_storyMediaObject_name_roundtrips() throws {
+        var m = StoryMediaObject(aspectRatio: 1.0)
+        m.name = "Intro"
+        let data = try JSONEncoder().encode(m)
+        let decoded = try JSONDecoder().decode(StoryMediaObject.self, from: data)
+        XCTAssertEqual(decoded.name, "Intro")
+    }
+
+    func test_storyMediaObject_legacyWithoutName_decodesToNil() throws {
+        let json = #"{"id":"m1","postMediaId":"p","mediaType":"image","aspectRatio":1.0}"#
+        let decoded = try JSONDecoder().decode(StoryMediaObject.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.name)
+    }
+
+    func test_storyAudioPlayerObject_name_roundtrips() throws {
+        var a = StoryAudioPlayerObject()
+        a.name = "Musique"
+        let data = try JSONEncoder().encode(a)
+        let decoded = try JSONDecoder().decode(StoryAudioPlayerObject.self, from: data)
+        XCTAssertEqual(decoded.name, "Musique")
+    }
+
+    func test_storyTextObject_name_roundtrips() throws {
+        var t = StoryTextObject(text: "Hello")
+        t.name = "Titre"
+        let data = try JSONEncoder().encode(t)
+        let decoded = try JSONDecoder().decode(StoryTextObject.self, from: data)
+        XCTAssertEqual(decoded.name, "Titre")
     }
 }

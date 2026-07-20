@@ -346,11 +346,12 @@ function VerifyEmailContent() {
 }
 
 function LoadingFallback() {
+  const { t } = useI18n('common');
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="text-center space-y-3">
         <LoadingSpinner size="lg" />
-        <p className="text-sm text-gray-600 dark:text-gray-400">Chargement...</p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{t('loading', 'Loading…')}</p>
       </div>
     </div>
   );

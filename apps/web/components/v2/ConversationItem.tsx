@@ -1,11 +1,14 @@
 'use client';
 
 import React, { memo } from 'react';
+import { getUserStatus } from '@/lib/user-status';
+import { presenceDotClassV2 } from './Avatar';
 import { Badge } from './Badge';
 import { LanguageOrb } from './LanguageOrb';
 import { TypingIndicator } from './TypingIndicator';
 import { GhostBadge } from './GhostBadge';
 import { SwipeableRow, SwipeIcons, SwipeColors, SwipeAction } from './SwipeableRow';
+import { useI18n } from '@/hooks/use-i18n';
 
 export interface ConversationTag {
   id: string;
@@ -81,7 +84,9 @@ export const ConversationItem = memo(function ConversationItem({
   onDragStart,
   className = '',
 }: ConversationItemProps): React.JSX.Element {
+  const { t } = useI18n('conversations');
   const displayName = conversation.customName || conversation.name;
+  const presence = getUserStatus({ isOnline: conversation.isOnline });
 
   const noop = () => {};
 
@@ -90,28 +95,28 @@ export const ConversationItem = memo(function ConversationItem({
     {
       id: 'archive',
       icon: SwipeIcons.archive,
-      label: 'Archiver',
+      label: t('v2chat.archive'),
       ...SwipeColors.archive,
       onClick: onArchive ?? noop,
     },
     {
       id: 'delete',
       icon: SwipeIcons.delete,
-      label: 'Supprimer',
+      label: t('v2chat.delete'),
       ...SwipeColors.delete,
       onClick: onDelete ?? noop,
     },
     {
       id: 'read',
       icon: SwipeIcons.read,
-      label: 'Lu',
+      label: t('v2chat.markRead'),
       ...SwipeColors.read,
       onClick: onMarkRead ?? noop,
     },
     {
       id: 'mute',
       icon: SwipeIcons.mute,
-      label: conversation.isMuted ? 'Son' : 'Sourdine',
+      label: conversation.isMuted ? t('v2chat.unmute') : t('v2chat.mute'),
       ...SwipeColors.mute,
       onClick: onMute ?? noop,
     },
@@ -122,28 +127,28 @@ export const ConversationItem = memo(function ConversationItem({
     {
       id: 'pin',
       icon: SwipeIcons.pin,
-      label: conversation.isPinned ? 'Desepingler' : 'Epingler',
+      label: conversation.isPinned ? t('v2chat.unpin') : t('v2chat.pin'),
       ...SwipeColors.pin,
       onClick: onPin ?? noop,
     },
     {
       id: 'important',
       icon: SwipeIcons.important,
-      label: 'Important',
+      label: t('v2chat.important'),
       ...SwipeColors.important,
       onClick: onMarkImportant ?? noop,
     },
     {
       id: 'tag',
       icon: SwipeIcons.tag,
-      label: 'Tag',
+      label: t('v2chat.tag'),
       ...SwipeColors.tag,
       onClick: onAddTag ?? noop,
     },
     {
       id: 'call',
       icon: SwipeIcons.call,
-      label: 'Appeler',
+      label: t('v2chat.call'),
       ...SwipeColors.call,
       onClick: onCall ?? noop,
     },
@@ -168,7 +173,7 @@ export const ConversationItem = memo(function ConversationItem({
       return (
         <span className="flex items-center gap-1" style={{ color: 'var(--gp-text-secondary)' }}>
           <span>&#128247;</span>
-          <span>Photo</span>
+          <span>{t('v2chat.photo')}</span>
           {lastMessage.attachmentCount && lastMessage.attachmentCount > 1 && (
             <span>+{lastMessage.attachmentCount - 1}</span>
           )}
@@ -180,7 +185,7 @@ export const ConversationItem = memo(function ConversationItem({
       return (
         <span className="flex items-center gap-1" style={{ color: 'var(--gp-text-secondary)' }}>
           <span>&#128206;</span>
-          <span>Fichier</span>
+          <span>{t('v2chat.file')}</span>
           {lastMessage.attachmentCount && lastMessage.attachmentCount > 1 && (
             <span>+{lastMessage.attachmentCount - 1}</span>
           )}
@@ -192,7 +197,7 @@ export const ConversationItem = memo(function ConversationItem({
       return (
         <span className="flex items-center gap-1" style={{ color: 'var(--gp-text-secondary)' }}>
           <span>&#127908;</span>
-          <span>Message vocal</span>
+          <span>{t('v2chat.voiceMessage')}</span>
         </span>
       );
     }
@@ -266,11 +271,12 @@ export const ConversationItem = memo(function ConversationItem({
             <LanguageOrb code={conversation.languageCode} size="md" pulse={false} />
           )}
 
-          {/* Indicateur en ligne (conversations directes uniquement) */}
-          {!conversation.isGroup && conversation.isOnline && (
+          {/* Indicateur en ligne (conversations directes uniquement).
+              Offline (>30min) : aucun dot — vert online/recent, orange away. */}
+          {!conversation.isGroup && presence !== 'offline' && (
             <div
-              className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300"
-              style={{ background: 'var(--gp-jade-green)', borderColor: 'var(--gp-surface)' }}
+              className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 transition-colors duration-300 ${presenceDotClassV2[presence]}`}
+              style={{ borderColor: 'var(--gp-surface)' }}
             />
           )}
 
@@ -361,6 +367,7 @@ export const ConversationItem = memo(function ConversationItem({
                   e.stopPropagation();
                   onOptionsClick?.();
                 }}
+                aria-label={t('v2chat.options')}
                 className="p-1 rounded transition-colors duration-300 hover:bg-[var(--gp-hover)]"
                 style={{ color: 'var(--gp-text-muted)' }}
               >
@@ -376,7 +383,7 @@ export const ConversationItem = memo(function ConversationItem({
             <div className="flex items-center gap-1 mt-1">
               <TypingIndicator />
               <span className="text-xs transition-colors duration-300" style={{ color: 'var(--gp-text-muted)' }}>
-                ecrit...
+                {t('v2chat.typing')}
               </span>
             </div>
           )}

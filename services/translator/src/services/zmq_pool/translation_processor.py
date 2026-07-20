@@ -18,6 +18,33 @@ from ..zmq_models import TranslationTask
 
 logger = logging.getLogger(__name__)
 
+# Budget d'inférence — incident prod 2026-07-04 : un post de 1839 chars
+# (fr → 7 langues) n'a JAMAIS été traduit. Le texte est bien segmenté en
+# phrases par translate_with_structure, mais le timeout FIXE de 45 s
+# couvrait la traduction du texte ENTIER (tous segments, modèle premium,
+# CPU) : tout texte >~1500 chars force-échouait, le gateway épuisait ses
+# 5 retries et le message restait dans sa langue d'origine — rupture
+# silencieuse du Prisme Linguistique. Le budget croît avec la longueur
+# (le coût CPU est ~linéaire au nombre de segments), borné pour ne pas
+# monopoliser un worker sur un input pathologique.
+# Calibration : mesure prod ~30 s/500 chars par langue seule (lock libre) ;
+# la pente à 45 s garde ~1.5× de marge pour la contention inter-workers sur
+# le lock d'inférence du modèle.
+INFERENCE_TIMEOUT_BASE_S = 45.0
+INFERENCE_TIMEOUT_PER_500_CHARS_S = 45.0
+INFERENCE_TIMEOUT_MAX_S = 360.0
+
+
+def inference_timeout_for(text_length: int) -> float:
+    """Budget d'inférence (secondes) proportionnel à la longueur du texte.
+
+    ≤ 500 chars : base 45 s (comportement historique, inchangé pour les
+    messages courts) ; au-delà : +45 s par tranche de 500 chars, plafonné
+    à 360 s.
+    """
+    extra = INFERENCE_TIMEOUT_PER_500_CHARS_S * max(0, text_length - 500) / 500.0
+    return min(INFERENCE_TIMEOUT_MAX_S, INFERENCE_TIMEOUT_BASE_S + extra)
+
 
 async def process_single_translation(
     task: TranslationTask,
@@ -42,25 +69,20 @@ async def process_single_translation(
     results = []
 
     try:
-        # Lancer les traductions en parallèle pour chaque langue cible
-        translation_tasks = []
-
+        # Une langue à la fois : l'inférence ML est sérialisée par le lock
+        # modèle (model_loader.get_model_inference_lock), un fan-out
+        # concurrent ne parallélise rien mais fait courir le budget de
+        # CHAQUE langue pendant l'attente des autres — un texte long
+        # multi-langues expirait alors toutes ses langues d'un coup.
         for target_language in task.target_languages:
-            translation_task = asyncio.create_task(
-                _translate_single_language(
+            try:
+                result = await _translate_single_language(
                     task=task,
                     target_language=target_language,
                     worker_name=worker_name,
                     translation_service=translation_service,
                     translation_cache=translation_cache
                 )
-            )
-            translation_tasks.append((target_language, translation_task))
-
-        # Attendre toutes les traductions
-        for target_language, translation_task in translation_tasks:
-            try:
-                result = await translation_task
 
                 # Ajouter métadonnées
                 result['poolType'] = 'any' if task.conversation_id == 'any' else 'normal'
@@ -128,8 +150,9 @@ async def process_batch_translation(
         # Pour chaque langue cible
         for target_lang in target_langs:
             try:
-                # Utiliser le batch translation du service ML
-                batch_timeout = 45.0 * len(texts)  # 45s par texte en batch
+                # Utiliser le batch translation du service ML — budget = somme
+                # des budgets individuels (proportionnels à la longueur).
+                batch_timeout = sum(inference_timeout_for(len(t)) for t in texts)
                 if translation_service and hasattr(translation_service, '_ml_translate_batch'):
                     try:
                         translated_texts = await asyncio.wait_for(
@@ -148,6 +171,7 @@ async def process_batch_translation(
                     # Fallback: traduire un par un
                     translated_texts = []
                     for text in texts:
+                        single_budget = inference_timeout_for(len(text))
                         try:
                             result = await asyncio.wait_for(
                                 translation_service.translate_with_structure(
@@ -157,10 +181,10 @@ async def process_batch_translation(
                                     model_type=model_type,
                                     source_channel='zmq_batch'
                                 ),
-                                timeout=45.0
+                                timeout=single_budget
                             )
                         except asyncio.TimeoutError:
-                            logger.error(f"⏱️ [BATCH] Single inference timeout (45s) {source_lang}→{target_lang}")
+                            logger.error(f"⏱️ [BATCH] Single inference timeout ({single_budget:.0f}s, {len(text)} chars) {source_lang}→{target_lang}")
                             raise
                         translated_texts.append(result.get('translated_text', text))
 
@@ -200,7 +224,7 @@ async def process_batch_translation(
             f"({batch_time/len(tasks):.0f}ms/text)"
         )
 
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         logger.error(f"[BATCH] General batch error: {e}")
 
     return translations_completed
@@ -265,6 +289,7 @@ async def _translate_single_language(
         # ÉTAPE 2: Traduire si pas en cache
         # ═══════════════════════════════════════════════════════════════════
         if translation_service:
+            inference_budget = inference_timeout_for(len(task.text))
             try:
                 result = await asyncio.wait_for(
                     translation_service.translate_with_structure(
@@ -274,11 +299,12 @@ async def _translate_single_language(
                         model_type=task.model_type,
                         source_channel='zmq'
                     ),
-                    timeout=45.0  # iter-4: évite qu'un input pathologique bloque le worker
+                    timeout=inference_budget
                 )
             except asyncio.TimeoutError:
                 logger.error(
-                    f"⏱️ [PROCESSOR] Inference timeout (45s) for {task.source_language}→{target_language} "
+                    f"⏱️ [PROCESSOR] Inference timeout ({inference_budget:.0f}s, {len(task.text)} chars) "
+                    f"for {task.source_language}→{target_language} "
                     f"msg={task.message_id} task={task.task_id}"
                 )
                 raise RuntimeError(f"inference_timeout: {task.source_language}→{target_language}")

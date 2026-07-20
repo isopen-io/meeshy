@@ -3,6 +3,8 @@
  * @module shared/types/mention
  */
 
+import { hasMentions as hasMentionsCore, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT } from '../utils/mention-parser.js';
+
 /**
  * Utilisateur mentionné résolu par le serveur.
  * Inclus dans les réponses API (messages, posts, comments) pour permettre
@@ -218,10 +220,13 @@ export function extractMentions(
     maxUsernameLength = 30
   } = config;
 
-  // Regex: @ suivi de lettres, chiffres, underscore (et optionnellement espaces)
+  // Regex: @ suivi de lettres, chiffres, underscore, tiret (et optionnellement espaces).
+  // Le tiret fait partie du charset username (/^[a-zA-Z0-9_-]+$/) — cf. MENTION_HANDLE_CHARS.
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `parseMentions`) : un `@` collé après un mot
+  // appartient à une adresse e-mail (`bob@alice.com`) et n'est PAS une mention. Flag `u` requis.
   const pattern = allowSpaces
-    ? new RegExp(`@([\\w ]{1,${maxUsernameLength}})`, 'g')
-    : new RegExp(`@(\\w{1,${maxUsernameLength}})`, 'g');
+    ? new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS} ]{1,${maxUsernameLength}})`, 'gu')
+    : new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]{1,${maxUsernameLength}})`, 'gu');
 
   const mentions = new Set<string>();
   const matches = content.matchAll(pattern);
@@ -237,12 +242,16 @@ export function extractMentions(
 }
 
 /**
- * Vérifie si un texte contient des mentions
+ * Vérifie si un texte contient des mentions.
+ *
+ * Délègue à `hasMentions` de `mention-parser` (source de vérité unique, Unicode-aware) pour
+ * rester cohérent avec la détection de `@DisplayName` accentué de `parseMentions`.
+ *
  * @param content - Le contenu à vérifier
  * @returns true si au moins une mention est présente
  */
 export function hasMentions(content: string): boolean {
-  return /@\w+/.test(content);
+  return hasMentionsCore(content);
 }
 
 /**
@@ -263,15 +272,27 @@ export function mentionsToLinks(
   linkTemplate: string = '/u/{username}',
   validUsernames?: string[]
 ): string {
-  return content.replace(/@(\w+)/g, (_match, username) => {
+  if (!validUsernames || validUsernames.length === 0) return content;
+
+  // Les usernames sont canoniques en minuscules (MentionService les normalise
+  // avant persistance dans `validatedMentions`), tandis que le texte du message
+  // conserve la casse tapée par l'utilisateur. La comparaison doit donc être
+  // insensible à la casse, sinon `@Alice` ne devient jamais un lien.
+  const validLower = new Set(validUsernames.map((u) => u.toLowerCase()));
+
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT) : ne pas linkifier le `@` interne d'une adresse
+  // e-mail (`bob@alice.com` ne doit pas devenir `bob[@alice](/u/alice).com`). Flag `u` requis.
+  return content.replace(new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]+)`, 'gu'), (_match, username) => {
+    const canonical = username.toLowerCase();
     // Vérifier si le username est dans la liste validée
-    if (!validUsernames || !validUsernames.includes(username)) {
+    if (!validLower.has(canonical)) {
       // Username pas validé → texte plain
       return `@${username}`;
     }
 
-    // Username validé → lien cliquable
-    const link = linkTemplate.replace('{username}', username);
+    // Username validé → lien cliquable. L'URL utilise l'username canonique
+    // (minuscules) ; le libellé conserve la casse d'origine du message.
+    const link = linkTemplate.replace('{username}', canonical);
     return `[@${username}](${link})`;
   });
 }
@@ -315,8 +336,23 @@ export function detectMentionAtCursor(
  * @returns true si le username est valide
  */
 export function isValidMentionUsername(username: string): boolean {
-  // Lettres, chiffres, underscore, 1-30 caractères
-  return /^\w{1,30}$/.test(username);
+  // Lettres, chiffres, underscore, tiret, 1-30 caractères — parité charset username.
+  return new RegExp(`^[${MENTION_HANDLE_CHARS}]{1,30}$`).test(username);
+}
+
+/**
+ * Valide une query de mention EN COURS DE FRAPPE (détectée sous le curseur).
+ * Diffère de {@link isValidMentionUsername} par la longueur minimale 0 : juste après avoir
+ * tapé `@`, la query est encore vide et l'autocomplete doit s'ouvrir. Le charset reste la
+ * source de vérité unique {@link MENTION_HANDLE_CHARS} (lettres/chiffres/underscore/tiret),
+ * pour que les usernames à tiret (`@marie-claire`) restent autocomplétables — parité entre
+ * le composer (`useMentions`) et l'édition de message (`EditMessageView`), qui inlinaient
+ * chacun leur propre regex et divergeaient (`\w` vs `[\w-]`).
+ * @param query - Le texte tapé après `@`, sans le `@`
+ * @returns true si la query peut alimenter l'autocomplete de mention
+ */
+export function isValidMentionQuery(query: string): boolean {
+  return new RegExp(`^[${MENTION_HANDLE_CHARS}]{0,30}$`).test(query);
 }
 
 /**
@@ -350,7 +386,7 @@ export const MENTION_CONSTANTS = {
   AUTOCOMPLETE_DEBOUNCE_MS: 300,
   NOTIFICATION_WORD_LIMIT: 20,
   MENTION_TRIGGER: '@',
-  MENTION_REGEX: /@(\w+)/g,
+  MENTION_REGEX: new RegExp(`${NAME_BOUNDARY_LEFT}@([${MENTION_HANDLE_CHARS}]+)`, 'gu'),
   MENTION_DISPLAY_REGEX: /@([\w][\w\s'-]{0,49})(?=[!?,;:.@\n]|\s{2,}|$)/g
 } as const;
 

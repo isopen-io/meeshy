@@ -84,7 +84,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
   };
 });
 
-import { MentionService, MentionSuggestion, MentionValidationResult } from '../../../services/MentionService';
+import { MentionService, MentionSuggestion, MentionValidationResult, resolveMentionedUsers, resolveUsernamesToIds } from '../../../services/MentionService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../../services/CacheStore';
 
@@ -227,15 +227,15 @@ describe('MentionService', () => {
       expect(mentions).toHaveLength(3);
     });
 
-    it('should reject invalid username formats (special characters)', () => {
-      // Usernames with special chars should be ignored
+    it('should extract hyphenated usernames and truncate at genuinely invalid chars', () => {
+      // Hyphen is a valid username char (/^[a-zA-Z0-9_-]+$/) → @john-doe is a full handle.
+      // Dot is not part of the charset → @jane.smith truncates to `jane`.
       const content = 'Hey @john-doe and @jane.smith';
       const mentions = service.extractMentions(content);
 
-      // The regex @(\w+) will match john and jane (stopping at - and .)
-      expect(mentions).toContain('john');
+      expect(mentions).toContain('john-doe');
+      expect(mentions).not.toContain('john');
       expect(mentions).toContain('jane');
-      expect(mentions).not.toContain('john-doe');
       expect(mentions).not.toContain('jane.smith');
     });
 
@@ -278,13 +278,22 @@ describe('MentionService', () => {
       expect(mentions).not.toContain(longUsername);
     });
 
-    it('should handle email-like patterns correctly', () => {
+    it('should NOT treat an @ glued after a word (email address) as a mention', () => {
       const content = 'Contact john@example.com for info';
       const mentions = service.extractMentions(content);
 
-      // Should extract 'john' as a mention (before @)
-      // but actually the regex /@(\w+)/ captures after @, so it gets 'example'
-      expect(mentions).toContain('example');
+      // `@example` is part of an email address, not a mention. Same left boundary as the
+      // SSOT parseMentions/hasMentions (mention-parser.ts): a `@` preceded by a name char
+      // belongs to an email — extracting `example` would fire a spurious mention notification.
+      expect(mentions).toEqual([]);
+    });
+
+    it('extracts a real mention but ignores an adjacent email fragment', () => {
+      const content = 'ping @alice about john@example.com';
+      const mentions = service.extractMentions(content);
+
+      expect(mentions).toContain('alice');
+      expect(mentions).not.toContain('example');
     });
   });
 
@@ -1579,5 +1588,243 @@ describe('MentionService', () => {
 
       expect(prisma.postMention.create).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+// ==============================================
+// resolveMentionedUsers (module-level export) — mixed-case username resolution
+// ==============================================
+//
+// Regression guard: `resolveMentionedUsers` lowercases parsed handles and must
+// still resolve a mention against a stored username that preserves case
+// (e.g. `@Alice_B` → DB `Alice_B`). MongoDB's Prisma connector ignores
+// `mode: 'insensitive'` when combined with `in` (documented in
+// MentionService.resolveUsernames), so the query must use OR + case-insensitive
+// `equals`, not a lowercased `in` list.
+describe('resolveMentionedUsers (module export)', () => {
+  type FakeUser = {
+    id: string;
+    username: string;
+    isActive: boolean;
+    displayName: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    avatar: string | null;
+  };
+
+  // Faithful emulation of MongoDB+Prisma matching semantics for User.findMany:
+  //  - `OR: [{ username: { equals, mode: 'insensitive' } }]` → case-INSENSITIVE
+  //  - `username: { in: [...], mode: 'insensitive' }`        → mode IGNORED,
+  //    i.e. case-SENSITIVE membership (the real-world MongoDB behavior)
+  const mongoLikeFindMany = (db: readonly FakeUser[]) =>
+    jest.fn(async ({ where }: { where: any }) => {
+      const isActiveOk = (u: FakeUser) =>
+        where.isActive === undefined || u.isActive === where.isActive;
+
+      const matchesUsername = (u: FakeUser): boolean => {
+        if (Array.isArray(where.OR)) {
+          return where.OR.some((clause: any) => {
+            const eq = clause.username?.equals;
+            if (eq === undefined) return false;
+            return clause.username?.mode === 'insensitive'
+              ? u.username.toLowerCase() === String(eq).toLowerCase()
+              : u.username === eq;
+          });
+        }
+        const inList = where.username?.in;
+        if (Array.isArray(inList)) {
+          // MongoDB ignores `mode` with `in` → exact, case-sensitive membership
+          return inList.includes(u.username);
+        }
+        return false;
+      };
+
+      return db.filter((u) => isActiveOk(u) && matchesUsername(u));
+    });
+
+  const aliceB: FakeUser = {
+    id: 'u-alice',
+    username: 'Alice_B',
+    isActive: true,
+    displayName: null,
+    firstName: 'Alice',
+    lastName: 'B',
+    avatar: null,
+  };
+
+  it('resolves a mention of a mixed-case username (@Alice_B → Alice_B)', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([aliceB]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['hey @Alice_B look at this']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ userId: 'u-alice', username: 'Alice_B', displayName: 'Alice B' });
+  });
+
+  it('resolves a lowercased mention of a mixed-case username (@alice_b → Alice_B)', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([aliceB]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['ping @alice_b']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].username).toBe('Alice_B');
+  });
+
+  it('queries with OR + case-insensitive equals, never a lowercased `in` list', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prismaMock = { user: { findMany } } as any;
+
+    await resolveMentionedUsers(prismaMock, ['yo @Alice_B']);
+
+    const where = findMany.mock.calls[0][0].where;
+    expect(where.username?.in).toBeUndefined();
+    expect(where.OR).toEqual([{ username: { equals: 'alice_b', mode: 'insensitive' } }]);
+    expect(where.isActive).toBe(true);
+  });
+
+  it('dedupes case-variant mentions of the same user', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([aliceB]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['@Alice_B and @alice_b']);
+
+    expect(result).toHaveLength(1);
+  });
+
+  it('returns [] when there are no mentions', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prismaMock = { user: { findMany } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['no handles here']);
+
+    expect(result).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  // The `@` in an e-mail address is glued to a preceding word character, so it
+  // belongs to the address — not a mention. The left boundary (NAME_BOUNDARY_LEFT,
+  // SSOT `parseMentions`) enforces this; without it `john@example.com` spuriously
+  // resolves a bystander named `example` across the entire posts/comments surface.
+  const exampleUser: FakeUser = {
+    id: 'u-example',
+    username: 'example',
+    isActive: true,
+    displayName: null,
+    firstName: 'Ex',
+    lastName: 'Ample',
+    avatar: null,
+  };
+
+  it('does not extract a handle out of an e-mail address (john@example.com)', async () => {
+    const findMany = mongoLikeFindMany([exampleUser]);
+    const prismaMock = { user: { findMany } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['Contact me at john@example.com']);
+
+    expect(result).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('ignores an `@` glued after a non-latin/accented word (adrià@example.io)', async () => {
+    const findMany = mongoLikeFindMany([exampleUser]);
+    const prismaMock = { user: { findMany } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['écris à adrià@example.io stp']);
+
+    expect(result).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('still resolves a real mention that follows a boundary (space)', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([exampleUser]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['hey @example look here']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].username).toBe('example');
+  });
+
+  it('still resolves a mention anchored at the start of the content', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([exampleUser]) } } as any;
+
+    const result = await resolveMentionedUsers(prismaMock, ['@example ping']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].username).toBe('example');
+  });
+});
+
+// ==============================================
+// resolveUsernamesToIds (module-level export) — canonical username→id resolver
+// ==============================================
+//
+// SSOT for the real-time layer (socket handlers + agent mention pipeline).
+// Regression guard: the callers previously used `{ username: { in: [...lowercased] } }`,
+// but MongoDB ignores `mode: 'insensitive'` with `in`, so an `in` list matches
+// case-SENSITIVELY. Stored usernames preserve case (`normalizeUsername` never
+// lowercases, e.g. `Alice`), so an `in` query silently dropped every mixed-case
+// mention — the notification was never emitted.
+describe('resolveUsernamesToIds (module export)', () => {
+  type FakeUser = { id: string; username: string };
+
+  // Faithful emulation of MongoDB+Prisma matching semantics for User.findMany:
+  //  - `OR: [{ username: { equals, mode: 'insensitive' } }]` → case-INSENSITIVE
+  //  - `username: { in: [...] }` → `mode` IGNORED, i.e. case-SENSITIVE membership
+  const mongoLikeFindMany = (db: readonly FakeUser[]) =>
+    jest.fn(async ({ where }: { where: any }) => {
+      const matches = (u: FakeUser): boolean => {
+        if (Array.isArray(where.OR)) {
+          return where.OR.some((clause: any) => {
+            const eq = clause.username?.equals;
+            if (eq === undefined) return false;
+            return clause.username?.mode === 'insensitive'
+              ? u.username.toLowerCase() === String(eq).toLowerCase()
+              : u.username === eq;
+          });
+        }
+        const inList = where.username?.in;
+        if (Array.isArray(inList)) return inList.includes(u.username);
+        return false;
+      };
+      return db.filter(matches).map((u) => ({ id: u.id }));
+    });
+
+  const alice: FakeUser = { id: 'u-alice', username: 'Alice' };
+  const bob: FakeUser = { id: 'u-bob', username: 'Bob_B' };
+
+  it('returns [] for an empty username list without querying', async () => {
+    const findMany = jest.fn();
+    const prismaMock = { user: { findMany } } as any;
+
+    const result = await resolveUsernamesToIds(prismaMock, []);
+
+    expect(result).toEqual([]);
+    expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('resolves a lowercased handle against a case-preserved stored username', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([alice, bob]) } } as any;
+
+    const result = await resolveUsernamesToIds(prismaMock, ['alice']);
+
+    expect(result).toEqual(['u-alice']);
+  });
+
+  it('resolves multiple mixed-case handles', async () => {
+    const prismaMock = { user: { findMany: mongoLikeFindMany([alice, bob]) } } as any;
+
+    const result = await resolveUsernamesToIds(prismaMock, ['ALICE', 'bob_b']);
+
+    expect(result).toEqual(['u-alice', 'u-bob']);
+  });
+
+  it('queries with OR + case-insensitive equals, never a lowercased `in` list', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const prismaMock = { user: { findMany } } as any;
+
+    await resolveUsernamesToIds(prismaMock, ['Alice']);
+
+    const where = findMany.mock.calls[0][0].where;
+    expect(where.username?.in).toBeUndefined();
+    expect(where.OR).toEqual([{ username: { equals: 'Alice', mode: 'insensitive' } }]);
   });
 });

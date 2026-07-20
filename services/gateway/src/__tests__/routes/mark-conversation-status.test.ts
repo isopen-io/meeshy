@@ -52,6 +52,8 @@ const mockPrisma: any = {
   message: { findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn() },
   conversationReadCursor: {
     upsert: jest.fn(),
+    updateMany: jest.fn(),
+    create: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
     findMany: jest.fn()
@@ -93,6 +95,7 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     // cached cursor.unreadCount field.
     mockPrisma.message.count.mockResolvedValue(UNREAD_COUNT);
     mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+    mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.conversationReadCursor.update.mockResolvedValue({});
     mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
     // No cursor yet → read floor falls back to participant.joinedAt.
@@ -136,5 +139,91 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     });
 
     expect(response.statusCode).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Badge reset: broadcastReadStatusUpdate must emit CONVERSATION_UNREAD_UPDATED
+// to the reader's user room so multi-device badge is cleared after mark-as-read.
+// ---------------------------------------------------------------------------
+
+describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset', () => {
+  let app2: FastifyInstance;
+  let mockEmit2: jest.Mock;
+  let mockTo2: jest.Mock;
+
+  beforeAll(async () => {
+    mockEmit2 = jest.fn();
+    mockTo2 = jest.fn().mockReturnValue({ emit: mockEmit2 });
+    app2 = Fastify({ logger: false });
+    app2.decorate('prisma', mockPrisma);
+    app2.decorate('socketIOHandler', {
+      getManager: () => ({
+        getIO: () => ({ to: mockTo2 }),
+      }),
+    });
+    await app2.register(messageReadStatusRoutes);
+    await app2.ready();
+  });
+
+  afterAll(async () => {
+    await app2.close();
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (MessageReadStatusService as any).recentActionCache.clear();
+    mockTo2.mockReturnValue({ emit: mockEmit2 });
+
+    mockResolveConversationId.mockResolvedValue(CONVERSATION_ID);
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: PARTICIPANT_ID,
+      joinedAt: new Date('2020-01-01T00:00:00Z'),
+    });
+    mockPrisma.participant.findUnique.mockResolvedValue(null);
+    mockPrisma.participant.findMany.mockResolvedValue([]);
+    mockPrisma.message.findFirst.mockResolvedValue({ id: LATEST_MESSAGE_ID, createdAt: new Date() });
+    mockPrisma.message.count.mockResolvedValue(UNREAD_COUNT);
+    mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+    mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.conversationReadCursor.update.mockResolvedValue({});
+    mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+    mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+  });
+
+  it('mark-as-read emits CONVERSATION_UNREAD_UPDATED to reading user room for badge reset', async () => {
+    const response = await app2.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockTo2).toHaveBeenCalledWith('user:user-1');
+    expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONVERSATION_ID,
+      unreadCount: expect.any(Number),
+    });
+  });
+
+  it('mark-as-read emits CONVERSATION_UNREAD_UPDATED even when showReadReceipts=false (badge reset is not a peer disclosure)', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+
+    const response = await app2.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    // Badge reset must still fire — it syncs the reader's OWN devices, not discloses to peers.
+    expect(mockTo2).toHaveBeenCalledWith('user:user-1');
+    expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONVERSATION_ID,
+      unreadCount: 0,
+    });
+    // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false —
+    // neither the legacy name nor the dual-emitted message:read-status-updated.
+    expect(mockEmit2).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
+    expect(mockEmit2).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
   });
 });

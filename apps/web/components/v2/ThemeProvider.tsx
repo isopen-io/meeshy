@@ -37,7 +37,7 @@ const themeInitScript = `
     }
 
     var meta = document.querySelector('meta[name="theme-color"]');
-    var color = isDark ? '#0D0D0F' : '#FFF8F3';
+    var color = isDark ? '#0F172A' : '#F8FAFC';
     if (meta) {
       meta.setAttribute('content', color);
     }
@@ -111,7 +111,7 @@ export function V2ThemeProvider({ children, defaultTheme = 'system' }: ThemeProv
     }
 
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-    const themeColor = isDark ? '#0D0D0F' : '#FFF8F3';
+    const themeColor = isDark ? '#0F172A' : '#F8FAFC';
 
     if (metaThemeColor) {
       metaThemeColor.setAttribute('content', themeColor);

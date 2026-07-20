@@ -1,15 +1,16 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { useFeedQuery, useFeedPosts } from '@/hooks/queries/use-feed-query';
+import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
 import type { Post } from '@meeshy/shared/types/post';
 
 const mockGetFeed = jest.fn();
+const mockGetPost = jest.fn();
 
 jest.mock('@/services/posts.service', () => ({
   postsService: {
     getFeed: (...args: unknown[]) => mockGetFeed(...args),
-    getPost: jest.fn(),
+    getPost: (...args: unknown[]) => mockGetPost(...args),
   },
 }));
 
@@ -178,5 +179,31 @@ describe('useFeedPosts', () => {
     );
 
     expect(result.current.posts).toEqual([]);
+  });
+});
+
+describe('usePrefetchPost', () => {
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('returns a callable prefetch function', () => {
+    const { result } = renderHook(() => usePrefetchPost(), {
+      wrapper: createWrapper(),
+    });
+
+    expect(typeof result.current).toBe('function');
+  });
+
+  it('calls getPost when the prefetch callback is invoked', async () => {
+    mockGetPost.mockResolvedValue({ success: true, data: mockPost });
+
+    const { result } = renderHook(() => usePrefetchPost(), {
+      wrapper: createWrapper(),
+    });
+
+    result.current('post-xyz');
+
+    await waitFor(() => expect(mockGetPost).toHaveBeenCalledWith('post-xyz'));
   });
 });

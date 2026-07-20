@@ -19,12 +19,12 @@ public final class NetworkConditionMonitor: ObservableObject {
 
     @Published public private(set) var condition: NetworkCondition = .offline
 
-    // `nonisolated(unsafe)` requis pour Swift 6 strict concurrency :
-    // `NWPathMonitor` est configuré une fois à l'init et jamais muté ensuite.
-    // Le `pathUpdateHandler` s'exécute sur la `queue` non-main qui hop ensuite
-    // sur MainActor via Task pour publier `condition`.
-    nonisolated(unsafe) private let monitor = NWPathMonitor()
-    nonisolated(unsafe) private let queue = DispatchQueue(
+    // `NWPathMonitor` / `DispatchQueue` sont des constantes `let` de type Sendable,
+    // donc implicitement nonisolated : accessibles depuis le `pathUpdateHandler`
+    // (closure non-main) sans annotation. Configurés une fois à l'init, jamais mutés ;
+    // le handler hop sur MainActor via Task pour publier `condition`.
+    private let monitor = NWPathMonitor()
+    private let queue = DispatchQueue(
         label: "me.meeshy.network-condition", qos: .utility
     )
 

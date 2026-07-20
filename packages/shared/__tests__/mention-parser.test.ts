@@ -40,6 +40,69 @@ describe('parseMentions', () => {
       const result = parseMentions('@Marie tu viens ?', participants);
       expect(result).toEqual(['u3']);
     });
+
+    it('accepte une frontière de ponctuation après le displayName', () => {
+      const result = parseMentions('@Marie!', participants);
+      expect(result).toEqual(['u3']);
+    });
+  });
+
+  describe('résolution exacte (pas de préfixe)', () => {
+    it('ne résout PAS un displayName comme préfixe d’un mot plus long', () => {
+      const result = parseMentions('Bonjour @Marienne', participants);
+      expect(result).toEqual([]);
+    });
+
+    it('ne résout PAS un displayName multi-mots comme préfixe', () => {
+      const result = parseMentions('@Jean Charleston est une ville', participants);
+      expect(result).toEqual([]);
+    });
+
+    it('ne résout PAS un displayName suivi d’un chiffre ou underscore', () => {
+      expect(parseMentions('@Marie2024', participants)).toEqual([]);
+      expect(parseMentions('@Marie_bot', participants)).toEqual([]);
+    });
+
+    it('ne résout PAS un username capturé dans une adresse e-mail', () => {
+      const result = parseMentions('écris à contact@marie.com', participants);
+      expect(result).toEqual([]);
+    });
+
+    it('ne résout PAS un displayName précédé d’un caractère de mot (e-mail)', () => {
+      const result = parseMentions('écris à contact@Marie.com', participants);
+      expect(result).toEqual([]);
+    });
+
+    it('ne résout PAS un handle e-mail précédé d’une lettre Unicode (parité frontière displayName)', () => {
+      // La frontière gauche du fallback @username doit être Unicode comme celle du
+      // path @DisplayName : un `@` collé à une lettre accentuée / non-latine reste
+      // un morceau d'adresse e-mail, pas une mention.
+      expect(parseMentions('écris à André@atabeth.com', participants)).toEqual([]);
+      expect(parseMentions('Привет Влад@jcharlesnm bonjour', participants)).toEqual([]);
+    });
+
+    it('ne résout PAS un @handle collé APRÈS un @mention résolu (domaine e-mail)', () => {
+      // Invariant NAME_BOUNDARY_LEFT : un `@` précédé d'un caractère de nom
+      // appartient à une adresse e-mail, pas à une mention. La résolution
+      // @DisplayName ne doit pas « décoller » le handle suivant en supprimant
+      // le span matché — sinon `@Marie@atabeth.com` résoudrait atabeth depuis
+      // le domaine e-mail. Parité stricte avec `extractMentions` / `hasMentions`
+      // (types/mention.ts) qui n'extraient QUE `Marie` sur la même entrée.
+      expect(parseMentions('@Marie@atabeth.com', participants)).toEqual(['u3']);
+      expect(parseMentions('@Marie@atabeth', participants)).toEqual(['u3']);
+    });
+
+    it('ne résout PAS un displayName collé APRÈS un autre displayName résolu', () => {
+      // `@Andre Tabeth@Marie` : le second `@` est collé à la lettre `h` de
+      // « Tabeth » → morceau d'adresse, pas une mention. La suppression du span
+      // `@Andre Tabeth` ne doit pas décoller `@Marie`. Seul Andre Tabeth est
+      // résolu (les mentions volontairement multiples s'écrivent séparées).
+      expect(parseMentions('@Andre Tabeth@Marie', participants)).toEqual(['u1']);
+      // Contrôle : correctement séparées, les deux se résolvent.
+      expect(parseMentions('@Andre Tabeth @Marie', participants)).toEqual(
+        expect.arrayContaining(['u1', 'u3'])
+      );
+    });
   });
 
   describe('@username fallback', () => {
@@ -79,9 +142,34 @@ describe('parseMentions', () => {
     });
   });
 
+  describe('@username avec tiret (charset username /^[a-zA-Z0-9_-]+$/)', () => {
+    const hyphenParticipants: MentionParticipant[] = [
+      { userId: 'h1', username: 'marie-claire', displayName: 'Marie Claire' },
+      { userId: 'h2', username: 'jean',         displayName: 'Jean' },
+    ];
+
+    it('résout un username contenant un tiret', () => {
+      expect(parseMentions('coucou @marie-claire !', hyphenParticipants)).toEqual(['h1']);
+    });
+
+    it('ne tronque pas @marie-claire au premier tiret', () => {
+      // 'marie' seul n'est pas un participant : avant le fix, `\w` capturait 'marie'
+      // (non résolu) et marie-claire n'était jamais notifiée.
+      expect(parseMentions('@marie-claire', hyphenParticipants)).toEqual(['h1']);
+    });
+
+    it('sans participants, retourne le handle brut complet avec tiret', () => {
+      expect(parseMentions('@marie-claire', [])).toEqual(['@marie-claire']);
+    });
+  });
+
   describe('hasMentions', () => {
     it('détecte @ comme mention', () => {
       expect(hasMentions('Salut @Andre Tabeth')).toBe(true);
+    });
+
+    it('détecte un @username à tiret', () => {
+      expect(hasMentions('Salut @marie-claire')).toBe(true);
     });
 
     it('détecte @username comme mention', () => {
@@ -90,6 +178,66 @@ describe('parseMentions', () => {
 
     it('retourne false sans mention', () => {
       expect(hasMentions('Bonjour')).toBe(false);
+    });
+
+    it('détecte un @DisplayName à initiale accentuée (parité avec parseMentions)', () => {
+      // @Éric est résolu par parseMentions (frontières Unicode) mais l'ancien
+      // /@\w/ ASCII ne le voyait pas — drift corrigé.
+      expect(hasMentions('Salut @Éric')).toBe(true);
+      expect(hasMentions('Coucou @André Tabeth')).toBe(true);
+    });
+
+    it('détecte un @DisplayName non-latin (cyrillique)', () => {
+      expect(hasMentions('Привет @Владимир')).toBe(true);
+    });
+
+    it('ne confond pas une adresse e-mail (@ suivi d\'espace) avec une mention', () => {
+      expect(hasMentions('Email: test@ domain.com')).toBe(false);
+    });
+
+    it('ne confond pas une adresse e-mail collée (word@name) avec une mention — parité parseMentions', () => {
+      // parseMentions applique NAME_BOUNDARY_LEFT sur ses deux chemins, donc
+      // `contact@marie.com` ne résout AUCUNE mention. hasMentions doit être
+      // cohérent : le `@` précédé d'un caractère de nom fait partie d'un e-mail.
+      expect(parseMentions('écris à contact@marie.com', [])).toEqual([]);
+      expect(hasMentions('écris à contact@marie.com')).toBe(false);
+      expect(hasMentions('reply to jean.dupont@example.org please')).toBe(false);
+    });
+  });
+
+  describe('invariant sans drift hasMentions ⟷ raw parseMentions (participant-agnostique)', () => {
+    // Le docstring des deux fonctions interdit tout drift : sur le chemin
+    // participant-agnostique (aucun participant), un `@handle` détecté par
+    // `hasMentions` DOIT être extrait comme handle brut par `parseMentions`.
+    // Le fallback brut utilisait MENTION_HANDLE_CHARS (ASCII, aligné username),
+    // là où hasMentions utilise NAME_CHAR (Unicode) — d'où un handle non-latin
+    // signalé mais jamais extrait.
+
+    it('extrait un handle brut non-latin (cyrillique) — parité hasMentions', () => {
+      expect(parseMentions('@Владимир', [])).toEqual(['@Владимир']);
+    });
+
+    it('extrait un handle brut à initiale accentuée — parité hasMentions', () => {
+      expect(parseMentions('Salut @Éric', [])).toEqual(['@Éric']);
+      expect(parseMentions('Coucou @André', [])).toEqual(['@André']);
+    });
+
+    it('hasMentions(x) est vrai SSI parseMentions(x, []) est non vide', () => {
+      const samples = [
+        'Salut @alice',
+        '@marie-claire on y va',
+        'Привет @Владимир',
+        'Salut @Éric ça va ?',
+        '@André Tabeth bonjour',
+        'écris à contact@marie.com',
+        'reply to jean.dupont@example.org please',
+        'test@ domain.com',
+        'Bonjour tout le monde',
+        '',
+      ];
+      for (const s of samples) {
+        expect(hasMentions(s)).toBe(parseMentions(s, []).length > 0);
+      }
     });
   });
 });

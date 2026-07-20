@@ -6,10 +6,11 @@ import MeeshySDK
 /// instantaneous — no image decode, no Metal pipeline cold start, no
 /// AVPlayer init on the transition.
 ///
-/// Maintains a sliding window of at most 3 canvas views: `[N-1, N, N+1]`.
-/// The window is symmetric — one slide of look-behind for back-swipe and one
-/// of look-ahead so the next slide's first frame is already rendered.
-/// Views outside the window are evicted (memory bounded).
+/// Maintains a sliding window of at most 4 canvas views: `[N-1, N, N+1, N+2]`.
+/// The window is asymmetric — one slide of look-behind for back-swipe and TWO
+/// of look-ahead so the next two slides' first frames are already rendered
+/// before the user swipes (forward navigation is the dominant gesture in a
+/// story reader). Views outside the window are evicted (memory bounded).
 ///
 /// Usage from a multi-slide viewer:
 /// ```swift
@@ -89,6 +90,15 @@ public final class StoryReaderPrefetcher {
     /// Returns the prefetched canvas view for `itemId`, if any. Returns
     /// `nil` when the slide is outside the current window (caller should
     /// fall back to lazy instantiation).
+    ///
+    /// WS3.5 — activate(.play) contract: every prefetched canvas is bootstrapped
+    /// in `.edit` (see `bootstrap`) so neighbour slides do NOT auto-start their
+    /// audio + background/foreground video at mount time. A canvas returned here
+    /// is therefore still in `.edit`; the caller MUST promote it to `.play` via
+    /// `activate(currentId:)` BEFORE displaying it, otherwise its bg/fg video and
+    /// audio never start (the slide renders its first frame but stays paused).
+    /// This method intentionally does NOT auto-flip the mode: doing so would
+    /// start audio for a slide that is prefetched but not yet visible.
     public func view(for itemId: String) -> StoryCanvasUIView? {
         bootstrapped[itemId]
     }
@@ -148,16 +158,18 @@ public final class StoryReaderPrefetcher {
 
     // MARK: - Window math
 
-    /// Indices to keep in the sliding window. Symétrique : 1 slide en arrière
-    /// (N-1) + 1 slide en avant (N+1), centré sur `N`. La marche-avant couvre
-    /// le swipe suivant (sa première frame est déjà rendue), la marche-arrière
+    /// Indices to keep in the sliding window. Asymétrique : 1 slide en arrière
+    /// (N-1) + DEUX slides en avant (N+1, N+2), centré sur `N`. La marche-avant
+    /// élargie à n+2 garde les deux prochaines premières frames déjà rendues
+    /// avant le swipe (navigation avant dominante dans un reader de stories), ce
+    /// qui supprime le décodage/cold-start au changement de page. La marche-arrière
     /// couvre le back-swipe. Bornes : start drops indices < 0, end drops
-    /// indices ≥ count — donc `[N, N+1]` au premier slide, `[N-1, N]` au
+    /// indices ≥ count — donc `[N, N+1, N+2]` au premier slide, `[N-1, N]` au
     /// dernier. Single-slide group keeps only `N`.
     func windowIndices(around current: Int, count: Int) -> [Int] {
         guard count > 0 else { return [] }
         let lower = max(0, current - 1)
-        let upper = min(count - 1, current + 1)
+        let upper = min(count - 1, current + 2)
         return Array(lower...upper)
     }
 

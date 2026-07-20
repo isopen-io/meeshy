@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import CoreLocation
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -32,6 +33,7 @@ struct ShareableLink: Identifiable {
 
 // MARK: - Feed View
 struct FeedView: View {
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "feed")
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -43,9 +45,9 @@ struct FeedView: View {
     // injected by `iPadRootView`'s environment.
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
-    @State private var showStoryViewer = false
-    @State private var selectedStoryUserId: String?
-    @State private var storyViewerSingleGroup = false
+    // Présentation unifiée du viewer de story (même coordinator que la story tray
+    // et que `ThemedFeedOverlay` côté iPhone). Injecté par `iPadRootView`.
+    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @StateObject var viewModel = FeedViewModel()
     /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
     /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
@@ -72,6 +74,11 @@ struct FeedView: View {
     /// system share UI as soon as this is non-nil and clears it on dismiss.
     @State private var shareableLink: ShareableLink?
     @State private var editingPost: FeedPost?
+    /// Réel dont les commentaires sont présentés en feuille depuis le feed. Le
+    /// bouton « commentaire » d'une carte réel ouvre la `CommentsSheetView`
+    /// DIRECTEMENT (parité avec les cartes post du feed) au lieu de pousser le
+    /// viewer plein écran — l'utilisateur commente sans quitter le fil.
+    @State private var reelCommentsPost: FeedPost?
 
     // Post reaction state — hoisted to parent so socket events update all cards without
     // mutating FeedPost values (pure socket-driven path, mirrors FeedCommentsSheet pattern).
@@ -95,7 +102,7 @@ struct FeedView: View {
     // Impression tracking
     @State private var pendingImpressionIds = Set<String>()
     @State private var recordedImpressionIds = Set<String>()
-    @State private var impressionTimer: Timer?
+    @State private var impressionFlushTask: Task<Void, Never>?
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
@@ -448,13 +455,25 @@ struct FeedView: View {
             // reserves `CollapsibleHeaderMetrics.expandedHeight` of top padding,
             // so on iPad it simply fills the space that was previously left empty.
             VStack(spacing: 0) {
+                // Compact story trail integrated inside the header (accessory
+                // slot) — reveals as the full-size trail scrolls up under it.
                 CollapsibleHeader(
                     title: "Meeshy Feed",
                     scrollOffset: headerScrollOffset,
                     showBackButton: false,
                     titleColor: theme.textPrimary,
                     backArrowColor: MeeshyColors.indigo500,
-                    backgroundColor: theme.backgroundPrimary
+                    backgroundColor: theme.backgroundPrimary,
+                    accessory: {
+                        AnyView(
+                            // Lancement unifié via StoryViewerCoordinator (cf.
+                            // PinnedStoryTrailBand.presentStory) — même chemin que la trail des chats.
+                            PinnedStoryTrailBand(
+                                viewModel: storyViewModel,
+                                scrollOffset: headerScrollOffset
+                            )
+                        )
+                    }
                 )
                 Spacer()
             }
@@ -610,6 +629,8 @@ struct FeedView: View {
                         .shadow(color: MeeshyColors.indigo300.opacity(0.4), radius: 8, y: 4)
 
                     Image(systemName: "plus")
+                        // Doctrine 86i : glyphe du FAB dans un cercle de dimension fixe 40×40 → figé
+                        // (l'icône ne doit pas déborder du bouton flottant). Bouton déjà labellisé.
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                 }
@@ -680,16 +701,12 @@ struct FeedView: View {
             },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
-                // Les commentaires d'un réel vivent dans le viewer plein écran
-                // (interactions riches) — même handoff que le tap média : on coupe
-                // la lecture muette du feed puis on présente le viewer sur ce post.
-                reelAutoplay.clear()
-                SharedAVPlayerManager.shared.pause()
+                // Le bouton commentaire d'un réel ouvre la feuille de commentaires
+                // DIRECTEMENT (parité avec les cartes post du feed) — l'utilisateur
+                // commente sans basculer dans le viewer plein écran. La lecture
+                // muette du feed continue derrière la feuille (translucide).
                 HapticFeedback.medium()
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
-                }
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                reelCommentsPost = post
             },
             onRepost: { postId in togglePostRepost(postId: postId) },
             onBookmark: { postId in togglePostBookmark(postId: postId) },
@@ -793,7 +810,20 @@ struct FeedView: View {
             moodLookup: { userId in
                 (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                  tapHandler: statusViewModel.moodTapHandler(for: userId))
-            }
+            },
+            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+            onViewAuthorStory: {
+                // Parité iPhone (`ThemedFeedOverlay`) : toucher l'avatar d'un auteur
+                // qui a une story ouvre SA story via le coordinator unique. Sans ce
+                // câblage, l'anneau de story et le tap étaient inertes sur iPad.
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
+            },
+            // RF2: a POST that reposts a REEL renders inside FeedPostCard (not the
+            // immersive reel card) — hand it the shared autoplay coordinator so the
+            // embedded reel plays muted/inline, elected against the native reels.
+            reelAutoplay: reelAutoplay
         )
         .equatable()
     }
@@ -824,7 +854,9 @@ struct FeedView: View {
             // liste de conversations — UX coherente cross-screen.
             MeeshyRefreshableScroll(
                 onRefresh: {
-                    await viewModel.refresh()
+                    async let feedRefresh: Void = viewModel.refresh()
+                    async let storyRefresh: Void = storyViewModel.loadStories(forceNetwork: true)
+                    _ = await (feedRefresh, storyRefresh)
                 },
                 coordinateSpaceName: "feedScroll",
                 onScrollOffsetChange: { offset in
@@ -839,12 +871,10 @@ struct FeedView: View {
                     Color.clear.frame(height: 0).id("feed-top")
 
                     // Story tray — same component used by the conversation list
-                    // and the iPhone feed so stories load identically here.
-                    StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
-                        selectedStoryUserId = userId
-                        storyViewerSingleGroup = false
-                        showStoryViewer = true
-                    })
+                    // and the iPhone feed so stories load identically here. Le tap
+                    // ouvre le viewer via StoryViewerCoordinator (chemin unique),
+                    // exactement comme la liste de conversations.
+                    StoryTrayView(viewModel: storyViewModel)
 
                     // Composer placeholder
                     composerPlaceholder
@@ -1060,11 +1090,27 @@ struct FeedView: View {
                 postLikedIds.remove(event.postId)
             }
         }
+        // Bookmark : même réconciliation canonique que le like. L'événement est
+        // PERSONNEL (emitToUser) → toujours pour l'utilisateur courant. Le
+        // ViewModel a posé le `bookmarkCount` absolu sur le post ; on purge ici
+        // le delta optimiste local pour que `bookmarkCount + delta` retombe sur
+        // le compteur autoritaire (sans reload). Si le compteur est absent
+        // (vieux gateway), on garde le delta (dégradation gracieuse).
+        .onReceive(SocialSocketManager.shared.postBookmarked.receive(on: DispatchQueue.main)) { payload in
+            if payload.bookmarkCount != nil {
+                postBookmarkDelta[payload.postId] = nil
+            }
+            if payload.bookmarked {
+                postBookmarkedIds.insert(payload.postId)
+            } else {
+                postBookmarkedIds.remove(payload.postId)
+            }
+        }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
             viewModel.feedStore?.stopObserving()
-            impressionTimer?.invalidate()
-            impressionTimer = nil
+            impressionFlushTask?.cancel()
+            impressionFlushTask = nil
         }
         .sheet(isPresented: $showAudioComposer) {
             AudioPostComposerView { audioURL, mimeType, transcription in
@@ -1074,26 +1120,10 @@ struct FeedView: View {
                 }
             }
         }
-        // Story viewer opened from the tray (mirror of the iPhone feed overlay).
-        // fullScreenCover creates a fresh environment, so re-inject the objects
-        // StoryViewerContainer / its inner SharePickerView read.
-        .fullScreenCover(isPresented: $showStoryViewer) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: selectedStoryUserId,
-                isPresented: $showStoryViewer,
-                onReplyToStory: { replyContext in
-                    showStoryViewer = false
-                    router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
-                },
-                singleGroup: storyViewerSingleGroup,
-                startAtFirstUnviewed: true,
-                presentationSource: "iPadFeed"
-            )
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
-        }
+        // Story viewer présentation : unifiée via StoryViewerCoordinator au
+        // niveau root (`.fullScreenCover(item:)`). L'ancien cover local
+        // `(isPresented:)` + `selectedStoryUserId` séparé provoquait une capture
+        // périmée de l'uid (écran noir « story introuvable »). Supprimé.
         .sheet(isPresented: $showComposerLanguagePicker) {
             AudioLanguagePickerView(
                 selectedLocale: Binding(
@@ -1281,6 +1311,10 @@ struct FeedView: View {
                 Spacer(minLength: 0)
 
                 // Toolbar
+                // Doctrine 82i : les 6 glyphes d'action du composer ci-dessous (photo/caméra/
+                // emoji/fichier/position/audio, 20pt) sont figés — rangée horizontale contrainte
+                // (HStack spacing 16 + Spacer) qui déborderait si les icônes scalaient en XXXL.
+                // Chaque bouton porte déjà son `.accessibilityLabel` → VoiceOver reste complet.
                 HStack(spacing: 16) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
@@ -1386,12 +1420,18 @@ struct FeedView: View {
                 showEmojiPicker = false
             }
             .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(item: $shareableLink) { link in
             // System share sheet — paste/AirDrop/Messages/etc. all receive the
             // `meeshy.me/l/<token>` URL so every external touchpoint funnels
             // through the user's TrackingLink for attribution.
             ShareSheet(activityItems: [link.url])
+        }
+        .sheet(item: $reelCommentsPost) { post in
+            // Même feuille de commentaires que les cartes post (`FeedPostCard`) —
+            // ouverte directement depuis le bouton commentaire d'un réel du feed.
+            CommentsSheetView(post: post, accentColor: post.authorColor)
         }
         .sheet(item: $editingPost) { post in
             EditPostSheet(
@@ -1431,14 +1471,26 @@ struct FeedView: View {
     }
 
     private func scheduleImpressionFlush() {
-        impressionTimer?.invalidate()
-        let ids = pendingImpressionIds
-        impressionTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
-            let batch = Array(ids)
-            Task { @MainActor in
+        // Debounce via a cancellable Task, NOT Timer.scheduledTimer: a default-mode
+        // run-loop timer does not fire while the feed ScrollView is in tracking
+        // mode, and it was re-armed on every card `onAppear` — so feed-appearance
+        // impressions never flushed (impressionCount only ever moved on Detail
+        // opens, tracking postOpenCount 1:1). Task.sleep fires regardless of
+        // run-loop mode. Mirrors ProfileUserPostsList.scheduleImpressionFlush.
+        impressionFlushTask?.cancel()
+        impressionFlushTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled else { return }
+            let batch = Array(pendingImpressionIds)
+            guard !batch.isEmpty else { return }
+            pendingImpressionIds.subtract(batch)
+            do {
+                try await PostService.shared.recordImpressions(postIds: batch)
+                // Mark recorded ONLY on success so a failed flush leaves the ids
+                // eligible to re-enqueue when the card next appears.
                 recordedImpressionIds.formUnion(batch)
-                pendingImpressionIds.subtract(batch)
-                try? await PostService.shared.recordImpressions(postIds: batch)
+            } catch {
+                FeedView.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
             }
         }
     }

@@ -33,8 +33,8 @@ struct OnboardingView: View {
         OnboardingPage(
             id: 0,
             icon: "message.fill",
-            title: String(localized: "onboarding.page0.title", defaultValue: "Bienvenue sur Meeshy", bundle: .main),
-            subtitle: String(localized: "onboarding.page0.subtitle", defaultValue: "Le reseau social ou la langue n'est plus une barriere", bundle: .main),
+            title: String(localized: "onboarding.page0.title", bundle: .main),
+            subtitle: String(localized: "onboarding.page0.subtitle", bundle: .main),
             accentColor: MeeshyColors.error,
             gradientColors: (
                 dark: [Color(hex: "2A0A0A"), Color(hex: "1A0533"), Color(hex: "0F0F14")],
@@ -44,8 +44,8 @@ struct OnboardingView: View {
         OnboardingPage(
             id: 1,
             icon: "globe.badge.chevron.backward",
-            title: String(localized: "onboarding.page1.title", defaultValue: "100+ langues, zero barriere", bundle: .main),
-            subtitle: String(localized: "onboarding.page1.subtitle", defaultValue: "Discutez avec le monde entier dans votre langue — traduction instantanee et invisible", bundle: .main),
+            title: String(localized: "onboarding.page1.title", bundle: .main),
+            subtitle: String(localized: "onboarding.page1.subtitle", bundle: .main),
             accentColor: MeeshyColors.indigo400,
             gradientColors: (
                 dark: [Color(hex: "031A19"), Color(hex: "0A3D3A"), Color(hex: "0F0F14")],
@@ -55,8 +55,8 @@ struct OnboardingView: View {
         OnboardingPage(
             id: 2,
             icon: "waveform.and.person.filled",
-            title: String(localized: "onboarding.page2.title", defaultValue: "Votre voix, leurs langues", bundle: .main),
-            subtitle: String(localized: "onboarding.page2.subtitle", defaultValue: "Envoyez un vocal en francais, vos amis l'ecoutent dans leur langue avec votre voix", bundle: .main),
+            title: String(localized: "onboarding.page2.title", bundle: .main),
+            subtitle: String(localized: "onboarding.page2.subtitle", bundle: .main),
             accentColor: MeeshyColors.indigo600,
             gradientColors: (
                 dark: [Color(hex: "1A0533"), Color(hex: "2D1B69"), Color(hex: "0F0F14")],
@@ -66,8 +66,8 @@ struct OnboardingView: View {
         OnboardingPage(
             id: 3,
             icon: "lock.shield.fill",
-            title: String(localized: "onboarding.page3.title", defaultValue: "Privee par nature", bundle: .main),
-            subtitle: String(localized: "onboarding.page3.subtitle", defaultValue: "Chiffrement de bout en bout — vos conversations restent les votres", bundle: .main),
+            title: String(localized: "onboarding.page3.title", bundle: .main),
+            subtitle: String(localized: "onboarding.page3.subtitle", bundle: .main),
             accentColor: MeeshyColors.success,
             gradientColors: (
                 dark: [Color(hex: "0A1A0A"), Color(hex: "1A3A1A"), Color(hex: "0F0F14")],
@@ -77,7 +77,7 @@ struct OnboardingView: View {
         OnboardingPage(
             id: 4,
             icon: "bubble.left.and.bubble.right.fill",
-            title: String(localized: "onboarding.page4.title", defaultValue: "Meeshy en action", bundle: .main),
+            title: String(localized: "onboarding.page4.title", bundle: .main),
             subtitle: "",
             accentColor: MeeshyColors.indigo400,
             gradientColors: (
@@ -173,14 +173,14 @@ struct OnboardingView: View {
                     HapticFeedback.light()
                     completeOnboarding()
                 } label: {
-                    Text(String(localized: "onboarding.skip", defaultValue: "Passer", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                    Text(String(localized: "onboarding.skip", bundle: .main))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.vertical, MeeshySpacing.sm)
                 }
                 .bounceOnTap(scale: 0.94)
-                .accessibilityLabel(String(localized: "onboarding.skip.a11y", defaultValue: "Passer l'introduction", bundle: .main))
+                .accessibilityLabel(String(localized: "onboarding.skip.a11y", bundle: .main))
                 .transition(.opacity)
             }
         }
@@ -226,13 +226,13 @@ struct OnboardingView: View {
 
             VStack(spacing: MeeshySpacing.md) {
                 Text(page.title)
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 if !page.subtitle.isEmpty {
                     Text(page.subtitle)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(MeeshyFont.relative(16, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
@@ -393,6 +393,10 @@ struct OnboardingView: View {
         }
         .padding(.horizontal, 8)
         .allowsHitTesting(false)
+        // Decorative demo bubbles (untranslated Spanish/Japanese sample text).
+        // Folding them into the page's combined VoiceOver element would read as
+        // confusing noise — let the page title speak for this slide instead.
+        .accessibilityHidden(true)
     }
 
     // MARK: - Page Indicators
@@ -412,6 +416,38 @@ struct OnboardingView: View {
                     )
                     .animation(MeeshyAnimation.springDefault, value: currentPage)
             }
+        }
+        // The decorative capsules replace the native page dots
+        // (`.page(indexDisplayMode: .never)`), so they carry no meaning for
+        // VoiceOver. Expose the strip as a single adjustable element mirroring
+        // `UIPageControl`: it announces "Page N of M" and lets VoiceOver users
+        // flick up/down to page — the same navigation the swipe/next button give.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(pageIndicatorA11yLabel)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment where currentPage < pages.count - 1:
+                goToPage(currentPage + 1)
+            case .decrement where currentPage > 0:
+                goToPage(currentPage - 1)
+            default:
+                break
+            }
+        }
+    }
+
+    private var pageIndicatorA11yLabel: String {
+        String(
+            format: String(localized: "onboarding.pages.a11y", bundle: .main),
+            currentPage + 1,
+            pages.count
+        )
+    }
+
+    private func goToPage(_ index: Int) {
+        HapticFeedback.light()
+        withAnimation(MeeshyAnimation.springDefault) {
+            currentPage = index
         }
     }
 
@@ -450,12 +486,12 @@ struct OnboardingView: View {
 
                 HStack(spacing: MeeshySpacing.sm) {
                     Text(isLastPage
-                         ? String(localized: "onboarding.start", defaultValue: "Commencer", bundle: .main)
-                         : String(localized: "onboarding.next", defaultValue: "Suivant", bundle: .main))
-                        .font(.system(size: MeeshyFont.headlineSize, weight: .bold))
+                         ? String(localized: "onboarding.start", bundle: .main)
+                         : String(localized: "onboarding.next", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
 
                     Image(systemName: isLastPage ? "arrow.right" : "chevron.right")
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 }
                 .foregroundColor(.white)
             }
@@ -463,8 +499,8 @@ struct OnboardingView: View {
         .pressable()
         .animation(.easeInOut(duration: 0.5), value: currentPage)
         .accessibilityLabel(isLastPage
-                            ? String(localized: "onboarding.start.a11y", defaultValue: "Commencer a utiliser Meeshy", bundle: .main)
-                            : String(localized: "onboarding.next.a11y", defaultValue: "Page suivante", bundle: .main))
+                            ? String(localized: "onboarding.start.a11y", bundle: .main)
+                            : String(localized: "onboarding.next.a11y", bundle: .main))
     }
 
     private var buttonGradient: LinearGradient {

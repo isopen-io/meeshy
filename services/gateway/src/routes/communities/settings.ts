@@ -14,6 +14,7 @@ import {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -96,8 +97,8 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
 
       // Preparer les donnees de mise a jour
       const updateData: any = {
-        name: validatedData.name,
-        description: validatedData.description,
+        name: validatedData.name !== undefined ? SecuritySanitizer.sanitizeText(validatedData.name) : undefined,
+        description: validatedData.description !== undefined ? SecuritySanitizer.sanitizeText(validatedData.description) : undefined,
         avatar: validatedData.avatar,
         banner: validatedData.banner,
         isPrivate: validatedData.isPrivate

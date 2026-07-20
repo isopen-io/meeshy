@@ -529,10 +529,23 @@ publish_message() {
     local request_file
     request_file=$(create_secure_temp)
     
+    # Phase 4 idempotency key requise par le gateway : cid_<uuid v4 minuscule>
+    # (sinon validation de schéma → HTTP 400)
+    local client_message_id
+    if command -v uuidgen &>/dev/null; then
+        client_message_id="cid_$(uuidgen | tr '[:upper:]' '[:lower:]')"
+    else
+        local _hex
+        _hex=$(LC_ALL=C tr -dc '0-9a-f' < /dev/urandom | head -c 30)
+        client_message_id=$(printf 'cid_%s-%s-4%s-8%s-%s' "${_hex:0:8}" "${_hex:8:4}" "${_hex:12:3}" "${_hex:15:3}" "${_hex:18:12}")
+    fi
+    log_debug "clientMessageId: $client_message_id"
+
     jq -n \
         --arg content "$message" \
         --arg lang "$lang" \
-        '{content: $content, originalLanguage: $lang, messageType: "text"}' > "$request_file"
+        --arg cid "$client_message_id" \
+        '{content: $content, clientMessageId: $cid, originalLanguage: $lang, messageType: "text"}' > "$request_file"
     
     # Send message
     result=$(http_request POST "${API_URL}/api/v1/conversations/${conv_id}/messages" \

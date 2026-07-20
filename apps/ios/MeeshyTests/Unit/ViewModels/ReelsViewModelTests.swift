@@ -143,10 +143,37 @@ final class ReelsViewModelTests: XCTestCase {
         XCTAssertEqual(service.lastGetReelsSeedId, "r2")
         XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2", "affinity-1"])
     }
+
+    // MARK: - Share (deduplicated tracking-link path — aligned with the feed)
+
+    func test_shareLink_usesDeduplicatedTrackingLinkPath_andReturnsShortUrl() async {
+        let (sut, service, _) = makeSUT()
+
+        let shortUrl = await sut.shareLink(for: Self.makeReel(id: "r1"))
+
+        // The reel share MUST hit the deduplicated `generateLink: true` path so
+        // re-taps reuse the existing link instead of bumping shareCount each tap
+        // (the over-count bug). It also returns the short URL so the caller can
+        // present the system share sheet — same contract as the feed.
+        XCTAssertEqual(service.shareCallCount, 1)
+        XCTAssertEqual(service.lastSharePostId, "r1")
+        XCTAssertEqual(service.lastShareGenerateLink, true)
+        XCTAssertEqual(shortUrl, "https://meeshy.me/l/mock123")
+    }
+
+    func test_shareLink_whenServiceFails_returnsNil() async {
+        let (sut, service, _) = makeSUT()
+        service.shareResult = .failure(NSError(domain: "test", code: 1))
+
+        let shortUrl = await sut.shareLink(for: Self.makeReel(id: "r1"))
+
+        XCTAssertNil(shortUrl)
+    }
 }
 
 // MARK: - Reel Media Layout (pure classification of a reel's media surfaces)
 
+@MainActor
 final class ReelMediaLayoutTests: XCTestCase {
 
     private func img(_ id: String) -> FeedMedia { FeedMedia(id: id, type: .image, url: "https://x/\(id).jpg") }

@@ -1,0 +1,58 @@
+{
+  "title": "Fil",
+  "srHeading": "Fil d'actualité — posts, reels et stories",
+  "tabs": {
+    "label": "Type de fil",
+    "posts": "Publications",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Stories publiques",
+    "storiesShort": "Stories",
+    "moods": "Humeurs",
+    "compose": "Composer une publication",
+    "posts": "Publications"
+  },
+  "audioPostLabel": "Enregistrer un post audio",
+  "updating": "Mise à jour du fil…",
+  "updatingShort": "Mise à jour…",
+  "loadError": "Impossible de charger le fil.",
+  "retry": "Réessayer",
+  "loadingMore": "Chargement de plus de publications",
+  "newPostsOne": "{count} nouvelle publication",
+  "newPostsOther": "{count} nouvelles publications",
+  "empty": "Aucune publication pour le moment. Soyez le premier à partager quelque chose !",
+  "unknownAuthor": "Inconnu",
+  "time": {
+    "now": "À l'instant",
+    "minutes": "Il y a {count}min",
+    "hours": "Il y a {count}h",
+    "days": "Il y a {count}j"
+  },
+  "toast": {
+    "error": "Erreur",
+    "storyPublished": "Story publiée !",
+    "storyVisibleFriends": "Votre story est visible par vos amis.",
+    "storyVisibleFriendsMedia": "Votre story est visible par vos amis ({count} media).",
+    "storyPublishError": "Impossible de publier la story.",
+    "storyDeleted": "Story supprimée",
+    "storyDeleteError": "Impossible de supprimer la story.",
+    "replySent": "Réponse envoyée",
+    "postPublished": "Publié !",
+    "postPublishedDesc": "Votre post a été partagé.",
+    "postPublishError": "Impossible de publier le post.",
+    "linkCopied": "Lien copié !",
+    "linkCopyError": "Impossible de copier le lien.",
+    "postDeleted": "Post supprimé",
+    "postEdited": "Post modifié",
+    "reposted": "Reposté !",
+    "quoted": "Cité !",
+    "audioPublished": "Audio post publié !",
+    "publishError": "Impossible de publier.",
+    "uploadError": "Erreur upload",
+    "uploadErrorDesc": "Impossible d'uploader l'audio.",
+    "moodPublished": "Mood publié !",
+    "status": "Status",
+    "statusSelected": "Status {id} sélectionné"
+  }
+}

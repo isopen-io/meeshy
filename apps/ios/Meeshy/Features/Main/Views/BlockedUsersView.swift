@@ -56,9 +56,9 @@ struct BlockedUsersView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -66,8 +66,9 @@ struct BlockedUsersView: View {
             Spacer()
 
             Text(String(localized: "blocked.users.title", defaultValue: "Utilisateurs bloques", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -100,6 +101,8 @@ struct BlockedUsersView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "blocked.users.loading.a11y", defaultValue: "Chargement en cours", bundle: .main))
     }
 
     private var skeletonRow: some View {
@@ -122,7 +125,7 @@ struct BlockedUsersView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
         )
         .shimmer()
@@ -177,18 +180,20 @@ struct BlockedUsersView: View {
                 accentColor: color,
                 avatarURL: user.avatar
             )
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -197,7 +202,7 @@ struct BlockedUsersView: View {
                 userToUnblock = user
             } label: {
                 Text(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -211,10 +216,10 @@ struct BlockedUsersView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )

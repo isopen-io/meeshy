@@ -6,6 +6,7 @@ import XCTest
 /// into a single mutually-exclusive state. The underlying booleans stay
 /// in place; this enum is the canonical lens that views and a future
 /// refactor will switch to.
+@MainActor
 final class ConversationLoadingPhaseTests: XCTestCase {
 
     // MARK: - Basic transitions

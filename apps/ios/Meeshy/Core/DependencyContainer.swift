@@ -6,7 +6,7 @@ import GRDB
 import MeeshySDK
 import os
 
-private let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
+private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
 
 /// Diagnostic record produced by ``DependencyContainer`` boot.
 ///
@@ -31,7 +31,6 @@ final class DependencyContainer {
     let dbPool: DatabasePool
     let messagePersistence: MessagePersistenceActor
     let feedPersistence: FeedPersistenceActor
-    let retryEngine: RetryEngine
     let thumbnailPrefetcher: ThumbnailPrefetcher
     let mediaSnapshotStore: MediaSnapshotStore
 
@@ -74,20 +73,14 @@ final class DependencyContainer {
         self.feedPersistence = FeedPersistenceActor(dbWriter: pool)
         self.thumbnailPrefetcher = ThumbnailPrefetcher.shared
         self.mediaSnapshotStore = MediaSnapshotStore.shared
-        self.retryEngine = RetryEngine(
-            persistence: messagePersistence,
-            dbWriter: pool,
-            sender: MessageRESTSender()
-        )
         self.initDiagnostics = diagnostics
 
         Task {
             await messagePersistence.start()
-            await retryEngine.start()
         }
 
-        // Q3 (P1 hotfix) — au logout, quiesce le RetryEngine PUIS purge la
-        // table outbox. Sans ça, des messages enqueued par user A pourraient
+        // Q3 (P1 hotfix) — au logout, purge TOUTES les tables messages
+        // on-device. Sans ça, des messages enqueued par user A pourraient
         // être envoyés sous l'identité du user B après un logout+login rapide
         // sur le même device. Hook côté app car le SDK AuthManager ne connaît
         // pas DependencyContainer (qui est app-side).
@@ -113,7 +106,11 @@ final class DependencyContainer {
            !UserDefaults.standard.bool(forKey: autoVacuumKey) {
             let pool = self.dbPool
             Task.detached(priority: .background) {
-                try? DatabaseMaintenance.enableIncrementalAutoVacuumOneShot(on: pool)
+                do {
+                    try DatabaseMaintenance.enableIncrementalAutoVacuumOneShot(on: pool)
+                } catch {
+                    containerLogger.error("Failed to enable incremental auto-vacuum: \(error.localizedDescription, privacy: .public)")
+                }
                 await MainActor.run {
                     UserDefaults.standard.set(true, forKey: autoVacuumKey)
                 }
@@ -124,16 +121,13 @@ final class DependencyContainer {
     // MARK: - Q3 — Outbox session quiesce hook
 
     /// Pattern calqué sur `ConversationAudioCoordinator.wireAuthLogoutHook` :
-    /// observe la transition `isAuthenticated true→false`, stop le retry
-    /// engine PUIS purge TOUTES les tables messages on-device (outbox +
-    /// `messages` autoritaire + translations/transcriptions/audio/attachments/
-    /// pending_ids via `clearAllMessagesForLogout`). Sans la purge de `messages`,
-    /// user B verrait le contenu de user A au prochain login (table non
-    /// namespacée par userId, lue par `MessageStore.loadInitialSnapshot`).
-    /// Ordre strict (D-13 du design doc) : stopper le RetryEngine empêche un
-    /// flush concurrent avec le delete (sinon race entre `SELECT` et `DELETE`).
+    /// observe la transition `isAuthenticated true→false` et purge TOUTES les
+    /// tables messages on-device (outbox + `messages` autoritaire +
+    /// translations/transcriptions/audio/attachments/pending_ids via
+    /// `clearAllMessagesForLogout`). Sans la purge de `messages`, user B verrait
+    /// le contenu de user A au prochain login (table non namespacée par userId,
+    /// lue par `MessageStore.loadInitialSnapshot`).
     private func wireOutboxLogoutHook() {
-        let engine = retryEngine
         let persistence = messagePersistence
         AuthManager.shared.$isAuthenticated
             .removeDuplicates()
@@ -142,7 +136,6 @@ final class DependencyContainer {
             .receive(on: DispatchQueue.main)
             .sink { _ in
                 Task {
-                    await engine.stop()
                     do {
                         try await persistence.clearAllMessagesForLogout()
                     } catch {
@@ -250,14 +243,33 @@ final class DependencyContainer {
                 try fileManager.moveItem(atPath: path, toPath: quarantined)
             } catch {
                 containerLogger.error("Failed to quarantine corrupt DB: \(error.localizedDescription, privacy: .public) — deleting instead")
-                try? fileManager.removeItem(atPath: path)
+                do {
+                    try fileManager.removeItem(atPath: path)
+                } catch {
+                    containerLogger.error("Failed to delete corrupt DB at \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
         // The WAL and SHM siblings reference a now-missing main file and
         // would prevent GRDB from creating a fresh database. They never
         // carry data we can recover separately, so they're safe to remove.
-        try? fileManager.removeItem(atPath: path + "-wal")
-        try? fileManager.removeItem(atPath: path + "-shm")
+        let walPath = path + "-wal"
+        if fileManager.fileExists(atPath: walPath) {
+            do {
+                try fileManager.removeItem(atPath: walPath)
+            } catch {
+                containerLogger.error("Failed to remove WAL file at \(path, privacy: .public)-wal: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
+        let shmPath = path + "-shm"
+        if fileManager.fileExists(atPath: shmPath) {
+            do {
+                try fileManager.removeItem(atPath: shmPath)
+            } catch {
+                containerLogger.error("Failed to remove SHM file at \(path, privacy: .public)-shm: \(error.localizedDescription, privacy: .public)")
+            }
+        }
 
         return (mainExists && fileManager.fileExists(atPath: quarantined)) ? quarantined : nil
     }
@@ -284,7 +296,13 @@ final class DependencyContainer {
         }
         let base = groupContainer ?? URL.applicationSupportDirectory
         let dbDir = base.appendingPathComponent("Database")
-        try? FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
+        if !FileManager.default.fileExists(atPath: dbDir.path) {
+            do {
+                try FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
+            } catch {
+                containerLogger.error("Failed to create database directory at \(dbDir.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
         let dbPath = dbDir.appendingPathComponent("meeshy_messages.sqlite").path
         applyMessageStoreFileProtection(directoryPath: dbDir.path, databasePath: dbPath)
         return dbPath
@@ -336,17 +354,3 @@ final class DependencyContainer {
     }
 }
 
-// MARK: - Stub REST sender (TODO: wire to actual REST API)
-
-private struct MessageRESTSender: MessageSending {
-    func send(
-        conversationId: String,
-        content: String?,
-        contentType: String,
-        encryptedPayload: Data?,
-        attachments: Data?
-    ) async throws -> SendMessageResponse {
-        throw NSError(domain: "NotImplemented", code: 0,
-                      userInfo: [NSLocalizedDescriptionKey: "MessageRESTSender not yet wired"])
-    }
-}

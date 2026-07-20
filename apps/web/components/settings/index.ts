@@ -17,7 +17,6 @@ export { DocumentSettings } from './DocumentSettings';
 // export { MediaSettings } from './MediaSettings';
 
 // Utility components
-export { FontSelector } from './font-selector';
 export { LanguageSelector } from './language-selector';
 export { ThemeSettings } from './theme-settings';
 

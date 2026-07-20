@@ -33,7 +33,7 @@ public struct ProfileCompletionRing: View {
                 .trim(from: 0, to: animatedProgress)
                 .stroke(
                     LinearGradient(
-                        colors: [MeeshyColors.pink, MeeshyColors.cyan],
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),

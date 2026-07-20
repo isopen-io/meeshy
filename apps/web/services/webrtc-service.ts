@@ -86,6 +86,12 @@ export class WebRTCService {
   private makingOffer = false;
   private isSettingRemoteAnswerPending = false;
   private ignoreOffer = false;
+  // Set when negotiate({iceRestart:true}) is dropped by the makingOffer
+  // guard because an unrelated renegotiation (e.g. A/V switch) is already in
+  // flight. Without this, a colliding ICE restart is discarded with no
+  // retry and the connection can be stranded in 'failed' forever — replayed
+  // from negotiate()'s finally block once the in-flight offer settles.
+  private pendingIceRestart = false;
   // Auto-renegotiation (onnegotiationneeded → negotiate) is suppressed during
   // the initial explicit offer/answer to avoid a duplicate first offer. It is
   // armed once the connection is established so mid-call media changes (A/V
@@ -110,6 +116,14 @@ export class WebRTCService {
 
   setIceServers(iceServers: RTCIceServer[]): void {
     this.serverIceServers = iceServers;
+    // RC-1: TURN credentials can resolve/refresh AFTER createPeerConnection()
+    // already ran (e.g. socket ack racing local-stream setup). Without this,
+    // the live RTCPeerConnection keeps the STUN-only/stale servers it was
+    // constructed with for the rest of the call, and a symmetric-NAT peer can
+    // never gather a TURN relay candidate.
+    if (this.peerConnection) {
+      this.peerConnection.setConfiguration({ iceServers });
+    }
   }
 
   /**
@@ -130,9 +144,23 @@ export class WebRTCService {
    * (maxaveragebitrate=128000, stereo=1, useinbandfec=1, usedtx=1, maxplaybackrate=48000)
    */
   private mungeOpusSdp(sdp: string): string {
+    // Collect payload types declared by `m=audio` lines first (rather than
+    // tracking section boundaries top-to-bottom) so this stays correct
+    // regardless of whether `a=fmtp` lines appear before or after their
+    // owning `m=` line. Without this, the params below (Opus-only) would
+    // leak onto video fmtp lines (e.g. H264 `profile-level-id`) sharing the
+    // same SDP.
+    const audioPayloadTypes = new Set<string>();
+    sdp.split('\r\n').forEach((line) => {
+      if (!line.startsWith('m=audio ')) return;
+      line.trim().split(' ').slice(3).forEach((pt) => audioPayloadTypes.add(pt));
+    });
+
     return sdp.replace(
       /a=fmtp:(\d+) (.+)/g,
-      (_match, payloadType, existingParams) => {
+      (match, payloadType, existingParams) => {
+        if (!audioPayloadTypes.has(payloadType)) return match;
+
         const opusParams = new Map<string, string>();
         existingParams.split(';').forEach((param: string) => {
           const [key, value] = param.trim().split('=');
@@ -154,39 +182,38 @@ export class WebRTCService {
   }
 
   /**
-   * Add RED (Redundant Encoding) for audio packet loss recovery.
-   * Wraps Opus in RED at ~20% bandwidth cost for ~50% packet loss resilience.
+   * Prefer Opus + RED (RFC 2198 redundancy, packet-loss resilience) via the
+   * standard `setCodecPreferences` API instead of SDP munging. Mirrors the
+   * iOS SOTA principle (docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md
+   * §1.3.4 — "no SDP munging for Opus DTX/RED/codec preferences"): SDP-level
+   * RED insertion (the old `addAudioRedundancy` regex munger) forced a
+   * redundancy payload the local libwebrtc/browser encoder never validated
+   * against its own capabilities, which is exactly the class of bug that
+   * previously caused iOS to go silent after ICE connected once RED landed
+   * in a peer's SDP. `setCodecPreferences` validates against
+   * `RTCRtpSender.getCapabilities()`, so a codec that isn't actually
+   * supported is never forced onto the wire. No-ops gracefully when the API
+   * or capability isn't available (older Safari).
    */
-  private addAudioRedundancy(sdp: string): string {
-    const opusMatch = sdp.match(/a=rtpmap:(\d+) opus\/48000\/2/);
-    if (!opusMatch) return sdp;
-    const opusPT = opusMatch[1];
-    const redPT = '63';
+  private applyAudioCodecPreferences(transceiver: RTCRtpTransceiver): void {
+    if (typeof transceiver.setCodecPreferences !== 'function') return;
+    const RtpSenderCtor = (globalThis as { RTCRtpSender?: typeof RTCRtpSender }).RTCRtpSender;
+    const capabilities = RtpSenderCtor?.getCapabilities?.('audio');
+    if (!capabilities?.codecs?.length) return;
 
-    if (sdp.includes('red/48000')) return sdp;
+    const opusCodecs = capabilities.codecs.filter((c) => c.mimeType.toLowerCase() === 'audio/opus');
+    const redCodecs = capabilities.codecs.filter((c) => c.mimeType.toLowerCase() === 'audio/red');
+    const preferred = [...opusCodecs, ...redCodecs];
+    if (!preferred.length) return;
 
-    const lines = sdp.split('\r\n');
-    const result: string[] = [];
-
-    for (const line of lines) {
-      if (line.startsWith('m=audio ')) {
-        const parts = line.split(' ');
-        if (parts.length >= 4 && !parts.includes(redPT)) {
-          const [m, port, proto, ...payloads] = parts;
-          result.push([m, port, proto, redPT, ...payloads].join(' '));
-          continue;
-        }
-      }
-
-      result.push(line);
-
-      if (line === `a=rtpmap:${opusPT} opus/48000/2`) {
-        result.push(`a=rtpmap:${redPT} red/48000/2`);
-        result.push(`a=fmtp:${redPT} ${opusPT}/${opusPT}`);
-      }
+    try {
+      transceiver.setCodecPreferences(preferred);
+      logger.info('[WebRTCService] audio codec preferences applied', {
+        codecs: preferred.map((c) => c.mimeType),
+      });
+    } catch (error) {
+      logger.warn('[WebRTCService] setCodecPreferences (audio) failed', { error });
     }
-
-    return result.join('\r\n');
   }
 
   /**
@@ -278,11 +305,12 @@ export class WebRTCService {
   }
 
   /**
-   * Apply all SDP munging: Opus params, RED, Transport-CC, video bitrate hints.
+   * Apply all SDP munging: Opus params, Transport-CC, video bitrate hints.
+   * RED preference is applied separately via setCodecPreferences (see
+   * applyAudioCodecPreferences) — not SDP munging.
    */
   private mungeSdp(sdp: string): string {
     let munged = this.mungeOpusSdp(sdp);
-    munged = this.addAudioRedundancy(munged);
     munged = this.addTransportCC(munged);
     munged = this.addVideoBitrateHints(munged);
     return munged;
@@ -296,6 +324,20 @@ export class WebRTCService {
       logger.debug('[WebRTCService] Creating peer connection', { participantId });
 
       this.participantId = participantId;
+
+      // Perfect-negotiation state is scoped to the RTCPeerConnection this
+      // method is about to build — a service instance can be reused across a
+      // participant leave→rejoin without an intervening close() (see
+      // use-webrtc-p2p.ts's per-participant service cache), so any state left
+      // over from a prior connection (e.g. autoNegotiate=true from a
+      // completed initial negotiation) is stale and must not leak onto the
+      // new one, or onnegotiationneeded can fire a second, racing offer.
+      this.videoTransceiver = null;
+      this.autoNegotiate = false;
+      this.makingOffer = false;
+      this.isSettingRemoteAnswerPending = false;
+      this.ignoreOffer = false;
+      this.pendingIceRestart = false;
 
       // Create RTCPeerConnection (prefer server-provided TURN servers over config defaults)
       this.peerConnection = new RTCPeerConnection({
@@ -726,9 +768,19 @@ export class WebRTCService {
       throw new Error('Peer connection not initialized');
     }
     if (this.makingOffer) {
-      logger.debug('[WebRTCService] negotiate() skipped: offer already in flight', {
-        participantId: this.participantId,
-      });
+      if (options.iceRestart) {
+        // Do not drop this on the floor: a colliding ICE restart must still
+        // happen once the in-flight offer settles, or the connection can be
+        // stranded in 'failed' with no further recovery signal.
+        this.pendingIceRestart = true;
+        logger.warn('[WebRTCService] negotiate() iceRestart deferred: offer already in flight', {
+          participantId: this.participantId,
+        });
+      } else {
+        logger.debug('[WebRTCService] negotiate() skipped: offer already in flight', {
+          participantId: this.participantId,
+        });
+      }
       return;
     }
     try {
@@ -755,6 +807,15 @@ export class WebRTCService {
       throw err;
     } finally {
       this.makingOffer = false;
+      if (this.pendingIceRestart) {
+        this.pendingIceRestart = false;
+        logger.info('[WebRTCService] Replaying deferred ICE restart after in-flight offer settled', {
+          participantId: this.participantId,
+        });
+        void this.negotiate({ iceRestart: true }).catch((error) => {
+          logger.error('[WebRTCService] Deferred ICE restart replay failed', { error });
+        });
+      }
     }
   }
 
@@ -842,10 +903,11 @@ export class WebRTCService {
     const audioTrack = stream.getAudioTracks()[0] ?? null;
     const videoTrack = stream.getVideoTracks()[0] ?? null;
 
-    this.peerConnection.addTransceiver(audioTrack ?? 'audio', {
+    const audioTransceiver = this.peerConnection.addTransceiver(audioTrack ?? 'audio', {
       direction: 'sendrecv',
       streams: [stream],
     });
+    this.applyAudioCodecPreferences(audioTransceiver);
 
     if (options.sendVideo && videoTrack) {
       // Hint the encoder toward camera content (drop resolution before
@@ -1093,9 +1155,19 @@ export class WebRTCService {
   }
 
   /**
-   * Close connection and cleanup
+   * Close connection and cleanup.
+   *
+   * `stopLocalTracks` defaults to `true` (full-teardown behavior). Pass
+   * `false` when closing ONE peer connection among several that share the
+   * same local `MediaStream` reference (group calls: use-webrtc-p2p.ts keeps
+   * one WebRTCService per remote participant, all fed the same stream via
+   * addLocalMedia) — stopping the hardware tracks here would kill local
+   * audio/video for every OTHER still-connected participant, not just this
+   * one. The shared stream's real lifecycle (camera/mic release) belongs to
+   * whoever owns it (call-store's reset()), not to a single peer's cleanup.
    */
-  close(): void {
+  close(options: { stopLocalTracks?: boolean } = {}): void {
+    const { stopLocalTracks = true } = options;
     logger.debug('[WebRTCService] Closing connection', {
       participantId: this.participantId,
     });
@@ -1104,14 +1176,17 @@ export class WebRTCService {
     this.stopQualityMonitor();
     this.clearDisconnectGraceTimer();
 
-    // Stop all local tracks
+    // Release this instance's own reference; only stop the tracks themselves
+    // when this service owns the full teardown (see doc comment above).
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
-        track.stop();
-        logger.debug('[WebRTCService] Stopped local track', {
-          trackKind: track.kind,
+      if (stopLocalTracks) {
+        this.localStream.getTracks().forEach((track) => {
+          track.stop();
+          logger.debug('[WebRTCService] Stopped local track', {
+            trackKind: track.kind,
+          });
         });
-      });
+      }
       this.localStream = null;
     }
 
@@ -1127,6 +1202,7 @@ export class WebRTCService {
     this.makingOffer = false;
     this.isSettingRemoteAnswerPending = false;
     this.ignoreOffer = false;
+    this.pendingIceRestart = false;
 
     logger.info('[WebRTCService]', 'Connection closed and cleaned up');
   }

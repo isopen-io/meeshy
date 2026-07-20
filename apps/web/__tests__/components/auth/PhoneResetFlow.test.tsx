@@ -29,8 +29,10 @@ jest.mock('next/navigation', () => ({
 // Mock useI18n hook
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
-    t: (key: string) => {
+    t: (key: string, params?: Record<string, unknown>) => {
       const translations: Record<string, string> = {
+        'otp.groupLabel': '{length}-digit verification code',
+        'otp.digitLabel': 'Digit {index} of {total}',
         'phoneReset.title': 'Reset via Phone',
         'phoneReset.description': 'Enter your phone number',
         'phoneReset.phoneLabel': 'Phone Number',
@@ -72,7 +74,13 @@ jest.mock('@/hooks/useI18n', () => ({
         'phoneReset.errors.tokenExpired': 'Session expired',
         'phoneReset.errors.invalidToken': 'Invalid session',
       };
-      return translations[key] || key;
+      const value = translations[key] || key;
+      if (params && typeof params === 'object') {
+        return value.replace(/\{(\w+)\}/g, (match, paramKey) =>
+          params[paramKey] !== undefined ? String(params[paramKey]) : match
+        );
+      }
+      return value;
     },
     locale: 'en',
   }),
@@ -686,7 +694,7 @@ describe('PhoneResetFlow', () => {
       );
 
       otpInputs.forEach((input, index) => {
-        expect(input).toHaveAttribute('aria-label', `Chiffre ${index + 1} sur 6`);
+        expect(input).toHaveAttribute('aria-label', `Digit ${index + 1} of 6`);
       });
     });
 

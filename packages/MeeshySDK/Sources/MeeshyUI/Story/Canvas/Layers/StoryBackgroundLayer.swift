@@ -56,7 +56,7 @@ public struct BackgroundTransform: Sendable, Equatable {
 ///
 /// Uses `nonisolated` inits to interop with `CALayer`'s nonisolated initializers
 /// (MeeshyUI module applies `defaultIsolation(MainActor)`).
-public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
+public final class StoryBackgroundLayer: CALayer {
     public enum Kind: Sendable {
         case solidColor(UIColor)
         case gradient(colors: [UIColor], direction: GradientDirection)
@@ -110,12 +110,22 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         didSet {
             guard oldValue != isPlaybackActive else { return }
             if isPlaybackActive {
-                avPlayer?.play()
+                alignToTimelineThenPlay()
             } else {
                 avPlayer?.pause()
             }
         }
     }
+
+    /// Playhead unifié de la slide (secondes), poussé par le canvas. Sert au
+    /// CALAGE timeline de la vidéo de fond quand elle (re)démarre — symétrique au
+    /// foreground. Pour une ouverture/scrub à `t>0`, la frame de fond se cale sur
+    /// le playhead au lieu de repartir de zéro. JAMAIS appliqué par frame : seul
+    /// `alignToTimelineThenPlay()` seek, et uniquement au-delà du seuil de dérive
+    /// (resume en place / bascule plein écran = aucun saut).
+    @MainActor public var slidePlayheadSeconds: Double = 0
+
+    private static let timelineSeekDriftThreshold: Double = 0.30
 
     nonisolated(unsafe) var contentLayer: CALayer?
     nonisolated(unsafe) var avPlayer: AVPlayer?
@@ -652,7 +662,7 @@ extension StoryBackgroundLayer {
                                        fitOverride: self.transform3D.videoFitMode)
                 break
             }
-            storyMediaLog.info("bg video path=cache-miss → fetch async")
+            storyMediaLog.info("bg video path=cache-miss → stream remote + cache bg")
 
             // Cache miss : placeholder ThumbHash dans un sublayer si dispo,
             // sinon on garde le layer transparent (le parent porte le fond
@@ -670,16 +680,27 @@ extension StoryBackgroundLayer {
             }
             backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
 
-            // Précache async puis play. AVPlayerLayer s'ajoute par-dessus
-            // le placeholder, qui disparaît visuellement quand la vidéo joue.
+            // Stream l'URL distante IMMÉDIATEMENT : `AVPlayer` fait du
+            // progressive/range loading (l'endpoint sert `Accept-Ranges: bytes`
+            // / 206), donc la 1ère frame arrive en ~centaines de ms quelle que
+            // soit la taille du fichier. L'AVPlayerLayer s'ajoute par-dessus le
+            // placeholder ThumbHash, qui disparaît visuellement quand la vidéo
+            // joue. Bloquer sur un download INTÉGRAL (`videoLocalFileURLAwait`)
+            // rendait les grosses stories injouables sur réseau device
+            // (cellulaire/wifi) : un clip de 30+ Mo ne finissait pas de descendre
+            // avant l'auto-advance de la slide → la vidéo n'apparaissait jamais
+            // (ne marchait que sur le réseau rapide du simulateur, et le failsafe
+            // 2s faisait avancer la barre sur le flou). Régression 2026-05-20
+            // (f917d30b94) ; on restaure le streaming d'avant.
             let fitOverride = self.transform3D.videoFitMode
-            Task { @MainActor [weak self] in
-                let started = CFAbsoluteTimeGetCurrent()
-                let url = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
-                let elapsed = Int((CFAbsoluteTimeGetCurrent() - started) * 1000)
-                storyMediaLog.info("bg video fetch done in \(elapsed, privacy: .public)ms → \(url.isFileURL ? "local" : "REMOTE-FALLBACK", privacy: .public)")
-                self?.attachBackgroundPlayer(url: url, looping: looping, mute: mute,
-                                              fitOverride: fitOverride)
+            attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
+                                   fitOverride: fitOverride)
+            // Peuple le cache disque HORS du chemin de lecture pour qu'une
+            // revisite joue depuis un fichier local. Détaché + priorité utility
+            // pour ne jamais concurrencer le stream live.
+            let cacheKey = remoteURL.absoluteString
+            Task.detached(priority: .utility) {
+                _ = try? await CacheCoordinator.shared.video.data(for: cacheKey)
             }
         }
 
@@ -711,17 +732,35 @@ extension StoryBackgroundLayer {
     /// pour décider si on peut garder le `contentLayer` actuel (même contenu)
     /// ou s'il faut tout reconstruire (changement réel de slide bg).
     ///
-    /// On ignore les paramètres dynamiques (mute, color associé) car leur
-    /// changement n'impose pas de recréer le layer (mute = property AVPlayer,
-    /// color = backgroundColor du layer). Seule l'IDENTITÉ du média compte.
-    nonisolated private static func contentIdentity(for kind: Kind) -> String {
+    /// On ignore les paramètres dynamiques (mute) car leur changement n'impose
+    /// pas de recréer le layer (mute = property AVPlayer). Pour les fonds
+    /// COULEUR/GRADIENT, la valeur fait partie de l'identité (BUG-1 user
+    /// 2026-07-04) : « color » constant faisait passer un changement de
+    /// pastille par le no-op diff (`hasVisibleContent` satisfait par
+    /// l'ANCIENNE couleur) → la nouvelle couleur n'atterrissait jamais sur le
+    /// canvas (la mini-preview SwiftUI, elle, se mettait à jour). La
+    /// reconstruction d'un fond couleur est SYNCHRONE — aucun risque de flash,
+    /// le fast-path ne protège que les fetchs async image/vidéo.
+    /// `internal` (pas private) : seam de test du contrat d'identité.
+    nonisolated static func contentIdentity(for kind: Kind) -> String {
         switch kind {
-        case .solidColor:                       return "color"
-        case .gradient:                         return "gradient"
+        case .solidColor(let color):
+            return "color:\(Self.colorKey(color))"
+        case .gradient(let colors, let direction):
+            let key = colors.map(Self.colorKey).joined(separator: "|")
+            return "gradient:\(key):\(String(describing: direction))"
         case .image(let postMediaId, _):        return "image:\(postMediaId)"
         case .video(let postMediaId, let looping, _, _):
             return "video:\(postMediaId):\(looping)"
         }
+    }
+
+    nonisolated private static func colorKey(_ color: UIColor) -> String {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        if color.getRed(&r, green: &g, blue: &b, alpha: &a) {
+            return String(format: "%.3f,%.3f,%.3f,%.3f", r, g, b, a)
+        }
+        return String(describing: color)
     }
 }
 
@@ -729,10 +768,14 @@ extension StoryBackgroundLayer {
 
 extension StoryBackgroundLayer {
 
-    /// Attache un AVPlayer pour une URL `file://` locale. Factorisé pour les
-    /// deux chemins (cache chaud immédiat / cache froid après fetch async).
-    /// Garantit que l'URL passée est un fichier local — les URLs HTTPS doivent
-    /// être pré-cachées en amont via `videoLocalFileURLAwait`.
+    /// Attache un AVPlayer pour une URL vidéo. Factorisé pour les trois chemins :
+    /// `file://` (composer / cache disque déjà téléchargé), cache disque chaud,
+    /// et URL distante HTTPS streamée en direct. `AVPlayerItem(url:)` gère les
+    /// trois — pour une URL distante, `AVPlayer` fait du progressive/range
+    /// loading (premier frame en ~centaines de ms) et le cache disque se peuple
+    /// en arrière-plan via le caller. NE PAS bloquer sur un download intégral
+    /// avant d'appeler ceci (régression 2026-05-20 → grosses stories injouables
+    /// sur réseau device).
     @MainActor
     func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool, fitOverride: String? = nil) {
         let item = AVPlayerItem(url: url)
@@ -818,7 +861,7 @@ extension StoryBackgroundLayer {
         // La vidéo prefetchée reste prête à jouer instantanément sans
         // gaspiller le décodeur audio.
         if isPlaybackActive {
-            self.avPlayer?.play()
+            alignToTimelineThenPlay()
         }
 
         // Background loop observer — ensures the video repeats until the slide
@@ -840,6 +883,46 @@ extension StoryBackgroundLayer {
         }
 
         onPlayerAttached?()
+    }
+
+    /// Cale la vidéo de fond sur le playhead unifié puis lance la lecture.
+    ///
+    /// On ne cale QUE les fonds **non loopés** (`avPlayerLooper == nil`, clip ≥
+    /// durée du slide) : leur temps interne doit suivre le playhead, donc une
+    /// ouverture/scrub à `t>0` les positionne correctement. Un fond **loopé**
+    /// remplit la durée du slide et sa phase exacte n'a aucun sens timeline — le
+    /// recaler risquerait un saut visible sur un resume en place, donc on le
+    /// laisse boucler librement. `seek` uniquement au-delà du seuil de dérive
+    /// (resume déjà aligné / bascule plein écran = aucun saut).
+    @MainActor
+    private func alignToTimelineThenPlay() {
+        guard let player = avPlayer else { return }
+        if avPlayerLooper == nil {
+            let target = max(0, slidePlayheadSeconds)
+            let current = player.currentTime().seconds
+            if target.isFinite, current.isFinite,
+               abs(current - target) > Self.timelineSeekDriftThreshold {
+                player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                            toleranceBefore: .zero, toleranceAfter: .zero)
+            }
+        }
+        player.play()
+    }
+
+    /// Scrub de preview timeline : pause puis cale le player de fond sur le
+    /// playhead unifié avec une tolérance large. Même règle que
+    /// `alignToTimelineThenPlay` pour un fond bouclé (`avPlayerLooper`) : sa
+    /// phase n'a aucun sens timeline, on le fige sans le recaler.
+    @MainActor
+    public func alignPausedToSlidePlayhead() {
+        guard let player = avPlayer else { return }
+        player.pause()
+        guard avPlayerLooper == nil else { return }
+        let target = max(0, slidePlayheadSeconds)
+        guard target.isFinite else { return }
+        let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
+                    toleranceBefore: tolerance, toleranceAfter: tolerance)
     }
 
     @MainActor
@@ -870,10 +953,19 @@ extension StoryBackgroundLayer {
     /// aux strings parsables en URL avec un scheme connu.
     nonisolated static func directURLIfAny(from candidate: String) -> URL? {
         guard !candidate.isEmpty else { return nil }
-        guard candidate.hasPrefix("file://")
-                || candidate.hasPrefix("http://")
-                || candidate.hasPrefix("https://") else { return nil }
-        return URL(string: candidate)
+        // Local composer asset — returned verbatim, never network-normalized.
+        if candidate.hasPrefix("file://") { return URL(string: candidate) }
+        // Absolute http(s) OR a server-relative media path (getAttachmentPath /
+        // forward / repost emit `/api/v1/attachments/...`). Normalize both via
+        // the SSRF-guarded resolver so a relative background URL still loads
+        // instead of dropping to the solid-color fallback (black background on
+        // another user's story).
+        if candidate.hasPrefix("http://")
+            || candidate.hasPrefix("https://")
+            || candidate.hasPrefix("/") {
+            return MeeshyConfig.resolveMediaURL(candidate)
+        }
+        return nil
     }
 }
 

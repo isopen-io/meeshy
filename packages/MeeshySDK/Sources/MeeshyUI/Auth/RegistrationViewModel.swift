@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Combine
 import MeeshySDK
 
@@ -18,35 +19,35 @@ public enum RegistrationStep: Int, CaseIterable, Identifiable {
 
     public var funHeader: String {
         switch self {
-        case .pseudo: return "C'est comment mon gars?"
-        case .phone: return "Ton numero pour le kwatt!"
-        case .email: return "Ton adresse la, c'est quoi?"
-        case .identity: return "Dis-moi ton nom!"
-        case .password: return "Mets un code beton!"
-        case .language: return "Tu parles quoi meme?"
-        case .profile: return "Montre-toi un peu!"
-        case .recap: return "On est ensemble!"
+        case .pseudo: return "Un pseudo unique, comme toi"
+        case .phone: return "Ton numéro, ta clé de secours"
+        case .email: return "Ton email, ton filet de sécurité"
+        case .identity: return "Dis-nous qui tu es"
+        case .password: return "Mets un code béton!"
+        case .language: return "Parle ta langue, on traduit"
+        case .profile: return "Montre-toi sous ton plus beau jour"
+        case .recap: return "Le monde t'attend!"
         }
     }
 
     public var funSubtitle: String {
         switch self {
         case .pseudo:
-            return "Choisis un nom de boss que tout Meeshy va connaitre! Sois creatif!"
+            return "Choisis le nom que le monde va retenir — de Douala à Paris, de São Paulo à Tokyo. Sois créatif!"
         case .phone:
-            return "Optionnel. Permet la recuperation du compte si tu perds ton mot de passe."
+            return "Il vérifie que ton compte est unique, sécurise tes engagements et te le rend si tu perds l'accès. Jamais affiché publiquement."
         case .email:
-            return "Ton email c'est ta carte d'identite sur internet. On va pas te spam!"
+            return "Indispensable pour récupérer ton compte et confirmer tes engagements. Zéro spam, promis!"
         case .identity:
-            return "Ton vrai nom pour que tes amis te reconnaissent. On est entre nous!"
+            return "Ton vrai nom, c'est ce qui permet à tes proches de te retrouver — et de prouver que ton compte est bien à toi."
         case .password:
-            return "Faut que ce soit fort comme le ndole de maman! Minimum 8 caracteres!"
+            return "Faut que ce soit fort comme le ndolé de maman! Minimum 8 caractères!"
         case .language:
-            return "Choisis ta langue principale et ta langue regionale. Meeshy traduit tout automatiquement!"
+            return "Choisis ta langue, Meeshy traduit tout: tes amis du Sénégal, du Canada, du Brésil, du Japon ou d'Australie te liront dans la leur."
         case .profile:
-            return "Dis au monde qui tu es! C'est optionnel mais ca fait du bien."
+            return "Une belle photo et une bannière soignée ouvrent toutes les portes: c'est comme ça qu'on rencontre la crème de la crème, ici et sur les 5 continents."
         case .recap:
-            return "Tu es dedans maintenant! Bienvenue dans la famille Meeshy!"
+            return "Tu y es! Des rencontres t'attendent sur les 5 continents. Bienvenue dans la famille Meeshy!"
         }
     }
 
@@ -100,6 +101,8 @@ public final class RegistrationViewModel: ObservableObject {
     @Published public var systemLanguage = "fr"
     @Published public var regionalLanguage = "fr"
     @Published public var bio = ""
+    @Published public var profileImage: UIImage?
+    @Published public var bannerImage: UIImage?
     @Published public var acceptTerms = false
 
     // MARK: - API Validation State
@@ -117,6 +120,9 @@ public final class RegistrationViewModel: ObservableObject {
     @Published public var phoneAvailable: Bool?
     @Published public var phoneNumberValid: Bool?
     @Published public var phoneError: String?
+    /// Renseigné quand le numéro appartient déjà à un compte : porte les
+    /// indices de récupération (compte dormant + identité ressemblante).
+    @Published public var phoneOwnership: PhoneOwnershipResponse?
 
     // MARK: - General State
 
@@ -128,6 +134,9 @@ public final class RegistrationViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var usernameTask: Task<Void, Never>?
     private var emailTask: Task<Void, Never>?
+    /// Dernière signature (numéro + identité) sondée pour la récupération, afin
+    /// de ne pas relancer une requête réseau identique.
+    private var lastOwnershipProbe: String?
     private var phoneTask: Task<Void, Never>?
 
     public let totalSteps = RegistrationStep.allCases.count
@@ -320,6 +329,9 @@ public final class RegistrationViewModel: ObservableObject {
     private func checkPhoneAvailability() {
         phoneTask?.cancel()
         let fullPhone = selectedCountry.dialCode + phoneNumber.filter { $0.isNumber }
+        let country = selectedCountry.id
+        let first = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let last = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         phoneTask = Task {
             isValidatingPhone = true
@@ -333,18 +345,56 @@ public final class RegistrationViewModel: ObservableObject {
                 phoneAvailable = result.available
                 if result.phoneNumberValid == false {
                     phoneError = "Ce numero semble invalide"
+                    phoneOwnership = nil
                 } else if !result.available {
                     phoneError = "Ce numero est deja utilise!"
+                    // Numéro pris : sonde le compte propriétaire pour proposer une
+                    // récupération si c'est un compte dormant à l'identité proche.
+                    await probePhoneOwnership(fullPhone: fullPhone, country: country, firstName: first, lastName: last)
                 } else {
                     phoneError = nil
+                    phoneOwnership = nil
                 }
             } catch {
                 guard !Task.isCancelled else { return }
                 phoneAvailable = true
                 phoneNumberValid = nil
                 phoneError = "Verification non effectuee"
+                phoneOwnership = nil
             }
         }
+    }
+
+    private func probePhoneOwnership(fullPhone: String, country: String, firstName: String, lastName: String) async {
+        // Ne re-sonde pas une signature identique (numéro + identité déjà connue).
+        let signature = "\(fullPhone)|\(firstName)|\(lastName)"
+        guard signature != lastOwnershipProbe else { return }
+
+        do {
+            let ownership = try await AuthService.shared.checkPhoneOwnership(
+                phone: fullPhone,
+                countryCode: country,
+                firstName: firstName.isEmpty ? nil : firstName,
+                lastName: lastName.isEmpty ? nil : lastName
+            )
+            guard !Task.isCancelled else { return }
+            lastOwnershipProbe = signature
+            phoneOwnership = ownership
+        } catch {
+            guard !Task.isCancelled else { return }
+            phoneOwnership = nil
+        }
+    }
+
+    /// Vrai quand le numéro saisi appartient à un compte dormant dont
+    /// l'identité ressemble à celle déclarée — on propose la récupération.
+    public var phoneRecoverySuggested: Bool {
+        phoneOwnership?.recoverySuggested == true
+    }
+
+    /// Vrai dès que le numéro appartient à un compte existant (récupérable ou non).
+    public var phoneBelongsToExistingAccount: Bool {
+        phoneOwnership?.exists == true
     }
 
     // MARK: - Username Suggestion

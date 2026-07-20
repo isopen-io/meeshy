@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
-import type { Post, PostLikedEventData, PostUnlikedEventData, PostRepostedEventData, StoryViewedEventData, StoryReactedEventData, StoryUnreactedEventData, StatusReactedEventData, StatusUnreactedEventData, CommentAddedEventData, CommentDeletedEventData, CommentLikedEventData } from '@meeshy/shared/types/post';
+import type { Post, PostLikedEventData, PostUnlikedEventData, PostRepostedEventData, StoryViewedEventData, StoryReactedEventData, StoryUnreactedEventData, StatusReactedEventData, StatusUnreactedEventData, CommentAddedEventData, CommentDeletedEventData, CommentLikedEventData, CommentTranslationUpdatedEventData, CommentMediaUpdatedEventData } from '@meeshy/shared/types/post';
 
 // ===== MOCKS =====
 
@@ -32,6 +32,9 @@ function createMockPrisma() {
   return {
     friendRequest: {
       findMany: jest.fn(),
+    },
+    communityMember: {
+      findMany: jest.fn().mockResolvedValue([]),
     },
   } as any;
 }
@@ -188,10 +191,19 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostLiked(data, AUTHOR_ID);
 
-      // 2 amis + auteur (feed rooms) + la post room (unification : détail/reel
-      // viewer rejoignent `ROOMS.post` et doivent recevoir le like) = 4.
-      expect(mockIO.to).toHaveBeenCalledTimes(4);
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post(data.postId));
+      // M2 — UN SEUL emit sur l'union (2 amis + auteur + post room). Socket.IO
+      // dédoublonne → plus de double-livraison pour un ami-viewer.
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(
+        expect.arrayContaining([
+          ROOMS.feed(FRIEND_1),
+          ROOMS.feed(FRIEND_2),
+          ROOMS.feed(AUTHOR_ID),
+          ROOMS.post(data.postId),
+        ]),
+      );
+      expect(mockIO.emit).toHaveBeenCalledTimes(1);
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_LIKED, data);
     });
   });
@@ -208,9 +220,18 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastPostUnliked(data, AUTHOR_ID);
 
-      // 2 amis + auteur (feed rooms) + la post room = 4 (cf. broadcastPostLiked).
-      expect(mockIO.to).toHaveBeenCalledTimes(4);
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post(data.postId));
+      // M2 — UN SEUL emit sur l'union (cf. broadcastPostLiked).
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(
+        expect.arrayContaining([
+          ROOMS.feed(FRIEND_1),
+          ROOMS.feed(FRIEND_2),
+          ROOMS.feed(AUTHOR_ID),
+          ROOMS.post(data.postId),
+        ]),
+      );
+      expect(mockIO.emit).toHaveBeenCalledTimes(1);
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_UNLIKED, data);
     });
   });
@@ -276,6 +297,20 @@ describe('SocialEventsHandler', () => {
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.STORY_CREATED, { story });
     });
+
+    it('should fan a COMMUNITY story to community co-members + author (not friends)', async () => {
+      mockPrisma.communityMember.findMany
+        .mockResolvedValueOnce([{ communityId: 'c1' }])
+        .mockResolvedValueOnce([{ userId: 'co-1' }]);
+      const story = createMockPost({ id: 'story-2', type: 'STORY', visibility: 'COMMUNITY' });
+
+      await handler.broadcastStoryCreated(story, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed('co-1'));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+    });
   });
 
   describe('broadcastStoryViewed', () => {
@@ -319,10 +354,12 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
 
-      // Two emits: feed:{authorId} and post:{storyId}
-      expect(mockIO.to).toHaveBeenCalledTimes(2);
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post('story-1'));
+      // Single deduped emit (io.to([...])) → an author watching their own story
+      // (in both rooms) receives STORY_REACTED exactly once, no `+2`.
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toContain(ROOMS.feed(AUTHOR_ID));
+      expect(rooms).toContain(ROOMS.post('story-1'));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.STORY_REACTED, data);
     });
   });
@@ -342,6 +379,42 @@ describe('SocialEventsHandler', () => {
     });
   });
 
+  describe('post broadcasts — visibility filtering (rights of diffusion, C1-bis)', () => {
+    it('broadcastPostCreated for a PRIVATE post reaches only the author feed', async () => {
+      const post = createMockPost({ id: 'p-priv', visibility: 'PRIVATE' });
+
+      await handler.broadcastPostCreated(post, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+    });
+
+    it('broadcastPostCreated for an ONLY post reaches only the allow-listed friend', async () => {
+      const post = createMockPost({ id: 'p-only', visibility: 'ONLY', visibilityUserIds: [FRIEND_1] });
+
+      await handler.broadcastPostCreated(post, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
+      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+    });
+
+    it('broadcastPostLiked for an EXCEPT post skips the excluded friend feed (post room still reached)', async () => {
+      await handler.broadcastPostLiked(
+        { postId: 'p-exc', userId: VIEWER_ID, emoji: '❤️', likeCount: 1, reactionSummary: { '❤️': 1 } },
+        AUTHOR_ID,
+        'EXCEPT',
+        [FRIEND_1],
+      );
+
+      // Single unified emit (M2) → rooms is an array; assert its contents.
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
+      expect(rooms).toContain(ROOMS.feed(FRIEND_2));
+      expect(rooms).toContain(ROOMS.post('p-exc'));
+    });
+  });
+
   describe('broadcastStatusReacted', () => {
     it('should emit STATUS_REACTED to the status author AND to the post room', () => {
       const data: StatusReactedEventData = {
@@ -352,10 +425,11 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
 
-      // Two emits: feed:{authorId} and post:{statusId}
-      expect(mockIO.to).toHaveBeenCalledTimes(2);
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post('status-1'));
+      // Single deduped emit (io.to([...])) → author-viewer counts the emoji once.
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toContain(ROOMS.feed(AUTHOR_ID));
+      expect(rooms).toContain(ROOMS.post('status-1'));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.STATUS_REACTED, data);
     });
 
@@ -368,8 +442,9 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
 
-      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
-      expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_2));
     });
   });
 
@@ -378,31 +453,119 @@ describe('SocialEventsHandler', () => {
   // ==============================================
 
   describe('broadcastCommentAdded', () => {
-    it('should emit COMMENT_ADDED to friends and author', async () => {
-      const data: CommentAddedEventData = {
-        postId: 'post-1',
-        comment: {
-          id: 'comment-1',
-          content: 'Nice post!',
-          likeCount: 0,
-          replyCount: 0,
-          createdAt: new Date().toISOString(),
-        },
-        commentCount: 1,
-      };
+    const makeData = (postId = 'post-1'): CommentAddedEventData => ({
+      postId,
+      comment: {
+        id: 'comment-1',
+        content: 'Nice post!',
+        likeCount: 0,
+        replyCount: 0,
+        createdAt: new Date().toISOString(),
+      },
+      commentCount: 1,
+    });
+
+    it('should emit COMMENT_ADDED to the friend feeds, the author feed AND the post room', async () => {
+      const data = makeData();
 
       await handler.broadcastCommentAdded(data, AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(3);
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
-      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      // Single chained emit on the UNION of rooms (Socket.IO dedupes a socket
+      // present in several rooms → exactly-once delivery).
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(
+        expect.arrayContaining([
+          ROOMS.feed(FRIEND_1),
+          ROOMS.feed(FRIEND_2),
+          ROOMS.feed(AUTHOR_ID),
+          ROOMS.post('post-1'),
+        ])
+      );
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.COMMENT_ADDED, data);
+    });
+
+    it('should reach the post room so a detail/reel viewer who is NOT the author\'s friend sees the comment live', async () => {
+      const data = makeData('post-77');
+
+      await handler.broadcastCommentAdded(data, AUTHOR_ID);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toContain(ROOMS.post('post-77'));
+    });
+
+    it('should deliver EXACTLY ONCE (single emit) so non-idempotent comment inserts never double-apply', async () => {
+      const data = makeData();
+
+      await handler.broadcastCommentAdded(data, AUTHOR_ID);
+
+      expect(mockIO.emit).toHaveBeenCalledTimes(1);
+    });
+
+    it('should still reach the author feed AND the post room when the friends lookup fails', async () => {
+      mockPrisma.friendRequest.findMany.mockRejectedValue(new Error('Database connection lost'));
+      const data = makeData('post-err');
+
+      await handler.broadcastCommentAdded(data, AUTHOR_ID);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-err')]));
+    });
+  });
+
+  // C1 — comment events must respect the POST's visibility, NOT fan out to all
+  // the author's friends regardless of who may see the post.
+  describe('broadcastCommentAdded — visibility filtering (rights of diffusion)', () => {
+    const makeData = (postId = 'post-1'): CommentAddedEventData => ({
+      postId,
+      comment: { id: 'comment-1', content: 'secret', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() },
+      commentCount: 1,
+    });
+
+    it('PRIVATE: reaches ONLY the author feed and the (join-gated) post room — never friend feeds', async () => {
+      await handler.broadcastCommentAdded(makeData(), AUTHOR_ID, 'PRIVATE', []);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]);
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_2));
+    });
+
+    it('ONLY: reaches only the allow-listed friend (+ author + post room)', async () => {
+      await handler.broadcastCommentAdded(makeData(), AUTHOR_ID, 'ONLY', [FRIEND_1]);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(FRIEND_1), ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]));
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_2));
+    });
+
+    it('EXCEPT: excludes the listed friend but keeps the others', async () => {
+      await handler.broadcastCommentAdded(makeData(), AUTHOR_ID, 'EXCEPT', [FRIEND_1]);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toContain(ROOMS.feed(FRIEND_2));
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
+    });
+
+    it('defaults to PUBLIC friend fan-out when visibility is omitted (back-compat)', async () => {
+      await handler.broadcastCommentAdded(makeData(), AUTHOR_ID);
+
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(FRIEND_1), ROOMS.feed(FRIEND_2)]));
+    });
+  });
+
+  describe('broadcastCommentDeleted — visibility filtering', () => {
+    it('PRIVATE: does not reach friend feeds', async () => {
+      await handler.broadcastCommentDeleted({ postId: 'post-1', commentId: 'c1', commentCount: 0 }, AUTHOR_ID, 'PRIVATE', []);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).not.toContain(ROOMS.feed(FRIEND_1));
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]));
     });
   });
 
   describe('broadcastCommentDeleted', () => {
-    it('should emit COMMENT_DELETED to friends and author', async () => {
+    it('should emit COMMENT_DELETED to the friend feeds, the author feed AND the post room', async () => {
       const data: CommentDeletedEventData = {
         postId: 'post-1',
         commentId: 'comment-1',
@@ -411,13 +574,30 @@ describe('SocialEventsHandler', () => {
 
       await handler.broadcastCommentDeleted(data, AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(3);
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(
+        expect.arrayContaining([
+          ROOMS.feed(FRIEND_1),
+          ROOMS.feed(FRIEND_2),
+          ROOMS.feed(AUTHOR_ID),
+          ROOMS.post('post-1'),
+        ])
+      );
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.COMMENT_DELETED, data);
+    });
+
+    it('should deliver EXACTLY ONCE so the optimistic removal never double-corrects', async () => {
+      const data: CommentDeletedEventData = { postId: 'post-1', commentId: 'comment-1', commentCount: 0 };
+
+      await handler.broadcastCommentDeleted(data, AUTHOR_ID);
+
+      expect(mockIO.emit).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('broadcastCommentLiked', () => {
-    it('should emit COMMENT_LIKED ONLY to the comment author', () => {
+    it('should emit COMMENT_LIKED to the comment author AND the post room (live count for all viewers)', () => {
       const data: CommentLikedEventData = {
         postId: 'post-1',
         commentId: 'comment-1',
@@ -429,8 +609,9 @@ describe('SocialEventsHandler', () => {
       const commentAuthorId = 'user-comment-author';
       handler.broadcastCommentLiked(data, commentAuthorId);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      expect(mockIO.to).toHaveBeenCalledTimes(2);
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(commentAuthorId));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post('post-1'));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.COMMENT_LIKED, data);
     });
 
@@ -447,6 +628,45 @@ describe('SocialEventsHandler', () => {
 
       expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_1));
       expect(mockIO.to).not.toHaveBeenCalledWith(ROOMS.feed(FRIEND_2));
+    });
+  });
+
+  // ==============================================
+  // COMMENT TRANSLATION / MEDIA BROADCASTS — must reach the post room too
+  // ==============================================
+
+  describe('broadcastCommentTranslationUpdated', () => {
+    it('should emit COMMENT_TRANSLATION_UPDATED to the friend/author feeds AND the post room', async () => {
+      const data: CommentTranslationUpdatedEventData = {
+        postId: 'post-1',
+        commentId: 'comment-1',
+        language: 'fr',
+        translation: { text: 'Bonjour', translationModel: 'nllb', createdAt: new Date().toISOString() },
+      };
+
+      await handler.broadcastCommentTranslationUpdated(data, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]));
+      expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, data);
+    });
+  });
+
+  describe('broadcastCommentMediaUpdated', () => {
+    it('should emit COMMENT_MEDIA_UPDATED to the friend/author feeds AND the post room', async () => {
+      const data: CommentMediaUpdatedEventData = {
+        postId: 'post-1',
+        commentId: 'comment-1',
+        comment: { id: 'comment-1', content: 'hi', likeCount: 0, replyCount: 0, createdAt: new Date().toISOString() },
+      };
+
+      await handler.broadcastCommentMediaUpdated(data, AUTHOR_ID);
+
+      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      const rooms = mockIO.to.mock.calls[0][0] as string[];
+      expect(rooms).toEqual(expect.arrayContaining([ROOMS.feed(AUTHOR_ID), ROOMS.post('post-1')]));
+      expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
     });
   });
 
@@ -679,7 +899,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
       expect(calledRooms).toContain(ROOMS.post('story-42'));
       // Both emits use the same event constant
@@ -696,7 +916,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).not.toContain(ROOMS.feed(FRIEND_1));
       expect(calledRooms).not.toContain(ROOMS.feed(FRIEND_2));
     });
@@ -716,7 +936,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStoryUnreacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
       expect(calledRooms).toContain(ROOMS.post('story-42'));
       const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
@@ -748,7 +968,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
       expect(calledRooms).toContain(ROOMS.post('status-99'));
     });
@@ -768,7 +988,7 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStatusUnreacted(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
       expect(calledRooms).toContain(ROOMS.post('status-99'));
       const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
@@ -806,7 +1026,7 @@ describe('SocialEventsHandler', () => {
       const post = createMockPost();
       await handler.broadcastPostCreated(post, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toContain(ROOMS.feed(FRIEND_1));
       expect(calledRooms).toContain(ROOMS.feed(FRIEND_2));
       expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
@@ -824,7 +1044,7 @@ describe('SocialEventsHandler', () => {
       };
       handler.broadcastStoryViewed(data, AUTHOR_ID);
 
-      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      const calledRooms = mockIO.to.mock.calls.flatMap((call: any[]) => Array.isArray(call[0]) ? call[0] : [call[0]]);
       expect(calledRooms).toEqual([ROOMS.feed(AUTHOR_ID)]);
     });
   });

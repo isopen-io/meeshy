@@ -35,11 +35,15 @@ public actor CacheCoordinator {
     /// synced to the server, so the cache IS the source of truth. Reads
     /// always hit the `.fresh` branch (see `CachePolicy.drafts`).
     public let drafts: GRDBCacheStore<String, ConversationDraft>
+    /// Local-only call transcripts — never sent to the Meeshy server. See
+    /// `CachePolicy.callTranscripts`.
+    public let callTranscripts: GRDBCacheStore<String, CallTranscript>
     public let statuses: GRDBCacheStore<String, StatusEntry>
     public let friends: GRDBCacheStore<String, FriendRequestUser>
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
     public let blockedUsers: GRDBCacheStore<String, BlockedUser>
     public let userSearch: GRDBCacheStore<String, UserSearchResult>
+    public let callHistory: GRDBCacheStore<String, APICallRecord>
     public let timeline: GRDBCacheStore<String, TimelinePoint>
     /// User-defined conversation categories. Single key "list" stores the full
     /// ordered set (typically <20 items). Stale-while-revalidate via
@@ -226,7 +230,12 @@ public actor CacheCoordinator {
         self.profiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "prof", encrypted: true)
         self.feed = GRDBCacheStore(policy: .feedPosts, db: db, namespace: "feed")
         self.comments = GRDBCacheStore(policy: .comments, db: db, namespace: "comments")
-        self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories")
+        // R9 — chiffré comme les autres contenus sociaux (messages, profils,
+        // notifications) : le tray porte du contenu privé (FRIENDS/ONLY).
+        // Migration douce : les rows legacy en CLAIR échouent au déchiffrement
+        // → cache-miss propre (contrat pinné par GRDBCacheStoreEncryptionTests)
+        // → un refetch réseau unique au premier lancement, puis tout est chiffré.
+        self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories", encrypted: true)
         self.stats = GRDBCacheStore(policy: .userStats, db: db, namespace: "stats")
         self.notifications = GRDBCacheStore(policy: .notifications, db: db, namespace: "notif", encrypted: true)
         self.affiliateTokens = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "affil")
@@ -235,11 +244,13 @@ public actor CacheCoordinator {
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
         self.communities = GRDBCacheStore(policy: .communities, db: db, namespace: "communities")
         self.drafts = GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")
+        self.callTranscripts = GRDBCacheStore(policy: .callTranscripts, db: db, namespace: "calltx", encrypted: true)
         self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
         self.blockedUsers = GRDBCacheStore(policy: .participants, db: db, namespace: "blocked", encrypted: true)
         self.userSearch = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "usearch")
+        self.callHistory = GRDBCacheStore(policy: .callHistory, db: db, namespace: "callhist", encrypted: true)
         self.timeline = GRDBCacheStore(policy: .userStats, db: db, namespace: "timeline")
         self.categories = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-cat")
         self.userTags = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-tags")
@@ -310,11 +321,13 @@ public actor CacheCoordinator {
         await communityLinks.invalidateAll()
         await communities.invalidateAll()
         await drafts.invalidateAll()
+        await callTranscripts.invalidateAll()
         await statuses.invalidateAll()
         await friends.invalidateAll()
         await friendRequests.invalidateAll()
         await blockedUsers.invalidateAll()
         await userSearch.invalidateAll()
+        await callHistory.invalidateAll()
         await timeline.invalidateAll()
         // Preference stores are NOT userId-namespaced and the coordinator is a
         // process-lifetime singleton, so their in-memory L1 would otherwise
@@ -662,7 +675,11 @@ public actor CacheCoordinator {
     }
 
     private nonisolated func clearTranslationCacheDB() {
-        try? db.write { db in try TranslationCacheRecord.deleteAll(db) }
+        do {
+            try db.write { db in _ = try TranslationCacheRecord.deleteAll(db) }
+        } catch {
+            logger.error("Failed to clear translation cache table: \(error.localizedDescription)")
+        }
     }
 
     /// Purge ciblée des 3 caches in-memory de traduction/transcription +

@@ -298,6 +298,28 @@ struct MessageDetailSheet: View {
             }
             DispatchQueue.main.async { externalTabSelection?.wrappedValue = nil }
         }
+        .onReceive(
+            MessageSocketManager.shared.translationFailed
+                .filter { $0.messageId == message.id }
+                .receive(on: DispatchQueue.main)
+        ) { _ in
+            translatingLanguages = []
+        }
+        .onReceive(
+            MessageSocketManager.shared.audioTranslationFailed
+                .filter { $0.messageId == message.id }
+                .receive(on: DispatchQueue.main)
+        ) { _ in
+            translatingAudioLanguages = []
+        }
+        .onReceive(
+            MessageSocketManager.shared.transcriptionFailed
+                .filter { $0.messageId == message.id }
+                .receive(on: DispatchQueue.main)
+        ) { _ in
+            translatingLanguages = []
+            translatingAudioLanguages = []
+        }
     }
 
     // MARK: - Unified Grid
@@ -820,7 +842,9 @@ struct MessageDetailSheet: View {
                     translations[t.targetLanguage] = t.translatedContent
                 }
             }
-        } catch { }
+        } catch {
+            Logger.network.error("translation fetch failed: \(error.localizedDescription)")
+        }
     }
 
     private static func languageName(for code: String) -> String {
@@ -1464,8 +1488,9 @@ struct MessageDetailSheet: View {
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 28, weight: .light))
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
@@ -1477,8 +1502,9 @@ struct MessageDetailSheet: View {
     private func retryableErrorView(accent: Color) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.slash")
-                .font(.system(size: 28, weight: .light))
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
@@ -1634,8 +1660,10 @@ struct MessageDetailSheet: View {
             Spacer().frame(height: 20)
 
             Image(systemName: "trash.fill")
+                // doctrine 84i — glyphe hero décoratif ≥40pt (le titre porte le sens)
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.error)
+                .accessibilityHidden(true)
                 .scaleEffect(deleteIconScale)
                 .onAppear {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
@@ -2134,7 +2162,8 @@ struct MessageDetailSheet: View {
             // Empty state with transcribe button
             VStack(spacing: 12) {
                 Image(systemName: "text.word.spacing")
-                    .font(.system(size: 28, weight: .light))
+                    .font(MeeshyFont.relative(28, weight: .light))
+                    .accessibilityHidden(true)
                     .foregroundColor(theme.textMuted.opacity(0.4))
 
                 Text(String(localized: "message-detail.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
@@ -2345,7 +2374,9 @@ struct MessageDetailSheet: View {
             do {
                 let statuses = try await AttachmentService.shared.getStatusDetails(attachmentId: attachment.id)
                 attachmentStatuses[attachment.id] = statuses
-            } catch { }
+            } catch {
+                Logger.network.error("attachment status fetch failed for \(attachment.id): \(error.localizedDescription)")
+            }
         }
     }
 
@@ -2392,25 +2423,15 @@ struct MessageDetailSheet: View {
     }
 
     private func formatDateFR(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        date.formatted(.dateTime.day().month().year().hour().minute())
     }
 
     private func formatTimeFR(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        date.formatted(.dateTime.hour().minute())
     }
 
     private func formatDateTimeFR(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd/MM/yyyy HH:mm"
-        return formatter.string(from: date)
+        date.formatted(.dateTime.day().month().year().hour().minute())
     }
 
     private func formatDuration(_ seconds: Int) -> String {

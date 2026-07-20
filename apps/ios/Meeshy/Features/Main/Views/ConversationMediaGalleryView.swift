@@ -22,10 +22,50 @@ struct ConversationMediaGalleryView: View {
     @State private var showControls = true
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
-    @State private var saveState: SaveState = .idle
+    @StateObject private var saveCoordinator = MediaSaveCoordinator()
     @ObservedObject private var videoManager = SharedAVPlayerManager.shared
 
-    private enum SaveState { case idle, saving, saved, failed }
+    /// Annonce VoiceOver de l'état du bouton d'enregistrement. Vide au repos.
+    private var saveStateAccessibilityValue: String {
+        saveCoordinator.isProcessing
+            ? String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
+            : ""
+    }
+
+    /// Position lisible du média courant pour VoiceOver — la capsule « n / N »
+    /// serait sinon lue « n barre oblique N » (position portée par le seul texte).
+    private var galleryPositionAccessibilityLabel: String {
+        String(
+            format: String(localized: "gallery.position", defaultValue: "Média %1$d sur %2$d", bundle: .main),
+            currentIndex + 1,
+            allAttachments.count
+        )
+    }
+
+    /// Libellé VoiceOver d'une image plein écran : la légende si le call site en
+    /// fournit une, sinon un libellé générique (l'image ne doit jamais être muette).
+    private func imageAccessibilityLabel(_ attachment: MessageAttachment) -> String {
+        if let caption = captionMap[attachment.id], !caption.isEmpty {
+            return caption
+        }
+        return String(localized: "gallery.image", defaultValue: "Image", bundle: .main)
+    }
+
+    /// Résumé VoiceOver de la rangée métadonnées (dimensions + poids), joint de
+    /// façon locale-aware. Chaîne vide si aucune métadonnée n'est disponible.
+    private func mediaMetadataAccessibilityLabel(_ att: MessageAttachment) -> String {
+        var parts: [String] = []
+        if let w = att.width, let h = att.height, w > 0, h > 0 {
+            parts.append(String(
+                format: String(localized: "gallery.dimensions", defaultValue: "%1$d par %2$d", bundle: .main),
+                w, h
+            ))
+        }
+        if att.fileSize > 0 {
+            parts.append(att.fileSizeFormatted)
+        }
+        return ListFormatter.localizedString(byJoining: parts)
+    }
 
     var body: some View {
         ZStack {
@@ -126,7 +166,7 @@ struct ConversationMediaGalleryView: View {
 
     private func captionOverlay(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(14, weight: .medium))
             .foregroundColor(.white.opacity(0.85))
             .multilineTextAlignment(.leading)
             .lineLimit(4)
@@ -242,10 +282,16 @@ struct ConversationMediaGalleryView: View {
                     offset = .zero
                 }
             }
+            // Sans label, l'image plein écran est un élément VoiceOver muet quand
+            // on balaie la galerie. Caption si fournie, sinon libellé générique.
+            .accessibilityLabel(imageAccessibilityLabel(attachment))
+            .accessibilityAddTraits(.isImage)
         } else {
+            // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
             Image(systemName: "photo")
                 .font(.system(size: 48))
                 .foregroundColor(.white.opacity(0.3))
+                .accessibilityHidden(true)
         }
     }
 
@@ -271,49 +317,58 @@ struct ConversationMediaGalleryView: View {
                     stopActiveVideoAudio()
                     dismiss()
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(.white.opacity(0.8))
+                    // Chrome : glyphe `xmark` figé dans un cercle glass 40pt
+                    // (doctrine 82i) — ne pas scaler. Glass APRÈS le sizing.
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 40, height: 40)
+                        .adaptiveGlass(in: Circle(), interactive: true)
                         .padding()
                 }
+                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
                 Spacer()
 
                 if allAttachments.count > 1 {
                     Text("\(currentIndex + 1) / \(allAttachments.count)")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(13, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(.ultraThinMaterial.opacity(0.7)))
+                        .adaptiveGlass(in: Capsule())
                         .contentTransition(.numericText())
                         .animation(.spring(response: 0.3), value: currentIndex)
+                        .accessibilityLabel(galleryPositionAccessibilityLabel)
                 }
 
                 Spacer()
 
                 if currentIndex < allAttachments.count {
-                    Button { saveCurrentToPhotos() } label: {
+                    Button { requestSaveCurrent() } label: {
                         Group {
-                            switch saveState {
-                            case .idle:
-                                Image(systemName: "arrow.down.to.line")
-                            case .saving:
+                            if saveCoordinator.isProcessing {
                                 ProgressView().tint(.white)
-                            case .saved:
-                                Image(systemName: "checkmark")
-                            case .failed:
-                                Image(systemName: "xmark")
+                            } else {
+                                Image(systemName: "arrow.down.to.line")
                             }
                         }
+                        // Chrome : glyphe d'état figé dans un cadre tap fixe
+                        // 40×40 (doctrine 82i) — ne pas scaler.
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 40, height: 40)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .adaptiveGlass(in: Circle(), interactive: true)
                         .padding(.trailing, 12)
                         .padding(.top, 8)
                     }
-                    .disabled(saveState == .saving || saveState == .saved)
+                    .disabled(saveCoordinator.isProcessing)
+                    .accessibilityLabel(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main))
+                    .accessibilityValue(saveStateAccessibilityValue)
+                    // Composant UNIFIÉ « Enregistrer » : même sheet de
+                    // destinations pour image et vidéo (Photos / Fichiers /
+                    // Partager), issue via toast + haptics.
+                    .mediaSaveFlow(saveCoordinator)
                 } else {
                     Color.clear.frame(width: 52, height: 40).padding(.trailing, 12)
                 }
@@ -370,31 +425,40 @@ struct ConversationMediaGalleryView: View {
                     )
                     VStack(alignment: .leading, spacing: 2) {
                         Text(info.senderName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(.white)
                         Text(info.sentAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
                     }
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
             }
             HStack(spacing: 8) {
+                // Glyphe de type média décoratif (apparié aux dimensions) —
+                // scale avec le texte mais masqué de VoiceOver.
                 Image(systemName: att.type == .video ? "video.fill" : "photo")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(.white.opacity(0.6))
+                    .accessibilityHidden(true)
                 if let w = att.width, let h = att.height, w > 0, h > 0 {
                     Text("\(w) \u{00D7} \(h)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                         .foregroundColor(.white.opacity(0.6))
                 }
                 if att.fileSize > 0 {
                     Text(att.fileSizeFormatted)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(.white.opacity(0.5))
                 }
                 Spacer()
             }
+            // Regroupe dimensions + poids en un seul arrêt VoiceOver et remplace
+            // le « × » (lu « multiplication ») par un « par » localisé.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(mediaMetadataAccessibilityLabel(att))
+            .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -455,39 +519,18 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
-    private func saveCurrentToPhotos() {
+    private func requestSaveCurrent() {
         guard currentIndex < allAttachments.count else { return }
         let att = allAttachments[currentIndex]
         let urlStr = att.fileUrl.isEmpty ? (att.thumbnailUrl ?? "") : att.fileUrl
-        guard !urlStr.isEmpty, let url = MeeshyConfig.resolveMediaURL(urlStr) else { return }
-        saveState = .saving
+        guard !urlStr.isEmpty else { return }
         HapticFeedback.light()
-        Task {
-            do {
-                if att.type == .video {
-                    let (tempURL, _) = try await URLSession.shared.download(from: url)
-                    let tempFile = FileManager.default.temporaryDirectory
-                        .appendingPathComponent("save_\(UUID().uuidString).mp4")
-                    try FileManager.default.moveItem(at: tempURL, to: tempFile)
-                    let saved = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
-                    try? FileManager.default.removeItem(at: tempFile)
-                    withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
-                    saved ? HapticFeedback.success() : HapticFeedback.error()
-                } else {
-                    let (data, _) = try await URLSession.shared.data(from: url)
-                    let saved = await PhotoLibraryManager.shared.saveImage(data)
-                    withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
-                    saved ? HapticFeedback.success() : HapticFeedback.error()
-                }
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                withAnimation { saveState = .idle }
-            } catch {
-                withAnimation { saveState = .failed }
-                HapticFeedback.error()
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                withAnimation { saveState = .idle }
-            }
-        }
+        saveCoordinator.requestSave(MediaSaveRequest(
+            kind: att.type == .video ? .video : .image,
+            remoteURLString: urlStr,
+            suggestedFileName: att.originalName.isEmpty ? nil : att.originalName,
+            attachmentId: att.id.isEmpty ? nil : att.id
+        ))
     }
 }
 
@@ -556,11 +599,16 @@ private struct GalleryVideoPage: View {
                 }
             }
 
-            if !isPlayerActive {
+            // Un seul contrôleur : une fois le player attaché à cette URL
+            // (lecture OU pause), play/pause appartient au transport partagé
+            // (`VideoTransportControls`). Gater sur `!isPlayerActive` faisait
+            // réapparaître ce poster 64pt PENDANT la pause, empilé sur le
+            // play/pause 64pt du transport (double contrôleur, bug user).
+            if !isPlayerAttached {
                 playOrDownloadButton
             }
         }
-        .task(id: attachment.fileUrl) {
+        .task(id: attachment.id) {
             if !downloader.isDownloading {
                 downloader.isCached = false
             }
@@ -608,25 +656,35 @@ private struct GalleryVideoPage: View {
                 break
             }
         } label: {
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 64, height: 64)
-                Circle()
-                    .fill(Color(hex: accentColor).opacity(0.85))
-                    .frame(width: 56, height: 56)
-                buttonContent
-            }
-            .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+            buttonContent
+                .frame(width: 64, height: 64)
+                .adaptiveGlassProminent(in: Circle(), tint: Color(hex: accentColor).opacity(0.85))
         }
         .disabled({
             if case .downloading = availability { return true }
             return false
         }())
+        .accessibilityLabel(playOrDownloadAccessibilityLabel)
+    }
+
+    /// Label VoiceOver du bouton central selon l'état (lecture / téléchargement
+    /// / progression). Les glyphes internes sont décoratifs.
+    private var playOrDownloadAccessibilityLabel: String {
+        switch availability {
+        case .ready:
+            return String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main)
+        case .needsDownload:
+            return String(localized: "media.downloadVideo", defaultValue: "Télécharger la vidéo", bundle: .main)
+        case .downloading:
+            return String(localized: "common.downloading", defaultValue: "Téléchargement…", bundle: .main)
+        }
     }
 
     @ViewBuilder
     private var buttonContent: some View {
+        // Glyphes/label figés : contenus d'un contrôle circulaire de taille
+        // fixe (56/64pt) — les scaler déborderait le cercle. État porté par
+        // `playOrDownloadAccessibilityLabel` sur le bouton parent.
         switch availability {
         case .ready:
             Image(systemName: "play.fill")

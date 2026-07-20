@@ -49,6 +49,7 @@ jest.mock('../../../utils/logger', () => ({
 import { PostReactionService, createPostReactionService } from '../../../services/PostReactionService';
 import type { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { ConflictError } from '../../../errors/custom-errors';
 
 describe('PostReactionService', () => {
   let service: PostReactionService;
@@ -106,7 +107,9 @@ describe('PostReactionService', () => {
         findMany: jest.fn(),
         deleteMany: jest.fn(),
         // Compteur autoritaire lu dans updatePostReactionSummary (sync likeCount).
-        count: jest.fn().mockResolvedValue(1)
+        count: jest.fn().mockResolvedValue(1),
+        // Ventilation + total autoritaires recomputés dans updatePostReactionSummary.
+        groupBy: jest.fn().mockResolvedValue([])
       },
       // $transaction executes the callback with a transaction client (same shape).
       $transaction: jest.fn(),
@@ -149,7 +152,7 @@ describe('PostReactionService', () => {
             findUnique: mockPrisma.post.findUnique,
             update: mockPrisma.post.update,
           },
-          postReaction: { count: mockPrisma.postReaction.count },
+          postReaction: { count: mockPrisma.postReaction.count, groupBy: mockPrisma.postReaction.groupBy },
         });
       });
     });
@@ -262,6 +265,21 @@ describe('PostReactionService', () => {
       ).rejects.toThrow('Maximum 1 different reactions per post reached');
     });
 
+    it('should throw a typed ConflictError (409) when max reactions per user reached', async () => {
+      // The reaction-limit guard is a reachable domain error (emoji change),
+      // not a server fault. It must be a typed ConflictError so the REST like
+      // route maps it to HTTP 409, never a 500 INTERNAL_ERROR.
+      mockPrisma.postReaction.findMany.mockResolvedValue([{ emoji: '👍' }]);
+
+      const error = await service
+        .addReaction({ postId: testPostId, userId: testUserId, emoji: '❤️' })
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as ConflictError).statusCode).toBe(409);
+      expect((error as ConflictError).code).toBe('REACTION_LIMIT_REACHED');
+    });
+
     it('should allow adding same emoji again (returns existing)', async () => {
       // User has 1 emoji
       mockPrisma.postReaction.findMany.mockResolvedValue([
@@ -318,7 +336,7 @@ describe('PostReactionService', () => {
             findUnique: mockPrisma.post.findUnique,
             update: mockPrisma.post.update,
           },
-          postReaction: { count: mockPrisma.postReaction.count },
+          postReaction: { count: mockPrisma.postReaction.count, groupBy: mockPrisma.postReaction.groupBy },
         });
       });
     });
@@ -1018,7 +1036,7 @@ describe('PostReactionService', () => {
             findUnique: mockPrisma.post.findUnique,
             update: mockPrisma.post.update,
           },
-          postReaction: { count: mockPrisma.postReaction.count },
+          postReaction: { count: mockPrisma.postReaction.count, groupBy: mockPrisma.postReaction.groupBy },
         });
       });
     });
@@ -1066,7 +1084,7 @@ describe('PostReactionService', () => {
   // TRANSACTION WRAPS REACTION SUMMARY
   // ==============================================
 
-  describe('updatePostReactionSummary — uses $transaction', () => {
+  describe('updatePostReactionSummary — $transaction + authoritative groupBy recompute', () => {
     beforeEach(() => {
       mockPrisma.post.findUnique.mockResolvedValue(createMockPost());
       mockPrisma.postReaction.findMany.mockResolvedValue([]);
@@ -1079,7 +1097,7 @@ describe('PostReactionService', () => {
             findUnique: mockPrisma.post.findUnique,
             update: mockPrisma.post.update,
           },
-          postReaction: { count: mockPrisma.postReaction.count },
+          postReaction: { count: mockPrisma.postReaction.count, groupBy: mockPrisma.postReaction.groupBy },
         });
       });
     });
@@ -1116,6 +1134,74 @@ describe('PostReactionService', () => {
       });
 
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('test_addReaction_writesReactionSummaryFromGroupBy_notDelta', async () => {
+      // La carte reactionSummary DOIT être recomputée depuis groupBy(PostReaction),
+      // pas dérivée par delta de la valeur préalable (auto-réparant vs emoji fantôme).
+      mockPrisma.post.findUnique.mockResolvedValue(
+        createMockPost({ reactionSummary: { '🔥': 99 }, reactionCount: 99 })
+      );
+      mockPrisma.postReaction.groupBy.mockResolvedValue([
+        { emoji: '👍', _count: { emoji: 3 } },
+        { emoji: '❤️', _count: { emoji: 2 } }
+      ]);
+
+      await service.addReaction({
+        postId: testPostId,
+        userId: testUserId,
+        emoji: '❤️'
+      });
+
+      expect(mockPrisma.postReaction.groupBy).toHaveBeenCalledWith({
+        by: ['emoji'],
+        where: { postId: testPostId },
+        _count: { emoji: true }
+      });
+      expect(mockPrisma.post.update).toHaveBeenCalledWith({
+        where: { id: testPostId },
+        data: { reactionSummary: { '👍': 3, '❤️': 2 }, reactionCount: 5, likeCount: 5 }
+      });
+    });
+
+    it('test_removeReaction_writesReactionSummaryFromGroupBy_notDelta', async () => {
+      mockPrisma.postReaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.post.findUnique.mockResolvedValue(
+        createMockPost({ reactionSummary: { '👍': 3 }, reactionCount: 3 })
+      );
+      mockPrisma.postReaction.groupBy.mockResolvedValue([
+        { emoji: '👍', _count: { emoji: 2 } }
+      ]);
+
+      await service.removeReaction({
+        postId: testPostId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.post.update).toHaveBeenCalledWith({
+        where: { id: testPostId },
+        data: { reactionSummary: { '👍': 2 }, reactionCount: 2, likeCount: 2 }
+      });
+    });
+
+    it('test_lastReactionRemoved_writesEmptySummaryAndZeroCounts', async () => {
+      mockPrisma.postReaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.post.findUnique.mockResolvedValue(
+        createMockPost({ reactionSummary: { '👍': 1 }, reactionCount: 1 })
+      );
+      mockPrisma.postReaction.groupBy.mockResolvedValue([]);
+
+      await service.removeReaction({
+        postId: testPostId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.post.update).toHaveBeenCalledWith({
+        where: { id: testPostId },
+        data: { reactionSummary: {}, reactionCount: 0, likeCount: 0 }
+      });
     });
   });
 

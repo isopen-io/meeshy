@@ -63,7 +63,7 @@ function ForgotPasswordContent() {
                 )}
               >
                 <Mail className="h-4 w-4" aria-hidden="true" />
-                <span>{t('forgotPassword.tabEmail') || 'Par email'}</span>
+                <span>{t('forgotPassword.tabEmail', "By email")}</span>
               </button>
               <button
                 onClick={() => setActiveMethod('phone')}
@@ -75,7 +75,7 @@ function ForgotPasswordContent() {
                 )}
               >
                 <Phone className="h-4 w-4" aria-hidden="true" />
-                <span>{t('forgotPassword.tabPhone') || 'Par téléphone'}</span>
+                <span>{t('forgotPassword.tabPhone', "By phone")}</span>
               </button>
             </div>
           </motion.div>
@@ -97,10 +97,10 @@ function ForgotPasswordContent() {
                     </div>
                   </div>
                   <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {t('forgotPassword.title') || 'Mot de passe oublié'}
+                    {t('forgotPassword.title', "Forgot Password")}
                   </h1>
                   <p className="text-gray-600 dark:text-gray-400 mt-2">
-                    {t('forgotPassword.description') || 'Entrez votre email pour recevoir un lien de réinitialisation'}
+                    {t('forgotPassword.description', "Enter your email address and we will send you a link to reset your password")}
                   </p>
                 </div>
 
@@ -108,7 +108,7 @@ function ForgotPasswordContent() {
 
                 {/* Security Note */}
                 <div className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                  <p>{t('forgotPassword.securityNote') || 'Le lien expirera dans 15 minutes.'}</p>
+                  <p>{t('forgotPassword.securityNote', "For security reasons, we will send a password reset link to your email address. The link will expire in 15 minutes.")}</p>
                 </div>
               </div>
             ) : (
@@ -127,15 +127,15 @@ function ForgotPasswordContent() {
           >
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
               <a href="/terms" className="hover:text-foreground transition-colors">
-                {t('register.termsOfService') || 'Conditions'}
+                {t('register.termsOfService', "Terms of Service")}
               </a>
               <span className="hidden sm:inline">•</span>
               <a href="/privacy" className="hover:text-foreground transition-colors">
-                {t('register.privacyPolicy') || 'Confidentialité'}
+                {t('register.privacyPolicy', "Privacy Policy")}
               </a>
               <span className="hidden sm:inline">•</span>
               <a href="/contact" className="hover:text-foreground transition-colors">
-                {t('register.contactUs') || 'Contact'}
+                {t('register.contactUs', "Contact us")}
               </a>
             </div>
           </motion.div>

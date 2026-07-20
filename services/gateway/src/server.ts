@@ -31,11 +31,14 @@ import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
+import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
+import { CORS_METHODS } from './config/cors-methods';
 import { conditionalGetOnSend } from './utils/etag';
 import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
+import { syncRoutes } from './routes/sync';
 import { linksRoutes } from './routes/links';
 import { trackingLinksRoutes } from './routes/tracking-links';
 import { anonymousRoutes } from './routes/anonymous';
@@ -496,7 +499,8 @@ class MeeshyServer {
         logger.warn(`CORS rejected origin: "${origin}"`);
         return cb(new Error('Not allowed by CORS'), false);
       },
-      credentials: true
+      credentials: true,
+      methods: CORS_METHODS
     });
 
     // OpenAPI/Swagger documentation
@@ -613,6 +617,13 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // routes already carry `request.user`; public routes simply no-op.
     this.server.addHook('preHandler', createDeviceLocaleMiddleware(this.prisma));
     logger.info('✅ deviceLocale hook registered (X-Device-Locale → User.deviceLocale)');
+
+    // Guideline 5 (MIIT) CallKit-in-China compliance — continuous device
+    // country signal (registrationCountry is only captured once at signup).
+    // CallEventsHandler reads User.deviceCountry to route incoming-call
+    // pushes away from the PushKit/CallKit 'voip' token type in China.
+    this.server.addHook('preHandler', createDeviceCountryMiddleware(this.prisma));
+    logger.info('✅ deviceCountry hook registered (X-Meeshy-Country → User.deviceCountry)');
 
     // Wave 1 Task 3.4 — expose MutationLogService on fastify so routes
     // can wrap their writes in `recordOrReturn(...)` for idempotency.
@@ -807,6 +818,14 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         manager.setDeliveryQueue(this.deliveryQueue);
         logger.info('[GWY] ✅ RedisDeliveryQueue injected into SocketIOManager');
 
+        // Share the Socket.IO layer's CallService with REST call routes so
+        // both observe the same in-memory ringingTimeouts/heartbeats maps
+        // (previously routes/calls.ts constructed its own, disconnected
+        // instance — a call initiated via REST never had its ringing timeout
+        // registered on the instance CallCleanupService/CallEventsHandler read).
+        this.server.decorate('callService', manager.getCallService());
+        logger.info('[GWY] ✅ CallService shared with REST routes');
+
         const notificationService = manager.getNotificationService();
         this.server.decorate('notificationService', notificationService);
         logger.info('[GWY] ✅ NotificationService exposed for routes');
@@ -956,6 +975,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     }, { prefix: API_PREFIX });
     // Register links management routes
     await this.server.register(linksRoutes, { prefix: API_PREFIX });
+    // SyncEngine unifié — endpoint delta /sync (spec §7, A3)
+    await this.server.register(syncRoutes, { prefix: API_PREFIX });
 
     // Register tracking links routes
     await this.server.register(trackingLinksRoutes, { prefix: API_PREFIX });
@@ -1294,6 +1315,63 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       const cleanupManager = this.socketIOHandler.getManager();
       if (cleanupManager) {
         this.callCleanupService.attachSocketServer(cleanupManager.getIO());
+        // RC-4 — share the socket layer's CallService so the heartbeat-GC
+        // tier (spec section 2.6) observes real in-memory heartbeat state
+        // instead of staying permanently unwired.
+        this.callCleanupService.setCallService(cleanupManager.getCallService());
+        // P3 — GC-forced call ends (stale ringing/connecting/active) now post
+        // the same call-summary system message as every other terminal path.
+        const callEventsHandler = cleanupManager.getCallEventsHandler();
+        this.callCleanupService.setPostSummaryCallback(
+          (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
+        );
+        // Live-call message — initiateCall's OWN GC sweeps (phantom stale
+        // participations, zombie active call) end calls with garbageCollected
+        // without any summary hook: an already-posted live "en cours" message
+        // would stay frozen forever. Same conversion path as the GC tiers.
+        cleanupManager.getCallService().setReapedCallCallback(
+          (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
+        );
+        // Parité socket (2026-07-12) — les routes REST end/leave n'ont pas d'`io`
+        // et ne diffusaient jamais `call:ended` au pair (qui restait « en appel »
+        // jusqu'au GC ~120s). Elles délèguent le fanout ici, même audience
+        // dédupliquée que les handlers socket call:end/call:leave.
+        cleanupManager.getCallService().setCallEndedBroadcaster(
+          (callId, conversationId, endedEvent) =>
+            callEventsHandler.broadcastCallEndedForTerminatedCall(
+              cleanupManager.getIO(), callId, conversationId, endedEvent
+            )
+        );
+        // Sibling-drift fix (2026-07-05) — GC-ended calls (the 4th terminal
+        // path) also release their qualityDegradedStreaks entries, matching
+        // the three paths CallEventsHandler already hooks into itself.
+        this.callCleanupService.setQualityStreakCleanupCallback(
+          (callId) => callEventsHandler.clearQualityDegradedStreaks(callId)
+        );
+        // Phantom-ringing safety net — a callee whose VoIP push was
+        // delivered but whose socket never joined the call room needs the
+        // same `call_cancel` background push every other missed-call path
+        // sends, or GC tier 1 (ringing timer never fired) leaves their
+        // CallKit screen ringing until its own client-side timeout.
+        this.callCleanupService.setMissedCallCancelPushCallback(
+          (callId, conversationId, duration) =>
+            callEventsHandler.sendMissedCallCancellationPushForTerminatedCall(callId, conversationId, duration)
+        );
+        // Sibling-drift fix (2026-07-07) — GC tier 1 (initiated/ringing > 120s
+        // → missed) now also creates the persisted missed-call notification
+        // for unresponded participants, matching the in-process ringing-
+        // timeout path (`handleMissedCall`). Calls `createMissedCallNotifications`
+        // directly, NOT `handleMissedCall` — GC's own transaction already
+        // performed the terminal `missed` write, so re-running
+        // `markCallAsMissed` here would be redundant.
+        this.callCleanupService.setMissedCallNotificationCallback(
+          (callId) => callEventsHandler.createMissedCallNotifications(callId)
+        );
+        // CALL-RESILIENCE (item H) — re-arm the in-process ringing timers a
+        // crash/restart wiped, so pre-answer calls interrupted by the restart
+        // resolve to `missed` (with their push notification) on the nominal
+        // ringing budget instead of ringing until the GC tier.
+        void callEventsHandler.rehydrateActiveCalls(cleanupManager.getIO());
       } else {
         logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
       }
@@ -1327,6 +1405,26 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     logger.info('🛑 Shutting down server...');
 
     try {
+      // CALL-RESILIENCE — tell the call handler we're shutting down BEFORE the
+      // HTTP/Socket.IO server closes and mass-drops every socket, so it does not
+      // interpret the restart's disconnect storm as everyone hanging up and end
+      // active peer-to-peer calls. Clients re-join the restarted instance; the
+      // media (direct P2P) never dropped.
+      try {
+        const socketManager = this.socketIOHandler?.getManager?.();
+        socketManager?.getCallEventsHandler?.().prepareForShutdown();
+        // Release the handler's own periodic buffered-offer cleanup interval
+        // and any leftover disconnect-grace timers — `prepareForShutdown()`
+        // only flips shutdown mode and clears the grace timers; it does not
+        // stop the interval, which would otherwise keep querying a handler
+        // that's about to be torn down.
+        socketManager?.getCallEventsHandler?.().destroy();
+        socketManager?.getCallService?.()?.destroy();
+        logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
+      } catch (callShutdownError) {
+        logger.warn('⚠️ Could not set call handler shutdown mode', callShutdownError);
+      }
+
       // Stop call cleanup service
       if (this.callCleanupService) {
         this.callCleanupService.stop();

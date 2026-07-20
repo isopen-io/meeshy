@@ -16,7 +16,11 @@ internal struct _InlineOverlayControls: View {
     let controls: MeeshyVideoPlayer.ControlSet
     let onExpand: (() -> Void)?
 
-    @State private var isSeeking = false
+    /// `@GestureState` (pas `@State`) : remis à `false` automatiquement par
+    /// SwiftUI si le drag est interrompu, même sans `.onEnded` — voir la
+    /// même règle documentée sur `AudioPlayerView.isUserScrubbing`, qui
+    /// publie dans la même `MediaScrubbingPreferenceKey`.
+    @GestureState private var isSeeking = false
     @State private var seekValue: Double = 0
 
     private var accent: Color { Color(hex: accentColor) }
@@ -42,6 +46,10 @@ internal struct _InlineOverlayControls: View {
         }
         .buttonStyle(BouncyControlButtonStyle())
         .allowsHitTesting(true)
+        // Signale le scrub en cours à l'hôte (voir MediaScrubbingPreferenceKey) :
+        // le conteneur de swipe de la bulle désengage reply/forward tant que le
+        // doigt manipule la seek bar.
+        .preference(key: MediaScrubbingPreferenceKey.self, value: isSeeking)
     }
 
     // MARK: - Scrim
@@ -205,14 +213,15 @@ internal struct _InlineOverlayControls: View {
             // réagit dès le touch pour un positionnement libre immédiat.
             .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
+                    .updating($isSeeking) { _, state, _ in
+                        state = true
+                    }
                     .onChanged { value in
-                        isSeeking = true
                         seekValue = max(0, min(1, value.location.x / geo.size.width))
                     }
                     .onEnded { value in
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
                         manager.seek(to: fraction * manager.duration)
-                        isSeeking = false
                         seekValue = 0
                     }
             )
@@ -277,7 +286,7 @@ internal struct _FullscreenOverlayControls: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .adaptiveGlass(in: Circle(), interactive: true)
                 }
             }
             if let fileName, !fileName.isEmpty {
@@ -297,7 +306,7 @@ internal struct _FullscreenOverlayControls: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.white.opacity(0.2)))
+                        .adaptiveGlass(in: Circle(), interactive: true)
                 }
             }
             if controls.contains(.save) {
@@ -315,7 +324,7 @@ internal struct _FullscreenOverlayControls: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white.opacity(0.9))
                     .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.2)))
+                    .adaptiveGlass(in: Circle(), interactive: true)
                 }
                 .disabled(saveState == .saving || saveState == .saved)
             }

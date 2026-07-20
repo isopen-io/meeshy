@@ -5,6 +5,7 @@ import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
+import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
 import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
 
 export interface PostComposerProps {
@@ -20,12 +21,12 @@ export interface PostComposerProps {
   className?: string;
 }
 
-const VISIBILITY_OPTIONS: { value: PostVisibility; label: string; icon: string }[] = [
-  { value: 'PUBLIC', label: 'Public', icon: '🌍' },
-  { value: 'FRIENDS', label: 'Friends', icon: '👥' },
-  { value: 'EXCEPT', label: 'Friends except...', icon: '🚫' },
-  { value: 'ONLY', label: 'Only...', icon: '🎯' },
-  { value: 'PRIVATE', label: 'Private', icon: '🔒' },
+const VISIBILITY_OPTIONS: { value: PostVisibility; labelKey: string; icon: string }[] = [
+  { value: 'PUBLIC', labelKey: 'postComposer.visibility.public', icon: '🌍' },
+  { value: 'FRIENDS', labelKey: 'postComposer.visibility.friends', icon: '👥' },
+  { value: 'EXCEPT', labelKey: 'postComposer.visibility.except', icon: '🚫' },
+  { value: 'ONLY', labelKey: 'postComposer.visibility.only', icon: '🎯' },
+  { value: 'PRIVATE', labelKey: 'postComposer.visibility.private', icon: '🔒' },
 ];
 
 function PostComposer({
@@ -37,6 +38,9 @@ function PostComposer({
   const { t } = useI18n('common');
   const [content, setContent] = useState('');
   const [visibility, setVisibility] = useState<PostVisibility>('PUBLIC');
+  // W6 — audience explicite des visibilités EXCEPT/ONLY (fix : ces options
+  // partaient sans liste → visibilité cassée). Même picker/gate que stories.
+  const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -45,15 +49,21 @@ function PostComposer({
     const trimmed = content.trim();
     if (!trimmed || disabled) return;
 
+    if (isAudienceIncomplete(visibility, visibilityUserIds.length)) return;
+
     onPublish({
       content: trimmed,
       type: 'POST',
       visibility,
+      visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility)
+        ? visibilityUserIds
+        : undefined,
     });
 
     setContent('');
+    setVisibilityUserIds([]);
     setIsExpanded(false);
-  }, [content, disabled, onPublish, visibility]);
+  }, [content, disabled, onPublish, visibility, visibilityUserIds]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -101,17 +111,17 @@ function PostComposer({
                 'text-[var(--gp-text-primary)] placeholder:text-[var(--gp-text-muted)]',
                 disabled && 'opacity-50 cursor-not-allowed',
               )}
-              aria-label="Post content"
+              aria-label={t('postComposer.contentLabel')}
             />
 
             {isExpanded && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--gp-border)]">
                 <div className="flex items-center gap-2">
                   {/* Media buttons */}
-                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label="Add photo">
+                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label={t('postComposer.addPhoto')}>
                     📷
                   </button>
-                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label="Add video">
+                  <button className="p-2 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors" aria-label={t('postComposer.addVideo')}>
                     🎥
                   </button>
 
@@ -120,10 +130,10 @@ function PostComposer({
                     <button
                       onClick={() => setShowVisibilityPicker(!showVisibilityPicker)}
                       className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
-                      aria-label="Change visibility"
+                      aria-label={t('postComposer.changeVisibility')}
                     >
                       <span>{selectedVisibility.icon}</span>
-                      <span>{selectedVisibility.label}</span>
+                      <span>{t(selectedVisibility.labelKey)}</span>
                     </button>
 
                     {showVisibilityPicker && (
@@ -133,6 +143,9 @@ function PostComposer({
                             key={opt.value}
                             onClick={() => {
                               setVisibility(opt.value);
+                              if (!(AUDIENCE_VISIBILITIES as readonly string[]).includes(opt.value)) {
+                                setVisibilityUserIds([]);
+                              }
                               setShowVisibilityPicker(false);
                             }}
                             className={cn(
@@ -141,7 +154,7 @@ function PostComposer({
                             )}
                           >
                             <span>{opt.icon}</span>
-                            <span>{opt.label}</span>
+                            <span>{t(opt.labelKey)}</span>
                           </button>
                         ))}
                       </div>
@@ -163,10 +176,21 @@ function PostComposer({
                   variant="primary"
                   size="sm"
                   onClick={handlePublish}
-                  disabled={!isValid || disabled}
+                  disabled={!isValid || disabled || isAudienceIncomplete(visibility, visibilityUserIds.length)}
                 >
-                  Publish
+                  {t('publish')}
                 </Button>
+              </div>
+            )}
+
+            {/* W6 — audience explicite pour EXCEPT/ONLY */}
+            {isExpanded && (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) && (
+              <div className="mt-2">
+                <AudienceUserPicker
+                  mode={visibility as 'EXCEPT' | 'ONLY'}
+                  selectedIds={visibilityUserIds}
+                  onChange={setVisibilityUserIds}
+                />
               </div>
             )}
           </div>

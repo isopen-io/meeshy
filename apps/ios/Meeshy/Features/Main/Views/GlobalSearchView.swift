@@ -41,9 +41,18 @@ struct GlobalSearchView: View {
             UserProfileSheet(
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
+                postsContent: { uid in
+                    AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
+                        selectedProfileUser = nil
+                        router.push(.postDetail(post.id, post))
+                    }, onOpenReel: { reel, reels in
+                        ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
+                    }))
+                }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
@@ -58,14 +67,14 @@ struct GlobalSearchView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(MeeshyFont.relative(18, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
             .accessibilityLabel(String(localized: "accessibility.back", defaultValue: "Retour"))
 
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 15, weight: .medium))
+                    .font(MeeshyFont.relative(15, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.error, MeeshyColors.indigo300],
@@ -78,7 +87,7 @@ struct GlobalSearchView: View {
                 TextField(String(localized: "search.global.placeholder", defaultValue: "Rechercher partout..."), text: $viewModel.searchText)
                     .focused($isSearchFieldFocused)
                     .foregroundColor(theme.textPrimary)
-                    .font(.system(size: 15))
+                    .font(MeeshyFont.relative(15))
                     .autocorrectionDisabled()
                     .submitLabel(.search)
                     .onSubmit {
@@ -104,19 +113,19 @@ struct GlobalSearchView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(
+            // iOS 26+ : champ de recherche en Liquid Glass natif (chrome de
+            // contrôle interactif). iOS < 26 : repli `.ultraThinMaterial`. Le
+            // liséré dégradé de marque est conservé en overlay au-dessus du verre.
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20))
+            .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [MeeshyColors.error.opacity(0.4), MeeshyColors.indigo300.opacity(0.4)],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                ),
-                                lineWidth: 1
-                            )
+                    .stroke(
+                        LinearGradient(
+                            colors: [MeeshyColors.error.opacity(0.4), MeeshyColors.indigo300.opacity(0.4)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
                     )
             )
         }
@@ -158,10 +167,13 @@ struct GlobalSearchView: View {
                     // overlay keeps the icon + label on a single line
                     // regardless of count width.
                     Image(systemName: tab.icon)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .overlay(alignment: .topTrailing) {
                             if count > 0 {
                                 Text(count > 99 ? "99+" : "\(count)")
+                                    // Fixed: micro count-badge positioned via absolute
+                                    // .offset/.fixedSize — must not scale with Dynamic Type
+                                    // or it clips out of its overlay anchor.
                                     .font(.system(size: 9, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(.horizontal, 4)
@@ -181,7 +193,7 @@ struct GlobalSearchView: View {
                             }
                         }
                     Text(tab.localizedName)
-                        .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                        .font(MeeshyFont.relative(13, weight: isSelected ? .bold : .medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                 }
@@ -252,7 +264,7 @@ struct GlobalSearchView: View {
                 .tint(MeeshyColors.indigo400)
                 .scaleEffect(1.2)
             Text(String(localized: "search.in_progress", defaultValue: "Recherche en cours..."))
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -281,7 +293,7 @@ struct GlobalSearchView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Image(systemName: "clock.arrow.circlepath")
-                            .font(.system(size: 14, weight: .medium))
+                            .font(MeeshyFont.relative(14, weight: .medium))
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [MeeshyColors.error, MeeshyColors.indigo300],
@@ -291,8 +303,9 @@ struct GlobalSearchView: View {
                             )
                             .accessibilityHidden(true)
                         Text(String(localized: "search.recent", defaultValue: "Recherches recentes"))
-                            .font(.system(size: 14, weight: .bold))
+                            .font(MeeshyFont.relative(14, weight: .bold))
                             .foregroundColor(theme.textPrimary)
+                            .accessibilityAddTraits(.isHeader)
 
                         Spacer()
 
@@ -303,7 +316,7 @@ struct GlobalSearchView: View {
                             HapticFeedback.light()
                         } label: {
                             Text(String(localized: "action.clear", defaultValue: "Effacer"))
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(MeeshyFont.relative(12, weight: .semibold))
                                 .foregroundColor(MeeshyColors.error)
                         }
                         .accessibilityLabel(String(localized: "accessibility.clear_recent_searches", defaultValue: "Effacer les recherches recentes"))
@@ -331,28 +344,29 @@ struct GlobalSearchView: View {
     private func recentSearchRow(_ query: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: "clock")
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
             Text(query)
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(1)
 
             Spacer()
 
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    viewModel.removeRecentSearch(query)
-                }
-                HapticFeedback.light()
+                removeRecentSearch(query)
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
-            .accessibilityLabel(String(localized: "accessibility.remove_recent_search", defaultValue: "Supprimer des recherches recentes") + ": \(query)")
+            // La rangée est un élément VoiceOver combiné (bouton « relancer la
+            // recherche ») : le bouton de suppression imbriqué serait absorbé et
+            // son action deviendrait injoignable. Masqué ici, ré-exposé via
+            // `.accessibilityAction(named:)` sur la rangée (doctrine 183i).
+            .accessibilityHidden(true)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -370,6 +384,16 @@ struct GlobalSearchView: View {
         .accessibilityLabel(String(localized: "accessibility.recent_search_label", defaultValue: "Recherche recente") + ": \(query)")
         .accessibilityHint(String(localized: "accessibility.recent_search_hint", defaultValue: "Relance la recherche"))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: Text(String(localized: "accessibility.remove_recent_search", defaultValue: "Supprimer des recherches recentes"))) {
+            removeRecentSearch(query)
+        }
+    }
+
+    private func removeRecentSearch(_ query: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            viewModel.removeRecentSearch(query)
+        }
+        HapticFeedback.light()
     }
 
     // MARK: - Messages Results
@@ -396,24 +420,24 @@ struct GlobalSearchView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(result.conversationName)
-                        .font(.system(size: 14, weight: .bold))
+                        .font(MeeshyFont.relative(14, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     Spacer()
 
                     Text(formatTimeAgo(result.createdAt))
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
                 }
 
                 Text(result.senderName)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo300)
                     .lineLimit(1)
 
                 Text(highlightedText(result.content, query: viewModel.resultsQuery))
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)
             }
@@ -459,7 +483,7 @@ struct GlobalSearchView: View {
                     ConversationTitleLabel(
                         name: result.name,
                         favoriteEmoji: result.conversation.userState.reaction,
-                        font: .system(size: 14, weight: .bold),
+                        font: MeeshyFont.relative(14, weight: .bold),
                         color: theme.textPrimary
                     )
 
@@ -467,6 +491,8 @@ struct GlobalSearchView: View {
 
                     if result.unreadCount > 0 {
                         Text("\(result.unreadCount)")
+                            // Fixed: compact numeric unread badge (iOS convention) —
+                            // kept off Dynamic Type so the capsule stays pill-tight.
                             .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
@@ -480,16 +506,16 @@ struct GlobalSearchView: View {
 
                 HStack(spacing: 6) {
                     conversationTypeIcon(result.type)
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
 
                     Text(conversationTypeLabel(result.type))
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
 
                     if result.memberCount > 2 {
                         Text("\(result.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -518,9 +544,9 @@ struct GlobalSearchView: View {
         case .hidden:
             HStack(spacing: 4) {
                 Image(systemName: "eye.slash")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "conversation.summary.hidden", defaultValue: "1 message caché"))
-                    .font(.system(size: 13).italic())
+                    .font(MeeshyFont.relative(13).italic())
             }
             .foregroundColor(theme.textSecondary)
             .lineLimit(1)
@@ -528,9 +554,9 @@ struct GlobalSearchView: View {
         case .viewOnce:
             HStack(spacing: 4) {
                 Image(systemName: "flame")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "conversation.summary.view_once", defaultValue: "1 message vue unique"))
-                    .font(.system(size: 13).italic())
+                    .font(MeeshyFont.relative(13).italic())
             }
             .foregroundColor(theme.textSecondary)
             .lineLimit(1)
@@ -538,9 +564,9 @@ struct GlobalSearchView: View {
         case .expired:
             HStack(spacing: 4) {
                 Image(systemName: "timer.badge.xmark")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "message.expired", defaultValue: "Message expiré"))
-                    .font(.system(size: 13).italic())
+                    .font(MeeshyFont.relative(13).italic())
             }
             .foregroundColor(theme.textSecondary)
             .lineLimit(1)
@@ -548,7 +574,7 @@ struct GlobalSearchView: View {
         case .ephemeralActive, .standard:
             if let preview = result.lastMessagePreview, !preview.isEmpty {
                 Text(preview)
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             }
@@ -576,7 +602,7 @@ struct GlobalSearchView: View {
                 avatarURL: result.avatar,
                 storyState: storyViewModel.storyRingState(forUserId: result.id),
                 moodEmoji: statusViewModel.statusForUser(userId: result.id)?.moodEmoji,
-                presenceState: result.isOnline ? .online : .offline,
+                presenceState: PresenceManager.shared.resolvedState(userId: result.id, isOnline: result.isOnline),
                 onViewStory: {
                     storyViewerCoordinator.present(StoryViewerRequest(
                         id: result.id,
@@ -589,12 +615,12 @@ struct GlobalSearchView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(result.displayName ?? result.username)
-                    .font(.system(size: 14, weight: .bold))
+                    .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(result.username)")
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
@@ -603,7 +629,7 @@ struct GlobalSearchView: View {
 
             if result.isOnline {
                 Text(String(localized: "status.online", defaultValue: "En ligne"))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(MeeshyColors.success)
             }
         }
@@ -711,7 +737,7 @@ struct GlobalSearchView: View {
         var attributed = AttributedString(text)
         if let range = attributed.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) {
             attributed[range].foregroundColor = MeeshyColors.error
-            attributed[range].font = .system(size: 13, weight: .bold)
+            attributed[range].font = MeeshyFont.relative(13, weight: .bold)
         }
         return attributed
     }

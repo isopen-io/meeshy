@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-private let emptyPaginatedPosts: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
+nonisolated(unsafe) private let emptyPaginatedPosts: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
 {"success":true,"data":[],"pagination":null,"error":null}
 """)
 
@@ -10,7 +10,7 @@ private let stubStatusPost: APIPost = JSONStub.decode("""
 {"id":"status-stub","type":"STATUS","content":"stub","moodEmoji":"\u{1F60A}","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"stub"}}
 """)
 
-final class MockStatusService: StatusServiceProviding {
+final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 
@@ -32,6 +32,8 @@ final class MockStatusService: StatusServiceProviding {
     var lastCreateVisibility: String?
     var lastCreateVisibilityUserIds: [String]?
     var lastCreateViaUsername: String?
+    var lastCreateAudioUrl: String?
+    var lastCreateRepostOfId: String?
 
     var deleteCallCount = 0
     var lastDeleteStatusId: String?
@@ -51,13 +53,16 @@ final class MockStatusService: StatusServiceProviding {
     }
 
     func create(moodEmoji: String, content: String?, visibility: String,
-                visibilityUserIds: [String]?, viaUsername: String? = nil) async throws -> APIPost {
+                visibilityUserIds: [String]?, viaUsername: String? = nil,
+                audioUrl: String? = nil, repostOfId: String? = nil) async throws -> APIPost {
         createCallCount += 1
         lastCreateMoodEmoji = moodEmoji
         lastCreateContent = content
         lastCreateVisibility = visibility
         lastCreateVisibilityUserIds = visibilityUserIds
         lastCreateViaUsername = viaUsername
+        lastCreateAudioUrl = audioUrl
+        lastCreateRepostOfId = repostOfId
         return try createResult.get()
     }
 
@@ -89,6 +94,9 @@ final class MockStatusService: StatusServiceProviding {
         lastCreateContent = nil
         lastCreateVisibility = nil
         lastCreateVisibilityUserIds = nil
+        lastCreateViaUsername = nil
+        lastCreateAudioUrl = nil
+        lastCreateRepostOfId = nil
 
         deleteResult = .success(())
         deleteCallCount = 0

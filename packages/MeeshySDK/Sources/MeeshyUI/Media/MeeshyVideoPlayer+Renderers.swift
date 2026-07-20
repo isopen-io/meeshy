@@ -162,6 +162,17 @@ internal struct _InlineRenderer: View {
                 controlsTimer = nil
             }
         }
+        .onAppear { autoplayIfNeeded() }
+        // WS3.7 / F1 — autoplay must ALSO fire when availability flips to `.ready`
+        // after first appear. On a cold cache `VideoAvailabilityResolver` mounts
+        // this renderer at `.needsDownload/.downloading`; `.onAppear` then fires
+        // too early (asset not ready) and never refires when the resolver flips
+        // `player.availability` to `.ready` (the view identity is unchanged). Key
+        // the retry on that exact value — the resolver re-inits `MeeshyVideoPlayer`
+        // with the new availability, so `player.availability` is the observable
+        // that changes. `autoplayIfNeeded`'s `!isThisActive` guard prevents a
+        // double-start. Mirrors the reel path's `adaptiveOnChange(of: ready)`.
+        .adaptiveOnChange(of: player.availability) { _, _ in autoplayIfNeeded() }
         .onDisappear { teardown() }
         .animation(.easeInOut(duration: 0.2), value: showControls)
         .animation(.easeInOut(duration: 0.15), value: isThisActive)
@@ -229,6 +240,10 @@ internal struct _InlineRenderer: View {
         thumbnailAspectRatio = size.width / size.height
     }
 
+    /// Facteur d'échelle des glyphes/anneau du bouton play, dérivé du diamètre
+    /// opaque `playButtonDiameter` (référence historique : 64pt).
+    private var playButtonScale: CGFloat { player.playButtonDiameter / 64 }
+
     private var playButton: some View {
         Button(action: handlePlayTap) {
             ZStack {
@@ -237,7 +252,7 @@ internal struct _InlineRenderer: View {
                 playButtonContent
                 downloadProgressRing
             }
-            .frame(width: 64, height: 64)
+            .frame(width: player.playButtonDiameter, height: player.playButtonDiameter)
             .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.8))
             .shadow(color: Color(hex: player.accentColor).opacity(0.45), radius: 12, y: 4)
         }
@@ -250,31 +265,31 @@ internal struct _InlineRenderer: View {
         switch player.availability {
         case .ready:
             Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: 22 * playButtonScale, weight: .bold))
                 .foregroundColor(.white)
-                .offset(x: 2)
+                .offset(x: 2 * playButtonScale)
         case .needsDownload:
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 22 * playButtonScale, weight: .bold))
                     .foregroundColor(.white)
                 if player.attachment.fileSize > 0 {
                     Text(formatSize(Int64(player.attachment.fileSize)))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 9 * playButtonScale, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white.opacity(0.9))
                 }
             }
         case .downloading(let progress):
             VStack(spacing: 2) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 16 * playButtonScale, weight: .bold))
                     .foregroundColor(.white.opacity(0.6))
                 if progress > 0 {
                     Text("\(Int(progress * 100))%")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(.system(size: 10 * playButtonScale, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                 } else {
-                    ProgressView().tint(.white).scaleEffect(0.6)
+                    ProgressView().tint(.white).scaleEffect(0.6 * playButtonScale)
                 }
             }
         }
@@ -285,9 +300,9 @@ internal struct _InlineRenderer: View {
         if case .downloading(let progress) = player.availability {
             Circle()
                 .trim(from: 0, to: progress > 0 ? progress : 0.05)
-                .stroke(Color.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 3 * playButtonScale, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .frame(width: 60, height: 60)
+                .frame(width: player.playButtonDiameter - 4, height: player.playButtonDiameter - 4)
                 .animation(.linear(duration: 0.2), value: progress)
         }
     }
@@ -330,6 +345,38 @@ internal struct _InlineRenderer: View {
         manager.load(urlString: player.attachment.fileUrl)
         manager.play()
         scheduleControlsHide()
+    }
+
+    /// Pure autoplay-on-appear decision (WS3.7). Autoplay only when the opaque
+    /// opt-in is set AND the asset is ready AND the view is on-screen AND no call
+    /// owns the audio session. Extracted `static` so the contract is unit-testable
+    /// without a SwiftUI render lifecycle.
+    static func shouldAutoplayOnAppear(
+        autoplayOnAppear: Bool,
+        isReady: Bool,
+        isOnScreen: Bool,
+        isCallActive: Bool
+    ) -> Bool {
+        autoplayOnAppear && isReady && isOnScreen && !isCallActive
+    }
+
+    private func autoplayIfNeeded() {
+        let isReady: Bool = { if case .ready = player.availability { return true }; return false }()
+        guard Self.shouldAutoplayOnAppear(
+            autoplayOnAppear: player.autoplayOnAppear,
+            isReady: isReady,
+            isOnScreen: true,
+            isCallActive: MediaSessionCoordinator.shared.isCallActive
+        ) else { return }
+        // No-op if this attachment is already the active inline playback (avoids
+        // restarting on a re-appear after the surface was already driving).
+        guard !isThisActive else { return }
+        // F5 — the mute intent is an opaque param: the SDK applies it, the app
+        // decides it. PostDetailView passes `autoplayMuted: false` (detail = sound
+        // on); the default `false` keeps the historical unmute-on-autoplay. The
+        // product mute decision stays app-side (SDK purity).
+        manager.isMuted = player.autoplayMuted
+        startPlayback()
     }
 
     private func teardown() {
@@ -481,7 +528,13 @@ internal struct _FullscreenRenderer: View {
                     controls: player.controls,
                     fileName: player.fileName,
                     onClose: { closePlayer() },
-                    onSave: { saveToPhotos() },
+                    onSave: {
+                        if let onSaveRequested = player.onSaveRequested {
+                            onSaveRequested()
+                        } else {
+                            saveToPhotos()
+                        }
+                    },
                     onShare: player.onShare,
                     saveState: saveState
                 )
@@ -527,13 +580,13 @@ internal struct _FullscreenRenderer: View {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 6) {
-                if let avatarUrl = author.avatarUrl,
-                   let url = MeeshyConfig.resolveMediaURL(avatarUrl) {
-                    AsyncImage(url: url) { img in
-                        img.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
+                if let avatarUrl = author.avatarUrl, !avatarUrl.isEmpty {
+                    // CachedAsyncImage : l'avatar auteur est déjà dans le
+                    // DiskCacheStore (MeeshyAvatar l'y a mis) — zéro re-download.
+                    CachedAsyncImage(url: avatarUrl) {
                         Circle().fill(Color.white.opacity(0.3))
                     }
+                    .aspectRatio(contentMode: .fill)
                     .frame(width: 24, height: 24)
                     .clipShape(Circle())
                 }
@@ -732,12 +785,19 @@ internal struct _FullscreenRenderer: View {
         HapticFeedback.light()
         Task {
             do {
-                // Pull from URLSession.download (streams to disk) — avoids
-                // double-loading a 200MB file into memory like .data(from:) would.
-                let (tempURL, _) = try await URLSession.shared.download(from: url)
                 let tempFile = FileManager.default.temporaryDirectory
                     .appendingPathComponent("save_\(UUID().uuidString).mp4")
-                try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                if let cached = CacheCoordinator.videoLocalFileURL(for: url.absoluteString) {
+                    // Cache-first : l'état .ready qui a permis la lecture implique
+                    // que le fichier est déjà dans le DiskCacheStore vidéo — le
+                    // copier évite de re-télécharger un média déjà sur disque.
+                    try FileManager.default.copyItem(at: cached, to: tempFile)
+                } else {
+                    // Pull from URLSession.download (streams to disk) — avoids
+                    // double-loading a 200MB file into memory like .data(from:) would.
+                    let (tempURL, _) = try await URLSession.shared.download(from: url)
+                    try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                }
                 let ok = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
                 try? FileManager.default.removeItem(at: tempFile)
                 await MainActor.run {

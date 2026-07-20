@@ -4,6 +4,7 @@ import XCTest
 
 // MARK: - AttachmentSendResult Tests
 
+@MainActor
 final class AttachmentSendResultTests: XCTestCase {
 
     func test_init_storesProperties() {
@@ -25,6 +26,7 @@ final class AttachmentSendResultTests: XCTestCase {
 
 // MARK: - PendingFileInfo Tests
 
+@MainActor
 final class PendingFileInfoTests: XCTestCase {
 
     func test_init_storesProperties() {
@@ -44,6 +46,7 @@ final class PendingFileInfoTests: XCTestCase {
 
 // MARK: - AttachmentSendError Tests
 
+@MainActor
 final class AttachmentSendErrorTests: XCTestCase {
 
     func test_missingConfiguration_hasDescription() {
@@ -54,6 +57,7 @@ final class AttachmentSendErrorTests: XCTestCase {
 
 // MARK: - UploadQueueProgress Tests
 
+@MainActor
 final class UploadQueueProgressTests: XCTestCase {
 
     func test_emptyQueue_zeroProgress() {

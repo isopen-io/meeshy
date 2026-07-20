@@ -9,6 +9,8 @@ import {
   useMemo,
 } from 'react';
 import { cn } from '@/lib/utils';
+import { truncateText } from '@/utils/truncate';
+import { formatDuration } from '@/utils/audio-formatters';
 import { getLanguageColor } from './theme';
 
 // ============================================================================
@@ -89,13 +91,6 @@ function getFlag(code: string): string {
   return FLAG_MAP[normalized] || '\u{1F310}';
 }
 
-function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
 function generateWaveform(src: string, barCount: number): number[] {
   let hash = 0;
   for (let i = 0; i < src.length; i++) {
@@ -113,12 +108,6 @@ function generateWaveform(src: string, barCount: number): number[] {
   return bars;
 }
 
-function truncateText(text: string, maxLength: number): { truncated: string; isTruncated: boolean } {
-  if (text.length <= maxLength) {
-    return { truncated: text, isTruncated: false };
-  }
-  return { truncated: text.slice(0, maxLength).trim() + '...', isTruncated: true };
-}
 
 // ============================================================================
 // Icon Components
@@ -608,11 +597,11 @@ export function MediaAudioCard({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-medium">
                   <span className="text-[var(--gp-text-secondary)] transition-colors duration-300">
-                    {formatTime(currentTime)}
+                    {formatDuration(currentTime)}
                   </span>
                   <span className="text-[var(--gp-text-muted)] transition-colors duration-300">/</span>
                   <span className="text-[var(--gp-text-muted)] transition-colors duration-300">
-                    {formatTime(duration)}
+                    {formatDuration(duration)}
                   </span>
                 </div>
 

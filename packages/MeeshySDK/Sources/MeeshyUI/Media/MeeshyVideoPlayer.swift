@@ -144,6 +144,23 @@ public struct MeeshyVideoPlayer: View {
     public let frame: Frame
     public let availability: VideoAvailability
     public let performance: PerformanceOptions
+    /// WS3.7 — opaque opt-in for the `.inline` path: when `true`, the inline
+    /// renderer starts playback (and unmutes the shared engine) on `.onAppear`
+    /// instead of waiting for a tap, provided the asset is ready and no call
+    /// owns the audio session. Default `false` keeps every existing call site
+    /// (feed, bubbles, carousels) tap-to-play & muted. The SDK only exposes the
+    /// flag; the decision to autoplay in a focused detail view is app-side.
+    public let autoplayOnAppear: Bool
+    /// F5 — opaque mute intent for the autoplay-on-appear path. When the inline
+    /// renderer autoplays (see `autoplayOnAppear`) it sets the shared engine's
+    /// mute to this value. Default `false` keeps the historical behavior
+    /// (autoplay unmutes). The product decision "detail = sound on, feed = muted"
+    /// lives app-side; the SDK only forwards the flag (SDK purity).
+    public let autoplayMuted: Bool
+    /// Diamètre du bouton play/download central du renderer `.inline`.
+    /// Paramètre opaque : l'app le réduit pour les petites cellules (grille
+    /// multi-média) et garde le défaut 64pt pour les surfaces pleine largeur.
+    public let playButtonDiameter: CGFloat
     public let author: VideoAuthor?
     public let caption: String?
     public let fileName: String?
@@ -153,6 +170,9 @@ public struct MeeshyVideoPlayer: View {
     public let onShare: (() -> Void)?
     public let onClose: (() -> Void)?
     public let onSaveSuccess: (() -> Void)?
+    /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
+    /// l'app quand fourni ; nil = save Photos direct legacy.
+    public let onSaveRequested: (() -> Void)?
 
     public init(
         attachment: MeeshyMessageAttachment,
@@ -162,6 +182,9 @@ public struct MeeshyVideoPlayer: View {
         frame: Frame = .bubble,
         availability: VideoAvailability = .ready,
         performance: PerformanceOptions? = nil,
+        autoplayOnAppear: Bool = false,
+        autoplayMuted: Bool = false,
+        playButtonDiameter: CGFloat = 64,
         author: VideoAuthor? = nil,
         caption: String? = nil,
         fileName: String? = nil,
@@ -170,7 +193,8 @@ public struct MeeshyVideoPlayer: View {
         onExpand: (() -> Void)? = nil,
         onShare: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil,
-        onSaveSuccess: (() -> Void)? = nil
+        onSaveSuccess: (() -> Void)? = nil,
+        onSaveRequested: (() -> Void)? = nil
     ) {
         self.attachment = attachment
         self.style = style
@@ -179,6 +203,9 @@ public struct MeeshyVideoPlayer: View {
         self.frame = frame
         self.availability = availability
         self.performance = performance ?? Self.inferPerformance(for: style)
+        self.autoplayOnAppear = autoplayOnAppear
+        self.autoplayMuted = autoplayMuted
+        self.playButtonDiameter = playButtonDiameter
         self.author = author
         self.caption = caption
         self.fileName = fileName
@@ -188,6 +215,7 @@ public struct MeeshyVideoPlayer: View {
         self.onShare = onShare
         self.onClose = onClose
         self.onSaveSuccess = onSaveSuccess
+        self.onSaveRequested = onSaveRequested
     }
 
     private static func inferPerformance(for style: Style) -> PerformanceOptions {

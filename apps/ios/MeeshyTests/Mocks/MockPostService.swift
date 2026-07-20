@@ -2,7 +2,7 @@ import Foundation
 import MeeshySDK
 import XCTest
 
-private let emptyPaginatedPosts: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
+nonisolated(unsafe) private let emptyPaginatedPosts: PaginatedAPIResponse<[APIPost]> = JSONStub.decode("""
 {"success":true,"data":[],"pagination":null,"error":null}
 """)
 
@@ -14,7 +14,7 @@ private let stubComment: APIPostComment = JSONStub.decode("""
 {"id":"comment-stub","content":"stub","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"stub"}}
 """)
 
-final class MockPostService: PostServiceProviding {
+final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     // MARK: - Stubbing
 
@@ -28,6 +28,7 @@ final class MockPostService: PostServiceProviding {
     var addCommentResult: Result<APIPostComment, Error> = .success(stubComment)
     var likeCommentResult: Result<Void, Error> = .success(())
     var unlikeCommentResult: Result<Void, Error> = .success(())
+    var deleteCommentResult: Result<Void, Error> = .success(())
     var repostResult: Result<APIPost, Error> = .success(stubPost)
     var shareResult: Result<Void, Error> = .success(())
     var createStoryResult: Result<APIPost, Error> = .success(stubPost)
@@ -66,6 +67,7 @@ final class MockPostService: PostServiceProviding {
     var lastAddCommentContent: String?
     var lastAddCommentParentId: String?
     var lastAddCommentClientMutationId: String?
+    var lastAddCommentAttachmentIds: [String]?
 
     var likeCommentCallCount = 0
     var lastLikeCommentPostId: String?
@@ -73,6 +75,9 @@ final class MockPostService: PostServiceProviding {
     var unlikeCommentCallCount = 0
     var lastUnlikeCommentPostId: String?
     var lastUnlikeCommentCommentId: String?
+    var deleteCommentCallCount = 0
+    var lastDeleteCommentPostId: String?
+    var lastDeleteCommentCommentId: String?
 
     var repostCallCount = 0
     var lastRepostPostId: String?
@@ -82,10 +87,13 @@ final class MockPostService: PostServiceProviding {
 
     var shareCallCount = 0
     var lastSharePostId: String?
+    var lastShareGenerateLink: Bool?
+    var lastSharePlatform: String?
 
     var createStoryCallCount = 0
     var lastCreateStoryContent: String?
     var lastCreateStoryRepostOfId: String?
+    var lastCreateStoryOriginalLanguage: String?
 
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
@@ -191,11 +199,14 @@ final class MockPostService: PostServiceProviding {
         try bookmarkResult.get()
     }
 
-    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int? = nil) async throws -> APIPostComment {
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?,
+                    attachmentIds: [String]?, mobileTranscription: MobileTranscriptionPayload?,
+                    originalLanguage: String?) async throws -> APIPostComment {
         addCommentCallCount += 1
         lastAddCommentPostId = postId
         lastAddCommentContent = content
         lastAddCommentParentId = parentId
+        lastAddCommentAttachmentIds = attachmentIds
         return try addCommentResult.get()
     }
 
@@ -218,6 +229,13 @@ final class MockPostService: PostServiceProviding {
         try unlikeCommentResult.get()
     }
 
+    func deleteComment(postId: String, commentId: String) async throws {
+        deleteCommentCallCount += 1
+        lastDeleteCommentPostId = postId
+        lastDeleteCommentCommentId = commentId
+        try deleteCommentResult.get()
+    }
+
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost {
         repostCallCount += 1
         lastRepostPostId = postId
@@ -236,6 +254,8 @@ final class MockPostService: PostServiceProviding {
     func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult {
         shareCallCount += 1
         lastSharePostId = postId
+        lastSharePlatform = platform
+        lastShareGenerateLink = generateLink
         try shareResult.get()
         return PostShareResult(
             shared: true,
@@ -246,11 +266,12 @@ final class MockPostService: PostServiceProviding {
     }
 
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String,
-                     originalLanguage: String?, mediaIds: [String]?,
+                     visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?,
                      repostOfId: String?) async throws -> APIPost {
         createStoryCallCount += 1
         lastCreateStoryContent = content
         lastCreateStoryRepostOfId = repostOfId
+        lastCreateStoryOriginalLanguage = originalLanguage
         return try createStoryResult.get()
     }
 
@@ -388,6 +409,7 @@ final class MockPostService: PostServiceProviding {
         lastAddCommentContent = nil
         lastAddCommentParentId = nil
         lastAddCommentClientMutationId = nil
+        lastAddCommentAttachmentIds = nil
 
         likeCommentResult = .success(())
         likeCommentCallCount = 0
@@ -397,6 +419,10 @@ final class MockPostService: PostServiceProviding {
         unlikeCommentCallCount = 0
         lastUnlikeCommentPostId = nil
         lastUnlikeCommentCommentId = nil
+        deleteCommentResult = .success(())
+        deleteCommentCallCount = 0
+        lastDeleteCommentPostId = nil
+        lastDeleteCommentCommentId = nil
 
         repostResult = .success(stubPost)
         repostCallCount = 0
@@ -408,11 +434,14 @@ final class MockPostService: PostServiceProviding {
         shareResult = .success(())
         shareCallCount = 0
         lastSharePostId = nil
+        lastShareGenerateLink = nil
+        lastSharePlatform = nil
 
         createStoryResult = .success(stubPost)
         createStoryCallCount = 0
         lastCreateStoryContent = nil
         lastCreateStoryRepostOfId = nil
+        lastCreateStoryOriginalLanguage = nil
 
         createWithTypeResult = .success(stubPost)
         createWithTypeCallCount = 0

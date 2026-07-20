@@ -4,6 +4,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 
 const ROLE_LEVELS: Record<string, number> = {
   creator: 40,
@@ -79,10 +80,12 @@ export function registerBanRoutes(
         where: { id: targetParticipant.id },
         data: { bannedAt: now, isActive: false, leftAt: now },
       })
+      invalidateParticipantLookup(targetParticipant.id, id)
 
       const io = socketIOHandler?.getManager()?.getIO()
       const room = ROOMS.conversation(id)
 
+      const manager = socketIOHandler?.getManager()
       if (io) {
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, {
           conversationId: id,
@@ -92,9 +95,9 @@ export function registerBanRoutes(
         })
 
         const userSockets = await io.in(ROOMS.user(targetUserId)).fetchSockets()
-        for (const s of userSockets) {
-          s.leave(room)
-        }
+        await Promise.all(userSockets.map(s => s.leave(room)))
+
+        manager?.invalidateParticipantCache?.(targetUserId, id)
       }
 
       return sendSuccess(reply, { userId: targetUserId, bannedAt: now.toISOString() })

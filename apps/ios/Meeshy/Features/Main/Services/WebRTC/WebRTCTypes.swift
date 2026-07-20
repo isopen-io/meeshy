@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 // MARK: - Agnostic Types (no WebRTC framework dependency)
@@ -20,19 +21,26 @@ struct IceCandidate: Codable, Sendable {
     let candidate: String
 }
 
-struct IceServer {
+struct IceServer: Sendable {
     let urls: [String]
     let username: String?
     let credential: String?
 
+    var hasTURNURL: Bool {
+        urls.contains { $0.hasPrefix("turn:") || $0.hasPrefix("turns:") }
+    }
+
     static let defaultServers: [IceServer] = [
         IceServer(urls: ["stun:stun.l.google.com:19302"], username: nil, credential: nil),
         IceServer(urls: ["stun:stun1.l.google.com:19302"], username: nil, credential: nil),
-        IceServer(urls: ["stun:stun2.l.google.com:19302"], username: nil, credential: nil)
+        IceServer(urls: ["stun:stun2.l.google.com:19302"], username: nil, credential: nil),
+        IceServer(urls: ["stun:stun6.l.google.com:19302"], username: nil, credential: nil),
+        // Cloudflare STUN — second provider for resilience against Google STUN outages
+        IceServer(urls: ["stun:stun.cloudflare.com:3478"], username: nil, credential: nil)
     ]
 }
 
-struct MediaTracks {
+struct MediaTracks: Sendable {
     let audioEnabled: Bool
     let videoEnabled: Bool
 }
@@ -75,6 +83,17 @@ struct CallStats: Equatable, Sendable {
     // path is `inbound == 0 && outbound > 0`. Without the outbound side we cannot
     // distinguish a transport fault from a peer who simply muted / has mic off.
     let outboundPacketsSent: Int
+    /// TWCC GCC bandwidth estimate from `candidate-pair` stats. Populated when
+    /// Transport-CC is negotiated (non-zero). 0 = TWCC not yet active or not
+    /// supported on this path. When non-zero this is a more authoritative signal
+    /// than the RTT/loss heuristic for setting the video encoder ceiling.
+    let availableOutgoingBitrateBps: Int
+    /// Mean audio jitter (milliseconds) averaged across all inbound-rtp audio
+    /// streams. Derived from the WebRTC `jitter` field (reported in seconds by
+    /// libwebrtc; multiplied by 1000 here). 0 = no audio inbound-rtp entry yet.
+    /// High jitter (> 30 ms) causes Opus PLC to degrade noticeably; this field
+    /// feeds the gateway `call:quality-report` so the summary can surface it.
+    let jitterMs: Double
 
     init(
         roundTripTimeMs: Double = 0,
@@ -85,7 +104,9 @@ struct CallStats: Equatable, Sendable {
         inboundPacketsReceived: Int = 0,
         inboundAudioPackets: Int = 0,
         inboundVideoPackets: Int = 0,
-        outboundPacketsSent: Int = 0
+        outboundPacketsSent: Int = 0,
+        availableOutgoingBitrateBps: Int = 0,
+        jitterMs: Double = 0
     ) {
         self.roundTripTimeMs = roundTripTimeMs
         self.packetsLost = packetsLost
@@ -96,6 +117,50 @@ struct CallStats: Equatable, Sendable {
         self.inboundAudioPackets = inboundAudioPackets
         self.inboundVideoPackets = inboundVideoPackets
         self.outboundPacketsSent = outboundPacketsSent
+        self.availableOutgoingBitrateBps = availableOutgoingBitrateBps
+        self.jitterMs = jitterMs
+    }
+}
+
+// MARK: - CallStats Codable (backward-compatible)
+
+extension CallStats: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case roundTripTimeMs, packetsLost, bandwidth, bytesReceived, codec
+        case inboundPacketsReceived, inboundAudioPackets, inboundVideoPackets
+        case outboundPacketsSent, availableOutgoingBitrateBps, jitterMs
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        roundTripTimeMs = try c.decode(Double.self, forKey: .roundTripTimeMs)
+        packetsLost = try c.decode(Int.self, forKey: .packetsLost)
+        bandwidth = try c.decode(Int.self, forKey: .bandwidth)
+        bytesReceived = try c.decode(Int.self, forKey: .bytesReceived)
+        codec = try c.decodeIfPresent(String.self, forKey: .codec)
+        inboundPacketsReceived = try c.decode(Int.self, forKey: .inboundPacketsReceived)
+        inboundAudioPackets = try c.decode(Int.self, forKey: .inboundAudioPackets)
+        inboundVideoPackets = try c.decode(Int.self, forKey: .inboundVideoPackets)
+        outboundPacketsSent = try c.decode(Int.self, forKey: .outboundPacketsSent)
+        availableOutgoingBitrateBps = try c.decode(Int.self, forKey: .availableOutgoingBitrateBps)
+        // Added after initial release — absent from persisted snapshots. Fall back to 0
+        // so old UserDefaults CallStats data continues to decode without error.
+        jitterMs = try c.decodeIfPresent(Double.self, forKey: .jitterMs) ?? 0
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(roundTripTimeMs, forKey: .roundTripTimeMs)
+        try c.encode(packetsLost, forKey: .packetsLost)
+        try c.encode(bandwidth, forKey: .bandwidth)
+        try c.encode(bytesReceived, forKey: .bytesReceived)
+        try c.encodeIfPresent(codec, forKey: .codec)
+        try c.encode(inboundPacketsReceived, forKey: .inboundPacketsReceived)
+        try c.encode(inboundAudioPackets, forKey: .inboundAudioPackets)
+        try c.encode(inboundVideoPackets, forKey: .inboundVideoPackets)
+        try c.encode(outboundPacketsSent, forKey: .outboundPacketsSent)
+        try c.encode(availableOutgoingBitrateBps, forKey: .availableOutgoingBitrateBps)
+        try c.encode(jitterMs, forKey: .jitterMs)
     }
 }
 
@@ -145,6 +210,7 @@ extension CallStats {
     /// inbound audio/video separate.
     static func reduce(entries: [RawEntry]) -> CallStats {
         var rtt = 0.0
+        var availableOutgoingBitrateBps = 0
         var packetsLost = 0
         var bytesSent = 0
         var bytesReceived = 0
@@ -152,6 +218,8 @@ extension CallStats {
         var inboundVideo = 0
         var outbound = 0
         var primaryCodecId: String?
+        var audioJitterSum = 0.0
+        var audioJitterCount = 0
 
         let codecMime: [String: String] = entries.reduce(into: [:]) { map, entry in
             guard entry.type == "codec", let mime = entry.mimeType else { return }
@@ -162,10 +230,17 @@ extension CallStats {
             switch entry.type {
             case "candidate-pair":
                 if let value = entry.values["currentRoundTripTime"] { rtt = value * 1000 }
+                if let bps = entry.values["availableOutgoingBitrate"] { availableOutgoingBitrateBps = Int(bps) }
             case "inbound-rtp":
                 if let lost = entry.values["packetsLost"] { packetsLost += Int(lost) }
                 let received = Int(entry.values["packetsReceived"] ?? 0)
-                if entry.kind == "video" { inboundVideo += received } else { inboundAudio += received }
+                if entry.kind == "video" {
+                    inboundVideo += received
+                } else {
+                    inboundAudio += received
+                    // libwebrtc reports jitter in seconds; accumulate for mean across audio streams
+                    if let j = entry.values["jitter"] { audioJitterSum += j; audioJitterCount += 1 }
+                }
                 bytesReceived += Int(entry.values["bytesReceived"] ?? 0)
                 if primaryCodecId == nil { primaryCodecId = entry.codecId }
             case "outbound-rtp":
@@ -180,6 +255,8 @@ extension CallStats {
             .flatMap { codecMime[$0] }
             .map { mime in mime.split(separator: "/").last.map(String.init) ?? mime }
 
+        let jitterMs = audioJitterCount > 0 ? (audioJitterSum / Double(audioJitterCount)) * 1000 : 0
+
         return CallStats(
             roundTripTimeMs: rtt,
             packetsLost: packetsLost,
@@ -189,7 +266,9 @@ extension CallStats {
             inboundPacketsReceived: inboundAudio + inboundVideo,
             inboundAudioPackets: inboundAudio,
             inboundVideoPackets: inboundVideo,
-            outboundPacketsSent: outbound
+            outboundPacketsSent: outbound,
+            availableOutgoingBitrateBps: availableOutgoingBitrateBps,
+            jitterMs: jitterMs
         )
     }
 }
@@ -200,7 +279,17 @@ extension CallStats {
 /// half-open self-heal and the `.connecting` watchdog can be unit-tested without
 /// a live `RTCPeerConnection` or device. `CallManager` owns the timers and the
 /// side effects (ICE restart, end-call); this type owns only the *decision*.
-enum CallReliabilityPolicy {
+nonisolated enum CallReliabilityPolicy {
+
+    /// EXIGENCE №1 — degraded-signaling indicator. The media path (P2P
+    /// DTLS-SRTP) is decoupled from the signaling socket: a socket drop during
+    /// an established call never tears it down (no listener has that power —
+    /// re-join/resync happens on `didReconnect`). This policy only drives the
+    /// discreet in-call hint that signaling operations (media toggles, hangup
+    /// relay, ICE relay) are deferred until the socket returns.
+    static func signalingDegraded(callEstablished: Bool, socketConnected: Bool) -> Bool {
+        callEstablished && !socketConnected
+    }
 
     /// §5.8 — half-open media detection. We keep `.connected` immediately on
     /// `RTCPeerConnectionState.connected` for snappy UX, but a real half-open
@@ -248,6 +337,390 @@ enum CallReliabilityPolicy {
         if secondsInConnecting >= restartAfterSeconds && !didAttemptRestart { return .restartICE }
         return .waiting
     }
+
+    /// `.reconnecting` watchdog. `attemptReconnection` self-limits at
+    /// `maxReconnectAttempts`, but it is only re-armed by a *fresh* signal — a new
+    /// `RTCPeerConnectionState` callback, a network-path flap, or a nil ICE-restart
+    /// offer. When an ICE restart is sent and then silently stalls (peer never
+    /// answers, transport wedged with no new state transition), none of those fire,
+    /// the attempt counter never advances, and the call hangs in `.reconnecting`
+    /// forever. This watchdog gives each attempt a budget; once it overruns we
+    /// escalate (`.retry` → `attemptReconnection`), which advances the counter and
+    /// eventually trips the cap → `.connectionLost`. Symmetric to the `.connecting`
+    /// watchdog, for the post-`.connected` reconnection path.
+    enum ReconnectingOutcome: Equatable {
+        case waiting
+        case retry
+    }
+
+    static func evaluateReconnecting(
+        secondsInAttempt: TimeInterval,
+        budgetSeconds: TimeInterval = QualityThresholds.reconnectAttemptBudgetSeconds
+    ) -> ReconnectingOutcome {
+        secondsInAttempt >= budgetSeconds ? .retry : .waiting
+    }
+
+    /// Reconnection-trigger arbitration. Reconnection is requested from several
+    /// independent sources: NWPathMonitor edges (path lost / restored / interface
+    /// handoff), the PC-state delegate, the watchdogs, and the ICE-restart
+    /// failure path. Without arbitration a single network blip fires several of
+    /// them back-to-back and each advances `reconnectAttempt` — the
+    /// `maxReconnectAttempts` budget is spent on redundant trigger *edges*
+    /// instead of reconnection *cycles*, and a call that would survive a 1-2s
+    /// hiccup drops with `.connectionLost`.
+    enum ReconnectTriggerOutcome: Equatable {
+        case startCycle   // not reconnecting yet — begin a cycle (advance budget)
+        case coalesce     // cycle in flight — re-arm its ICE restart, do NOT advance
+        case escalate     // watchdog overrun / failed restart — advance budget
+    }
+
+    static func evaluateReconnectTrigger(
+        isAlreadyReconnecting: Bool,
+        isEscalation: Bool
+    ) -> ReconnectTriggerOutcome {
+        if isEscalation { return .escalate }
+        return isAlreadyReconnecting ? .coalesce : .startCycle
+    }
+
+    /// FSM §3.2 invariant — `.reconnecting` is reserved for calls whose media
+    /// negotiation has begun (remote description applied): `.connected`,
+    /// `.reconnecting`, and `.connecting` (answer received, ICE in flight).
+    /// Before the answer (.ringing/.offering) an ICE restart is semantically
+    /// impossible — no remote description exists — and flipping the state made
+    /// CallView render the connected layout (frozen 00:00 timer) while the
+    /// callee was still ringing.
+    static func reconnectingAllowed(from state: CallState) -> Bool {
+        switch state {
+        case .connected, .reconnecting, .connecting: return true
+        case .idle, .ringing, .offering, .ended: return false
+        }
+    }
+
+    /// Audit appels 2026-07-11 #9 — `updateIceServers` is setConfiguration-only
+    /// (no ICE re-gather), so TURN credentials landing MID-RECONNECT would only
+    /// take effect at the next allocation, i.e. once the `.reconnecting`
+    /// watchdog escalates seconds later. Re-arming the in-flight attempt's
+    /// restart the moment the fresh credentials are applied removes that dead
+    /// window. On every other phase the refresh stays inert by design: the
+    /// TURNCredentialService TTL clamp guarantees credentials always outlive
+    /// the call, so a healthy call never pays a gratuitous re-gather.
+    static func shouldRearmRestartOnCredentialRefresh(state: CallState) -> Bool {
+        switch state {
+        case .reconnecting: return true
+        case .idle, .ringing, .offering, .connecting, .connected, .ended: return false
+        }
+    }
+
+    /// Duration-clock decision at the `.connected` transition. Reset on a fresh
+    /// connect AND on a first-ever connect that transited through
+    /// `.reconnecting` (pre-establishment ICE restart) — `durationTask` dies on
+    /// a nil `callStartDate`, so skipping the reset froze the timer at 00:00.
+    /// Preserve only on a genuine mid-call reconnect (running clock exists).
+    static func shouldResetCallClock(wasReconnecting: Bool, hasExistingStartDate: Bool) -> Bool {
+        !wasReconnecting || !hasExistingStartDate
+    }
+
+    /// Seconds after quality-monitor start during which the BWE signal is
+    /// ignored: GCC ramps from its conservative kick-off estimate (~300 kbps)
+    /// and converges in ~5-10 s on a healthy path — reading the ramp as
+    /// .poor flags a perfectly good call.
+    static let bweWarmupSeconds: TimeInterval = 15
+
+    /// Merge policy for the two quality signals (RTT/loss heuristic vs TWCC
+    /// GCC bandwidth estimate). The BWE ladder is calibrated against VIDEO
+    /// tier bitrates (poor < 400 kbps): on an audio-only call GCC never
+    /// probes above the ~64 kbps the Opus encoder asks for, so every audio
+    /// call read as .poor/.critical for its whole duration (prod analytics
+    /// 2026-07-03: RTT 7 ms, 0 % loss, still "poor"). The BWE signal only
+    /// constrains the level when video is actually being sent AND the
+    /// estimator has had time to converge; the RTT/loss heuristic is never
+    /// gated.
+    static func effectiveQualityLevel(
+        heuristic: VideoQualityLevel,
+        bwe: VideoQualityLevel?,
+        isSendingVideo: Bool,
+        secondsSinceMonitorStart: TimeInterval
+    ) -> VideoQualityLevel {
+        guard isSendingVideo,
+              secondsSinceMonitorStart >= bweWarmupSeconds,
+              let bwe else { return heuristic }
+        return min(heuristic, bwe)
+    }
+
+    /// Quality distribution for the analytics payload — PURE: the currently
+    /// open level window (since the last level change) is folded in
+    /// virtually, the accumulator is never mutated. This lets the same code
+    /// serve the periodic in-call snapshots AND the final teardown emit.
+    /// `critical` merges into `poor` (the payload contract has 4 buckets);
+    /// an empty call (never connected / no samples) reads as fully excellent;
+    /// clock skew (window start in the future) contributes zero, never
+    /// negative time.
+    static func qualityDistribution(
+        accumulatedSeconds: [VideoQualityLevel: Double],
+        openWindowLevel: VideoQualityLevel?,
+        openWindowSince: Date?,
+        now: Date
+    ) -> [String: Double] {
+        var seconds = accumulatedSeconds
+        if let level = openWindowLevel, let since = openWindowSince {
+            seconds[level, default: 0] += max(0, now.timeIntervalSince(since))
+        }
+        let total = seconds.values.reduce(0, +)
+        guard total > 0 else {
+            return ["excellent": 1.0, "good": 0.0, "fair": 0.0, "poor": 0.0]
+        }
+        return [
+            "excellent": (seconds[.excellent] ?? 0) / total,
+            "good": (seconds[.good] ?? 0) / total,
+            "fair": (seconds[.fair] ?? 0) / total,
+            "poor": ((seconds[.poor] ?? 0) + (seconds[.critical] ?? 0)) / total
+        ]
+    }
+
+    /// Ring/negotiation split for the end-of-call analytics. `setupTimeMs`
+    /// (initiated → connected) includes the HUMAN ringing time — 23 s observed
+    /// in prod, useless for spotting a WebRTC setup regression.
+    /// `negotiationTimeMs` (answer/join → connected) isolates the technical
+    /// part. Pure: -1 whenever an anchor is missing — never a lying 0.
+    static func callSetupMetrics(
+        initiatedAt: Date?,
+        negotiationStartAt: Date?,
+        connectedAt: Date?
+    ) -> (setupTimeMs: Int, negotiationTimeMs: Int) {
+        guard let connectedAt else { return (-1, -1) }
+        let setup = initiatedAt.map { Int(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
+        let negotiation = negotiationStartAt.map { Int(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
+        return (setup, negotiation)
+    }
+
+    /// Gate for the `call_cancel` silent push (phantom-ring hardening): the
+    /// gateway sends it when a call ends WITHOUT ever being answered, aimed
+    /// at devices whose socket never came up (VoIP push delivered, WebSocket
+    /// blocked). It may ONLY kill a still-ringing INCOMING call whose callId
+    /// matches — a late/replayed cancel must never end a connected call, an
+    /// outgoing ring, or an unrelated call.
+    static func shouldEndRingingOnCancellation(
+        pushCallId: String,
+        currentCallId: String?,
+        callState: CallState
+    ) -> Bool {
+        guard pushCallId == currentCallId else { return false }
+        guard case .ringing(isOutgoing: false) = callState else { return false }
+        return true
+    }
+
+    /// Idempotence guard for `handleRemoteEnd` (a `call:ended` fanout). The
+    /// gateway can emit `call:ended` more than once for the same call — the
+    /// native hangup/reject path AND (2026-07-12) the REST DELETE end/leave
+    /// broadcast both reach the handler through the single `callEnded`
+    /// publisher. Process the first, drop the rest: a duplicate while already
+    /// `.ended` is a no-op, and an event for a DIFFERENT call must never tear
+    /// down the current one. A `call:ended` during the ring (remote cancel)
+    /// still processes — only a terminal `.ended` state is deduplicated.
+    static func shouldProcessRemoteEnd(
+        currentCallId: String?,
+        incomingCallId: String,
+        callState: CallState
+    ) -> Bool {
+        guard incomingCallId == currentCallId else { return false }
+        if case .ended = callState { return false }
+        return true
+    }
+
+    /// Delay before the periodic TURN credential refresh, at 80% of the TTL.
+    /// A degenerate TTL (zero, negative, or shorter than the floor) clamps to
+    /// `minimumDelay` instead of disarming the refresh — silently skipping it
+    /// would let mid-call TURN credentials expire and kill relayed calls at the
+    /// credential horizon (coturn rejects allocation refreshes past the expiry
+    /// embedded in the username).
+    static func turnRefreshDelay(
+        ttl: TimeInterval,
+        minimumDelay: TimeInterval = QualityThresholds.turnMinRefreshDelaySeconds
+    ) -> TimeInterval {
+        max(minimumDelay, ttl * 0.8)
+    }
+
+    /// Whether a TURN refresh watchdog should retry the `call:request-ice-servers`
+    /// emit after `attempt` retries with no `call:ice-servers-refreshed` response.
+    /// `emitRequestIceServers` carries no ACK, so a single dropped emit or reply
+    /// must not silently disarm the refresh for the rest of the call — but the
+    /// retries are bounded so a persistently unreachable gateway doesn't spin
+    /// forever inside one cycle (the periodic scheduler re-arms the next cycle
+    /// once retries are exhausted).
+    static func turnRefreshShouldRetry(
+        attempt: Int,
+        maxRetries: Int = QualityThresholds.turnRefreshMaxRetries
+    ) -> Bool {
+        attempt < maxRetries
+    }
+
+    /// Stuck-muted CallKit fallback gate. On iPhone/iPad,
+    /// `RTCAudioSession.isAudioEnabled` is flipped ONLY by `provider:didActivate:`.
+    /// If CallKit never delivers it, the call sits `.connected` with dead mic and
+    /// speaker and no safety net (the half-open detector keys off RTP counters,
+    /// which comfort-noise/DTX packets keep non-zero). Force activation only in
+    /// that exact stuck state — never when CallKit did its job, never on Mac
+    /// (which self-activates in `transitionToConnected`), never after the call
+    /// ended.
+    static func shouldForceAudioSessionActivation(
+        usesCallKit: Bool,
+        didActivateFired: Bool,
+        isAudioEnabled: Bool,
+        callIsActive: Bool
+    ) -> Bool {
+        usesCallKit && callIsActive && !didActivateFired && !isAudioEnabled
+    }
+
+    /// Whether the platform's CallKit stack can actually drive a call.
+    /// Three cases must run calls entirely in-app instead:
+    /// - iOS-app-on-Mac: `reportNewIncomingCall` fails (error 3) and
+    ///   `provider:didActivate:` never fires — CallKit half-succeeds then
+    ///   leaves a stuck "call in progress".
+    /// - Simulator: `provider:didActivate:` never fires either, and
+    ///   callservicesd autonomously sends `CXEndCallAction` ~3s after an
+    ///   outgoing start, killing the call while still `.ringing`.
+    /// - China region (Guideline 5 / MIIT): Apple requires CallKit inactive
+    ///   in China. VoIPPushManager never registers for PushKit VoIP there
+    ///   (the OS-enforced source of forced CallKit activation), so this gate
+    ///   only needs to cover the foreground socket-delivered path — see
+    ///   VoIPPushManager.shouldRegisterVoIPPush for the background half.
+    /// All three take the `[AUDIO_FALLBACK]` self-activation path in
+    /// `transitionToConnected`.
+    static func platformUsesCallKit(isiOSAppOnMac: Bool, isSimulator: Bool, isChinaRegion: Bool) -> Bool {
+        !isiOSAppOnMac && !isSimulator && !isChinaRegion
+    }
+
+    /// Whether the call UI must render the video layout. True as soon as ANY
+    /// stream is visible: the local camera, or the peer's camera during a
+    /// unilateral escalation of an audio call (renegotiation delivers the
+    /// remote track while `localVideoEnabled` stays false). Gating the layout
+    /// on the local camera alone leaves the incoming H264 stream decoded but
+    /// never rendered.
+    static func videoLayoutActive(
+        localVideoEnabled: Bool,
+        hasRemoteVideoTrack: Bool,
+        remoteVideoEnabled: Bool
+    ) -> Bool {
+        localVideoEnabled || (hasRemoteVideoTrack && remoteVideoEnabled)
+    }
+}
+
+/// Sustained-degradation gate for the "Connexion instable" pill. One 5 s
+/// stats tick is not a bad call — a transient RTT spike or a single loss
+/// burst self-heals without the user ever needing a warning. Alert only
+/// after two consecutive degraded ticks (~10 s); a single healthy tick
+/// clears immediately (fast recovery feedback). `.fair` is a working link —
+/// it never alerts.
+nonisolated struct DegradedLinkTracker {
+    static let consecutiveTicksToAlert = 2
+
+    private var degradedStreak = 0
+    private(set) var isDegraded = false
+
+    @discardableResult
+    mutating func record(level: VideoQualityLevel) -> Bool {
+        switch level {
+        case .poor, .critical:
+            degradedStreak += 1
+            if degradedStreak >= Self.consecutiveTicksToAlert { isDegraded = true }
+        case .excellent, .good, .fair:
+            degradedStreak = 0
+            isDegraded = false
+        }
+        return isDegraded
+    }
+
+    mutating func reset() {
+        degradedStreak = 0
+        isDegraded = false
+    }
+}
+
+/// Hysteresis gate for the jitter-driven audio bitrate cap in
+/// `WebRTCService.adjustBitrate`. A single 5 s stats tick with a transient
+/// jitter burst (e.g. one buffered retransmit on a captive-portal Wi-Fi) must
+/// not permanently ratchet the Opus encoder down to `minBitrate` and back up
+/// on the very next tick — that produces audible warble on a link that didn't
+/// need the cap. Mirrors `DegradedLinkTracker`'s consecutive-tick contract:
+/// requires two consecutive high-jitter ticks before capping, and clears on
+/// the very first tick back under threshold (fast recovery).
+nonisolated struct JitterBitrateCapTracker {
+    static let consecutiveTicksToActivate = 2
+
+    private var highJitterStreak = 0
+    private(set) var isCapped = false
+
+    @discardableResult
+    mutating func record(jitterMs: Double, thresholdMs: Double) -> Bool {
+        if jitterMs > thresholdMs {
+            highJitterStreak += 1
+            if highJitterStreak >= Self.consecutiveTicksToActivate { isCapped = true }
+        } else {
+            highJitterStreak = 0
+            isCapped = false
+        }
+        return isCapped
+    }
+
+    mutating func reset() {
+        highJitterStreak = 0
+        isCapped = false
+    }
+}
+
+/// Half-open detection state across connection epochs.
+///
+/// Replaces the poll-loop-local `halfOpenSettled` bool, which had two defects:
+/// 1. It was only reset when the loop *observed* `.reconnecting`; a reconnection
+///    cycle completing between two poll ticks left it `true` for the rest of the
+///    call (self-heal frozen).
+/// 2. Re-arming compared *cumulative* RTP counters against the threshold, so a
+///    post-restart half-open was instantly declared `.healthy` on the strength
+///    of pre-restart traffic.
+///
+/// The owner bumps `connectionEpoch` on every `transitionToConnected`; this
+/// state re-arms itself whenever the epoch changes, snapshots the counters as
+/// the epoch baseline, and evaluates per-epoch *deltas*. Returns `nil` once the
+/// epoch has settled (healthy confirmed or the one allowed self-heal fired).
+nonisolated struct HalfOpenMonitorState {
+    private var observedEpoch = Int.min
+    private var settled = false
+    private var epochStart = Date.distantPast
+    private var baselineInbound = 0
+    private var baselineOutbound = 0
+
+    /// Cheap pre-check so the poll loop can skip the (relatively expensive)
+    /// WebRTC stats fetch once the current epoch has settled.
+    func needsEvaluation(epoch: Int) -> Bool {
+        epoch != observedEpoch || !settled
+    }
+
+    mutating func evaluate(
+        epoch: Int,
+        inboundPackets: Int,
+        outboundPackets: Int,
+        now: Date = Date(),
+        requiredInboundPackets: Int = QualityThresholds.rtpGateRequiredPackets,
+        graceSeconds: TimeInterval = QualityThresholds.halfOpenHealGraceSeconds
+    ) -> CallReliabilityPolicy.HalfOpenOutcome? {
+        if epoch != observedEpoch {
+            observedEpoch = epoch
+            settled = false
+            epochStart = now
+            baselineInbound = inboundPackets
+            baselineOutbound = outboundPackets
+        }
+        guard !settled else { return nil }
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: inboundPackets - baselineInbound,
+            outboundPackets: outboundPackets - baselineOutbound,
+            secondsInConnected: now.timeIntervalSince(epochStart),
+            requiredInboundPackets: requiredInboundPackets,
+            graceSeconds: graceSeconds
+        )
+        if outcome == .healthy || outcome == .healHalfOpen { settled = true }
+        return outcome
+    }
 }
 
 // MARK: - WebRTC Client Protocol
@@ -281,6 +754,12 @@ protocol WebRTCClientProviding: AnyObject {
     /// downscale). No-op on audio-only calls (no video transceiver). Driven by
     /// the quality ladder in `WebRTCService.adjustBitrate`.
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)
+    /// Applies an adaptive audio sender cap (max bitrate). Called by
+    /// `WebRTCService.adjustBitrate` when the quality ladder changes tier so
+    /// the encoder sheds bandwidth on a degraded link rather than competing
+    /// with video for the available budget. Min bitrate is always preserved
+    /// at the value set by `applyAudioCodecPreferences` (16 kbps floor).
+    func applyAudioEncoding(maxBitrateBps: Int)
     /// Whether a local camera track currently exists (audio-only calls have
     /// none until upgraded). Drives the self-preview / camera-toggle UI.
     var hasLocalVideoTrack: Bool { get }
@@ -301,25 +780,55 @@ protocol WebRTCClientProviding: AnyObject {
     func getStats() async -> CallStats?
     func createDataChannel(label: String) -> Bool
     func sendDataChannelMessage(_ data: Data)
+    /// RFC 4733 DTMF: forward digits to the audio transceiver's RTCDTMFSender.
+    /// Called from `CXPlayDTMFCallAction` when the user presses digits in the
+    /// CallKit keypad (e.g. conference PIN, IVR navigation). No-op when the
+    /// audio transceiver's DTMF sender is unavailable or the connection is not
+    /// established. Valid characters: 0-9, A-D, *, #, comma (2 s pause).
+    func sendDTMF(digits: String)
     func disconnect()
+    /// Same teardown as `disconnect()`, but first gives a just-enqueued
+    /// DataChannel send (e.g. the local hangup `bye`, see `sendHangupBye()`)
+    /// a bounded grace period to actually reach the wire before the
+    /// transport is destroyed. `RTCDataChannel.sendData` only enqueues onto
+    /// libwebrtc's SCTP thread — closing the peer connection immediately
+    /// after can silently drop an unflushed send. No-op difference from
+    /// `disconnect()` when nothing is buffered.
+    func disconnectAfterFlushingPendingSend()
 
-    var audioEffectsService: CallAudioEffectsServiceProviding? { get }
     var videoFilterPipeline: VideoFilterPipeline { get }
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws
 }
 
-// MARK: - DataChannel Transcription Message
+// MARK: - DataChannel Control Messages
 
-struct DataChannelTranscriptionMessage: Codable, Sendable {
-    let type: String  // "transcription-segment"
-    let text: String
-    let speakerId: String
-    let startTime: Double
-    let isFinal: Bool
-    let language: String
-    let translatedText: String?
-    let translatedLanguage: String?
+/// Message de CONTRÔLE in-band sur le data channel — enveloppe minimale
+/// `{type, reason?}`. Le type `"bye"` signale le raccroché du pair en P2P
+/// direct : zéro aller-retour serveur, l'autre bout coupe instantanément
+/// (parité WhatsApp). Le fanout socket `call:ended` reste le chemin
+/// AUTORITATIF (et le seul qui atteint un pair dont le média est déjà mort) ;
+/// le bye n'est qu'un raccourci — les deux chemins sont dédupliqués par le
+/// garde `.ended` de `handleRemoteEnd`.
+nonisolated struct DataChannelControlMessage: Codable, Sendable, Equatable {
+    let type: String
+    let reason: String?
+}
+
+/// Routage typé des messages entrants du data channel. Pur et testable :
+/// une seule passe de décodage décide bye / segment de transcription / bruit
+/// (ping keep-alive, payload inconnu d'une version future).
+/// `nonisolated` : value type pur, décodable depuis n'importe quel contexte
+/// (le callback data channel WebRTC arrive hors main thread).
+nonisolated enum DataChannelInbound: Equatable {
+    case bye(reason: String?)
+    case ignored
+
+    static func decode(_ data: Data) -> DataChannelInbound {
+        if let control = try? JSONDecoder().decode(DataChannelControlMessage.self, from: data),
+           control.type == "bye" {
+            return .bye(reason: control.reason)
+        }
+        return .ignored
+    }
 }
 
 // MARK: - WebRTC Client Delegate
@@ -338,7 +847,7 @@ protocol WebRTCClientDelegate: AnyObject {
 
 // MARK: - Call End Reason
 
-enum CallEndReason: Equatable {
+enum CallEndReason: Equatable, Sendable {
     case local
     case remote
     case rejected
@@ -347,27 +856,141 @@ enum CallEndReason: Equatable {
     case connectionLost
 }
 
+extension CallEndReason {
+    nonisolated static func == (lhs: CallEndReason, rhs: CallEndReason) -> Bool {
+        switch (lhs, rhs) {
+        case (.local, .local), (.remote, .remote), (.rejected, .rejected),
+             (.missed, .missed), (.connectionLost, .connectionLost): return true
+        case (.failed(let a), .failed(let b)): return a == b
+        default: return false
+        }
+    }
+}
+
+// MARK: - Call Retry Policy
+
+/// Pure decision: which end reasons warrant a « Réessayer » (retry) affordance.
+/// Only TRANSIENT establishment/drop failures — a retry genuinely recovers those
+/// (prod 2026-07-12: ~16% of calls end in failed/connectionLost, commonly
+/// transient ICE-gathering / TURN-allocation hiccups). Normal outcomes
+/// (local/remote hangup, missed, rejected) are never retried.
+///
+/// Parité web `isRetryableCallFailure` and Android `CallRetryPolicy` — one rule,
+/// three platforms.
+nonisolated enum CallRetryPolicy {
+    static func isRetryable(_ reason: CallEndReason) -> Bool {
+        switch reason {
+        case .failed, .connectionLost: return true
+        case .local, .remote, .missed, .rejected: return false
+        }
+    }
+}
+
 // MARK: - Call Display Mode
 
 enum CallDisplayMode: Sendable {
     case fullScreen
     case pip
+    case bubble
 }
+
+/// Bord horizontal d'ancrage de la bulle d'appel repliée (`CallBubbleView`),
+/// mis à jour au relâchement du drag de repositionnement.
+enum BubbleHorizontalEdge: Sendable { case leading, trailing }
 
 // MARK: - Quality Thresholds
 
-enum QualityThresholds {
+/// Pure namespace of immutable configuration constants. Declared `nonisolated`
+/// so it opts out of the module's `defaultIsolation = MainActor`: these `static
+/// let` thresholds are Sendable value types and must be readable from nonisolated
+/// contexts (e.g. libwebrtc stats callbacks, `VoIPPushManager.parseIceServers`).
+nonisolated enum QualityThresholds {
+    // MARK: Audio bitrate tier boundaries (used by adjustBitrate in WebRTCService)
+
+    /// RTT at or below this value → excellent audio quality (max bitrate).
     static let excellentRTT: Double = 100
+    /// RTT at or below this value → good audio quality (default bitrate). Above → min bitrate.
     static let goodRTT: Double = 250
+    /// RTT above this value → critical video tier (severe congestion).
     static let poorRTT: Double = 500
 
     static let excellentPacketLoss: Double = 0.01
     static let goodPacketLoss: Double = 0.05
     static let poorPacketLoss: Double = 0.10
 
+    // MARK: Video quality tier boundaries (used by VideoQualityLevel.from(rtt:packetLoss:))
+    // Note: excellentRTT (100), poorRTT (500), excellentPacketLoss (0.01),
+    // goodPacketLoss (0.05), and poorPacketLoss (0.10) are shared across both
+    // audio and video classification; the two intermediate video boundaries below
+    // are video-specific.
+
+    /// RTT boundary between good and fair video quality tiers.
+    /// Above this → at most .fair; at or below → may be .good or .excellent.
+    static let videoFairRTT: Double = 200
+
+    /// RTT boundary between fair and poor video quality tiers.
+    /// Above this → at most .poor; at or below → may be .fair or better.
+    static let videoPoorRTT: Double = 300
+
+    /// Packet-loss boundary between fair and poor video quality.
+    /// Above this → at most .poor; at or below → may be .fair or better.
+    static let videoFairPacketLoss: Double = 0.03
+
+    // MARK: BWE (TWCC GCC) quality tier thresholds
+    // Set conservatively below each tier's `targetVideoBitrate` to absorb
+    // audio (~64kbps) + RTCP/SRTCP overhead without over-committing bitrate.
+    // Used by VideoQualityLevel.from(availableOutgoingBitrateBps:).
+
+    static let bweExcellentBps: Int = 2_000_000  // 80 % of excellent target (2.5 Mbps)
+    static let bweGoodBps: Int     = 1_000_000   // 67 % of good target (1.5 Mbps)
+    static let bweFairBps: Int     =   400_000   // 50 % of fair target (800 kbps)
+    static let bwePoorBps: Int     =   150_000   // 37.5 % of poor target (400 kbps)
+
+    // MARK: PiP thermal frame-rate ladder
+    // PiP shows a small floating thumbnail — lower fps than the main encoder
+    // is acceptable and significantly reduces GPU/ANE load on a hot device.
+    // Separate from `VideoThermalProfile` (which caps the *main* stream encoder)
+    // so the two ladders can be tuned independently.
+
+    /// Maximum frame rate delivered to the PiP thumbnail when the device is
+    /// thermally nominal or only lightly stressed (.nominal / .fair).
+    static let pipFrameRateDefault: Int = 15
+
+    /// PiP frame rate cap under `.serious` thermal pressure. Still smooth
+    /// enough for speech at 10 fps; saves significant GPU compared to 15.
+    static let pipFrameRateSerious: Int = 10
+
+    /// PiP frame rate cap under `.critical` thermal pressure. Near-slideshow
+    /// but preserves the call without the user losing the remote face entirely.
+    static let pipFrameRateCritical: Int = 8
+
+    /// Fixed clearance added on top of `safeAreaInsets.top` when computing the
+    /// PiP thumbnail resting position. Must clear the ENTIRE top chrome row —
+    /// 8 pt top padding + 44 pt chevron/conversation buttons (leading) and
+    /// call-duration badge (trailing) + 8 pt breathing room — because the PiP
+    /// rests top-trailing by default, right where the duration badge lives.
+    /// Source of truth for `CallView.pipCenter(_:in:safeArea:)`.
+    static let pipTopClearance: CGFloat = 60
+
+    /// Fixed clearance added on top of `safeAreaInsets.bottom` when computing
+    /// the PiP thumbnail resting position. Provides room for the call control
+    /// bar above the safe area edge (control bar ≈ 120 pt).
+    /// Source of truth for `CallView.pipCenter(_:in:safeArea:)`.
+    static let pipBottomClearance: CGFloat = 130
+
     static let maxBitrate: Int = 128_000
+    /// Floor bitrate the adaptation algorithm will proactively target under
+    /// severe degradation (24 kbps = speech quality floor for Opus).
     static let minBitrate: Int = 24_000
     static let defaultBitrate: Int = 64_000
+    /// Audio jitter above this threshold (ms) triggers a cap to `minBitrate`.
+    /// Opus PLC degrades noticeably when jitter exceeds ~30 ms; shedding encoder
+    /// complexity gives the jitter buffer headroom to absorb the spikes.
+    static let highJitterThresholdMs: Double = 30.0
+    /// SDP-level absolute codec minimum set in `RTCRtpEncodingParameters`.
+    /// Lower than `minBitrate` so the encoder can survive an extreme network
+    /// event even after the adaptation algorithm has already reduced to 24 kbps.
+    static let audioCodecFloorBitrateBps: Int = 16_000
 
     // Audit P2-iOS-12 — bumped from 3s to 5s. RTCPeerConnection.statistics
     // walks the entire stats graph (~5–10ms CPU per call); 5s is the
@@ -378,6 +1001,12 @@ enum QualityThresholds {
     /// WhatsApp/Telegram with 10s/30s. Reference §5.12.
     static let heartbeatIntervalSeconds: TimeInterval = 10.0
 
+    /// Cadence des snapshots analytics « in_progress » pendant un appel
+    /// connecté. 60 s = 1-2 req/min avec l'émission finale — bien sous le
+    /// rate limit gateway CALL_ANALYTICS (10/min) ; un kill de l'app perd au
+    /// pire la dernière minute de télémétrie.
+    static let analyticsSnapshotIntervalSeconds: TimeInterval = 60.0
+
     /// 3 missed beats (~30s) marks heartbeat as lost. After this, FSM
     /// transitions active → reconnecting.
     static let heartbeatLostThresholdSeconds: TimeInterval = 30.0
@@ -386,6 +1015,33 @@ enum QualityThresholds {
     /// 5s timeout absorbs worst-case without false positives.
     static let heartbeatAckTimeoutSeconds: TimeInterval = 5.0
     static let maxReconnectAttempts: Int = 3
+    /// Hard cap on the ICE candidate buffer maintained while the socket is
+    /// down.  ICE can generate 50+ candidates per gathering round (host +
+    /// STUN server-reflexive + TURN relayed × UDP/TCP); beyond this cap
+    /// candidates are dropped since they belong to a stale ICE generation
+    /// that the remote won't honour after reconnect anyway.
+    /// 100 (was 50) — the prior cap sat exactly at the documented "50+"
+    /// figure, so a single busy gathering round during a socket outage
+    /// could hit the cap and drop legitimate, still-relevant candidates.
+    static let maxPendingIceCandidates: Int = 100
+    /// Cap on the `WebRTCService.iceCandidateBuffer` maintained while the remote
+    /// description has not yet been set. Beyond this count ICE candidates are
+    /// FIFO-evicted (oldest first) — the ICE agent selects a pair well before
+    /// 200 candidates arrive, so older entries have negligible value.
+    /// Distinct from `maxPendingIceCandidates` (CallManager socket-level buffer, cap 50).
+    static let iceCandidateBufferCap: Int = 200
+    /// Maximum byte length of a single ICE candidate line accepted from a remote peer.
+    /// libwebrtc parses these strings without bounds checks; a malformed or hostile SDP
+    /// with a multi-MB candidate string causes memory pressure inside the library.
+    /// 10 KB is orders of magnitude above any real ICE candidate (~200 bytes typical).
+    static let iceCandidateLineMaxBytes: Int = 10_000
+    /// Maximum character length of the `sdpMid` field in an ICE candidate.
+    /// RFC 5888 §5 allows any ALPHANUMERIC token; 256 chars is a safe ceiling.
+    static let iceCandidateSdpMidMaxLength: Int = 256
+    /// Maximum character length of a TURN credential field (username or credential).
+    /// libwebrtc encodes these in HTTP Authorization headers; > 1 KB per field risks
+    /// header-size rejection by TURN servers and memory pressure in the auth path.
+    nonisolated static let turnCredentialMaxLength: Int = 1024
 
     /// §3.2 — debounce before treating `RTCPeerConnectionState.disconnected`
     /// as a reconnect trigger. ICE produces transient `.disconnected` blips
@@ -398,6 +1054,15 @@ enum QualityThresholds {
     static let initialVideoBitrate: Int = 500_000
     static let minVideoBitrate: Int = 100_000
     static let maxVideoBitrate: Int = 2_500_000
+    /// Frame-rate floor applied when `VideoQualityLevel.critical.targetFPS == 0`.
+    /// Mirrors the `.poor` tier's fps — keeps video alive at minimum cost rather
+    /// than stalling the encoder with an fps of zero.
+    static let criticalVideoFloorFPS: Int = 15
+    /// Resolution floor (portrait height, pixels) applied when
+    /// `VideoQualityLevel.critical.targetResolutionHeight == 0`.
+    /// Together with `criticalVideoFloorFPS` and `minVideoBitrate` this defines
+    /// the 360p15 @ 100 kbps worst-case floor documented in `applyVideoQuality`.
+    static let criticalVideoFloorHeight: Int = 360
 
     /// Phase 1 fix E6 — RTP gate before transitioning to .connected.
     /// ICE connected does NOT mean media flows: NAT, codec mismatch, audio
@@ -407,7 +1072,6 @@ enum QualityThresholds {
     /// declaring "connected". Beyond 10s with no RTP → ended(.failed).
     /// Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.3
     static let rtpGatePollIntervalSeconds: TimeInterval = 2.0
-    static let rtpGateMaxAttempts: Int = 5
     static let rtpGateRequiredPackets: Int = 5
 
     /// §5.8 — grace window after reaching `.connected` before a stalled inbound
@@ -423,6 +1087,17 @@ enum QualityThresholds {
     static let connectingRestartSeconds: TimeInterval = 12.0
     static let connectingFailSeconds: TimeInterval = 25.0
 
+    /// `.reconnecting` watchdog budget — the max time a single ICE-restart attempt
+    /// may stay pending before the watchdog escalates to the next attempt. Covers
+    /// the per-attempt exponential backoff (≤4s) plus ICE re-gather/connect on a
+    /// weak cellular link (~5s), without leaving the user staring at "Reconnecting…".
+    /// Combined with `maxReconnectAttempts` it bounds the total reconnection window
+    /// to ~`maxReconnectAttempts × reconnectAttemptBudgetSeconds` before the call
+    /// fails with `.connectionLost` — instead of hanging forever when an ICE restart
+    /// silently stalls (offer sent, peer never answers, no new PC-state callback,
+    /// no network flap to re-arm `attemptReconnection`).
+    static let reconnectAttemptBudgetSeconds: TimeInterval = 10.0
+
     /// Caller-side ringing timeout. The gateway has its own 60s server-side
     /// timeout (CallEventsHandler.ts §scheduleRingingTimeout) but a snappier
     /// 45s client-side cutoff gives the user a faster fail path when:
@@ -432,11 +1107,201 @@ enum QualityThresholds {
     /// Picked at 45s to align with WhatsApp/FaceTime UX while leaving 15s
     /// headroom under the gateway's hard cap.
     static let outgoingRingTimeoutSeconds: TimeInterval = 45.0
+
+    /// Default TURN credential TTL (seconds) used when the signalling path does
+    /// not carry an explicit `ttl` field (VoIP push, socket-only incoming — neither
+    /// payload carries a `ttl`). Mirrors the gateway's own default
+    /// (`TURNCredentialService.credentialTTL`, `services/gateway/src/services/TURNCredentialService.ts`,
+    /// `TURN_CREDENTIAL_TTL` env, 24h) rather than guessing a shorter window: the
+    /// gateway raised its default from 600s to 86400s (CALL-FIX 2026-06-25) after the
+    /// short value silently killed TURN-relayed calls once credentials expired mid-call.
+    /// A client-side guess much shorter than the real TTL only costs an extra refresh
+    /// round-trip (harmless), but one that's a fraction of the true value — like the
+    /// previous 480s here — would have been actively misleading documentation for
+    /// anyone tuning this against the gateway.
+    static let turnDefaultCredentialTTLSeconds: TimeInterval = 86400
+
+    /// Minimum delay (seconds) before a TURN credential refresh, regardless of
+    /// the TTL reported by the gateway. Guards against a malformed TTL=0 response
+    /// that would otherwise trigger an immediate refresh on every call tick.
+    static let turnMinRefreshDelaySeconds: TimeInterval = 30
+
+    /// Watchdog window (seconds) after emitting `call:request-ice-servers`
+    /// before retrying, if `call:ice-servers-refreshed` hasn't come back yet.
+    /// `emitRequestIceServers` is fire-and-forget (no ACK) — a single dropped
+    /// emit or gateway reply must not permanently kill the refresh chain for
+    /// the rest of a long call.
+    static let turnRefreshRetryTimeoutSeconds: TimeInterval = 8
+
+    /// Max consecutive retries of a single TURN refresh request before giving
+    /// up on that cycle and falling back to re-arming the next periodic
+    /// refresh (rather than retrying forever).
+    static let turnRefreshMaxRetries: Int = 3
+
+    /// Delay after `.connected` before the stuck-muted CallKit fallback
+    /// re-checks whether `provider:didActivate:` ever fired. CallKit normally
+    /// delivers it within ~500 ms of the call connecting; 2 s is comfortably
+    /// past that without leaving the user in a silent call for long.
+    static let stuckMutedFallbackDelaySeconds: TimeInterval = 2.0
+
+    /// How long to wait for an SDP offer after the callee answers before
+    /// treating the call as timed-out and failing it. Covers worst-case
+    /// signalling round-trips on bad cellular (NAT traversal + server hop).
+    /// Matches the gateway's own offer-expiry window.
+    static let sdpOfferTimeoutSeconds: TimeInterval = 30
+
+    /// Safety net that force-fulfills a held `CXAnswerCallAction` if the call
+    /// still hasn't connected. MUST stay strictly greater than
+    /// `sdpOfferTimeoutSeconds`: if it fired first, CallKit would be told the
+    /// call is "connected" (starting the Recents timer) only for
+    /// `scheduleSdpOfferTimeout` to fail the call moments later — Recents
+    /// would then show a call that lasted the gap between the two timeouts
+    /// but never actually connected. The 5s margin absorbs scheduling jitter
+    /// between the two independently-armed timers.
+    static let pendingAnswerActionSafetyNetSeconds: TimeInterval = sdpOfferTimeoutSeconds + 5
+
+    /// Settle window after `callState` transitions to `.ended` before the
+    /// call identity (callId / remoteUserId / callDuration) is cleared.
+    /// Gives the UI time to read final stats before teardown completes.
+    static let callEndSettleSeconds: TimeInterval = 1.5
+
+    /// Longer settle window for a RETRYABLE transient failure — the ended screen
+    /// holds its « Réessayer » affordance this long before auto-dismissing, so
+    /// the user has a real chance to re-dial (parité web/Android retry).
+    static let callEndRetryableSettleSeconds: TimeInterval = 12.0
+
+    /// Delay `endCurrentAndAnswerPending()` waits after calling `endCall()`
+    /// before answering the waiting call — gives CallKit's `CXEndCallAction`
+    /// and the audio session teardown time to settle so the pending call's
+    /// answer doesn't race the outgoing call's hangup on the same audio
+    /// session. Distinct from `callEndSettleSeconds` (a UI-facing stats
+    /// readability window on the call that just ended, not a handoff delay
+    /// before starting the next one).
+    static let endAndAnswerPendingHandoffSeconds: TimeInterval = 0.5
+
+    /// HTTP timeout for the VoIP push freshness check (GET /calls/:id).
+    /// 4 s absorbs worst-case DNS + TLS + gateway response while still
+    /// failing fast enough to avoid blocking CallKit for a stale push.
+    static let voipFreshnessTimeoutSeconds: TimeInterval = 4.0
+
+    /// How often the data-channel keep-alive ping fires. 15 s matches the
+    /// TURN server's minimum activity requirement (Coturn refreshTimeout).
+    static let dataChannelPingIntervalSeconds: TimeInterval = 15
+
+    /// Bound on how long `disconnectAfterFlushingPendingSend()` waits for a
+    /// just-enqueued DataChannel send (the local hangup `bye`) to actually
+    /// reach the wire before forcing teardown regardless. A stuck/never-
+    /// draining buffer (peer already gone) must not delay hangup indefinitely.
+    static let dataChannelFlushTimeoutMilliseconds: Int = 200
+
+    /// Poll interval while waiting for `dataChannelFlushTimeoutMilliseconds`.
+    static let dataChannelFlushPollIntervalMilliseconds: Int = 20
+
+    /// How long a remote-quality-degraded badge stays visible before it
+    /// auto-resets to healthy. 15 s is long enough to be meaningful without
+    /// persisting after a transient blip self-heals.
+    static let remoteQualityResetSeconds: TimeInterval = 15
+
+    // MARK: Opus fmtp codec hints (mungeOpusSDP in P2PWebRTCClient)
+
+    /// `maxaveragebitrate` fmtp hint for Opus. 64 kbps matches the
+    /// `defaultBitrate` adaptation target — the SDP hint is the absolute
+    /// encoder ceiling; the RtpEncoding max handles the dynamic range.
+    static let opusFmtpMaxAverageBitrate: Int = 64_000
+    /// `maxplaybackrate` fmtp hint for Opus. 48 kHz = full wideband audio,
+    /// the native sample rate of the Opus codec and WebRTC's internal APM.
+    static let opusFmtpMaxPlaybackRate: Int = 48_000
+
+    // MARK: SDP x-google-bitrate hints (addVideoBitrateHints in P2PWebRTCClient)
+
+    /// `x-google-max-bitrate` hint injected into video fmtp lines. 2 500 kbps
+    /// aligns with `maxVideoBitrate` (2.5 Mbps) — the open-loop encoder ceiling
+    /// when TWCC GCC hasn't yet provided a BWE estimate. Not a hard cap; GCC
+    /// overrides once probing data arrives.
+    static let sdpVideoMaxBitrateKbps: Int = 2_500
+    /// `x-google-min-bitrate` hint injected into video fmtp lines. 100 kbps =
+    /// `minVideoBitrate` expressed in kbps (the SDP hint unit), ensuring the
+    /// encoder never drops below the critical-tier floor on startup.
+    static let sdpVideoMinBitrateKbps: Int = 100
+
+    // MARK: Quality-level debounce (WebRTCService)
+
+    /// Minimum interval between consecutive video quality-level upgrades.
+    /// 5 s prevents thrashing when stats oscillate around a tier boundary —
+    /// a single RTT spike doesn't immediately flip the encoder back to a
+    /// lower tier once it has stabilised. Used in `processStats` debounce gate.
+    static let qualityLevelDebounceSeconds: TimeInterval = 5.0
+
+    // MARK: ICE candidate pool (P2PWebRTCClient — PERF-003)
+
+    /// Number of ICE candidates pre-gathered before the SDP exchange completes.
+    /// 4 = host + srflx + 2×relay; covers the dual-STUN + single-TURN topology
+    /// without over-provisioning. Pre-warming starts as soon as `setConfiguration`
+    /// runs, shaving 200–400ms off connect time on cellular.
+    static let iceCandidatePoolSize: Int = 4
+
+    // MARK: Video survival hysteresis (VideoSurvivalPolicy)
+
+    /// How long a call must stay at `.poor` / `.critical` quality continuously
+    /// before the survival controller drops to audio-only. 6 s absorbs transient
+    /// spikes (cellular handoff, brief congestion) without prematurely killing
+    /// video while the link is still likely to recover on its own.
+    static let videoSurvivalSuspendAfterSeconds: TimeInterval = 6
+
+    /// How long a call must stay at `.excellent` / `.good` quality continuously
+    /// before the survival controller re-enables outbound video. Intentionally
+    /// longer than `videoSurvivalSuspendAfterSeconds` (6 s): re-acquiring the
+    /// camera + renegotiating is expensive, so we require the link to have
+    /// clearly settled before committing.
+    static let videoSurvivalResumeAfterSeconds: TimeInterval = 10
+
+    // MARK: Signalling retry (emitOfferWithRetry / emitAnswerRetry)
+
+    /// Starting backoff delay for SDP offer/answer ACK retries. Doubles on each
+    /// successive attempt (500ms → 1s → 2s) — §4.6 bounded exponential backoff.
+    static let signalRetryInitialDelaySeconds: TimeInterval = 0.5
+
+    /// Total SDP offer transmission attempts (including the first). 3 attempts
+    /// with 500ms/1s/2s backoff give the socket up to 3.5s total window before
+    /// the gateway replay buffer takes over.
+    static let signalOfferMaxAttempts: Int = 3
+
+    /// Total SDP answer transmission attempts (including the inline attempt 1).
+    /// The callee's answer path runs attempt 1 inline (so `CXAnswerCallAction`
+    /// can be fulfilled promptly), then retries 2…4 in the background via
+    /// `emitAnswerRetry`. Matches the offer budget so neither side starves.
+    static let signalAnswerTotalAttempts: Int = 4
+
+    // MARK: SDP extmap ID allocation (RFC 5285 §4.2)
+
+    /// First extmap ID tried when injecting Transport-CC into the SDP.
+    /// IDs 1–4 are typically consumed by libwebrtc's own extensions (MID,
+    /// RID, audio level, abs-send-time). Starting at 5 avoids collisions
+    /// without scanning the full extmap list.
+    static let extmapStartId: Int = 5
+
+    /// Maximum valid extmap ID for the 1-byte header form (RFC 5285 §4.2).
+    /// IDs 15+ require the 2-byte header form, which not all implementations
+    /// support. If IDs 5–14 are exhausted (10 occupied slots — extremely
+    /// unlikely in a real WebRTC SDP), the extension is not injected and
+    /// a fault is logged rather than emitting an invalid 15+ ID.
+    static let extmapMaxId: Int = 14
+
+    /// Delay after rebuilding the audio stack following an AVAudioSession
+    /// media-services reset before re-applying the speaker route.  The
+    /// RTCAudioSession I/O unit needs a short stabilisation window once
+    /// `audioSessionDidActivate` has been called; attempting `overrideOutputAudioPort`
+    /// too early (< ~100 ms) can silently fail on some hardware.
+    /// 200 ms is conservative but avoids the race on all tested devices.
+    static let mediaServicesResetSpeakerDelaySeconds: TimeInterval = 0.2
 }
 
 // MARK: - Video Quality Level (§4.8)
 
-enum VideoQualityLevel: String, Comparable, Sendable {
+// `nonisolated` — pure value ladder consumed from nonisolated policy code
+// (CallReliabilityPolicy.effectiveQualityLevel needs the Comparable
+// conformance outside the MainActor) and libwebrtc stats callbacks.
+nonisolated enum VideoQualityLevel: String, Comparable, Sendable {
     case excellent
     case good
     case fair
@@ -488,17 +1353,28 @@ enum VideoQualityLevel: String, Comparable, Sendable {
     }
 
     static func from(rtt: Double, packetLoss: Double) -> VideoQualityLevel {
-        if rtt > 500 || packetLoss > 0.10 { return .critical }
-        if rtt > 300 || packetLoss > 0.05 { return .poor }
-        if rtt > 200 || packetLoss > 0.03 { return .fair }
-        if rtt > 100 || packetLoss > 0.01 { return .good }
+        if rtt > QualityThresholds.poorRTT || packetLoss > QualityThresholds.poorPacketLoss { return .critical }
+        if rtt > QualityThresholds.videoPoorRTT || packetLoss > QualityThresholds.goodPacketLoss { return .poor }
+        if rtt > QualityThresholds.videoFairRTT || packetLoss > QualityThresholds.videoFairPacketLoss { return .fair }
+        if rtt > QualityThresholds.excellentRTT || packetLoss > QualityThresholds.excellentPacketLoss { return .good }
         return .excellent
+    }
+
+    /// Map TWCC GCC `availableOutgoingBitrate` (bps) to a quality level. Thresholds
+    /// are set conservatively below each tier's `targetVideoBitrate` to leave headroom
+    /// for audio + RTCP overhead. Returns `.critical` when `bps == 0` (TWCC not yet active).
+    static func from(availableOutgoingBitrateBps bps: Int) -> VideoQualityLevel {
+        if bps >= QualityThresholds.bweExcellentBps { return .excellent }
+        if bps >= QualityThresholds.bweGoodBps      { return .good }
+        if bps >= QualityThresholds.bweFairBps       { return .fair }
+        if bps >= QualityThresholds.bwePoorBps       { return .poor }
+        return .critical
     }
 }
 
 // MARK: - Errors
 
-enum WebRTCError: Error, LocalizedError {
+enum WebRTCError: Error, LocalizedError, Sendable {
     case noPeerConnection
     case failedToCreatePeerConnection
     case failedToCreateSDP
@@ -507,6 +1383,9 @@ enum WebRTCError: Error, LocalizedError {
     case notSupported
     case simulatorVideoUnsupported
     case offerIgnored
+    /// The user has denied camera access in iOS Settings. The call can continue
+    /// as audio-only; the user must re-grant permission to enable video.
+    case cameraPermissionDenied
 
     var errorDescription: String? {
         switch self {
@@ -521,6 +1400,8 @@ enum WebRTCError: Error, LocalizedError {
             "Use a real device for video calls."
         case .offerIgnored:
             "Colliding offer ignored by the impolite peer (perfect negotiation glare)"
+        case .cameraPermissionDenied:
+            "Camera access denied. Enable it in Settings → Meeshy → Camera."
         }
     }
 }
@@ -538,7 +1419,7 @@ enum WebRTCError: Error, LocalizedError {
 /// then takes the MORE conservative of the network target and the thermal cap
 /// on each axis. `.nominal` is a strict no-op.
 enum VideoThermalProfile {
-    struct Ceiling: Equatable {
+    struct Ceiling: Equatable, Sendable {
         let bitrateFactor: Double   // multiplies the network bitrate target (≤ 1)
         let maxFramerate: Int       // absolute fps cap
         let minScaleDownBy: Double  // floor on resolution downscale (≥ 1)
@@ -569,6 +1450,21 @@ enum VideoThermalProfile {
         let flooredScale = max(scaleDownBy, c.minScaleDownBy)
         return (max(1, cappedBitrate), max(1, cappedFramerate), max(1.0, flooredScale))
     }
+}
+
+// MARK: - Video capture ceiling
+
+/// Video capture/encoding ceiling. Kept as a single source of truth so the
+/// camera format picker (`P2PWebRTCClient.selectFormat`) and the encoding
+/// config stay in sync when the preset is updated.
+struct VideoConfig: Sendable {
+    let maxResolution: CGSize
+    let maxFrameRate: Int
+
+    static let hd720p30 = VideoConfig(
+        maxResolution: CGSize(width: 1280, height: 720),
+        maxFrameRate: 30
+    )
 }
 
 // MARK: - Camera device catalog (§7.1 — Continuity / external camera picker)

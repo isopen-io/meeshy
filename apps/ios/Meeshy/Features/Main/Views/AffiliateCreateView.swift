@@ -15,7 +15,7 @@ struct AffiliateCreateView: View {
 
     var onCreate: ((AffiliateToken) -> Void)?
 
-    private let accentColor = "2ECC71"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         NavigationStack {
@@ -47,17 +47,17 @@ struct AffiliateCreateView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
 
                 TextField(String(localized: "affiliate.create.name.placeholder", defaultValue: "Ex: Invitation Twitter", bundle: .main), text: $name)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .padding(12)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(theme.surfaceGradient(tint: accentColor))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                     .stroke(theme.border(tint: accentColor), lineWidth: 1)
                             )
                     )
@@ -65,18 +65,18 @@ struct AffiliateCreateView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
 
                 TextField(String(localized: "affiliate.create.maxUses.placeholder", defaultValue: "Illimite", bundle: .main), text: $maxUses)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .keyboardType(.numberPad)
                     .padding(12)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(theme.surfaceGradient(tint: accentColor))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                     .stroke(theme.border(tint: accentColor), lineWidth: 1)
                             )
                     )
@@ -84,7 +84,7 @@ struct AffiliateCreateView: View {
 
             if let errorMessage {
                 Text(errorMessage)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
             }
         }
@@ -103,16 +103,16 @@ struct AffiliateCreateView: View {
                         .scaleEffect(0.8)
                 } else {
                     Image(systemName: "link.badge.plus")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                 }
                 Text(String(localized: "affiliate.create.button", defaultValue: "Creer le lien", bundle: .main))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(
                         name.trimmingCharacters(in: .whitespaces).isEmpty
                             ? Color(hex: accentColor).opacity(0.4)

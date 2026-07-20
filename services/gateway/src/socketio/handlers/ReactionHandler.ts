@@ -15,6 +15,8 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -25,6 +27,7 @@ export interface ReactionHandlerDependencies {
   reactionService: ReactionService;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
+  deliveryQueue?: RedisDeliveryQueue | null;
 }
 
 export class ReactionHandler {
@@ -34,6 +37,8 @@ export class ReactionHandler {
   private reactionService: ReactionService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private deliveryQueue: RedisDeliveryQueue | null;
+  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ReactionHandlerDependencies) {
     this.io = deps.io;
@@ -42,6 +47,16 @@ export class ReactionHandler {
     this.reactionService = deps.reactionService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.deliveryQueue = deps.deliveryQueue ?? null;
+  }
+
+  /**
+   * Injected after construction by `MeeshySocketIOManager.setDeliveryQueue`
+   * (same instance shared with MessageHandler and the REST broadcast path),
+   * since the queue is built once `server.ts` has the Redis-backed CacheStore.
+   */
+  setDeliveryQueue(queue: RedisDeliveryQueue): void {
+    this.deliveryQueue = queue;
   }
 
   /**
@@ -76,6 +91,16 @@ export class ReactionHandler {
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
+      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
+      if (!rateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Too many reactions. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
+
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {
         const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
@@ -85,18 +110,32 @@ export class ReactionHandler {
 
       const reactionService = this.reactionService;
 
-      const reaction = await reactionService.addReaction({
+      const addResult = await reactionService.addReaction({
         messageId: validated.messageId,
         emoji: validated.emoji,
         participantId
       });
 
-      if (!reaction) {
+      if (!addResult) {
         const errorResponse: SocketIOResponse<unknown> = {
           success: false,
           error: 'Failed to add reaction'
         };
         if (callback) callback(errorResponse);
+        return;
+      }
+
+      const { reaction, replacedEmojis } = addResult;
+
+      if (addResult.unchanged) {
+        // Idempotent no-op: the participant already had exactly this emoji on
+        // this message (optimistic-UI double-fire, a socket retry after a lost
+        // ACK, or a second device echoing the same tap). Nothing changed in the
+        // DB, so reply success but skip the REACTION_ADDED broadcast and the
+        // author notification — re-emitting them spams every participant in the
+        // room and re-notifies the author for a reaction that never changed
+        // state. Mirrors handleReactionRemove's already-absent guard below.
+        if (callback) callback({ success: true, data: reaction });
         return;
       }
 
@@ -119,12 +158,37 @@ export class ReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      // Broadcaster l'événement
+      // Fire-and-forget post-success side-effects so errors in broadcast or
+      // notification do not confuse the already-confirmed client response.
       if (message) {
-        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED);
+        // Single-reaction-per-user swap: tell other clients the previous emoji
+        // is gone before announcing the new one (order is cosmetic — the two
+        // events target different emojis and merge independently client-side).
+        for (const removedEmoji of replacedEmojis) {
+          reactionService.createUpdateEvent(
+            validated.messageId,
+            removedEmoji,
+            'remove',
+            participantId,
+            message.conversationId
+          )
+            .then(removeEvent => {
+              // Attach the broadcast's own `.catch` — it is async (awaits
+              // normalizeConversationId, then emits), so its rejection escapes
+              // the outer chain otherwise, surfacing as an unhandledRejection.
+              // Parity with the REACTION_ADDED broadcast below.
+              this._broadcastReactionEventWithConversationId(message.conversationId, removeEvent, SERVER_EVENTS.REACTION_REMOVED)
+                .catch(err => logger.error('reaction:add replaced-emoji broadcast failed', { error: err, conversationId: message.conversationId }));
+              void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, removedEmoji, removeEvent as unknown as Record<string, unknown>);
+            })
+            .catch(err => logger.error('reaction:add replaced-emoji createUpdateEvent failed', { error: err, conversationId: message.conversationId }));
+        }
+        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
+          .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
+        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
       }
-
-      await this._createReactionNotification(validated.messageId, validated.emoji, userId, isAnonymous, reaction.id);
+      // _createReactionNotification handles errors internally; void to be explicit.
+      void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
     } catch (error: unknown) {
       logger.error('reaction:add failed', { error });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -166,6 +230,16 @@ export class ReactionHandler {
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
+      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_REMOVE);
+      if (!rateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.REACTION_REMOVE);
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Too many reaction changes. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
+
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {
         const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };
@@ -182,11 +256,13 @@ export class ReactionHandler {
       });
 
       if (!removed) {
-        const errorResponse: SocketIOResponse<unknown> = {
-          success: false,
-          error: 'Reaction not found'
-        };
-        if (callback) callback(errorResponse);
+        // Idempotent: the reaction is already absent — the caller's desired
+        // end-state is achieved. Reply success (no broadcast, nothing changed)
+        // instead of an error, which the client would treat as a failed un-react
+        // and roll the optimistic removal back, re-showing a reaction that is
+        // gone. Mirrors the idempotent REST DELETE (R-GW2) and the add path's
+        // P2002 handling.
+        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
         return;
       }
 
@@ -210,7 +286,9 @@ export class ReactionHandler {
       if (callback) callback(successResponse);
 
       if (message) {
-        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED);
+        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
+          .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
+        void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
       }
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
@@ -246,6 +324,12 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
+
+      const syncAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_SYNC);
+      if (!syncAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
 
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, messageId);
       if (!participantId) {
@@ -325,6 +409,57 @@ export class ReactionHandler {
       (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
     );
     this.io.to(ROOMS.conversation(normalizedConversationId)).emit(eventType, updateEvent);
+  }
+
+  /**
+   * Offline delivery queue for reaction add/remove — mirrors
+   * `MessageHandler._enqueueOfflineEventForParticipants` for edits/deletes.
+   * Without this a reaction toggled while a participant is offline is only
+   * broadcast to the live conversation room, so the offline peer's cached
+   * reaction counts stay stale until an unrelated full refetch. On reconnect
+   * `MeeshySocketIOManager._drainedEventName` replays the queued entry as
+   * REACTION_ADDED / REACTION_REMOVED with the same payload as the live emit.
+   *
+   * The actor is excluded by participant id (Leçon 78: exclude on the CALLER's
+   * identity, never on message content) and every online peer is skipped since
+   * they already received the live broadcast.
+   *
+   * `dedupKey` scopes the delivery-queue dedup to (messageId, reactor, emoji)
+   * instead of the default messageId — RedisDeliveryQueue's default dedup is
+   * (messageId, eventType), which would otherwise collapse two different
+   * reactors' 'reaction-added' events on the same message into one, silently
+   * dropping every reactor after the first for an offline peer.
+   */
+  private async _enqueueOfflineReactionEvent(
+    conversationId: string,
+    actorParticipantId: string | null | undefined,
+    eventType: 'reaction-added' | 'reaction-removed',
+    messageId: string,
+    emoji: string,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.deliveryQueue) return;
+    try {
+      const participants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true },
+        select: { id: true, userId: true }
+      });
+      const dedupKey = `${messageId}:${actorParticipantId ?? 'unknown'}:${emoji}`;
+      for (const p of participants) {
+        const queueKey = p.userId ?? p.id;
+        if (p.id === actorParticipantId || this.connectedUsers.has(queueKey)) continue;
+        this.deliveryQueue.enqueue(queueKey, {
+          messageId,
+          conversationId,
+          payload,
+          enqueuedAt: new Date().toISOString(),
+          eventType,
+          dedupKey,
+        }).catch((err) => logger.warn('Failed to enqueue offline reaction event', { userId: queueKey, eventType, error: err }));
+      }
+    } catch (err) {
+      logger.warn('Failed to fetch participants for offline reaction enqueue', { conversationId, eventType, error: err });
+    }
   }
 
   /**

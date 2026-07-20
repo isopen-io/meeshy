@@ -91,7 +91,7 @@ env:
   DOCKER_NAMESPACE: isopen
   PLATFORMS: linux/amd64
   NODE_VERSION: '22'
-  BUN_VERSION: '1.1.38'
+  BUN_VERSION: '1.3.14'
   PNPM_VERSION: '9'
   PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
 
@@ -111,7 +111,7 @@ jobs:
       has_changes: ${{ steps.services.outputs.has_changes }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -237,19 +237,19 @@ jobs:
           swap-storage: true
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up QEMU (for ARM64 emulation if needed)
         if: contains(github.event.inputs.platforms || env.PLATFORMS, 'arm64')
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: arm64
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.DOCKER_REGISTRY }}
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -264,7 +264,7 @@ jobs:
 
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.DOCKER_NAMESPACE }}/${{ matrix.image }}
           tags: |
@@ -290,7 +290,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}

@@ -23,6 +23,14 @@ import type {
   ReactionListener,
   ReadStatusListener,
   ConversationJoinedListener,
+  ConversationNewListener,
+  FriendRequestCancelledListener,
+  FriendRequestNewListener,
+  FriendRequestAcceptedListener,
+  FriendRequestRejectedListener,
+  ConversationDeletedListener,
+  ConversationUpdatedListener,
+  UserUpdatedListener,
   UnsubscribeFn
 } from './types';
 
@@ -42,6 +50,19 @@ export class PresenceService {
   private readStatusListeners: Set<ReadStatusListener> = new Set();
   private unreadUpdatedListeners: Set<(data: { conversationId: string; unreadCount: number }) => void> = new Set();
   private participantRoleUpdatedListeners: Set<(data: { conversationId: string; userId: string; newRole: string }) => void> = new Set();
+  private conversationNewListeners: Set<ConversationNewListener> = new Set();
+  private friendRequestCancelledListeners: Set<FriendRequestCancelledListener> = new Set();
+  private friendRequestNewListeners: Set<FriendRequestNewListener> = new Set();
+  private friendRequestAcceptedListeners: Set<FriendRequestAcceptedListener> = new Set();
+  private friendRequestRejectedListeners: Set<FriendRequestRejectedListener> = new Set();
+  private userUpdatedListeners: Set<UserUpdatedListener> = new Set();
+  private conversationDeletedListeners: Set<ConversationDeletedListener> = new Set();
+  private conversationUpdatedListeners: Set<ConversationUpdatedListener> = new Set();
+  private conversationParticipantLeftListeners: Set<(data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void> = new Set();
+  private conversationParticipantBannedListeners: Set<(data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void> = new Set();
+  private conversationParticipantUnbannedListeners: Set<(data: { conversationId: string; userId: string }) => void> = new Set();
+  private conversationClosedListeners: Set<(data: { conversationId: string; closedBy: string; closedAt: string }) => void> = new Set();
+  private conversationJoinErrorListeners: Set<(data: { conversationId: string; reason: string; message: string }) => void> = new Set();
 
   /**
    * Setup presence event listeners on socket
@@ -115,6 +136,59 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, (data: { conversationId: string; userId: string; newRole: string }) => {
       this.participantRoleUpdatedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_NEW as any, (data: any) => {
+      this.conversationNewListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED as any, (data: any) => {
+      this.friendRequestCancelledListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.FRIEND_REQUEST_NEW as any, (data: any) => {
+      this.friendRequestNewListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED as any, (data: any) => {
+      this.friendRequestAcceptedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.USER_UPDATED as any, (data: any) => {
+      this.userUpdatedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.FRIEND_REQUEST_REJECTED as any, (data: any) => {
+      this.friendRequestRejectedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_DELETED as any, (data: any) => {
+      this.conversationDeletedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_UPDATED as any, (data: any) => {
+      this.conversationUpdatedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT as any, (data: any) => {
+      this.conversationParticipantLeftListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED as any, (data: any) => {
+      this.conversationParticipantBannedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED as any, (data: any) => {
+      this.conversationParticipantUnbannedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_CLOSED as any, (data: any) => {
+      this.conversationClosedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_JOIN_ERROR as any, (data: { conversationId: string; reason: string; message: string }) => {
+      logger.warn('[PresenceService]', 'conversation join rejected', { conversationId: data.conversationId, reason: data.reason });
+      this.conversationJoinErrorListeners.forEach(listener => listener(data));
     });
   }
 
@@ -202,6 +276,71 @@ export class PresenceService {
     return () => this.participantRoleUpdatedListeners.delete(listener);
   }
 
+  onConversationNew(listener: ConversationNewListener): UnsubscribeFn {
+    this.conversationNewListeners.add(listener);
+    return () => this.conversationNewListeners.delete(listener);
+  }
+
+  onFriendRequestCancelled(listener: FriendRequestCancelledListener): UnsubscribeFn {
+    this.friendRequestCancelledListeners.add(listener);
+    return () => this.friendRequestCancelledListeners.delete(listener);
+  }
+
+  onFriendRequestNew(listener: FriendRequestNewListener): UnsubscribeFn {
+    this.friendRequestNewListeners.add(listener);
+    return () => this.friendRequestNewListeners.delete(listener);
+  }
+
+  onFriendRequestAccepted(listener: FriendRequestAcceptedListener): UnsubscribeFn {
+    this.friendRequestAcceptedListeners.add(listener);
+    return () => this.friendRequestAcceptedListeners.delete(listener);
+  }
+
+  onFriendRequestRejected(listener: FriendRequestRejectedListener): UnsubscribeFn {
+    this.friendRequestRejectedListeners.add(listener);
+    return () => this.friendRequestRejectedListeners.delete(listener);
+  }
+
+  onUserUpdated(listener: UserUpdatedListener): UnsubscribeFn {
+    this.userUpdatedListeners.add(listener);
+    return () => this.userUpdatedListeners.delete(listener);
+  }
+
+  onConversationDeleted(listener: ConversationDeletedListener): UnsubscribeFn {
+    this.conversationDeletedListeners.add(listener);
+    return () => this.conversationDeletedListeners.delete(listener);
+  }
+
+  onConversationUpdated(listener: ConversationUpdatedListener): UnsubscribeFn {
+    this.conversationUpdatedListeners.add(listener);
+    return () => this.conversationUpdatedListeners.delete(listener);
+  }
+
+  onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): UnsubscribeFn {
+    this.conversationParticipantLeftListeners.add(listener);
+    return () => this.conversationParticipantLeftListeners.delete(listener);
+  }
+
+  onConversationParticipantBanned(listener: (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void): UnsubscribeFn {
+    this.conversationParticipantBannedListeners.add(listener);
+    return () => this.conversationParticipantBannedListeners.delete(listener);
+  }
+
+  onConversationParticipantUnbanned(listener: (data: { conversationId: string; userId: string }) => void): UnsubscribeFn {
+    this.conversationParticipantUnbannedListeners.add(listener);
+    return () => this.conversationParticipantUnbannedListeners.delete(listener);
+  }
+
+  onConversationClosed(listener: (data: { conversationId: string; closedBy: string; closedAt: string }) => void): UnsubscribeFn {
+    this.conversationClosedListeners.add(listener);
+    return () => this.conversationClosedListeners.delete(listener);
+  }
+
+  onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): UnsubscribeFn {
+    this.conversationJoinErrorListeners.add(listener);
+    return () => this.conversationJoinErrorListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -217,6 +356,19 @@ export class PresenceService {
     this.readStatusListeners.clear();
     this.unreadUpdatedListeners.clear();
     this.participantRoleUpdatedListeners.clear();
+    this.conversationNewListeners.clear();
+    this.friendRequestCancelledListeners.clear();
+    this.friendRequestNewListeners.clear();
+    this.friendRequestAcceptedListeners.clear();
+    this.friendRequestRejectedListeners.clear();
+    this.userUpdatedListeners.clear();
+    this.conversationDeletedListeners.clear();
+    this.conversationUpdatedListeners.clear();
+    this.conversationParticipantLeftListeners.clear();
+    this.conversationParticipantBannedListeners.clear();
+    this.conversationParticipantUnbannedListeners.clear();
+    this.conversationClosedListeners.clear();
+    this.conversationJoinErrorListeners.clear();
   }
 
   /**

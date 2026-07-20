@@ -13,6 +13,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { StoryTranslationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import type { Server as SocketIOServer } from 'socket.io';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { getCommunityCoMemberIds } from './communityVisibility';
 
 const log = enhancedLogger.child({ module: 'StoryTextObjectTranslationService' });
 
@@ -127,6 +128,18 @@ export class StoryTextObjectTranslationService {
     const recipients = new Set<string>([authorId]);
     if (visibility === 'ONLY') {
       for (const id of visibilityUserIds) recipients.add(id);
+      return [...recipients];
+    }
+
+    if (visibility === 'COMMUNITY') {
+      for (const id of await getCommunityCoMemberIds(this.prisma, authorId)) recipients.add(id);
+      return [...recipients];
+    }
+
+    // PRIVATE = draft / author-only. Mirrors `SocialEventsHandler.getVisibilityFilteredRecipients`
+    // (`case 'PRIVATE': return []`). Without this guard the story falls through to the friend
+    // fan-out below and leaks the translated overlay text to every friend of the author.
+    if (visibility === 'PRIVATE') {
       return [...recipients];
     }
 

@@ -43,7 +43,10 @@ public final class MentionComposerController: ObservableObject {
     private let localCandidates: () -> [MentionCandidate]
     private var debounceTask: Task<Void, Never>?
 
-    private static let minQueryLengthForAPI = 2
+    // 0 = la liste par défaut s'affiche dès la frappe de « @ » (requête vide) :
+    // pour un post, le backend renvoie auteur + personnes ayant commenté + contacts ;
+    // pour une conversation, les participants. Débounce + cache Redis évitent le spam.
+    private static let minQueryLengthForAPI = 0
     private static let debounceMs: UInt64 = 300_000_000
 
     // MARK: - Init

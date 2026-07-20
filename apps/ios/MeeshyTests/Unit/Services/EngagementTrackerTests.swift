@@ -80,9 +80,9 @@ final class MockEngagementSink: EngagementSinking, @unchecked Sendable {
     private var _finalized: [EngagementSession] = []
     var opened: [EngagementSession] { lock.lock(); defer { lock.unlock() }; return _opened }
     var finalized: [EngagementSession] { lock.lock(); defer { lock.unlock() }; return _finalized }
-    func beginSession(_ s: EngagementSession) async { lock.lock(); _opened.append(s); lock.unlock() }
+    func beginSession(_ s: EngagementSession) async { lock.withLock { _opened.append(s) } }
     func checkpoint(_ s: EngagementSession) async {}
-    func finalizeSession(_ s: EngagementSession) async { lock.lock(); _finalized.append(s); lock.unlock() }
+    func finalizeSession(_ s: EngagementSession) async { lock.withLock { _finalized.append(s) } }
     func requestFlush() async {}
 }
 final class MutableClockMs { var value: Int = 0 }

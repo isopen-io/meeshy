@@ -86,7 +86,19 @@
       "memberJoined": "New member in \"{title}\"",
       "missedCall": "Missed {type} call",
       "system": "System notification",
-      "default": "New notification"
+      "default": "New notification",
+      "postLike": "@{sender} liked your post",
+      "postComment": "@{sender} commented on your post",
+      "postRepost": "@{sender} reposted your post",
+      "commentReply": "@{sender} replied to your comment",
+      "commentLike": "@{sender} liked your comment",
+      "commentReaction": "@{sender} reacted to your comment",
+      "storyReaction": "@{sender} reacted to your story",
+      "statusReaction": "@{sender} reacted to your status",
+      "friendNewPost": "@{sender} shared a post",
+      "friendNewStory": "@{sender} added a story",
+      "friendNewMood": "@{sender} shared a mood",
+      "loginNewDevice": "New sign-in detected"
     },
     "content": {
       "memberJoinedMessage": "{sender} joined the group",
@@ -103,7 +115,8 @@
       "now": "just now",
       "minute": "{count} min ago",
       "hour": "{count}h ago",
-      "day": "{count}d ago"
+      "day": "{count}d ago",
+      "yesterdayAt": "yesterday {time}"
     },
     "actions": {
       "accept": "Accept",
@@ -316,6 +329,9 @@
       "reconnecting": "Reconnecting...",
       "disconnected": "Disconnected"
     },
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "context": {
+      "expired": "expired"
+    }
   }
 }

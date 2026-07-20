@@ -60,27 +60,27 @@ function ResetPasswordContent() {
                     </div>
                   </div>
                   <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {t('resetPassword.errors.invalidLink') || 'Lien invalide'}
+                    {t('resetPassword.errors.invalidLink', "Invalid Reset Link")}
                   </h1>
                   <p className="text-gray-600 dark:text-gray-400 mt-2">
-                    {t('resetPassword.errors.invalidLinkDescription') || 'Le lien de réinitialisation est invalide ou manquant'}
+                    {t('resetPassword.errors.invalidLinkDescription', "The password reset link is invalid or missing")}
                   </p>
                 </div>
 
                 {/* Error message */}
                 <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-6">
                   <p className="text-sm text-red-600 dark:text-red-400">
-                    {t('resetPassword.errors.noToken') || 'Aucun token trouvé dans l\'URL. Utilisez le lien de votre email.'}
+                    {t('resetPassword.errors.noToken', "No reset token found in the URL. Please use the link from your email.")}
                   </p>
                 </div>
 
                 <div className="space-y-4">
                   <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                    {t('resetPassword.errors.noTokenHelp') || 'Cliquez sur le lien dans l\'email ou demandez un nouveau lien.'}
+                    {t('resetPassword.errors.noTokenHelp', "Please click the reset link from the email we sent you, or request a new password reset.")}
                   </p>
                   <Button asChild className="w-full">
                     <Link href="/forgot-password">
-                      {t('resetPassword.requestNewLink') || 'Demander un nouveau lien'}
+                      {t('resetPassword.requestNewLink', "Request New Reset Link")}
                     </Link>
                   </Button>
                 </div>
@@ -157,10 +157,10 @@ function ResetPasswordContent() {
                   </div>
                 </div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {t('resetPassword.title') || 'Nouveau mot de passe'}
+                  {t('resetPassword.title', "Reset Password")}
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400 mt-2">
-                  {t('resetPassword.description') || 'Choisissez un nouveau mot de passe sécurisé'}
+                  {t('resetPassword.description', "Enter your new password below. Make sure it is strong and secure.")}
                 </p>
               </div>
 
@@ -168,8 +168,8 @@ function ResetPasswordContent() {
 
               {/* Security Tips */}
               <div className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <p>{t('resetPassword.securityTip1') || 'Utilisez un mot de passe unique'}</p>
-                <p>{t('resetPassword.securityTip2') || 'Nous recommandons un gestionnaire de mots de passe'}</p>
+                <p>{t('resetPassword.securityTip1', "Use a unique password that you have not used before")}</p>
+                <p>{t('resetPassword.securityTip2', "We recommend using a password manager to generate and store secure passwords")}</p>
               </div>
             </div>
           </motion.div>
@@ -183,15 +183,15 @@ function ResetPasswordContent() {
           >
             <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
               <a href="/terms" className="hover:text-foreground transition-colors">
-                {t('register.termsOfService') || 'Conditions'}
+                {t('register.termsOfService', "Terms of Service")}
               </a>
               <span className="hidden sm:inline">•</span>
               <a href="/privacy" className="hover:text-foreground transition-colors">
-                {t('register.privacyPolicy') || 'Confidentialité'}
+                {t('register.privacyPolicy', "Privacy Policy")}
               </a>
               <span className="hidden sm:inline">•</span>
               <a href="/contact" className="hover:text-foreground transition-colors">
-                {t('register.contactUs') || 'Contact'}
+                {t('register.contactUs', "Contact us")}
               </a>
             </div>
           </motion.div>

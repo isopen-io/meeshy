@@ -12,9 +12,11 @@ import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
+import { useAuth } from '@/hooks/use-auth';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Conversation } from '@meeshy/shared/types';
 import type { CallInitiateAck, CallJoinAck } from '@meeshy/shared/types/video-call';
+import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 
 interface UseVideoCallOptions {
   /**
@@ -37,27 +39,12 @@ interface UseVideoCallReturn {
 }
 
 /**
- * Configuration des contraintes média
- */
-const AUDIO_CONSTRAINTS: MediaTrackConstraints = {
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
-};
-
-const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
-  width: { ideal: 640, max: 1280 },
-  height: { ideal: 480, max: 720 },
-  frameRate: { ideal: 24, max: 30 },
-  facingMode: 'user',
-};
-
-/**
  * Hook pour gérer les appels vidéo
  */
 export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCallReturn {
   const [error, setError] = useState<string | null>(null);
   const callStore = useCallStore();
+  const { user } = useAuth();
 
   // Les appels ne sont supportés que pour les conversations directes
   const isCallSupported = conversation?.type === 'direct';
@@ -81,10 +68,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
 
     try {
       // Demander les permissions média (vidéo uniquement pour un appel vidéo)
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: AUDIO_CONSTRAINTS,
-        video: isVideo ? VIDEO_CONSTRAINTS : false,
-      });
+      stream = await navigator.mediaDevices.getUserMedia(getCallMediaConstraints(type));
 
       // Stocker le stream pour réutilisation
       (window as any).__preauthorizedMediaStream = stream;
@@ -94,7 +78,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
 
       if (!socket?.connected) {
         toast.error('Connection error. Please try again.');
-        cleanupStream(stream);
+        stopPreauthorizedStream(stream);
         return;
       }
 
@@ -109,19 +93,55 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       };
 
       socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, (ack: CallInitiateAck) => {
+        // The gateway can reject call:initiate (callee busy/blocked/offline,
+        // rate-limited, validation error). Without handling this branch the
+        // pre-authorized camera/mic stream stays hot forever — the only
+        // consumer that releases it is VideoCallInterface, which never
+        // mounts because currentCall is never set — and the user is left
+        // staring at a "Starting call..." toast with no further feedback.
+        if (!ack?.success) {
+          stopPreauthorizedStream(stream);
+          toast.error(ack?.error?.message ?? 'Failed to start call. Please try again.');
+          return;
+        }
+
         // Persist the server-provided ICE servers (STUN + time-limited TURN)
         // so the initiator's RTCPeerConnection is built with TURN credentials
         // before the SDP offer is created.
-        if (ack?.success && ack.data?.iceServers?.length) {
+        if (ack.data?.iceServers?.length) {
           useCallStore.getState().setIceServers(ack.data.iceServers);
         }
+
+        // P0 fix (2026-07-06) — the gateway deliberately never re-emits
+        // `call:initiated` back to the initiator's own socket(s) (it only
+        // notifies the OTHER conversation members); `CallManager`'s
+        // `isInitiator` branch that would set `currentCall`/`isInCall` is
+        // therefore unreachable for the caller on web. Without this, the
+        // callee gets rung correctly but the caller's own screen never shows
+        // the call UI. Set the call as current directly from the ack — the
+        // only data the caller actually needs to start rendering; the
+        // participants list is populated as callees join via the existing
+        // `call:participant-joined` handler (a no-op until `currentCall`
+        // exists, so this is the step that unblocks it).
+        if (ack.data?.callId && user) {
+          useCallStore.getState().setCurrentCall({
+            id: ack.data.callId,
+            conversationId: conversation.id,
+            mode: ack.data.mode,
+            status: 'initiated',
+            initiatorId: user.id,
+            startedAt: new Date(),
+            participants: [],
+          });
+        }
+
+        toast.success('Starting call...');
       });
-      toast.success('Starting call...');
     } catch (error: unknown) {
-      cleanupStream(stream);
+      stopPreauthorizedStream(stream);
       handleMediaError(error);
     }
-  }, [conversation]);
+  }, [conversation, user]);
 
   const answerCall = useCallback(async (callId: string) => {
     const socket = meeshySocketIOService.getSocket();
@@ -177,16 +197,6 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
     isCallSupported,
     error,
   };
-}
-
-/**
- * Nettoie un MediaStream
- */
-function cleanupStream(stream: MediaStream | null): void {
-  if (stream) {
-    stream.getTracks().forEach(track => track.stop());
-    delete (window as any).__preauthorizedMediaStream;
-  }
 }
 
 /**

@@ -118,11 +118,15 @@ struct CreateShareLinkView: View {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
                 }
                 .padding(14)
                 .background(rowBackground)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(selectedConversation.map { "\($0.name), \($0.type.displayLabel)" }
+                ?? String(localized: "share.link.create.choose_group", defaultValue: "Choisir un groupe ou une communauté", bundle: .main))
+            .accessibilityHint(String(localized: "share.link.create.conversation.a11yHint", defaultValue: "Choisit la conversation à partager", bundle: .main))
         }
     }
 
@@ -390,9 +394,11 @@ struct CreateShareLinkView: View {
                 Image(systemName: icon)
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(accent)
+                    .accessibilityHidden(true)
                 Text(title.uppercased())
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textSecondary)
+                    .accessibilityAddTraits(.isHeader)
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
@@ -419,9 +425,11 @@ struct CreateShareLinkView: View {
             Text(label)
                 .font(.caption2.weight(.medium))
                 .foregroundColor(theme.textSecondary)
+                .accessibilityHidden(true)
             TextField(placeholder, text: text)
                 .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
+                .accessibilityLabel(label)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -462,6 +470,7 @@ struct CreateShareLinkView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(Color(hex: color))
         }
+        .accessibilityHidden(true)
     }
 
     private func conversationTypeIcon(_ type: Conversation.ConversationType) -> some View {
@@ -564,11 +573,16 @@ private struct ConversationPickerSheet: View {
                                             .foregroundColor(theme.textPrimary)
                                         Spacer()
                                         if selected?.id == conv.id {
+                                            // Selection is conveyed to VoiceOver by the
+                                            // `.isSelected` trait below; the glyph is decorative.
                                             Image(systemName: "checkmark.circle.fill")
                                                 .foregroundColor(MeeshyColors.shareAccent)
+                                                .accessibilityHidden(true)
                                         }
                                     }
                                 }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityAddTraits(selected?.id == conv.id ? .isSelected : [])
                             }
                         }
                     }
@@ -621,7 +635,7 @@ private enum ExpirationOption: String, CaseIterable {
         case .m3:    cal.date(byAdding: .month, value: 3, to: now)
         }
         guard let date else { return nil }
-        return ISO8601DateFormatter().string(from: date)
+        return date.formatted(.iso8601)
     }
 }
 

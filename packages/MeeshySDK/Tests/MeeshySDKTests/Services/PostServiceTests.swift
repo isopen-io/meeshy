@@ -43,7 +43,8 @@ final class PostServiceTests: XCTestCase {
             effectFlags: nil,
             createdAt: Date(),
             author: APIAuthor(id: "author2", username: "bob", displayName: "Bob", avatar: nil),
-            currentUserReactions: nil
+            currentUserReactions: nil,
+            media: nil
         )
     }
 

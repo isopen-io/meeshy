@@ -77,6 +77,13 @@
       "position": "Posición {label}",
       "distributionNote": "Este gráfico muestra la distribución del rendimiento del top {count} clasificado por posición.",
       "curveNote": "La curva descendente indica cómo disminuyen los valores a lo largo de las posiciones."
+    },
+    "conversationType": {
+      "direct": "Directa",
+      "group": "Grupo",
+      "public": "Pública",
+      "broadcast": "Difusión",
+      "unknown": "Desconocido"
     }
   },
   "scanLog": {
@@ -295,6 +302,7 @@
       "fieldCooldown": "Cooldown (minutos)",
       "cooldownHint": "Tiempo antes de poder volver a seleccionar este topic en la misma conversación.",
       "fieldActive": "Activo (usado por el estratega)",
+      "close": "Cerrar",
       "cancel": "Cancelar",
       "saving": "Guardando...",
       "save": "Guardar",
@@ -347,6 +355,46 @@
       "added": "Añadido",
       "noResults": "Ningún usuario encontrado",
       "minChars": "Introduce al menos 2 caracteres"
+    },
+    "conversationsTab": {
+      "deleteConfirm": "¿Eliminar esta configuración de agente?",
+      "title": "Configuraciones de agente",
+      "count": "{count} conversaciones configuradas",
+      "searchPlaceholder": "Buscar...",
+      "configure": "Configurar",
+      "empty": "Ninguna conversación configurada para el agente",
+      "viewMessages": "Ver mensajes del agente",
+      "triggerScheduler": "Planificador de disparadores",
+      "columns": {
+        "conversation": "Conversación",
+        "status": "Estado",
+        "triggers": "Disparadores",
+        "controlled": "Controlados",
+        "messages": "Mensajes",
+        "confidence": "Confianza",
+        "lastResponse": "Última resp.",
+        "actions": "Acciones"
+      }
+    },
+    "conversationPicker": {
+      "searchPlaceholder": "Buscar por título, ID o identificador...",
+      "searching": "Buscando en las salas...",
+      "untitled": "Sin título",
+      "noResults": "No se encontró ninguna conversación para «{term}»",
+      "minChars": "Introduce al menos 2 caracteres para buscar"
+    },
+    "rolesSection": {
+      "empty": "Ningún rol observado para esta conversación",
+      "origin": {
+        "observed": "Observado",
+        "archetype": "Arquetipo",
+        "hybrid": "Híbrido"
+      },
+      "locked": "Bloqueado",
+      "unlock": "Desbloquear",
+      "messagesAnalyzed": "{count} msj analizados",
+      "confidence": "Confianza",
+      "assignArchetype": "Asignar un arquetipo..."
     }
   },
   "agentLive": {
@@ -919,7 +967,8 @@
     "clickColReferrer": "Referrer",
     "clickColSource": "Fuente",
     "clickColStatus": "Estado",
-    "fieldNamePlaceholder": "Promo verano"
+    "fieldNamePlaceholder": "Promo verano",
+    "copyError": "Error al copiar el enlace"
   },
   "users": {
     "newUser": {
@@ -1712,6 +1761,11 @@
   "usersDetail": {
     "viewMembers": "Ver miembros",
     "membersModalTitle": "Miembros",
+    "viewMessages": "Ver mensajes",
+    "messagesModalTitle": "Mensajes",
+    "noMessages": "Sin mensajes",
+    "editedBadge": "Editado",
+    "deletedBadge": "Eliminado",
     "mediaTitle": "Medios",
     "loadingMedia": "Cargando medios...",
     "noMedia": "Sin medios",
@@ -1748,7 +1802,6 @@
     "noConversations": "Sin conversaciones",
     "noPosts": "Sin publicaciones",
     "loadMore": "Cargar más",
-    "deletedBadge": "Eliminado",
     "membersWord": "miembros",
     "filterAll": "Todos",
     "postTypePost": "Publicación",
@@ -1920,7 +1973,8 @@
     "next": "Siguiente",
     "deleteTitle": "Eliminar enlace de compartición",
     "deleteDescription": "Esta acción es irreversible. El enlace de compartición y todos sus accesos serán eliminados permanentemente.",
-    "deleteConfirm": "Eliminar"
+    "deleteConfirm": "Eliminar",
+    "copyError": "Error al copiar el enlace"
   },
   "translationsPage": {
     "loadError": "Error al cargar las traducciones",

@@ -4,7 +4,7 @@ import { logError } from '../utils/logger';
 import { sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
 
 const sendEmailInvitationSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
 });
 
 export async function invitationRoutes(fastify: FastifyInstance) {

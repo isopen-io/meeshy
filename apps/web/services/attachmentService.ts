@@ -15,6 +15,7 @@ import {
 } from '@meeshy/shared/types/attachment';
 import { createAuthHeaders } from '@/utils/token-utils';
 import { buildApiUrl } from '@/lib/config';
+import { logger } from '@/utils/logger';
 
 export class AttachmentService {
   /**
@@ -33,24 +34,24 @@ export class AttachmentService {
     // VALIDATION CRITIQUE: Vérifier que les fichiers ne sont pas vides
     const emptyFiles = files.filter(f => f.size === 0);
     if (emptyFiles.length > 0) {
-      console.error('❌ [AttachmentService.uploadFiles] ERREUR: Fichiers vides reçus:', emptyFiles.map(f => f.name));
+      logger.error('[Attachment]', 'Fichiers vides reçus', { files: emptyFiles.map(f => f.name) });
       throw new Error(`Cannot upload empty files: ${emptyFiles.map(f => f.name).join(', ')}`);
     }
 
     // Log détaillé des fichiers à uploader
-    console.log('📤 [AttachmentService.uploadFiles] Files to upload:', files.map((f, i) => ({
+    logger.info('[Attachment]', 'Files to upload', { files: files.map((f, i) => ({
       index: i,
       name: f.name,
       size: f.size,
       type: f.type,
       lastModified: f.lastModified
-    })));
+    }))});
 
     const formData = new FormData();
     let totalFormDataSize = 0;
 
     files.forEach((file, index) => {
-      console.log(`📎 [AttachmentService.uploadFiles] Appending file ${index}:`, {
+      logger.info('[Attachment]', `Appending file ${index}`, {
         name: file.name,
         size: file.size,
         type: file.type,
@@ -60,7 +61,7 @@ export class AttachmentService {
 
       // Vérifier que c'est bien un File valide
       if (!((file as any) instanceof File) && !((file as any) instanceof Blob)) {
-        console.error(`❌ [AttachmentService.uploadFiles] Invalid file at index ${index}:`, typeof file);
+        logger.error('[Attachment]', `Invalid file at index ${index}`, { type: typeof file });
         throw new Error(`Invalid file at index ${index}: expected File or Blob`);
       }
 
@@ -70,11 +71,11 @@ export class AttachmentService {
       // Si des métadonnées sont fournies pour ce fichier, les ajouter
       if (metadataArray && metadataArray[index]) {
         formData.append(`metadata_${index}`, JSON.stringify(metadataArray[index]));
-        console.log(`📋 [AttachmentService.uploadFiles] Metadata for file ${index}:`, metadataArray[index]);
+        logger.info('[Attachment]', `Metadata for file ${index}`, { metadata: metadataArray[index] });
       }
     });
 
-    console.log('📊 [AttachmentService.uploadFiles] FormData prepared:', {
+    logger.info('[Attachment]', 'FormData prepared', {
       filesCount: files.length,
       totalSize: totalFormDataSize,
       totalSizeMB: (totalFormDataSize / (1024 * 1024)).toFixed(2) + ' MB',
@@ -101,7 +102,7 @@ export class AttachmentService {
 
       // Handle successful completion
       xhr.addEventListener('load', () => {
-        console.log('📥 [AttachmentService.uploadFiles] Response received:', {
+        logger.info('[Attachment]', 'Response received', {
           status: xhr.status,
           responseLength: xhr.responseText.length
         });
@@ -112,7 +113,7 @@ export class AttachmentService {
 
             // Log détaillé de la réponse
             const attachments = result.attachments || result.data?.attachments || [];
-            console.log('✅ [AttachmentService.uploadFiles] Upload success:', {
+            logger.info('[Attachment]', 'Upload success', {
               success: result.success,
               attachmentsCount: attachments.length,
               attachments: attachments.map((a: any) => ({
@@ -127,16 +128,16 @@ export class AttachmentService {
             // Vérifier si des attachments ont des IDs vides
             const emptyIdAttachments = attachments.filter((a: any) => !a.id);
             if (emptyIdAttachments.length > 0) {
-              console.error('❌ [AttachmentService.uploadFiles] ERREUR: Attachments avec ID vide détectés!', emptyIdAttachments);
+              logger.error('[Attachment]', 'Attachments avec ID vide détectés', { emptyIdAttachments });
             }
 
             resolve(result);
           } catch (error) {
-            console.error('❌ [AttachmentService.uploadFiles] Failed to parse response:', error);
+            logger.error('[Attachment]', 'Failed to parse response', { error });
             reject(new Error('Failed to parse response'));
           }
         } else {
-          console.error('❌ [AttachmentService.uploadFiles] Upload failed:', {
+          logger.error('[Attachment]', 'Upload failed', {
             status: xhr.status,
             response: xhr.responseText.substring(0, 500)
           });

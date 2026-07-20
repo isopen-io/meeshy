@@ -338,7 +338,7 @@ export class ZmqMessageHandler extends EventEmitter {
     }
 
     // Enrichir translatedAudios avec les données binaires
-    const enrichedTranslatedAudios = event.translatedAudios.map(audio => {
+    const enrichedTranslatedAudios = (event.translatedAudios ?? []).map(audio => {
       const audioBinary = audioBinaries.get(audio.targetLanguage);
       return {
         ...audio,

@@ -1,9 +1,11 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
+import { SecuritySanitizer } from '../../utils/sanitize';
 import {
   sendSuccess,
   sendForbidden,
+  sendBadRequest,
   sendNotFound,
   sendInternalError
 } from '../../utils/response.js';
@@ -93,9 +95,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const body = createLinkSchema.parse(request.body);
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          error: 'Utilisateur enregistré requis pour créer un lien'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis pour créer un lien');
       }
 
       const user = request.authContext.registeredUser!;
@@ -208,6 +208,17 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         });
         conversationId = conversation.id;
 
+        // Auto-join every connected member's sockets to the new conversation
+        // room so they receive message:new immediately without a reconnect.
+        const socketManager = fastify.socketIOHandler?.getManager();
+        if (socketManager) {
+          for (const participant of participantsToCreate) {
+            socketManager.joinUserToConversationRoom(participant.userId, conversation.id).catch(
+              (err: unknown) => logError(fastify.log, 'Failed to auto-join member to new conversation room:', err)
+            );
+          }
+        }
+
       } else {
         // Créer une nouvelle conversation de type public (legacy)
         const conversationIdentifier = generateConversationIdentifier(body.name || 'Shared Conversation');
@@ -220,8 +231,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           data: {
             identifier: conversationIdentifier,
             type: 'public',
-            title: body.name || 'Conversation partagée',
-            description: body.description,
+            title: body.name ? SecuritySanitizer.sanitizeText(body.name) : 'Conversation partagée',
+            description: body.description ? SecuritySanitizer.sanitizeText(body.description) : undefined,
             participants: {
               create: [{
                 userId,
@@ -237,6 +248,14 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           }
         });
         conversationId = conversation.id;
+
+        // Same auto-join for the legacy path (creator is the sole member).
+        const socketManager = fastify.socketIOHandler?.getManager();
+        if (socketManager) {
+          socketManager.joinUserToConversationRoom(userId, conversation.id).catch(
+            (err: unknown) => logError(fastify.log, 'Failed to auto-join creator to new conversation room:', err)
+          );
+        }
       }
 
       // Générer le linkId initial
@@ -261,8 +280,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           linkId: initialLinkId,
           conversationId: conversationId!,
           createdBy: userId,
-          name: body.name,
-          description: body.description,
+          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
+          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
           maxUses: body.maxUses,
           maxConcurrentUsers: body.maxConcurrentUsers,
           maxUniqueSessions: body.maxUniqueSessions,
@@ -338,11 +357,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Données invalides',
-          errors: error.errors
-        });
+        return sendBadRequest(reply, 'Données invalides');
       }
       logError(fastify.log, 'Create link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

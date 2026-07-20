@@ -25,10 +25,14 @@ import SwiftUI
 // }
 // ```
 //
-// Le spinner natif iOS est masque via `.tint(.clear)` — l'utilisateur ne
-// voit que notre indicator brand. Le coordinate space est expose au
-// caller pour permettre un header sticky/collapsible qui reagit au
-// scroll : passer un binding `headerScrollOffset` recupere l'offset.
+// Le spinner natif iOS est masque par le proxy UIKit
+// `UIRefreshControl.appearance().tintColor = .clear` (AppDelegate de l'app
+// hote) — l'utilisateur ne voit que notre indicator brand. Ne JAMAIS le
+// masquer via `.tint(.clear)` sur le ScrollView : l'environnement se
+// propage au contenu et efface les icones des menus contextuels natifs
+// iOS 26. Le coordinate space est expose au caller pour permettre un
+// header sticky/collapsible qui reagit au scroll : passer un binding
+// `headerScrollOffset` recupere l'offset.
 
 public struct MeeshyRefreshableScroll<Content: View>: View {
     private let onRefresh: () async -> Void
@@ -87,7 +91,18 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
             .padding(.top, topPadding)
         }
         .coordinateSpace(name: coordinateSpaceName)
+        // iOS 16–17: the sentinel preference drives both the collapsing header and
+        // the pull-to-refresh phase.
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+            onScrollOffsetChange?(offset)
+            updatePullingPhase(scrollOffset: offset)
+        }
+        // iOS 18+: `.onPreferenceChange` no longer re-fires on scroll. Read
+        // `contentOffset.y` natively and negate it to recover the sentinel's `minY`
+        // sign (0 at rest, negative scrolling up, positive while pulling down) so
+        // both the header collapse and the pull indicator keep working.
+        .trackScrollContentOffset { contentOffsetY in
+            let offset = -contentOffsetY
             onScrollOffsetChange?(offset)
             updatePullingPhase(scrollOffset: offset)
         }
@@ -97,9 +112,16 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
             // async, puis on rejoue completing -> idle avec haptics.
             await performRefresh()
         }
-        // Masque le spinner natif iOS — l'indicator Meeshy est notre
-        // unique signal visuel.
-        .tint(.clear)
+        // PAS de `.tint(.clear)` ici pour masquer le spinner natif : le tint
+        // d'environnement se propage a TOUT le contenu du scroll, et sur
+        // iOS 26 les icones des menus contextuels natifs (Liquid Glass)
+        // suivent ce tint → icones invisibles app-wide (cause racine du
+        // faux « iOS 26 n'affiche pas les icones », elucide 2026-07-11).
+        // Le spinner natif est masque par le proxy UIKit
+        // `UIRefreshControl.appearance().tintColor = .clear` (AppDelegate),
+        // documente comme le seul mecanisme efficace sur iOS 17+ — le tint
+        // SwiftUI ne masquait deja plus rien ici. Invariant verrouille par
+        // ConversationMenuSystemDesignGuardTests.
     }
 
     /// Met a jour pullPhase pendant le pull (avant que .refreshable

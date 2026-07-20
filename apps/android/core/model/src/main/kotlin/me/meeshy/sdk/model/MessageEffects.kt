@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model
 
+import java.time.Instant
 import kotlinx.serialization.Serializable
 
 /**
@@ -29,6 +30,21 @@ object MessageEffectFlags {
     const val LIFECYCLE_MASK: Long = EPHEMERAL or BLURRED or VIEW_ONCE
     const val APPEARANCE_MASK: Long = SHAKE or ZOOM or EXPLODE or CONFETTI or FIREWORKS or WAOO
     const val PERSISTENT_MASK: Long = GLOW or PULSE or RAINBOW or SPARKLE
+
+    /** True when any bitfield bit is set — port of `MessageEffectFlags.hasAnyEffect`. */
+    fun hasAny(flags: Long): Boolean = flags != 0L
+
+    /** True when at least one lifecycle bit is set — port of `hasLifecycleEffect`. */
+    fun hasLifecycle(flags: Long): Boolean = flags and LIFECYCLE_MASK != 0L
+
+    /** True when at least one appearance bit is set — port of `hasAppearanceEffect`. */
+    fun hasAppearance(flags: Long): Boolean = flags and APPEARANCE_MASK != 0L
+
+    /** True when at least one persistent bit is set — port of `hasPersistentEffect`. */
+    fun hasPersistent(flags: Long): Boolean = flags and PERSISTENT_MASK != 0L
+
+    /** True when every bit of [effect] is set in [flags] — mirrors `OptionSet.contains`. */
+    fun has(flags: Long, effect: Long): Boolean = flags and effect == effect
 }
 
 /** Appearance style for the explode effect — port of ExplodeStyle (MessageEffects.swift). */
@@ -53,5 +69,92 @@ data class MessageEffects(
     val rainbowColors: List<String>? = null,
     val sparkleIntensity: Double? = null,
 ) {
-    val hasAnyEffect: Boolean get() = flags != 0L
+    val hasAnyEffect: Boolean get() = MessageEffectFlags.hasAny(flags)
+
+    /** True when a lifecycle effect (ephemeral / blurred / view-once) is active. */
+    val hasLifecycleEffect: Boolean get() = MessageEffectFlags.hasLifecycle(flags)
+
+    /** True when a one-shot appearance effect (shake / zoom / …) is active. */
+    val hasAppearanceEffect: Boolean get() = MessageEffectFlags.hasAppearance(flags)
+
+    /** True when a persistent visual effect (glow / pulse / …) is active. */
+    val hasPersistentEffect: Boolean get() = MessageEffectFlags.hasPersistent(flags)
+
+    /** True when every bit of [effect] is present in [flags]. */
+    fun has(effect: Long): Boolean = MessageEffectFlags.has(flags, effect)
+}
+
+/**
+ * Resolves the [MessageEffects] carried by a message from its wire fields — a
+ * direct port of the `effects` derivation in iOS `APIMessage.toMessage`
+ * (`MessageModels.swift`):
+ *
+ * - When the backend supplies a positive [effectFlags] bitfield it is authoritative
+ *   and the lifecycle booleans are ignored entirely.
+ * - Otherwise the lifecycle flags are derived from the legacy per-behaviour fields
+ *   (`isBlurred`, `isViewOnce`, expiry presence) for backwards compatibility.
+ */
+object MessageEffectsResolver {
+    fun resolve(
+        effectFlags: Int?,
+        isBlurred: Boolean? = null,
+        isViewOnce: Boolean? = null,
+        hasExpiry: Boolean = false,
+    ): MessageEffects {
+        if (effectFlags != null && effectFlags > 0) {
+            return MessageEffects(flags = effectFlags.toLong() and 0xFFFFFFFFL)
+        }
+        var flags = 0L
+        if (isBlurred == true) flags = flags or MessageEffectFlags.BLURRED
+        if (isViewOnce == true) flags = flags or MessageEffectFlags.VIEW_ONCE
+        if (hasExpiry) flags = flags or MessageEffectFlags.EPHEMERAL
+        return MessageEffects(flags = flags)
+    }
+}
+
+/** The outgoing wire projection of a composer's [MessageEffects] selection. */
+data class MessageEffectsWire(
+    val effectFlags: Int? = null,
+    val isBlurred: Boolean? = null,
+    val isViewOnce: Boolean? = null,
+    val ephemeralDuration: Int? = null,
+    val expiresAt: String? = null,
+    val maxViewOnceCount: Int? = null,
+)
+
+/**
+ * Encodes a composer's [MessageEffects] selection into the outgoing wire fields — the
+ * send-path counterpart to [MessageEffectsResolver] (which decodes a *received* message)
+ * and [MessageEffectsEditor] (which edits the selection). A direct port of the iOS
+ * `ConversationViewModel` send resolution:
+ *
+ * - No effects selected ⇒ every wire field is `null` (iOS `effectFlags: nil`).
+ * - Any effect ⇒ the full bitfield ships as [MessageEffectsWire.effectFlags] (iOS
+ *   `pendingEffects.flags.rawValue`); the lifecycle bits also project to the legacy
+ *   `isBlurred` / `isViewOnce` booleans (set to `true` only — never `false`, mirroring
+ *   iOS `? true : nil`) for backends that read the per-behaviour fields.
+ * - `EPHEMERAL` + a chosen duration ⇒ the raw seconds ship as
+ *   [MessageEffectsWire.ephemeralDuration] and a concrete
+ *   `expiresAt = now + duration` timestamp (iOS `EphemeralDuration.expiresAt`); the flag
+ *   is authoritative, so a stale duration param with the chip toggled off is ignored.
+ * - `VIEW_ONCE` ⇒ [MessageEffects.maxViewOnceCount] ships when present.
+ *
+ * The single [MessageEffects] value is the source of truth — every wire field is derived
+ * from it, never from scattered composer toggles (a deliberate improvement over iOS).
+ */
+object MessageEffectsEncoder {
+    fun encode(effects: MessageEffects, now: Instant): MessageEffectsWire {
+        if (!effects.hasAnyEffect) return MessageEffectsWire()
+        val ephemeralSeconds =
+            if (effects.has(MessageEffectFlags.EPHEMERAL)) effects.ephemeralDuration else null
+        return MessageEffectsWire(
+            effectFlags = (effects.flags and 0xFFFFFFFFL).toInt(),
+            isBlurred = if (effects.has(MessageEffectFlags.BLURRED)) true else null,
+            isViewOnce = if (effects.has(MessageEffectFlags.VIEW_ONCE)) true else null,
+            ephemeralDuration = ephemeralSeconds,
+            expiresAt = ephemeralSeconds?.let { now.plusSeconds(it.toLong()).toString() },
+            maxViewOnceCount =
+                if (effects.has(MessageEffectFlags.VIEW_ONCE)) effects.maxViewOnceCount else null,
+        )
+    }
 }

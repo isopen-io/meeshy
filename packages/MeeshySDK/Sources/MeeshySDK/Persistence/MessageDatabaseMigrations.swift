@@ -264,5 +264,33 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "callSummaryJson", .blob)
             }
         }
+
+        // Server's authoritative active-recipient denominator for the
+        // all-or-nothing delivery indicator (active participants excluding the
+        // sender). NOT NULL DEFAULT 0 keeps existing rows valid and matches
+        // `MessageRecord.recipientCount` (0 = server did not provide it → the
+        // display falls back to `memberCount − 1`).
+        migrator.registerMigration("messages_recipient_count") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "recipientCount", .integer).notNull().defaults(to: 0)
+            }
+        }
+
+        // Journal local des tentatives d'envoi (spec 2026-07-08
+        // message-send-failure-retry-flow) — une ligne par tentative de
+        // transport, clé `localId` = clientMessageId. Conservé après succès
+        // pour la carte « Historique d'envoi » de la vue détails.
+        migrator.registerMigration("messages_send_attempts") { db in
+            try db.create(table: "send_attempts") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("localId", .text).notNull().indexed()
+                t.column("attemptNumber", .integer).notNull()
+                t.column("transport", .text).notNull()
+                t.column("startedAt", .datetime).notNull()
+                t.column("finishedAt", .datetime)
+                t.column("outcome", .text).notNull()
+                t.column("errorMessage", .text)
+            }
+        }
     }
 }

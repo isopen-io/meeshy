@@ -116,6 +116,18 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case incomingCall = "incoming_call"
     case callEnded = "call_ended"
     case callDeclined = "call_declined"
+    /// Guideline 5 (MIIT) — China-region incoming-call push. Distinct raw
+    /// value from `.incomingCall` because CallEventsHandler.ts always sends
+    /// `data.type: "call"` for the incoming-call push (both the 'voip' and
+    /// 'apns' routing share this payload) — VoIPPushManager already depends
+    /// on this exact literal (`payloadType == "call"`) to validate PushKit
+    /// payloads, so the string can't be renamed to "incoming_call" without
+    /// breaking that unrelated, functioning path. Routes identically to
+    /// `.incomingCall` for icon/preference-filtering purposes, but drives
+    /// the full call-answer flow (not just a conversation deep-link) in
+    /// `RootView.navigateFromNotification` since it is the ONLY affordance
+    /// a backgrounded/killed-app China user has to engage the call.
+    case incomingCallAlert = "call"
 
     // Translation events
     case translationCompleted = "translation_completed"
@@ -184,7 +196,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .communityJoined, .memberJoined, .legacyGroupJoined: return "person.badge.checkmark"
         case .communityLeft, .memberLeft, .legacyGroupLeft: return "person.badge.minus"
         case .missedCall, .callDeclined, .legacyCallMissed: return "phone.arrow.down.left"
-        case .incomingCall, .callEnded, .legacyCallIncoming: return "phone.fill"
+        case .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming: return "phone.fill"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike: return "hand.thumbsup.fill"
         case .commentReaction: return "heart.fill"
         case .postComment, .commentReply, .legacyPostComment, .legacyStoryReply: return "text.bubble.fill"
@@ -226,7 +238,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "4ECDC4"
         case .communityInvite, .communityJoined, .communityLeft, .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft, .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
             return "F8B500"
-        case .missedCall, .callDeclined, .incomingCall, .callEnded, .legacyCallMissed, .legacyCallIncoming:
+        case .missedCall, .callDeclined, .incomingCall, .incomingCallAlert, .callEnded, .legacyCallMissed, .legacyCallIncoming:
             return "E91E63"
         case .legacyAffiliateSignup:
             return "2ECC71"
@@ -267,6 +279,9 @@ public struct NotificationContext: Codable, Sendable {
     public let conversationId: String?
     public let conversationTitle: String?
     public let conversationType: String?
+    /// Avatar de la conversation/groupe — repli pour la toast quand l'expéditeur
+    /// n'a pas d'avatar personnel (messages de groupe).
+    public let conversationAvatar: String?
     public let messageId: String?
     public let originalMessageId: String?
     public let callSessionId: String?
@@ -274,22 +289,46 @@ public struct NotificationContext: Codable, Sendable {
     public let reactionId: String?
     public let postId: String?
     public let commentId: String?
+    /// Identifiant du commentaire parent quand `commentId` est une réponse.
+    /// Permet de déplier le fil parent puis de défiler jusqu'à la réponse ciblée.
+    public let parentCommentId: String?
+    /// URL publique du 1er attachment du message (image/audio/vidéo).
+    public let firstAttachmentUrl: String?
+    /// MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`.
+    public let firstAttachmentMimeType: String?
+    /// Durée en ms du 1er attachment audio/vidéo.
+    public let firstAttachmentDurationMs: Int?
+    /// Date ISO de publication de l'entité sociale liée (post/story/réel/mood).
+    /// Permet d'afficher « publié il y a 2 j » même quand le contenu n'est plus
+    /// accessible (story expirée).
+    public let postCreatedAt: String?
+    /// Date ISO d'expiration de l'entité sociale liée (story/status éphémère).
+    /// Le client affiche « expirée » et explique la perte d'accès.
+    public let postExpiresAt: String?
 
     public init(
         conversationId: String? = nil,
         conversationTitle: String? = nil,
         conversationType: String? = nil,
+        conversationAvatar: String? = nil,
         messageId: String? = nil,
         originalMessageId: String? = nil,
         callSessionId: String? = nil,
         friendRequestId: String? = nil,
         reactionId: String? = nil,
         postId: String? = nil,
-        commentId: String? = nil
+        commentId: String? = nil,
+        parentCommentId: String? = nil,
+        firstAttachmentUrl: String? = nil,
+        firstAttachmentMimeType: String? = nil,
+        firstAttachmentDurationMs: Int? = nil,
+        postCreatedAt: String? = nil,
+        postExpiresAt: String? = nil
     ) {
         self.conversationId = conversationId
         self.conversationTitle = conversationTitle
         self.conversationType = conversationType
+        self.conversationAvatar = conversationAvatar
         self.messageId = messageId
         self.originalMessageId = originalMessageId
         self.callSessionId = callSessionId
@@ -297,6 +336,12 @@ public struct NotificationContext: Codable, Sendable {
         self.reactionId = reactionId
         self.postId = postId
         self.commentId = commentId
+        self.parentCommentId = parentCommentId
+        self.firstAttachmentUrl = firstAttachmentUrl
+        self.firstAttachmentMimeType = firstAttachmentMimeType
+        self.firstAttachmentDurationMs = firstAttachmentDurationMs
+        self.postCreatedAt = postCreatedAt
+        self.postExpiresAt = postExpiresAt
     }
 }
 
@@ -324,6 +369,21 @@ public struct NotificationDelivery: Codable, Sendable {
 // MARK: - Notification Metadata
 
 public struct NotificationMetadata: Codable, Sendable {
+    /// Résumé léger d'un attachment de message (média inline + détails).
+    public struct Attachments: Codable, Sendable {
+        public let count: Int?
+        /// "image" | "video" | "audio" | "document" | "text" | "code"
+        public let firstType: String?
+        public let firstFilename: String?
+        /// Durée en ms du 1er attachment audio/vidéo.
+        public let firstDurationMs: Int?
+        /// Taille en octets du 1er attachment.
+        public let firstFileSize: Int?
+        /// Dimensions du 1er attachment image/vidéo.
+        public let firstWidth: Int?
+        public let firstHeight: Int?
+    }
+
     public let messagePreview: String?
     public let action: String?
     public let reactionEmoji: String?
@@ -331,9 +391,27 @@ public struct NotificationMetadata: Codable, Sendable {
     public let memberCount: Int?
     public let postId: String?
     public let commentId: String?
+    /// Identifiant du commentaire parent (réponse à un commentaire) — permet de
+    /// déplier le fil parent puis de défiler/surligner la réponse (`commentId`).
+    public let parentCommentId: String?
     public let commentPreview: String?
     public let emoji: String?
     public let postType: String?
+    /// Type de contenu pour les notifs « friend_new_* » (STORY/POST/MOOD/STATUS/REEL).
+    public let contentType: String?
+    /// Aperçu de l'entité visée (post/story/réel) — réactions, commentaires, partages.
+    public let postPreview: String?
+    /// Aperçu du commentaire parent (réponse à un commentaire).
+    public let parentCommentPreview: String?
+    /// Extrait textuel du contenu publié (friend_new_*).
+    public let excerpt: String?
+    /// Nature du média principal — "image" | "video" | "audio" | "text".
+    public let mediaType: String?
+    /// Miniature (image) de l'entité sociale liée (post/story/réel) — rendue
+    /// comme vignette dans la ligne de notification in-app.
+    public let postThumbnailUrl: String?
+    /// Détails du 1er attachment d'un message (durée audio, taille, dimensions).
+    public let attachments: Attachments?
 
     // Login new device fields
     public let deviceName: String?
@@ -356,9 +434,17 @@ public struct NotificationMetadata: Codable, Sendable {
         memberCount = try container.decodeIfPresent(Int.self, forKey: .memberCount)
         postId = try container.decodeIfPresent(String.self, forKey: .postId)
         commentId = try container.decodeIfPresent(String.self, forKey: .commentId)
+        parentCommentId = try container.decodeIfPresent(String.self, forKey: .parentCommentId)
         commentPreview = try container.decodeIfPresent(String.self, forKey: .commentPreview)
         emoji = try container.decodeIfPresent(String.self, forKey: .emoji)
         postType = try container.decodeIfPresent(String.self, forKey: .postType)
+        contentType = try container.decodeIfPresent(String.self, forKey: .contentType)
+        postPreview = try container.decodeIfPresent(String.self, forKey: .postPreview)
+        parentCommentPreview = try container.decodeIfPresent(String.self, forKey: .parentCommentPreview)
+        excerpt = try container.decodeIfPresent(String.self, forKey: .excerpt)
+        mediaType = try container.decodeIfPresent(String.self, forKey: .mediaType)
+        postThumbnailUrl = try container.decodeIfPresent(String.self, forKey: .postThumbnailUrl)
+        attachments = try container.decodeIfPresent(Attachments.self, forKey: .attachments)
         deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
         deviceVendor = try container.decodeIfPresent(String.self, forKey: .deviceVendor)
         deviceOS = try container.decodeIfPresent(String.self, forKey: .deviceOS)
@@ -373,7 +459,8 @@ public struct NotificationMetadata: Codable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case messagePreview, action, reactionEmoji, callType, memberCount
-        case postId, commentId, commentPreview, emoji, postType
+        case postId, commentId, parentCommentId, commentPreview, emoji, postType
+        case contentType, postPreview, parentCommentPreview, excerpt, mediaType, postThumbnailUrl, attachments
         case deviceName, deviceVendor, deviceOS, deviceOSVersion, deviceType
         case ipAddress, country, countryName, city, location
     }
@@ -424,6 +511,13 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
     public var senderName: String? { actor?.displayName ?? actor?.username }
     public var senderAvatar: String? { actor?.avatar }
 
+    /// Miniature (image) du contenu social lié (post/story/réel) à afficher en
+    /// vignette de la ligne — `nil` quand le contenu n'a pas de média visuel.
+    public var postThumbnailURLString: String? {
+        guard let url = metadata?.postThumbnailUrl, !url.isEmpty else { return nil }
+        return url
+    }
+
     public var message: String? { content ?? metadata?.messagePreview }
 
     public var data: NotificationData? {
@@ -442,6 +536,15 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
     // MARK: - Formatted title for display
 
     public var formattedTitle: String {
+        // Source unique : le gateway calcule le titre « acteur + action »
+        // localisé et conscient de l'entité (story / réel / publication…) puis
+        // le persiste. On l'affiche tel quel — identique au push et au web.
+        // Le switch ci-dessous n'est qu'un REPLI pour les anciennes notifications
+        // ou les types non gérés côté serveur (messages, appels, système…).
+        if let title, !title.trimmingCharacters(in: .whitespaces).isEmpty {
+            return title
+        }
+
         let actorName = actor?.displayedName ?? "Quelqu'un"
         let conversationTitle = context?.conversationTitle ?? "la conversation"
 
@@ -488,7 +591,7 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
             return "Role modifie pour \(actorName)"
         case .missedCall, .callDeclined, .legacyCallMissed:
             return "Appel manque de \(actorName)"
-        case .incomingCall, .callEnded, .legacyCallIncoming:
+        case .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming:
             return "Appel de \(actorName)"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
             if let content, !content.isEmpty {
@@ -511,7 +614,9 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
                 return "\(actorName) a reagi \(emoji) a votre commentaire"
             }
             return "\(actorName) a reagi a votre commentaire"
-        case .postComment, .commentReply, .legacyPostComment:
+        case .commentReply:
+            return "\(actorName) a repondu a votre commentaire"
+        case .postComment, .legacyPostComment:
             return "\(actorName) a commente votre publication"
         case .storyNewComment:
             return "\(actorName) a commente votre story"
@@ -567,16 +672,95 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
     public var formattedBody: String? {
         switch notificationType {
         case .messageReaction, .reaction, .legacyMessageReaction:
+            // What message was reacted to.
             return metadata?.messagePreview
         case .newMessage, .legacyNewMessage, .messageReply, .userMentioned, .mention, .legacyMention, .reply, .legacyStoryReply:
-            return content?.isEmpty == false ? content : metadata?.messagePreview
-        case .postComment, .commentReply, .legacyPostComment:
+            // `content` already embeds attachment details (durée audio, taille,
+            // dimensions) built server-side; fall back to the raw preview.
+            return Self.firstNonEmpty(content, metadata?.messagePreview)
+        // Comments & replies — show the actual comment / reply text.
+        case .postComment, .legacyPostComment, .commentReply,
+             .storyNewComment, .friendStoryComment, .storyThreadReply:
+            return Self.firstNonEmpty(metadata?.commentPreview, content)
+        // Reactions / likes / reposts on an entity — surface a text excerpt of
+        // the entity. Media-only content (e.g. a photo story) shows no body text:
+        // the thumbnail carries the visual and the context line already states
+        // « Votre story · 📷 Photo », so a body fallback would just triplicate it.
+        case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost:
+            return metadata?.postPreview
+        case .commentLike, .commentReaction:
             return metadata?.commentPreview
+        // Friend new content — the excerpt, or a media summary when text-less.
+        case .friendNewStory, .friendNewPost, .friendNewMood:
+            return Self.firstNonEmpty(metadata?.excerpt, mediaSummary)
         case .loginNewDevice:
             return loginDeviceBody
         default:
             return nil
         }
+    }
+
+    /// Secondary, muted context line: WHICH entity the notification concerns
+    /// (« Story · « aperçu » », « En réponse à « … » ») and its lifecycle
+    /// (« publiée il y a 2 j · expirée ») so an expired story is self-explanatory.
+    public var formattedContext: String? {
+        // Types sociaux : base d'entité (sous-titre serveur localisé préféré,
+        // sinon repli client) + date de PUBLICATION du contenu lié (locale
+        // appareil — « du 23/06/2026 14:30 ») + état d'expiration. Pour les
+        // autres types, le sous-titre serveur (nom du groupe, etc.) est la ligne.
+        switch notificationType {
+        case .postComment, .legacyPostComment, .storyNewComment, .friendStoryComment, .storyThreadReply,
+             .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost,
+             .commentLike, .commentReaction, .commentReply,
+             .friendNewStory, .friendNewPost, .friendNewMood:
+            return decoratedSocialContext
+        default:
+            return (subtitle?.isEmpty == false) ? subtitle : nil
+        }
+    }
+
+    /// Base d'entité + date du contenu + expiry, jointes par « · ». La date
+    /// n'est ajoutée que si le contenu lié porte une `postCreatedAt` — elle est
+    /// distincte de l'horodatage d'arrivée de la notif (affiché à droite).
+    private var decoratedSocialContext: String? {
+        let base = serverSubtitleBase ?? legacySocialEntityBase
+        let parts = [base, contentPublishedLabel, expiryLabel]
+            .compactMap { value -> String? in (value?.isEmpty == false) ? value : nil }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Sous-titre serveur (localisé, conscient de l'entité) s'il est présent.
+    private var serverSubtitleBase: String? {
+        guard let subtitle, !subtitle.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return subtitle
+    }
+
+    /// Repli client (anciennes notifs / sous-titre serveur absent) : libellé
+    /// d'entité + aperçu, SANS date ni expiry (ajoutés par `decoratedSocialContext`).
+    private var legacySocialEntityBase: String? {
+        switch notificationType {
+        case .commentReply:
+            if let parent = metadata?.parentCommentPreview, !parent.isEmpty {
+                return "En réponse à « \(parent) »"
+            }
+            return "En réponse à votre commentaire"
+        case .commentLike, .commentReaction, .friendNewStory, .friendNewPost, .friendNewMood:
+            // Le body montre déjà le commentaire/extrait — pas d'aperçu dupliqué ici.
+            return socialKindLabel
+        default:
+            var line = socialKindLabel
+            if let preview = metadata?.postPreview, !preview.isEmpty {
+                line += " · « \(preview) »"
+            }
+            return line
+        }
+    }
+
+    /// Date de publication du contenu lié (« il y a 6 min » / « hier 14:30 » /
+    /// « 23/06/2026 14:30 »), formatée pour l'appareil. `nil` si absente.
+    private var contentPublishedLabel: String? {
+        guard let iso = context?.postCreatedAt, let date = Self.parseISODate(iso) else { return nil }
+        return NotificationDateFormatter.string(for: date)
     }
 
     private var loginDeviceBody: String? {
@@ -594,6 +778,81 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
             parts.append(os)
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - Social context & lifecycle helpers
+
+extension APINotification {
+    /// Libellé typé du contenu social : distingue story / réel / mood / statut /
+    /// publication. Lit `metadata.postType` (réactions, commentaires) ou
+    /// `metadata.contentType` (friend_new_*), avec repli sur le type de notif.
+    var socialKindLabel: String {
+        switch (metadata?.postType ?? metadata?.contentType)?.uppercased() {
+        case "STORY": return "Story"
+        case "REEL": return "Réel"
+        case "MOOD": return "Humeur"
+        case "STATUS": return "Statut"
+        case "POST": return "Publication"
+        default:
+            switch notificationType {
+            case .storyReaction, .storyNewComment, .friendStoryComment, .storyThreadReply, .friendNewStory:
+                return "Story"
+            case .statusReaction:
+                return "Statut"
+            case .friendNewMood:
+                return "Humeur"
+            default:
+                return "Publication"
+            }
+        }
+    }
+
+    /// Résumé média pour un contenu sans texte (« 📷 Photo », « 🎥 Vidéo »…).
+    var mediaSummary: String? {
+        switch metadata?.mediaType?.lowercased() {
+        case "image": return "📷 Photo"
+        case "video": return "🎥 Vidéo"
+        case "audio": return "🎵 Audio"
+        default: return nil
+        }
+    }
+
+    /// « expirée » quand la date d'expiration de l'entité liée est dépassée.
+    var expiryLabel: String? {
+        guard let iso = context?.postExpiresAt, let date = Self.parseISODate(iso) else { return nil }
+        return date <= Date() ? "expirée" : nil
+    }
+
+    /// Indique si l'entité sociale liée est une story/statut expiré.
+    public var isLinkedContentExpired: Bool {
+        guard let iso = context?.postExpiresAt, let date = Self.parseISODate(iso) else { return false }
+        return date <= Date()
+    }
+
+    static func firstNonEmpty(_ values: String?...) -> String? {
+        for value in values {
+            if let value, !value.isEmpty { return value }
+        }
+        return nil
+    }
+
+    // `nonisolated(unsafe)` : ISO8601DateFormatter est thread-safe pour le
+    // parsing une fois configuré ; ces statics sont partagés depuis un struct
+    // Sendable nonisolated (même pattern que les CIContext/NSCache du SDK).
+    private nonisolated(unsafe) static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private nonisolated(unsafe) static let isoPlain: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    static func parseISODate(_ string: String) -> Date? {
+        isoFractional.date(from: string) ?? isoPlain.date(from: string)
     }
 }
 

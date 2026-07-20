@@ -56,6 +56,9 @@ final class ReelsViewModel: ObservableObject {
     @Published private(set) var bookmarkedIds: Set<String> = []
 
     private var likeDelta: [String: Int] = [:]
+    /// Optimistic bookmark-count bump per post id — same role as `likeDelta`.
+    /// Purged when the canonical absolute count arrives on `post:bookmarked`.
+    private var bookmarkDelta: [String: Int] = [:]
     /// Optimistic comment-count bump per post id (applied on top of the server
     /// count) so the reel's comment counter rises the instant a comment is sent.
     @Published private var commentDelta: [String: Int] = [:]
@@ -124,14 +127,22 @@ final class ReelsViewModel: ObservableObject {
     private func subscribeToBookmarkEvents() {
         SocialSocketManager.shared.postBookmarked
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.applyServerBookmark($0.postId, bookmarked: $0.bookmarked) }
+            .sink { [weak self] in self?.applyServerBookmark($0.postId, bookmarked: $0.bookmarked, bookmarkCount: $0.bookmarkCount) }
             .store(in: &cancellables)
     }
 
-    private func applyServerBookmark(_ postId: String, bookmarked: Bool) {
+    /// Canonical reconciliation mirroring `applyServerLike` : the absolute
+    /// `bookmarkCount` (when provided by the gateway) makes authority, so we set
+    /// the model count and purge the optimistic delta. The icon is confirmed via
+    /// `bookmarkedIds`. A nil count (older gateway) only reconciles the icon.
+    private func applyServerBookmark(_ postId: String, bookmarked: Bool, bookmarkCount: Int?) {
         if bookmarked { bookmarkedIds.insert(postId) } else { bookmarkedIds.remove(postId) }
         if let index = reels.firstIndex(where: { $0.id == postId }) {
             reels[index].isBookmarkedByMe = bookmarked
+            if let count = bookmarkCount {
+                reels[index].bookmarkCount = count
+                bookmarkDelta[postId] = nil
+            }
         }
     }
 
@@ -253,6 +264,12 @@ final class ReelsViewModel: ObservableObject {
         max(0, post.likes + (likeDelta[post.id] ?? 0))
     }
 
+    /// Bookmark count including the optimistic delta from a just-toggled bookmark
+    /// (reconciled to the absolute server count on `post:bookmarked`).
+    func bookmarkCount(_ post: FeedPost) -> Int {
+        max(0, post.bookmarkCount + (bookmarkDelta[post.id] ?? 0))
+    }
+
     /// Comment count including the optimistic bump from a just-sent comment.
     func commentCount(_ post: FeedPost) -> Int {
         max(0, post.commentCount + (commentDelta[post.id] ?? 0))
@@ -328,24 +345,51 @@ final class ReelsViewModel: ObservableObject {
         guard !bookmarkInFlight.contains(id) else { return }
         bookmarkInFlight.insert(id)
         let wasBookmarked = bookmarkedIds.contains(id)
-        if wasBookmarked { bookmarkedIds.remove(id) } else { bookmarkedIds.insert(id) }
-        if !wasBookmarked { EngagementTracker.shared.recordAction(.bookmarked, surface: .reels) }
+        if wasBookmarked {
+            bookmarkedIds.remove(id)
+            bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) - 1
+        } else {
+            bookmarkedIds.insert(id)
+            bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) + 1
+            EngagementTracker.shared.recordAction(.bookmarked, surface: .reels)
+        }
         HapticFeedback.light()
         Task {
             do {
                 if wasBookmarked { try await service.removeBookmark(postId: id) }
                 else { try await service.bookmark(postId: id) }
             } catch {
-                if wasBookmarked { bookmarkedIds.insert(id) } else { bookmarkedIds.remove(id) }
+                // Rollback both the icon and the optimistic count.
+                if wasBookmarked {
+                    bookmarkedIds.insert(id)
+                    bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) + 1
+                } else {
+                    bookmarkedIds.remove(id)
+                    bookmarkDelta[id] = (bookmarkDelta[id] ?? 0) - 1
+                }
             }
             bookmarkInFlight.remove(id)
         }
     }
 
-    func share(_ post: FeedPost) {
+    /// Records a share on `post` and mints a **deduplicated** tracking link —
+    /// aligned with the feed's `sharePost(_:generateLink:)`. Returns the absolute
+    /// `meeshy.me/l/<token>` short URL so the caller can present the system share
+    /// sheet, or `nil` on failure (the caller falls back to the raw post URL).
+    ///
+    /// Replaces the old plain `share(postId:)` path, which incremented the server
+    /// `shareCount` on EVERY tap with no dedup — re-taps inflated the counter even
+    /// though nothing new was shared (a reel showed 23 shares for 4 unique views).
+    /// The `generateLink: true` path upserts one link per (post, sharer): the
+    /// counter rises at most once per sharer, exactly like the feed.
+    func shareLink(for post: FeedPost) async -> String? {
         EngagementTracker.shared.recordAction(.shared, surface: .reels)
-        HapticFeedback.light()
-        Task { try? await service.share(postId: post.id) }
+        do {
+            let result = try await service.share(postId: post.id, platform: "system", generateLink: true)
+            return result.shortUrl
+        } catch {
+            return nil
+        }
     }
 
     func recordView(_ id: String) {

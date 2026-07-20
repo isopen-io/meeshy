@@ -89,4 +89,111 @@ final class ClipInspectorTests: XCTestCase {
         XCTAssertEqual(ClipInspector.fadeRange.lowerBound, 0)
         XCTAssertEqual(ClipInspector.fadeRange.upperBound, 3)
     }
+
+    // MARK: - Sections visibles (modale allégée, retours user 2026-07-11)
+    // Par défaut la modale ne montre que l'essentiel ; les détails (début/
+    // durée, hints) vivent derrière le bouton (i), la configuration
+    // d'animation derrière l'icône losange.
+
+    func test_visibleSections_default_hidesDetailsAndAnimation() {
+        let sections = ClipInspector.visibleSections(
+            kind: .video, isBackground: false, isDetailsExpanded: false, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .timing, .volume, .toggles, .actions])
+    }
+
+    func test_visibleSections_detailsExpanded_insertsDetailsAfterTiming() {
+        let sections = ClipInspector.visibleSections(
+            kind: .video, isBackground: false, isDetailsExpanded: true, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .timing, .details, .volume, .toggles, .actions])
+    }
+
+    func test_visibleSections_animationExpanded_appendsConfigBelowActions() {
+        let sections = ClipInspector.visibleSections(
+            kind: .video, isBackground: false, isDetailsExpanded: false, isAnimationExpanded: true)
+        XCTAssertEqual(sections, [.header, .timing, .volume, .toggles, .actions, .animation])
+    }
+
+    func test_visibleSections_textAndImageClips_haveNoVolume() {
+        for kind in [ClipInspector.ClipSnapshot.Kind.text, .image] {
+            let sections = ClipInspector.visibleSections(
+                kind: kind, isBackground: false, isDetailsExpanded: false, isAnimationExpanded: false)
+            XCTAssertEqual(sections, [.header, .timing, .toggles, .actions],
+                           "\(kind) n'a pas de piste audio — pas de section volume")
+        }
+    }
+
+    func test_visibleSections_bothExpanded_showsEverythingInOrder() {
+        let sections = ClipInspector.visibleSections(
+            kind: .audio, isBackground: false, isDetailsExpanded: true, isAnimationExpanded: true)
+        XCTAssertEqual(sections, [.header, .timing, .details, .volume, .toggles, .actions, .animation])
+    }
+
+    // Un FOND couvre toute la slide : début/durée sont ignorés par le moteur —
+    // afficher la barre de timing serait un contrôle sans effet (capture user
+    // 2026-07-20 : steppers « 0:0… » affichés ET ignorés sur un clip Background).
+    func test_visibleSections_backgroundClip_hidesTiming() {
+        let sections = ClipInspector.visibleSections(
+            kind: .video, isBackground: true, isDetailsExpanded: false, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .volume, .toggles, .actions])
+    }
+
+    // MARK: - Confirmation de suppression (jamais de delete direct)
+
+    func test_deleteConfirmation_request_presentsAlert() {
+        var confirmation = ClipInspector.DeleteConfirmation()
+        XCTAssertFalse(confirmation.isPresented)
+        confirmation.request()
+        XCTAssertTrue(confirmation.isPresented)
+    }
+
+    func test_deleteConfirmation_cancel_dismissesWithoutSideEffect() {
+        var confirmation = ClipInspector.DeleteConfirmation()
+        confirmation.request()
+        confirmation.cancel()
+        XCTAssertFalse(confirmation.isPresented)
+    }
+
+    func test_deleteConfirmation_confirm_invokesDeleteOnceAndDismisses() {
+        var confirmation = ClipInspector.DeleteConfirmation()
+        confirmation.request()
+        var deleteCount = 0
+        confirmation.confirm { deleteCount += 1 }
+        XCTAssertEqual(deleteCount, 1)
+        XCTAssertFalse(confirmation.isPresented)
+    }
+
+    // MARK: - Timing lié début / fin / durée (fin = début + durée)
+
+    func test_resolveLinkedTiming_editDuration_movesEndKeepsStart() {
+        let r = ClipInspector.resolveLinkedTiming(
+            field: .duration, start: 2, end: 6, duration: 5, slideDuration: 20)
+        XCTAssertEqual(r.start, 2, accuracy: 0.001)
+        XCTAssertEqual(r.duration, 5, accuracy: 0.001)
+        XCTAssertEqual(r.end, 7, accuracy: 0.001)   // start + duration
+    }
+
+    func test_resolveLinkedTiming_editEnd_keepsStartRecomputesDuration() {
+        let r = ClipInspector.resolveLinkedTiming(
+            field: .end, start: 2, end: 8, duration: 4, slideDuration: 20)
+        XCTAssertEqual(r.start, 2, accuracy: 0.001)
+        XCTAssertEqual(r.end, 8, accuracy: 0.001)
+        XCTAssertEqual(r.duration, 6, accuracy: 0.001)   // end - start
+    }
+
+    func test_resolveLinkedTiming_editStart_movesClipKeepsDuration() {
+        let r = ClipInspector.resolveLinkedTiming(
+            field: .start, start: 3, end: 6, duration: 4, slideDuration: 20)
+        XCTAssertEqual(r.start, 3, accuracy: 0.001)
+        XCTAssertEqual(r.duration, 4, accuracy: 0.001)   // duration preserved
+        XCTAssertEqual(r.end, 7, accuracy: 0.001)        // start + duration
+    }
+
+    func test_resolveLinkedTiming_clampsDurationNonNegativeAndEndWithinSlide() {
+        let neg = ClipInspector.resolveLinkedTiming(
+            field: .end, start: 5, end: 3, duration: 2, slideDuration: 20)
+        XCTAssertGreaterThanOrEqual(neg.duration, 0)      // end < start clamps duration to 0
+        let over = ClipInspector.resolveLinkedTiming(
+            field: .duration, start: 18, end: 19, duration: 10, slideDuration: 20)
+        XCTAssertLessThanOrEqual(over.end, 20)            // end clamped to slideDuration
+    }
 }

@@ -27,6 +27,10 @@ struct StoryViewerRequest: Identifiable, Equatable {
     /// de post, ma story) : le viewer ne montre que le groupe de cet
     /// utilisateur. Les contextes « flux » (tray, liste) gardent `false`.
     var singleGroup: Bool = false
+    /// R4 inc.2 — id exact du post story quand le producteur le connaît
+    /// (notification, deep link). Permet au container un fetch unitaire
+    /// léger si le tray ignore le groupe. `nil` = comportement historique.
+    var postId: String? = nil
 }
 
 /// Named magic numbers for the iPhone root-view audio overlay layout.
@@ -36,14 +40,101 @@ private enum AudioOverlayConstants {
     static let iPhoneBottomPadding: CGFloat = 60
 }
 
+/// Découple la présentation d'appel (cover plein écran + pastille flottante +
+/// bulle + bannière call-waiting) du corps de `RootView` / `iPadRootView`.
+///
+/// AVANT : ces 4 modifiers lisaient `CallManager.shared` directement dans
+/// `RootView.body`, donc chaque `objectWillChange` de CallManager — tick
+/// `callDuration` 1 Hz **plus** chaque stat qualité WebRTC / ajustement bitrate —
+/// invalidait TOUT le body, y compris en arrière-plan pendant un appel. Résultat :
+/// tempête de re-layout CoreText → watchdog scene-update `0x8BADF00D`
+/// (`ProcessVisibility: Background`, budget 10 s dépassé). Prouvé par la sonde
+/// `🩺RENDER` (`RootView: _callManager changed` en rafale, `phase=BG`) + MetricKit.
+///
+/// APRÈS : l'unique `@ObservedObject callManager` vit ici. SwiftUI ne ré-évalue
+/// que `body(content:)` (les overlays d'appel, légers) et ne reconstruit JAMAIS
+/// le `content` sous-jacent (liste de conversations, NavigationStack, tabs) —
+/// celui-ci est un placeholder opaque que le framework diffe sans re-layout.
+struct CallPresentationLayer: ViewModifier {
+    @ObservedObject private var callManager = CallManager.shared
+
+    func body(content: Content) -> some View {
+        content
+            // Le `set: false` est un "minimize" (→ PiP), PAS un "end call" :
+            // swiper le cover vers le bas ne raccroche pas. Le bouton hangup de
+            // chaque UI passe explicitement par `callManager.endCall()`.
+            .fullScreenCover(isPresented: Binding(
+                get: {
+                    CallState.shouldPresentFullScreenCover(
+                        callState: callManager.callState,
+                        displayMode: callManager.displayMode
+                    )
+                },
+                set: { if !$0 { callManager.displayMode = .pip } }
+            )) {
+                CallView(callManager: callManager)
+            }
+            .overlay(alignment: .top) {
+                FloatingCallPillView(callManager: callManager)
+                    .padding(.top, MeeshySpacing.sm)
+            }
+            .overlay {
+                CallBubbleView(callManager: callManager)
+            }
+            // §7.6 — call-waiting : un 2e appel entrant pendant un appel actif.
+            // Reject termine le nouvel appel ; "end & answer" raccroche l'appel
+            // courant et accepte le nouveau. L'`.id(pending.callId)` force un
+            // remount (fresh onAppear/timer 15 s) à chaque supersession — sinon
+            // un 3e appelant réutilise l'identité du 2e et se fait auto-rejeter
+            // 5-10 s trop tôt (Audit Vague 27).
+            .overlay(alignment: .top) {
+                if callManager.showCallWaitingBanner {
+                    CallWaitingBannerView(
+                        callerName: callManager.pendingIncomingCall?.fromUsername
+                            ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
+                        isVisible: $callManager.showCallWaitingBanner,
+                        onReject: { callManager.rejectPendingCall() },
+                        onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
+                    )
+                    .id(callManager.pendingIncomingCall?.callId)
+                    .padding(.top, MeeshySpacing.sm)
+                }
+            }
+    }
+}
+
+/// Détient un `ConversationListViewModel` sans JAMAIS republier.
+///
+/// `RootView`/`iPadRootView` doivent POSSÉDER le VM (durée de vie + injection
+/// `.environmentObject` vers la liste) mais ne doivent PAS se ré-évaluer à chaque
+/// churn du VM — presence refresh, `reloadFromCache` (count=100) répété, unread
+/// counts. Or `RootView.body` ne lit AUCUN @Published du VM (seulement des
+/// `.environmentObject()` + des accès dans des closures) : l'observation venait
+/// uniquement du `@StateObject`, générant des re-render inutiles à l'idle (Instant
+/// App Principles : « Zero Unnecessary Re-render »). Ce owner n'a pas de
+/// @Published → son `objectWillChange` ne fire jamais → RootView ne re-render
+/// jamais à cause de lui. Les vues enfants observent le VM via `@EnvironmentObject`.
+@MainActor
+final class ConversationListVMOwner: ObservableObject {
+    let viewModel = ConversationListViewModel()
+}
+
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
-    @StateObject private var conversationViewModel = ConversationListViewModel()
+    // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
+    // du VM (presence, reloadFromCache) ne re-render RootView à l'idle. Exposé via
+    // la propriété calculée `conversationViewModel` ci-dessous — les 12 usages
+    // (injections + closures) restent inchangés.
+    @StateObject private var conversationVMOwner = ConversationListVMOwner()
+    private var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
     @StateObject private var router = Router()
-    @ObservedObject private var callManager = CallManager.shared
+    // CallManager n'est PLUS observé ici : sa présentation (cover + overlays) est
+    // portée par `.modifier(CallPresentationLayer())`, qui isole le churn d'appel
+    // (callDuration 1 Hz + stats qualité) hors de `RootView.body`. Cf. watchdog
+    // 0x8BADF00D. RootView ne se ré-évalue donc plus à chaque tick d'appel.
     @StateObject private var connectionStatus = ConnectionStatusViewModel()
     @ObservedObject private var notificationManager = NotificationToastManager.shared
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
@@ -74,6 +165,12 @@ struct RootView: View {
     /// every parent view. The coordinator's `pendingRequest` mirrors the
     /// legacy `Identifiable?` contract expected by `.fullScreenCover(item:)`.
     @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
+
+    /// U1 — namespace de la transition zoom tray→viewer (iOS 18+). Injecté
+    /// dans l'environnement pour que la bulle du tray (source) et le cover
+    /// (destination) partagent la même identité visuelle. iOS 16-17 : les
+    /// helpers `zoomTransition*` sont no-op, comportement historique intact.
+    @Namespace private var storyZoomNamespace
 
     /// Conversation surfaced by a long-press / pull-down on an in-app
     /// notification toast — presented as a reusable `ConversationView` preview
@@ -155,8 +252,11 @@ struct RootView: View {
                     case .profile:
                         ProfileView()
                             .navigationBarHidden(true)
-                    case .contacts(let initialTab):
-                        ContactsHubView(initialTab: initialTab)
+                    case .contacts:
+                        ContactsHubView()
+                            .navigationBarHidden(true)
+                    case .peopleDiscovery(let initialTab):
+                        PeopleDiscoveryView(initialTab: initialTab)
                             .navigationBarHidden(true)
                     case .communityList:
                         CommunityListView(
@@ -248,8 +348,8 @@ struct RootView: View {
                     case .dataExport:
                         DataExportView()
                             .navigationBarHidden(true)
-                    case .postDetail(let postId, let initialPost, let showComments):
-                        PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments)
+                    case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
+                        PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
                     case .bookmarks:
                         BookmarksView()
                             .navigationBarHidden(true)
@@ -305,6 +405,8 @@ struct RootView: View {
                         ReelsPlayerView(
                             seedPosts: launch.seedPosts,
                             startId: launch.startId,
+                            commentTargetId: launch.commentId,
+                            commentParentTargetId: launch.parentCommentId,
                             revealCompleted: reelsRevealCompleted,
                             safeArea: safeArea,
                             onClose: { closeReels() },
@@ -407,7 +509,7 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
-        .environmentObject(StatusBubbleController.shared)
+        .environment(\.zoomTransitionNamespace, storyZoomNamespace)
         // In-app notification preview: long-press / pull-down on a toast opens
         // the conversation (last messages + simple composer) over the current
         // page. A sheet creates a fresh environment, so the objects the reused
@@ -428,7 +530,6 @@ struct RootView: View {
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationViewModel)
                 .environmentObject(storyViewerCoordinator)
-                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
         }
@@ -440,12 +541,12 @@ struct RootView: View {
         .adaptiveOnChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
-                .first?.title = "Meeshy — \(title)"
+                .first?.title = String(format: String(localized: "root.scene_title_format", defaultValue: "Meeshy — %@", bundle: .main), title)
         }
         .onAppear {
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
-                .first?.title = "Meeshy — Conversations"
+                .first?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
         }
         .task {
             // Connect Socket.IO early so the backend knows we're online
@@ -509,6 +610,7 @@ struct RootView: View {
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
                 singleGroup: request.singleGroup,
+                postId: request.postId,
                 startAtFirstUnviewed: request.startAtFirstUnviewed,
                 presentationSource: "RootView.fromConv",
                 initialAction: request.initialAction
@@ -526,51 +628,19 @@ struct RootView: View {
             // cover ne pouvait pas se cacher sans ça. Bug sync pill
             // chevauche header 2026-05-27.
             .environment(\.isStoryViewerPresenting, true)
+            // U1 — transition zoom depuis la bulle du tray (iOS 18+, no-op
+            // sinon). sourceID = userId du groupe : si la story s'ouvre
+            // depuis un point d'entrée sans bulle enregistrée (notification,
+            // deep link), iOS retombe sur la transition cover standard.
+            .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
         }
-        // Call presentation is split between fullScreen and PiP modes so the
-        // user can keep using the rest of the app during an active call:
-        //   - `displayMode == .fullScreen` → present `CallView` via
-        //     `.fullScreenCover` like before.
-        //   - `displayMode == .pip` → the cover dismisses and
-        //     `FloatingCallPillView` (mounted as an overlay below) takes
-        //     over. Tapping the pill or pressing its expand button bumps
-        //     `displayMode` back to `.fullScreen`, which re-presents the
-        //     cover.
-        // The Binding's `set: false` branch is now a "minimize" instead of
-        // an "end call" — swiping down on the cover should NOT terminate
-        // the call. The hangup button on either UI still routes through
-        // `callManager.endCall()` explicitly.
-        .fullScreenCover(isPresented: Binding(
-            get: {
-                CallState.shouldPresentFullScreenCover(
-                    callState: callManager.callState,
-                    displayMode: callManager.displayMode
-                )
-            },
-            set: { if !$0 { callManager.displayMode = .pip } }
-        )) {
-            CallView()
-        }
-        .overlay(alignment: .top) {
-            FloatingCallPillView()
-                .padding(.top, 8)
-        }
-        // §7.6 — call-waiting: a 2nd incoming call while one is active. Was dead
-        // code (CallManager API + CallWaitingBannerView existed but were never
-        // mounted). Reject ends the new call; "end & answer" drops the current
-        // call and accepts the new one.
-        .overlay(alignment: .top) {
-            if callManager.showCallWaitingBanner {
-                CallWaitingBannerView(
-                    callerName: callManager.pendingIncomingCall?.fromUsername
-                        ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
-                    isVisible: $callManager.showCallWaitingBanner,
-                    onReject: { callManager.rejectPendingCall() },
-                    onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
-                )
-                .padding(.top, 8)
-            }
-        }
+        // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
+        // bannière call-waiting) extraite dans `CallPresentationLayer` : le tick
+        // `callDuration` 1 Hz et les stats qualité WebRTC n'invalident plus TOUT
+        // `RootView.body` (cause du watchdog 0x8BADF00D en arrière-plan pendant un
+        // appel). Toute la logique/les commentaires détaillés vivent dans le
+        // ViewModifier ci-dessus.
+        .modifier(CallPresentationLayer())
         // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
         // single-label "Synchronisation..." pill) via .safeAreaInset on the
         // NavigationStack root. Same emplacement, same chrome dimensions —
@@ -695,9 +765,18 @@ struct RootView: View {
             UserProfileSheet(
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
+                postsContent: { uid in
+                    AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
+                        router.deepLinkProfileUser = nil
+                        router.push(.postDetail(post.id, post))
+                    }, onOpenReel: { reel, reels in
+                        ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
+                    }))
+                }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSharePicker) {
@@ -717,7 +796,6 @@ struct RootView: View {
                 .environmentObject(conversationViewModel)
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.medium, .large])
             }
         }
@@ -729,7 +807,6 @@ struct RootView: View {
         .sheet(isPresented: $showNewConversation) {
             NewConversationView()
                 .environmentObject(statusViewModel)
-                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -899,6 +976,12 @@ struct RootView: View {
         let conversationId: String?
         let messageId: String?
         let postId: String?
+        /// Commentaire ciblé (like/réponse/commentaire) — l'app ouvre l'entité
+        /// puis défile/surligne ce commentaire. `nil` = pas de cible commentaire.
+        let commentId: String?
+        /// Commentaire parent quand `commentId` est une réponse — l'app déplie le
+        /// fil du parent avant de défiler jusqu'à la réponse.
+        let parentCommentId: String?
         // Phase G — `metadata.postType` distinguishes a story-flavoured
         // post (`"STORY"`) from a regular feed post for `.postComment` /
         // `.commentReply`. May be `nil` when the gateway omits it; the
@@ -913,16 +996,32 @@ struct RootView: View {
         // source data is partial, matching `StoryExpiredContent`'s
         // resilient rendering contract).
         let storyContext: StoryNotificationContext
+        // Guideline 5 (MIIT) — China-region incoming-call push (.incomingCallAlert).
+        // Only ever populated from `init(from: NotificationPayload)`: a live,
+        // just-tapped push. `APINotification`/`SocketNotificationEvent` are
+        // history/socket entries where the call, if any, is already resolved.
+        let callId: String?
+        let callerUserId: String?
+        let callerName: String?
+        let isVideoCall: Bool
+        let iceServersJSON: String?
 
         init(from notification: APINotification) {
             type = notification.notificationType
             conversationId = notification.context?.conversationId
             messageId = notification.context?.messageId
             postId = notification.context?.postId ?? notification.metadata?.postId
+            commentId = notification.context?.commentId ?? notification.metadata?.commentId
+            parentCommentId = notification.context?.parentCommentId ?? notification.metadata?.parentCommentId
             postType = notification.metadata?.postType
             senderId = notification.senderId
             senderUsername = notification.senderName
             storyContext = StoryNotificationContext.from(notification)
+            callId = nil
+            callerUserId = nil
+            callerName = nil
+            isVideoCall = false
+            iceServersJSON = nil
         }
 
         init(from event: SocketNotificationEvent) {
@@ -930,10 +1029,17 @@ struct RootView: View {
             conversationId = event.conversationId
             messageId = event.messageId
             postId = event.postId
+            commentId = event.commentId
+            parentCommentId = event.parentCommentId
             postType = event.postType
             senderId = event.senderId
             senderUsername = event.senderUsername
             storyContext = NotificationNavContext.makeStoryContext(from: event)
+            callId = nil
+            callerUserId = nil
+            callerName = nil
+            isVideoCall = false
+            iceServersJSON = nil
         }
 
         init(from payload: NotificationPayload) {
@@ -941,10 +1047,17 @@ struct RootView: View {
             conversationId = payload.conversationId
             messageId = payload.messageId
             postId = payload.postId
+            commentId = payload.commentId
+            parentCommentId = payload.parentCommentId
             postType = payload.postType
             senderId = payload.senderId
             senderUsername = payload.senderUsername
             storyContext = NotificationNavContext.makeStoryContext(from: payload)
+            callId = payload.callId
+            callerUserId = payload.callerUserId
+            callerName = payload.callerName
+            isVideoCall = payload.isVideoCall
+            iceServersJSON = payload.iceServersJSON
         }
 
         // MARK: - Story context fabrication
@@ -1059,31 +1172,29 @@ struct RootView: View {
         navigateFromNotification(NotificationNavContext(from: payload))
     }
 
-    // Phase G — heuristic for `.postComment` / `.commentReply`: when the
-    // gateway populates `metadata.postType` we trust it (`"STORY"`); when
-    // it doesn't, fall back to the local cache where any post carrying a
-    // non-nil `expiresAt` is, by definition, a story. Both signals are
-    // "best-effort" and we deliberately bias toward the story flow when
-    // either matches because the dedicated screen still degrades gracefully
-    // (`expired` empty state) for posts that no longer exist.
+    // Routing decision for a social-content notification — delegated to the pure
+    // `NotificationContentRouter` (single source of truth, mirrors the web's
+    // `resolveContentRoute`). `metadata.postType` is the high-confidence signal;
+    // when the gateway omits it we fall back to the notification type and, last,
+    // to the local story cache where any post carrying a non-nil `expiresAt` is,
+    // by definition, a story.
     private func isStoryNotification(_ ctx: NotificationNavContext, postId: String) -> Bool {
-        // High confidence: explicit type from notification metadata
-        if ctx.postType?.uppercased() == "STORY" { return true }
-        if ctx.postType?.uppercased() == "POST" || ctx.postType?.uppercased() == "STATUS" { return false }
+        let storyLifecycleHint = StoryService.shared.cachedPost(id: postId)?.expiresAt != nil
+        return NotificationContentRouter.surface(
+            postType: ctx.postType,
+            notificationType: ctx.type,
+            storyLifecycleHint: storyLifecycleHint
+        ) == .story
+    }
 
-        // Medium confidence: explicit notification types that are story-only
-        switch ctx.type {
-        case .storyReaction, .storyNewComment, .friendStoryComment, .storyThreadReply, .friendNewStory:
-            return true
-        default:
-            break
-        }
-
-        // Low confidence fallback: check cache if it has an expiry date
-        if let cached = StoryService.shared.cachedPost(id: postId) {
-            return cached.expiresAt != nil
-        }
-        return false
+    // Reel-flavoured notification (`metadata.postType == "REEL"`). Reels open in
+    // the full-screen immersive viewer, never the story target or the post detail.
+    private func isReelNotification(_ ctx: NotificationNavContext) -> Bool {
+        NotificationContentRouter.surface(
+            postType: ctx.postType,
+            notificationType: ctx.type,
+            storyLifecycleHint: false
+        ) == .reel
     }
 
     private func navigateFromNotification(_ ctx: NotificationNavContext) {
@@ -1120,30 +1231,70 @@ struct RootView: View {
                 navigateToConversationById(conversationId)
             }
 
+        // Guideline 5 (MIIT) — China-region incoming-call push. This is the
+        // ONLY affordance a backgrounded/killed-app China user has to engage
+        // an incoming call (no CallKit, no PushKit VoIP registration — see
+        // VoIPPushManager.shouldRegisterVoIPPush). A plain conversation
+        // deep-link would neither negotiate WebRTC nor show an answer UI, so
+        // this drives the same call-answer flow the socket-delivered
+        // foreground path already uses.
+        case .incomingCallAlert:
+            guard let callId = ctx.callId, !callId.isEmpty else {
+                // Malformed/legacy payload without a callId — fall back to
+                // the conversation so the tap is never a dead end.
+                if let conversationId = ctx.conversationId, !conversationId.isEmpty {
+                    navigateToConversationById(conversationId)
+                }
+                return
+            }
+            CallManager.shared.handleIncomingCallNotification(
+                callId: callId,
+                fromUserId: ctx.callerUserId ?? "",
+                fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",
+                isVideo: ctx.isVideoCall,
+                iceServers: VoIPPushManager.parseIceServers(ctx.iceServersJSON),
+                conversationId: ctx.conversationId
+            )
+
         case .postLike, .legacyPostLike, .postRepost, .friendNewPost:
             if let postId = ctx.postId, !postId.isEmpty {
-                router.push(.postDetail(postId))
+                if isReelNotification(ctx) {
+                    openReelFromNotification(postId: postId)
+                } else {
+                    router.push(.postDetail(postId))
+                }
             } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
             }
 
         case .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction:
             if let postId = ctx.postId, !postId.isEmpty {
-                // Phase G — story-flavoured comments route to the
-                // notification target screen (which redirects into the
-                // viewer's comments overlay or shows the expired empty
-                // state). Detection: explicit `metadata.postType == "STORY"`
-                // OR a cache hint (cached post carries a non-nil
-                // `expiresAt`). Falls back to the regular post-detail
-                // navigation otherwise.
-                if isStoryNotification(ctx, postId: postId) {
+                // Reel comments/reactions open the full-screen reel viewer (the
+                // user tapped a notification about a réel — it must land on the
+                // réel, not the story viewer with the wrong post).
+                //
+                // Phase G — story-flavoured comments route to the notification
+                // target screen (which redirects into the viewer's comments
+                // overlay or shows the expired empty state). Detection: explicit
+                // `metadata.postType == "STORY"` OR a cache hint (cached post
+                // carries a non-nil `expiresAt`). Falls back to the regular
+                // post-detail navigation otherwise.
+                if isReelNotification(ctx) {
+                    openReelFromNotification(postId: postId, commentId: ctx.commentId, parentCommentId: ctx.parentCommentId)
+                } else if isStoryNotification(ctx, postId: postId) {
                     router.push(.storyNotificationTarget(
                         storyId: postId,
                         intent: .comments,
                         context: ctx.storyContext
                     ))
                 } else {
-                    router.push(.postDetail(postId, nil, showComments: true))
+                    router.push(.postDetail(
+                        postId,
+                        nil,
+                        showComments: true,
+                        commentId: ctx.commentId,
+                        parentCommentId: ctx.parentCommentId
+                    ))
                 }
             } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
@@ -1192,6 +1343,51 @@ struct RootView: View {
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
              .system, .maintenance, .updateAvailable, .voiceCloneReady:
             break
+        }
+    }
+
+    /// Opens the full-screen reel viewer for a reel-flavoured social
+    /// notification. The reels feed (`getReels(seedReelId:)`) deliberately
+    /// EXCLUDES the seed reel, so the target reel must be injected as the pager's
+    /// seed — otherwise the pager opens on the first affinity reel (the original
+    /// "wrong post" bug). Cache-first for an instant open (the Notification
+    /// Service Extension prefetches the tapped post into the feed cache via
+    /// `NSEPendingPostConsumer`), then network as a fallback so the tap is never a
+    /// dead end.
+    private func openReelFromNotification(postId: String, commentId: String? = nil, parentCommentId: String? = nil) {
+        Task { @MainActor in
+            await NSEPendingPostConsumer.shared.consumeAll()
+
+            if let cached = await cachedReelSeed(for: postId) {
+                reelsPresenter.present(posts: [cached], startId: postId, commentId: commentId, parentCommentId: parentCommentId)
+                return
+            }
+
+            let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            if let apiPost = try? await PostService.shared.getPost(postId: postId) {
+                reelsPresenter.present(
+                    posts: [apiPost.toFeedPost(preferredLanguages: preferred)],
+                    startId: postId,
+                    commentId: commentId,
+                    parentCommentId: parentCommentId
+                )
+            } else {
+                // Never a dead end: the universal post-detail surface renders any
+                // post type, including a reel.
+                router.push(.postDetail(postId))
+            }
+        }
+    }
+
+    /// The reel already cached for `postId` (NSE-prefetched or previously loaded),
+    /// or `nil` on a cold cache. Mirrors `PostDetailViewModel.loadPost`'s
+    /// cache-first read so a tapped reel notification renders instantly.
+    private func cachedReelSeed(for postId: String) async -> FeedPost? {
+        switch await CacheCoordinator.shared.feed.load(for: postId) {
+        case .fresh(let cached, _), .stale(let cached, _):
+            return cached.first
+        case .expired, .empty:
+            return nil
         }
     }
 
@@ -1284,12 +1480,12 @@ struct RootView: View {
     /// hides when the queue drains. Shown only when the device is online so
     /// it does not stack with `OfflineBanner`.
     private var pendingSettingsBannerOverlay: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xs + 2) {
             PendingSettingsBannerInline()
             PendingStoryBannerInline()
             Spacer()
         }
-        .padding(.top, 50)
+        .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.lg)
         .zIndex(189)
     }
 
@@ -1334,7 +1530,8 @@ struct RootView: View {
         // mask FIRST (the poster / frame 0 shows), THEN start playback from frame 0
         // over the poster that stays underneath (`ReelVideoView` keeps `ReelPoster`
         // behind the surface) → seamless, no flash and no black gap.
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+        Task {
+            try? await Task.sleep(for: .seconds(duration))
             guard reelsPresenter.launch != nil, !reelsRevealClosing else { return }
             reelsRevealMasked = false
             reelsRevealCompleted = true
@@ -1362,7 +1559,8 @@ struct RootView: View {
         withAnimation(.easeIn(duration: duration)) {
             reelsRevealProgress = 0
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + duration) {
+        Task {
+            try? await Task.sleep(for: .seconds(duration))
             reelsPresenter.dismiss()
             reelsRevealClosing = false
         }
@@ -1373,6 +1571,8 @@ struct RootView: View {
         FreeFloatingButtonsContainer(
             leftPosition: $feedButtonPosition,
             rightPosition: $menuButtonPosition,
+            leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
+            rightA11yLabel: String(localized: "a11y.floating.menu", defaultValue: "Menu", bundle: .main),
             onLeftTap: {
                 HapticFeedback.light()
                 // Le tap ouvre l'overlay Feed (sa vocation : l'icône est le Feed).
@@ -1383,11 +1583,15 @@ struct RootView: View {
                 }
             },
             onRightTap: {
+                HapticFeedback.light()
+                // Le bouton porte l'avatar de l'utilisateur. 1er tap = déplie le
+                // menu ; 2e tap (menu déjà ouvert) = ouvre la page profil dans les
+                // réglages et referme le menu, comme n'importe quel autre item.
                 if showMenu {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showMenu = false
                     }
-                    router.push(.settings)
+                    router.push(.profile)
                 } else {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showMenu.toggle()
@@ -1403,17 +1607,24 @@ struct RootView: View {
                 }
             },
             onRightLongPress: {
-                router.push(.settings)
+                // Long-press sur l'avatar = raccourci direct vers la page profil
+                // (sans passer par le menu). Les réglages restent accessibles via
+                // le dernier item du menu (roue dentée).
+                HapticFeedback.medium()
+                if showMenu {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showMenu = false
+                    }
+                }
+                router.push(.profile)
             },
             isSearchBarVisible: !isScrollingDown,
-            leftA11yLabel: String(localized: "a11y.floating.feed", defaultValue: "Flux", bundle: .main),
             leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
-            rightA11yLabel: String(localized: "a11y.floating.menu", defaultValue: "Menu", bundle: .main),
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
             rightA11yValue: notificationManager.unreadCount > 0
                 ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
                 : nil,
-            rightA11yActionName: String(localized: "a11y.floating.menu.settings-action", defaultValue: "Réglages", bundle: .main),
+            rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
             leftContent: {
                 // Feed button content
                 ZStack {
@@ -1429,16 +1640,18 @@ struct RootView: View {
                     if showFeed {
                         // Animated logo when feed is open (with breathing effect)
                         AnimatedLogoView(color: .white, lineWidth: 3, continuous: true)
-                            .frame(width: 26, height: 26)
+                            .frame(width: MeeshySpacing.xxl + MeeshySpacing.xs, height: MeeshySpacing.xxl + MeeshySpacing.xs)
                     } else {
                         Image(systemName: "square.stack.fill")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(MeeshyFont.relative(20, weight: .semibold))
                             .foregroundColor(.white)
                     }
                 }
             },
             rightContent: {
-                // Menu button content
+                // Menu button content — porte l'avatar de l'utilisateur (ou ses
+                // initiales) à l'intérieur de l'anneau dégradé. L'anneau vire au
+                // rouge quand le menu est ouvert ; le badge de notifications reste.
                 ZStack {
                     Circle()
                         .fill(
@@ -1449,13 +1662,18 @@ struct RootView: View {
                             )
                         )
 
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
+                    MeeshyAvatar(
+                        name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
+                        context: .custom(38),
+                        avatarURL: AuthManager.shared.currentUser?.avatar,
+                        thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
+                    )
+                    .allowsHitTesting(false)
 
                     // Badge
                     if !showMenu && notificationManager.unreadCount > 0 {
                         NotificationBadge(count: notificationManager.unreadCount)
+                            .accessibilityLabel(String(format: String(localized: "a11y.notifications.unread_count", defaultValue: "%d notifications non lues", bundle: .main), notificationManager.unreadCount))
                     }
                 }
             }
@@ -1471,7 +1689,7 @@ struct RootView: View {
             let pos = menuButtonPos
 
             // Calculate button position on screen
-            let minEdgePadding: CGFloat = 20
+            let minEdgePadding: CGFloat = MeeshySpacing.xl
             let topSafeZone: CGFloat = 50
             let bottomSafeZone: CGFloat = isScrollingDown ? 50 : 110
             let buttonSize: CGFloat = 52
@@ -1487,7 +1705,7 @@ struct RootView: View {
 
             // Menu items configuration
             let menuItemSize: CGFloat = 46
-            let menuSpacing: CGFloat = 12
+            let menuSpacing: CGFloat = MeeshySpacing.md
 
             // Determine if menu should expand up or down
             let expandDown = pos.y < 0.5
@@ -1496,12 +1714,16 @@ struct RootView: View {
             let menuX = pos.isLeft ? buttonX : buttonX
             let menuStartY = expandDown ? buttonY + halfButton + menuSpacing + menuItemSize / 2 : buttonY - halfButton - menuSpacing - menuItemSize / 2
 
-            // Menu items
-            let menuItems: [(icon: String, color: String, action: () -> Void)] = [
-                ("link.badge.plus", "F8B500", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
-                ("bell.fill", "FF6B6B", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
-                ("person.2.fill", "6366F1", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts()) }),
-                ("person.3.fill", "2ECC71", { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) })
+            // Menu items — boutons d'action. Le profil n'a PAS d'item dédié : il
+            // s'ouvre via le 2e tap (ou le long-press) sur le bouton avatar. Le
+            // DERNIER bouton est la roue dentée (→ préférences générales).
+            let menuItems: [(icon: String, color: String, label: String, action: () -> Void)] = [
+                ("link.badge.plus", "F8B500", String(localized: "root.menu.links", defaultValue: "Mes liens"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.links) }),
+                ("bell.fill", "FF6B6B", String(localized: "root.menu.notifications", defaultValue: "Notifications"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.notifications) }),
+                ("person.2.fill", "6366F1", String(localized: "root.menu.contacts", defaultValue: "Contacts"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.contacts) }),
+                ("sparkle.magnifyingglass", "8B5CF6", String(localized: "root.menu.discover", defaultValue: "Découvrir"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.peopleDiscovery()) }),
+                ("person.3.fill", "2ECC71", String(localized: "root.menu.communities", defaultValue: "Communautés"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.communityList) }),
+                ("gearshape.fill", "64748B", String(localized: "root.menu.settings", defaultValue: "Réglages"), { withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { showMenu = false }; router.push(.settings) })
             ]
 
             ForEach(Array(menuItems.enumerated()), id: \.offset) { index, item in
@@ -1511,16 +1733,30 @@ struct RootView: View {
 
                 let itemY = menuStartY + yOffset
 
-                // Special handling for notifications badge
-                if item.icon == "bell.fill" {
-                    ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
-                        .position(x: menuX, y: itemY)
-                        .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
-                } else {
-                    ThemedActionButton(icon: item.icon, color: item.color, action: item.action)
-                        .position(x: menuX, y: itemY)
-                        .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
+                // Special handling for notifications & pending-request badges
+                Group {
+                    if item.icon == "bell.fill" {
+                        ThemedActionButton(
+                            icon: item.icon, color: item.color,
+                            label: item.label, hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
+                            badge: notificationManager.unreadCount, action: item.action
+                        )
+                    } else if item.icon == "sparkle.magnifyingglass" {
+                        ThemedActionButton(
+                            icon: item.icon, color: item.color,
+                            label: item.label, hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
+                            badge: FriendshipCache.shared.pendingReceivedCount, action: item.action
+                        )
+                    } else {
+                        ThemedActionButton(
+                            icon: item.icon, color: item.color,
+                            label: item.label, hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
+                            action: item.action
+                        )
+                    }
                 }
+                .position(x: menuX, y: itemY)
+                .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
             }
         }
         .ignoresSafeArea()
@@ -1708,37 +1944,45 @@ private struct PendingSettingsBannerInline: View {
     var body: some View {
         Group {
             if pendingCount > 0 {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundColor(MeeshyColors.indigo950)
 
                     Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Spacer()
-
-                    Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.white.opacity(0.85))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundColor(MeeshyColors.indigo950)
                         .lineLimit(1)
+                        .layoutPriority(1)
+
+                    Spacer(minLength: MeeshySpacing.sm)
+
+                    // cf. PendingStoryBannerInline : la version FR est plus longue —
+                    // shrink-avant-troncature pour rester lisible.
+                    Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
+                        .font(MeeshyFont.relative(10, weight: .regular))
+                        .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .truncationMode(.tail)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.vertical, MeeshySpacing.sm)
+                // Ambre `warning` cohérent avec PendingStoryBannerInline (état
+                // en attente / hors-ligne) ; texte foncé pour le contraste.
                 .background(
                     LinearGradient(
                         colors: [
-                            MeeshyColors.indigo500.opacity(0.92),
-                            MeeshyColors.indigo700.opacity(0.88)
+                            MeeshyColors.warning,
+                            Color(hex: "F59E0B")
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
-                .padding(.horizontal, 16)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -1762,47 +2006,83 @@ private struct PendingSettingsBannerInline: View {
 
 /// Surfaces the count of stories waiting in `StoryPublishQueue` (typically
 /// composed offline). Mirrors `PendingSettingsBannerInline`. Self-hides
-/// when the queue drains. Inlined to avoid a project.pbxproj edit.
+/// when the queue drains, OR when the user swipes it away (up/left/right —
+/// user request 2026-07-19: it had no gesture at all before). A manual
+/// dismiss only holds for the CURRENT `pendingCount` — it reappears the
+/// moment the count changes (a new story queued, or one resolves), so a
+/// swipe never permanently hides a genuinely new situation.
 private struct PendingStoryBannerInline: View {
     @StateObject private var publishService = StoryPublishService.shared
+    @State private var dismissedAtCount: Int?
+
+    private var isVisible: Bool {
+        publishService.pendingCount > 0 && dismissedAtCount != publishService.pendingCount
+    }
 
     var body: some View {
         Group {
-            if publishService.pendingCount > 0 {
-                HStack(spacing: 8) {
+            if isVisible {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "photo.stack")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundColor(MeeshyColors.indigo950)
 
                     Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Spacer()
-
-                    Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
-                        .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.white.opacity(0.85))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundColor(MeeshyColors.indigo950)
                         .lineLimit(1)
+                        .layoutPriority(1)
+
+                    Spacer(minLength: MeeshySpacing.sm)
+
+                    // Texte secondaire : la version FR ("Publication au retour en
+                    // ligne") est plus longue que l'anglaise — `minimumScaleFactor`
+                    // la réduit avant de tronquer, pour qu'elle reste lisible en
+                    // portrait étroit / Dynamic Type agrandi.
+                    Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
+                        .font(MeeshyFont.relative(10, weight: .regular))
+                        .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .truncationMode(.tail)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.vertical, MeeshySpacing.sm)
+                // Ambre `warning` (design system : "Attention / pending") au lieu
+                // de l'indigo de marque, pour signaler un état hors-ligne/en
+                // attente ; texte foncé (indigo950) pour un contraste lisible sur
+                // l'ambre clair.
                 .background(
                     LinearGradient(
                         colors: [
-                            MeeshyColors.indigo500.opacity(0.92),
-                            MeeshyColors.indigo700.opacity(0.88)
+                            MeeshyColors.warning,
+                            Color(hex: "F59E0B")
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 6, y: 2)
-                .padding(.horizontal, 16)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
+                .gesture(
+                    DragGesture(minimumDistance: 15)
+                        .onEnded { value in
+                            guard PendingBannerDismissResolver.shouldDismiss(translation: value.translation) else { return }
+                            dismiss()
+                        }
+                )
+                .accessibilityAction(named: Text(String(localized: "common.dismiss", defaultValue: "Masquer", bundle: .main))) {
+                    dismiss()
+                }
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: publishService.pendingCount)
+    }
+
+    private func dismiss() {
+        dismissedAtCount = publishService.pendingCount
+        HapticFeedback.light()
     }
 }

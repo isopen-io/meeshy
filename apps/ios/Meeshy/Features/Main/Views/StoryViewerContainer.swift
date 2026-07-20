@@ -16,6 +16,11 @@ struct StoryViewerContainer: View {
     @Binding var isPresented: Bool
     var onReplyToStory: ((ReplyContext) -> Void)? = nil
     var singleGroup: Bool = false
+    /// R4 inc.2 — id exact du post story quand le point d'entrée le connaît
+    /// (bookmark, notification, deep link) : permet un fetch unitaire léger
+    /// si le tray ignore le groupe, au lieu du refetch full-tray bloquant.
+    /// `nil` conserve le comportement historique.
+    var postId: String? = nil
     var initialStoryIndex: Int = 0
     /// Forwarded to `StoryViewerView` : ouvre le viewer sur la première story
     /// non vue (points d'entrée « toucher le profil / avatar / tray »).
@@ -36,13 +41,18 @@ struct StoryViewerContainer: View {
             Color.black.ignoresSafeArea()
 
             if let resolvedIndex = viewModel.groupIndex(forUserId: uid) {
+                let resolvedStoryIndex = StoryIndexResolver.index(
+                    forPostId: postId,
+                    in: viewModel.storyGroups[resolvedIndex],
+                    fallback: initialStoryIndex
+                )
                 if singleGroup {
                     StoryViewerView(
                         viewModel: viewModel,
                         groups: [viewModel.storyGroups[resolvedIndex]],
                         currentGroupIndex: 0,
                         isPresented: $isPresented,
-                        initialStoryIndex: initialStoryIndex,
+                        initialStoryIndex: resolvedStoryIndex,
                         startAtFirstUnviewed: startAtFirstUnviewed,
                         initialAction: initialAction
                     )
@@ -54,7 +64,7 @@ struct StoryViewerContainer: View {
                         currentGroupIndex: resolvedIndex,
                         isPresented: $isPresented,
                         onReplyToStory: onReplyToStory,
-                        initialStoryIndex: initialStoryIndex,
+                        initialStoryIndex: resolvedStoryIndex,
                         startAtFirstUnviewed: startAtFirstUnviewed,
                         initialAction: initialAction
                     )
@@ -101,8 +111,11 @@ struct StoryViewerContainer: View {
         ZStack {
             VStack(spacing: 16) {
                 Image(systemName: "exclamationmark.circle")
+                    // Doctrine 84i/86i : glyphe hero d'etat d'erreur (~38pt, decoratif) → fige ;
+                    // le titre ci-dessous porte le sens. Masque de VoiceOver.
                     .font(.system(size: 38, weight: .regular))
                     .foregroundColor(.white.opacity(0.8))
+                    .accessibilityHidden(true)
 
                 Text(String(localized: "story.viewer.notFound.title", defaultValue: "Story introuvable", bundle: .main))
                     .foregroundColor(.white)
@@ -151,11 +164,14 @@ struct StoryViewerContainer: View {
                 Spacer()
                 Button { isPresented = false } label: {
                     Image(systemName: "xmark")
+                        // Doctrine 82i : glyphe dans un cadre de tap fixe 32×32 → fige
+                        // (le scaler deborderait du cercle). Bouton labellise ci-dessous.
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(Color.white.opacity(0.2)))
                 }
+                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 .padding(.trailing, 16)
                 .padding(.top, 8)
             }
@@ -179,6 +195,27 @@ struct StoryViewerContainer: View {
 
         Logger.messages.info("[StoryViewerContainer] Group missing uid=\(uid, privacy: .public) source=\(presentationSource, privacy: .public) groupCount=\(viewModel.storyGroups.count) availableIds=\(viewModel.storyGroups.map(\.id).joined(separator: ","), privacy: .public)")
 
+        // R4 — Cache-first (mission produit n°2 : jamais de spinner si un rendu
+        // partiel est possible) : un deep link / une notification à froid arrive
+        // AVANT le `loadStories` du boot — le tray du cache 24 h contient très
+        // probablement le groupe. `loadStories()` le sert immédiatement
+        // (`.fresh` → zéro réseau ; `.stale` → servi + refetch silencieux) et
+        // le body réactif monte le viewer sans spinner plein écran.
+        await viewModel.loadStories()
+
+        if viewModel.groupIndex(forUserId: uid) != nil { return }
+
+        // R4 inc.2 — le cache ignore ce groupe mais le point d'entrée connaît
+        // le post exact : fetch unitaire léger (GET /posts/:id) AVANT le
+        // full-tray. Ne court-circuite que si le groupe du uid demandé est
+        // bien monté (un postId d'un autre auteur retombe sur le full fetch).
+        if let postId {
+            _ = await viewModel.ensureStoryLoaded(postId: postId)
+            if viewModel.groupIndex(forUserId: uid) != nil { return }
+        }
+
+        // Le cache ne connaît pas ce groupe (story récente d'un contact, tray
+        // périmé) : refetch réseau complet — comportement historique conservé.
         await viewModel.loadStories(forceNetwork: true)
 
         if viewModel.groupIndex(forUserId: uid) != nil { return }

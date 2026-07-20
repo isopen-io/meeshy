@@ -91,7 +91,7 @@ const ConversationDetailsStepComponent: React.FC<ConversationDetailsStepProps> =
           </div>
           {isCheckingIdentifier ? (
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {t('createConversationModal.conversationDetails.checkingIdentifier') || 'Vérification...'}
+              {t('createConversationModal.conversationDetails.checkingIdentifier', 'Checking availability...')}
             </p>
           ) : customIdentifier && !validateIdentifierFormat(customIdentifier) ? (
             <p className="text-xs text-red-500 mt-1">
@@ -99,11 +99,11 @@ const ConversationDetailsStepComponent: React.FC<ConversationDetailsStepProps> =
             </p>
           ) : identifierAvailable === false ? (
             <p className="text-xs text-red-600 mt-1">
-              ❌ {t('createConversationModal.conversationDetails.identifierTaken') || 'Cet identifiant est déjà utilisé'}
+              ❌ {t('createConversationModal.conversationDetails.identifierTaken', 'This identifier is already taken')}
             </p>
           ) : identifierAvailable === true ? (
             <p className="text-xs text-green-600 mt-1">
-              ✓ {t('createConversationModal.conversationDetails.identifierAvailable') || 'Cet identifiant est disponible'}
+              ✓ {t('createConversationModal.conversationDetails.identifierAvailable', 'This identifier is available')}
             </p>
           ) : (
             <p className="text-xs text-muted-foreground mt-1">

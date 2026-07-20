@@ -350,6 +350,37 @@ describe('ApplicationPreferenceSchema', () => {
     });
     expect(valid.tutorialsCompleted).toHaveLength(3);
   });
+
+  test('conserve les timestamps de consentement voix (non strippés par Zod)', () => {
+    // Popup iOS 2026-07-08 : le consentement vocal transite par la MÊME API
+    // préférences (PATCH /me/preferences/application). Sans ces clés au
+    // schema, Zod (mode strip) les supprimait silencieusement.
+    const result = ApplicationPreferenceSchema.parse({
+      dataProcessingConsentAt: '2026-07-08T10:00:00Z',
+      voiceDataConsentAt: '2026-07-08T10:00:00Z',
+      voiceProfileConsentAt: '2026-07-08T10:00:00Z',
+      voiceCloningConsentAt: '2026-07-08T10:00:00Z',
+      voiceCloningEnabledAt: '2026-07-08T10:00:00Z'
+    });
+    expect(result.voiceProfileConsentAt).toBe('2026-07-08T10:00:00Z');
+    expect(result.voiceCloningConsentAt).toBe('2026-07-08T10:00:00Z');
+  });
+
+  test('accepte null et l\'absence des timestamps de consentement', () => {
+    const withNulls = ApplicationPreferenceSchema.parse({
+      voiceProfileConsentAt: null
+    });
+    expect(withNulls.voiceProfileConsentAt).toBeNull();
+
+    const absent = ApplicationPreferenceSchema.parse({});
+    expect(absent.voiceProfileConsentAt).toBeUndefined();
+  });
+
+  test('rejette un timestamp de consentement non ISO-8601', () => {
+    expect(() => {
+      ApplicationPreferenceSchema.parse({ voiceProfileConsentAt: 'pas-une-date' });
+    }).toThrow();
+  });
 });
 
 describe('Schema.partial() pour updates partiels', () => {
@@ -359,7 +390,12 @@ describe('Schema.partial() pour updates partiels', () => {
     });
 
     expect(partial.showOnlineStatus).toBe(false);
-    expect(partial.showLastSeen).toBeUndefined();
+    // zod v4: `.partial()` ne fait qu'ajouter `.optional()` à chaque champ et
+    // conserve le `.default()` interne, qui s'applique donc toujours pour les
+    // clés absentes (contrairement à zod v3 qui retournait undefined). Tous les
+    // champs de PrivacyPreferenceSchema ayant un default, le sous-ensemble est
+    // accepté et les champs non fournis prennent leur valeur par défaut.
+    expect(partial.showLastSeen).toBe(true);
   });
 
   test('NotificationPreferenceSchema.partial() devrait accepter plusieurs champs', () => {

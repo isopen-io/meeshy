@@ -28,6 +28,10 @@ public enum MessageTextRenderer {
     /// Pass `mentionColor` to override mention (`@username`) link color.
     /// Pass `accentColor` to override m+token and URL link color.
     /// Pass `mentionDisplayNames` to resolve `@username` → display name (e.g. `["atabeth": "Ata Beth"]`).
+    /// Pass `trackedLinks` (`[rawURL: token]`) to route raw URLs through the
+    /// gateway tracking redirect: a `.urlLink` whose raw string is a key (with a
+    /// trailing-punctuation-trimmed fallback) links to `https://meeshy.me/l/<token>`
+    /// instead of the raw URL — the DISPLAYED text stays the raw URL.
     /// Callers that omit these parameters retain identical behavior to before.
     public static func render(
         _ text: String,
@@ -36,12 +40,31 @@ public enum MessageTextRenderer {
         mentionColor: Color? = nil,
         accentColor: Color? = nil,
         mentionDisplayNames: [String: String]? = nil,
-        highlightTerm: String? = nil
+        highlightTerm: String? = nil,
+        trackedLinks: [String: String]? = nil
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
         let segments = parse(text, mentionDisplayNames: mentionDisplayNames)
         let ranges = highlightTerm.flatMap { highlightRanges(in: text, term: $0) } ?? []
-        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor, mentionDisplayNames: mentionDisplayNames, highlightRanges: ranges, fullText: text)
+        return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, accentColor: accentColor, mentionDisplayNames: mentionDisplayNames, highlightRanges: ranges, fullText: text, trackedLinks: trackedLinks)
+    }
+
+    // MARK: - Tracked-link resolution
+
+    /// Resolves the tappable destination for a raw URL string. Returns the
+    /// `https://meeshy.me/l/<token>` tracking URL when the raw string (or its
+    /// trailing-punctuation-trimmed form) is a key in `trackedLinks`; otherwise
+    /// the original `url`. Pure + side-effect-free so it's unit-testable.
+    static func resolvedLinkURL(raw: String, original: URL, trackedLinks: [String: String]?) -> URL {
+        guard let trackedLinks, !trackedLinks.isEmpty else { return original }
+        if let token = trackedLinks[raw] {
+            return URL(string: "https://meeshy.me/l/\(token)") ?? original
+        }
+        let trimmed = raw.trimmingTrailingLinkPunctuation
+        if trimmed != raw, let token = trackedLinks[trimmed] {
+            return URL(string: "https://meeshy.me/l/\(token)") ?? original
+        }
+        return original
     }
 
     /// Extract all URLs found in the text (for link preview / OG cards).
@@ -83,7 +106,6 @@ public enum MessageTextRenderer {
     /// Returns NSRanges suitable for AttributedString highlighting.
     public static func highlightRanges(in text: String, term: String) -> [NSRange] {
         guard !term.isEmpty else { return [] }
-        let ns = text as NSString
         let lowered = text.lowercased()
         let termLower = term.lowercased()
         var ranges: [NSRange] = []
@@ -358,7 +380,8 @@ public enum MessageTextRenderer {
         accentColor: Color?,
         mentionDisplayNames: [String: String]?,
         highlightRanges: [NSRange] = [],
-        fullText: String = ""
+        fullText: String = "",
+        trackedLinks: [String: String]? = nil
     ) -> Text {
         var result = AttributedString()
         var charOffset = 0
@@ -407,7 +430,9 @@ public enum MessageTextRenderer {
 
             case .urlLink(let display, let url):
                 var attr = AttributedString(display)
-                attr.link = url
+                // DISPLAY stays the raw URL; the tappable destination becomes
+                // the gateway tracking redirect when a token is mapped.
+                attr.link = Self.resolvedLinkURL(raw: display, original: url, trackedLinks: trackedLinks)
                 attr.font = .system(size: fontSize, weight: .medium)
                 attr.underlineStyle = .single
                 if let accentColor {
@@ -436,9 +461,25 @@ public enum MessageTextRenderer {
             guard intersection.length > 0 else { continue }
             let localStart = intersection.location - charOffset
             let localNS = NSRange(location: localStart, length: intersection.length)
-            guard let swiftRange = Range(localNS, in: segmentText) else { continue }
+            guard Range(localNS, in: segmentText) != nil else { continue }
             let attrRange = attr.index(attr.startIndex, offsetByCharacters: localStart)..<attr.index(attr.startIndex, offsetByCharacters: localStart + intersection.length)
             attr[attrRange].backgroundColor = Color.yellow.opacity(0.4)
         }
+    }
+}
+
+private extension String {
+    /// Trailing-punctuation set used for tracked-link key matching. The URL
+    /// regex may capture a trailing `.,;:!?)]` that the gateway excluded when
+    /// it minted the token (it tracks the bare URL). Trim them so a sentence
+    /// like "see https://x.com." still maps to the `https://x.com` token.
+    private static let trailingLinkPunctuation: Set<Character> = [".", ",", ";", ":", "!", "?", ")", "]"]
+
+    var trimmingTrailingLinkPunctuation: String {
+        var result = self
+        while let last = result.last, Self.trailingLinkPunctuation.contains(last) {
+            result.removeLast()
+        }
+        return result
     }
 }

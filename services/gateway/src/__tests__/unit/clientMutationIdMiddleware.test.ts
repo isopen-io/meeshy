@@ -121,6 +121,39 @@ describe('clientMutationId middleware', () => {
     expect(body.error?.code).toBe('INVALID_MUTATION_ID');
   });
 
+  it('rejects an array header value (typeof !== string) with 400', async () => {
+    // Fastify can expose multi-value headers as string[] when the client sends
+    // repeated headers; typeof raw !== 'string' branch must reject them.
+    // Register an early hook that injects an array BEFORE the mutation-id hook reads it.
+    app = Fastify({ logger: false });
+    app.addHook('onRequest', async (req) => {
+      (req.headers as any)['x-client-mutation-id'] = ['cmid_1', 'cmid_2'];
+    });
+    registerClientMutationIdHook(app);
+    app.get('/check', async (req) => ({ cmid: req.clientMutationId ?? null }));
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: '/check' });
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as any;
+    expect(body.error?.code).toBe('INVALID_MUTATION_ID');
+  });
+
+  it('is idempotent: calling registerClientMutationIdHook twice does not throw', async () => {
+    // Covers the branch where hasRequestDecorator returns true (decorator already added).
+    app = Fastify({ logger: false });
+    registerClientMutationIdHook(app);
+    // Second call: decorator already registered — the `if (!hasRequestDecorator)` branch is false
+    expect(() => registerClientMutationIdHook(app)).not.toThrow();
+    app.get('/noop', async () => ({}));
+    await app.ready();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/noop',
+      headers: { 'x-client-mutation-id': VALID_CMID },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
   it('preserves cmid across multiple handlers on same request', async () => {
     app = Fastify({ logger: false });
     registerClientMutationIdHook(app);

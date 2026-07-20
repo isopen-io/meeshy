@@ -5,12 +5,15 @@
 
 'use client';
 
-import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
+import { useRemoteCallAlerts } from '@/hooks/use-remote-call-alerts';
+import { useCallCaptions } from '@/hooks/use-call-captions';
+import { useCallAnalyticsReporter } from '@/hooks/use-call-analytics-reporter';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
 import {
   useAdaptiveDegradation,
@@ -23,6 +26,7 @@ import { CallControls } from './CallControls';
 import { CallStatusIndicator } from './CallStatusIndicator';
 import { AudioEffectsCarousel } from './AudioEffectsCarousel';
 import { CallQualityOverlay } from './CallQualityOverlay';
+import { CallCaptionsOverlay } from './CallCaptionsOverlay';
 import { CallInfoOverlay } from './CallInfoOverlay';
 import { LocalVideoTile } from './LocalVideoTile';
 import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
@@ -31,6 +35,16 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+
+/**
+ * Watchdog de la phase de connexion (parité iOS `connectingFailSeconds` /
+ * Android `CallConnectingWatchdog`) : un appel dont l'ICE ne s'établit JAMAIS
+ * restait indéfiniment sur l'UI d'appel — l'échec ne produisait qu'un toast
+ * pendant que webrtc-service retentait l'ICE en boucle sans borne d'escalade.
+ * Une seule fenêtre par appel, jamais ré-armée après la première connexion
+ * (les stalls mid-call ont leur propre chaîne reconnect/restart).
+ */
+const CONNECT_WATCHDOG_MS = 45_000;
 
 interface VideoCallInterfaceProps {
   callId: string;
@@ -71,7 +85,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, []);
 
   // Initialize WebRTC
-  const { initializeLocalStream, createOffer, connectionState, enableVideo, disableVideo, applyQualityTier } = useWebRTCP2P({
+  const { initializeLocalStream, createOffer, connectionState, enableVideo, disableVideo, applyQualityTier, removeParticipant } = useWebRTCP2P({
     callId,
     userId: user?.id,
     onError: handleWebRTCError,
@@ -108,6 +122,17 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     callId,
     updateInterval: 2000,
   });
+
+  // Remote-peer alerts relayed by the gateway (iOS/Android parity): the PEER's
+  // sustained degradation (transient pill, 15 s auto-clear) and the privacy
+  // signal when the peer captures the call screen.
+  const { remoteQualityDegraded, remoteScreenCapturing } = useRemoteCallAlerts(callId);
+  const { captions } = useCallCaptions(callId);
+
+  // Report per-call reliability telemetry at teardown (parité iOS/Android) —
+  // the web was the one client that never emitted call:analytics, leaving the
+  // reliability dashboard blind to web calls.
+  useCallAnalyticsReporter({ callId, connectionState, qualityStats, isVideo: controls.videoEnabled });
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
@@ -376,13 +401,15 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
       const newVideoTrack = newStream.getVideoTracks()[0];
 
-      // Replace track in peer connections
-      useCallStore.getState().peerConnections.forEach((pc) => {
-        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-        if (sender) {
-          sender.replaceTrack(newVideoTrack);
-        }
-      });
+      // MDN warns the outgoing track must not be stopped until replaceTrack()
+      // resolves on every sender — the peer connection may still be reading
+      // from it. Await all replacements first; a rejection propagates to the
+      // catch block below and the old track is left untouched.
+      const replacements = Array.from(useCallStore.getState().peerConnections.values())
+        .map(pc => pc.getSenders().find(s => s.track?.kind === 'video'))
+        .filter((sender): sender is RTCRtpSender => Boolean(sender))
+        .map(sender => sender.replaceTrack(newVideoTrack));
+      await Promise.all(replacements);
 
       videoTrack.stop();
       localStream.removeTrack(videoTrack);
@@ -394,6 +421,47 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       toast.error(t('calls.toasts.cameraSwitchFailed'));
     }
   };
+
+  // Le watchdog lit le raccrochage et l'état via des refs : ré-armer la
+  // fenêtre parce qu'une dépendance a changé fausserait le budget.
+  const handleHangUpRef = useRef<() => void>(() => {});
+  const connectionStateRef = useRef(connectionState);
+  const hasConnectedRef = useRef(false);
+
+  useEffect(() => {
+    connectionStateRef.current = connectionState;
+    if (connectionState === 'connected') {
+      hasConnectedRef.current = true;
+    }
+  }, [connectionState]);
+
+  useEffect(() => {
+    // Seedé depuis l'état COURANT (pas `false` en dur) : un remontage sur un
+    // appel déjà connecté ne doit jamais ré-ouvrir une fenêtre de kill.
+    hasConnectedRef.current = connectionStateRef.current === 'connected';
+    const timer = setTimeout(() => {
+      if (hasConnectedRef.current) return;
+      logger.warn('[VideoCallInterface]', 'Connect watchdog expired — ending the never-connected call', {
+        callId,
+      });
+      // A never-connected call is a TRANSIENT failure — post a « Réessayer »
+      // offer (consumed by useCallRetryToast at the conversation level, which
+      // survives this teardown) instead of a dead-end toast. Fall back to the
+      // plain timeout toast if the call context is already gone.
+      const { currentCall, controls, offerCallRetry } = useCallStore.getState();
+      if (currentCall?.conversationId) {
+        offerCallRetry({
+          conversationId: currentCall.conversationId,
+          type: controls.videoEnabled ? 'video' : 'audio',
+        });
+      } else {
+        toast.error(t('calls.toasts.connectTimeout'));
+      }
+      handleHangUpRef.current();
+    }, CONNECT_WATCHDOG_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- une fenêtre par callId, jamais ré-armée par les re-render
+  }, [callId]);
 
   const handleHangUp = useCallback(() => {
     logger.debug('[VideoCallInterface]', 'Hanging up - callId: ' + callId);
@@ -414,7 +482,18 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     reset();
   }, [callId, reset]);
 
+  useEffect(() => {
+    handleHangUpRef.current = handleHangUp;
+  }, [handleHangUp]);
+
   // Listen for participant left events to show disconnected state
+  // Regression: the 2s delayed cleanup below used to hand setTimeout() to
+  // nobody — unmounting (or this effect re-running for a new callId)
+  // mid-window left it armed, so it fired against whatever call was current
+  // by then, tearing down a brand-new call's participant. Tracked per
+  // participant so cleanup can cancel every pending timeout on teardown.
+  const leaveCleanupTimeouts = React.useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
   useEffect(() => {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
@@ -430,11 +509,47 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       // Mark participant as disconnected
       setDisconnectedParticipants((prev) => new Set(prev).add(participantId));
 
+      // Snapshot the connection at leave-time so the delayed cleanup below can
+      // detect a same-session rejoin (network blip, tab reload) within the
+      // grace window and skip tearing down the *new* connection that already
+      // replaced this one in the store.
+      const connectionAtLeave = useCallStore.getState().peerConnections.get(participantId);
+
+      const existingTimeout = leaveCleanupTimeouts.current.get(participantId);
+      if (existingTimeout) clearTimeout(existingTimeout);
+
       // Remove their stream and peer connection after 2 seconds
-      setTimeout(() => {
-        const { removeRemoteStream, removePeerConnection } = useCallStore.getState();
+      const timeoutId = setTimeout(() => {
+        leaveCleanupTimeouts.current.delete(participantId);
+        const { peerConnections, removeRemoteStream } = useCallStore.getState();
+
+        if (peerConnections.get(participantId) !== connectionAtLeave) {
+          // Participant already rejoined and got a fresh RTCPeerConnection
+          // registered under the same id — leave it (and the offer guard
+          // below) alone, only clear the stale disconnected-banner flag.
+          setDisconnectedParticipants((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(participantId);
+            return newSet;
+          });
+          return;
+        }
+
         removeRemoteStream(participantId);
-        removePeerConnection(participantId);
+        // removeParticipant (not just the store's removePeerConnection) so the
+        // WebRTCService/remoteDescriptionSetRef/iceCandidateQueueRef/offerInFlightRef
+        // entries are cleared too — otherwise a same-session rejoin's initial
+        // offer gets misrouted as a renegotiation against a closed connection.
+        removeParticipant(participantId);
+
+        // Sibling-drift fix: `offersCreatedFor` is only ever populated (or
+        // cleared on createOffer failure) by the offer-creation effect above —
+        // never on a participant leaving. If this same participant rejoins
+        // while the component stays mounted (network blip, tab reload), the
+        // effect would see them as already-offered and silently skip
+        // `createOffer` forever, since the peer connection just torn down
+        // above is gone but the guard never was.
+        offersCreatedFor.current.delete(participantId);
 
         // Remove from disconnected set
         setDisconnectedParticipants((prev) => {
@@ -443,14 +558,20 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
           return newSet;
         });
       }, 2000);
+
+      leaveCleanupTimeouts.current.set(participantId, timeoutId);
     };
 
     socket.on(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
 
     return () => {
       socket.off(SERVER_EVENTS.CALL_PARTICIPANT_LEFT, handleParticipantLeft);
+      for (const timeoutId of leaveCleanupTimeouts.current.values()) {
+        clearTimeout(timeoutId);
+      }
+      leaveCleanupTimeouts.current.clear();
     };
-  }, [callId]);
+  }, [callId, removeParticipant]);
 
   // Get remote participant info
   const remoteParticipant = currentCall?.participants?.find(
@@ -485,12 +606,25 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         participantName={remoteParticipant?.username || 'Unknown'}
       />
 
-      {/* Connection quality + discreet survival pill */}
+      {/* Connection quality + discreet survival pill + remote-peer alerts */}
       <CallQualityOverlay
         stats={qualityStats}
         showStats={showStats}
         videoSuspended={videoSuspended}
         userWantsVideo={controls.videoEnabled}
+        remoteQualityDegraded={remoteQualityDegraded}
+        remoteScreenCapturing={remoteScreenCapturing}
+        participantName={remoteParticipant?.username || ''}
+      />
+
+      {/* Live translated captions from peers (call:translated-segment) */}
+      <CallCaptionsOverlay
+        captions={captions}
+        resolveSpeakerName={(speakerId) =>
+          currentCall?.participants?.find(
+            (p) => (p.userId || p.participantId) === speakerId
+          )?.username
+        }
       />
 
       {/* Audio Effects Panel (Sliding from bottom) */}
@@ -513,8 +647,17 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       <div className="absolute inset-0">
         {displayParticipant ? (
           <div
-            className="w-full h-full cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-label={t('calls.stream.fullscreen')}
+            className="w-full h-full cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
             onClick={() => handleToggleFullscreen(displayParticipant[0])}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleToggleFullscreen(displayParticipant[0]);
+              }
+            }}
           >
             <VideoStream
               key={displayParticipant[0]}

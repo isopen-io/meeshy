@@ -98,24 +98,44 @@ export class ConsentValidationService {
     const hasVoiceDataConsent = !!voiceDataConsentAt && hasDataProcessingConsent;
     const hasVoiceProfileConsent = !!voiceProfileConsentAt && hasVoiceDataConsent;
 
-    // Features activées dans UserPreferences.audio
-    const audioTranscriptionEnabledAt = audioPrefs.audioTranscriptionEnabledAt;
-    const textTranslationEnabledAt = audioPrefs.textTranslationEnabledAt;
-    const audioTranslationEnabledAt = audioPrefs.audioTranslationEnabledAt;
-    const translatedAudioGenerationEnabledAt = audioPrefs.translatedAudioGenerationEnabledAt;
+    // Features activées dans UserPreferences.audio.
+    //
+    // Les clients écrivent les BOOLÉENS du AudioPreferenceSchema
+    // (`transcriptionEnabled`, `audioTranslationEnabled`, `ttsEnabled` —
+    // cf. packages/shared/types/preferences/audio.ts) via
+    // PATCH /me/preferences/audio ; les timestamps `…EnabledAt` historiques
+    // ne sont écrits par aucune route. Sans cette dérivation, les gates
+    // ci-dessous étaient TOUJOURS faux hors dev et le pipeline audio
+    // (transcription/traduction) restait bloqué même consentement accordé.
+    // Le timestamp legacy garde priorité s'il existe ; le booléen absent
+    // retombe sur le défaut du schema (transcription: true, le reste: false).
+    const boolPref = (value: unknown, defaultValue: boolean): boolean =>
+      typeof value === 'boolean' ? value : defaultValue;
+    const audioTranscriptionEnabled =
+      !!audioPrefs.audioTranscriptionEnabledAt || boolPref(audioPrefs.transcriptionEnabled, true);
+    // La traduction texte est le cœur du Prisme Linguistique — active par
+    // défaut, seul un timestamp legacy explicite peut la porter aussi.
+    const textTranslationEnabled =
+      !!audioPrefs.textTranslationEnabledAt || boolPref(audioPrefs.textTranslationEnabled, true);
+    const audioTranslationEnabled =
+      !!audioPrefs.audioTranslationEnabledAt || boolPref(audioPrefs.audioTranslationEnabled, false);
+    const translatedAudioGenerationEnabled =
+      !!audioPrefs.translatedAudioGenerationEnabledAt || boolPref(audioPrefs.ttsEnabled, false);
 
-    // Consentements avancés dans UserPreferences.application
-    const voiceCloningConsentAt = applicationPrefs.voiceCloningConsentAt;
+    // Consentements avancés dans UserPreferences.application. Le consentement
+    // clonage est aussi porté par `User.voiceCloningEnabledAt` — c'est le champ
+    // que `POST /voice-profile/consent { voiceCloningConsent: true }` écrit.
+    const voiceCloningConsentAt = applicationPrefs.voiceCloningConsentAt || voiceCloningEnabledAt;
     const thirdPartyServicesConsentAt = applicationPrefs.thirdPartyServicesConsentAt;
 
     const hasVoiceCloningConsent = !!voiceCloningConsentAt && hasVoiceProfileConsent;
     const hasThirdPartyServicesConsent = !!thirdPartyServicesConsentAt && hasDataProcessingConsent;
 
     // Calculer les capacités selon la hiérarchie de consentements
-    const canTranscribeAudio = !!audioTranscriptionEnabledAt && hasVoiceDataConsent;
-    const canTranslateText = !!textTranslationEnabledAt && hasDataProcessingConsent;
-    const canTranslateAudio = !!audioTranslationEnabledAt && canTranscribeAudio && canTranslateText;
-    const canGenerateTranslatedAudio = !!translatedAudioGenerationEnabledAt && canTranslateAudio;
+    const canTranscribeAudio = audioTranscriptionEnabled && hasVoiceDataConsent;
+    const canTranslateText = textTranslationEnabled && hasDataProcessingConsent;
+    const canTranslateAudio = audioTranslationEnabled && canTranscribeAudio && canTranslateText;
+    const canGenerateTranslatedAudio = translatedAudioGenerationEnabled && canTranslateAudio;
     const canUseVoiceCloning = !!voiceCloningEnabledAt && hasVoiceCloningConsent;
 
     return {
@@ -142,8 +162,21 @@ export class ConsentValidationService {
     const status = await this.getConsentStatus(userId);
     const violations: ConsentViolation[] = [];
 
+    // Chaîne évaluée sur l'état STORED ∪ INCOMING : une même requête active
+    // légitimement plusieurs maillons d'un coup (popup iOS 2026-07-08 —
+    // transcription + traduction audio + TTS dans un seul PATCH). Évaluer
+    // chaque maillon uniquement sur l'état stocké rejetterait la requête qui
+    // contient elle-même le maillon précédent. Les CONSENTEMENTS, eux,
+    // restent exigés tels que stockés (catégorie application / User).
+    const effCanTranscribe = status.hasVoiceDataConsent &&
+      (preferences.transcriptionEnabled === true || status.canTranscribeAudio);
+    const effCanTranslateAudio = effCanTranscribe && status.canTranslateText &&
+      (preferences.audioTranslationEnabled === true || status.canTranslateAudio);
+    const effCanGenerateTranslatedAudio = effCanTranslateAudio &&
+      (preferences.ttsEnabled === true || status.canGenerateTranslatedAudio);
+
     // Transcription requiert voiceDataConsent
-    if (preferences.transcriptionEnabled === true && !status.canTranscribeAudio) {
+    if (preferences.transcriptionEnabled === true && !effCanTranscribe) {
       violations.push({
         field: 'transcriptionEnabled',
         message: 'Audio transcription requires voice data consent and feature activation',
@@ -152,7 +185,7 @@ export class ConsentValidationService {
     }
 
     // Traduction audio requiert transcription + traduction texte
-    if (preferences.audioTranslationEnabled === true && !status.canTranslateAudio) {
+    if (preferences.audioTranslationEnabled === true && !effCanTranslateAudio) {
       violations.push({
         field: 'audioTranslationEnabled',
         message: 'Audio translation requires text translation and audio transcription to be enabled',
@@ -165,7 +198,7 @@ export class ConsentValidationService {
     }
 
     // TTS (génération audio traduit) requiert traduction audio
-    if (preferences.ttsEnabled === true && !status.canGenerateTranslatedAudio) {
+    if (preferences.ttsEnabled === true && !effCanGenerateTranslatedAudio) {
       violations.push({
         field: 'ttsEnabled',
         message: 'TTS requires audio translation and translated audio generation to be enabled',
@@ -323,8 +356,15 @@ export class ConsentValidationService {
     const status = await this.getConsentStatus(userId);
     const violations: ConsentViolation[] = [];
 
+    // Octroi same-request : le corps peut LUI-MÊME accorder le consentement
+    // (popup iOS — PATCH application avec dataProcessingConsentAt + telemetry
+    // dans le même envoi). getConsentStatus lit l'état AVANT écriture ;
+    // sans cette reconnaissance, la requête qui accorde serait rejetée.
+    const grantsDataProcessing =
+      status.hasDataProcessingConsent || !!preferences.dataProcessingConsentAt;
+
     // Télémétrie requiert dataProcessingConsent
-    if (preferences.telemetryEnabled === true && !status.hasDataProcessingConsent) {
+    if (preferences.telemetryEnabled === true && !grantsDataProcessing) {
       violations.push({
         field: 'telemetryEnabled',
         message: 'Telemetry requires data processing consent',

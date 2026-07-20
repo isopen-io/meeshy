@@ -181,6 +181,7 @@
       "messageDeletedByOther": "Un message a été supprimé",
       "modifyError": "Erreur lors de la modification du message",
       "editError": "Erreur lors de la modification du message",
+      "contentRequired": "Contenu requis",
       "deleteError": "Erreur lors de la suppression du message",
       "replyTo": "Répondre à ce message",
       "messageFound": "Message trouvé !",
@@ -201,7 +202,10 @@
       "title": "Oups ! Une erreur s'est produite",
       "description": "Une erreur inattendue s'est produite. Veuillez réessayer.",
       "details": "Détails de l'erreur",
-      "reload": "Recharger la page"
+      "reload": "Recharger la page",
+      "featureError": "Une erreur s'est produite dans {feature}",
+      "featureUnavailable": "Cette section n'est pas disponible pour le moment.",
+      "retry": "Réessayer"
     },
     "download": "Télécharger",
     "play": "Lire",
@@ -213,6 +217,11 @@
     "zoomIn": "Zoomer",
     "zoomOut": "Dézoomer",
     "rotate": "Pivoter",
+    "imageViewer": "Visionneuse d'images",
+    "imageLoadError": "Impossible de charger l'image",
+    "downloadAnyway": "Télécharger quand même",
+    "lightboxKeyboardHelp": "Utilisez les flèches ← → pour naviguer • +/- pour zoomer • R pour pivoter • Échap pour fermer",
+    "videoLightboxKeyboardHelp": "Utilisez les flèches ← → pour naviguer • Espace pour lecture/pause • M pour couper le son • F pour le plein écran • Échap pour fermer",
     "clearSearch": "Effacer la recherche",
     "backToList": "Retour à la liste",
     "backToConversations": "Retour aux conversations",
@@ -260,8 +269,33 @@
     "storyVisibility": {
       "public": "Public",
       "friends": "Amis",
+      "community": "Communauté",
+      "except": "Tous sauf…",
+      "only": "Seulement…",
       "private": "Privé"
     },
+    "audiencePicker": {
+      "searchPlaceholder": "Rechercher des personnes…",
+      "exceptHint": "Votre story sera masquée aux personnes sélectionnées.",
+      "onlyHint": "Seules les personnes sélectionnées verront votre story.",
+      "empty": "Aucun résultat",
+      "remove": "Retirer"
+    },
+    "postComposer": {
+      "contentLabel": "Contenu du post",
+      "addPhoto": "Ajouter une photo",
+      "addVideo": "Ajouter une vidéo",
+      "changeVisibility": "Changer la visibilité",
+      "visibility": {
+        "public": "Public",
+        "friends": "Amis",
+        "except": "Amis sauf...",
+        "only": "Seulement...",
+        "private": "Privé"
+      }
+    },
+    "audioUnavailable": "URL audio non disponible",
+    "audioProgress": "Progression audio",
     "statusComposer": {
       "title": "Quel est ton mood ?",
       "placeholder": "Qu'est-ce que tu fais ?",
@@ -275,5 +309,14 @@
     "anonymousUser": "Utilisateur anonyme"
   },
   "copied": "Copié",
-  "never": "Jamais"
+  "never": "Jamais",
+  "offlineMessage": "Vous êtes hors ligne — les messages seront envoyés à la reconnexion",
+  "updateAvailable": "Une nouvelle version de Meeshy est disponible !",
+  "updateNow": "Mettre à jour",
+  "wait": "Attendre",
+  "languageSelector": {
+    "selectLanguage": "Sélectionner une langue",
+    "searchLanguage": "Rechercher une langue...",
+    "noLanguageFound": "Aucune langue trouvée"
+  }
 }

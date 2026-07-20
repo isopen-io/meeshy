@@ -8,6 +8,7 @@ import SwiftUI
 /// (mêmes constantes : buttonSize 52, minEdgePadding 20, topSafeZone 50,
 /// bottomSafeZone 110/50). Si l'un bouge sans l'autre, le disque naît à côté du
 /// bouton — ce test casse alors volontairement.
+@MainActor
 final class FeedButtonAnchorTests: XCTestCase {
 
     private let screen = CGSize(width: 390, height: 844)

@@ -2,17 +2,23 @@ import SwiftUI
 import UIKit
 import MeeshySDK
 
-/// Column of 2 floating action buttons (Contenu + Effets) pinned to the
-/// bottom-leading corner. Pure presentation — owns no state.
+/// Barre HORIZONTALE des 6 outils du composer, centrée en bas du canvas
+/// (directive user 2026-07-10 : disposition type Instagram, mais en
+/// horizontal bas — les outils à portée de pouce, le canvas dégagé).
+/// Pure presentation — owns no state.
 ///
 /// Inputs are primitives (`Int`, optional `BandCategory`) so the view is
 /// `Equatable` and skips re-evaluation when its inputs haven't changed.
+///
+/// Grammaire gestuelle conservée : tap = ouvre/ferme le panneau, swipe-up
+/// sur un outil = ouvre, swipe-down n'importe où sur la barre = cache les
+/// outils (canvas nu + poignée fantôme C3).
 struct ComposerFABColumn: View, Equatable {
     let mediaBadge: Int
     let sonBadge: Int
     let textBadge: Int
     let drawingBadge: Int
-    let filtersBadge: Int
+    let textureBadge: Int
     let timelineBadge: Int
     let activeCategory: BandCategory?
 
@@ -22,17 +28,20 @@ struct ComposerFABColumn: View, Equatable {
 
     @Environment(\.theme) private var theme
 
+    /// 48 pt : 6 outils + 5 interstices de 10 pt = 338 pt — tient sur la
+    /// largeur du plus petit iPhone supporté (SE, 375 pt) sans scroll.
+    private static let fabDiameter: CGFloat = 48
+
     var body: some View {
-        VStack(spacing: 12) {
-            fab(category: .timeline, icon: "clock", badge: timelineBadge)
-            fab(category: .filters, icon: "camera.filters", badge: filtersBadge)
-            fab(category: .drawing, icon: "pencil.tip", badge: drawingBadge)
-            fab(category: .text, icon: "textformat", badge: textBadge)
-            fab(category: .son, icon: "music.note", badge: sonBadge)
+        HStack(spacing: 10) {
             fab(category: .media, icon: "play.rectangle.fill", badge: mediaBadge)
+            fab(category: .text, icon: "textformat", badge: textBadge)
+            fab(category: .drawing, icon: "pencil.tip", badge: drawingBadge)
+            fab(category: .son, icon: "music.note", badge: sonBadge)
+            fab(category: .texture, icon: "paintpalette.fill", badge: textureBadge)
+            fab(category: .timeline, icon: "clock", badge: timelineBadge)
         }
-        .padding(.leading, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     }
 
     @ViewBuilder
@@ -44,10 +53,11 @@ struct ComposerFABColumn: View, Equatable {
         let isActive = activeCategory == category
         let accent: Color = {
             switch category {
-            case .media: return MeeshyColors.coral
+            case .media: return MeeshyColors.error
             case .son: return MeeshyColors.indigo400
             case .text: return MeeshyColors.indigo400
             case .drawing: return MeeshyColors.success
+            case .texture: return MeeshyColors.warning
             case .filters: return MeeshyColors.info
             case .timeline: return MeeshyColors.indigo300
             }
@@ -67,11 +77,11 @@ struct ComposerFABColumn: View, Equatable {
                         Circle().stroke(accent.opacity(0.4), lineWidth: 1)
                     }
                     Image(systemName: icon)
-                        .font(.system(size: 22, weight: .semibold))
+                        .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(isActive ? .white : accent)
                         .accessibilityHidden(true)
                 }
-                .frame(width: 56, height: 56)
+                .frame(width: Self.fabDiameter, height: Self.fabDiameter)
                 .overlay(alignment: .topTrailing) {
                     if badge > 0 {
                         Text("\(badge)")
@@ -86,11 +96,48 @@ struct ComposerFABColumn: View, Equatable {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Ouvrir l'outil \(category)")
-            .accessibilityValue(badge > 0 ? "\(badge) éléments actifs" : "Aucun élément")
-            .accessibilityHint(isActive ? "Touchez deux fois pour fermer." : "Touchez deux fois pour ouvrir.")
+            // Audit a11y it.88 : `String(describing: category)` annonçait les
+            // noms d'enum INTERNES (« texture », « son ») — jamais localisés
+            // et incohérents avec les libellés affichés (« Fond »). VoiceOver
+            // parle désormais la langue de l'UI, via les clés story.tool.*.
+            .accessibilityLabel(String(
+                localized: "story.composer.fab.open",
+                defaultValue: "Ouvrir l'outil \(toolDisplayName(category))",
+                bundle: .module
+            ))
+            .accessibilityValue(badge > 0
+                ? String(localized: "story.composer.fab.badge",
+                         defaultValue: "\(badge) élément(s) actif(s)", bundle: .module)
+                : String(localized: "story.composer.fab.badge.none",
+                         defaultValue: "Aucun élément", bundle: .module))
+            .accessibilityHint(isActive
+                ? String(localized: "story.composer.fab.hint.close",
+                         defaultValue: "Touchez deux fois pour fermer.", bundle: .module)
+                : String(localized: "story.composer.fab.hint.open",
+                         defaultValue: "Touchez deux fois pour ouvrir.", bundle: .module))
         }
-        .frame(width: 56, height: 56)
+        .frame(width: Self.fabDiameter, height: Self.fabDiameter)
+    }
+
+    /// Nom AFFICHÉ de l'outil (mêmes clés que les tuiles/chips — story.tool.*),
+    /// pour que VoiceOver annonce ce que l'écran montre.
+    private func toolDisplayName(_ category: BandCategory) -> String {
+        switch category {
+        case .media:
+            return String(localized: "story.tool.media", defaultValue: "Médias", bundle: .module)
+        case .son:
+            return String(localized: "story.tool.audio", defaultValue: "Son", bundle: .module)
+        case .text:
+            return String(localized: "story.tool.text", defaultValue: "Texte", bundle: .module)
+        case .drawing:
+            return String(localized: "story.tool.drawing", defaultValue: "Dessin", bundle: .module)
+        case .filters:
+            return String(localized: "story.tool.filters", defaultValue: "Effets", bundle: .module)
+        case .timeline:
+            return String(localized: "story.tool.timeline", defaultValue: "Timeline", bundle: .module)
+        case .texture:
+            return String(localized: "story.tool.texture", defaultValue: "Fond", bundle: .module)
+        }
     }
 
     static func == (lhs: ComposerFABColumn, rhs: ComposerFABColumn) -> Bool {
@@ -98,7 +145,7 @@ struct ComposerFABColumn: View, Equatable {
             && lhs.sonBadge == rhs.sonBadge
             && lhs.textBadge == rhs.textBadge
             && lhs.drawingBadge == rhs.drawingBadge
-            && lhs.filtersBadge == rhs.filtersBadge
+            && lhs.textureBadge == rhs.textureBadge
             && lhs.timelineBadge == rhs.timelineBadge
             && lhs.activeCategory == rhs.activeCategory
     }
@@ -163,6 +210,10 @@ struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
         container.backgroundColor = .clear
 
         let host = UIHostingController(rootView: content())
+        // L'environnement SwiftUI ne traverse pas un UIHostingController : le
+        // `\.colorScheme` épinglé par le parent (chrome canvas) serait perdu et
+        // le contenu suivrait le thème de l'app. On forwarde via les traits.
+        host.overrideUserInterfaceStyle = context.environment.colorScheme == .dark ? .dark : .light
         host.view.translatesAutoresizingMaskIntoConstraints = false
         host.view.backgroundColor = .clear
         container.addSubview(host.view)
@@ -185,6 +236,8 @@ struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.onSwipeUp = onSwipeUp
         context.coordinator.onSwipeDown = onSwipeDown
+        context.coordinator.hostingController?.overrideUserInterfaceStyle =
+            context.environment.colorScheme == .dark ? .dark : .light
         (context.coordinator.hostingController as? UIHostingController<Content>)?.rootView = content()
     }
 

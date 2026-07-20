@@ -4,6 +4,7 @@
  */
 
 import { buildApiUrl } from '@/lib/config';
+import { logger } from '@/utils/logger';
 
 // Types
 export interface MaskedUserInfo {
@@ -102,7 +103,7 @@ class PhonePasswordResetService {
 
       return data;
     } catch (error) {
-      console.error('[PhonePasswordResetService] lookupByPhone error:', error);
+      logger.error('[PhonePasswordReset]', 'lookupByPhone error', { error });
       return {
         success: false,
         error: this.getErrorCode('internal_error'),
@@ -133,7 +134,7 @@ class PhonePasswordResetService {
 
       return data;
     } catch (error) {
-      console.error('[PhonePasswordResetService] verifyIdentity error:', error);
+      logger.error('[PhonePasswordReset]', 'verifyIdentity error', { error });
       return {
         success: false,
         error: this.getErrorCode('internal_error'),
@@ -163,7 +164,7 @@ class PhonePasswordResetService {
 
       return data;
     } catch (error) {
-      console.error('[PhonePasswordResetService] verifyCode error:', error);
+      logger.error('[PhonePasswordReset]', 'verifyCode error', { error });
       return {
         success: false,
         error: this.getErrorCode('internal_error'),
@@ -193,7 +194,7 @@ class PhonePasswordResetService {
 
       return data;
     } catch (error) {
-      console.error('[PhonePasswordResetService] resendCode error:', error);
+      logger.error('[PhonePasswordReset]', 'resendCode error', { error });
       return {
         success: false,
         error: this.getErrorCode('internal_error'),

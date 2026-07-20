@@ -41,48 +41,48 @@ final class TabNavigationTests: XCTestCase {
         XCTAssertTrue(router.isHubRoute)
     }
 
-    // MARK: - ContactsTab Routing
+    // MARK: - PeopleDiscovery Routing
 
-    func test_contacts_defaultTab_isContacts() {
-        let route = Route.contacts()
-        if case .contacts(let tab) = route {
-            XCTAssertEqual(tab, .contacts)
-        } else {
-            XCTFail("Expected .contacts route")
-        }
-    }
-
-    func test_contacts_requestsTab_passesThrough() {
-        let route = Route.contacts(.requests)
-        if case .contacts(let tab) = route {
-            XCTAssertEqual(tab, .requests)
-        } else {
-            XCTFail("Expected .contacts route")
-        }
-    }
-
-    func test_contacts_discoverTab_passesThrough() {
-        let route = Route.contacts(.discover)
-        if case .contacts(let tab) = route {
+    func test_peopleDiscovery_defaultTab_isDiscover() {
+        let route = Route.peopleDiscovery()
+        if case .peopleDiscovery(let tab) = route {
             XCTAssertEqual(tab, .discover)
         } else {
-            XCTFail("Expected .contacts route")
+            XCTFail("Expected .peopleDiscovery route")
         }
     }
 
-    func test_contacts_blockedTab_passesThrough() {
-        let route = Route.contacts(.blocked)
-        if case .contacts(let tab) = route {
+    func test_peopleDiscovery_requestsTab_passesThrough() {
+        let route = Route.peopleDiscovery(.requests)
+        if case .peopleDiscovery(let tab) = route {
+            XCTAssertEqual(tab, .requests)
+        } else {
+            XCTFail("Expected .peopleDiscovery route")
+        }
+    }
+
+    func test_peopleDiscovery_discoverTab_passesThrough() {
+        let route = Route.peopleDiscovery(.discover)
+        if case .peopleDiscovery(let tab) = route {
+            XCTAssertEqual(tab, .discover)
+        } else {
+            XCTFail("Expected .peopleDiscovery route")
+        }
+    }
+
+    func test_peopleDiscovery_blockedTab_passesThrough() {
+        let route = Route.peopleDiscovery(.blocked)
+        if case .peopleDiscovery(let tab) = route {
             XCTAssertEqual(tab, .blocked)
         } else {
-            XCTFail("Expected .contacts route")
+            XCTFail("Expected .peopleDiscovery route")
         }
     }
 
     // MARK: - All hub routes are recognized
 
     func test_allHubRoutes_returnTrueForIsHub() {
-        let hubRoutes: [Route] = [.profile, .settings, .communityList, .contacts(), .links, .notifications]
+        let hubRoutes: [Route] = [.profile, .settings, .communityList, .contacts, .peopleDiscovery(), .links, .notifications]
         for route in hubRoutes {
             XCTAssertTrue(route.isHub, "\(route) should be a hub route")
         }

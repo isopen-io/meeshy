@@ -13,6 +13,7 @@ import XCTest
 ///   does **not** navigate.
 /// - Short tap on a playing story ⇒ navigate prev/next based on side.
 /// - Composer engaged ⇒ tap dismisses the composer instead.
+@MainActor
 final class StoryGestureDecisionsTests: XCTestCase {
 
     // MARK: - decideTouchDown

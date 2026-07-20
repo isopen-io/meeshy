@@ -2,6 +2,7 @@
 
 import { HTMLAttributes, forwardRef } from 'react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 import { getLanguageColor } from './theme';
 
 export type ContentType = 'text' | 'image' | 'audio' | 'video';
@@ -21,10 +22,13 @@ export interface ReplyPreviewProps extends Omit<HTMLAttributes<HTMLDivElement>, 
   className?: string;
 }
 
-const CONTENT_TYPE_LABELS: Record<Exclude<ContentType, 'text'>, string> = {
-  image: '📷 Photo',
-  audio: '🎤 Audio',
-  video: '🎬 Vidéo',
+const CONTENT_TYPE_META: Record<
+  Exclude<ContentType, 'text'>,
+  { emoji: string; key: string; fallback: string }
+> = {
+  image: { emoji: '📷', key: 'v2chat.photo', fallback: 'Photo' },
+  audio: { emoji: '🎤', key: 'v2chat.audio', fallback: 'Audio' },
+  video: { emoji: '🎬', key: 'v2chat.video', fallback: 'Video' },
 };
 
 const ReplyPreview = forwardRef<HTMLDivElement, ReplyPreviewProps>(
@@ -40,8 +44,12 @@ const ReplyPreview = forwardRef<HTMLDivElement, ReplyPreviewProps>(
     },
     ref
   ) => {
+    const { t } = useI18n('conversations');
     const accentColor = getLanguageColor(languageCode);
-    const displayContent = contentType === 'text' ? content : CONTENT_TYPE_LABELS[contentType];
+    const mediaMeta = contentType === 'text' ? null : CONTENT_TYPE_META[contentType];
+    const displayContent = mediaMeta
+      ? `${mediaMeta.emoji} ${t(mediaMeta.key, mediaMeta.fallback)}`
+      : content;
 
     return (
       <div

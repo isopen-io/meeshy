@@ -118,8 +118,54 @@ final class MeeshyUserPreferredContentLanguagesTests: XCTestCase {
         XCTAssertNil(MeeshyUser.normalizeLanguageCode("a"))
     }
 
-    func test_normalizeLanguageCode_threeLetterCodeIsTruncated() {
-        // Matches NLLB-200 2-letter mapping contract.
+    func test_normalizeLanguageCode_iso6393ReducesToSupportedPrefix() {
+        // "eng"/"fra" have no Meeshy entry but map to a supported 639-1 code.
         XCTAssertEqual(MeeshyUser.normalizeLanguageCode("eng"), "en")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("fra"), "fr")
+    }
+
+    func test_normalizeLanguageCode_reducesViaExplicitMapNotTruncation() {
+        // "spa" (Spanish) reduces to the SUPPORTED "es" — NOT rejected, NOT
+        // truncated to "sp". The explicit map knows the real 639-1 target.
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("spa"), "es")
+        // 639-2/B (bibliographic) variants that differ from /T also reduce.
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("deu"), "de")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("ger"), "de")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("zho"), "zh")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("chi"), "zh")
+    }
+
+    func test_normalizeLanguageCode_prefixCollisionMapsToCorrectLanguage() {
+        // "swe" (Swedish) MUST map to "sv" — blind truncation gave "sw"
+        // (Swahili), an unrelated supported language. This was the bug.
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("swe"), "sv")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("swa"), "sw")
+    }
+
+    func test_normalizeLanguageCode_filipinoRejectedNotMappedToFinnish() {
+        // Apple/CLDR report Filipino as "fil" (Locale.current = "fil_PH").
+        // Blind truncation mapped it to "fi" (Finnish), silently serving a
+        // Filipino user Finnish translations. Filipino has no supported Meeshy
+        // entry, so the correct answer is nil.
+        XCTAssertNil(MeeshyUser.normalizeLanguageCode("fil"))
+        XCTAssertNil(MeeshyUser.normalizeLanguageCode("fil-PH"))
+        XCTAssertNil(MeeshyUser.normalizeLanguageCode("tgl"))
+    }
+
+    func test_normalizeLanguageCode_supportedThreeLetterCodePreserved() {
+        // Cameroonian languages have no ISO 639-1 code and are keyed by their
+        // 3-letter code everywhere. Truncating "bas" → "ba" (Bashkir) would
+        // break the Prisme Linguistique resolution.
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("bas"), "bas")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("dua"), "dua")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("ewo"), "ewo")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageCode("bas-CM"), "bas")
+    }
+
+    func test_normalizeLanguageCode_unknownIso6393Rejected() {
+        // A 3-letter code with no explicit 639-1 target is refused rather than
+        // corrupted by truncation (both when its prefix is supported and not).
+        XCTAssertNil(MeeshyUser.normalizeLanguageCode("xyz"))
+        XCTAssertNil(MeeshyUser.normalizeLanguageCode("enx"))
     }
 }

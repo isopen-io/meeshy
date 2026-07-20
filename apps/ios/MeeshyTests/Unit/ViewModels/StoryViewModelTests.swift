@@ -38,14 +38,14 @@ final class StoryViewModelTests: XCTestCase {
         )
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         cancellables = nil
         sut = nil
         mockStoryService = nil
         mockPostService = nil
         mockSocket = nil
         mockAPI = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Factory Helpers
@@ -115,7 +115,8 @@ final class StoryViewModelTests: XCTestCase {
         id: String = "item-1",
         content: String? = "Test story",
         isViewed: Bool = false,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        updatedAt: Date? = nil
     ) -> StoryItem {
         StoryItem(
             id: id,
@@ -124,7 +125,8 @@ final class StoryViewModelTests: XCTestCase {
             storyEffects: nil,
             createdAt: createdAt,
             expiresAt: createdAt.addingTimeInterval(72000),
-            isViewed: isViewed
+            isViewed: isViewed,
+            updatedAt: updatedAt
         )
     }
 
@@ -228,18 +230,21 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertTrue(sut.storyGroups[0].stories[0].isViewed)
     }
 
-    func test_markViewed_callsServiceMarkViewed() async {
+    func test_markViewed_enqueuesDurableOutboxRecord() async {
+        // R6 — le « vu » passe par l'outbox durable (survit kill/offline),
+        // plus par le POST fire-and-forget direct.
         let item = makeStoryItem(id: "view-service-test", isViewed: false)
         let group = makeStoryGroup(userId: "u1", stories: [item])
         sut.storyGroups = [group]
+        var enqueuedStoryIds: [String] = []
+        sut.markViewedOutboxEnqueuer = { enqueuedStoryIds.append($0) }
 
         sut.markViewed(storyId: "view-service-test")
 
         // Give the fire-and-forget Task time to execute
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        XCTAssertEqual(mockStoryService.markViewedCallCount, 1)
-        XCTAssertEqual(mockStoryService.lastMarkViewedStoryId, "view-service-test")
+        XCTAssertEqual(enqueuedStoryIds, ["view-service-test"])
     }
 
     func test_markViewed_nonExistentStoryId_doesNothing() {
@@ -250,6 +255,396 @@ final class StoryViewModelTests: XCTestCase {
         sut.markViewed(storyId: "non-existent")
 
         XCTAssertFalse(sut.storyGroups[0].stories[0].isViewed, "Should not modify unrelated stories")
+    }
+
+    // MARK: - R5 offline replay : pin plan + wiring
+
+    private func makeMediaStoryItem(id: String = "pin-item",
+                                    videoURL: String? = "https://cdn.test/clip.mp4",
+                                    audioURL: String? = "https://cdn.test/voice.m4a",
+                                    imageURL: String? = "https://cdn.test/photo.jpg",
+                                    expiresAt: Date = Date().addingTimeInterval(3600)) -> StoryItem {
+        var media: [FeedMedia] = []
+        if let videoURL {
+            media.append(FeedMedia(id: "m-video", type: .video, url: videoURL, duration: 5))
+        }
+        if let audioURL {
+            media.append(FeedMedia(id: "m-audio", type: .audio, url: audioURL, duration: 5))
+        }
+        if let imageURL {
+            media.append(FeedMedia(id: "m-image", type: .image, url: imageURL))
+        }
+        return StoryItem(
+            id: id,
+            content: nil,
+            media: media,
+            storyEffects: nil,
+            createdAt: Date(),
+            expiresAt: expiresAt,
+            isViewed: false
+        )
+    }
+
+    func test_pinTargets_routesMediaByType() {
+        let story = makeMediaStoryItem()
+
+        let targets = StoryViewModel.pinTargets(for: story)
+
+        XCTAssertEqual(targets.count, 3)
+        XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/clip.mp4" })?.store, .video)
+        XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/voice.m4a" })?.store, .audio)
+        XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/photo.jpg" })?.store, .images,
+                       "Images (and unknown types) route to the images store, mirroring the prefetch path")
+    }
+
+    func test_pinTargets_contradictoryDeclaredType_sniffedByExtension() {
+        // R7 — un mp4 déclaré image doit être pinné dans le store video
+        // (là où prefetch/lecture le rangent réellement).
+        let media = [FeedMedia(id: "m-x", type: .image, url: "https://cdn.test/really-a-video.mp4")]
+        let story = StoryItem(
+            id: "pin-sniff", content: nil, media: media, storyEffects: nil,
+            createdAt: Date(), expiresAt: Date().addingTimeInterval(3600), isViewed: false
+        )
+
+        let targets = StoryViewModel.pinTargets(for: story)
+
+        XCTAssertEqual(targets.first(where: { $0.urlString.hasSuffix(".mp4") })?.store, .video)
+    }
+
+    func test_pinDeadline_usesStoryExpiry() {
+        let expiry = Date().addingTimeInterval(1234)
+        let story = makeMediaStoryItem(expiresAt: expiry)
+
+        XCTAssertEqual(StoryViewModel.pinDeadline(for: story), expiry,
+                       "The pin must not outlive the story")
+    }
+
+    func test_markViewed_pinsViewedStoryMediaUntilExpiry() async {
+        let unique = UUID().uuidString
+        let videoURL = "https://cdn.test/\(unique).mp4"
+        let story = makeMediaStoryItem(id: "pin-wiring", videoURL: videoURL,
+                                       audioURL: nil, imageURL: nil)
+        let group = makeStoryGroup(userId: "u1", stories: [story])
+        sut.storyGroups = [group]
+
+        sut.markViewed(storyId: "pin-wiring")
+
+        // The pin runs in a fire-and-forget Task — give it time to land.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let pinned = await CacheCoordinator.shared.video.isPinned(videoURL)
+        XCTAssertTrue(pinned, "Viewing a story must pin its media for offline replay until expiry")
+    }
+
+    func test_offlineReplay_viewedStory_mediaResolvesFromDiskThroughViewerKeys() async {
+        // R5(c) — contrat d'intégration de la relecture offline. L'ÉCRITURE
+        // (prefetch/pin) travaille avec la clé BRUTE `FeedMedia.url` ; la
+        // LECTURE (StoryViewerView.mediaIndex) reconstruit la clé via
+        // `URL(string: raw).absoluteString` puis les layers résolvent en
+        // DISK-ONLY (`videoLocalFileURL` / `imageLocalFileURL` /
+        // `audioLocalFileURL` — zéro réseau par construction). Toute
+        // divergence de chaîne ou de store entre les deux bouts casserait la
+        // relecture offline en silence : ce test dérive chaque clé
+        // indépendamment et exige le disk-hit + le pin sous la clé VIEWER.
+        let unique = UUID().uuidString
+        let rawVideo = "https://cdn.test/\(unique)/clip.mp4"
+        let rawAudio = "https://cdn.test/\(unique)/voice.m4a"
+        let rawImage = "https://cdn.test/\(unique)/photo.jpg"
+        let story = makeMediaStoryItem(id: "offline-replay", videoURL: rawVideo,
+                                       audioURL: rawAudio, imageURL: rawImage)
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [story])]
+
+        let payload = Data("offline-replay-bytes".utf8)
+        await CacheCoordinator.shared.video.save(payload, for: rawVideo)
+        await CacheCoordinator.shared.audio.save(payload, for: rawAudio)
+        await CacheCoordinator.shared.images.save(payload, for: rawImage)
+
+        sut.markViewed(storyId: "offline-replay")
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        guard let viewerVideoKey = URL(string: rawVideo)?.absoluteString,
+              let viewerAudioKey = URL(string: rawAudio)?.absoluteString,
+              let viewerImageKey = URL(string: rawImage)?.absoluteString else {
+            return XCTFail("Fixture URLs must parse — the viewer would drop them from mediaIndex")
+        }
+
+        XCTAssertNotNil(CacheCoordinator.videoLocalFileURL(for: viewerVideoKey),
+                        "Video bg must replay from disk (StoryBackgroundLayer path) without network")
+        XCTAssertNotNil(CacheCoordinator.audioLocalFileURL(for: viewerAudioKey),
+                        "Audio must replay from disk (ReaderAudioMixer path) without network")
+        XCTAssertNotNil(CacheCoordinator.imageLocalFileURL(for: viewerImageKey),
+                        "Image bg must replay from disk (loadImage disk-hit) without network")
+
+        let videoPinned = await CacheCoordinator.shared.video.isPinned(viewerVideoKey)
+        let audioPinned = await CacheCoordinator.shared.audio.isPinned(viewerAudioKey)
+        let imagePinned = await CacheCoordinator.shared.images.isPinned(viewerImageKey)
+        XCTAssertTrue(videoPinned, "The viewer's video key must be pinned against eviction")
+        XCTAssertTrue(audioPinned, "The viewer's audio key must be pinned against eviction")
+        XCTAssertTrue(imagePinned, "The viewer's image key must be pinned against eviction")
+    }
+
+    // MARK: - R4 inc.2 : fetch unitaire par postId (story hors tray)
+
+    private static func isoDate(offset: TimeInterval) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: Date().addingTimeInterval(offset))
+    }
+
+    func test_ensureStoryLoaded_fetchesAndInsertsMissingGroup() async {
+        mockStoryService.fetchPostResult = .success(Self.makeStoryAPIPost(
+            id: "p-solo", authorId: "u-out", authorUsername: "outsider",
+            createdAt: Self.isoDate(offset: -60), expiresAt: Self.isoDate(offset: 3600)))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-solo")
+
+        XCTAssertTrue(loaded)
+        XCTAssertNotNil(sut.groupIndex(forUserId: "u-out"),
+                        "A story outside the tray must become viewable after the unit fetch")
+        XCTAssertEqual(mockStoryService.fetchPostCallCount, 1)
+    }
+
+    func test_ensureStoryLoaded_storyAlreadyInTray_skipsNetwork() async {
+        let story = makeStoryItem(id: "p-known")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [story])]
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-known")
+
+        XCTAssertTrue(loaded)
+        XCTAssertEqual(mockStoryService.fetchPostCallCount, 0,
+                       "Cache-first: a story already in the tray must not refetch")
+    }
+
+    func test_ensureStoryLoaded_expiredStory_isNotInserted() async {
+        // Factory defaults date from January 2026 — expired relative to now.
+        mockStoryService.fetchPostResult = .success(Self.makeStoryAPIPost(
+            id: "p-dead", authorId: "u-dead", authorUsername: "ghost"))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-dead")
+
+        XCTAssertFalse(loaded)
+        XCTAssertNil(sut.groupIndex(forUserId: "u-dead"),
+                     "An expired deep link must not insert a ghost group into the tray")
+    }
+
+    func test_ensureStoryLoaded_fetchFailure_returnsFalse() async {
+        mockStoryService.fetchPostResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-fail")
+
+        XCTAssertFalse(loaded)
+        XCTAssertTrue(sut.storyGroups.isEmpty)
+    }
+
+    func test_ensureStoryLoaded_existingAuthor_mergesWithoutDuplicates() async {
+        let existing = makeStoryItem(id: "s-old", createdAt: Date().addingTimeInterval(-120))
+        sut.storyGroups = [makeStoryGroup(userId: "u-merge", stories: [existing])]
+        mockStoryService.fetchPostResult = .success(Self.makeStoryAPIPost(
+            id: "s-new", authorId: "u-merge", authorUsername: "merger",
+            createdAt: Self.isoDate(offset: -30), expiresAt: Self.isoDate(offset: 3600)))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "s-new")
+
+        XCTAssertTrue(loaded)
+        let group = sut.storyGroups.first { $0.id == "u-merge" }
+        XCTAssertEqual(group?.stories.map(\.id), ["s-old", "s-new"],
+                       "Merge appends ascending by createdAt without duplicating (storyCreated sink contract)")
+    }
+
+    // MARK: - R8 inc.1 : delta-sync du refetch silencieux
+
+    func test_deltaSince_derivesMaxUpdatedAtFromCache() {
+        let t1 = Date(timeIntervalSince1970: 1_000)
+        let t2 = Date(timeIntervalSince1970: 2_000)
+        let groups = [
+            makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "a", updatedAt: t1)]),
+            makeStoryGroup(userId: "u2", stories: [makeStoryItem(id: "b", updatedAt: t2), makeStoryItem(id: "c")]),
+        ]
+
+        XCTAssertEqual(StoryViewModel.deltaSince(for: groups), t2)
+        XCTAssertNil(StoryViewModel.deltaSince(for: [makeStoryGroup(userId: "u3", stories: [makeStoryItem(id: "d")])]),
+                     "A legacy cache without updatedAt must disable the delta (full fetch)")
+    }
+
+    private static func makeDeltaResponse(postsJSON: String) -> PaginatedAPIResponse<[APIPost]> {
+        JSONStub.decode("""
+        {"success":true,"data":[\(postsJSON)],"pagination":null,"error":null}
+        """)
+    }
+
+    func test_deltaRefresh_passesUpdatedSince_andReplacesModifiedStory_preservingLocalViewed() async {
+        let local = makeStoryItem(id: "s-mod", isViewed: true)
+        sut.storyGroups = [makeStoryGroup(userId: "u-delta", stories: [local])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
+        {"id":"s-mod","type":"STORY","content":"updated","createdAt":"2026-07-04T06:00:00.000Z",
+         "updatedAt":"2026-07-04T07:00:00.000Z","expiresAt":"2026-07-05T06:00:00.000Z",
+         "viewCount":5,"isViewedByMe":false,
+         "author":{"id":"u-delta","username":"delta"}}
+        """))
+        let since = Date(timeIntervalSince1970: 5_000)
+
+        await sut.fetchStoriesFromNetwork(deltaSince: since)
+
+        XCTAssertEqual(mockStoryService.lastListUpdatedSince, since,
+                       "The silent refresh must forward the delta cursor to the service")
+        let merged = sut.storyGroups.first { $0.id == "u-delta" }?.stories.first { $0.id == "s-mod" }
+        XCTAssertEqual(merged?.viewCount, 5, "Server-side counters must land through the delta merge")
+        XCTAssertEqual(merged?.isViewed, true, "A stale server isViewedByMe must never un-view a local ring (monotone)")
+        XCTAssertNotNil(merged?.updatedAt, "updatedAt must survive the merge — it advances the next delta cursor")
+    }
+
+    func test_deltaRefresh_insertsBrandNewStoryGroup() async {
+        sut.storyGroups = [makeStoryGroup(userId: "u-old", stories: [makeStoryItem(id: "s-old")])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
+        {"id":"s-new","type":"STORY","content":"fresh","createdAt":"2026-07-04T06:30:00.000Z",
+         "updatedAt":"2026-07-04T06:30:00.000Z","expiresAt":"2026-07-05T06:00:00.000Z",
+         "author":{"id":"u-new","username":"newcomer"}}
+        """))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date(timeIntervalSince1970: 5_000))
+
+        XCTAssertNotNil(sut.groupIndex(forUserId: "u-new"), "A new author's delta story must appear in the tray")
+        XCTAssertNotNil(sut.groupIndex(forUserId: "u-old"), "The delta merge must never drop untouched groups")
+    }
+
+    func test_deltaRefresh_emptyDelta_keepsTrayIntact() async {
+        let existing = makeStoryGroup(userId: "u-keep", stories: [makeStoryItem(id: "s-keep")])
+        sut.storyGroups = [existing]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: ""))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date(timeIntervalSince1970: 5_000))
+
+        XCTAssertEqual(sut.storyGroups.map(\.id), ["u-keep"],
+                       "An empty delta must not overwrite the displayed tray")
+        XCTAssertEqual(mockStoryService.listCallCount, 1)
+    }
+
+    // MARK: - R12 inc.2 : persistance dirty des mutations locales
+
+    func test_persistStoryCache_localMutation_landsInStoreAndSurvivesDirtyFlush() async {
+        // R12 inc.2 — persistStoryCache est passé de save() synchrone (full
+        // rewrite + freshness reset) à mergeUpdate (dirty débouncé, freshness
+        // préservée — sémantique pinnée par GRDBCacheStoreFreshnessTests côté
+        // SDK). Ce test caractérise le câblage : une mutation locale traverse
+        // le nouveau chemin et survit au flush dirty.
+        let unique = UUID().uuidString
+        let storyId = "flush-\(unique)"
+        let item = makeStoryItem(id: storyId, isViewed: false)
+        sut.storyGroups = [makeStoryGroup(userId: "u-\(unique)", stories: [item])]
+
+        sut.markViewed(storyId: storyId)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        await CacheCoordinator.shared.stories.flushDirtyKeys()
+        let result = await CacheCoordinator.shared.stories.load(for: StoryViewModel.storiesCacheKey)
+
+        let groups: [StoryGroup]
+        switch result {
+        case .fresh(let g, _), .stale(let g, _): groups = g
+        case .expired, .empty:
+            return XCTFail("The mutated tray must be readable back from the stories store")
+        }
+        let story = groups.first { $0.id == "u-\(unique)" }?.stories.first { $0.id == storyId }
+        XCTAssertEqual(story?.isViewed, true,
+                       "A local mutation must land in the store through the dirty mergeUpdate path")
+    }
+
+    // MARK: - Group intro (interstitiel inter-groupes)
+
+    private func makeIntroGroup(id: String = "intro-user-\(UUID().uuidString)",
+                                username: String = "alice") -> StoryGroup {
+        StoryGroup(id: id, username: username, avatarColor: "6366F1",
+                   stories: [makeStoryItem()])
+    }
+
+    private static func makeStatusPost(authorId: String, authorName: String,
+                                       mood: String, content: String?) -> APIPost {
+        let contentJSON = content.map { "\"\($0)\"" } ?? "null"
+        return JSONStub.decode("""
+        {
+            "id": "status-\(authorId)",
+            "type": "STATUS",
+            "moodEmoji": "\(mood)",
+            "content": \(contentJSON),
+            "createdAt": "2026-07-03T10:00:00.000Z",
+            "author": {"id": "\(authorId)", "username": "\(authorName)"}
+        }
+        """)
+    }
+
+    func test_resolveGroupIntro_mapsProfileFromResolver() async {
+        let group = makeIntroGroup()
+        sut.introProfileResolver = { _ in
+            MeeshyUser(id: group.id, username: "alice",
+                       firstName: "Alice", lastName: "Martin",
+                       banner: "https://cdn.test/banner.jpg", bannerThumbHash: "bh")
+        }
+        sut.introMoodFeedLoader = { [] }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.displayName, "Alice Martin",
+                       "Full name is built from first+last when displayName is absent")
+        XCTAssertEqual(intro.bannerURL, "https://cdn.test/banner.jpg")
+        XCTAssertEqual(intro.bannerThumbHash, "bh")
+    }
+
+    func test_resolveGroupIntro_mapsMoodFromStatusFeed() async {
+        let group = makeIntroGroup()
+        sut.introProfileResolver = { _ in MeeshyUser(id: group.id, username: "alice") }
+        sut.introMoodFeedLoader = {
+            [Self.makeStatusPost(authorId: group.id, authorName: "alice",
+                                 mood: "🔥", content: "En feu aujourd'hui")]
+        }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.moodEmoji, "🔥")
+        XCTAssertEqual(intro.moodMessage, "En feu aujourd'hui")
+    }
+
+    func test_resolveGroupIntro_moodFeedFetchedOncePerSession() async {
+        let group = makeIntroGroup()
+        sut.introProfileResolver = { _ in MeeshyUser(id: group.id, username: "alice") }
+        var fetchCount = 0
+        sut.introMoodFeedLoader = { fetchCount += 1; return [] }
+
+        _ = await sut.resolveGroupIntro(for: group)
+        _ = await sut.resolveGroupIntro(for: makeIntroGroup(username: "bob"))
+
+        XCTAssertEqual(fetchCount, 1,
+                       "The statuses feed is fetched once per ViewModel session, then reused")
+    }
+
+    func test_resolveGroupIntro_survivesResolverFailure() async {
+        let group = makeIntroGroup(username: "carol")
+        sut.introProfileResolver = { _ in throw URLError(.notConnectedToInternet) }
+        sut.introMoodFeedLoader = { throw URLError(.notConnectedToInternet) }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.userId, group.id)
+        XCTAssertEqual(intro.username, "carol",
+                       "Offline: the intro still renders with the group's own data")
+        XCTAssertNil(intro.displayName)
+        XCTAssertNil(intro.moodEmoji)
+    }
+
+    func test_markViewed_expiredStory_doesNotPin() async {
+        let unique = UUID().uuidString
+        let videoURL = "https://cdn.test/\(unique).mp4"
+        let story = makeMediaStoryItem(id: "pin-expired", videoURL: videoURL,
+                                       audioURL: nil, imageURL: nil,
+                                       expiresAt: Date().addingTimeInterval(-60))
+        let group = makeStoryGroup(userId: "u1", stories: [story])
+        sut.storyGroups = [group]
+
+        sut.markViewed(storyId: "pin-expired")
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let pinned = await CacheCoordinator.shared.video.isPinned(videoURL)
+        XCTAssertFalse(pinned, "An already-expired story must not leave a pin behind")
     }
 
     func test_markViewed_preservesAllStoryFields() {
@@ -1055,7 +1450,8 @@ final class StoryViewModelTests: XCTestCase {
             loadedImages: [:],
             loadedVideoURLs: [:],
             loadedAudioURLs: [:],
-            visibility: "PUBLIC"
+            visibility: "PUBLIC",
+            visibilityUserIds: []
         )
 
         let count = await StoryPublishQueue.shared.count
@@ -1079,13 +1475,66 @@ final class StoryViewModelTests: XCTestCase {
             loadedImages: [:],
             loadedVideoURLs: [:],
             loadedAudioURLs: [:],
-            visibility: "PUBLIC"
+            visibility: "PUBLIC",
+            visibilityUserIds: []
         )
 
         XCTAssertNil(sut.activeUpload,
             "Offline path must not touch activeUpload (no banner side-effect)")
 
         await StoryPublishQueue.shared.clearAll()
+    }
+
+    // MARK: - F3 — originalLanguage forwarded on the publish entry points (Prisme)
+
+    /// The offline enqueue entry point must STAMP the resolved source language
+    /// onto the persisted `StoryPublishQueueItem` so the gateway routes NLLB-200
+    /// on flush. Pre-WS5.1 this argument was hardcoded `nil` (Prisme regression):
+    /// a non-nil `originalLanguage` here must survive into the queue.
+    func test_enqueueStoryForOfflinePublish_forwardsOriginalLanguage() async throws {
+        await StoryPublishQueue.shared.clearAll()
+
+        await sut.enqueueStoryForOfflinePublish(
+            slides: [Self.makeTextOnlySlide(content: "Hallo")],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:],
+            loadedAudioURLs: [:],
+            originalLanguage: "de",
+            visibility: "PUBLIC",
+            visibilityUserIds: []
+        )
+
+        let items = await StoryPublishQueue.shared.pendingItems
+        XCTAssertEqual(items.first?.originalLanguage, "de",
+                       "the resolved source language must be persisted onto the queue item")
+
+        await StoryPublishQueue.shared.clearAll()
+    }
+
+    /// The queued-REPLAY entry point (`executeQueuedPublish`) must thread the
+    /// item's persisted `originalLanguage` into the `createStory` call. This is
+    /// the previously-buggy path (hardcoded nil before WS5.1) and has no other
+    /// app-side coverage — a missed argument here would silently drop the source
+    /// language on every offline story that flushes after reconnect.
+    func test_executeQueuedPublish_forwardsOriginalLanguageToCreateStory() async throws {
+        mockAPI.authToken = "test-token"
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let payload = try encoder.encode([Self.makeTextOnlySlide(content: "Hej")])
+        let item = StoryPublishQueueItem(
+            visibility: "PUBLIC",
+            slidesPayload: payload,
+            originalLanguage: "sv"
+        )
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost(
+            id: "post-sv", content: "Hej", authorId: "a1", authorUsername: "alice"
+        ))
+
+        _ = try await sut.executeQueuedPublish(item: item)
+
+        XCTAssertEqual(mockPostService.lastCreateStoryOriginalLanguage, "sv",
+                       "the queued item's originalLanguage must reach createStory on replay")
     }
 
     // MARK: - Realtime story reactions (it.23 — story:reacted/unreacted wiring)
@@ -1174,5 +1623,133 @@ final class StoryViewModelTests: XCTestCase {
             StoryCoverThumbnail.preferredCoverURLString(
                 localCover: nil, serverThumbnailUrl: nil, mediaUrl: nil, avatarURL: "av"),
             "av")
+    }
+
+    // MARK: - mediaURLStrings (prefetch dedup — extraction pure)
+
+    func test_mediaURLStrings_extractsAndDeduplicatesMediaURLs() {
+        let media = [
+            FeedMedia(id: "m-bg", type: .image, url: "https://cdn/bg.jpg"),
+            FeedMedia(id: "m-fg", type: .video, url: "https://cdn/fg.mp4"),
+            FeedMedia(id: "m-dup", type: .image, url: "https://cdn/bg.jpg") // doublon d'URL
+        ]
+        let item = StoryItem(id: "s1", media: media, storyEffects: nil, createdAt: Date())
+
+        let urls = Set(StoryViewModel.mediaURLStrings(for: item))
+
+        XCTAssertEqual(urls, ["https://cdn/bg.jpg", "https://cdn/fg.mp4"],
+                       "URLs média extraites et dédupliquées")
+    }
+
+    func test_mediaURLStrings_emptyMedia_returnsEmpty() {
+        let item = StoryItem(id: "s1", media: [], storyEffects: nil, createdAt: Date())
+        XCTAssertTrue(StoryViewModel.mediaURLStrings(for: item).isEmpty)
+    }
+
+    // MARK: - Offline optimistic visibility (P4 — voir ses stories hors-ligne)
+
+    func test_optimisticStoryId_isTempIdScopedAndIndexed() {
+        XCTAssertEqual(StoryViewModel.optimisticStoryId(tempStoryId: "pending_abc", slideIndex: 0),
+                       "pending_abc#0")
+        XCTAssertEqual(StoryViewModel.optimisticStoryId(tempStoryId: "pending_abc", slideIndex: 2),
+                       "pending_abc#2")
+        // Préfixé par le tempStoryId → retrait par préfixe possible.
+        XCTAssertTrue(StoryViewModel.optimisticStoryId(tempStoryId: "pending_abc", slideIndex: 1)
+            .hasPrefix("pending_abc#"))
+    }
+
+    func test_removeOptimisticStories_removesPendingKeepsPublished() {
+        let pending0 = makeStoryItem(id: "pending_x#0")
+        let pending1 = makeStoryItem(id: "pending_x#1")
+        let published = makeStoryItem(id: "server-real-id")
+        sut.storyGroups = [makeStoryGroup(userId: "me", stories: [published, pending0, pending1])]
+
+        sut.removeOptimisticStories(tempStoryId: "pending_x")
+
+        XCTAssertEqual(sut.storyGroups.count, 1)
+        XCTAssertEqual(sut.storyGroups[0].stories.map(\.id), ["server-real-id"],
+                       "seuls les placeholders pending_x#* sont retirés, la vraie story reste")
+    }
+
+    func test_removeOptimisticStories_removesGroupWhenAllPending() {
+        let pending0 = makeStoryItem(id: "pending_y#0")
+        sut.storyGroups = [makeStoryGroup(userId: "me", stories: [pending0])]
+
+        sut.removeOptimisticStories(tempStoryId: "pending_y")
+
+        XCTAssertTrue(sut.storyGroups.isEmpty,
+                      "un groupe ne contenant que des pending devient vide → retiré")
+    }
+
+    func test_removeOptimisticStories_unrelatedTempId_isNoOp() {
+        let pending0 = makeStoryItem(id: "pending_x#0")
+        sut.storyGroups = [makeStoryGroup(userId: "me", stories: [pending0])]
+
+        sut.removeOptimisticStories(tempStoryId: "pending_OTHER")
+
+        XCTAssertEqual(sut.storyGroups[0].stories.map(\.id), ["pending_x#0"],
+                       "un tempId sans correspondance ne touche à rien")
+    }
+
+    func test_insertOptimisticOfflineStories_insertsUnderCurrentUserAsViewed() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+        sut.storyGroups = []
+
+        sut.insertOptimisticOfflineStories(
+            slides: [Self.makeTextOnlySlide(id: "slide-a", content: "Bonjour"),
+                     Self.makeTextOnlySlide(id: "slide-b", content: "Coucou")],
+            slideImages: [:],
+            loadedImages: [:],
+            tempStoryId: "pending_z",
+            visibility: "PUBLIC"
+        )
+
+        XCTAssertEqual(sut.storyGroups.count, 1, "groupe créé pour l'auteur")
+        XCTAssertEqual(sut.storyGroups[0].id, "me-id")
+        let ids = sut.storyGroups[0].stories.map(\.id)
+        XCTAssertTrue(ids.contains("pending_z#0") && ids.contains("pending_z#1"),
+                      "une story optimiste par slide, id préfixé par le tempStoryId")
+        XCTAssertTrue(sut.storyGroups[0].stories.allSatisfy { $0.isViewed },
+                      "ses propres stories sont marquées vues (pas d'anneau non-lu sur soi-même)")
+    }
+
+    func test_insertOptimisticOfflineStories_noCurrentUser_isNoOp() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = nil
+        sut.storyGroups = []
+
+        sut.insertOptimisticOfflineStories(
+            slides: [Self.makeTextOnlySlide()],
+            slideImages: [:], loadedImages: [:],
+            tempStoryId: "pending_z", visibility: "PUBLIC"
+        )
+
+        XCTAssertTrue(sut.storyGroups.isEmpty, "sans utilisateur courant, aucune insertion")
+    }
+
+    func test_loadStories_forceNetwork_preservesPendingOptimisticStories() async {
+        // L'auteur a une story optimiste hors-ligne en attente. Un refetch réseau
+        // (qui ne la contient pas) ne doit PAS la faire disparaître du tray.
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        let pending = makeStoryItem(id: "pending_keep#0")
+        sut.storyGroups = [makeStoryGroup(userId: "me-id", username: "Moi", stories: [pending])]
+
+        // Le serveur renvoie une story d'un AUTRE auteur, sans la pending.
+        let serverPost = Self.makeStoryAPIPost(id: "s-other", authorId: "other", authorUsername: "bob")
+        mockStoryService.listResult = .success(Self.makeStoriesResponse(posts: [serverPost]))
+
+        await sut.loadStories(forceNetwork: true)
+
+        let allIds = sut.storyGroups.flatMap { $0.stories.map(\.id) }
+        XCTAssertTrue(allIds.contains("pending_keep#0"),
+                      "la story optimiste en attente survit au refetch réseau")
+        XCTAssertTrue(allIds.contains("s-other"),
+                      "les stories serveur sont bien chargées en parallèle")
     }
 }

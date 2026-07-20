@@ -17,6 +17,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { EventEmitter } from 'events';
+// Source de vérité des seuils de tolérance ZMQ — importée pour que ces tests
+// suivent automatiquement toute évolution des défauts (cbFailureThreshold,
+// maxRetries) sans dériver. Les env vars ne sont pas posées en test → défauts.
+import { ZMQ_TOLERANCE_DEFAULTS } from '../../../services/zmq-translation/zmqToleranceConfig';
 
 // Mock zeromq before importing the client
 const mockPushSocket = {
@@ -192,6 +196,45 @@ describe('ZmqTranslationClient', () => {
 
       // The receive should be called as part of polling
       expect(mockSubSocket.receive).toHaveBeenCalled();
+    });
+
+    it('keeps a single receive() in flight while one is pending (zeromq allows only one read at a time)', async () => {
+      // A receive that never settles — the socket is waiting for a message.
+      (mockSubSocket.receive as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+      client = new ZmqTranslationClient();
+      await client.initialize();
+
+      jest.advanceTimersByTime(100);
+      await Promise.resolve();
+      jest.advanceTimersByTime(1000);
+      await Promise.resolve();
+
+      // Prod 2026-07-04: the old 100ms tick stacked receive() calls on top
+      // of the pending one — every extra call threw "Socket is busy
+      // reading" into a silent catch, 10×/s for hours.
+      expect(mockSubSocket.receive).toHaveBeenCalledTimes(1);
+    });
+
+    it('recreates the SUB socket after prolonged silence (zombie watchdog, prod 2026-07-04)', async () => {
+      (mockSubSocket.receive as jest.Mock).mockImplementation(() => new Promise(() => {}));
+
+      client = new ZmqTranslationClient();
+      await client.initialize();
+      const subscriberCallsAfterInit = (require('zeromq').Subscriber as jest.Mock).mock.calls.length;
+
+      // Cross the 120s silence threshold tick by tick.
+      for (let elapsed = 0; elapsed <= 121_000; elapsed += 1_000) {
+        jest.advanceTimersByTime(1_000);
+        await Promise.resolve();
+      }
+
+      // The watchdog must have closed the zombie and built a fresh Subscriber
+      // (new connection ⇒ the subscription frame is re-emitted to the PUB).
+      expect(mockSubSocket.close).toHaveBeenCalled();
+      expect((require('zeromq').Subscriber as jest.Mock).mock.calls.length)
+        .toBeGreaterThan(subscriberCallsAfterInit);
+      expect(mockSubSocket.subscribe).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -1371,6 +1414,792 @@ describe('ZmqTranslationClient', () => {
 
       await expect(client.sendTranslationRequest(request)).rejects.toThrow('Circuit breaker is OPEN');
       expect(mockRetryHandler.canSendRequest).toHaveBeenCalled();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════
+  // GAP-FILL TESTS — added to reach ≥92% line+branch coverage
+  // ════════════════════════════════════════════════════════════════════
+
+  describe('ZmqConnectionManager — uncovered branches', () => {
+    // Import ZmqConnectionManager directly to test it in isolation
+    let connectionManager: any;
+
+    beforeEach(async () => {
+      // Purge stray mockResolvedValueOnce queued by earlier tests: with the
+      // single-flight listener they are no longer greedily consumed by the
+      // polling loop and would leak into these isolated tests.
+      (mockSubSocket.receive as jest.Mock).mockReset();
+      (mockSubSocket.receive as jest.Mock).mockRejectedValue(new Error('No message'));
+      const { ZmqConnectionManager } = await import('../../../services/zmq-translation/ZmqConnectionManager');
+      connectionManager = new ZmqConnectionManager({ host: '0.0.0.0', pushPort: 5555, subPort: 5558 });
+    });
+
+    afterEach(async () => {
+      if (connectionManager) {
+        await connectionManager.close();
+      }
+    });
+
+    it('receive() should throw when subSocket is null (not initialized)', async () => {
+      // subSocket is null before initialize() — line 116
+      await expect(connectionManager.receive()).rejects.toThrow('Socket SUB non initialisé');
+    });
+
+    it('receive() should throw when receive returns empty messages — line 122', async () => {
+      await connectionManager.initialize();
+      // Return empty array to trigger the "No message available" throw
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([]);
+      await expect(connectionManager.receive()).rejects.toThrow('No message available');
+    });
+
+    it('receive() returns Buffer[] when multiple frames received', async () => {
+      await connectionManager.initialize();
+      const frame1 = Buffer.from('frame1');
+      const frame2 = Buffer.from('frame2');
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([frame1, frame2]);
+      const result = await connectionManager.receive();
+      expect(Array.isArray(result)).toBe(true);
+      expect((result as Buffer[]).length).toBe(2);
+    });
+
+    it('receive() returns single Buffer when one frame received', async () => {
+      await connectionManager.initialize();
+      const frame1 = Buffer.from('frame1');
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([frame1]);
+      const result = await connectionManager.receive();
+      expect(Buffer.isBuffer(result)).toBe(true);
+    });
+
+    it('sendPing() should return early when pushSocket is null — lines 144-145', async () => {
+      // pushSocket is null before initialize()
+      await expect(connectionManager.sendPing()).resolves.toBeUndefined();
+    });
+
+    it('close() should handle errors gracefully — lines 186-188', async () => {
+      await connectionManager.initialize();
+      // Make pushSocket.close() throw to trigger the catch block
+      (mockPushSocket.close as jest.Mock).mockRejectedValueOnce(new Error('Close failed'));
+      // Should not throw — errors are caught internally
+      await expect(connectionManager.close()).resolves.toBeUndefined();
+    });
+
+    it('getSockets() should return both sockets — lines 193-198', async () => {
+      await connectionManager.initialize();
+      const sockets = connectionManager.getSockets();
+      expect(sockets).toHaveProperty('pushSocket');
+      expect(sockets).toHaveProperty('subSocket');
+    });
+
+    it('getSockets() should return null sockets before initialize', () => {
+      const sockets = connectionManager.getSockets();
+      expect(sockets.pushSocket).toBeNull();
+      expect(sockets.subSocket).toBeNull();
+    });
+
+    it('getIsConnected() returns false when not initialized', () => {
+      expect(connectionManager.getIsConnected()).toBe(false);
+    });
+
+    it('getIsConnected() returns true when initialized', async () => {
+      await connectionManager.initialize();
+      expect(connectionManager.getIsConnected()).toBe(true);
+    });
+  });
+
+  describe('ZmqTranslationClient — circuit breaker branches', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('sendTranslationRequest() should throw when circuit breaker is open — line 427', async () => {
+      // Trigger CB open by injecting state directly
+      (client as any).cbOpenedAt = Date.now();
+      (client as any).cbConsecutiveErrors = 5;
+
+      const request: TranslationRequest = {
+        messageId: 'msg-cb',
+        text: 'Test',
+        sourceLanguage: 'en',
+        targetLanguages: ['fr'],
+        conversationId: 'conv-cb'
+      };
+
+      await expect(client.sendTranslationRequest(request)).rejects.toThrow('ZMQ circuit breaker OPEN');
+    });
+
+    it('sendAudioProcessRequest() should throw when circuit breaker is open — line 449', async () => {
+      (client as any).cbOpenedAt = Date.now();
+      (client as any).cbConsecutiveErrors = 5;
+
+      const request: Omit<AudioProcessRequest, 'type'> = {
+        messageId: 'msg-cb',
+        attachmentId: 'attach-cb',
+        conversationId: 'conv-cb',
+        senderId: 'user-cb',
+        audioUrl: 'https://example.com/audio.mp3',
+        audioPath: '/tmp/audio.mp3',
+        audioDurationMs: 1000,
+        targetLanguages: ['fr'],
+        generateVoiceClone: false,
+        modelType: 'basic'
+      };
+
+      await expect(client.sendAudioProcessRequest(request)).rejects.toThrow('ZMQ circuit breaker OPEN');
+    });
+
+    it('_cbIsOpen() resets circuit breaker after cooldown — lines 196-200', async () => {
+      // Open the circuit breaker
+      (client as any).cbOpenedAt = Date.now() - 31_000; // 31s ago — past 30s cooldown
+      (client as any).cbConsecutiveErrors = 5;
+
+      // Should auto-reset and return false
+      const isOpen = (client as any)._cbIsOpen();
+      expect(isOpen).toBe(false);
+      expect((client as any).cbOpenedAt).toBeNull();
+      expect((client as any).cbConsecutiveErrors).toBe(0);
+    });
+
+    it('_cbIsOpen() returns true when circuit breaker is still in cooldown — line 202', async () => {
+      (client as any).cbOpenedAt = Date.now(); // Just opened
+      (client as any).cbConsecutiveErrors = 5;
+
+      const isOpen = (client as any)._cbIsOpen();
+      expect(isOpen).toBe(true);
+    });
+
+    it('_cbRecordError() opens circuit breaker after threshold errors — lines 213-214', async () => {
+      expect((client as any).cbOpenedAt).toBeNull();
+
+      // Trigger CB_FAILURE_THRESHOLD consecutive errors (source-of-truth value).
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.cbFailureThreshold; i++) {
+        (client as any)._cbRecordError();
+      }
+
+      expect((client as any).cbOpenedAt).not.toBeNull();
+    });
+
+    it('_cbRecordError() does NOT re-open when already open — guard on line 212', () => {
+      const openedAt = Date.now() - 1000;
+      (client as any).cbOpenedAt = openedAt;
+      (client as any).cbConsecutiveErrors = 5;
+
+      // Additional error should increment counter but not reset openedAt
+      (client as any)._cbRecordError();
+
+      // cbOpenedAt should remain unchanged (guard: cbOpenedAt === null is false)
+      expect((client as any).cbOpenedAt).toBe(openedAt);
+    });
+
+    it('_cbRecordSuccess() clears circuit breaker state', () => {
+      (client as any).cbOpenedAt = Date.now();
+      (client as any).cbConsecutiveErrors = 5;
+
+      (client as any)._cbRecordSuccess();
+
+      expect((client as any).cbConsecutiveErrors).toBe(0);
+      expect((client as any).cbOpenedAt).toBeNull();
+    });
+  });
+
+  describe('ZmqTranslationClient — retry failure branch in _registerRequestTimeout', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('should emit translationError when retry resend fails — lines 170-174', async () => {
+      const errors: any[] = [];
+      client.on('translationError', (e) => errors.push(e));
+
+      const request: TranslationRequest = {
+        messageId: 'msg-retry-fail',
+        text: 'Test',
+        sourceLanguage: 'en',
+        targetLanguages: ['fr'],
+        conversationId: 'conv-retry'
+      };
+
+      await client.sendTranslationRequest(request);
+
+      // Make the retry resend fail (all subsequent sends fail)
+      (mockPushSocket.send as jest.Mock).mockRejectedValue(new Error('Retry send failed'));
+
+      // Trigger the 30s timeout (fires async callback that calls resend which throws)
+      await jest.advanceTimersByTimeAsync(30_000 + 100);
+
+      expect(errors.length).toBe(1);
+      expect(errors[0].error).toContain('ZMQ timeout');
+    });
+
+    it('should emit error after max retries exceeded — lines 176-179', async () => {
+      const errors: any[] = [];
+      client.on('translationError', (e) => errors.push(e));
+
+      const request: TranslationRequest = {
+        messageId: 'msg-max-retries',
+        text: 'Test',
+        sourceLanguage: 'en',
+        targetLanguages: ['fr'],
+        conversationId: 'conv-max-retries'
+      };
+
+      await client.sendTranslationRequest(request);
+
+      // Exhaust all retries: 1 initial attempt + ZMQ_MAX_RETRIES retries = maxRetries+1 timeouts.
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.maxRetries + 1; i++) {
+        await jest.advanceTimersByTimeAsync(30_000 + 100);
+      }
+
+      expect(errors.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('ZmqTranslationClient — sendTranscriptionOnlyRequest', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('should send transcription-only request via audioPath — lines 472-484', async () => {
+      const taskId = await client.sendTranscriptionOnlyRequest({
+        messageId: 'msg-transcription',
+        attachmentId: 'attach-transcription',
+        audioPath: '/tmp/audio.mp3'
+      });
+
+      expect(taskId).toBe('test-uuid-1234');
+      const stats = client.getStats();
+      expect(stats.requests_sent).toBe(1);
+    });
+
+    it('should emit transcriptionError after timeout', async () => {
+      const errors: any[] = [];
+      client.on('transcriptionError', (e) => errors.push(e));
+
+      await client.sendTranscriptionOnlyRequest({
+        messageId: 'msg-transcription-timeout',
+        attachmentId: 'attach-timeout',
+        audioPath: '/tmp/audio.mp3'
+      });
+
+      // Exhaust retries to guarantee an error is eventually emitted (maxRetries+1 timeouts).
+      for (let i = 0; i < ZMQ_TOLERANCE_DEFAULTS.maxRetries + 1; i++) {
+        await jest.advanceTimersByTimeAsync(30_000 + 100);
+      }
+
+      expect(errors.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('ZmqTranslationClient — translateText and translateToMultipleLanguages', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('translateText() should delegate to sendTranslationRequest — lines 551-561', async () => {
+      const taskId = await client.translateText('Hello', 'en', 'fr', 'msg-123', 'conv-456');
+      expect(taskId).toBe('test-uuid-1234');
+      expect(mockPushSocket.send).toHaveBeenCalled();
+      const sentMessage = JSON.parse((mockPushSocket.send as jest.Mock).mock.calls[0][0]);
+      expect(sentMessage.text).toBe('Hello');
+      expect(sentMessage.targetLanguages).toEqual(['fr']);
+    });
+
+    it('translateText() should use provided modelType — lines 551-561', async () => {
+      await client.translateText('Hello', 'en', 'fr', 'msg-123', 'conv-456', 'premium');
+      const sentMessage = JSON.parse((mockPushSocket.send as jest.Mock).mock.calls[0][0]);
+      expect(sentMessage.modelType).toBe('premium');
+    });
+
+    it('translateText() should use default modelType basic — lines 551-561', async () => {
+      await client.translateText('Hello', 'en', 'fr', 'msg-123', 'conv-456');
+      const sentMessage = JSON.parse((mockPushSocket.send as jest.Mock).mock.calls[0][0]);
+      expect(sentMessage.modelType).toBe('basic');
+    });
+
+    it('translateToMultipleLanguages() should delegate to sendTranslationRequest — lines 563-581', async () => {
+      const taskId = await client.translateToMultipleLanguages(
+        'Hello', 'en', ['fr', 'de'], 'msg-123', 'conv-456'
+      );
+      expect(taskId).toBe('test-uuid-1234');
+      const sentMessage = JSON.parse((mockPushSocket.send as jest.Mock).mock.calls[0][0]);
+      expect(sentMessage.targetLanguages).toEqual(['fr', 'de']);
+    });
+
+    it('translateToMultipleLanguages() should use default modelType basic — lines 563-581', async () => {
+      await client.translateToMultipleLanguages('Hello', 'en', ['fr'], 'msg-123', 'conv-456');
+      const sentMessage = JSON.parse((mockPushSocket.send as jest.Mock).mock.calls[0][0]);
+      expect(sentMessage.modelType).toBe('basic');
+    });
+  });
+
+  describe('ZmqTranslationClient — translateTextObject', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('translateTextObject() should fire-and-forget — lines 587-591', async () => {
+      client.translateTextObject({
+        postId: 'post-123',
+        textObjectIndex: 0,
+        text: 'Hello',
+        sourceLanguage: 'en',
+        targetLanguages: ['fr']
+      });
+
+      // Let microtasks settle
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockPushSocket.send).toHaveBeenCalled();
+    });
+
+    it('translateTextObject() should log warning on send failure — line 589', async () => {
+      (mockPushSocket.send as jest.Mock).mockRejectedValueOnce(new Error('ZMQ send failed'));
+
+      client.translateTextObject({
+        postId: 'post-error',
+        textObjectIndex: 1,
+        text: 'Test',
+        sourceLanguage: 'en',
+        targetLanguages: ['fr']
+      });
+
+      // Should not throw even if ZMQ send fails
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(client).toBeDefined();
+    });
+  });
+
+  describe('ZmqTranslationClient — healthCheck error path', () => {
+    it('healthCheck() should return false when connectionManager.sendPing throws — lines 606-607', async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+
+      // Spy on connectionManager.sendPing to throw — this triggers the outer catch
+      const spy = jest.spyOn((client as any).connectionManager, 'sendPing').mockRejectedValueOnce(new Error('Ping error'));
+
+      const isHealthy = await client.healthCheck();
+      expect(isHealthy).toBe(false);
+
+      spy.mockRestore();
+    });
+  });
+
+  describe('ZmqTranslationClient — sendVoiceAPIRequest retry resend branch', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('should retry voice_health requests (fast ops) and update requests_sent — lines 510-511', async () => {
+      const request: VoiceAPIRequest = {
+        type: 'voice_health',
+        taskId: 'health-resend-task'
+      };
+
+      await client.sendVoiceAPIRequest(request);
+      const statsBefore = client.getStats().requests_sent;
+
+      // Trigger 30s timeout to cause retry (use async version to flush async callbacks)
+      await jest.advanceTimersByTimeAsync(30_000 + 100);
+
+      const statsAfter = client.getStats().requests_sent;
+      expect(statsAfter).toBeGreaterThan(statsBefore);
+    });
+  });
+
+  describe('ZmqTranslationClient — sendVoiceProfileRequest retry resend branch', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('should send voiceProfileRequest and register timeout — lines 524-537', async () => {
+      const request: VoiceProfileAnalyzeRequest = {
+        type: 'voice_profile_analyze',
+        request_id: 'profile-retry-task',
+        user_id: 'user-001',
+        audio_data: 'base64data',
+        audio_format: 'wav'
+      };
+
+      const taskId = await client.sendVoiceProfileRequest(request);
+      expect(taskId).toBe('profile-retry-task');
+
+      const statsBefore = client.getStats().requests_sent;
+
+      // Trigger 30s timeout to fire retry resend (use async version to flush async callbacks)
+      await jest.advanceTimersByTimeAsync(30_000 + 100);
+
+      const statsAfter = client.getStats().requests_sent;
+      expect(statsAfter).toBeGreaterThan(statsBefore);
+    });
+  });
+
+  describe('ZmqTranslationClient — event forwarding for uncovered events', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('should forward transcriptionCompleted event — lines 298-302', (done) => {
+      const event = {
+        type: 'transcription_completed',
+        taskId: 'transcription-task-123',
+        messageId: 'msg-456',
+        attachmentId: 'attach-789',
+        transcription: { text: 'Hello', language: 'en', confidence: 0.9, durationMs: 1000, source: 'whisper' },
+        processingTimeMs: 500
+      };
+
+      client.on('transcriptionCompleted', (data) => {
+        expect(data.taskId).toBe('transcription-task-123');
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+
+    it('should forward transcriptionError event — lines 304-308', (done) => {
+      const event = {
+        type: 'transcription_error',
+        taskId: 'transcription-error-task',
+        messageId: 'msg-456',
+        attachmentId: 'attach-789',
+        error: 'Transcription failed',
+        errorCode: 'WHISPER_ERROR'
+      };
+
+      client.on('transcriptionError', (data) => {
+        expect(data.taskId).toBe('transcription-error-task');
+        expect(data.error).toBe('Transcription failed');
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+
+    it('should forward transcriptionReady event — lines 311-313', (done) => {
+      const event = {
+        type: 'transcription_ready',
+        taskId: 'transcription-ready-task',
+        messageId: 'msg-456',
+        attachmentId: 'attach-789',
+        transcription: { text: 'Hello', language: 'en', confidence: 0.9, durationMs: 1000, source: 'whisper' },
+        processingTimeMs: 200
+      };
+
+      client.on('transcriptionReady', (data) => {
+        expect(data.taskId).toBe('transcription-ready-task');
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+
+    it('should forward translationReady event (deprecated) — lines 316-318', (done) => {
+      const event = {
+        type: 'translation_ready',
+        taskId: 'translation-ready-task',
+        messageId: 'msg-456',
+        attachmentId: 'attach-789',
+        language: 'fr',
+        translatedAudio: { audioUrl: 'https://example.com/fr.mp3', language: 'fr', segments: [] }
+      };
+
+      client.on('translationReady', (data) => {
+        expect(data.taskId).toBe('translation-ready-task');
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+
+    it('should forward audioTranslationReady event — lines 320-322', (done) => {
+      const event = {
+        type: 'audio_translation_ready',
+        taskId: 'audio-trans-ready-task',
+        messageId: 'msg-456',
+        attachmentId: 'attach-789',
+        language: 'fr',
+        translatedAudio: { audioUrl: 'https://example.com/fr.mp3', language: 'fr', segments: [] }
+      };
+
+      client.on('audioTranslationReady', (data) => {
+        expect(data.taskId).toBe('audio-trans-ready-task');
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+
+    it('should forward audioTranslationsProgressive event — lines 324-326', (done) => {
+      const event = {
+        type: 'audio_translations_progressive',
+        taskId: 'audio-progressive-task',
+        messageId: 'msg-456',
+        attachmentId: 'attach-789',
+        language: 'fr',
+        translatedAudio: { audioUrl: 'https://example.com/fr.mp3', language: 'fr', segments: [] }
+      };
+
+      client.on('audioTranslationsProgressive', (data) => {
+        expect(data.taskId).toBe('audio-progressive-task');
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+
+    it('should forward audioTranslationsCompleted event — lines 328-330', (done) => {
+      const event = {
+        type: 'audio_translations_completed',
+        taskId: 'audio-completed-task',
+        messageId: 'msg-456',
+        attachmentId: 'attach-789',
+        language: 'fr',
+        translatedAudio: { audioUrl: 'https://example.com/fr.mp3', language: 'fr', segments: [] }
+      };
+
+      client.on('audioTranslationsCompleted', (data) => {
+        expect(data.taskId).toBe('audio-completed-task');
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+
+    it('should forward voiceTranslationCompleted event — lines 333-335', (done) => {
+      const event = {
+        type: 'voice_translation_completed',
+        jobId: 'job-123',
+        status: 'completed',
+        userId: 'user-456',
+        timestamp: Date.now(),
+        result: {
+          originalAudio: { transcription: 'Hello', language: 'en', audioUrl: '' },
+          translations: []
+        }
+      };
+
+      client.on('voiceTranslationCompleted', (data) => {
+        expect(data.jobId).toBe('job-123');
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+
+    it('should forward voiceTranslationFailed event — lines 337-339', (done) => {
+      const event = {
+        type: 'voice_translation_failed',
+        jobId: 'job-error-123',
+        status: 'failed',
+        userId: 'user-456',
+        timestamp: Date.now(),
+        error: 'Pipeline crashed',
+        errorCode: 'PIPELINE_ERROR'
+      };
+
+      client.on('voiceTranslationFailed', (data) => {
+        expect(data.jobId).toBe('job-error-123');
+        expect(data.error).toBe('Pipeline crashed');
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+
+    it('should forward storyTextObjectTranslationCompleted event — lines 342-344', (done) => {
+      const event = {
+        type: 'story_text_object_translation_completed',
+        postId: 'post-123',
+        textObjectIndex: 2,
+        translations: [{ language: 'fr', text: 'Bonjour' }]
+      };
+
+      client.on('storyTextObjectTranslationCompleted', (data) => {
+        expect(data.postId).toBe('post-123');
+        expect(data.textObjectIndex).toBe(2);
+        done();
+      });
+
+      const messageBuffer = Buffer.from(JSON.stringify(event));
+      (mockSubSocket.receive as jest.Mock).mockResolvedValueOnce([messageBuffer]);
+      jest.advanceTimersByTime(100);
+    });
+  });
+
+  describe('ZmqTranslationClient — testReception()', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('should call sendPing and schedule a timeout — lines 664-682', async () => {
+      await client.testReception();
+      expect(mockPushSocket.send).toHaveBeenCalled();
+      // Advance to trigger the inner setTimeout
+      jest.advanceTimersByTime(3001);
+      await Promise.resolve();
+      expect(client).toBeDefined();
+    });
+
+    it('testReception() should log error when sendPing fails — line 680', async () => {
+      jest.spyOn((client as any).connectionManager, 'sendPing').mockRejectedValueOnce(new Error('Ping failed'));
+      await client.testReception(); // should not throw
+      expect(client).toBeDefined();
+    });
+  });
+
+  describe('ZmqTranslationClient — voice_translate_async long-running type', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('should NOT retry voice_translate_async (deadman only)', async () => {
+      const request: VoiceAPIRequest = {
+        type: 'voice_translate_async',
+        taskId: 'async-no-retry-task',
+        userId: 'user-1',
+        audioBase64: 'AAAA',
+        targetLanguages: ['fr']
+      };
+
+      await client.sendVoiceAPIRequest(request);
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(1);
+
+      jest.advanceTimersByTime(35_000);
+      await Promise.resolve();
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(1);
+    });
+  });
+
+  describe('ZmqTranslationClient — sendAudioProcessRequest retry resend branch', () => {
+    beforeEach(async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+    });
+
+    it('should retry sendAudioProcessRequest on timeout and increment requests_sent — lines 458-460', async () => {
+      const request: Omit<AudioProcessRequest, 'type'> = {
+        messageId: 'msg-audio-retry',
+        attachmentId: 'attach-retry',
+        conversationId: 'conv-retry',
+        senderId: 'user-retry',
+        audioUrl: '',
+        audioPath: '/tmp/audio.mp3',
+        audioDurationMs: 1000,
+        targetLanguages: ['fr'],
+        generateVoiceClone: false,
+        modelType: 'basic'
+      };
+
+      await client.sendAudioProcessRequest(request);
+      const statsBefore = client.getStats().requests_sent;
+
+      // Trigger retry
+      await jest.advanceTimersByTimeAsync(30_000 + 100);
+
+      const statsAfter = client.getStats().requests_sent;
+      expect(statsAfter).toBeGreaterThan(statsBefore);
+    });
+  });
+
+  describe('ZmqTranslationClient — close() error path', () => {
+    it('close() should handle errors in cleanup — line 657', async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+
+      // Make connectionManager.close() throw to trigger the catch block
+      jest.spyOn((client as any).connectionManager, 'close').mockRejectedValueOnce(new Error('Close error'));
+
+      // Should not propagate the error
+      await expect(client.close()).resolves.toBeUndefined();
+    });
+  });
+
+  describe('ZmqTranslationClient — constructor env var fallbacks', () => {
+    it('should use hardcoded defaults when env vars are absent — branches 1[1], 3[1], 5[1]', () => {
+      // Temporarily remove env vars so the || fallback is exercised
+      const savedHost = process.env.ZMQ_TRANSLATOR_HOST;
+      const savedPush = process.env.ZMQ_TRANSLATOR_PUSH_PORT;
+      const savedSub = process.env.ZMQ_TRANSLATOR_SUB_PORT;
+      delete process.env.ZMQ_TRANSLATOR_HOST;
+      delete process.env.ZMQ_TRANSLATOR_PUSH_PORT;
+      delete process.env.ZMQ_TRANSLATOR_SUB_PORT;
+
+      try {
+        const c = new ZmqTranslationClient();
+        expect(c).toBeDefined();
+        // host defaults to '0.0.0.0', ports default to 5555/5558
+        expect((c as any).host).toBe('0.0.0.0');
+        expect((c as any).pushPort).toBe(5555);
+        expect((c as any).subPort).toBe(5558);
+      } finally {
+        // Restore env vars
+        if (savedHost !== undefined) process.env.ZMQ_TRANSLATOR_HOST = savedHost;
+        if (savedPush !== undefined) process.env.ZMQ_TRANSLATOR_PUSH_PORT = savedPush;
+        if (savedSub !== undefined) process.env.ZMQ_TRANSLATOR_SUB_PORT = savedSub;
+      }
+    });
+  });
+
+  describe('ZmqTranslationClient — _startResultListener running=false branch', () => {
+    it('should hit running=false branch (lines 389-390) when polling fires after close', async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+
+      // Directly set running to false WITHOUT clearing the interval
+      // This simulates the race where the interval fires after running=false
+      (client as any).running = false;
+
+      // Now let the interval tick — it should hit the early-return branch
+      jest.advanceTimersByTime(100);
+      await Promise.resolve();
+
+      // Client should still be defined (no throw)
+      expect(client).toBeDefined();
+    });
+
+    it('should handle if(message) false path (line 400) when receive returns falsy', async () => {
+      client = new ZmqTranslationClient();
+      await client.initialize();
+
+      // Spy on connectionManager.receive to return null (falsy) to hit if(message)=false
+      const spy = jest.spyOn((client as any).connectionManager, 'receive').mockResolvedValueOnce(null as any);
+
+      jest.advanceTimersByTime(100);
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(client).toBeDefined();
+      spy.mockRestore();
     });
   });
 

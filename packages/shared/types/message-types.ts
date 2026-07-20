@@ -79,6 +79,42 @@ export interface MessageStatusEntry {
 }
 
 /**
+ * Progression de consommation média d'un participant sur un attachement précis,
+ * exposée dans le détail de statut d'un message (`getMessageReadStatus`).
+ *
+ * Permet à l'auteur de voir jusqu'où CHAQUE autre participant a écouté un audio
+ * ou regardé une vidéo (position en ms + complétion), au-delà de l'agrégat
+ * « écouté par tous ». Aligné avec Prisma `AttachmentStatusEntry`.
+ *
+ * Visibilité : exposé au même titre que les accusés de réception/lecture
+ * (`receivedBy`/`readBy`) — pas de filtre de confidentialité supplémentaire.
+ *
+ * @see schema.prisma — model AttachmentStatusEntry
+ */
+export interface MessageAttachmentConsumptionParticipant {
+  readonly participantId: string;
+  readonly displayName: string;
+  readonly avatarURL: string | null;
+  /** Dernière position de lecture audio (ms), null si jamais écouté */
+  readonly lastPlayPositionMs: number | null;
+  /** Audio écouté jusqu'au bout */
+  readonly listenedComplete: boolean;
+  /** Dernière position de visionnage vidéo (ms), null si jamais regardé */
+  readonly lastWatchPositionMs: number | null;
+  /** Vidéo regardée jusqu'au bout */
+  readonly watchedComplete: boolean;
+}
+
+/**
+ * Consommation média par attachement, regroupée par participant.
+ * @see schema.prisma — model AttachmentStatusEntry
+ */
+export interface MessageAttachmentConsumption {
+  readonly attachmentId: string;
+  readonly participants: ReadonlyArray<MessageAttachmentConsumptionParticipant>;
+}
+
+/**
  * Message retourné par la Gateway
  * Aligné avec le modèle Prisma Message
  *

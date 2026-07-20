@@ -152,6 +152,9 @@
       "searchPlaceholder": "Escribe para buscar un usuario...",
       "noResults": "No se encontró ningún usuario para \"{query}\"",
       "helpText": "↑↓ navegar • Enter seleccionar • Esc cerrar"
+    },
+    "bubble": {
+      "forwarded": "Reenviado"
     }
   }
 }

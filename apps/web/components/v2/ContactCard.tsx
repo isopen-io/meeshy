@@ -3,6 +3,7 @@
 import React, { memo, useState } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { getUserStatus, PRESENCE_BADGE_CLASS } from '@/lib/user-status';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { Badge } from './Badge';
@@ -49,6 +50,7 @@ export const ContactCard = memo(function ContactCard({
   className,
 }: ContactCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const presence = getUserStatus({ isOnline: contact.isOnline, lastActiveAt: contact.lastActiveAt });
 
   return (
     <div
@@ -63,6 +65,7 @@ export const ContactCard = memo(function ContactCard({
         name={contact.name}
         size="lg"
         isOnline={contact.isOnline}
+        presence={presence}
         languageOrb={
           <LanguageOrb
             code={contact.languageCode}
@@ -75,7 +78,7 @@ export const ContactCard = memo(function ContactCard({
 
       <div className="flex-1 min-w-0">
         <Link
-          href={`/v2/profile/${contact.id}`}
+          href={`/u/${contact.id}`}
           className="font-medium truncate block text-[var(--gp-text-primary)] hover:underline"
         >
           {contact.name}
@@ -94,9 +97,13 @@ export const ContactCard = memo(function ContactCard({
       </div>
 
       <div className="flex items-center gap-2 flex-shrink-0">
-        {contact.isOnline && (
-          <Badge variant="success" size="sm">
-            {t('status.online')}
+        {presence !== 'offline' && (
+          <Badge size="sm" className={`${PRESENCE_BADGE_CLASS[presence]} text-white border-transparent`}>
+            {presence === 'online'
+              ? t('status.online')
+              : presence === 'recent'
+                ? t('status.recent', { defaultValue: 'Actif récemment' })
+                : t('status.away', { defaultValue: 'Absent' })}
           </Badge>
         )}
 

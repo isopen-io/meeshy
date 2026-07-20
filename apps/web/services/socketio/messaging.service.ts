@@ -14,7 +14,11 @@ import { logger } from '@/utils/logger';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   AttachmentStatusUpdatedEventData,
+  AttachmentUpdatedEventData,
+  LinkMessageNewEventData,
   MessageConsumedEventData,
+  MessagePinnedEventData,
+  MessageUnpinnedEventData,
   ReactionUpdateEventData,
 } from '@meeshy/shared/types/socketio-events';
 import type {
@@ -45,6 +49,11 @@ export class MessagingService {
   private mentionListeners: Set<(data: unknown) => void> = new Set();
   private consumedListeners: Set<(data: MessageConsumedEventData) => void> = new Set();
   private attachmentStatusListeners: Set<(data: AttachmentStatusUpdatedEventData) => void> = new Set();
+  private messageAttachmentUpdatedListeners: Set<(data: AttachmentUpdatedEventData) => void> = new Set();
+  private pendingDeliveredListeners: Set<(data: { count: number; conversationIds: string[] }) => void> = new Set();
+  private linkMessageNewListeners: Set<(data: LinkMessageNewEventData) => void> = new Set();
+  private messagePinnedListeners: Set<(data: MessagePinnedEventData) => void> = new Set();
+  private messageUnpinnedListeners: Set<(data: MessageUnpinnedEventData) => void> = new Set();
 
   private encryptionHandlers: EncryptionHandlers | null = null;
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
@@ -58,7 +67,8 @@ export class MessagingService {
 
   private isOwnMessage(message: Message): boolean {
     if (!this.currentUserId) return false;
-    const senderId = (message.sender as any)?.userId ?? (message.sender as any)?.id ?? (message as any).senderId;
+    const sender = message.sender;
+    const senderId = sender?.userId ?? sender?.id ?? message.senderId;
     return senderId === this.currentUserId;
   }
 
@@ -187,6 +197,26 @@ export class MessagingService {
       this.attachmentStatusListeners.forEach(listener => listener(data));
     });
 
+    (socket as unknown as { on: (event: string, handler: (data: AttachmentUpdatedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, (data: AttachmentUpdatedEventData) => {
+      this.messageAttachmentUpdatedListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: { count: number; conversationIds: string[] }) => void) => void }).on(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, (data: { count: number; conversationIds: string[] }) => {
+      this.pendingDeliveredListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: LinkMessageNewEventData) => void) => void }).on(SERVER_EVENTS.LINK_MESSAGE_NEW, (data: LinkMessageNewEventData) => {
+      this.linkMessageNewListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: MessagePinnedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_PINNED, (data: MessagePinnedEventData) => {
+      this.messagePinnedListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: MessageUnpinnedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_UNPINNED, (data: MessageUnpinnedEventData) => {
+      this.messageUnpinnedListeners.forEach(listener => listener(data));
+    });
+
     socket.on(SERVER_EVENTS.MENTION_CREATED, (data: unknown) => {
       this.mentionListeners.forEach(listener => listener(data));
     });
@@ -229,7 +259,7 @@ export class MessagingService {
         : errorMsg.includes('session')
           ? 'SESSION_NOT_FOUND'
           : 'DECRYPTION_FAILED';
-      console.error(`[MessagingService] Decryption failed (${decryptionErrorCode}):`, decryptionError);
+      logger.error('[MessagingService]', `Decryption failed (${decryptionErrorCode})`, { conversationId: message.conversationId, messageId: message.id });
       return {
         ...message,
         content: message.content || '[Encrypted message - Unable to decrypt]',
@@ -298,7 +328,8 @@ export class MessagingService {
             }
           }
         } catch (encryptionError) {
-          console.error('[MessagingService] Encryption failed:', encryptionError);
+          logger.error('[MessagingService]', 'Encryption failed — aborting send to prevent plaintext leak', { conversationId });
+          throw encryptionError;
         }
       }
 
@@ -344,7 +375,7 @@ export class MessagingService {
       return this.sendMessageViaRest(options);
 
     } catch (error) {
-      console.error('[MessagingService] Error sending message:', error);
+      logger.error('[MessagingService]', 'Error sending message', { error: error instanceof Error ? error.message : String(error) });
       return { success: false };
     }
   }
@@ -358,7 +389,7 @@ export class MessagingService {
     content: string
   ): Promise<boolean> {
     if (!socket || !socket.connected) {
-      console.error('[MessagingService] Socket not connected');
+      logger.warn('[MessagingService]', 'editMessage: socket not connected');
       return false;
     }
 
@@ -382,7 +413,7 @@ export class MessagingService {
     messageId: string
   ): Promise<boolean> {
     if (!socket || !socket.connected) {
-      console.error('[MessagingService] Socket not connected');
+      logger.warn('[MessagingService]', 'deleteMessage: socket not connected');
       return false;
     }
 
@@ -426,7 +457,7 @@ export class MessagingService {
         clientMessageId: options.clientMessageId,
       };
     } catch (error) {
-      console.error('[MessagingService] REST fallback also failed:', error);
+      logger.error('[MessagingService]', 'REST fallback also failed', { error: error instanceof Error ? error.message : String(error) });
       return { success: false };
     }
   }
@@ -520,6 +551,31 @@ export class MessagingService {
     return () => this.attachmentStatusListeners.delete(listener);
   }
 
+  onMessageAttachmentUpdated(listener: (data: AttachmentUpdatedEventData) => void): UnsubscribeFn {
+    this.messageAttachmentUpdatedListeners.add(listener);
+    return () => this.messageAttachmentUpdatedListeners.delete(listener);
+  }
+
+  onPendingMessagesDelivered(listener: (data: { count: number; conversationIds: string[] }) => void): UnsubscribeFn {
+    this.pendingDeliveredListeners.add(listener);
+    return () => this.pendingDeliveredListeners.delete(listener);
+  }
+
+  onLinkMessageNew(listener: (data: LinkMessageNewEventData) => void): UnsubscribeFn {
+    this.linkMessageNewListeners.add(listener);
+    return () => this.linkMessageNewListeners.delete(listener);
+  }
+
+  onMessagePinned(listener: (data: MessagePinnedEventData) => void): UnsubscribeFn {
+    this.messagePinnedListeners.add(listener);
+    return () => this.messagePinnedListeners.delete(listener);
+  }
+
+  onMessageUnpinned(listener: (data: MessageUnpinnedEventData) => void): UnsubscribeFn {
+    this.messageUnpinnedListeners.add(listener);
+    return () => this.messageUnpinnedListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -530,6 +586,11 @@ export class MessagingService {
     this.mentionListeners.clear();
     this.consumedListeners.clear();
     this.attachmentStatusListeners.clear();
+    this.messageAttachmentUpdatedListeners.clear();
+    this.pendingDeliveredListeners.clear();
+    this.linkMessageNewListeners.clear();
+    this.messagePinnedListeners.clear();
+    this.messageUnpinnedListeners.clear();
     this.markReceivedTimers.forEach(timer => clearTimeout(timer));
     this.markReceivedTimers.clear();
     this.recentMessageIds.clear();

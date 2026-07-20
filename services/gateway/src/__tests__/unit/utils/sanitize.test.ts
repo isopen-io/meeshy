@@ -150,9 +150,22 @@ describe('SecuritySanitizer', () => {
       expect(result).toContain('Text');
     });
 
-    it('should remove zero-width characters', () => {
-      const input = 'Hello\u200BWorld\u200CTest\u200D';
+    it('should remove zero-width space and BOM', () => {
+      const input = 'Hello\u200BWorld\uFEFFTest';
       expect(SecuritySanitizer.sanitizeText(input)).toBe('HelloWorldTest');
+    });
+
+    it('should preserve ZWJ in emoji sequences (family emoji stays intact)', () => {
+      const family = '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466}';
+      const result = SecuritySanitizer.sanitizeText(`Hello ${family}`);
+      expect(result).toBe(`Hello ${family}`);
+      expect(result).toContain('\u200D');
+    });
+
+    it('should preserve ZWNJ required by Persian/Farsi orthography', () => {
+      const persian = 'mi\u200Cravam';
+      expect(SecuritySanitizer.sanitizeText(persian)).toBe(persian);
+      expect(SecuritySanitizer.sanitizeText(persian)).toContain('\u200C');
     });
 
     it('should remove control characters', () => {
@@ -932,6 +945,38 @@ describe('SecuritySanitizer', () => {
       };
       const result = SecuritySanitizer.sanitizeMongoQuery(input);
       expect(result.level1.level2.level3.$where).toBeUndefined();
+    });
+
+    it('should block __proto__ prototype pollution (JSON.parse request-body vector)', () => {
+      // Fastify parses request.body via JSON.parse, which yields an OWN
+      // enumerable __proto__ key (unlike an object literal). Copying it with
+      // sanitized['__proto__'] = value would pollute the returned object.
+      const input = JSON.parse('{"__proto__": {"isAdmin": true}, "name": "test"}');
+      const result = SecuritySanitizer.sanitizeMongoQuery(input);
+      expect(result.isAdmin).toBeUndefined();
+      expect(({} as Record<string, unknown>).isAdmin).toBeUndefined();
+      expect(result.name).toBe('test');
+    });
+
+    it('should block constructor key', () => {
+      const input = JSON.parse('{"constructor": {"isAdmin": true}, "name": "test"}');
+      const result = SecuritySanitizer.sanitizeMongoQuery(input);
+      expect(Object.prototype.hasOwnProperty.call(result, 'constructor')).toBe(false);
+      expect(result.name).toBe('test');
+    });
+
+    it('should block prototype key', () => {
+      const input = JSON.parse('{"prototype": {"isAdmin": true}, "name": "test"}');
+      const result = SecuritySanitizer.sanitizeMongoQuery(input);
+      expect(result.prototype).toBeUndefined();
+      expect(result.name).toBe('test');
+    });
+
+    it('should block nested __proto__ prototype pollution', () => {
+      const input = JSON.parse('{"user": {"__proto__": {"isAdmin": true}, "name": "bob"}}');
+      const result = SecuritySanitizer.sanitizeMongoQuery(input);
+      expect(result.user.isAdmin).toBeUndefined();
+      expect(result.user.name).toBe('bob');
     });
   });
 

@@ -1,5 +1,7 @@
 import SwiftUI
 import Combine
+import PhotosUI
+import UniformTypeIdentifiers
 import MeeshySDK
 import MeeshyUI
 
@@ -7,9 +9,35 @@ struct PostDetailView: View {
     let postId: String
     var initialPost: FeedPost?
     var showComments: Bool = false
+    /// Commentaire ciblé par une navigation depuis une notification (like /
+    /// réponse / commentaire). L'écran défile jusqu'à lui et le surligne.
+    var targetCommentId: String?
+    /// Commentaire parent quand la cible est une réponse — l'écran déplie le fil
+    /// du parent puis défile jusqu'à ce fil (la réponse y apparaît).
+    var targetParentCommentId: String?
 
     @StateObject private var viewModel = PostDetailViewModel()
+    /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
+    /// donc le backend suggère l'auteur du post, les personnes ayant commenté, puis
+    /// les contacts (parité avec `FeedCommentsSheet`).
+    @StateObject private var mentionController: MentionComposerController
     private var theme: ThemeManager { ThemeManager.shared }
+
+    init(
+        postId: String,
+        initialPost: FeedPost? = nil,
+        showComments: Bool = false,
+        targetCommentId: String? = nil,
+        targetParentCommentId: String? = nil
+    ) {
+        self.postId = postId
+        self.initialPost = initialPost
+        // A comment target implies the comments section must be revealed.
+        self.showComments = showComments || targetCommentId != nil
+        self.targetCommentId = targetCommentId
+        self.targetParentCommentId = targetParentCommentId
+        _mentionController = StateObject(wrappedValue: MentionComposerController(context: .post(id: postId)))
+    }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var router: Router
@@ -20,12 +48,35 @@ struct PostDetailView: View {
     @State private var activeDisplayLangCode: String? = nil
     @State private var fullscreenMediaId: String? = nil
     @State private var showFullscreenGallery = false
+    @State private var audioFullscreen: AudioFullscreenSource?
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    /// Section de commentaire actuellement surlignée (cible d'une notification).
+    @State private var highlightedCommentId: String? = nil
+    /// Garde-fou : ne défile vers la cible qu'une seule fois (les commentaires
+    /// peuvent arriver après le premier rendu via le chargement paginé).
+    @State private var didScrollToTargetComment: Bool = false
+    /// Texte du composer, lié au `UniversalComposerBar`. Permet de préremplir une
+    /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
+    /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
+    @State private var composerText: String = ""
+    /// @mention auto-injectée par `beginReply` (réponse à une réponse) — suivie
+    /// pour la retirer proprement si on change de cible sans envoyer.
+    @State private var prefilledMention: String? = nil
+    // Comment attachments + real voice capture (parity with feed/reels composer).
+    @State private var commentAttachments: [ComposerAttachment] = []
+    @State private var showCommentPhotoPicker: Bool = false
+    @State private var commentPhotoItems: [PhotosPickerItem] = []
+    @State private var showCommentFilePicker: Bool = false
+    @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var isTextExpanded = false
     @State private var headerScrollOffset: CGFloat = 0
+    // Inline story canvas playback gating (audio active → pause when off-screen / in call).
+    @State private var storyCanvasVisible: Bool = true
+    @State private var isCallActive: Bool = false
+    @State private var scrollViewportHeight: CGFloat = 0
     private static let scrollSpace = "postDetailScroll"
     /// Set once `PostService.share(... generateLink: true)` returns — the
     /// `.sheet(item:)` further down presents the system share UI as soon
@@ -88,12 +139,11 @@ struct PostDetailView: View {
     @State private var postLikeDelta: [String: Int] = [:]
     @State private var postHeartInFlightIds: Set<String> = []
 
-    // Bookmark / repost / share optimistic state — same pattern as FeedView.
+    // Bookmark / repost optimistic state — same pattern as FeedView.
     @State private var isPostBookmarked: Bool = false
     @State private var isBookmarkInFlight: Bool = false
     @State private var isPostReposted: Bool = false
     @State private var isRepostInFlight: Bool = false
-    @State private var isShareInFlight: Bool = false
     @State private var showRepostOptions: Bool = false
     @State private var isEditing: Bool = false
 
@@ -219,46 +269,18 @@ struct PostDetailView: View {
         }
     }
 
-    @MainActor
-    private func sharePostFromDetail() {
-        guard !isShareInFlight else { return }
-        isShareInFlight = true
-        Task {
-            defer { Task { @MainActor in isShareInFlight = false } }
-            // Mint a tracking link; fall back to the raw post URL when the
-            // gateway can't issue a TrackingLink (offline / 5xx).
-            do {
-                struct SharePayload: Decodable {
-                    let shared: Bool?
-                    let shareCount: Int?
-                    let shortUrl: String?
-                    let token: String?
-                }
-                let body = try JSONSerialization.data(withJSONObject: ["generateLink": true])
-                let resp: APIResponse<SharePayload> = try await APIClient.shared.request(
-                    endpoint: "/posts/\(postId)/share",
-                    method: "POST",
-                    body: body
-                )
-                if let s = resp.data.shortUrl, let url = URL(string: s) {
-                    shareableLink = ShareableLink(url: url)
-                    return
-                }
-            } catch {
-                // fall through to raw fallback
-            }
-            if let raw = ShareableLink.fallback(forPostId: postId) {
-                shareableLink = raw
-            } else {
-                FeedbackToastManager.shared.showError("Erreur lors du partage")
-            }
-        }
-    }
-
     private var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
     private var accentColor: String {
         displayPost?.authorColor ?? "6366F1"
+    }
+
+    /// True when the signed-in user authored this post — gates the private reach
+    /// stats (vues + impressions) shown next to the @handle, mirroring the feed
+    /// and reel cards where analytics are author-only.
+    private var isPostAuthor: Bool {
+        guard let me = AuthManager.shared.currentUser?.id, let post = displayPost else { return false }
+        return me == post.authorId
     }
 
     // MARK: - Prisme Linguistique
@@ -278,6 +300,26 @@ struct PostDetailView: View {
             return translation.text
         }
         return post.displayContent
+    }
+
+    /// Vidéo embeddable (YouTube) détectée dans le contenu affiché du post.
+    private var embeddedVideo: EmbeddedVideo? {
+        EmbeddableVideoResolver.resolve(in: effectiveContent)
+    }
+
+    /// `[rawURL: token]` outbound-link tracking map du post (nil si aucun lien
+    /// tracké → pas de réécriture dans le renderer).
+    private var postTrackedLinks: [String: String]? {
+        let map = displayPost?.trackedLinkMap ?? [:]
+        return map.isEmpty ? nil : map
+    }
+
+    /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
+    /// première URL du contenu via `trackedLinkMap`. `nil` → watchURL.
+    private var embedTrackedURL: URL? {
+        guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
+              let token = displayPost?.trackedLinkMap[raw] else { return nil }
+        return URL(string: "https://meeshy.me/l/\(token)")
     }
 
     private var textTruncation: (text: String, isTruncated: Bool) {
@@ -335,16 +377,35 @@ struct PostDetailView: View {
         // ZONE 1: Text
         textZone(post)
 
-        // ZONE 2: Media
-        if post.hasMedia {
+        // ZONE 2: Story canvas (inline reader) OR standard media
+        //
+        // For a SHARED STORY (a POST that reposts a STORY), the embedded story
+        // canvas is rendered by `repostEmbed` below — so suppress the wrapper's
+        // own media here to avoid showing the same story content twice. Mirrors
+        // the existing text-dedup guards (`if !post.isStory` / `if !isStoryRepost`).
+        let isSharedStory = (post.repost?.type ?? "").uppercased() == "STORY"
+        if post.isStory {
+            storyCanvasSection(post)
+        } else if post.hasMedia, !isSharedStory {
             detailMediaSection(post.media)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
         }
 
         // Repost embed
+        //
+        // STORY qui reposte une STORY : le canvas principal ci-dessus rend
+        // DÉJÀ la republication complète (effects/médias/audio retombent sur
+        // la source via `StoryItem(feedPost:)`). Rendre en plus l'embed de
+        // l'original doublait le contenu à l'écran (bug 2026-07-13,
+        // IMG_1161) — on le remplace par une ligne d'attribution « via
+        // @auteur » qui ouvre l'original.
         if let repost = post.repost {
-            repostEmbed(repost)
+            if post.isStory && isSharedStory {
+                storyRepostAttributionRow(repost)
+            } else {
+                repostEmbed(repost)
+            }
         }
 
         // Actions bar
@@ -375,7 +436,7 @@ struct PostDetailView: View {
                 likeDelta: viewModel.commentLikeDelta,
                 heartInFlightIds: viewModel.commentHeartInFlightIds,
                 onReply: { target in
-                    viewModel.replyingTo = target
+                    beginReply(to: target)
                 },
                 onToggleThread: {
                     Task { await viewModel.toggleThread(comment.id, postId: postId) }
@@ -383,14 +444,28 @@ struct PostDetailView: View {
                 onLikeComment: { commentId in
                     Task { await viewModel.toggleCommentLike(commentId, postId: postId) }
                 },
+                onDeleteComment: { target in
+                    Task { await viewModel.deleteComment(target) }
+                },
                 moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                 storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
-                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline,
+                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
                 replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
                 replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
+                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state }
             )
             .padding(.horizontal, 16)
+            .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
+                    .padding(.horizontal, 8)
+            )
+            .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
+            // Anchor for notification-driven navigation: scroll/highlight targets
+            // the top-level section. For a reply, the parent thread is expanded so
+            // the reply becomes visible right below this anchor.
+            .id("comment-\(comment.id)")
         }
 
         if viewModel.isLoadingComments {
@@ -410,63 +485,134 @@ struct PostDetailView: View {
         }
     }
 
+    /// Notification → comment navigation. Scrolls to (and briefly highlights) the
+    /// targeted comment once it's loaded. For a reply, scrolls to the parent
+    /// section and expands its thread so the reply is revealed. Falls back to the
+    /// legacy "reveal comments + focus composer" behaviour when there's no target.
+    /// Runs once (guarded by `didScrollToTargetComment`); re-invoked as comments
+    /// page in until the target is present.
+    private func attemptScrollToTargetComment(using proxy: ScrollViewProxy) {
+        guard let target = targetCommentId, !target.isEmpty else {
+            if showComments && !didScrollToTargetComment {
+                didScrollToTargetComment = true
+                withAnimation { proxy.scrollTo("commentsSection", anchor: .top) }
+                composerFocusTrigger.toggle()
+            }
+            return
+        }
+        guard !didScrollToTargetComment else { return }
+
+        // Only top-level sections carry a scroll anchor. For a reply, that's the
+        // parent comment; otherwise the comment itself.
+        let sectionId = targetParentCommentId.flatMap { $0.isEmpty ? nil : $0 } ?? target
+        guard viewModel.topLevelComments.contains(where: { $0.id == sectionId }) else { return }
+        didScrollToTargetComment = true
+
+        if let parentId = targetParentCommentId, !parentId.isEmpty,
+           !viewModel.expandedThreads.contains(parentId) {
+            Task { await viewModel.toggleThread(parentId, postId: postId) }
+        }
+
+        withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+        highlightedCommentId = sectionId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+            if highlightedCommentId == sectionId { highlightedCommentId = nil }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Connection status banner (banner manages its own socket observation)
             ConnectionBanner()
 
             if let post = displayPost {
-                ScrollViewReader { scrollProxy in
-                    ScrollView(showsIndicators: false) {
-                        // Sentinel: publishes the scroll offset so the floating
-                        // header reveals the author at scroll. minY≈0 at rest
-                        // (content origin sits just under the header inset),
-                        // goes negative on scroll.
-                        GeometryReader { geo in
-                            Color.clear.preference(
-                                key: ScrollOffsetPreferenceKey.self,
-                                value: geo.frame(in: .named(Self.scrollSpace)).minY
+                ZStack(alignment: .top) {
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(showsIndicators: false) {
+                            VStack(spacing: 0) {
+                                // Reserve the floating header's height so the inline
+                                // author block sits just below it at rest and scrolls
+                                // UNDER the translucent surface (same as SettingsView).
+                                Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
+
+                                LazyVStack(spacing: 0) {
+                                    postDetailContent(post)
+                                }
+                                .padding(.bottom, 80)
+                            }
+                            // iOS 16–17 scroll-offset reader: the content's top `minY`
+                            // is 0 at rest and goes negative as it scrolls up.
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.preference(
+                                        key: ScrollOffsetPreferenceKey.self,
+                                        value: geo.frame(in: .named(Self.scrollSpace)).minY
+                                    )
+                                }
                             )
                         }
-                        .frame(height: 0)
-
-                        LazyVStack(spacing: 0) {
-                            postDetailContent(post)
-                        }
-                        .padding(.bottom, 80)
-                    }
-                    .coordinateSpace(name: Self.scrollSpace)
-                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
-                        headerScrollOffset = offset
-                    }
-                    // Floating translucent header pinned to the top. `safeAreaInset`
-                    // reserves the header height for the content (author block stays
-                    // visible right below it at rest) while letting the content scroll
-                    // UNDER the translucent surface — the canonical SwiftUI pattern for
-                    // a bar over a scroll view, and it handles the safe area itself.
-                    // (A plain ZStack overlay let the header's `.ignoresSafeArea(.top)`
-                    // pull the scroll content under the bar and hide the author.)
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        postDetailHeader(post)
-                    }
-                    .onAppear {
-                        if showComments {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                withAnimation {
-                                    scrollProxy.scrollTo("commentsSection", anchor: .top)
+                        .coordinateSpace(name: Self.scrollSpace)
+                        // `.onPreferenceChange` stops re-firing on scroll under iOS 18+
+                        // (it delivers only the initial value — verified on iOS 18.2
+                        // and iOS 26), so the author chip never revealed. Keep it for
+                        // iOS 16–17 and overlay the native iOS 18+ scroll reader, which
+                        // reports `contentOffset.y` (0 at top, positive scrolling down),
+                        // negated to match the `minY` sign the preference path produced.
+                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollOffset = $0 }
+                        .trackScrollContentOffset { headerScrollOffset = -$0 }
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.preference(key: ScrollViewportHeightKey.self, value: geo.size.height)
+                            }
+                        )
+                        .onPreferenceChange(ScrollViewportHeightKey.self) { scrollViewportHeight = $0 }
+                        .onAppear {
+                            if showComments {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    attemptScrollToTargetComment(using: scrollProxy)
                                 }
-                                composerFocusTrigger.toggle()
                             }
                         }
+                        // Comments load asynchronously (and paginate), so the
+                        // target may not exist at first render. Retry the scroll
+                        // each time the loaded set changes until it lands once.
+                        .adaptiveOnChange(of: viewModel.topLevelComments.count) { _, _ in
+                            attemptScrollToTargetComment(using: scrollProxy)
+                        }
+                        .onReceive(CallManager.shared.$callState) { state in
+                            isCallActive = state.isActive
+                        }
+                    } // ScrollViewReader
+
+                    // Floating translucent header overlaid on the scroll content's
+                    // top — NOT `.safeAreaInset` (which pinned the scroll-offset
+                    // preference). The ZStack respects the safe area so the header
+                    // clears the Dynamic Island; the `Color.clear` spacer above
+                    // reserves its room so the author isn't hidden at rest.
+                    VStack(spacing: 0) {
+                        postDetailHeader(post)
+                        Spacer(minLength: 0)
                     }
-                } // ScrollViewReader
+                } // ZStack
             } else if viewModel.isLoading {
                 Spacer()
                 ProgressView()
                 Spacer()
             }
 
-            composer
+            VStack(spacing: 0) {
+                if mentionController.activeQuery != nil {
+                    MentionSuggestionPanel(
+                        controller: mentionController,
+                        accentColor: accentColor,
+                        currentText: composerText,
+                        onSelect: { updated in composerText = updated }
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                composer
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .navigationBarHidden(true)
@@ -523,6 +669,10 @@ struct PostDetailView: View {
             //   comptées IMMÉDIATEMENT, avant tout tracking d'engagement (durée de lecture).
             try? await PostService.shared.viewPost(postId: postId, duration: nil)
             await viewModel.registerDetailOpen(postId)
+            // Reprend le brouillon de commentaire laissé sur ce post (cache-first).
+            if composerText.isEmpty, let draft = CommentDraftStore.shared.load(postId: postId) {
+                composerText = draft
+            }
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)
@@ -603,9 +753,18 @@ struct PostDetailView: View {
             UserProfileSheet(
                 user: user,
                 moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? "")
+                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
+                postsContent: { uid in
+                    AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
+                        selectedProfileUser = nil
+                        router.push(.postDetail(post.id, post))
+                    }, onOpenReel: { reel, reels in
+                        ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
+                    }))
+                }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large, .medium])
             .presentationDragIndicator(.visible)
         }
         .sheet(item: $shareableLink) { link in
@@ -653,6 +812,7 @@ struct PostDetailView: View {
                 )
             }
         }
+        .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
     }
 
     // MARK: - Floating Header (CollapsibleHeader)
@@ -679,9 +839,47 @@ struct PostDetailView: View {
                             .font(.subheadline.weight(.bold))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
-                        Text(RelativeTimeFormatter.shortString(for: post.timestamp))
-                            .font(.caption2)
-                            .foregroundColor(theme.textMuted)
+                        let reach = PostReachFormatter.components(
+                            username: post.authorUsername,
+                            isAuthor: isPostAuthor,
+                            viewCount: post.viewCount,
+                            impressionCount: post.impressionCount
+                        )
+                        if reach.pseudo != nil || reach.views != nil {
+                            HStack(spacing: 4) {
+                                if let pseudo = reach.pseudo {
+                                    Text(pseudo)
+                                        .font(.caption2)
+                                        .foregroundColor(theme.textMuted)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                        .layoutPriority(0)
+                                }
+                                if let views = reach.views, let impressions = reach.impressions {
+                                    if reach.pseudo != nil {
+                                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                                    }
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
+                                        Text(views).font(.caption2.weight(.medium))
+                                        Text("·").font(.caption2)
+                                        Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
+                                        Text(impressions).font(.caption2.weight(.medium))
+                                    }
+                                    .foregroundColor(theme.textMuted)
+                                    // Stats must always print in full (up to "2.3M") —
+                                    // they're the values the user cross-checks against the
+                                    // inline reach line. Pin their size + priority so the
+                                    // @pseudo yields/truncates first; never clip a number.
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .layoutPriority(1)
+                                }
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
+                            .accessibilityValue("\(post.viewCount) · \(post.impressionCount)")
+                        }
                     }
                 }
             }
@@ -690,49 +888,6 @@ struct PostDetailView: View {
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(String(format: String(localized: "a11y.post.author_profile", defaultValue: "Profil de %@", bundle: .main), post.author))
             .accessibilityHint(String(localized: "a11y.post.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
-
-            // Détails de langue insérés dans le header (miroir du bloc auteur inline) :
-            // drapeaux tappables + icône translate. Hors du Button profil pour que les
-            // gestes de langue ne déclenchent pas l'ouverture du profil.
-            let flags = buildAvailableFlags()
-            if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
-                HStack(spacing: 5) {
-                    ForEach(flags, id: \.self) { code in
-                        let display = LanguageDisplay.from(code: code)
-                        let isActive = code == secondaryLangCode
-                        VStack(spacing: 1) {
-                            Text(display?.flag ?? "?")
-                                .font(isActive ? .caption : .caption2)
-                                .scaleEffect(isActive ? 1.05 : 1.0)
-                            if isActive {
-                                RoundedRectangle(cornerRadius: 1)
-                                    .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                                    .frame(width: 10, height: 1.5)
-                            }
-                        }
-                        .animation(.easeInOut(duration: 0.2), value: isActive)
-                        .onTapGesture { handleFlagTap(code) }
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityLabel(String(format: String(localized: "a11y.post.show_language", defaultValue: "Afficher en %@", bundle: .main), display?.name ?? code))
-                        .accessibilityValue(isActive ? String(localized: "a11y.post.language_shown", defaultValue: "Affichée", bundle: .main) : "")
-                        .meeshyTapTarget(44)
-                    }
-                    if post.translations != nil, !post.translations!.isEmpty {
-                        Image(systemName: "translate")
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(MeeshyColors.indigo400)
-                            .onTapGesture {
-                                HapticFeedback.light()
-                                showTranslationSheet = true
-                            }
-                            .accessibilityAddTraits(.isButton)
-                            .accessibilityLabel(String(localized: "a11y.post.translations", defaultValue: "Traductions", bundle: .main))
-                            .accessibilityHint(String(localized: "a11y.post.translations.hint", defaultValue: "Affiche les langues disponibles", bundle: .main))
-                            .meeshyTapTarget(44)
-                    }
-                }
-            }
         }
     }
 
@@ -788,6 +943,43 @@ struct PostDetailView: View {
         )
     }
 
+    // MARK: - Author Reach Line
+
+    /// `@pseudo` suivi, pour l'auteur uniquement, des compteurs de portée
+    /// (vues puis impressions) — la barre d'actions du bas n'affiche donc plus
+    /// l'œil. Même grammaire visuelle que le feed/réel (`FeedPostCard`,
+    /// `ReelFeedCard`) : analytics privées, réservées à l'auteur.
+    @ViewBuilder
+    private func authorReachLine(_ post: FeedPost) -> some View {
+        let username = post.authorUsername ?? ""
+        let hasUsername = !username.isEmpty
+        if hasUsername || isPostAuthor {
+            HStack(spacing: 5) {
+                if hasUsername {
+                    Text("@\(username)")
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
+                }
+                if isPostAuthor {
+                    if hasUsername {
+                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                    }
+                    HStack(spacing: 3) {
+                        Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
+                        Text(PostReachFormatter.compact(post.viewCount)).font(.caption2.weight(.medium))
+                        Text("·").font(.caption2)
+                        Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
+                        Text(PostReachFormatter.compact(post.impressionCount)).font(.caption2.weight(.medium))
+                    }
+                    .foregroundColor(theme.textMuted)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
+                    .accessibilityValue("\(post.viewCount) · \(post.impressionCount)")
+                }
+            }
+        }
+    }
+
     // MARK: - Text Zone
 
     @ViewBuilder
@@ -822,13 +1014,17 @@ struct PostDetailView: View {
                         .accessibilityLabel(String(format: String(localized: "a11y.post.author_profile", defaultValue: "Profil de %@", bundle: .main), post.author))
                         .accessibilityHint(String(localized: "a11y.post.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
+                    // @pseudo + portée (vues · impressions) — sous le nom, l'œil
+                    // ne vit plus dans la barre d'actions du bas.
+                    authorReachLine(post)
+
                     HStack(spacing: 4) {
                         Text(post.timestamp, style: .relative)
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
 
                         let flags = buildAvailableFlags()
-                        if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                        if !flags.isEmpty || post.translations?.isEmpty == false {
                             Text("·").font(.caption).foregroundColor(theme.textMuted)
 
                             ForEach(flags, id: \.self) { code in
@@ -853,7 +1049,7 @@ struct PostDetailView: View {
                                 .meeshyTapTarget(44)
                             }
 
-                            if post.translations != nil, !post.translations!.isEmpty {
+                            if post.translations?.isEmpty == false {
                                 Image(systemName: "translate")
                                     .font(.caption2.weight(.medium))
                                     .foregroundColor(MeeshyColors.indigo400)
@@ -875,27 +1071,26 @@ struct PostDetailView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
-            // Content with truncation
+            // Story caption lives inside the canvas overlays → suppress the plain
+            // body (caption + secondary translation + embed) for stories to avoid
+            // showing the same text twice.
+            if !post.isStory {
+            // Content with truncation — le corps passe par `MessageTextRenderer`
+            // pour rendre les URLs cliquables + trackées (`/l/<token>`). Le lien
+            // a priorité sur le tap d'expansion (défaut SwiftUI pour `.link`).
             let truncation = textTruncation
-            Group {
-                if truncation.isTruncated && !isTextExpanded {
-                    Text(truncation.text + "... ")
-                        .font(.callout)
-                        .foregroundColor(theme.textPrimary)
-                    + Text(String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))
+            let bodyText = (truncation.isTruncated && !isTextExpanded)
+                ? truncation.text + "..."
+                : effectiveContent
+            VStack(alignment: .leading, spacing: 2) {
+                MessageTextRenderer.render(bodyText, fontSize: 16, color: theme.textPrimary, accentColor: Color(hex: accentColor), trackedLinks: postTrackedLinks)
+                    .tint(Color(hex: accentColor))
+                if truncation.isTruncated {
+                    Text(isTextExpanded
+                        ? String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main)
+                        : String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))
                         .font(.callout.weight(.semibold))
                         .foregroundColor(Color(hex: accentColor))
-                } else if truncation.isTruncated && isTextExpanded {
-                    Text(effectiveContent + " ")
-                        .font(.callout)
-                        .foregroundColor(theme.textPrimary)
-                    + Text(String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main))
-                        .font(.callout.weight(.semibold))
-                        .foregroundColor(Color(hex: accentColor))
-                } else {
-                    Text(effectiveContent)
-                        .font(.callout)
-                        .foregroundColor(theme.textPrimary)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -949,6 +1144,14 @@ struct PostDetailView: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(String(format: String(localized: "a11y.post.secondary_translation", defaultValue: "Traduction en %1$@ : %2$@", bundle: .main), display?.name ?? code, content))
             }
+
+            // Embed vidéo (YouTube) détecté dans le contenu du post.
+            if let embeddedVideo {
+                VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentColor), trackedURL: embedTrackedURL)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+            }
+            } // if !post.isStory
         }
     }
 
@@ -956,6 +1159,36 @@ struct PostDetailView: View {
 
     @State private var repostSecondaryLangCode: String? = nil
     @State private var repostActiveDisplayLangCode: String? = nil
+
+    /// Attribution compacte d'une STORY republiée en story : icône repost +
+    /// « @auteur » (SANS « via » — l'icône dit déjà la republication, même
+    /// règle que le header du viewer, directive user 2026-07-13) tappable
+    /// vers l'original. Remplace l'embed canvas complet (qui doublait le
+    /// contenu sous le canvas principal — IMG_1161, 2026-07-13).
+    private func storyRepostAttributionRow(_ repost: RepostContent) -> some View {
+        Button {
+            HapticFeedback.light()
+            router.push(.postDetail(repost.id))
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.2.squarepath")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(theme.textMuted)
+                Text("@\(repost.authorUsername ?? repost.author)")
+                    .font(.footnote)
+                    .foregroundColor(theme.accentText(repost.authorColor))
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(theme.textMuted)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
+        .accessibilityHint(String(localized: "a11y.post.repost_author.hint", defaultValue: "Ouvre la publication d'origine", bundle: .main))
+    }
 
     @ViewBuilder
     private func repostEmbed(_ repost: RepostContent) -> some View {
@@ -1002,8 +1235,12 @@ struct PostDetailView: View {
             .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
             .accessibilityHint(String(localized: "a11y.post.repost_author.hint", defaultValue: "Ouvre la publication d'origine", bundle: .main))
 
-            // Text content with translation support
-            if !repost.content.isEmpty {
+            // Text content with translation support.
+            // For STORY reposts the caption lives inside the canvas overlays
+            // (rendered below via StoryReaderRepresentable) — suppress the
+            // plain body here to avoid showing the same text twice, mirroring
+            // the main-post guard (`if !post.isStory`) and `StoryRepostEmbedCell`.
+            if !isStoryRepost, !repost.content.isEmpty {
                 let repostDisplayContent = repostEffectiveContent(repost)
                 Text(repostDisplayContent)
                     .font(.subheadline)
@@ -1052,17 +1289,19 @@ struct PostDetailView: View {
                 }
             }
 
-            // Story-type repost — render the canvas
+            // Story-type repost — render the canvas. Unmuted to match the native
+            // story detail (RF3); the SHARED `storyCanvasContainer` brings the SAME
+            // off-screen + call-aware pause wiring, so the repost canvas can't play
+            // with sound while scrolled off-screen.
             if isStoryRepost {
-                StoryReaderRepresentable(
-                    repost: repost,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                    mute: true
+                storyCanvasContainer(
+                    StoryReaderRepresentable(
+                        repost: repost,
+                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                        mute: false,
+                        isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                    )
                 )
-                .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                .frame(maxWidth: 460)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
             } else if !repost.media.isEmpty {
@@ -1245,38 +1484,6 @@ struct PostDetailView: View {
 
             Spacer()
 
-            HStack(spacing: 5) {
-                Image(systemName: "bubble.right")
-                    .font(.body)
-                    .foregroundColor(Color(hex: accentColor))
-                Text("\(post.commentCount)")
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(theme.textMuted)
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(String(localized: "a11y.post.comments", defaultValue: "Commentaires", bundle: .main))
-            .accessibilityValue("\(post.commentCount)")
-
-            // Total opens (postOpenCount) — informative, non-interactive, mirrors the
-            // reel eye badge. The Detail page now both COUNTS an opening (engagement
-            // surface=detail) and SHOWS the running total.
-            if post.postOpenCount > 0 {
-                Spacer()
-                HStack(spacing: 5) {
-                    Image(systemName: "eye.fill")
-                        .font(.body)
-                        .foregroundColor(theme.textSecondary)
-                    Text("\(post.postOpenCount)")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(String(localized: "reels.action.views", defaultValue: "Vues", bundle: .main))
-                .accessibilityValue("\(post.postOpenCount)")
-            }
-
-            Spacer()
-
             // Repost
             Button {
                 showRepostOptions = true
@@ -1293,7 +1500,7 @@ struct PostDetailView: View {
             .accessibilityLabel(String(localized: "a11y.post.repost", defaultValue: "Republier", bundle: .main))
             .accessibilityValue(isPostReposted ? String(localized: "a11y.post.reposted", defaultValue: "Republié", bundle: .main) : "")
             .accessibilityHint(String(localized: "a11y.post.repost.hint", defaultValue: "Republier ou citer cette publication", bundle: .main))
-            .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
+            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) {
                     toggleDetailRepost(quote: false)
                 }
@@ -1322,33 +1529,76 @@ struct PostDetailView: View {
                 ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
                 : String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
-
-            Spacer()
-
-            // Share
-            Button {
-                sharePostFromDetail()
-                HapticFeedback.light()
-            } label: {
-                ZStack {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.body)
-                        .foregroundColor(theme.textSecondary)
-                        .opacity(isShareInFlight ? 0 : 1)
-                    if isShareInFlight {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                            .progressViewStyle(.circular)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
-            }
-            .disabled(isShareInFlight)
-            .accessibilityLabel(String(localized: "a11y.post.share", defaultValue: "Partager", bundle: .main))
-            .accessibilityHint(String(localized: "a11y.post.share.hint", defaultValue: "Partager cette publication", bundle: .main))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - Story Canvas (inline reader)
+
+    /// Renders a story post's canvas inline via `StoryReaderRepresentable`
+    /// (audio active). Pauses when scrolled off-screen or during a call.
+    /// Empty guard covers an expired/asset-less story (no black box).
+    @ViewBuilder
+    private func storyCanvasSection(_ post: FeedPost) -> some View {
+        // Le garde « indisponible » s'évalue sur la conversion ENRICHIE
+        // (`StoryItem(feedPost:)` retombe sur la source d'une republication) :
+        // une story-repost sans ajouts propres a `storyEffects`/`media` nil
+        // côté post mais un contenu complet côté source — elle doit rendre
+        // son canvas, pas le placeholder.
+        let renderedItem = StoryItem(feedPost: post)
+        if renderedItem.storyEffects == nil && renderedItem.media.isEmpty {
+            HStack(spacing: 6) {
+                Image(systemName: "sparkles.rectangle.stack")
+                Text(String(localized: "feed.post.detail.story_unavailable", defaultValue: "Story indisponible", bundle: .main))
+            }
+            .font(.footnote)
+            .foregroundColor(theme.textMuted)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+        } else {
+            // Réutilise `renderedItem` construit pour la garde ci-dessus au
+            // lieu de laisser `StoryReaderRepresentable(feedPost:)` reconvertir
+            // le même `FeedPost` — évite une 2e conversion par évaluation de
+            // body (ce panneau réévalue à chaque frame de scroll via
+            // `storyCanvasVisible`) ET garantit que la garde et le rendu
+            // voient EXACTEMENT le même item (post-revue 2026-07-13 : la
+            // double construction pouvait diverger si la cascade de fallback
+            // changeait d'un côté sans l'autre).
+            storyCanvasContainer(
+                StoryReaderRepresentable(
+                    story: renderedItem,
+                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                    mute: false,
+                    isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                )
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+    }
+
+    /// Shared canvas wrapper for BOTH the native story and the STORY-repost paths
+    /// (RF3): identical sizing + the GeometryReader/`StoryCanvasFrameKey`/
+    /// `onPreferenceChange` visibility tracking that updates `storyCanvasVisible`.
+    /// Extracting it guarantees the off-screen pause wiring can't exist on one path
+    /// and be missing on the other (which would leak audio on the repost path).
+    private func storyCanvasContainer(_ reader: StoryReaderRepresentable) -> some View {
+        reader
+            .aspectRatio(9.0 / 16.0, contentMode: .fit)
+            .frame(maxWidth: 460)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: StoryCanvasFrameKey.self,
+                                           value: geo.frame(in: .named(Self.scrollSpace)))
+                }
+            )
+            .onPreferenceChange(StoryCanvasFrameKey.self) { frame in
+                let h = scrollViewportHeight > 0 ? scrollViewportHeight : frame.maxY + 1
+                storyCanvasVisible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
+            }
     }
 
     // MARK: - Media Views
@@ -1363,30 +1613,44 @@ struct PostDetailView: View {
         VStack(spacing: 8) {
             // Single media
             if mediaList.count == 1, let media = mediaList.first {
-                detailSingleMedia(media)
+                detailSingleMedia(media, isPrimaryVideo: media.id == primaryAutoplayVideoId)
             } else {
-                // Visual grid
+                // Visual grid (multi-media videos render as tap-to-play thumbnails
+                // here — they never autoplay).
                 if !visualMedia.isEmpty {
                     detailVisualGrid(visualMedia)
                 }
-                // Audio players
+                // Audio players (never a video → never the primary autoplay video)
                 ForEach(audioMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
                 // Documents
                 ForEach(docMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
                 // Locations
                 ForEach(locMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
             }
         }
     }
 
+    /// The single video that autoplays on open (F2): deterministic own > repost.
+    /// The first `.video` of the post's own media; if the post has no own video,
+    /// the first `.video` of the repost's media. `nil` when neither has a video.
+    /// Only this media id gets `autoplayOnAppear: true` — every other video stays
+    /// tap-to-play so two videos (own + repost) never fight over the single
+    /// `SharedAVPlayerManager` (last-to-appear-wins flicker / clobbered load).
+    private var primaryAutoplayVideoId: String? {
+        guard let post = displayPost else { return nil }
+        if let own = post.media.first(where: { $0.type == .video }) { return own.id }
+        if let reposted = post.repost?.media.first(where: { $0.type == .video }) { return reposted.id }
+        return nil
+    }
+
     @ViewBuilder
-    private func detailSingleMedia(_ media: FeedMedia) -> some View {
+    private func detailSingleMedia(_ media: FeedMedia, isPrimaryVideo: Bool) -> some View {
         switch media.type {
         case .image:
             let aspectRatio: CGFloat? = {
@@ -1421,6 +1685,17 @@ struct PostDetailView: View {
                     frame: .card,
                     availability: availability,
                     performance: .inline,
+                    // WS3.7 / D2 / F2 — detail media is a focused view: autoplay
+                    // the PRIMARY video (with sound) on appear. The feed and every
+                    // other call site keep the default (tap-to-play, muted). Only
+                    // the primary video (deterministic own > repost, see
+                    // `primaryAutoplayVideoId`) autoplays — a post + repost each
+                    // with a video would otherwise both hit the single
+                    // `SharedAVPlayerManager` and clobber each other.
+                    autoplayOnAppear: isPrimaryVideo,
+                    // F5 — detail = sound on. The mute intent is now an opaque SDK
+                    // param; the product decision lives here, app-side.
+                    autoplayMuted: false,
                     onDownload: onDownload,
                     onExpand: { openMediaFullscreen(media) }
                 )
@@ -1436,6 +1711,17 @@ struct PostDetailView: View {
                     context: .feedPost,
                     accentColor: media.thumbnailColor,
                     transcription: media.transcription,
+                    translatedAudios: media.translatedAudios,
+                    onFullscreen: {
+                        guard let post = displayPost else { return }
+                        audioFullscreen = .fromFeed(
+                            media: media,
+                            author: ProfileSheetUser.from(feedPost: post),
+                            originalLanguage: post.originalLanguage,
+                            caption: post.content,
+                            createdAt: post.timestamp
+                        )
+                    },
                     availability: availability,
                     onDownload: onDownload
                 )
@@ -1616,19 +1902,14 @@ struct PostDetailView: View {
     // MARK: - Comments Header
 
     private var commentsHeader: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
                 .font(.subheadline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
-            if let post = displayPost, post.commentCount > 0 {
-                Text("\(post.commentCount)")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color(hex: accentColor)))
-            }
+            Text("(\(displayPost?.commentCount ?? 0))")
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(theme.textMuted)
 
             Spacer()
         }
@@ -1695,27 +1976,141 @@ struct PostDetailView: View {
             style: .light,
             mode: .comment,
             accentColor: accentColor,
+            forceShowAttachment: true,
+            forceShowVoice: true,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
-            onSend: { text in
-                let effects = commentEffects
-                let blur = commentBlurEnabled
-                commentEffects = .none
-                commentBlurEnabled = false
-                Task {
-                    let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
-                    let effectFlags = flags > 0 ? Int(flags) : nil
-                    if viewModel.replyingTo != nil {
-                        await viewModel.sendReply(text, effectFlags: effectFlags)
-                    } else {
-                        await viewModel.sendComment(text, effectFlags: effectFlags)
-                    }
-                }
-            },
+            onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
+            textBinding: $composerText,
             replyBanner: replyBannerView,
+            customAttachmentsPreview: commentAttachments.isEmpty
+                ? nil
+                : AnyView(CommentAttachmentsTray(attachments: commentAttachments) { id in
+                    commentAttachments.removeAll { $0.id == id }
+                  }),
+            onTextChange: { text in
+                mentionController.handleQuery(in: text)
+                CommentDraftStore.shared.save(postId: postId, text: text)
+            },
+            onStartRecording: { startCommentRecording() },
+            onStopRecordingToAttachment: { stopCommentRecordingToAttachment() },
+            onSendRecording: { stopAndSendCommentRecording() },
+            onCancelRecording: { audioRecorder.cancelRecording() },
+            externalIsRecording: audioRecorder.isRecording,
+            externalRecordingDuration: audioRecorder.duration,
+            externalAudioLevels: audioRecorder.audioLevels,
+            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording,
+            onPhotoLibrary: { showCommentPhotoPicker = true },
+            onFilePicker: { showCommentFilePicker = true },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
+            externalAttachments: commentAttachments,
             focusTrigger: $composerFocusTrigger
         )
+        .photosPicker(
+            isPresented: $showCommentPhotoPicker,
+            selection: $commentPhotoItems,
+            maxSelectionCount: 1,
+            matching: .any(of: [.images, .videos])
+        )
+        .fileImporter(
+            isPresented: $showCommentFilePicker,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            if case .success(let urls) = result {
+                commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
+            }
+        }
+        .adaptiveOnChange(of: commentPhotoItems) { _, items in
+            Task {
+                commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
+                await MainActor.run { commentPhotoItems = [] }
+            }
+        }
     }
+
+    // MARK: - Reply targeting
+
+    /// Amorce une réponse. Répondre à une réponse (niveau 2) reste plat au niveau
+    /// 2 (cf. `sendReply` : parentId = racine) ; on préremplit une @mention vers
+    /// l'auteur ciblé pour qu'il soit notifié (`user_mentioned`) malgré le
+    /// reparentage à la racine.
+    private func beginReply(to target: FeedComment) {
+        viewModel.replyingTo = target
+        composerFocusTrigger = true
+        // Retire la @mention auto-injectée d'une cible précédente avant d'en poser
+        // une nouvelle (évite accumulation / mauvais auteur notifié).
+        if let old = prefilledMention, composerText.hasPrefix(old) {
+            composerText = String(composerText.dropFirst(old.count))
+        }
+        prefilledMention = nil
+        guard target.parentId != nil,
+              let username = target.authorUsername, !username.isEmpty else { return }
+        let mention = "@\(username) "
+        if !composerText.hasPrefix(mention) {
+            composerText = mention + composerText
+        }
+        prefilledMention = mention
+    }
+
+    // MARK: - Comment send + voice (parity with feed/reels composer)
+
+    private func submitComment(text: String, attachments: [ComposerAttachment]) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let media = CommentComposerStaging.firstPendingMedia(in: attachments)
+        commentAttachments.removeAll()
+        guard !trimmed.isEmpty || media != nil else { return }
+        let effects = commentEffects
+        let blur = commentBlurEnabled
+        commentEffects = .none
+        commentBlurEnabled = false
+        // Réponse plate à 2 niveaux (cf. sendReply) : reparente à la racine.
+        let parentId = viewModel.replyingTo?.parentId ?? viewModel.replyingTo?.id
+        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+        let effectFlags = flags > 0 ? Int(flags) : nil
+        Task {
+            if let media {
+                await viewModel.submitCommentWithMedia(trimmed, effectFlags: effectFlags, parentId: parentId, pendingMedia: media)
+            } else if parentId != nil {
+                await viewModel.sendReply(trimmed, effectFlags: effectFlags)
+            } else {
+                await viewModel.sendComment(trimmed, effectFlags: effectFlags)
+            }
+        }
+    }
+
+    private func startCommentRecording() {
+        audioRecorder.startRecording()
+        HapticFeedback.medium()
+    }
+
+    @discardableResult
+    private func stopCommentRecordingToAttachment() -> Bool {
+        guard audioRecorder.duration > 0.5 else {
+            audioRecorder.cancelRecording()
+            return false
+        }
+        let duration = audioRecorder.duration
+        guard let url = audioRecorder.stopRecording() else { return false }
+        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
+        return true
+    }
+
+    private func stopAndSendCommentRecording() {
+        guard stopCommentRecordingToAttachment() else { return }
+        submitComment(text: "", attachments: commentAttachments)
+    }
+}
+
+// MARK: - Story canvas visibility preference keys
+
+private struct StoryCanvasFrameKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+}
+
+private struct ScrollViewportHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

@@ -1,9 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_title">Meeshy Chats</string>
+    <string name="conversations_section_pinned">Pinned</string>
+    <string name="conversations_section_all">My conversations</string>
     <string name="conversations_logout">Log out</string>
+    <string name="conversations_contacts">Contacts</string>
     <string name="conversations_empty">No conversations yet</string>
+    <string name="conversations_empty_subtitle">Start a new conversation to see it here.</string>
     <string name="conversations_retry">Retry</string>
+    <string name="conversations_error_title">Couldn\'t load conversations</string>
+    <string name="conversations_error_subtitle">Check your connection and try again.</string>
+    <string name="conversations_no_results_subtitle">Try a different search or filter.</string>
     <string name="conversations_no_messages">No messages yet</string>
     <string name="conversations_banner_syncing">Syncing…</string>
     <string name="conversations_banner_reconnecting">Reconnecting…</string>
@@ -14,6 +21,7 @@
     <string name="conversations_preview_file">📎 File</string>
     <string name="conversations_preview_location">📍 Location</string>
     <string name="conversations_preview_you">You</string>
+    <string name="conversations_preview_draft_prefix">Draft: </string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
     <string name="conversations_search">Search</string>
     <string name="conversations_search_hint">Search conversations</string>
@@ -28,4 +36,23 @@
     <string name="conversations_filter_channels">Channels</string>
     <string name="conversations_filter_favorites">Favorites</string>
     <string name="conversations_filter_archived">Archived</string>
+    <string name="conversations_action_pin">Pin</string>
+    <string name="conversations_action_unpin">Unpin</string>
+    <string name="conversations_action_mute">Mute</string>
+    <string name="conversations_action_unmute">Unmute</string>
+    <string name="conversations_action_archive">Archive</string>
+    <string name="conversations_action_unarchive">Unarchive</string>
+    <string name="conversations_action_mark_read">Mark as read</string>
+    <string name="conversations_action_discard_draft">Discard draft</string>
+    <string name="conversations_action_more">More actions</string>
+    <string name="conversations_badge_pinned">Pinned</string>
+    <string name="conversations_badge_muted">Muted</string>
+    <string name="conversations_new">New conversation</string>
+    <string name="new_conversation_title">New conversation</string>
+    <string name="new_conversation_back">Back</string>
+    <string name="new_conversation_create">Create</string>
+    <string name="new_conversation_search_hint">Search people</string>
+    <string name="new_conversation_group_title">Group name</string>
+    <string name="new_conversation_remove">Remove</string>
+    <string name="new_conversation_selected">Selected</string>
 </resources>

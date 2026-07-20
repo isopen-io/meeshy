@@ -48,10 +48,21 @@ jobs:
     # runtime download). 25 min fails fast if a test deadlocks instead of hanging.
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
+
+      # XcodeGen owns project generation (see commit dropping hand-edited
+      # pbxproj entries). The committed Meeshy.xcodeproj/project.pbxproj is a
+      # generated artifact and can lag behind newly-added sources; regenerate
+      # it from project.yml so every file on disk is compiled (otherwise a new
+      # file like a Bubble subview fails with "cannot find … in scope").
+      - name: Generate Xcode project (XcodeGen)
+        run: |
+          brew install xcodegen
+          cd apps/ios
+          xcodegen generate
 
       - name: Provision iOS 18.2 simulator
         id: sim
@@ -69,6 +80,27 @@ jobs:
           fi
           SIM_ID=$(xcrun simctl create "iPhone16Pro-iOS182-CI" "iPhone 16 Pro" "com.apple.CoreSimulator.SimRuntime.iOS-18-2")
           echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
+
+      # Pre-resolve the SPM graph with retries. Firebase/grpc ship binary-target
+      # zips fetched from dl.google.com, which intermittently fail mid-download
+      # on the runner ("The network connection was lost." → exit 74) and took the
+      # whole job down before a single test compiled. Resolving up front (into the
+      # same default DerivedData the test step reuses) lets us retry the transient
+      # network failure instead of losing the run; a real resolution error still
+      # fails after the attempts are exhausted.
+      - name: Resolve SPM packages (retry on transient network)
+        run: |
+          for attempt in 1 2 3 4; do
+            if xcodebuild -resolvePackageDependencies \
+                 -project apps/ios/Meeshy.xcodeproj -scheme Meeshy; then
+              echo "SPM resolve OK (attempt $attempt)"
+              exit 0
+            fi
+            echo "::warning::SPM resolve attempt $attempt failed (transient network?), retrying in $((attempt * 15))s"
+            sleep $((attempt * 15))
+          done
+          echo "::error::SPM resolve failed after 4 attempts"
+          exit 1
 
       - name: Run iOS tests
         run: |

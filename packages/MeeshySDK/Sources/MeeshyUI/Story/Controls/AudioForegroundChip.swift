@@ -115,6 +115,9 @@ public struct AudioForegroundChip: View {
     public let isUserMuted: Bool
     public let onDragEnd: () -> Void
     public let onTap: () -> Void
+    /// Tap sur l'icône (mode `.composer`) → coupe / réactive le son de cette
+    /// piste. Le composer persiste via le `volume` du modèle (0 = muet).
+    public let onToggleMute: () -> Void
 
     @GestureState private var dragOffset: CGSize = .zero
     @Environment(\.colorScheme) private var colorScheme
@@ -125,7 +128,8 @@ public struct AudioForegroundChip: View {
                 isSelected: Bool = false,
                 isUserMuted: Bool = false,
                 onDragEnd: @escaping () -> Void = {},
-                onTap: @escaping () -> Void = {}) {
+                onTap: @escaping () -> Void = {},
+                onToggleMute: @escaping () -> Void = {}) {
         self._audioObject = audioObject
         self.canvasSize = canvasSize
         self.mode = mode
@@ -133,6 +137,7 @@ public struct AudioForegroundChip: View {
         self.isUserMuted = isUserMuted
         self.onDragEnd = onDragEnd
         self.onTap = onTap
+        self.onToggleMute = onToggleMute
     }
 
     public var body: some View {
@@ -164,7 +169,7 @@ public struct AudioForegroundChip: View {
 
     private var chipContent: some View {
         HStack(spacing: 8) {
-            iconView
+            muteToggleIcon
                 .frame(width: 18, height: 18)
             AudioForegroundSineWave(paused: isUserMuted)
                 .frame(width: 54, height: 18)
@@ -178,6 +183,22 @@ public struct AudioForegroundChip: View {
                 .stroke(strokeColor, lineWidth: isSelected ? 2 : 1)
         )
         .contentShape(Capsule())
+    }
+
+    /// Icône audio = bouton mute en mode composer (tap → coupe/réactive le
+    /// son), simple indicateur en mode reader (l'overlay parent gère le toggle).
+    @ViewBuilder
+    private var muteToggleIcon: some View {
+        switch mode {
+        case .composer:
+            Button(action: onToggleMute) { iconView }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isUserMuted
+                    ? "Activer le son de cette piste"
+                    : "Couper le son de cette piste")
+        case .reader:
+            iconView
+        }
     }
 
     /// L'icône bascule entre un gradient brand (audible) et un gris clair

@@ -2,6 +2,7 @@ package me.meeshy.app.conversations
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,10 +11,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.chat.ConversationDraftStore
+import me.meeshy.sdk.chat.StarredMessagesStore
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.ConversationFilter
 import me.meeshy.sdk.model.ConversationFilters
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
@@ -31,8 +36,12 @@ data class ConversationListUiState(
     val selectedFilter: ConversationFilter = ConversationFilter.ALL,
     val searchText: String = "",
     val isSearchActive: Boolean = false,
+    val drafts: Map<String, ConversationDraft> = emptyMap(),
 ) {
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
+
+    /** The persisted draft for [conversationId], if the composer holds one — drives the row's "Draft: …" preview. */
+    fun draftFor(conversationId: String): ConversationDraft? = drafts[conversationId]
 
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
@@ -44,6 +53,9 @@ data class ConversationListUiState(
 class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
     private val messageSocketManager: MessageSocketManager,
+    private val workManager: WorkManager,
+    private val draftStore: ConversationDraftStore,
+    private val starredStore: StarredMessagesStore,
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -81,6 +93,12 @@ class ConversationListViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            draftStore.observeAll().collect { drafts ->
+                _state.update { it.copy(drafts = drafts).withVisible(rawConversations) }
+            }
+        }
+
+        viewModelScope.launch {
             launch {
                 messageSocketManager.unreadUpdated.collect {
                     repository.refresh()
@@ -95,6 +113,37 @@ class ConversationListViewModel @Inject constructor(
                 messageSocketManager.conversationUpdated.collect {
                     repository.refresh()
                 }
+            }
+            launch {
+                messageSocketManager.conversationDeleted.collect { event ->
+                    ConversationPurge.onConversationDeleted(event)?.let(::purge)
+                }
+            }
+            launch {
+                messageSocketManager.participantLeft.collect { event ->
+                    ConversationPurge.onParticipantLeft(event, _state.value.currentUserId)?.let(::purge)
+                }
+            }
+        }
+    }
+
+    /**
+     * Purges a removed conversation from local state. The star cleanup runs
+     * first and synchronously — local-only, so a bookmark can never outlive the
+     * conversation it points at even if the follow-up refresh fails — then a
+     * refresh drops the vanished row from the list. A refresh failure is
+     * swallowed silently (background revalidation stays quiet; the SWR stream
+     * keeps the last good cache); cancellation is rethrown.
+     */
+    private fun purge(conversationId: String) {
+        starredStore.removeConversation(conversationId)
+        viewModelScope.launch {
+            try {
+                repository.refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Silent: a failed background refresh leaves the cached list intact.
             }
         }
     }
@@ -114,6 +163,75 @@ class ConversationListViewModel @Inject constructor(
         _state.update {
             val next = if (active) it else it.copy(searchText = "")
             next.copy(isSearchActive = active).withVisible(rawConversations)
+        }
+    }
+
+    /** Toggles the pinned state of a conversation (swipe action / context menu). */
+    fun togglePin(id: String) {
+        val pinned = prefsOf(id)?.isPinned ?: false
+        runPrefMutation { repository.setPinnedOptimistic(id, !pinned) }
+    }
+
+    /** Toggles the muted state of a conversation. */
+    fun toggleMute(id: String) {
+        val muted = prefsOf(id)?.isMuted ?: false
+        runPrefMutation { repository.setMutedOptimistic(id, !muted) }
+    }
+
+    /** Toggles the archived state of a conversation. */
+    fun toggleArchive(id: String) {
+        val archived = prefsOf(id)?.isArchived ?: false
+        runPrefMutation { repository.setArchivedOptimistic(id, !archived) }
+    }
+
+    /** Marks a conversation read from the list (swipe action). */
+    fun markRead(id: String) {
+        runPrefMutation { repository.markReadOptimistic(id) }
+    }
+
+    /**
+     * Discards a conversation's unsent draft (context-menu action, offered only on
+     * a draft-bearing row). Optimistically drops the draft from state so the row
+     * loses its "Brouillon : …" preview and sinks out of the floated group
+     * immediately, then clears the durable store (the reactive `observeAll` stream
+     * re-emits the same cleared map). A no-op when the row holds nothing meaningful;
+     * a failed clear rolls the optimistic removal back.
+     */
+    fun discardDraft(id: String) {
+        val snapshot = _state.value.drafts
+        if (!DraftDiscard.isDiscardable(id, snapshot)) return
+        _state.update { it.copy(drafts = DraftDiscard.afterDiscard(id, it.drafts)).withVisible(rawConversations) }
+        viewModelScope.launch {
+            try {
+                draftStore.clear(id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(drafts = snapshot, errorMessage = e.message).withVisible(rawConversations) }
+            }
+        }
+    }
+
+    private fun prefsOf(id: String) =
+        rawConversations.firstOrNull { it.id == id }?.resolvedPreferences
+
+    /**
+     * Runs an optimistic preference mutation and schedules an outbox flush only
+     * when something was actually queued; a no-op mutation never wakes
+     * WorkManager. Errors are swallowed — the cache write already rolled back
+     * inside the repository transaction on failure.
+     */
+    private fun runPrefMutation(mutate: suspend () -> Boolean) {
+        viewModelScope.launch {
+            try {
+                if (mutate()) {
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
         }
     }
 
@@ -152,7 +270,12 @@ private fun CacheResult<List<ApiConversation>>.rawListOr(
  * cache list, applying the active filter, search query and current user identity.
  */
 private fun ConversationListUiState.withVisible(raw: List<ApiConversation>): ConversationListUiState =
-    copy(conversations = ConversationFilters.apply(raw, selectedFilter, searchText, currentUserId))
+    copy(
+        conversations = DraftAwareOrdering.apply(
+            ConversationFilters.apply(raw, selectedFilter, searchText, currentUserId),
+            drafts,
+        ),
+    )
 
 /**
  * Maps a [CacheResult]'s SWR flags onto the screen state — skeleton only on a

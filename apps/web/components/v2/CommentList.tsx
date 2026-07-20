@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { CommentItem } from './CommentItem';
 import { CommentComposer } from './CommentComposer';
 import { Skeleton } from './Skeleton';
+import { isHeartLikedByMe } from '@/lib/reactions';
 import type { PostComment } from '@meeshy/shared/types/post';
 
 export interface CommentListProps {
@@ -23,6 +24,9 @@ export interface CommentListProps {
   onDeleteComment?: (commentId: string) => void;
   onSubmitComment?: (content: string, parentId?: string) => void;
   onShowReplies?: (commentId: string) => void;
+  /** Commentaire ciblé par une navigation depuis une notification : on défile
+   *  jusqu'à lui et on le surligne brièvement dès qu'il est rendu. */
+  targetCommentId?: string | null;
   className?: string;
 }
 
@@ -42,10 +46,28 @@ function CommentList({
   onDeleteComment,
   onSubmitComment,
   onShowReplies,
+  targetCommentId,
   className,
 }: CommentListProps) {
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [replyToAuthor, setReplyToAuthor] = useState<string | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
+  // Notification → comment navigation: once the target comment is in the list,
+  // scroll to it and pulse a highlight. Re-runs if the target changes or the
+  // comment arrives in a later page load. No-op when the id isn't (yet) present.
+  useEffect(() => {
+    if (!targetCommentId) return;
+    if (!comments.some((c) => c.id === targetCommentId)) return;
+
+    const el = typeof document !== 'undefined'
+      ? document.getElementById(`comment-${targetCommentId}`)
+      : null;
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedId(targetCommentId);
+    const timer = setTimeout(() => setHighlightedId(null), 2600);
+    return () => clearTimeout(timer);
+  }, [targetCommentId, comments]);
 
   const handleReply = useCallback(
     (commentId: string) => {
@@ -99,12 +121,13 @@ function CommentList({
           comment={comment}
           userLanguage={userLanguage}
           isAuthor={currentUserId === comment.authorId}
-          isLiked={likedCommentIds.has(comment.id)}
+          isLiked={likedCommentIds.has(comment.id) || isHeartLikedByMe(comment)}
           onLike={onLikeComment}
           onUnlike={onUnlikeComment}
           onReply={handleReply}
           onDelete={onDeleteComment}
           onShowReplies={onShowReplies}
+          isHighlighted={highlightedId === comment.id}
         />
       ))}
 

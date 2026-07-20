@@ -64,14 +64,14 @@ public struct AchievementBadge: View {
                     HStack {
                         Spacer()
                         Circle()
-                            .fill(MeeshyColors.pink)
+                            .fill(MeeshyColors.indigo500)
                             .frame(width: 20, height: 20)
                             .overlay(
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.white)
                             )
-                            .shadow(color: MeeshyColors.pink.opacity(0.4), radius: 4)
+                            .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 4)
                     }
                 }
                 .frame(width: 60, height: 60)

@@ -28,31 +28,38 @@ public struct CategoryPickerView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "folder.fill")
-                                .font(.system(size: 14))
+                                .font(MeeshyFont.relative(14))
                                 .foregroundColor(Color(hex: "3B82F6"))
+                                .accessibilityHidden(true)
                             Text(category.name)
-                                .font(.system(size: 15))
+                                .font(MeeshyFont.relative(15))
                                 .foregroundColor(theme.textPrimary)
                             Spacer()
                             if selectedCategoryId == category.id {
                                 Image(systemName: "checkmark")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(MeeshyFont.relative(14, weight: .semibold))
                                     .foregroundColor(Color(hex: "3B82F6"))
+                                    .accessibilityHidden(true)
                             }
                         }
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                     }
+                    .accessibilityAddTraits(selectedCategoryId == category.id ? .isSelected : [])
                     Divider().padding(.leading, 52)
                 }
 
                 if isCreating {
                     HStack(spacing: 12) {
                         Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(Color(hex: "3B82F6"))
-                        TextField("Nom de la catégorie", text: $newCategoryName)
-                            .font(.system(size: 15))
+                            .accessibilityHidden(true)
+                        TextField(
+                            String(localized: "category.picker.new.placeholder", defaultValue: "Nom de la catégorie", bundle: .module),
+                            text: $newCategoryName
+                        )
+                            .font(MeeshyFont.relative(15))
                             .foregroundColor(theme.textPrimary)
                             .onSubmit { Task { await createCategory() } }
                         Button {
@@ -62,6 +69,7 @@ public struct CategoryPickerView: View {
                                 .foregroundColor(Color(hex: "3B82F6"))
                         }
                         .disabled(newCategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .accessibilityLabel(String(localized: "category.picker.create.a11y", defaultValue: "Créer la catégorie", bundle: .module))
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
@@ -71,10 +79,11 @@ public struct CategoryPickerView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 14))
+                                .font(MeeshyFont.relative(14))
                                 .foregroundColor(Color(hex: "3B82F6"))
-                            Text("Nouvelle catégorie")
-                                .font(.system(size: 15))
+                                .accessibilityHidden(true)
+                            Text(String(localized: "category.picker.new.button", defaultValue: "Nouvelle catégorie", bundle: .module))
+                                .font(MeeshyFont.relative(15))
                                 .foregroundColor(Color(hex: "3B82F6"))
                             Spacer()
                         }
@@ -97,13 +106,16 @@ public struct CategoryPickerView: View {
         }
     }
 
-    // TODO: Category creation not yet implemented — PreferenceService.createCategory does not exist.
-    // The UI clears the field and reloads, but no category is persisted server-side.
     private func createCategory() async {
         let name = newCategoryName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        newCategoryName = ""
-        isCreating = false
-        await loadCategories()
+        do {
+            _ = try await PreferenceService.shared.createCategory(name: name)
+            newCategoryName = ""
+            isCreating = false
+            await loadCategories()
+        } catch {
+            Logger.network.error("[CategoryPickerView] Failed to create category: \(error.localizedDescription)")
+        }
     }
 }

@@ -57,6 +57,17 @@ final class StoryTimelineDurationTests: XCTestCase {
         XCTAssertEqual(s.computedTotalDuration(), 10.0, accuracy: 0.001)
     }
 
+    /// La FENÊTRE foreground (`startTime + duration`) étend la slide, pas la seule
+    /// `duration`. Vidéo fg décalée à 4 s, durée 5 s → fenêtre finit à 9 s → slide
+    /// ≥ 9 s. (Avant : seule `duration=5` comptait → max(6, 5)=6 s → queue tronquée.)
+    func test_contentDerivedDuration_includesForegroundWindowWithStartTime() {
+        let fg = StoryMediaObject(kind: .video, aspectRatio: 1.78,
+                                  isBackground: false, startTime: 4.0, duration: 5.0)
+        let s = StorySlide(id: "s1", effects: StoryEffects(mediaObjects: [fg]), duration: 6)
+        XCTAssertEqual(s.contentDerivedDuration(), 9.0, accuracy: 0.001)
+        XCTAssertEqual(s.computedTotalDuration(), 9.0, accuracy: 0.001)
+    }
+
     // MARK: - TimelineProject round-trip (pin seulement si surcharge explicite)
 
     func test_timelineApply_explicitOverride_pinsTimelineDuration() {
@@ -80,5 +91,24 @@ final class StoryTimelineDurationTests: XCTestCase {
         // est rechargée (round-trip stable), pas le contenu auto.
         let s = StorySlide(id: "s1", effects: StoryEffects(timelineDuration: 3.0), duration: 6)
         XCTAssertEqual(TimelineProject(from: s).slideDuration, 3.0, accuracy: 0.001)
+    }
+
+    // MARK: - StoryEffects.contentDerivedDuration (extracted static core)
+
+    func test_staticContentDerivedDuration_matchesSlideInstanceMethod() {
+        // The extracted static function must compute the exact same result as
+        // the StorySlide instance method it now delegates to — this is a pure
+        // refactor, not a behavior change (design doc 2026-07-18).
+        let media = [StoryMediaObject(kind: .video, aspectRatio: 1.78, isBackground: false, startTime: 2, duration: 5)]
+        var effects = StoryEffects()
+        effects.mediaObjects = media
+        let s = StorySlide(id: "s1", effects: effects, duration: 6)
+
+        let viaInstance = s.contentDerivedDuration()
+        let viaStatic = StoryEffects.contentDerivedDuration(
+            mediaObjects: media, audioPlayerObjects: nil, textObjects: []
+        )
+        XCTAssertEqual(viaInstance, viaStatic, accuracy: 0.001)
+        XCTAssertEqual(viaStatic, 7.0, accuracy: 0.001) // window = 2 + 5 = 7 > 6s floor
     }
 }

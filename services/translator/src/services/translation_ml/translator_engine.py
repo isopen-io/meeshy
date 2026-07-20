@@ -10,12 +10,61 @@ Responsabilités:
 
 import logging
 import asyncio
+import os
 import threading
 import re
 from typing import List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
+from config.settings import LANGUAGE_MAPPINGS
+
 logger = logging.getLogger(__name__)
+
+try:
+    from langdetect import detect_langs, DetectorFactory, LangDetectException
+    DetectorFactory.seed = 0  # déterministe
+    _LANGDETECT_OK = True
+except ImportError:
+    _LANGDETECT_OK = False
+
+DEFAULT_DETECT_LANGUAGE = os.getenv("TRANSLATOR_DEFAULT_DETECT_LANG", "fr")
+try:
+    DETECT_MIN_CONFIDENCE = float(os.getenv("TRANSLATOR_DETECT_MIN_CONFIDENCE", "0.80"))
+except ValueError:
+    DETECT_MIN_CONFIDENCE = 0.80
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PRÉSERVATION DES LIENS HTTP(S)
+# NLLB corromprait les URLs (domaines/segments traduits comme des mots). On les
+# masque par un marqueur emoji-délimité (copié verbatim par NLLB, comme les
+# emojis) avant traduction, puis on les restaure intactes après.
+# ═══════════════════════════════════════════════════════════════════════════
+_URL_PATTERN = re.compile(r'https?://\S+')
+
+
+def mask_urls(text: str) -> Tuple[str, List[str]]:
+    """Remplace chaque URL HTTP(S) par un marqueur 🔗{i}🔗.
+
+    Retourne `(texte_masqué, urls)` où `urls[i]` est l'URL d'origine du marqueur i.
+    """
+    urls: List[str] = []
+
+    def _replace(match: "re.Match[str]") -> str:
+        urls.append(match.group(0))
+        return f'🔗{len(urls) - 1}🔗'
+
+    return _URL_PATTERN.sub(_replace, text), urls
+
+
+def restore_urls(text: str, urls: List[str]) -> str:
+    """Restaure les URLs masquées par `mask_urls`.
+
+    Tolère un espacement éventuellement inséré par NLLB autour du marqueur.
+    """
+    for index, url in enumerate(urls):
+        text = re.sub(r'🔗\s*' + str(index) + r'\s*🔗', lambda _m: url, text)
+    return text
 
 
 def smart_split_text(text: str, max_chars: int = 200) -> List[str]:
@@ -141,43 +190,30 @@ class TranslatorEngine:
         self._pipeline_cache = LRUPipelineCache(max_size=cache_size)
         self._pipeline_lock = threading.Lock()
 
-        # Mapping des codes de langues NLLB
-        self.lang_codes = {
-            'fr': 'fra_Latn',
-            'en': 'eng_Latn',
-            'es': 'spa_Latn',
-            'de': 'deu_Latn',
-            'pt': 'por_Latn',
-            'zh': 'zho_Hans',
-            'ja': 'jpn_Jpan',
-            'ar': 'arb_Arab'
-        }
+        # Mapping des codes de langues NLLB — source unique : LANGUAGE_MAPPINGS
+        # (config/settings.py). L'ancien dict codé en dur ne couvrait que 8 des 40
+        # langues déclarées dans SUPPORTED_LANGUAGES ; les 32 autres tombaient sur
+        # le défaut `.get(code, 'eng_Latn'/'fra_Latn')` aux call sites de traduction
+        # → une demande de russe renvoyait silencieusement du français.
+        self.lang_codes = dict(LANGUAGE_MAPPINGS)
 
         logger.info("⚙️ TranslatorEngine initialisé")
 
-    def detect_language(self, text: str) -> str:
-        """
-        Détection de langue simple basée sur mots-clés
-
-        Args:
-            text: Texte à analyser
-
-        Returns:
-            Code langue détecté ('fr', 'en', 'es', 'de')
-        """
-        text_lower = text.lower()
-
-        # Mots caractéristiques par langue
-        if any(word in text_lower for word in ['bonjour', 'comment', 'vous', 'merci', 'salut']):
-            return 'fr'
-        elif any(word in text_lower for word in ['hello', 'how', 'you', 'thank', 'hi']):
-            return 'en'
-        elif any(word in text_lower for word in ['hola', 'como', 'estas', 'gracias']):
-            return 'es'
-        elif any(word in text_lower for word in ['guten', 'wie', 'geht', 'danke', 'hallo']):
-            return 'de'
-        else:
-            return 'en'  # Défaut
+    def detect_language(self, text: str, fallback: Optional[str] = None) -> str:
+        """Détecte la langue source. langdetect seuillé ; jamais de défaut 'en'
+        arbitraire — repli sur `fallback` puis `DEFAULT_DETECT_LANGUAGE`."""
+        default = fallback if fallback is not None else DEFAULT_DETECT_LANGUAGE
+        cleaned = _URL_PATTERN.sub(" ", text or "").strip()
+        if not _LANGDETECT_OK or sum(c.isalpha() for c in cleaned) < 4:
+            return default
+        try:
+            ranked = detect_langs(cleaned)
+        except LangDetectException:
+            return default
+        top = ranked[0]
+        if top.prob < DETECT_MIN_CONFIDENCE:
+            return default
+        return top.lang.split("-")[0]  # zh-cn/zh-tw -> zh
 
     def _get_or_create_pipeline(
         self,
@@ -292,16 +328,22 @@ class TranslatorEngine:
             raise Exception(f"Modèle {model_type} non chargé")
 
         # ═══════════════════════════════════════════════════════════════════
+        # PRÉSERVATION DES LIENS: masquer les URLs HTTP(S) AVANT découpage et
+        # traduction (NLLB les corromprait). Restaurées verbatim à la fin.
+        # ═══════════════════════════════════════════════════════════════════
+        masked_text, urls = mask_urls(text)
+
+        # ═══════════════════════════════════════════════════════════════════
         # DÉCOUPAGE INTELLIGENT: Textes longs découpés aux ponctuations
         # ═══════════════════════════════════════════════════════════════════
-        if len(text) > 200:
+        if len(masked_text) > 200:
             logger.info(
-                f"[TRANSLATE] Texte long détecté ({len(text)} chars) → "
+                f"[TRANSLATE] Texte long détecté ({len(masked_text)} chars) → "
                 f"découpage intelligent aux ponctuations"
             )
 
             # Découper en morceaux de max 200 caractères
-            chunks = smart_split_text(text, max_chars=200)
+            chunks = smart_split_text(masked_text, max_chars=200)
 
             logger.info(
                 f"[TRANSLATE] Texte découpé en {len(chunks)} morceaux "
@@ -324,10 +366,13 @@ class TranslatorEngine:
                 f"[TRANSLATE] ✅ Traduction complète: {len(text)} → {len(final_translation)} chars"
             )
 
-            return final_translation
+            return restore_urls(final_translation, urls)
 
         # Texte court: traduction directe
-        return await self._translate_single_chunk(text, source_lang, target_lang, model_type)
+        translated = await self._translate_single_chunk(
+            masked_text, source_lang, target_lang, model_type
+        )
+        return restore_urls(translated, urls)
 
     async def _translate_single_chunk(
         self,
@@ -463,20 +508,35 @@ class TranslatorEngine:
                 # Les modèles PyTorch ne sont PAS thread-safe, donc on sérialise les inférences
                 model_lock = self.model_loader.get_model_inference_lock(model_type)
 
-                with model_lock:
-                    logger.info(f"🔒 [MODEL_LOCK] Lock acquis pour modèle '{model_type}'")
+                # ═══════════════════════════════════════════════════════════════
+                # ISOLATION AUDIO ↔ TEXTE (anti-famine)
+                # Le verrou d'inférence est acquis/libéré PAR CHUNK, et non pour
+                # l'intégralité du batch. Un long job audio (un message vocal peut
+                # générer des centaines de segments) libère ainsi le modèle entre
+                # chaque chunk : une traduction texte temps réel en attente peut
+                # s'intercaler au lieu d'attendre tout le batch (→ plus de timeout
+                # ZMQ côté gateway, plus de traductions perdues). Chaque appel
+                # `reusable_pipeline(chunk)` reste atomique et sérialisé par le lock,
+                # donc la thread-safety PyTorch est préservée.
+                # ═══════════════════════════════════════════════════════════════
+                n_chunks = (len(texts) + batch_size - 1) // batch_size
+                logger.info(
+                    f"🔒 [MODEL_LOCK] Inférence batch '{model_type}' en {n_chunks} chunk(s) "
+                    f"(lock acquis/libéré par chunk)"
+                )
 
-                    # OPTIMISATION: Traitement direct SANS timeout wrapper (overhead supprimé)
-                    with create_inference_context():
-                        for i in range(0, len(texts), batch_size):
-                            chunk = texts[i:i + batch_size]
+                # OPTIMISATION: Traitement direct SANS timeout wrapper (overhead supprimé)
+                with create_inference_context():
+                    for i in range(0, len(texts), batch_size):
+                        chunk = texts[i:i + batch_size]
 
-                            # ═══════════════════════════════════════════════════════════════
-                            # OPTIMISATIONS NLLB AVANCÉES:
-                            # - num_beams=1: Greedy decoding (4x plus rapide que beam search)
-                            # - do_sample=False: Désactive sampling (déterministe)
-                            # - max_length=256: Optimisé pour segments courts
-                            # ═══════════════════════════════════════════════════════════════
+                        # ═══════════════════════════════════════════════════════════════
+                        # OPTIMISATIONS NLLB AVANCÉES:
+                        # - num_beams=1: Greedy decoding (4x plus rapide que beam search)
+                        # - do_sample=False: Désactive sampling (déterministe)
+                        # - max_length=256: Optimisé pour segments courts
+                        # ═══════════════════════════════════════════════════════════════
+                        with model_lock:
                             results = reusable_pipeline(
                                 chunk,
                                 src_lang=nllb_source,
@@ -487,16 +547,17 @@ class TranslatorEngine:
                                 # early_stopping retiré: incompatible avec num_beams=1
                             )
 
-                            for result in results:
-                                if isinstance(result, dict) and 'translation_text' in result:
-                                    all_results.append(result['translation_text'])
-                                elif isinstance(result, list) and len(result) > 0:
-                                    all_results.append(result[0].get('translation_text', '[No-Result]'))
-                                else:
-                                    all_results.append('[Batch-No-Result]')
+                        # Agrégation des résultats HORS lock (le modèle est libre
+                        # pour une autre traduction pendant qu'on formate la sortie).
+                        for result in results:
+                            if isinstance(result, dict) and 'translation_text' in result:
+                                all_results.append(result['translation_text'])
+                            elif isinstance(result, list) and len(result) > 0:
+                                all_results.append(result[0].get('translation_text', '[No-Result]'))
+                            else:
+                                all_results.append('[Batch-No-Result]')
 
-                # Lock automatiquement libéré ici (sortie du with)
-                logger.info(f"🔓 [MODEL_LOCK] Lock libéré pour modèle '{model_type}'")
+                logger.info(f"🔓 [MODEL_LOCK] Batch '{model_type}' terminé (lock libéré entre chunks)")
 
                 logger.info(f"[BATCH-SYNC] ✅ Sortie inference_context, {len(all_results)} résultats")
 

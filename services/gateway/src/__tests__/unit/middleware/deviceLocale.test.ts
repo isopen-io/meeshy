@@ -10,9 +10,15 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import {
   deviceLocaleMiddleware,
+  createDeviceLocaleMiddleware,
   _resetDeviceLocaleCache,
   _seedDeviceLocaleCache,
+  _deviceLocaleCacheSize,
+  _DEVICE_LOCALE_MAX_TRACKED_USERS,
 } from '../../../middleware/deviceLocale';
+
+/** Mirror of the production DEBOUNCE_MS (5 min) — kept local to the test. */
+const DEBOUNCE_WINDOW_MS = 5 * 60 * 1000;
 
 type MockUser = {
   id?: string;
@@ -213,5 +219,124 @@ describe('deviceLocaleMiddleware', () => {
     );
 
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op when user has neither id nor userId (extractUserId returns undefined)', async () => {
+    const { prisma, update } = makePrismaMock();
+
+    await deviceLocaleMiddleware(
+      makeRequest(
+        { 'x-device-locale': 'fr-FR' },
+        { isAnonymous: false } // no id, no userId
+      ),
+      makeReply(),
+      prisma
+    );
+
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op when prisma is unavailable (no override, no server.prisma)', async () => {
+    // req.server.prisma is undefined — the middleware should warn and skip
+    const req = {
+      headers: { 'x-device-locale': 'fr-FR' },
+      user: { id: 'u3', deviceLocale: null },
+      server: { prisma: undefined },
+    } as unknown as import('fastify').FastifyRequest;
+
+    await expect(
+      deviceLocaleMiddleware(req, makeReply(), undefined)
+    ).resolves.toBeUndefined();
+  });
+
+  describe('bounded debounce cache (memory-leak guard)', () => {
+    it('evicts entries aged past the debounce window once the cap is crossed', async () => {
+      const { prisma } = makePrismaMock();
+
+      // Fill the cache to the cap with entries that are already expired
+      // (seeded well before the debounce window).
+      const longAgo = Date.now() - (DEBOUNCE_WINDOW_MS + 60_000);
+      for (let i = 0; i < _DEVICE_LOCALE_MAX_TRACKED_USERS; i++) {
+        _seedDeviceLocaleCache(`stale-${i}`, longAgo);
+      }
+      expect(_deviceLocaleCacheSize()).toBe(_DEVICE_LOCALE_MAX_TRACKED_USERS);
+
+      // A fresh write for a brand-new user crosses the cap and triggers the
+      // sweep: every stale entry is dropped, leaving only the new user.
+      await deviceLocaleMiddleware(
+        makeRequest({ 'x-device-locale': 'fr-FR' }, { userId: 'fresh', isAnonymous: false }),
+        makeReply(),
+        prisma
+      );
+
+      expect(_deviceLocaleCacheSize()).toBe(1);
+    });
+
+    it('never grows past the hard cap even when every entry is still fresh', async () => {
+      const { prisma } = makePrismaMock();
+
+      // Fill the cache to the cap with entries written "just now" (fresh).
+      const now = Date.now();
+      for (let i = 0; i < _DEVICE_LOCALE_MAX_TRACKED_USERS; i++) {
+        _seedDeviceLocaleCache(`fresh-${i}`, now);
+      }
+
+      // A write for a new user crosses the cap; no entry is expired, so the
+      // hard-cap fallback drops the oldest-inserted entry to make room.
+      await deviceLocaleMiddleware(
+        makeRequest({ 'x-device-locale': 'fr-FR' }, { userId: 'newcomer', isAnonymous: false }),
+        makeReply(),
+        prisma
+      );
+
+      expect(_deviceLocaleCacheSize()).toBeLessThanOrEqual(_DEVICE_LOCALE_MAX_TRACKED_USERS);
+    });
+
+    it('does not prune while the cache stays under the cap', async () => {
+      const { prisma } = makePrismaMock();
+
+      const longAgo = Date.now() - (DEBOUNCE_WINDOW_MS + 60_000);
+      _seedDeviceLocaleCache('old-but-under-cap', longAgo);
+
+      await deviceLocaleMiddleware(
+        makeRequest({ 'x-device-locale': 'fr-FR' }, { userId: 'another', isAnonymous: false }),
+        makeReply(),
+        prisma
+      );
+
+      // The stale entry is retained (no sweep below the cap) alongside the new
+      // one — pruning is amortised, not eager.
+      expect(_deviceLocaleCacheSize()).toBe(2);
+    });
+  });
+
+  describe('createDeviceLocaleMiddleware factory', () => {
+    it('returns a hook function that delegates to deviceLocaleMiddleware', async () => {
+      const { prisma, update } = makePrismaMock();
+      const hook = createDeviceLocaleMiddleware(prisma as any);
+
+      await hook(
+        makeRequest({ 'x-device-locale': 'de-DE' }, { id: 'u4', deviceLocale: null }),
+        makeReply()
+      );
+
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(update).toHaveBeenCalledWith({
+        where: { id: 'u4' },
+        data: { deviceLocale: 'de' },
+      });
+    });
+
+    it('factory hook is a no-op when header is absent', async () => {
+      const { prisma, update } = makePrismaMock();
+      const hook = createDeviceLocaleMiddleware(prisma as any);
+
+      await hook(
+        makeRequest({}, { id: 'u5', deviceLocale: null }),
+        makeReply()
+      );
+
+      expect(update).not.toHaveBeenCalled();
+    });
   });
 });

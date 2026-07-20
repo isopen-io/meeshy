@@ -32,6 +32,7 @@ import { renderBlockNode } from './renderers/block-renderer';
 import { renderInlineNode } from './renderers/inline-renderer';
 import { renderTable } from './renderers/table-renderer';
 import { getCachedHtml, setCachedHtml } from './cache';
+import { logger } from '@/utils/logger';
 
 /**
  * Parse markdown content into AST nodes
@@ -51,7 +52,7 @@ export const parseMarkdown = (content: string): MarkdownNode[] => {
 
   // CVE Fix: Validate input length - js-early-exit pattern
   if (!validateContentLength(content)) {
-    console.warn(`Content exceeds maximum length of ${MAX_CONTENT_LENGTH} bytes`);
+    logger.warn('[MarkdownParser]', `Content exceeds maximum length of ${MAX_CONTENT_LENGTH} bytes`);
     return [{
       type: 'paragraph',
       children: [{

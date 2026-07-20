@@ -26,6 +26,17 @@ jest.mock('sonner', () => ({
   },
 }));
 
+// Mock auth — startCall's ack handler reads the current user id to build the
+// initiator's CallSession (P0 fix, 2026-07-06). The user object/return value
+// must be a STABLE reference across renders (matching the real hook's
+// selector-based memoization) — recreating it per call would make
+// `startCall`'s useCallback identity churn every render.
+const mockAuthUser = { id: 'user-caller-1' };
+const mockAuthReturn = { user: mockAuthUser, isChecking: false };
+jest.mock('@/hooks/use-auth', () => ({
+  useAuth: () => mockAuthReturn,
+}));
+
 // Mock socket service
 const mockGetSocket = jest.fn();
 const mockEmit = jest.fn();
@@ -220,6 +231,10 @@ describe('useVideoCall', () => {
     });
 
     it('should show success toast after initiating call', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-111', mode: 'p2p', iceServers: [] } });
+      });
+
       const { result } = renderHook(() =>
         useVideoCall({ conversation: mockDirectConversation })
       );
@@ -229,6 +244,62 @@ describe('useVideoCall', () => {
       });
 
       expect(mockToastSuccess).toHaveBeenCalledWith('Starting call...');
+    });
+
+    it('should not show success toast when the ack is unsuccessful', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockToastSuccess).not.toHaveBeenCalled();
+    });
+
+    it('should stop the pre-authorized stream and show an error toast when the ack is unsuccessful', async () => {
+      const stopMock1 = jest.fn();
+      const stopMock2 = jest.fn();
+      mockGetUserMedia.mockResolvedValue({
+        getTracks: () => [{ stop: stopMock1 }, { stop: stopMock2 }],
+      });
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false, error: { code: 'CALLEE_BUSY', message: 'User is busy' } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(stopMock1).toHaveBeenCalled();
+      expect(stopMock2).toHaveBeenCalled();
+      expect((window as any).__preauthorizedMediaStream).toBeUndefined();
+      expect(mockToastError).toHaveBeenCalledWith('User is busy');
+    });
+
+    it('should show a generic error toast when the ack fails without an error message', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall();
+      });
+
+      expect(mockToastError).toHaveBeenCalledWith('Failed to start call. Please try again.');
     });
 
     it('should handle disconnected socket', async () => {
@@ -467,6 +538,413 @@ describe('useVideoCall', () => {
         },
         expect.any(Function)
       );
+    });
+  });
+
+  describe('answerCall', () => {
+    it('should set error when socket is null', async () => {
+      mockGetSocket.mockReturnValue(null);
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.answerCall('call-456');
+      });
+
+      expect(result.current.error).toBe('Socket not connected');
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('should set error when socket is disconnected', async () => {
+      mockGetSocket.mockReturnValue({ connected: false, emit: mockEmit });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.answerCall('call-456');
+      });
+
+      expect(result.current.error).toBe('Socket not connected');
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('should emit CALL_JOIN with callId when socket is connected', async () => {
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.answerCall('call-789');
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_JOIN,
+        { callId: 'call-789' },
+        expect.any(Function)
+      );
+    });
+
+    it('should set error when ack returns success=false', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.answerCall('call-789');
+      });
+
+      expect(result.current.error).toBe('Failed to join call');
+    });
+
+    it('should call setIceServers when ack returns iceServers', async () => {
+      const iceServers = [{ urls: 'stun:stun.example.com' }];
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { iceServers } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      // Reset iceServers before the test to ensure isolation
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      storeModule.setState({ iceServers: null });
+
+      await act(async () => {
+        await result.current.answerCall('call-789');
+      });
+
+      expect(storeModule.getState().iceServers).toEqual(iceServers);
+    });
+
+    it('should not call setIceServers when ack returns empty iceServers', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.answerCall('call-789');
+      });
+
+      // No error set
+      expect(result.current.error).toBeNull();
+    });
+  });
+
+  describe('rejectCall', () => {
+    it('should be a no-op when socket is null', async () => {
+      mockGetSocket.mockReturnValue(null);
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.rejectCall('call-456');
+      });
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('should be a no-op when socket is disconnected', async () => {
+      mockGetSocket.mockReturnValue({ connected: false, emit: mockEmit });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.rejectCall('call-456');
+      });
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('should emit CALL_END with reason=rejected when socket connected', async () => {
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.rejectCall('call-456');
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_END,
+        { callId: 'call-456', reason: 'rejected' },
+        expect.any(Function)
+      );
+    });
+  });
+
+  describe('endCall', () => {
+    it('should be a no-op when socket is disconnected', async () => {
+      mockGetSocket.mockReturnValue({ connected: false, emit: mockEmit });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.endCall('call-123');
+      });
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('should emit CALL_END with reason=completed when socket connected', async () => {
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.endCall('call-123');
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_END,
+        { callId: 'call-123', reason: 'completed' },
+        expect.any(Function)
+      );
+    });
+  });
+
+  describe('toggleAudio', () => {
+    it('should be a no-op when socket is disconnected', async () => {
+      mockGetSocket.mockReturnValue({ connected: false, emit: mockEmit });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.toggleAudio('call-123', false);
+      });
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('should emit CALL_TOGGLE_AUDIO with correct params when socket connected', async () => {
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.toggleAudio('call-123', false);
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_TOGGLE_AUDIO,
+        { callId: 'call-123', enabled: false },
+        expect.any(Function)
+      );
+    });
+
+    it('should emit CALL_TOGGLE_AUDIO with enabled=true', async () => {
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.toggleAudio('call-123', true);
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_TOGGLE_AUDIO,
+        { callId: 'call-123', enabled: true },
+        expect.any(Function)
+      );
+    });
+  });
+
+  describe('toggleVideo', () => {
+    it('should be a no-op when socket is disconnected', async () => {
+      mockGetSocket.mockReturnValue({ connected: false, emit: mockEmit });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.toggleVideo('call-123', false);
+      });
+
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('should emit CALL_TOGGLE_VIDEO with correct params when socket connected', async () => {
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.toggleVideo('call-123', false);
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_TOGGLE_VIDEO,
+        { callId: 'call-123', enabled: false },
+        expect.any(Function)
+      );
+    });
+
+    it('should emit CALL_TOGGLE_VIDEO with enabled=true', async () => {
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.toggleVideo('call-123', true);
+      });
+
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_TOGGLE_VIDEO,
+        { callId: 'call-123', enabled: true },
+        expect.any(Function)
+      );
+    });
+  });
+
+  describe('startCall ICE servers', () => {
+    it('should call setIceServers when ack has iceServers with content', async () => {
+      const iceServers = [
+        { urls: 'stun:stun.example.com' },
+        { urls: 'turn:turn.example.com', username: 'u', credential: 'p' },
+      ];
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { iceServers } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      expect(storeModule.getState().iceServers).toEqual(iceServers);
+    });
+
+    it('should not call setIceServers when ack has empty iceServers', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      // ensure null before call
+      storeModule.setState({ iceServers: null });
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      // Still null — not overwritten with empty array
+      expect(storeModule.getState().iceServers).toBeNull();
+    });
+
+    it('should not call setIceServers when ack is unsuccessful', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      storeModule.setState({ iceServers: null });
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      expect(storeModule.getState().iceServers).toBeNull();
+    });
+  });
+
+  describe('startCall sets currentCall for the initiator (P0 fix, 2026-07-06)', () => {
+    beforeEach(async () => {
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      storeModule.setState({ currentCall: null, isInCall: false });
+    });
+
+    it('sets currentCall + isInCall from the ack — gateway never re-emits call:initiated to the initiator', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { callId: 'call-999', mode: 'p2p', iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      const { currentCall, isInCall } = storeModule.getState();
+      expect(isInCall).toBe(true);
+      expect(currentCall).toMatchObject({
+        id: 'call-999',
+        conversationId: mockDirectConversation.id,
+        mode: 'p2p',
+        status: 'initiated',
+        initiatorId: 'user-caller-1',
+        participants: [],
+      });
+    });
+
+    it('does not set currentCall when the ack is unsuccessful', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: false });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      expect(storeModule.getState().currentCall).toBeNull();
+      expect(storeModule.getState().isInCall).toBe(false);
+    });
+
+    it('does not set currentCall when the ack carries no callId', async () => {
+      mockEmit.mockImplementation((_event: string, _data: unknown, cb: Function) => {
+        cb({ success: true, data: { iceServers: [] } });
+      });
+
+      const { result } = renderHook(() =>
+        useVideoCall({ conversation: mockDirectConversation })
+      );
+
+      await act(async () => {
+        await result.current.startCall('video');
+      });
+
+      const { useCallStore: storeModule } = await import('@/stores/call-store');
+      expect(storeModule.getState().currentCall).toBeNull();
     });
   });
 });

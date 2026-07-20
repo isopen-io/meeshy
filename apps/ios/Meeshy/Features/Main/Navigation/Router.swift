@@ -8,7 +8,8 @@ enum Route: Hashable {
     case conversation(Conversation)
     case settings
     case profile
-    case contacts(ContactsTab = .contacts)
+    case contacts
+    case peopleDiscovery(DiscoveryTab = .discover)
     case communityList
     case communityDetail(String)
     case communityCreate
@@ -23,7 +24,7 @@ enum Route: Hashable {
     case shareLinks
     case communityLinks
     case dataExport
-    case postDetail(String, FeedPost? = nil, showComments: Bool = false)
+    case postDetail(String, FeedPost? = nil, showComments: Bool = false, commentId: String? = nil, parentCommentId: String? = nil)
     case bookmarks
     case starredMessages
     case friendRequests
@@ -44,7 +45,7 @@ enum Route: Hashable {
 extension Route {
     var isHub: Bool {
         switch self {
-        case .profile, .settings, .communityList, .contacts, .links, .notifications:
+        case .profile, .settings, .communityList, .contacts, .peopleDiscovery, .links, .notifications:
             return true
         default:
             return false
@@ -56,51 +57,53 @@ extension Route {
         case .conversation(let conv):
             return conv.name
         case .settings:
-            return "Parametres"
+            return String(localized: "route.title.settings", defaultValue: "Settings", bundle: .main)
         case .profile:
-            return "Profil"
+            return String(localized: "route.title.profile", defaultValue: "Profile", bundle: .main)
         case .contacts:
-            return "Contacts"
+            return String(localized: "route.title.contacts", defaultValue: "Contacts", bundle: .main)
+        case .peopleDiscovery:
+            return String(localized: "route.title.discover", defaultValue: "Discover", bundle: .main)
         case .communityList:
-            return "Communautes"
+            return String(localized: "route.title.communities", defaultValue: "Communities", bundle: .main)
         case .communityDetail:
-            return "Communaute"
+            return String(localized: "route.title.community", defaultValue: "Community", bundle: .main)
         case .communityCreate:
-            return "Nouvelle communaute"
+            return String(localized: "route.title.community_create", defaultValue: "New community", bundle: .main)
         case .communitySettings:
-            return "Parametres communaute"
+            return String(localized: "route.title.community_settings", defaultValue: "Community settings", bundle: .main)
         case .communityMembers:
-            return "Membres"
+            return String(localized: "route.title.members", defaultValue: "Members", bundle: .main)
         case .communityInvite:
-            return "Inviter"
+            return String(localized: "route.title.invite", defaultValue: "Invite", bundle: .main)
         case .notifications:
-            return "Notifications"
+            return String(localized: "route.title.notifications", defaultValue: "Notifications", bundle: .main)
         case .userStats:
-            return "Statistiques"
+            return String(localized: "route.title.stats", defaultValue: "Statistics", bundle: .main)
         case .links:
-            return "Liens"
+            return String(localized: "route.title.links", defaultValue: "Links", bundle: .main)
         case .affiliate:
-            return "Affiliation"
+            return String(localized: "route.title.affiliate", defaultValue: "Affiliate", bundle: .main)
         case .trackingLinks:
-            return "Liens de suivi"
+            return String(localized: "route.title.tracking_links", defaultValue: "Tracking links", bundle: .main)
         case .shareLinks:
-            return "Liens de partage"
+            return String(localized: "route.title.share_links", defaultValue: "Share links", bundle: .main)
         case .communityLinks:
-            return "Liens communaute"
+            return String(localized: "route.title.community_links", defaultValue: "Community links", bundle: .main)
         case .dataExport:
-            return "Export de donnees"
-        case .postDetail(_, let post, _):
-            return post?.author ?? "Publication"
+            return String(localized: "route.title.data_export", defaultValue: "Data export", bundle: .main)
+        case .postDetail(_, let post, _, _, _):
+            return post?.author ?? String(localized: "route.title.post", defaultValue: "Post", bundle: .main)
         case .bookmarks:
-            return "Signets"
+            return String(localized: "route.title.bookmarks", defaultValue: "Bookmarks", bundle: .main)
         case .starredMessages:
-            return "Messages favoris"
+            return String(localized: "route.title.starred", defaultValue: "Starred messages", bundle: .main)
         case .friendRequests:
-            return "Demandes d'amis"
+            return String(localized: "route.title.friend_requests", defaultValue: "Friend requests", bundle: .main)
         case .editProfile:
-            return "Modifier le profil"
+            return String(localized: "route.title.edit_profile", defaultValue: "Edit profile", bundle: .main)
         case .storyNotificationTarget:
-            return "Story"
+            return String(localized: "route.title.story", defaultValue: "Story", bundle: .main)
         }
     }
 }
@@ -157,7 +160,7 @@ final class Router: ObservableObject {
     }
 
     var sceneTitle: String {
-        currentRoute?.displayTitle ?? "Conversations"
+        currentRoute?.displayTitle ?? String(localized: "route.title.conversations", defaultValue: "Conversations", bundle: .main)
     }
 
     var isHubRoute: Bool {
@@ -202,6 +205,11 @@ final class Router: ObservableObject {
 
     @Published var pendingHighlightMessageId: String?
 
+    /// Quand true, la prochaine `ConversationView` ouverte active directement sa
+    /// vue recherche (bouton Recherche de l'aperçu long-press). Consommé + remis
+    /// à false par `ConversationView` à l'ouverture.
+    @Published var pendingOpenSearch: Bool = false
+
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         pendingHighlightMessageId = highlightMessageId
 
@@ -223,6 +231,22 @@ final class Router: ObservableObject {
         path = [.conversation(conversation)]
     }
 
+    /// Replaces the whole nav stack with a single route. On iPhone this is ONE
+    /// `path` mutation (no `popToRoot()` + delayed `push()`, which fired two
+    /// mutations in quick succession → "NavigationRequestObserver tried to update
+    /// multiple times per frame", #16). iPad two-column forwards via the callback,
+    /// unchanged. Also lands on the target directly instead of flashing root.
+    func replaceStack(with route: Route) {
+        if onRouteRequested != nil {
+            popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self.push(route)
+            }
+            return
+        }
+        path = [route]
+    }
+
     // MARK: - Deep Link Handling
 
     func handleDeepLink(_ url: URL) {
@@ -230,10 +254,7 @@ final class Router: ObservableObject {
             guard let self else { return }
             switch destination {
             case .ownProfile:
-                popToRoot()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self.push(.profile)
-                }
+                replaceStack(with: .profile)
 
             case .userProfile(let username):
                 deepLinkProfileUser = ProfileSheetUser(username: username)
@@ -271,10 +292,7 @@ final class Router: ObservableObject {
                 handleShareDeepLink(text: text, urlString: urlString)
 
             case .userLinks:
-                popToRoot()
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self.push(.links)
-                }
+                replaceStack(with: .links)
 
             case .post(let postId), .postDetail(let postId):
                 // `.post` is the legacy short-form (e.g. `meeshy://post/<id>`
@@ -310,7 +328,7 @@ final class Router: ObservableObject {
             Self.logger.info("Deep link navigated to conversation \(conversationId)")
         } catch {
             Self.logger.error("Failed to load conversation for deep link: \(error.localizedDescription)")
-            FeedbackToastManager.shared.showError("Impossible d'ouvrir la conversation")
+            FeedbackToastManager.shared.showError(String(localized: "deeplink.conversation.error", defaultValue: "Couldn't open the conversation", bundle: .main))
         }
     }
 

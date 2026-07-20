@@ -4,6 +4,7 @@ import MeeshySDK
 
 // MARK: - NotificationPayload Tests
 
+@MainActor
 final class NotificationPayloadTests: XCTestCase {
 
     // MARK: - Helpers
@@ -153,6 +154,7 @@ final class NotificationPayloadTests: XCTestCase {
 
 // MARK: - MeeshyNotificationType Tests (push navigation routing)
 
+@MainActor
 final class PushNavigationRoutingTests: XCTestCase {
 
     func test_friendRequest_rawValue() {

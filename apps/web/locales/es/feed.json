@@ -1,0 +1,58 @@
+{
+  "title": "Feed",
+  "srHeading": "Feed de noticias — publicaciones, reels e historias",
+  "tabs": {
+    "label": "Tipo de feed",
+    "posts": "Publicaciones",
+    "reels": "Reels"
+  },
+  "sections": {
+    "stories": "Historias públicas",
+    "storiesShort": "Historias",
+    "moods": "Estados de ánimo",
+    "compose": "Crear una publicación",
+    "posts": "Publicaciones"
+  },
+  "audioPostLabel": "Grabar una publicación de audio",
+  "updating": "Actualizando el feed…",
+  "updatingShort": "Actualizando…",
+  "loadError": "No se pudo cargar el feed.",
+  "retry": "Reintentar",
+  "loadingMore": "Cargando más publicaciones",
+  "newPostsOne": "{count} publicación nueva",
+  "newPostsOther": "{count} publicaciones nuevas",
+  "empty": "Aún no hay publicaciones. ¡Sé el primero en compartir algo!",
+  "unknownAuthor": "Desconocido",
+  "time": {
+    "now": "Justo ahora",
+    "minutes": "Hace {count}min",
+    "hours": "Hace {count}h",
+    "days": "Hace {count}d"
+  },
+  "toast": {
+    "error": "Error",
+    "storyPublished": "¡Historia publicada!",
+    "storyVisibleFriends": "Tu historia es visible para tus amigos.",
+    "storyVisibleFriendsMedia": "Tu historia es visible para tus amigos ({count} medios).",
+    "storyPublishError": "No se pudo publicar la historia.",
+    "storyDeleted": "Historia eliminada",
+    "storyDeleteError": "No se pudo eliminar la historia.",
+    "replySent": "Respuesta enviada",
+    "postPublished": "¡Publicado!",
+    "postPublishedDesc": "Tu publicación se ha compartido.",
+    "postPublishError": "No se pudo publicar la publicación.",
+    "linkCopied": "¡Enlace copiado!",
+    "linkCopyError": "No se pudo copiar el enlace.",
+    "postDeleted": "Publicación eliminada",
+    "postEdited": "Publicación editada",
+    "reposted": "¡Republicado!",
+    "quoted": "¡Citado!",
+    "audioPublished": "¡Publicación de audio publicada!",
+    "publishError": "No se pudo publicar.",
+    "uploadError": "Error de subida",
+    "uploadErrorDesc": "No se pudo subir el audio.",
+    "moodPublished": "¡Estado de ánimo publicado!",
+    "status": "Estado",
+    "statusSelected": "Estado {id} seleccionado"
+  }
+}

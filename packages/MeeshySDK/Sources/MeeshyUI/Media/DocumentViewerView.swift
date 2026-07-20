@@ -10,6 +10,9 @@ public struct DocumentViewerView: View {
     public let context: MediaPlayerContext
     public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var onDelete: (() -> Void)? = nil
+    /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
+    /// l'app quand fourni ; nil = save Documents direct legacy.
+    public var onSaveRequested: (() -> Void)? = nil
 
     @ObservedObject private var theme = ThemeManager.shared
     @State private var showFullViewer = false
@@ -19,9 +22,11 @@ public struct DocumentViewerView: View {
     private var docType: DocumentMediaType { DocumentMediaType.detect(from: attachment) }
 
     public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-                accentColor: String = MeeshyColors.brandPrimaryHex, onDelete: (() -> Void)? = nil) {
+                accentColor: String = MeeshyColors.brandPrimaryHex, onDelete: (() -> Void)? = nil,
+                onSaveRequested: (() -> Void)? = nil) {
         self.attachment = attachment; self.context = context
         self.accentColor = accentColor; self.onDelete = onDelete
+        self.onSaveRequested = onSaveRequested
     }
 
     // MARK: - Body
@@ -38,7 +43,8 @@ public struct DocumentViewerView: View {
             DocumentFullSheet(
                 attachment: attachment,
                 docType: docType,
-                accentColor: accentColor
+                accentColor: accentColor,
+                onSaveRequested: onSaveRequested
             )
         }
     }
@@ -66,7 +72,7 @@ public struct DocumentViewerView: View {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
                     .offset(x: 6, y: -6)
@@ -141,7 +147,7 @@ public struct DocumentViewerView: View {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 15))
-                        .foregroundColor(Color(hex: "FF6B6B"))
+                        .foregroundColor(MeeshyColors.error)
                 }
             }
         }
@@ -164,6 +170,9 @@ public struct DocumentFullSheet: View {
     public let attachment: MeeshyMessageAttachment
     public let docType: DocumentMediaType
     public let accentColor: String
+    /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
+    /// l'app quand fourni ; nil = save Documents direct legacy.
+    public var onSaveRequested: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
@@ -171,8 +180,10 @@ public struct DocumentFullSheet: View {
 
     private enum SaveState { case idle, saving, saved, failed }
 
-    public init(attachment: MeeshyMessageAttachment, docType: DocumentMediaType, accentColor: String) {
+    public init(attachment: MeeshyMessageAttachment, docType: DocumentMediaType, accentColor: String,
+                onSaveRequested: (() -> Void)? = nil) {
         self.attachment = attachment; self.docType = docType; self.accentColor = accentColor
+        self.onSaveRequested = onSaveRequested
     }
 
     public var body: some View {
@@ -197,7 +208,13 @@ public struct DocumentFullSheet: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if !attachment.fileUrl.isEmpty {
-                        Button { saveDocument() } label: {
+                        Button {
+                            if let onSaveRequested {
+                                onSaveRequested()
+                            } else {
+                                saveDocument()
+                            }
+                        } label: {
                             Group {
                                 switch saveState {
                                 case .idle:   Image(systemName: "arrow.down.to.line")
@@ -245,6 +262,18 @@ public struct DocumentFullSheet: View {
 
                 let preferred = attachment.originalName.isEmpty ? nil : attachment.originalName
                 _ = try MediaFileSaver.save(tempFile, preferredName: preferred)
+
+                // P7-9 gap — parité avec ImageViewerView : reporter la
+                // consommation `downloaded` pour que le panneau « Qui a vu »
+                // reflète les téléchargements de DOCUMENTS, pas seulement les
+                // images. Best-effort (try?) : un échec de report ne doit pas
+                // faire échouer un enregistrement réussi.
+                if !attachment.id.isEmpty {
+                    let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
+                    let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                        endpoint: "/attachments/\(attachment.id)/status", body: body
+                    )
+                }
 
                 await MainActor.run {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

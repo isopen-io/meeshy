@@ -102,6 +102,22 @@ struct StoryViewerView: View {
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
+    /// Interstitiel d'identité inter-groupes (directive user 2026-07-03) :
+    /// au passage au groupe d'une AUTRE personne, bannière en fond + pseudo,
+    /// nom, présence, mood pendant `groupIntroDuration` avant le slide.
+    @State var showGroupIntro = false
+    @State var groupIntroData: StoryViewModel.StoryGroupIntro?
+    @State var groupIntroTask: Task<Void, Never>?
+    /// Identités PRÉ-RÉSOLUES par groupe (directive 2026-07-10) : les groupes
+    /// voisins sont résolus PENDANT la lecture du groupe courant, si bien que
+    /// l'interstitiel du switch s'affiche COMPLET (nom, bannière, mood) dès la
+    /// première frame — plus d'enrichissement visible en second temps.
+    @State var groupIntroCache: [String: StoryViewModel.StoryGroupIntro] = [:]
+    /// 2,6 s (directive user 2026-07-14) : l'intro présente l'identité sans
+    /// ralentir l'enchaînement — assez pour lire nom + présence. Vue UNIQUE
+    /// désormais (`NeighborGroupCubeFace` n'affiche plus d'identité pendant le
+    /// drag — cf. son commentaire) : c'est la seule carte de transition.
+    static let groupIntroDuration: TimeInterval = 2.6
     /// True once the visible slide's background media is fully usable (real
     /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
     /// and the centered loading spinner.
@@ -188,8 +204,13 @@ struct StoryViewerView: View {
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State private var emojiToInject = ""
-    @State private var composerFocusTrigger = false
+    // Deferred profile open from the viewers sheet: set when a viewer row is
+    // tapped, consumed in the viewers sheet's `onDismiss` so the profile sheet
+    // presents cleanly after the viewers sheet closes (avoids stacking two
+    // sheets and reaching the Router across the sheet boundary).
+    @State private var pendingViewerProfile: ProfileSheetUser?
+    @State var emojiToInject = "" // internal for cross-file extension access
+    @State var composerFocusTrigger = false // internal for cross-file extension access
     @State var composerLanguage: String = DefaultComposerLanguage.resolve() // internal for cross-file extension access
     @State var commentBlurEnabled: Bool = false // internal for cross-file extension access
     @State var commentEffects: MessageEffects = .none // internal for cross-file extension access
@@ -200,7 +221,7 @@ struct StoryViewerView: View {
     /// changement de slide. `nil` = affichage selon les préférences de base uniquement.
     @State var sessionLanguageOverride: String? = nil // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scenePhase) var scenePhase // internal for cross-file extension access (shouldPauseTimer)
 
     // Required by `SharePickerView` presented via `.sheet(item:)` below. The
     // sheet creates a separate presentation hierarchy so EnvironmentObjects
@@ -328,18 +349,40 @@ struct StoryViewerView: View {
 
     /// Slide d'entrée d'un groupe pour la face du cube — même règle que le
     /// prefetch inter-groupes : première non-vue non-expirée, sinon première
-    /// non-expirée.
-    func entryStory(of group: StoryGroup) -> StoryItem? {
-        let now = Date()
-        return group.stories.first(where: { !$0.isViewed && !$0.isExpired(at: now) })
+    /// non-expirée. `nil` = le groupe n'a RIEN à afficher (toutes vues+expirées,
+    /// ou toutes expirées) — sert aussi de prédicat de gating pour
+    /// `neighborCubeGroup`/`presentGroupIntroIfNeeded` (n'afficher un
+    /// placeholder de transition QUE si le groupe cible a effectivement une
+    /// story à montrer). `static` + `now` injectable : aucune dépendance à
+    /// `self`, testable directement sans instancier la View.
+    static func entryStory(of group: StoryGroup, now: Date = Date()) -> StoryItem? {
+        group.stories.first(where: { !$0.isViewed && !$0.isExpired(at: now) })
             ?? group.stories.first(where: { !$0.isExpired(at: now) })
+    }
+
+    /// Index d'entrée d'un groupe — MÊME règle que `entryStory` (et que
+    /// l'aperçu du cube inter-groupes) : première slide non-vue non-expirée,
+    /// sinon première non-expirée, sinon 0. Utilisé au commit d'une transition
+    /// FORWARD pour reprendre CHAQUE auteur à sa première story non lue —
+    /// parité avec l'aperçu du cube qui montrait déjà cette slide, et respect
+    /// de la reprise par-utilisateur (si tout est vu → 0, première slide).
+    func entryIndex(of group: StoryGroup) -> Int {
+        let now = Date()
+        if let i = group.stories.firstIndex(where: { !$0.isViewed && !$0.isExpired(at: now) }) { return i }
+        if let i = group.stories.firstIndex(where: { !$0.isExpired(at: now) }) { return i }
+        return 0
     }
 
     private var neighborCubeGroup: StoryGroup? {
         guard neighborPreviewDirection != 0, !isPreviewMode else { return nil }
         let idx = currentGroupIndex + neighborPreviewDirection
         guard groups.indices.contains(idx) else { return nil }
-        return groups[idx]
+        let candidate = groups[idx]
+        // N'afficher le placeholder de transition QUE si ce groupe a
+        // effectivement une story à montrer — sinon l'avatar/bannière
+        // flashent pour un auteur dont tout est vu/expiré (directive user).
+        guard Self.entryStory(of: candidate) != nil else { return nil }
+        return candidate
     }
 
     // Depth effect from horizontal movement (slight scale + rotation)
@@ -366,7 +409,7 @@ struct StoryViewerView: View {
             slideProgress: slideProgress,
             dragProgress: dragProgress,
             neighborGroup: neighborCubeGroup,
-            neighborEntryStory: neighborCubeGroup.flatMap { entryStory(of: $0) },
+            neighborEntryStory: neighborCubeGroup.flatMap { Self.entryStory(of: $0) },
             neighborDirection: neighborPreviewDirection,
             isPresented: $isPresented,
             makeStoryCard: { geometry in storyCard(geometry: geometry) }
@@ -412,6 +455,9 @@ struct StoryViewerView: View {
             startTimer()
             markCurrentViewed()
             prefetchCurrentGroup()
+            // Pré-résolution des identités voisines dès l'ouverture : le
+            // premier switch de groupe présente un interstitiel déjà complet.
+            prefetchNeighborGroupIntros()
             withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                 appearScale = 1.0
                 appearCornerRadius = 0
@@ -431,6 +477,8 @@ struct StoryViewerView: View {
             // pipeline est ré-installé au prochain onAppear
             // (`hasInstalledPrefetchPipeline = false` ci-dessous).
             slideTimer.invalidate()
+            groupIntroTask?.cancel()
+            groupIntroTask = nil
             prefetchTasks.forEach { $0.cancel() }
             prefetchTasks.removeAll()
             prefetcher.detach()
@@ -485,6 +533,24 @@ struct StoryViewerView: View {
             slideTimer.markContentReady(slideId: id)
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
+            // Pas de haptic au changement de slide : ce onChange fire pour
+            // TOUTE navigation (auto-advance compris) et doublait le tick du
+            // point de geste — 2 à 3 vibrations par slide qui ralentissaient
+            // la lecture (retour user 2026-07-13). Le tick unique vit dans
+            // le geste manuel (+Canvas touchUp, commit de swipe de groupe).
+            // U6 — VoiceOver : annonce du changement de slide (« Story 2 sur
+            // 5 ») — sans elle, un utilisateur non-voyant n'a AUCUN signal
+            // que le contenu vient de changer sous ses doigts.
+            if UIAccessibility.isVoiceOverRunning,
+               let total = currentGroup?.stories.count {
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(
+                        localized: "story.viewer.a11y.slideChanged",
+                        defaultValue: "Story \(currentStoryIndex + 1) sur \(total)"
+                    )
+                )
+            }
             skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
@@ -493,6 +559,36 @@ struct StoryViewerView: View {
             }
             transitionPostRoom(from: previousStory, to: currentStory)
             transitionEngagement(to: currentStory)
+        }
+        // Interstitiel d'identité inter-groupes — au-dessus du canvas ET des
+        // contrôles (identité pleine pendant ~2,6 s, tap droite/double-tap =
+        // skip, tap gauche = retour au groupe précédent).
+        .overlay {
+            if showGroupIntro, let intro = groupIntroData {
+                StoryGroupIntroOverlay(
+                    intro: intro,
+                    avatarURL: currentGroup?.avatarURL,
+                    avatarColor: currentGroup?.avatarColor ?? "6366F1",
+                    // Présence résolue AU switch (directive 2026-07-10) :
+                    // entrée realtime du PresenceManager si elle existe (socket,
+                    // la plus fraîche), sinon le snapshot serveur embarqué par
+                    // le payload stories (`StoryGroup.authorPresence`) — plus
+                    // de « Hors ligne » par défaut faute de donnée pour un
+                    // auteur hors contacts.
+                    presence: PresenceManager.shared.presenceMap[intro.userId]
+                        ?? currentGroup?.authorPresence,
+                    // Détail « en ligne » réservé aux amis (directive user
+                    // 2026-07-13) : lookup O(1) synchrone, primitive Bool
+                    // descendue à la leaf view (règle "Zero Unnecessary
+                    // Re-render" — pas d'@ObservedObject sur le singleton
+                    // dans StoryGroupIntroOverlay).
+                    isFriend: FriendshipCache.shared.isFriend(intro.userId),
+                    onSkip: { skipGroupIntro() },
+                    onBack: { goBackToPreviousGroupFromIntro() }
+                )
+                .transition(.opacity)
+                .zIndex(30)
+            }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             skipExpiredStoriesIfNeeded()
@@ -504,6 +600,7 @@ struct StoryViewerView: View {
                 : nil
             transitionPostRoom(from: previousStory, to: currentStory)
             transitionEngagement(to: currentStory)
+            presentGroupIntroIfNeeded()
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
             applyCommentReactionEvent(event)
@@ -529,9 +626,23 @@ struct StoryViewerView: View {
         .adaptiveOnChange(of: currentStory?.id) { _, _ in
             if sessionLanguageOverride != nil { sessionLanguageOverride = nil }
         }
-        .sheet(isPresented: $showViewersSheet, onDismiss: { resumeTimer() }) {
+        .sheet(isPresented: $showViewersSheet, onDismiss: {
+            resumeTimer()
+            if let pending = pendingViewerProfile {
+                pendingViewerProfile = nil
+                selectedProfileUser = pending
+            }
+        }) {
             if let story = currentStory {
-                StoryViewersSheet(story: story, accentColor: Color(hex: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex))
+                StoryViewersSheet(
+                    story: story,
+                    accentColor: Color(hex: currentGroup?.avatarColor ?? MeeshyColors.brandPrimaryHex),
+                    statusViewModel: statusViewModel,
+                    onOpenProfile: { viewer in
+                        pendingViewerProfile = ProfileSheetUser(username: viewer.username)
+                        showViewersSheet = false
+                    }
+                )
             }
         }
         .sheet(isPresented: $showExportShareSheet, onDismiss: {
@@ -565,7 +676,7 @@ struct StoryViewerView: View {
                     authorHandle: wrapper.authorHandle
                 ),
                 onPublishSlide: { _, _, _, _, _ in },
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds in
                     viewModel.publishStoryInBackground(
                         slides: slides,
                         slideImages: slideImages,
@@ -573,7 +684,8 @@ struct StoryViewerView: View {
                         loadedVideoURLs: loadedVideoURLs,
                         loadedAudioURLs: loadedAudioURLs,
                         originalLanguage: originalLanguage,
-                        visibility: visibility
+                        visibility: visibility,
+                        visibilityUserIds: visibilityUserIds
                     )
                     repostStoryComposerSource = nil
                 },
@@ -840,6 +952,12 @@ struct StoryViewerView: View {
         let group = groups[currentGroupIndex]
         guard !group.stories.isEmpty else { return }
 
+        // The author may revisit their OWN expired stories to review engagement
+        // (reactions / comments). Don't skip or auto-close their own ring — an
+        // expiry banner in the comments overlay marks the state instead
+        // (spec 2026-06-23: comments/reactions on expired stories stay visible).
+        if group.id == AuthManager.shared.currentUser?.id { return }
+
         var idx = currentStoryIndex
         while idx < group.stories.count, group.stories[idx].isExpired(at: now) {
             idx += 1
@@ -996,6 +1114,7 @@ struct StoryViewerView: View {
             storyCommentLoadingReplies: storyCommentLoadingReplies,
             isLoadingComments: isLoadingComments,
             userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
+            isStoryExpired: currentStory?.isExpired() ?? false,
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
             keyboard: keyboard,
@@ -1046,6 +1165,7 @@ struct StoryViewerView: View {
             isStoryCommentsEmpty: storyComments.isEmpty,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
+            storyHasBackgroundAudio: storyHasBackgroundAudio,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
             onReplyToStory: onReplyToStory,
@@ -1092,12 +1212,13 @@ struct StoryViewerView: View {
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },
             resumeTimer: { resumeTimer() },
+            onPlaybackProgressing: { progressing in slideTimer.setPlaybackStalled(!progressing) },
             loadStoryComments: { loadStoryComments() },
             dismissComposer: { dismissComposer() },
             goToPrevious: { goToPrevious() },
             goToNext: { goToNext() },
-            sendComment: { text, effectFlags, parentId in
-                sendComment(text: text, effectFlags: effectFlags, parentId: parentId)
+            sendComment: { text, effectFlags, parentId, pendingMedia in
+                sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia)
             },
             makeStoryCommentRow: { comment, userLang in
                 makeStoryCommentRow(comment, userLang: userLang)
@@ -1258,6 +1379,20 @@ struct StoryViewerView: View {
         )
     }
 
+    /// `true` quand la slide courante POSSÈDE un audio de fond — pilote la
+    /// note musicale affichée après la date dans le header. La note signale
+    /// la PRÉSENCE de l'audio de fond, indépendamment du mute global ou du
+    /// moment de la timeline où il joue (directive user 2026-07-13, précision
+    /// itération 2). Délègue à `StoryAudioAvailability.hasBackgroundAudioTrack`
+    /// (SDK, single source of truth) plutôt que de réinliner le prédicat.
+    var storyHasBackgroundAudio: Bool { // internal for cross-file extension access
+        guard let story = currentStory else { return false }
+        return StoryAudioAvailability.hasBackgroundAudioTrack(
+            effects: story.storyEffects,
+            backgroundAudio: story.backgroundAudio
+        )
+    }
+
     /// Probes each foreground video of the current slide for a real audio track.
     /// Until a video is confirmed to carry audio it does NOT count toward
     /// `storyHasAudibleSound`, so the sound button never appears for a clip that
@@ -1382,4 +1517,292 @@ struct StoryViewerView: View {
     @State private var showReportSheet = false
 
     // MARK: - Content, Gestures, Navigation, Timer & Actions (see StoryViewerView+Content.swift)
+}
+
+// MARK: - Group intro (interstitiel d'identité inter-groupes)
+
+extension StoryViewerView {
+    /// Présente l'interstitiel d'identité au passage au groupe d'une AUTRE
+    /// personne : placeholder immédiat (username/avatar du groupe, déjà en
+    /// main — cache-first), enrichi async (nom complet, bannière, mood) par
+    /// `resolveGroupIntro` PENDANT l'affichage. Dismiss auto à 1,2 s ; le tap
+    /// skippe. Mes propres stories et le mode preview n'ont pas d'interstitiel.
+    /// Le gel de lecture passe par `shouldPauseTimer || showGroupIntro`
+    /// (timer + canvas + audio gelés en phase, reprise sans saut).
+    func presentGroupIntroIfNeeded() {
+        guard !isPreviewMode,
+              let group = currentGroup,
+              group.id != AuthManager.shared.currentUser?.id,
+              // Groupe sans story affichable (tout vu+expiré) → aucun interstitiel
+              // d'identité à montrer (directive user : gating sur "a effectivement
+              // des stories à afficher").
+              Self.entryStory(of: group) != nil else { return }
+        groupIntroTask?.cancel()
+        // Identité COMPLÈTE dès la première frame quand le groupe a été
+        // pré-résolu (`prefetchNeighborGroupIntros`) ; sinon placeholder
+        // immédiat (username/avatar du payload) enrichi pendant l'affichage.
+        groupIntroData = groupIntroCache[group.id]
+            ?? StoryViewModel.StoryGroupIntro(userId: group.id, username: group.username)
+        // Présentation INSTANTANÉE (pas de fade-in) : l'interstitiel OPAQUE
+        // prend l'écran dans la MÊME transaction que le swap de groupe — le
+        // slide du nouveau groupe n'est JAMAIS visible sous/derrière l'intro
+        // (directive user 2026-07-10, IMG_0976 « Windie Nh ne devait pas
+        // avoir son switcher s'afficher en overlay de ce slide »). Seule la
+        // sortie est animée : c'est elle qui révèle le slide.
+        showGroupIntro = true
+        let userId = group.id
+        groupIntroTask = Task { @MainActor in
+            let enrich = Task { @MainActor in
+                let intro = await viewModel.resolveGroupIntro(for: group)
+                groupIntroCache[userId] = intro
+                guard !Task.isCancelled, showGroupIntro, groupIntroData?.userId == userId else { return }
+                groupIntroData = intro
+            }
+            try? await Task.sleep(for: .seconds(Self.groupIntroDuration))
+            enrich.cancel()
+            guard !Task.isCancelled else { return }
+            dismissGroupIntro()
+        }
+        prefetchNeighborGroupIntros()
+    }
+
+    /// Pré-résout l'identité (nom, bannière, mood) des groupes ADJACENTS
+    /// pendant la lecture du groupe courant — même philosophie que le
+    /// prefetch média inter-groupes : au switch, l'interstitiel est complet
+    /// dès la première frame, présence comprise (payload feed + realtime).
+    func prefetchNeighborGroupIntros() {
+        guard !isPreviewMode else { return }
+        let myId = AuthManager.shared.currentUser?.id
+        for offset in [-1, 1] {
+            let index = currentGroupIndex + offset
+            guard index >= 0, index < groups.count else { continue }
+            let neighbor = groups[index]
+            guard neighbor.id != myId, groupIntroCache[neighbor.id] == nil else { continue }
+            Task { @MainActor in
+                let intro = await viewModel.resolveGroupIntro(for: neighbor)
+                groupIntroCache[neighbor.id] = intro
+            }
+        }
+    }
+
+    func skipGroupIntro() {
+        groupIntroTask?.cancel()
+        groupIntroTask = nil
+        dismissGroupIntro()
+    }
+
+    /// Tap zone gauche sur l'interstitiel d'identité — annule ce switch de
+    /// groupe et revient au groupe précédent (directive user 2026-07-14).
+    /// `currentGroupIndex` a déjà été incrémenté au moment où l'intro
+    /// s'affiche (elle masque visuellement le nouveau groupe pendant
+    /// `groupIntroDuration`), donc "revenir en arrière" ici signifie
+    /// toujours "annule ce switch de groupe" — jamais "story précédente dans
+    /// le nouveau groupe" (contrairement à `goToPrevious()`, sensible à
+    /// `currentStoryIndex`). Sans groupe précédent, dismiss simplement.
+    func goBackToPreviousGroupFromIntro() {
+        groupIntroTask?.cancel()
+        groupIntroTask = nil
+        dismissGroupIntro()
+        guard currentGroupIndex > 0 else { return }
+        groupTransition(forward: false) {
+            currentGroupIndex -= 1
+            currentStoryIndex = max(0, groups[currentGroupIndex].stories.count - 1)
+            progress = 0
+        }
+    }
+
+    private func dismissGroupIntro() {
+        withAnimation(.easeOut(duration: 0.25)) { showGroupIntro = false }
+    }
+}
+
+/// Interstitiel plein écran : bannière du profil en FOND (ThumbHash placeholder,
+/// fallback gradient couleur avatar → noir), voile de lisibilité, et au centre
+/// l'identité : avatar, nom, @username, présence en ligne, mood (emoji + message).
+/// Tap n'importe où = passer directement au slide.
+private struct StoryGroupIntroOverlay: View {
+    let intro: StoryViewModel.StoryGroupIntro
+    let avatarURL: String?
+    let avatarColor: String
+    let presence: UserPresence?
+    /// `true` quand l'auteur du groupe est un ami — gate le détail de
+    /// présence (« En ligne » / « Actif·ve récemment » / « Absent·e ») dans
+    /// `presenceBadge`. Directive user 2026-07-13 : le statut « en ligne »
+    /// est une information réservée aux amis, pas affichée pour un auteur
+    /// hors contacts.
+    let isFriend: Bool
+    /// Tap zone droite / double-tap n'importe où — passe directement au
+    /// premier slide du nouveau groupe (dismiss immédiat, révèle le slide
+    /// déjà courant).
+    let onSkip: () -> Void
+    /// Tap zone gauche — annule ce switch de groupe, retourne au groupe
+    /// précédent (directive user 2026-07-14).
+    let onBack: () -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                // Base OPAQUE obligatoire (directive 2026-07-10) : pendant que la
+                // bannière charge, CachedAsyncImage peut rendre un placeholder
+                // translucide — sans cette base, le slide et son chrome restaient
+                // visibles SOUS l'interstitiel (IMG_0976). L'intro est un ÉCRAN,
+                // pas un voile.
+                Color.black
+                bannerBackground
+                LinearGradient(
+                    colors: [.black.opacity(0.62), .black.opacity(0.28), .black.opacity(0.72)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                // Centrage EXPLICITE (directive user 2026-07-14, le bloc identité
+                // rendait visiblement sous le centre réel de l'écran) : plutôt que
+                // de compter sur le centrage ambiant du ZStack (dérive documentée
+                // à travers plusieurs `.ignoresSafeArea()` imbriqués), on positionne
+                // `identityContent` au centre EXACT de `geo.size` — robuste quelle
+                // que soit la cause exacte de la dérive ambiante.
+                identityContent
+                    .position(x: geo.size.width / 2, y: geo.size.height / 2)
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .contentShape(Rectangle())
+            // Double-tap (n'importe où) prioritaire sur le tap simple — sinon le
+            // simple tirerait toujours en premier et le double-tap ne fire jamais
+            // (pattern standard SwiftUI : `.exclusively(before:)` sur deux
+            // `SpatialTapGesture` de count différent, résolu via l'énum `Either`).
+            .gesture(
+                SpatialTapGesture(count: 2)
+                    .onEnded { _ in onSkip() }
+                    .exclusively(before: SpatialTapGesture(count: 1)
+                        .onEnded { value in
+                            if value.location.x < geo.size.width / 2 {
+                                onBack()
+                            } else {
+                                onSkip()
+                            }
+                        })
+            )
+        }
+        .ignoresSafeArea()
+        .environment(\.colorScheme, .dark)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilitySummary)
+        .accessibilityHint(String(localized: "story.groupIntro.skipHint",
+                                  defaultValue: "Touchez pour passer à la story"))
+    }
+
+    /// Fallback UNIQUE (pas de banner / banner en échec ou en chargement) —
+    /// une seule définition consommée par les deux branches de
+    /// `bannerBackground` pour qu'elles ne puissent jamais diverger visuellement.
+    private var avatarColorFallbackGradient: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: avatarColor), .black],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        )
+    }
+
+    private var bannerBackground: some View {
+        Group {
+            if let banner = intro.bannerURL, !banner.isEmpty {
+                // `showsStatusOverlays: false` : en échec/chargement de la
+                // bannière, AUCUN spinner ni bouton Retry ne doit saigner au
+                // centre de l'écran sous l'avatar (IMG_1155/1158, directive
+                // user 2026-07-13) — le fallback reste le gradient/thumbHash.
+                CachedAsyncImage(
+                    url: banner,
+                    thumbHash: intro.bannerThumbHash,
+                    showsStatusOverlays: false
+                ) {
+                    avatarColorFallbackGradient
+                }
+                .scaledToFill()
+            } else {
+                avatarColorFallbackGradient
+            }
+        }
+        // Verrou de taille — même piège que `NeighborGroupCubeFace` : une
+        // bannière dont le ratio diffère de l'écran peut proposer une taille
+        // intrinsèque asymétrique et faire dériver le centrage de
+        // `identityContent` au-dessus. `Color.black` (premier enfant du
+        // ZStack parent) ancre déjà normalement ce ZStack au plein écran,
+        // mais ce verrou explicite rend l'invariant local et robuste aux
+        // futurs changements de composition du parent.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+    }
+
+    private var identityContent: some View {
+        VStack(spacing: 14) {
+            // `storyTray` = 88 pt, le plus grand context avatar — l'identité
+            // est le sujet de l'écran. Présence + mood délégués au badge/capsule
+            // dédiés ci-dessous (plus lisibles qu'un dot 10 pt sur l'avatar).
+            MeeshyAvatar(
+                name: intro.displayName ?? intro.username,
+                context: .storyTray,
+                accentColor: avatarColor,
+                avatarURL: avatarURL
+            )
+            VStack(spacing: 4) {
+                Text(intro.displayName ?? intro.username)
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.white)
+                if intro.displayName != nil {
+                    Text("@\(intro.username)")
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+            }
+            if isFriend {
+                presenceBadge
+            }
+            if let emoji = intro.moodEmoji {
+                HStack(spacing: 8) {
+                    Text(emoji).font(.title3)
+                    if let message = intro.moodMessage, !message.isEmpty {
+                        Text(message)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.9))
+                            .lineLimit(2)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial, in: Capsule())
+            }
+        }
+        .padding(.horizontal, 32)
+    }
+
+    @ViewBuilder
+    private var presenceBadge: some View {
+        let state = presence?.state ?? .offline
+        HStack(spacing: 6) {
+            Circle()
+                .fill(state.dotColor)
+                .frame(width: 9, height: 9)
+            Text(presenceLabel(state))
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.85))
+        }
+    }
+
+    private func presenceLabel(_ state: PresenceState) -> String {
+        switch state {
+        case .online:
+            return String(localized: "story.groupIntro.online", defaultValue: "En ligne")
+        case .recent:
+            return String(localized: "story.groupIntro.recent", defaultValue: "Actif·ve récemment")
+        case .away:
+            return String(localized: "story.groupIntro.away", defaultValue: "Absent·e")
+        case .offline:
+            return String(localized: "story.groupIntro.offline", defaultValue: "Hors ligne")
+        }
+    }
+
+    private var accessibilitySummary: String {
+        var parts = [intro.displayName ?? intro.username]
+        // Même règle que le badge visuel : le statut de présence n'est
+        // annoncé à VoiceOver que pour un ami.
+        if isFriend { parts.append(presenceLabel(presence?.state ?? .offline)) }
+        if let message = intro.moodMessage { parts.append(message) }
+        return parts.joined(separator: ", ")
+    }
 }

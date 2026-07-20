@@ -65,7 +65,7 @@ class ConnectionManager:
         try:
             from utils.performance import Priority, PerformanceConfig
             PERFORMANCE_MODULE_AVAILABLE = True
-        except ImportError:
+        except ImportError:  # pragma: no cover
             pass
 
         self.enable_priority_queue = (

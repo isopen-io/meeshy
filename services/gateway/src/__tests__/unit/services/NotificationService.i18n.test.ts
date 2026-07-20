@@ -60,6 +60,18 @@ describe('attachments i18n', () => {
     expect(body).toContain('+1🎵');
     expect(body).toContain('📷 Foto');
   });
+  it('roule Ko → Mo au bord du mébioctet (jamais "1024 Ko")', () => {
+    // 1_048_500 o < 1 Mio mais /1024 = 1023.93 → .toFixed(0) rendait "1024 Ko".
+    // Le tier doit basculer sur la valeur ARRONDIE, comme formatCallDataSize.
+    const label = formatSingleAttachmentLabelI18n('fr', { type: 'audio', fileSize: 1_048_500 });
+    expect(label).not.toContain('1024 Ko');
+    expect(label).toContain('1.0 Mo');
+  });
+  it('garde les Ko sous le bord de rollover', () => {
+    // 500_000 / 1024 = 488.28 → "488 Ko" (aucune régression du tier Ko).
+    expect(formatSingleAttachmentLabelI18n('fr', { type: 'audio', fileSize: 500_000 }))
+      .toContain('488 Ko');
+  });
 });
 
 function makeContentHarness(usersById: Record<string, any>) {
@@ -99,6 +111,33 @@ describe('contenu localisé par destinataire', () => {
     const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
     await svc.createPostLikeNotification({ actorId: 'a', postId: 'p', postAuthorId: 'r', emoji: '❤️', postType: 'STORY' });
     expect(created[0].content).toBe('reacted ❤️ to your story');
+  });
+  it('comment_reaction REEL, destinataire en → corps et metadata.postType conscients du réel (F58)', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
+    await svc.createCommentReactionNotification({
+      commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
+      reactionEmoji: '❤️', postAuthorName: 'Bob', postType: 'REEL',
+    });
+    expect(created[0].content).toBe('User a reacted ❤️ to your comment on Bob’s reel');
+    expect(created[0].metadata.postType).toBe('REEL');
+  });
+  it('comment_reaction STATUS ne s’effondre pas vers POST dans metadata.postType (F58)', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'fr' } });
+    await svc.createCommentReactionNotification({
+      commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
+      reactionEmoji: '🔥', postAuthorName: 'Bob', postType: 'STATUS',
+    });
+    expect(created[0].content).toBe('User a a réagi 🔥 à votre commentaire sur le statut de Bob');
+    expect(created[0].metadata.postType).toBe('STATUS');
+  });
+  it('comment_reaction sans postType retombe sur POST (rétro-compat)', async () => {
+    const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
+    await svc.createCommentReactionNotification({
+      commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
+      reactionEmoji: '❤️', postAuthorName: 'Bob',
+    });
+    expect(created[0].content).toBe('User a reacted ❤️ to your comment on Bob’s post');
+    expect(created[0].metadata.postType).toBe('POST');
   });
 });
 

@@ -30,7 +30,11 @@ final class RouterTests: XCTestCase {
     }
 
     func test_isHub_contacts_returnsTrue() {
-        XCTAssertTrue(Route.contacts().isHub)
+        XCTAssertTrue(Route.contacts.isHub)
+    }
+
+    func test_isHub_peopleDiscovery_returnsTrue() {
+        XCTAssertTrue(Route.peopleDiscovery().isHub)
     }
 
     func test_isHub_links_returnsTrue() {
@@ -117,6 +121,24 @@ final class RouterTests: XCTestCase {
     func test_isDeepRoute_emptyPath_returnsFalse() {
         let router = Router()
         XCTAssertFalse(router.isDeepRoute)
+    }
+
+    // MARK: - Router.replaceStack — atomic stack replacement (#16)
+
+    func test_replaceStack_iPhone_collapsesToSingleRouteInOneMutation() {
+        let router = Router()   // no onRouteRequested → iPhone NavigationStack path
+        router.push(.settings)
+        router.push(.notifications)
+        router.replaceStack(with: .profile)
+        XCTAssertEqual(router.path, [.profile],
+                       "replaceStack must set the whole stack to one route (no popToRoot + delayed push)")
+    }
+
+    func test_replaceStack_iPad_forwardsViaCallback_withoutMutatingPath() {
+        let router = Router()
+        router.onRouteRequested = { _ in true }   // iPad two-column intercept
+        router.replaceStack(with: .links)
+        XCTAssertTrue(router.path.isEmpty, "iPad forwards via the callback, never the NavigationStack path")
     }
 
     func test_isHubRoute_afterPushProfile_returnsTrue() {
@@ -223,16 +245,23 @@ final class RouterTests: XCTestCase {
 
     func test_push_contacts_addsToPath() {
         let router = Router()
-        router.push(.contacts())
+        router.push(.contacts)
         XCTAssertEqual(router.path.count, 1)
-        XCTAssertEqual(router.currentRoute, .contacts())
+        XCTAssertEqual(router.currentRoute, .contacts)
     }
 
-    func test_push_contacts_withTab_addsToPath() {
+    func test_push_peopleDiscovery_addsToPath() {
         let router = Router()
-        router.push(.contacts(.requests))
+        router.push(.peopleDiscovery())
         XCTAssertEqual(router.path.count, 1)
-        XCTAssertEqual(router.currentRoute, .contacts(.requests))
+        XCTAssertEqual(router.currentRoute, .peopleDiscovery())
+    }
+
+    func test_push_peopleDiscovery_withTab_addsToPath() {
+        let router = Router()
+        router.push(.peopleDiscovery(.requests))
+        XCTAssertEqual(router.path.count, 1)
+        XCTAssertEqual(router.currentRoute, .peopleDiscovery(.requests))
     }
 
     func test_push_communityList_addsToPath() {

@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Per-clip editor surface. Stateless on its own — receives a snapshot, emits
-/// callbacks for every field commit. The owning container (`QuickTimelineView`
-/// or `ProTimelineView`) wires those callbacks back to `TimelineViewModel`.
+/// callbacks for every field commit. The owning container (`StoryTimelineView`
+/// `TimelineInspectorHost` wires those callbacks back to `TimelineViewModel`.
 ///
 /// ### State sync contract
 /// The inspector holds local `@State` for the slider/toggle values to keep
@@ -30,20 +30,70 @@ public struct ClipInspector: View {
         public let fadeOutDuration: Float
         public let isLooping: Bool
         public let isBackground: Bool
+        /// Nom personnalisé de la piste (nil = utilise `displayName` par défaut).
+        public let name: String?
 
         public init(id: String, displayName: String, kind: Kind,
                     startTime: Float, duration: Float, volume: Float,
                     fadeInDuration: Float, fadeOutDuration: Float,
-                    isLooping: Bool, isBackground: Bool) {
+                    isLooping: Bool, isBackground: Bool,
+                    name: String? = nil) {
             self.id = id; self.displayName = displayName; self.kind = kind
             self.startTime = startTime; self.duration = duration
             self.volume = volume
             self.fadeInDuration = fadeInDuration; self.fadeOutDuration = fadeOutDuration
             self.isLooping = isLooping; self.isBackground = isBackground
+            self.name = name
         }
     }
 
     public static let fadeRange: ClosedRange<Float> = 0...3
+
+    // MARK: - Sections (modale allégée)
+
+    /// Régions de la modale, dans l'ordre de rendu. La modale « surchargée »
+    /// (retour user 2026-07-11) n'expose plus que l'essentiel : la barre de
+    /// timing tactile (`timing`) est l'affordance principale de début/durée
+    /// (capture user 2026-07-20 : « du bout du doigt ») ; les steppers fins et
+    /// hints vivent derrière le bouton (i), la configuration d'animation
+    /// (fondus + étape au playhead) derrière le bouton Animation.
+    public enum Section: String, CaseIterable, Sendable, Equatable {
+        case header, timing, details, volume, toggles, actions, animation
+    }
+
+    /// Résout les sections visibles pour un état donné. Un clip FOND couvre
+    /// toute la slide : début/durée sont ignorés par le moteur, la barre de
+    /// timing disparaît (contrôle sans effet). Pure — testée sans monter la
+    /// vue (voir `ClipInspectorTests.test_visibleSections_*`).
+    public static func visibleSections(kind: ClipSnapshot.Kind,
+                                       isBackground: Bool,
+                                       isDetailsExpanded: Bool,
+                                       isAnimationExpanded: Bool) -> [Section] {
+        var sections: [Section] = [.header]
+        if !isBackground { sections.append(.timing) }
+        if isDetailsExpanded { sections.append(.details) }
+        if hasAudioAffordances(kind: kind) { sections.append(.volume) }
+        sections.append(.toggles)
+        sections.append(.actions)
+        if isAnimationExpanded { sections.append(.animation) }
+        return sections
+    }
+
+    // MARK: - Confirmation de suppression
+
+    /// Machine d'état minimale du flux « supprimer » : le bouton corbeille ne
+    /// détruit JAMAIS directement — il présente une alerte ; seule la
+    /// confirmation explicite invoque `onDelete` (retour user 2026-07-11).
+    public struct DeleteConfirmation: Sendable, Equatable {
+        public private(set) var isPresented = false
+        public init() {}
+        public mutating func request() { isPresented = true }
+        public mutating func cancel() { isPresented = false }
+        public mutating func confirm(onDelete: () -> Void) {
+            isPresented = false
+            onDelete()
+        }
+    }
 
     public let presentation: InspectorPresentation
     public let clip: ClipSnapshot
@@ -54,12 +104,64 @@ public struct ClipInspector: View {
     public let onBackgroundToggled: (Bool) -> Void
     public let onAddKeyframe: () -> Void
     public let onDelete: () -> Void
+    /// Ferme l'inspecteur (désélection) — la modale était infermable :
+    /// aucune affordance, seul un tap hasardeux hors clip la faisait
+    /// disparaître (retour user 2026-07-11).
+    public let onClose: () -> Void
+    /// Ajustement du DÉBUT par pas (déplace le clip, durée constante).
+    public let onStartAdjusted: (Float) -> Void
+    /// Ajustement de la DURÉE par pas (la fin bouge, le début reste).
+    public let onDurationAdjusted: (Float) -> Void
+    /// Renommage du clip (nil/vide = retour au nom par défaut).
+    public let onNameChanged: (String?) -> Void
+    /// Ajustement de la FIN (garde le début, recalcule la durée).
+    public let onEndAdjusted: (Float) -> Void
+    /// Trim du DÉBUT (fin fixe — la durée se réduit d'autant). Poignée gauche
+    /// de la barre de timing, câblée sur `TimelineViewModel.trimClipStart`.
+    public let onStartTrimmed: (Float) -> Void
+    /// Durée totale de la slide — étendue de la barre de timing tactile.
+    public let slideDuration: Float
+
+    /// Pas des steppers début/durée.
+    public static let timeStep: Float = 0.1
+
+    // MARK: - Timing lié (début / fin / durée)
+
+    public enum TimingField: Sendable, Equatable { case start, end, duration }
+
+    /// Résout les trois valeurs liées début/fin/durée sous la contrainte
+    /// `fin = début + durée`, selon le champ édité. Clamps : durée ≥ 0,
+    /// fin ≤ slideDuration, début ≥ 0. Pure — testée sans monter la vue.
+    public static func resolveLinkedTiming(field: TimingField,
+                                           start: Float, end: Float,
+                                           duration: Float,
+                                           slideDuration: Float) -> (start: Float, end: Float, duration: Float) {
+        switch field {
+        case .start:
+            let s = max(0, min(start, slideDuration))
+            let e = min(slideDuration, s + max(0, duration))
+            return (s, e, e - s)
+        case .duration:
+            let s = max(0, start)
+            let e = min(slideDuration, s + max(0, duration))
+            return (s, e, e - s)
+        case .end:
+            let s = max(0, start)
+            let e = max(s, min(end, slideDuration))
+            return (s, e, e - s)
+        }
+    }
 
     @State private var volume: Float
     @State private var fadeIn: Float
     @State private var fadeOut: Float
     @State private var loop: Bool
     @State private var background: Bool
+    @State private var draftName: String
+    @State private var isDetailsExpanded = false
+    @State private var isAnimationExpanded = false
+    @State private var deleteConfirmation = DeleteConfirmation()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(presentation: InspectorPresentation,
                 clip: ClipSnapshot,
@@ -69,7 +171,14 @@ public struct ClipInspector: View {
                 onLoopToggled: @escaping (Bool) -> Void,
                 onBackgroundToggled: @escaping (Bool) -> Void,
                 onAddKeyframe: @escaping () -> Void,
-                onDelete: @escaping () -> Void) {
+                onDelete: @escaping () -> Void,
+                onClose: @escaping () -> Void = {},
+                onStartAdjusted: @escaping (Float) -> Void = { _ in },
+                onDurationAdjusted: @escaping (Float) -> Void = { _ in },
+                onNameChanged: @escaping (String?) -> Void = { _ in },
+                onEndAdjusted: @escaping (Float) -> Void = { _ in },
+                onStartTrimmed: @escaping (Float) -> Void = { _ in },
+                slideDuration: Float = 0) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -79,11 +188,19 @@ public struct ClipInspector: View {
         self.onBackgroundToggled = onBackgroundToggled
         self.onAddKeyframe = onAddKeyframe
         self.onDelete = onDelete
+        self.onClose = onClose
+        self.onStartAdjusted = onStartAdjusted
+        self.onDurationAdjusted = onDurationAdjusted
+        self.onNameChanged = onNameChanged
+        self.onEndAdjusted = onEndAdjusted
+        self.onStartTrimmed = onStartTrimmed
+        self.slideDuration = slideDuration
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
         _loop = State(initialValue: clip.isLooping)
         _background = State(initialValue: clip.isBackground)
+        _draftName = State(initialValue: clip.name ?? "")
     }
 
     // MARK: - Test helpers
@@ -126,9 +243,12 @@ public struct ClipInspector: View {
         }
     }
 
-    /// True when looping a clip makes sense. Audio + video can loop; still
-    /// images and text overlays cannot (no playback to wrap around).
-    public static func supportsLoop(kind: ClipSnapshot.Kind) -> Bool {
+    /// True when looping a clip makes sense. RÈGLE PRODUIT : la boucle est
+    /// réservée au FOND (un fond couvre toute la slide et boucle pour la
+    /// remplir) — un clip foreground a une fenêtre début/durée, il ne boucle
+    /// jamais. Audio + vidéo uniquement (image/texte : rien à boucler).
+    public static func supportsLoop(kind: ClipSnapshot.Kind, isBackground: Bool) -> Bool {
+        guard isBackground else { return false }
         switch kind {
         case .video, .audio: return true
         case .image, .text:  return false
@@ -150,17 +270,32 @@ public struct ClipInspector: View {
     }
 
     public var body: some View {
+        let sections = Self.visibleSections(kind: clip.kind,
+                                            isBackground: background,
+                                            isDetailsExpanded: isDetailsExpanded,
+                                            isAnimationExpanded: isAnimationExpanded)
         VStack(alignment: .leading, spacing: 12) {
             header
-            metadataRow
-            if Self.hasAudioAffordances(kind: clip.kind) {
+            if sections.contains(.timing) {
+                timingSection
+            }
+            if sections.contains(.details) {
+                detailsSection
+            }
+            if sections.contains(.volume) {
                 volumeSlider
             }
-            fadeSliders
             togglesRow
             actionsRow
+            if sections.contains(.animation) {
+                animationConfig
+            }
         }
         .padding(presentation == .popover ? 14 : 18)
+        // Surface volontairement en MATÉRIAU, pas en glassEffect : les
+        // contrôles de la rangée d'actions portent le Liquid Glass et le
+        // verre ne peut pas échantillonner du verre (artefacts iOS 26).
+        // Matériau sous glass = composition canonique Apple.
         .background(
             RoundedRectangle(cornerRadius: presentation == .popover ? 14 : 0)
                 .fill(.ultraThinMaterial)
@@ -174,6 +309,28 @@ public struct ClipInspector: View {
             fadeOut = newClip.fadeOutDuration
             loop = newClip.isLooping
             background = newClip.isBackground
+            draftName = newClip.name ?? ""
+        }
+        .alert(
+            String(localized: "story.timeline.inspector.delete.confirmTitle",
+                   defaultValue: "Supprimer ce clip ?", bundle: .module),
+            isPresented: Binding(
+                get: { deleteConfirmation.isPresented },
+                set: { if !$0 { deleteConfirmation.cancel() } }
+            )
+        ) {
+            Button(String(localized: "story.timeline.inspector.delete.confirm",
+                          defaultValue: "Supprimer", bundle: .module),
+                   role: .destructive) {
+                deleteConfirmation.confirm(onDelete: onDelete)
+            }
+            Button(String(localized: "story.timeline.inspector.delete.cancel",
+                          defaultValue: "Annuler", bundle: .module),
+                   role: .cancel) {}
+        } message: {
+            Text(String(localized: "story.timeline.inspector.delete.confirmMessage",
+                        defaultValue: "Le clip sera définitivement retiré de la timeline.",
+                        bundle: .module))
         }
     }
 
@@ -185,37 +342,141 @@ public struct ClipInspector: View {
                 .font(.headline)
                 .foregroundStyle(MeeshyColors.indigo500)
                 .accessibilityHidden(true)
-            Text(clip.displayName)
-                .font(.headline)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            TextField(
+                String(localized: "story.timeline.inspector.name.placeholder",
+                       defaultValue: "Nom de la piste", bundle: .module),
+                text: $draftName
+            )
+            .font(.headline)
+            .textInputAutocapitalization(.words)
+            .submitLabel(.done)
+            .onSubmit { onNameChanged(draftName) }
+            .lineLimit(1)
             Spacer(minLength: 0)
+            Button {
+                withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
+                    isDetailsExpanded.toggle()
+                }
+            } label: {
+                Image(systemName: isDetailsExpanded ? "info.circle.fill" : "info.circle")
+                    .font(.title3)
+                    .foregroundStyle(isDetailsExpanded ? MeeshyColors.indigo500 : .secondary)
+                    .contentShape(Rectangle().inset(by: -8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "story.timeline.inspector.details",
+                                       defaultValue: "Détails", bundle: .module))
+            .accessibilityHint(String(localized: "story.timeline.inspector.details.hint",
+                                      defaultValue: "Affiche le début, la durée et les informations du clip",
+                                      bundle: .module))
+            .accessibilityAddTraits(isDetailsExpanded ? [.isSelected] : [])
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .contentShape(Rectangle().inset(by: -8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "story.timeline.inspector.close",
+                                       defaultValue: "Fermer", bundle: .module))
         }
+    }
+
+    /// Barre de trim tactile — l'affordance PRINCIPALE de début/durée
+    /// (capture user 2026-07-20 : steppers « 0:0… » tronqués, « définir
+    /// début/durée du bout du doigt »). Les steppers fins ±0,1 s restent
+    /// derrière le bouton (i) pour l'ajustement de précision.
+    private var timingSection: some View {
+        ClipTimingBar(
+            start: clip.startTime,
+            duration: clip.duration,
+            slideDuration: slideDuration,
+            onMoveCommitted: onStartAdjusted,
+            onTrimStartCommitted: onStartTrimmed,
+            onTrimEndCommitted: onEndAdjusted
+        )
+    }
+
+    /// Panneau (i) : steppers fins ±0,1 s + hints contextuels. Sorti du corps
+    /// de la modale — ces informations restent à un tap, sans charger la
+    /// surface par défaut. Pour un clip FOND, début/durée sont ignorés par le
+    /// moteur : on ne montre QUE le hint (pas de contrôles sans effet).
+    private var detailsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if background {
+                Text(String(localized: "story.timeline.inspector.background.hint",
+                            defaultValue: "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline.",
+                            bundle: .module))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                metadataRow
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(MeeshyColors.indigo500.opacity(0.08))
+        )
+        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
     }
 
     private var metadataRow: some View {
-        HStack(spacing: 24) {
-            metadataField(
-                title: String(localized: "story.timeline.inspector.start", bundle: .module),
-                value: Self.formatTime(seconds: clip.startTime)
+        let end = clip.startTime + clip.duration
+        return HStack(spacing: 12) {
+            steppableTimeField(
+                title: String(localized: "story.timeline.inspector.start",
+                              defaultValue: "Début", bundle: .module),
+                value: clip.startTime,
+                onAdjust: onStartAdjusted
             )
-            metadataField(
-                title: String(localized: "story.timeline.inspector.duration", bundle: .module),
-                value: Self.formatTime(seconds: clip.duration)
+            steppableTimeField(
+                title: String(localized: "story.timeline.inspector.end",
+                              defaultValue: "Fin", bundle: .module),
+                value: end,
+                onAdjust: onEndAdjusted
+            )
+            steppableTimeField(
+                title: String(localized: "story.timeline.inspector.duration",
+                              defaultValue: "Durée", bundle: .module),
+                value: clip.duration,
+                onAdjust: onDurationAdjusted
             )
         }
     }
 
-    private func metadataField(title: String, value: String) -> some View {
+    /// Champ temps éditable par pas de ±0,1 s — l'affichage seul rendait la
+    /// modale « peu compréhensible » : des valeurs qu'on lit mais qu'on ne
+    /// peut pas toucher (retour user 2026-07-11). Affichage COMPACT
+    /// (`0:03.5`) : le format ms `0:03.500` tronquait en « 0:0… » sur trois
+    /// colonnes en popover (capture user 2026-07-20).
+    private func steppableTimeField(title: String, value: Float,
+                                    onAdjust: @escaping (Float) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title.uppercased())
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(.body, design: .monospaced))
+            HStack(spacing: 6) {
+                stepButton(systemName: "minus.circle.fill") { onAdjust(-Self.timeStep) }
+                Text(TransportBar.formatTimeCompact(seconds: value))
+                    .font(.system(.callout, design: .monospaced))
+                    .monospacedDigit()
+                stepButton(systemName: "plus.circle.fill") { onAdjust(Self.timeStep) }
+            }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title) \(value)")
+        .accessibilityLabel("\(title) \(Self.formatTime(seconds: value))")
+    }
+
+    private func stepButton(systemName: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.title3)
+                .foregroundStyle(MeeshyColors.indigo400)
+                .contentShape(Rectangle().inset(by: -8))
+        }
+        .buttonStyle(.plain)
     }
 
     private var volumeSlider: some View {
@@ -231,82 +492,221 @@ public struct ClipInspector: View {
         }
     }
 
-    private var fadeSliders: some View {
-        HStack(spacing: 12) {
-            fadeSlider(
-                title: String(localized: "story.timeline.clip.tooltip.fadeIn", bundle: .module),
+    /// Durées proposées pour les animations d'entrée/sortie (fondu). `0` = off.
+    // `nonisolated`: an immutable Sendable constant that the `nonisolated`
+    // `nearestFadePreset(to:)` reads from a non-MainActor context (the struct is
+    // a `View`, so members are @MainActor-isolated by default).
+    public nonisolated static let fadePresets: [Float] = [0, 0.3, 0.5, 1.0, 2.0]
+
+    /// Rattache une valeur legacy arbitraire (ex. 0.4 s posée au slider
+    /// d'avant) au preset le plus proche pour l'état sélectionné des chips.
+    public nonisolated static func nearestFadePreset(to value: Float) -> Float {
+        fadePresets.min(by: { abs($0 - value) < abs($1 - value) }) ?? 0
+    }
+
+    /// Configuration d'animation dépliée par l'icône losange de la rangée
+    /// d'actions : apparition/disparition (chips de fondu) + étape
+    /// d'animation au playhead avec sa légende. Repliée par défaut — la
+    /// modale ne montre plus que l'essentiel (retour user 2026-07-11).
+    private var animationConfig: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            fadeChipRow(
+                title: String(localized: "story.timeline.inspector.fadeIn",
+                              defaultValue: "Apparition (fondu)", bundle: .module),
+                systemImage: "arrow.down.right.circle",
                 value: $fadeIn,
                 onCommit: { onFadeInChanged(fadeIn) }
             )
-            fadeSlider(
-                title: String(localized: "story.timeline.clip.tooltip.fadeOut", bundle: .module),
+            fadeChipRow(
+                title: String(localized: "story.timeline.inspector.fadeOut",
+                              defaultValue: "Disparition (fondu)", bundle: .module),
+                systemImage: "arrow.up.right.circle",
                 value: $fadeOut,
                 onCommit: { onFadeOutChanged(fadeOut) }
             )
-        }
-    }
-
-    private func fadeSlider(title: String, value: Binding<Float>, onCommit: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased())
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Slider(value: value, in: Self.fadeRange, step: 0.05) { editing in
-                if !editing { onCommit() }
-            }
-            .tint(MeeshyColors.indigo400)
-            .accessibilityValue(String(format: "%.2fs", value.wrappedValue))
-        }
-    }
-
-    @ViewBuilder
-    private var togglesRow: some View {
-        HStack(spacing: 24) {
-            if Self.supportsLoop(kind: clip.kind) {
-                Toggle(isOn: Binding(
-                    get: { loop },
-                    set: { loop = $0; onLoopToggled($0) }
-                )) {
-                    Text(String(localized: "story.timeline.inspector.loop", bundle: .module))
-                }
-                .toggleStyle(.switch)
-                .tint(MeeshyColors.indigo500)
-            }
-
-            Toggle(isOn: Binding(
-                get: { background },
-                set: { background = $0; onBackgroundToggled($0) }
-            )) {
-                Text(String(localized: "story.timeline.inspector.background", bundle: .module))
-            }
-            .toggleStyle(.switch)
-            .tint(MeeshyColors.indigo500)
-        }
-    }
-
-    private var actionsRow: some View {
-        HStack(spacing: 12) {
             Button(action: onAddKeyframe) {
                 Label(
-                    String(localized: "story.timeline.keyframe.add", bundle: .module),
+                    String(localized: "story.timeline.inspector.animate",
+                           defaultValue: "Animer au playhead", bundle: .module),
                     systemImage: "diamond.fill"
                 )
                 .font(.subheadline.weight(.semibold))
             }
             .buttonStyle(.borderedProminent)
             .tint(MeeshyColors.indigo500)
-            .accessibilityHint(String(localized: "story.timeline.keyframe.add", bundle: .module))
+            .accessibilityHint(String(localized: "story.timeline.inspector.animate.hint",
+                                      defaultValue: "Pose une étape d'animation à la position de lecture",
+                                      bundle: .module))
+            Text(String(localized: "story.timeline.inspector.animate.caption",
+                        defaultValue: "Étape d'animation : fige position, échelle et opacité à cet instant — l'élément glisse d'une étape à l'autre pendant la lecture.",
+                        bundle: .module))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(MeeshyColors.indigo500.opacity(0.08))
+        )
+        .transition(reduceMotion ? .opacity : .opacity.combined(with: .move(edge: .top)))
+    }
 
-            Spacer(minLength: 0)
-
-            Button(role: .destructive, action: onDelete) {
-                Label(
-                    String(localized: "story.timeline.clip.delete", bundle: .module),
-                    systemImage: "trash"
-                )
-                .font(.subheadline.weight(.semibold))
+    private func fadeChipRow(title: String, systemImage: String,
+                             value: Binding<Float>, onCommit: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.indigo400)
+                    .accessibilityHidden(true)
+                Text(title.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
             }
-            .tint(MeeshyColors.error)
+            HStack(spacing: 6) {
+                ForEach(Self.fadePresets, id: \.self) { preset in
+                    let isOn = Self.nearestFadePreset(to: value.wrappedValue) == preset
+                    Button {
+                        value.wrappedValue = preset
+                        onCommit()
+                    } label: {
+                        Text(preset == 0
+                             ? String(localized: "story.timeline.inspector.fade.off",
+                                      defaultValue: "off", bundle: .module)
+                             : (preset < 1 ? String(format: "%.1f s", preset)
+                                           : String(format: "%.0f s", preset)))
+                            .font(.caption2.weight(.semibold))
+                            .monospacedDigit()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(
+                                isOn ? MeeshyColors.indigo500 : MeeshyColors.indigo500.opacity(0.14)))
+                            .foregroundStyle(isOn ? .white : MeeshyColors.indigo400)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(title) \(preset)s")
+                    .accessibilityAddTraits(isOn ? [.isSelected] : [])
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var togglesRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 24) {
+                if Self.supportsLoop(kind: clip.kind, isBackground: background) {
+                    Toggle(isOn: Binding(
+                        get: { loop },
+                        set: { loop = $0; onLoopToggled($0) }
+                    )) {
+                        Text(String(localized: "story.timeline.inspector.loop",
+                                    defaultValue: "Boucle", bundle: .module))
+                    }
+                    .toggleStyle(.switch)
+                    .tint(MeeshyColors.indigo500)
+                }
+
+                Toggle(isOn: Binding(
+                    get: { background },
+                    set: { newValue in
+                        background = newValue
+                        onBackgroundToggled(newValue)
+                        // Règle produit : la boucle n'existe QUE pour le fond.
+                        // Un clip qui redevient foreground perd sa boucle.
+                        if !newValue, loop {
+                            loop = false
+                            onLoopToggled(false)
+                        }
+                    }
+                )) {
+                    Text(String(localized: "story.timeline.inspector.background",
+                                defaultValue: "Fond", bundle: .module))
+                }
+                .toggleStyle(.switch)
+                .tint(MeeshyColors.indigo500)
+            }
+            // Le hint « fond couvre toute la slide » vit désormais dans le
+            // panneau (i) — la modale par défaut reste légère.
+        }
+    }
+
+    /// Deux boutons, deux intentions LISIBLES : « Animation » déplie la
+    /// configuration PAR-DESSOUS (il n'anime rien lui-même), « Supprimer »
+    /// demande confirmation avant la suppression définitive. Icône + TEXTE
+    /// obligatoires — les pastilles icône-seule teintées (losange indigo sur
+    /// verre indigo, corbeille rouge sur verre rouge) ne portaient ni leur
+    /// sens ni leur contraste (capture user 2026-07-20).
+    ///
+    /// Composition Liquid Glass (iOS 26 via `Compatibility/AdaptiveGlass`) :
+    /// la SURFACE de la modale reste en matériau (le verre ne peut pas
+    /// échantillonner du verre), seuls les CONTRÔLES flottants prennent le
+    /// glass — groupés dans un `AdaptiveGlassContainer` pour que les formes
+    /// adjacentes se fondent correctement. Fallback < 26 : matériau teinté
+    /// + liseré, géré par le wrapper.
+    private var actionsRow: some View {
+        AdaptiveGlassContainer(spacing: 12) {
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
+                        isAnimationExpanded.toggle()
+                    }
+                } label: {
+                    animationToggleLabel
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "story.timeline.inspector.animation",
+                                           defaultValue: "Animation", bundle: .module))
+                .accessibilityHint(String(localized: "story.timeline.inspector.animation.hint",
+                                          defaultValue: "Affiche les réglages d'animation du clip",
+                                          bundle: .module))
+                .accessibilityAddTraits(isAnimationExpanded ? [.isSelected] : [])
+
+                Spacer(minLength: 0)
+
+                Button {
+                    deleteConfirmation.request()
+                } label: {
+                    Label(String(localized: "story.timeline.clip.delete", bundle: .module),
+                          systemImage: "trash")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .frame(height: 36)
+                        .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.error)
+                        .contentShape(Rectangle().inset(by: -4))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "story.timeline.clip.delete", bundle: .module))
+                .accessibilityHint(String(localized: "story.timeline.inspector.delete.hint",
+                                          defaultValue: "Demande une confirmation avant la suppression",
+                                          bundle: .module))
+            }
+        }
+    }
+
+    /// État replié = glass régulier teinté, foreground adaptatif au scheme
+    /// (`glassControlForeground` : blanc en sombre, indigo950 en clair) ;
+    /// déplié = glass prominent, blanc sur indigo — le contrôle actif se
+    /// détache, parité avec le fallback.
+    @ViewBuilder
+    private var animationToggleLabel: some View {
+        let label = Label(String(localized: "story.timeline.inspector.animation",
+                                 defaultValue: "Animation", bundle: .module),
+                          systemImage: "diamond.fill")
+            .font(.footnote.weight(.semibold))
+            .padding(.horizontal, 14)
+            .frame(height: 36)
+        if isAnimationExpanded {
+            label.foregroundStyle(.white)
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
+                .contentShape(Rectangle().inset(by: -4))
+        } else {
+            label.glassControlForeground()
+                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
+                .contentShape(Rectangle().inset(by: -4))
         }
     }
 

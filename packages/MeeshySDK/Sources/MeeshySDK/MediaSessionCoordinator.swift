@@ -34,6 +34,16 @@ public actor MediaSessionCoordinator {
         case interruptionEndedShouldNotResume
         case routeChangedOldDeviceUnavailable
         case routeChangedOther
+        /// F3 — a VoIP call just ended (the `setCallActive` true→false edge).
+        /// In-process WebRTC / RTCAudioSession teardown does NOT reliably post a
+        /// system `AVAudioSession.interruptionNotification`, so media that gated
+        /// itself off while `isCallActive` (story reader audio, reels) gets no
+        /// `interruptionEndedShouldResume`. This explicit signal lets those
+        /// SDK-internal observers re-start their gated playback. Treat it exactly
+        /// like `interruptionEndedShouldResume` (resume only if still on-screen
+        /// and not user-paused). SDK-internal: emitted by `setCallActive`, no
+        /// dependency on the app's call layer.
+        case callEndedShouldResume
     }
 
     private var activationCount = 0
@@ -83,7 +93,17 @@ public actor MediaSessionCoordinator {
     /// without a `Task` hop (no reorder risk). SDK stays call-layer-agnostic:
     /// the app wires this from `CallManager`.
     public nonisolated func setCallActive(_ active: Bool) {
+        let wasActive = callActive
         callActive = active
+        // On the true→false edge, broadcast an explicit resume signal. The system
+        // interruption-ended notification is NOT reliably posted for in-process
+        // WebRTC/RTCAudioSession call teardown, so SDK media that gated itself off
+        // during the call (story reader audio, reels) would otherwise stay silent
+        // until the next slide/page change. Emitted AFTER `callActive = false` so
+        // any observer that re-checks `isCallActive` sees the cleared state.
+        if wasActive && !active {
+            events.send(.callEndedShouldResume)
+        }
     }
 
     /// `true` tant qu'un appel VoIP possède la session audio (`.playAndRecord/
@@ -187,8 +207,17 @@ public actor MediaSessionCoordinator {
     /// to release even if the refcount is still > 0 — individual players are
     /// expected to have been stopped by `PlaybackCoordinator.stopAll()`
     /// beforehand. Fails quietly if the session is already inactive.
+    ///
+    /// During an active call the audio session is owned by RTCAudioSession /
+    /// CallKit, NOT by this coordinator — tearing it down here would mute a
+    /// live VoIP call the moment the user locks the screen. Mirror the
+    /// `callActive` guard every other method in this class already applies.
     public func deactivateForBackground() async {
+        guard Self.shouldManageSession(callActive: callActive) else { return }
         activationCount = 0
+        #if DEBUG
+        testProbe?.deactivateCount += 1
+        #endif
         do {
             try AVAudioSession.sharedInstance().setActive(
                 false,

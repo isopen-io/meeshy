@@ -3,8 +3,17 @@ import MeeshySDK
 
 actor PendingStatusQueue {
     static let shared = PendingStatusQueue()
+
     private let key = "meeshy_pending_status_actions"
     private let maxActions = 100
+
+    /// Injected API client — defaults to the app singleton. Overridable in
+    /// tests via `PendingStatusQueue(apiClient: mock)`.
+    private let apiClient: any APIClientProviding
+
+    init(apiClient: any APIClientProviding = APIClient.shared) {
+        self.apiClient = apiClient
+    }
 
     struct PendingAction: Codable, Sendable {
         let conversationId: String
@@ -20,6 +29,12 @@ actor PendingStatusQueue {
         }
         save(actions)
     }
+
+    /// Returns the current pending actions without removing them.
+    func peek() -> [PendingAction] { load() }
+
+    /// Returns the number of pending actions.
+    func pendingCount() -> Int { load().count }
 
     private static let maxAge: TimeInterval = 24 * 60 * 60
 
@@ -43,7 +58,7 @@ actor PendingStatusQueue {
                 ? "/conversations/\(action.conversationId)/mark-as-read"
                 : "/conversations/\(action.conversationId)/mark-as-received"
             do {
-                let _: APIResponse<[String: String]> = try await APIClient.shared.request(
+                let _: APIResponse<[String: String]> = try await apiClient.request(
                     endpoint: endpoint, method: "POST"
                 )
             } catch {
@@ -51,6 +66,12 @@ actor PendingStatusQueue {
             }
         }
         save(remaining)
+    }
+
+    /// Removes all pending actions without flushing to the server.
+    /// Used in tests and for reset scenarios.
+    func clearAll() {
+        save([])
     }
 
     private func load() -> [PendingAction] {

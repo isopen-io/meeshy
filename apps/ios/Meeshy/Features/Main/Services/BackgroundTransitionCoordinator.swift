@@ -102,6 +102,9 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("nse.consumePending") {
             await NSEPendingMessageConsumer.shared.consumeAll()
         }
+        await withBudget("nse.consumePendingPosts") {
+            await NSEPendingPostConsumer.shared.consumeAll()
+        }
         await withBudget("sockets.resume") {
             // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the
             // enterBackground guard), do NOT force-reconnect on resume: that would
@@ -114,22 +117,22 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
                 SocialSocketManager.shared.resumeFromBackground()
             }
         }
-        // Sync presence dots with the gateway runtime state. We may have missed
-        // `user:status` events while suspended, and `presence:snapshot` only
-        // fires on the next socket auth — which can lag by a few seconds after
-        // the resume. This REST refresh closes the gap so the conversation
-        // list lights up correctly the instant the user looks at it.
-        await withBudget("presence.refresh") {
-            PresenceService.shared.refreshKnownUsers()
-        }
         await withBudget("audio.resume") {
             await MediaLifecycleBridge.shared.resumeFromBackground()
         }
         await withBudget("sync.conversations") {
             await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
         }
+        await withBudget("conversationStore.flushOutbox") {
+            await ConversationStore.shared.flushOutbox()
+        }
         await withBudget("push.retryPending") {
             await PushDeliveryReceiptService.shared.flushPending()
+            // PendingStatusQueue is also flushed on socket reconnect via
+            // ConversationSocketHandler.triggerSyncIfNeeded(), but that observer
+            // only exists while a conversation is open. Flush here to cover the
+            // case where the user returns to the foreground on the list screen.
+            await PendingStatusQueue.shared.flush()
         }
         await withBudget("outbox.recovery") {
             // Récupère les records orphelins laissés en `.inflight` si le
@@ -158,7 +161,40 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             OutboxRetryScheduler.shared.schedule(at: nextRetry)
         }
         await withBudget("engagement.flush") {
-            await EngagementFlushTrigger.flushNow()
+            // Engagement rows are durable (SQLite) and retried by
+            // EngagementRetryScheduler + the network-reconnect observer, so this
+            // flush is NON-critical. Bound it: a slow network (serial dispatch +
+            // 429 retries, observed 15-35s) must never hold the background-task
+            // budget hostage and trip the 0x8BADF00D watchdog.
+            let completed = await Self.runBounded(seconds: Self.engagementFlushBudget) {
+                await EngagementFlushTrigger.flushNow()
+            }
+            if !completed {
+                logger.info("Step engagement.flush exceeded \(Self.engagementFlushBudget, privacy: .public)s budget — deferred to retry scheduler (durable)")
+            }
+        }
+    }
+
+    /// Max time the non-critical engagement flush may consume during a
+    /// background transition before it is abandoned to the retry scheduler.
+    private static let engagementFlushBudget: Double = 8
+
+    /// Races `operation` against a `seconds` timeout. Returns `true` if it
+    /// completed, `false` if it timed out — cancelling the still-running work so
+    /// a bounded, durable step can never block the background-task budget.
+    nonisolated static func runBounded(
+        seconds: Double,
+        _ operation: @escaping @Sendable () async -> Void
+    ) async -> Bool {
+        await withTaskGroup(of: Bool.self) { group in
+            group.addTask { await operation(); return true }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                return false
+            }
+            let finishedFirst = await group.next() ?? false
+            group.cancelAll()
+            return finishedFirst
         }
     }
 
@@ -205,9 +241,11 @@ final class MediaLifecycleBridge {
         PlaybackCoordinator.shared.testStopAllProbe?.stopAllCount += 1
         #endif
         PlaybackCoordinator.shared.stopAll()
-        #if DEBUG
-        MediaSessionCoordinator.shared.testProbe?.deactivateCount += 1
-        #endif
+        // `deactivateForBackground()` self-increments `deactivateCount` after its
+        // `callActive` guard, so the probe counts only real deactivations. Pre-
+        // counting here would double-count (and over-count when a call is active
+        // and the guard skips the actual teardown). `stopAll()` does NOT self-count,
+        // which is why its probe increment above stays external.
         await MediaSessionCoordinator.shared.deactivateForBackground()
     }
 

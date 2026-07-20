@@ -7,6 +7,9 @@
     <string name="tab_feed">Fil d\'actualité</string>
     <string name="tab_activity">Activité</string>
     <string name="tab_profile">Profil</string>
+    <string name="menu_new_conversation">Nouveau</string>
+    <string name="menu_reels">Réels</string>
+    <string name="menu_contacts">Contacts</string>
 
     <!-- Login screen -->
     <string name="login_welcome_back">Bon retour</string>
@@ -23,7 +26,7 @@
     <string name="chat_retry">Réessayer</string>
 
     <!-- Conversation list screen -->
-    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_title">Meeshy Chats</string>
     <string name="conversations_logout">Se déconnecter</string>
     <string name="conversations_empty">Aucune conversation pour l\'instant</string>
     <string name="conversations_retry">Réessayer</string>
@@ -49,4 +52,8 @@
     <string name="profile_cancel">Annuler</string>
     <string name="profile_save">Enregistrer</string>
     <string name="profile_unknown">Inconnu</string>
+    <string name="call_channel_name">Appels</string>
+    <string name="call_channel_description">Appels vocaux et vidéo entrants</string>
+    <string name="call_incoming_audio">Appel entrant</string>
+    <string name="call_incoming_video">Appel vidéo entrant</string>
 </resources>

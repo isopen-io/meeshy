@@ -1,0 +1,34 @@
+{
+  "linkCopied": "¡Enlace copiado!",
+  "linkCopyError": "No se pudo copiar el enlace",
+  "loading": "Cargando reel…",
+  "unavailableTitle": "Reel no disponible",
+  "notAReelTitle": "Este contenido no es un reel",
+  "goneTitle": "Este reel ya no existe",
+  "unavailableBody": "Este reel es privado o ha sido eliminado.",
+  "notAReelBody": "El enlace apunta a una publicación, no a un reel.",
+  "goneBody": "No se encuentra el reel que buscas.",
+  "backToFeed": "Volver al feed",
+  "player": {
+    "position": "Reel {current} de {total}",
+    "byAuthor": "Reel de {name}",
+    "play": "Reproducir",
+    "close": "Cerrar",
+    "previous": "Reel anterior",
+    "next": "Reel siguiente",
+    "mute": "Silenciar",
+    "unmute": "Activar sonido",
+    "like": "Me gusta",
+    "comment": "Comentar",
+    "share": "Compartir",
+    "save": "Guardar"
+  },
+  "feed": {
+    "loadingReels": "Cargando reels…",
+    "errorTitle": "Reels no disponibles",
+    "retry": "Reintentar",
+    "emptyTitle": "Aún no hay reels",
+    "emptyBody": "Vuelve más tarde o explora las publicaciones de tu red.",
+    "seePosts": "Ver publicaciones"
+  }
+}

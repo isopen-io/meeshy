@@ -5,6 +5,7 @@ import XCTest
 /// Covers the pure `SyncPillViewModel.derive(items:isOffline:now:)` function.
 /// Each case exercises one of the four output states or one of the priority
 /// rules so the truth table stays explicit and easy to reason about.
+@MainActor
 final class SyncPillViewModelDeriveTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_750_000_000)

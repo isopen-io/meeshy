@@ -182,7 +182,8 @@ services:
       - meeshy-staging-network
       - meeshy-network
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      # /live = liveness instantané (cf. prod) — évite le flapping unhealthy sous charge ML.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/live', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -223,7 +224,7 @@ services:
       - PUBLIC_URL=https://gate.staging.${DOMAIN:-meeshy.me}
       - TURN_SECRET=${TURN_SECRET}
       - TURN_SERVERS=${TURN_SERVERS:-}
-      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-600}
+      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-86400}
       - MAX_TRANSLATION_LENGTH=10000
       # Variables d'initialisation
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}

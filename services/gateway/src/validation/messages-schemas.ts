@@ -26,14 +26,14 @@ export const MessageStatusDetailsQuerySchema = z.object({
     .regex(/^\d+$/, 'Offset must be a non-negative integer')
     .transform(Number)
     .refine(val => val >= 0, 'Offset must be >= 0')
-    .default('0'),
+    .prefault('0'),
 
   limit: z
     .string()
     .regex(/^\d+$/, 'Limit must be a positive integer')
     .transform(Number)
     .refine(val => val >= 1 && val <= 100, 'Limit must be between 1 and 100')
-    .default('20'),
+    .prefault('20'),
 
   filter: z
     .enum(['all', 'delivered', 'read', 'unread'])
@@ -46,14 +46,14 @@ export const AttachmentStatusDetailsQuerySchema = z.object({
     .regex(/^\d+$/, 'Offset must be a non-negative integer')
     .transform(Number)
     .refine(val => val >= 0, 'Offset must be >= 0')
-    .default('0'),
+    .prefault('0'),
 
   limit: z
     .string()
     .regex(/^\d+$/, 'Limit must be a positive integer')
     .transform(Number)
     .refine(val => val >= 1 && val <= 100, 'Limit must be between 1 and 100')
-    .default('20'),
+    .prefault('20'),
 
   filter: z
     .enum(['all', 'viewed', 'downloaded', 'listened', 'watched'])
@@ -78,8 +78,7 @@ export const UpdateMessageBodySchema = z.object({
 export const MessageStatusBodySchema = z.object({
   status: z.enum(['read', 'delivered']),
 
-  timestamp: z
-    .string()
+  timestamp: z.iso
     .datetime()
     .optional()
 }).strict();

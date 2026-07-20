@@ -114,7 +114,7 @@ export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';
 
 export { Avatar } from './Avatar';
-export type { AvatarProps } from './Avatar';
+export type { AvatarProps, AvatarPresence } from './Avatar';
 
 export { Skeleton } from './Skeleton';
 export type { SkeletonProps } from './Skeleton';

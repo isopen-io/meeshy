@@ -16,6 +16,7 @@ import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
+import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -96,6 +97,9 @@ export class MessagingService {
       let participant = await performanceLogger.withTiming(
         'messaging.participantLookup',
         async () => {
+          const cached = getCachedParticipant(participantId, conversationId);
+          if (cached) return cached;
+
           let p = await this.prisma.participant.findUnique({
             where: { id: participantId },
             select: { id: true, conversationId: true, isActive: true }
@@ -110,6 +114,9 @@ export class MessagingService {
           if (!p) {
             p = await this.ensureParticipantFromMember(participantId, conversationId);
           }
+          if (p) {
+            cacheParticipant(participantId, conversationId, p);
+          }
           return p;
         },
         { ...corr, conversationId }
@@ -122,6 +129,39 @@ export class MessagingService {
         );
       }
 
+      // 3.5. Early dedup — runs after participant verification (security gate
+      //      stays intact) but before language detection, link processing, and
+      //      encryption context. Handles sequential retries with one DB read.
+      //      Concurrent retries still resolve via the P2002 catch in saveMessage.
+      if (request.clientMessageId) {
+        const earlyHit = await performanceLogger.withTiming(
+          'messaging.earlyDedupCheck',
+          () => this.prisma.message.findFirst({
+            where: { conversationId, clientMessageId: request.clientMessageId }
+          }),
+          corr
+        );
+        if (earlyHit) {
+          // Flag the in-process dedup marker so the caller (MessageHandler)
+          // suppresses the `message:new` re-broadcast / agent-notify / stats
+          // side effects. Without it, a sequential retry on the same
+          // clientMessageId re-broadcasts the bubble to every recipient. This
+          // mirrors the P2002 concurrent-retry path in MessageProcessor.saveMessage.
+          (earlyHit as { isDuplicate?: boolean }).isDuplicate = true;
+          const translations = (earlyHit as { translations?: unknown }).translations;
+          if (this.isTranslationsEmpty(translations)) {
+            void this.queueTranslation(earlyHit, earlyHit.originalLanguage ?? 'fr').catch((err) =>
+              logger.error('background re-translation failed on early dedup', err as Error)
+            );
+          }
+          logger.info('perf:messaging.handleMessage', {
+            ...corr, step: 'messaging.handleMessage', phase: 'end',
+            durationMs: Date.now() - startTime, messageId: earlyHit.id, earlyDedupHit: true
+          });
+          return this.createSuccessResponse(earlyHit, requestId, startTime, undefined, PENDING_TRANSLATION_STATUS);
+        }
+      }
+
       // 4. Détection de langue — trust the client's `originalLanguage` when
       //    provided. iOS detects it locally (ConversationViewModel:
       //    detectKeyboardLanguage()) and the web via navigator.language ;
@@ -131,8 +171,17 @@ export class MessagingService {
       //    claim in observed prod traffic. The detector is now ONLY invoked
       //    when the client omits `originalLanguage` entirely (anon flows,
       //    legacy clients).
-      const originalLanguage = request.originalLanguage
-        ?? (request.content
+      //
+      //    The socket schema is `originalLanguage: z.string().optional()`, so an
+      //    EMPTY / whitespace-only string is a valid payload (common when
+      //    client-side detection fails). A nullish (`??`) guard would let `''`
+      //    through and persist `Message.originalLanguage = ''`, which downstream
+      //    broadcasts as `'fr'` (Prisme corruption). Trim-then-truthy is what
+      //    forces those blank claims back onto the detector.
+      const claimedLanguage = request.originalLanguage?.trim();
+      const originalLanguage = claimedLanguage
+        ? claimedLanguage
+        : (request.content
             ? await performanceLogger.withTiming(
                 'messaging.detectLanguage',
                 () => this.validator.detectLanguage(request.content!),

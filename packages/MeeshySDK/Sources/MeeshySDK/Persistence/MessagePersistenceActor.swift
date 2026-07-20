@@ -48,6 +48,11 @@ fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord
     let contentAndState = a.content == b.content && a.serverId == b.serverId
         && a.state == b.state && a.isEdited == b.isEdited
         && a.editedAt == b.editedAt && a.deletedAt == b.deletedAt
+        // `createdAt` is the immutable server send time, but a row first
+        // written by the Notification Service Extension pre-persist carries a
+        // PLACEHOLDER value (the push-receipt time). Comparing it here lets the
+        // canonical reconcile detect — and persist — the correction.
+        && a.createdAt == b.createdAt && a.cachedTimeString == b.cachedTimeString
     let attachmentsAndReactions = a.attachmentsJson == b.attachmentsJson
         && a.reactionsJson == b.reactionsJson && a.reactionCount == b.reactionCount
     let encryptionAndDelivery = a.isEncrypted == b.isEncrypted && a.encryptionMode == b.encryptionMode
@@ -263,6 +268,46 @@ public actor MessagePersistenceActor {
         }
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
+    /// Journalise une tentative d'envoi (spec 2026-07-08
+    /// message-send-failure-retry-flow). `attemptNumber` est monotone par
+    /// message ; l'historique survit au `serverAck` pour la vue détails.
+    public func recordSendAttempt(
+        localId: String,
+        transport: SendAttemptRecord.Transport,
+        startedAt: Date,
+        outcome: SendAttemptRecord.Outcome,
+        errorMessage: String? = nil
+    ) throws {
+        try dbWriter.write { db in
+            _ = try SendAttemptRecord.log(
+                db,
+                localId: localId,
+                transport: transport,
+                startedAt: startedAt,
+                outcome: outcome,
+                errorMessage: errorMessage
+            )
+        }
+    }
+
+    /// Historique des tentatives d'envoi d'un message, ordonné par tentative.
+    /// `messageId` accepte indifféremment le `localId` (`cid_…`) ou le
+    /// `serverId` (la vue détails ne connaît que `message.id`, qui bascule sur
+    /// l'id serveur après réconciliation).
+    public func sendAttempts(messageId: String) throws -> [SendAttemptRecord] {
+        try dbWriter.read { db in
+            let localId = try String.fetchOne(
+                db,
+                sql: "SELECT localId FROM messages WHERE localId = ? OR serverId = ? LIMIT 1",
+                arguments: [messageId, messageId]
+            ) ?? messageId
+            return try SendAttemptRecord
+                .filter(Column("localId") == localId)
+                .order(Column("attemptNumber").asc)
+                .fetchAll(db)
         }
     }
 
@@ -530,7 +575,19 @@ public actor MessagePersistenceActor {
     /// posts a refresh for real changes — delivery/read events routinely
     /// target conversations whose rows are already past the transition.
     private func batchDeliverySync(conversationId: String, event: MessageEvent) throws -> Bool {
-        try dbWriter.write { db -> Bool in
+        // Read frontier carried by the event (the peer's read/deliver moment).
+        // A message created AFTER it cannot have been received/read yet, so it
+        // must be skipped — otherwise a message sent right after the peer read
+        // would falsely advance to delivered/read. Mirrors the frontier guard in
+        // ConversationSyncEngine.applyReadReceipt (the cache path).
+        let frontier: Date? = {
+            switch event {
+            case .delivered(_, let at): return at
+            case .readBy(_, let at): return at
+            default: return nil
+            }
+        }()
+        return try dbWriter.write { db -> Bool in
             let records = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
                 .filter([MessageState.sending.rawValue, MessageState.sent.rawValue]
@@ -539,6 +596,7 @@ public actor MessagePersistenceActor {
 
             var didChange = false
             for var record in records {
+                if let frontier, record.createdAt > frontier { continue }
                 var machine = MessageStateMachine(
                     state: record.state, retryCount: record.retryCount,
                     serverId: record.serverId
@@ -547,6 +605,20 @@ public actor MessagePersistenceActor {
                     record.state = machine.state
                     record.deliveredAt = machine.deliveredAt
                     record.readAt = machine.readAt
+                    // The caller (ConversationSocketHandler) only feeds this batch
+                    // a delivered/read event once the WHOLE group has received /
+                    // read (all-or-nothing). This path advances `state` but does
+                    // NOT carry per-row counters, so stamp the unambiguous "all"
+                    // markers the display resolver trusts — otherwise a real-time
+                    // group delivery/read would transiently regress to a single
+                    // check until the sibling counters write lands.
+                    if machine.state == .read {
+                        let at = machine.readAt ?? Date()
+                        record.readByAllAt = at
+                        record.deliveredToAllAt = record.deliveredToAllAt ?? machine.deliveredAt ?? at
+                    } else if machine.state == .delivered {
+                        record.deliveredToAllAt = machine.deliveredAt ?? Date()
+                    }
                     record.updatedAt = Date()
                     record.changeVersion += 1
                     try record.update(db)
@@ -587,12 +659,36 @@ public actor MessagePersistenceActor {
     // ObjectId) and `serverId` (an ObjectId) never collide, so the OR
     // resolves at most one row.
 
+    /// Slack for the `markEdited` ordering guard — see its comment for why a
+    /// strict `<` is unsafe across a GRDB `Date` round-trip.
+    private static let editOrderingTolerance: TimeInterval = 0.05
+
     public func markEdited(localId: String, newContent: String, editedAt: Date) throws {
         var affectedConversationId: String?
+        var didApply = false
         try dbWriter.write { db in
-            affectedConversationId = try MessageRecord
+            guard let existing = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db)?.conversationId
+                .fetchOne(db)
+            else { return }
+            // Ordering guard: `message:edited` carries no monotonic sequence, so a
+            // delayed/duplicate socket delivery can arrive after a newer edit was
+            // already applied. Comparing against the stored `editedAt` stops a
+            // stale edit from permanently clobbering the current content.
+            //
+            // A tolerance (rather than a strict `<`) is required: GRDB round-trips
+            // `Date` through a millisecond-precision text column, so re-applying
+            // the exact same in-memory `Date` twice (e.g. an optimistic edit
+            // followed by its own failure rollback, which reuses the same
+            // `editedAt`) can read back a value a fraction of a millisecond off
+            // from what was passed in — enough to misfire a strict comparison.
+            // Genuine out-of-order deliveries differ by network-delay magnitudes
+            // (well beyond this), so the tolerance doesn't weaken the guard.
+            if let currentEditedAt = existing.editedAt,
+               editedAt.timeIntervalSince(currentEditedAt) < -Self.editOrderingTolerance {
+                return
+            }
+            affectedConversationId = existing.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET content = ?, isEdited = 1, editedAt = ?,
@@ -601,10 +697,61 @@ public actor MessagePersistenceActor {
                     """,
                 arguments: [newContent, editedAt, Date(), localId, localId]
             )
+            didApply = true
         }
-        if let convId = affectedConversationId {
+        if didApply, let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
         }
+    }
+
+    /// In-place update of a call system message when its state changes on the
+    /// server — the live "Appel … en cours" bubble becoming the terminal
+    /// summary ("Appel audio · 04:32", "Appel manqué", …) via a
+    /// `message:edited` carrying call metadata. Applies content +
+    /// `callSummaryJson` + `updatedAt` + `changeVersion` WITHOUT touching
+    /// `isEdited`/`editedAt`: this is a server-authored state transition, not
+    /// a user edit, and must not brand the bubble "modifié".
+    public func applyCallNoticeUpdate(
+        localId: String,
+        content: String,
+        callSummaryJson: Data?,
+        serverUpdatedAt: Date
+    ) throws {
+        var affectedConversationId: String?
+        var didApply = false
+        try dbWriter.write { db in
+            guard let existing = try MessageRecord
+                .filter(Column("localId") == localId || Column("serverId") == localId)
+                .fetchOne(db)
+            else { return }
+            affectedConversationId = existing.conversationId
+            try db.execute(
+                sql: """
+                    UPDATE messages SET content = ?, callSummaryJson = ?,
+                    updatedAt = ?, changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
+                    """,
+                arguments: [content, callSummaryJson, serverUpdatedAt, localId, localId]
+            )
+            didApply = true
+        }
+        if didApply, let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
+    /// `true` when `incoming` decodes as a LIVE call summary (`kind:
+    /// 'call-live'`) for the SAME call whose stored summary is already
+    /// TERMINAL — i.e. a REST snapshot serialized while the call was still
+    /// ongoing that landed AFTER the terminal edit. Applying it would regress
+    /// the bubble to "en cours" forever. Any other combination returns `false`.
+    static func isStaleLiveCallSnapshot(existing: Data?, incoming: Data?) -> Bool {
+        guard
+            let existing, let incoming,
+            let stored = try? JSONDecoder().decode(CallSummaryMetadata.self, from: existing),
+            let candidate = try? JSONDecoder().decode(CallSummaryMetadata.self, from: incoming)
+        else { return false }
+        return candidate.isLive && !stored.isLive && candidate.callId == stored.callId
     }
 
     public func markDeleted(localId: String, deletedAt: Date) throws {
@@ -1297,7 +1444,15 @@ public actor MessagePersistenceActor {
                             longitude: apiAtt.longitude,
                             thumbnailColor: thumbColor,
                             transcription: embeddedTranscription,
-                            audioTranslations: embeddedAudioTranslations
+                            audioTranslations: embeddedAudioTranslations,
+                            deliveredToAllAt: apiAtt.deliveredToAllAt,
+                            viewedByAllAt: apiAtt.viewedByAllAt,
+                            downloadedByAllAt: apiAtt.downloadedByAllAt,
+                            listenedByAllAt: apiAtt.listenedByAllAt,
+                            watchedByAllAt: apiAtt.watchedByAllAt,
+                            viewedCount: apiAtt.viewedCount,
+                            downloadedCount: apiAtt.downloadedCount,
+                            consumedCount: apiAtt.consumedCount
                         )
                     }
                     return try? encoder.encode(ui)
@@ -1491,14 +1646,38 @@ public actor MessagePersistenceActor {
                     // un-delete the row.
                     let pendingEdit = pendingEditMessageIds.contains(api.id)
                     let pendingDelete = pendingDeleteMessageIds.contains(api.id)
+                    // Live-call anti-régression : un snapshot REST sérialisé
+                    // PENDANT l'appel peut être appliqué APRÈS l'édition
+                    // terminale reçue par socket. Un résumé TERMINAL stocké
+                    // n'est jamais régressé vers le live du même appel —
+                    // ni sa métadonnée ni son content « en cours ».
+                    let staleLiveCallSnapshot = Self.isStaleLiveCallSnapshot(
+                        existing: existing.callSummaryJson,
+                        incoming: callSummaryJson
+                    )
                     // Update mutable fields; preserve layout cache.
-                    if !keepLocalPlaintext && !pendingEdit && !pendingDelete {
+                    if !keepLocalPlaintext && !pendingEdit && !pendingDelete && !staleLiveCallSnapshot {
                         existing.content = api.content
                     }
                     // Backfill the server id so future reconciliations can find
                     // the row via the serverId column or PendingIdRecord even
                     // if applyEvent(.serverAck) didn't run for some reason.
                     existing.serverId = api.id
+                    // Authoritative send time. A row first written by the
+                    // Notification Service Extension pre-persist (offline push,
+                    // cold cache) only knows WHEN THE PUSH ARRIVED — i.e. when
+                    // the device came back online — not the real send time,
+                    // which it stamps as a `now` placeholder. The canonical
+                    // REST/socket payload IS the source of truth, so adopt its
+                    // `createdAt` here (and refresh the derived time-string the
+                    // bubble renders) instead of treating the placeholder as
+                    // immutable. Without this, a message received while offline
+                    // is permanently branded with the data-reactivation time,
+                    // contradicting its own notification timestamp and read
+                    // receipts (status-management-inconsistency, 2026-06).
+                    existing.createdAt = api.createdAt
+                    existing.sentAt = api.createdAt
+                    existing.cachedTimeString = timeString
                     if !pendingEdit {
                         existing.isEdited = api.isEdited ?? false
                         existing.editedAt = nil
@@ -1528,8 +1707,20 @@ public actor MessagePersistenceActor {
                     }
                     existing.deliveredCount = deliveredCount
                     existing.readCount = readCount
-                    existing.deliveredToAllAt = api.deliveredToAllAt
-                    existing.readByAllAt = api.readByAllAt
+                    // `deliveredToAllAt` / `readByAllAt` are the unambiguous
+                    // "every recipient has received / read" markers that the live
+                    // all-or-nothing path stamps locally (and that the delivery
+                    // resolver trusts). Coalesce rather than hard-assign so a REST
+                    // refresh — which currently returns null for these (the
+                    // gateway no longer computes them under the cursor model) —
+                    // never CLEARS a marker the live path already confirmed. A
+                    // genuine server value, if ever provided, still wins.
+                    existing.deliveredToAllAt = api.deliveredToAllAt ?? existing.deliveredToAllAt
+                    existing.readByAllAt = api.readByAllAt ?? existing.readByAllAt
+                    // Authoritative recipient denominator: adopt a positive server
+                    // value, but never let a refresh that omits it (socket-origin
+                    // row, older gateway) clear a count already learned.
+                    if let rc = api.recipientCount, rc > 0 { existing.recipientCount = rc }
                     existing.state = max(existing.state, computedState)
                     // Self-heal rows that were upserted before we resolved
                     // sender.userId — their `senderId` column held the
@@ -1563,7 +1754,9 @@ public actor MessagePersistenceActor {
                     existing.replyToId = api.replyToId ?? existing.replyToId
                     existing.storyReplyToId = api.storyReplyToId ?? existing.storyReplyToId
                     existing.mentionedUsersJson = mentionedUsersJson
-                    existing.callSummaryJson = callSummaryJson ?? existing.callSummaryJson
+                    existing.callSummaryJson = staleLiveCallSnapshot
+                        ? existing.callSummaryJson
+                        : (callSummaryJson ?? existing.callSummaryJson)
                     existing.effectFlags = effectFlags
                     // Write ONLY when something actually changed: either a
                     // mirrored field differs from the pre-mutation snapshot,
@@ -1654,7 +1847,8 @@ public actor MessagePersistenceActor {
                         layoutVersion: 0, layoutMaxWidth: nil,
                         cachedTimeString: timeString,
                         changeVersion: 0,
-                        callSummaryJson: callSummaryJson
+                        callSummaryJson: callSummaryJson,
+                        recipientCount: api.recipientCount ?? 0
                     )
                     try record.insert(db)
                     changedConvIds.insert(api.conversationId)
@@ -1698,7 +1892,7 @@ public actor MessagePersistenceActor {
     /// Delete all message records for a conversation (called on 403/access revoked).
     public func deleteAll(conversationId: String) async throws {
         try await dbWriter.write { db in
-            try MessageRecord
+            _ = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
                 .deleteAll(db)
         }

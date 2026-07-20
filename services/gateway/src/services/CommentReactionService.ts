@@ -20,6 +20,7 @@ export interface CommentReactionData {
 
 export interface CommentReactionSync {
   readonly commentId: string;
+  readonly postId: string;
   readonly reactions: readonly CommentReactionAggregationWithUsers[];
   readonly totalCount: number;
   readonly userReactions: readonly string[];
@@ -135,7 +136,7 @@ export class CommentReactionService {
         }
       });
 
-      await this.updateCommentReactionSummary(commentId, sanitized, 'add');
+      await this.updateCommentReactionSummary(commentId);
 
       return this.mapReactionToData(reaction);
     } catch (err: unknown) {
@@ -169,7 +170,7 @@ export class CommentReactionService {
     });
 
     if (result.count > 0) {
-      await this.updateCommentReactionSummary(commentId, sanitized, 'remove', result.count);
+      await this.updateCommentReactionSummary(commentId);
     }
 
     return result.count > 0;
@@ -179,6 +180,11 @@ export class CommentReactionService {
     const { commentId, currentUserId } = options;
 
     this.validateCommentId(commentId);
+
+    const comment = await this.prisma.postComment.findUnique({
+      where: { id: commentId },
+      select: { postId: true }
+    });
 
     const reactions = await this.prisma.commentReaction.findMany({
       where: { commentId },
@@ -251,6 +257,7 @@ export class CommentReactionService {
 
     return {
       commentId,
+      postId: comment?.postId ?? '',
       reactions: enrichedReactions,
       totalCount: reactions.length,
       userReactions: Array.from(new Set(userReactions))
@@ -361,40 +368,40 @@ export class CommentReactionService {
     };
   }
 
-  private async updateCommentReactionSummary(
-    commentId: string,
-    emoji: string,
-    action: 'add' | 'remove',
-    count: number = 1
-  ): Promise<void> {
+  private async updateCommentReactionSummary(commentId: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const comment = await tx.postComment.findUnique({
         where: { id: commentId },
-        select: { reactionSummary: true }
+        select: { id: true }
       });
 
       if (!comment) return;
 
-      const currentSummary = (comment.reactionSummary as Record<string, number>) || {};
+      // Ventilation par emoji ET total recalculés depuis la table `CommentReaction`
+      // (source de vérité), au lieu d'appliquer un delta add/remove sur une carte
+      // dénormalisée. Le pré-check des réactions dans addReaction/removeReaction se
+      // fait hors transaction, donc deux mutations concurrentes peuvent laisser un
+      // emoji fantôme dans reactionSummary (ligne présente, jamais reflétée dans la
+      // carte) ; recomputer depuis groupBy est auto-réparant, quel que soit l'état
+      // après la course. `reactionCount` ET `likeCount` synchronisés sur le total
+      // (parité REST/socket du like de commentaire : `PostCommentService.likeComment`
+      // = increment). Miroir de ReactionService.updateMessageReactionSummary /
+      // PostReactionService.updatePostReactionSummary.
+      const grouped = await tx.commentReaction.groupBy({
+        by: ['emoji'],
+        where: { commentId },
+        _count: { emoji: true }
+      });
 
-      if (action === 'add') {
-        currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
-      } else if (currentSummary[emoji]) {
-        currentSummary[emoji] -= count;
-        if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
-      }
-
-      // Compteur AUTORITAIRE depuis la table `CommentReaction` (la ligne add/remove
-      // a déjà été appliquée). On synchronise `reactionCount` ET `likeCount` sur ce
-      // total : le chemin SOCKET maintient désormais `likeCount` identiquement au
-      // chemin REST (`PostCommentService.likeComment` = increment), éliminant la
-      // divergence du compteur de like de commentaire entre les surfaces. Miroir de
-      // `PostReactionService.updatePostReactionSummary` (unification du like de post).
-      const total = await tx.commentReaction.count({ where: { commentId } });
+      const reactionSummary = grouped.reduce<Record<string, number>>((summary, group) => {
+        summary[group.emoji] = group._count.emoji;
+        return summary;
+      }, {});
+      const total = grouped.reduce((sum, group) => sum + group._count.emoji, 0);
 
       await tx.postComment.update({
         where: { id: commentId },
-        data: { reactionSummary: currentSummary, reactionCount: total, likeCount: total }
+        data: { reactionSummary, reactionCount: total, likeCount: total }
       });
     });
   }

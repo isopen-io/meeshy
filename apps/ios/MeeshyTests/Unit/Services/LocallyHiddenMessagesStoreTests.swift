@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class LocallyHiddenMessagesStoreTests: XCTestCase {
 
     private func makeSUT() -> LocallyHiddenMessagesStore {

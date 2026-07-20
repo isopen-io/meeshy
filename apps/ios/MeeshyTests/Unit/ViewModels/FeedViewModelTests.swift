@@ -173,7 +173,11 @@ final class FeedViewModelTests: XCTestCase {
         // Un reconnect du socket social doit declencher un refresh du feed
         // (backfill du gap pendant la coupure), miroir de ConversationSyncEngine.
         socket.didReconnect.send(())
-        try? await Task.sleep(nanoseconds: 300_000_000)
+        // Use polling instead of a fixed sleep: Combine's receive(on: DispatchQueue.main)
+        // delivery may not run during a single Task.sleep suspension under Swift 6 strict
+        // concurrency. Multiple short sleeps give the run loop several chances to drain
+        // pending DispatchQueue.main.async items before each condition check.
+        try? await waitForCondition(timeout: 5.0) { sut.posts.count == 1 }
 
         XCTAssertEqual(sut.posts.count, 1)
         XCTAssertEqual(sut.posts.first?.id, "p1")
@@ -1350,7 +1354,7 @@ final class FeedViewModelTests: XCTestCase {
     // MARK: - pinPost()
 
     func test_pinPost_callsPostService() async {
-        let (sut, _, _, postService) = makeSUT()
+        let (sut, _, _, _) = makeSUT()
 
         await sut.pinPost("pin-post")
 

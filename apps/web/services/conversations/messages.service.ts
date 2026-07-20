@@ -4,6 +4,7 @@
  */
 
 import { apiService } from '../api.service';
+import { logger } from '@/utils/logger';
 import { transformersService } from './transformers.service';
 import type {
   Message,
@@ -39,7 +40,8 @@ export class MessagesService {
     page = 1,
     limit = 20,
     cursor?: string | null,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    after?: string
   ): Promise<GetMessagesResponse> {
     try {
       const requestKey = `messages-${conversationId}`;
@@ -48,7 +50,9 @@ export class MessagesService {
       const offset = (page - 1) * limit;
 
       const queryParams: Record<string, unknown> = { limit };
-      if (cursor) {
+      if (after) {
+        queryParams.after = after;
+      } else if (cursor) {
         queryParams.before = cursor;
       } else {
         queryParams.offset = offset;
@@ -73,7 +77,7 @@ export class MessagesService {
       this.pendingRequests.delete(requestKey);
 
       if (!response.data?.success || !Array.isArray(response.data?.data)) {
-        console.warn('⚠️ Structure de réponse inattendue:', response.data);
+        logger.warn('[Messages]', 'Structure de réponse inattendue', { data: response.data });
         return MessagesService.EMPTY_MESSAGES_RESPONSE;
       }
 
@@ -96,7 +100,7 @@ export class MessagesService {
         throw new Error('REQUEST_CANCELLED');
       }
 
-      console.error('❌ Erreur lors du chargement des messages:', error);
+      logger.error('[Messages]', 'Erreur lors du chargement des messages', { error });
       return MessagesService.EMPTY_MESSAGES_RESPONSE;
     }
   }

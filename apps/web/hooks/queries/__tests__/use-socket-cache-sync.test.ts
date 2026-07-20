@@ -16,6 +16,8 @@ import type { Message, Conversation } from '@/types';
 
 // Capture the new-message listener registered by the hook
 let capturedMessageListener: ((message: Message) => void) | null = null;
+// Capture the delete listener registered by the hook
+let capturedDeleteListener: ((messageId: string) => void) | null = null;
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -24,7 +26,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       return () => { capturedMessageListener = null; };
     }),
     onMessageEdited: jest.fn(() => () => {}),
-    onMessageDeleted: jest.fn(() => () => {}),
+    onMessageDeleted: jest.fn((listener: (messageId: string) => void) => {
+      capturedDeleteListener = listener;
+      return () => { capturedDeleteListener = null; };
+    }),
     onTranslation: jest.fn(() => () => {}),
     onUnreadUpdated: jest.fn(() => () => {}),
     onTranscription: jest.fn(() => () => {}),
@@ -34,6 +39,21 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onPreferencesUpdated: jest.fn(() => () => {}),
     onConversationJoined: jest.fn(() => () => {}),
     onConversationLeft: jest.fn(() => () => {}),
+    onConversationNew: jest.fn(() => () => {}),
+    onConversationDeleted: jest.fn(() => () => {}),
+    onConversationUpdated: jest.fn(() => () => {}),
+    onConversationParticipantLeft: jest.fn(() => () => {}),
+    onConversationParticipantBanned: jest.fn(() => () => {}),
+    onConversationParticipantUnbanned: jest.fn(() => () => {}),
+    onConversationClosed: jest.fn(() => () => {}),
+    onCategoryChanged: jest.fn(() => () => {}),
+    onMessageAttachmentUpdated: jest.fn(() => () => {}),
+    onPendingMessagesDelivered: jest.fn(() => () => {}),
+    onLinkMessageNew: jest.fn(() => () => {}),
+    onConversationJoinError: jest.fn(() => () => {}),
+    onMessagePinned: jest.fn(() => () => {}),
+    onMessageUnpinned: jest.fn(() => () => {}),
+    onUserUpdated: jest.fn(() => () => {}),
     onStatusChange: jest.fn(() => () => {}),
   },
 }));
@@ -202,5 +222,90 @@ describe('useSocketCacheSync — B1 ID-only dedup', () => {
     const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
     expect(convs![0].id).toBe('conv-1');
     expect(convs![0].lastMessage).toBeDefined();
+  });
+});
+
+describe('useSocketCacheSync — delete advances conversation preview', () => {
+  beforeEach(() => {
+    capturedMessageListener = null;
+    capturedDeleteListener = null;
+    jest.clearAllMocks();
+  });
+
+  function seedTwoMessages(queryClient: QueryClient) {
+    const older = makeMessage({
+      id: 'm-old',
+      conversationId: 'conv-1',
+      content: 'older',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const newer = makeMessage({
+      id: 'm-new',
+      conversationId: 'conv-1',
+      content: 'newer',
+      createdAt: new Date('2026-01-01T00:01:00Z'),
+    });
+    // Infinite messages cache stores newest-first in page 0
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-1'), {
+      pages: [{ messages: [newer, older], hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+      { id: 'conv-1', lastMessage: newer, lastMessageAt: newer.createdAt, updatedAt: newer.createdAt } as any,
+    ]);
+    return { older, newer };
+  }
+
+  it('advances conversation lastMessage to the previous message when the latest is deleted', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    const { older } = seedTwoMessages(queryClient);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+    expect(capturedDeleteListener).not.toBeNull();
+
+    act(() => { capturedDeleteListener!('m-new'); });
+
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-1')) as any;
+    expect(cached.pages[0].messages.map((m: Message) => m.id)).toEqual(['m-old']);
+
+    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
+    expect(convs![0].lastMessage?.id).toBe('m-old');
+    expect(convs![0].lastMessageAt).toBe(older.createdAt);
+  });
+
+  it('leaves the preview untouched when a non-latest message is deleted', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedTwoMessages(queryClient);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-old'); });
+
+    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
+    expect(convs![0].lastMessage?.id).toBe('m-new');
+  });
+
+  it('does not blank the preview when no message remains in cache', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    const only = makeMessage({ id: 'm-only', conversationId: 'conv-1', content: 'only' });
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-1'), {
+      pages: [{ messages: [only], hasMore: false, total: 1 }],
+      pageParams: [1],
+    });
+    queryClient.setQueryData<Conversation[]>(queryKeys.conversations.list(), [
+      { id: 'conv-1', lastMessage: only, lastMessageAt: only.createdAt, updatedAt: only.createdAt } as any,
+    ]);
+
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-only'); });
+
+    // Message removed from the thread cache…
+    const cached = queryClient.getQueryData(queryKeys.messages.infinite('conv-1')) as any;
+    expect(cached.pages[0].messages).toHaveLength(0);
+    // …but the preview is left as-is rather than blanked (older messages may
+    // exist server-side but not be loaded in cache).
+    const convs = queryClient.getQueryData<Conversation[]>(queryKeys.conversations.list());
+    expect(convs![0].lastMessage?.id).toBe('m-only');
   });
 });

@@ -126,8 +126,8 @@ final class CachePolicyTests: XCTestCase {
 
     func test_predefined_feedPosts() {
         let p = CachePolicy.feedPosts
-        XCTAssertEqual(p.ttl, TimeInterval.hours(6))
-        XCTAssertEqual(p.staleTTL, TimeInterval.minutes(2))
+        XCTAssertEqual(p.ttl, TimeInterval.days(7))
+        XCTAssertEqual(p.staleTTL, TimeInterval.minutes(5))
         XCTAssertEqual(p.maxItemCount, 100)
     }
 

@@ -10,13 +10,14 @@
 'use client';
 
 import { useCallback, useMemo, useRef, useEffect } from 'react';
-import { useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
+import { useQueryClient, useInfiniteQuery, useIsRestoring, focusManager } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { apiService } from '@/services/api.service';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
 import { useConversationUIStore } from '@/stores/conversation-ui-store';
 import { messagesService } from '@/services/conversations/messages.service';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type { Message, User } from '@meeshy/shared/types';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
@@ -54,6 +55,10 @@ export interface ConversationMessagesRQReturn {
   removeOptimisticMessage: (tempId: string) => void;
 }
 
+const CATCH_UP_PAGE_LIMIT = 50;
+const CATCH_UP_MAX_PAGES = 5;
+const FOCUS_CATCH_UP_DEBOUNCE_MS = 1_000;
+
 // Instance du service anonyme (créée à la demande)
 let anonymousChatServiceInstance: AnonymousChatService | null = null;
 
@@ -68,7 +73,7 @@ function getAnonymousChatService(linkId: string): AnonymousChatService {
 /**
  * Fonction pour récupérer les messages via les services existants
  */
-async function fetchMessagesFromService(
+export async function fetchMessagesFromService(
   conversationId: string,
   pageParam: number | string,
   limit: number,
@@ -144,17 +149,33 @@ export function useConversationMessagesRQ(
     queryFn: ({ pageParam = 1, signal }) =>
       fetchMessagesFromService(conversationId!, pageParam, limit, linkId, signal),
     initialPageParam: 1 as number | string,
-    getNextPageParam: (lastPage) => {
+    getNextPageParam: (lastPage, allPages) => {
       if (!lastPage.hasMore) return undefined;
-      // Préférer le cursor renvoyé par le serveur
+      // Chemin anonyme (lien partagé) : AnonymousChatService.loadMessages(limit, offset)
+      // pagine par offset numérique et ne renvoie jamais de cursor. On avance donc par
+      // index de page. Renvoyer un ID de message (string) ici le ferait retomber sur la
+      // page 1 (offset 0) dans fetchMessagesFromService (`typeof pageParam === 'number' ? … : 1`),
+      // re-chargeant la première page en boucle — doublons + historique ancien inaccessible.
+      if (linkId) return allPages.length + 1;
+      // Chemin authentifié : préférer le cursor renvoyé par le serveur…
       if (lastPage.nextCursor) return lastPage.nextCursor;
-      // Dériver le cursor depuis le dernier message de la page (le plus ancien, tri DESC)
-      // Le gateway accepte un message ID comme paramètre "before"
+      // …sinon dériver un cursor "before" depuis le dernier message (le plus ancien, tri DESC).
+      // Le gateway accepte un message ID comme paramètre "before".
       const lastMessage = lastPage.messages[lastPage.messages.length - 1];
       if (lastMessage?.id) return lastMessage.id;
       return undefined;
     },
     enabled: enabled && !!conversationId,
+    // Socket.IO est la source de vérité pour la liste de messages ouverte.
+    // Un refetch au focus/reconnexion REMPLACE les pages du cache infini par
+    // les pages serveur ; si un message reçu via socket vient d'être ajouté au
+    // cache mais que la lecture REST ne le renvoie pas encore (lag de réplica
+    // MongoDB / read-after-write), il est effacé de l'écran — le message
+    // "apparaît puis disparaît" et ne revient qu'au rechargement (F5).
+    // On désactive donc ces refetch destructeurs pour CETTE requête : le
+    // socket maintient déjà la liste à jour (cf. handleNewMessage).
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     select: (data) => ({
       pages: data.pages,
       pageParams: data.pageParams,
@@ -501,6 +522,121 @@ export function useConversationMessagesRQ(
       };
     });
   }, [queryClient, conversationId, queryKey]);
+
+  // Non-destructive catch-up: fetch only messages newer than the newest cached
+  // entry (`after` watermark) and prepend the genuinely-new ones. A full refetch()
+  // REPLACES the cached pages and can drop socket-added messages (see the
+  // refetchOnWindowFocus: false comment above) — this path never does that,
+  // except as a last-resort fallback when the gap exceeds CATCH_UP_MAX_PAGES pages.
+  const syncInFlightRef = useRef(false);
+
+  const syncNewerMessages = useCallback(async () => {
+    if (!conversationId || linkId || syncInFlightRef.current) return;
+
+    const cached = queryClient.getQueryData<typeof data>(queryKey);
+    if (!cached) return;
+
+    const newestCreatedAtMs = (messages: Message[]): number =>
+      messages.reduce((max, m) => {
+        const t = m.createdAt ? new Date(m.createdAt).getTime() : 0;
+        return t > max ? t : max;
+      }, 0);
+
+    let watermarkMs = newestCreatedAtMs(cached.pages.flatMap(p => p.messages));
+    if (watermarkMs === 0) return;
+
+    syncInFlightRef.current = true;
+    try {
+      for (let iteration = 0; iteration < CATCH_UP_MAX_PAGES; iteration++) {
+        const after = new Date(watermarkMs).toISOString();
+        const result = await conversationsService.getMessages(
+          conversationId, 1, CATCH_UP_PAGE_LIMIT, null, undefined, after
+        );
+        const missed = result.messages ?? [];
+        if (missed.length === 0) return;
+
+        const current = queryClient.getQueryData<typeof data>(queryKey);
+        if (!current) return;
+
+        const cachedIds = new Set(current.pages.flatMap(p => p.messages.map(m => m.id)));
+        const genuinelyNew = missed.filter(m => !cachedIds.has(m.id));
+        if (genuinelyNew.length > 0) {
+          queryClient.setQueryData(queryKey, (old: typeof data) => {
+            if (!old) return old;
+            return {
+              ...old,
+              pages: old.pages.map((page, i) =>
+                i === 0
+                  ? { ...page, messages: [...genuinelyNew, ...page.messages] }
+                  : page
+              ),
+            };
+          });
+        }
+
+        const hasMore = result.hasMore === true || missed.length === CATCH_UP_PAGE_LIMIT;
+        if (!hasMore) return;
+
+        const newestFetchedMs = newestCreatedAtMs(missed);
+        if (newestFetchedMs <= watermarkMs) break;
+        watermarkMs = newestFetchedMs;
+      }
+      await refetch();
+    } catch {
+      // Silent — socket events will carry new messages going forward
+    } finally {
+      syncInFlightRef.current = false;
+    }
+  }, [conversationId, linkId, queryClient, queryKey, refetch]);
+
+  // Trigger 1 — socket reconnect: catch up on messages missed during the
+  // disconnection gap. Fires on the false → true edge only, not on initial mount.
+  const { isSocketConnected } = useConnectionStatus();
+  const prevSocketConnectedRef = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const prev = prevSocketConnectedRef.current;
+    prevSocketConnectedRef.current = isSocketConnected;
+
+    const isReconnect = prev === false && isSocketConnected === true;
+    if (!isReconnect) return;
+
+    void syncNewerMessages();
+  }, [isSocketConnected, syncNewerMessages]);
+
+  // Trigger 2 — conversation open/mount: the socket may already be connected
+  // (no reconnect edge) while the cached entry is stale. Waits for the async
+  // IndexedDB cache restore (useIsRestoring) so an F5 doesn't race the persister;
+  // cold opens (no cache entry) are handled by the initial queryFn fetch.
+  const isRestoring = useIsRestoring();
+
+  useEffect(() => {
+    if (isRestoring || !enabled || !conversationId || linkId) return;
+    if (!queryClient.getQueryData(queryKey)) return;
+
+    void syncNewerMessages();
+  }, [isRestoring, enabled, conversationId, linkId, queryClient, queryKey, syncNewerMessages]);
+
+  // Trigger 3 — window focus: safety net replacing the destructive
+  // refetchOnWindowFocus (disabled above). Debounced so rapid tab switches
+  // coalesce into one catch-up.
+  useEffect(() => {
+    if (!enabled || !conversationId || linkId) return;
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = focusManager.subscribe((focused) => {
+      if (!focused) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        void syncNewerMessages();
+      }, FOCUS_CATCH_UP_DEBOUNCE_MS);
+    });
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsubscribe();
+    };
+  }, [enabled, conversationId, linkId, syncNewerMessages]);
 
   return {
     messages,

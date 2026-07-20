@@ -131,8 +131,9 @@ extension FeedPostCard {
                         if count > 5 {
                             Color.black.opacity(0.6)
                             Text("+\(count - 5)")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(MeeshyFont.relative(22, weight: .bold))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         }
                     }
                     .contentShape(Rectangle())
@@ -147,6 +148,33 @@ extension FeedPostCard {
             .frame(height: 240)
             .clipShape(RoundedRectangle(cornerRadius: 16))
         }
+    }
+
+    // Compact media preview for a reposted POST/STATUS quote block (RF1). Reuses
+    // `galleryImageView` (image fill + video play glyph / audio waveform overlay)
+    // bounded to a short thumbnail, with a "+N" badge when the repost carries more
+    // than one media. No tap gesture and no AVPlayer: the enclosing repost Button
+    // already routes the tap to the ORIGINAL reposted post, so the media is hidden
+    // from VoiceOver (the Button is the interactive element).
+    @ViewBuilder
+    func repostMediaPreview(_ model: FeedPostCard.RepostMediaPreview) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            galleryImageView(model.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            if model.count > 1 {
+                Text("+\(model.count - 1)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                    .padding(8)
+            }
+        }
+        .accessibilityHidden(true)
     }
 
     // Gallery-specific image view (no individual rounding)
@@ -174,7 +202,7 @@ extension FeedPostCard {
                 )
             }
 
-            // Video overlay
+            // Video overlay (décoratif : la cellule galerie parente porte le libellé VoiceOver)
             if media.type == .video {
                 VStack(spacing: 6) {
                     ZStack {
@@ -184,6 +212,7 @@ extension FeedPostCard {
                         Circle()
                             .fill(Color.white.opacity(0.85))
                             .frame(width: 30, height: 30)
+                        // Glyphe dans un cercle de dimension fixe 30/36 : figé (déborderait s'il scalait, doctrine 86i)
                         Image(systemName: "play.fill")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.black.opacity(0.7))
@@ -191,27 +220,29 @@ extension FeedPostCard {
                     }
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             } else if media.type == .audio {
                 VStack(spacing: 4) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 20))
+                        .font(MeeshyFont.relative(20))
                         .foregroundColor(.white)
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             }
         }
         .clipped()
@@ -272,22 +303,7 @@ extension FeedPostCard {
     }
 
     func videoMediaView(_ media: FeedMedia) -> some View {
-        let attachment = media.toMessageAttachment()
-        return VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
-            MeeshyVideoPlayer(
-                attachment: attachment,
-                style: .inline,
-                controls: .inlineDefault,
-                accentColor: accentColor,
-                frame: .card,
-                availability: availability,
-                performance: .inline,
-                onDownload: onDownload,
-                onExpand: { openFullscreen(media) }
-            )
-        }
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        FeedVideoMediaCell(media: media, accentColor: accentColor, onExpand: { openFullscreen(media) })
     }
 
     func audioMediaView(_ media: FeedMedia) -> some View {
@@ -298,6 +314,16 @@ extension FeedPostCard {
                 context: .feedPost,
                 accentColor: media.thumbnailColor,
                 transcription: media.transcription,
+                translatedAudios: media.translatedAudios,
+                onFullscreen: {
+                    audioFullscreen = .fromFeed(
+                        media: media,
+                        author: ProfileSheetUser.from(feedPost: post),
+                        originalLanguage: post.originalLanguage,
+                        caption: post.content,
+                        createdAt: post.timestamp
+                    )
+                },
                 availability: availability,
                 onDownload: onDownload
             )
@@ -314,22 +340,24 @@ extension FeedPostCard {
                     .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                     .frame(width: 48, height: 56)
 
+                // Glyphe dans un cadre de dimension fixe 48×56 : figé (déborderait s'il scalait, doctrine 86i) ; le nom de fichier porte le sens
                 Image(systemName: "doc.fill")
                     .font(.system(size: 24))
                     .foregroundColor(Color(hex: media.thumbnailColor))
+                    .accessibilityHidden(true)
             }
 
             // Document info
             VStack(alignment: .leading, spacing: 4) {
                 Text(media.fileName ?? "Document")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     if let size = media.fileSize {
                         Text(size)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
 
@@ -337,7 +365,7 @@ extension FeedPostCard {
                         Text("\u{2022}")
                             .foregroundColor(theme.textMuted)
                         Text("\(pages) pages")
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -371,31 +399,34 @@ extension FeedPostCard {
                     )
                     .frame(width: 64, height: 64)
 
+                // Glyphe dans un cadre de dimension fixe 64×64 : figé (déborderait s'il scalait, doctrine 86i) ; le nom du lieu porte le sens
                 Image(systemName: "mappin.circle.fill")
                     .font(.system(size: 28))
                     .foregroundColor(Color(hex: media.thumbnailColor))
+                    .accessibilityHidden(true)
             }
 
             // Location info
             VStack(alignment: .leading, spacing: 4) {
                 Text(media.locationName ?? "Location")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(2)
 
                 if let lat = media.latitude, let lon = media.longitude {
                     Text(String(format: "%.4f, %.4f", lat, lon))
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
                 }
             }
 
             Spacer()
 
-            // Open in maps
+            // Open in maps (glyphe d'affordance décoratif)
             Image(systemName: "arrow.up.right.circle.fill")
-                .font(.system(size: 28))
+                .font(MeeshyFont.relative(28))
                 .foregroundColor(Color(hex: media.thumbnailColor))
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(
@@ -407,4 +438,60 @@ extension FeedPostCard {
                 )
         )
     }
+}
+
+// MARK: - Feed video cell (fills the card width, aspect-ratio driven height)
+
+/// A post-card video that ALWAYS fills the card width with a height derived
+/// from the source ratio. The previous `.aspectRatio(_, .fit)` collapsed the
+/// width whenever the surrounding layout proposed a bounded height (portrait
+/// clips ended up tiny and centred). Here the real card width is measured via a
+/// background `GeometryReader` (no layout hijack) and the height is set
+/// explicitly to `width / ratio`, so the width is never the free dimension.
+private struct FeedVideoMediaCell: View {
+    let media: FeedMedia
+    let accentColor: String
+    let onExpand: () -> Void
+
+    @State private var measuredWidth: CGFloat = 0
+
+    /// Source ratio (width / height), portrait capped at 1.6× width so a single
+    /// clip can't swallow the whole feed.
+    private var ratio: CGFloat {
+        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 16.0 / 9.0 }
+        return max(CGFloat(w) / CGFloat(h), 1.0 / 1.6)
+    }
+
+    var body: some View {
+        let attachment = media.toMessageAttachment()
+        VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
+            MeeshyVideoPlayer(
+                attachment: attachment,
+                style: .inline,
+                controls: .inlineDefault,
+                accentColor: accentColor,
+                frame: .card,
+                availability: availability,
+                performance: .inline,
+                onDownload: onDownload,
+                onExpand: onExpand
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: measuredWidth > 0 ? measuredWidth / ratio : nil)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: FeedVideoWidthKey.self, value: geo.size.width)
+            }
+        )
+        .onPreferenceChange(FeedVideoWidthKey.self) { width in
+            if width > 0, abs(width - measuredWidth) > 0.5 { measuredWidth = width }
+        }
+    }
+}
+
+private struct FeedVideoWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

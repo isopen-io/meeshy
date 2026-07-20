@@ -1,5 +1,10 @@
 package me.meeshy.ui.component.bubble
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,11 +26,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +51,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -49,11 +66,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.hexColor
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -63,12 +82,54 @@ public fun MessageBubble(
     outgoingColor: Color = MeeshyPalette.Indigo500,
     onLongPress: (() -> Unit)? = null,
     onReactionClick: ((String) -> Unit)? = null,
+    onReactionLongPress: (() -> Unit)? = null,
     onImageClick: ((Int) -> Unit)? = null,
+    onLocationClick: ((BubbleLocation) -> Unit)? = null,
+    onAudioClick: ((BubbleAudio) -> Unit)? = null,
+    onReplyPreviewClick: (() -> Unit)? = null,
+    onFlagTap: ((String) -> Unit)? = null,
+    mentionDisplayNames: Map<String, String>? = null,
+    highlightTerm: String? = null,
+    trackedLinks: Map<String, String>? = null,
+    effects: MessageEffects? = null,
+    hasPlayedAppearance: Boolean = false,
 ) {
+    // Combine the server deletion flag, the view-once consume count and the ephemeral
+    // self-destruct countdown. A deleted message keeps its "Message deleted" tombstone
+    // (visible → the inner `isDeleted` branch renders it); a consumed view-once message
+    // shows the "Seen and deleted" burned tombstone; an ephemeral message whose timer
+    // elapses collapses the whole bubble (iOS `EmptyView`) with a fade + burn-away scale.
+    val renderKind = rememberBubbleRenderKind(
+        isDeleted = content.isDeleted,
+        expiresAtIso = content.expiresAtIso,
+        isViewOnce = content.isViewOnce,
+        viewOnceCount = content.viewOnceCount,
+    )
+    AnimatedVisibility(
+        visible = !renderKind.isEphemeralExpired,
+        modifier = modifier,
+        enter = EnterTransition.None,
+        exit = fadeOut() + scaleOut(targetScale = 0.8f) + shrinkVertically(),
+    ) {
+    if (renderKind.isBurned) {
+        // A consumed view-once message shows the persistent "Seen and deleted"
+        // tombstone (iOS `BubbleBurnedView`) in place of its content, aligned to
+        // the sender side like the deleted tombstone.
+        BubbleBurnedView(isOutgoing = content.isOutgoing)
+    } else {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+            .padding(
+                start = MeeshySpacing.lg,
+                end = MeeshySpacing.lg,
+                // Consecutive-sender runs stack tightly: only the first message of a
+                // run gets a top gap and only the last a bottom gap, so a run reads
+                // as one visual block while distinct messages keep their 4dp breathing
+                // room (isFirst && isLast).
+                top = if (content.isFirstInGroup) MeeshySpacing.xs else MeeshySpacing.none,
+                bottom = if (content.isLastInGroup) MeeshySpacing.xs else MeeshySpacing.none,
+            ),
         horizontalArrangement = if (content.isOutgoing) Arrangement.End else Arrangement.Start,
     ) {
         val isFreeEmoji =
@@ -83,9 +144,22 @@ public fun MessageBubble(
             content.isOutgoing -> outgoingColor
             else -> MeeshyTheme.tokens.backgroundTertiary
         }
+        BubbleBlurRevealBoundary(messageId = content.messageId, spec = content.blurReveal) {
         Column(
             modifier = Modifier
                 .widthIn(max = 300.dp)
+                .messageEffects(
+                    // Drive the visual-treatment modifier from the resolved bubble
+                    // content by default (so received messages actually glow / pulse);
+                    // the `effects` param stays an optional override for previews/tests.
+                    effects = effects ?: content.effects,
+                    hasPlayedAppearance = hasPlayedAppearance,
+                    shape = RoundedCornerShape(MeeshyRadius.xl),
+                    // Seed the one-shot appearance burst on a stable per-message value so a
+                    // confetti/fireworks message renders the same reproducible burst across
+                    // recompositions (a scroll off/on never re-rolls it — surpasses iOS).
+                    appearanceSeed = content.messageId.hashCode().toLong(),
+                )
                 .clip(RoundedCornerShape(MeeshyRadius.xl))
                 .background(bubbleBackground)
                 .let { base ->
@@ -94,6 +168,27 @@ public fun MessageBubble(
                 }
                 .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
         ) {
+            if (content.isForwarded) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Send,
+                        contentDescription = null,
+                        tint = onColor.copy(alpha = 0.6f),
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.bubble_forwarded),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontStyle = FontStyle.Italic,
+                        color = onColor.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(start = 3.dp),
+                    )
+                }
+            }
+
             if (content.showSenderName && content.senderName != null) {
                 Text(
                     text = content.senderName,
@@ -104,9 +199,28 @@ public fun MessageBubble(
             }
 
             if (content.replyToText != null || content.replyToDeleted) {
+                val mediaLabel = when (content.replyToMediaKind) {
+                    ReplyMediaKind.Image -> stringResource(R.string.bubble_reply_photo)
+                    ReplyMediaKind.File -> stringResource(R.string.bubble_reply_attachment)
+                    ReplyMediaKind.None -> null
+                }
+                val replyText = content.replyToText?.takeIf { it.isNotBlank() }
+                    ?: mediaLabel
+                    ?: stringResource(R.string.bubble_message_deleted)
                 ReplyPreview(
                     senderName = content.replyToSenderName,
-                    previewText = content.replyToText ?: stringResource(R.string.bubble_message_deleted),
+                    previewText = replyText,
+                    mediaKind = if (content.replyToDeleted) ReplyMediaKind.None else content.replyToMediaKind,
+                    thumbnailUrl = content.replyToThumbnailUrl,
+                    accentColor = onColor,
+                    onClick = onReplyPreviewClick?.takeIf { content.replyToId != null },
+                    modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                )
+            }
+
+            if (content.storyReply != null) {
+                StoryReplyPreview(
+                    story = content.storyReply,
                     accentColor = onColor,
                     modifier = Modifier.padding(bottom = MeeshySpacing.xs),
                 )
@@ -130,7 +244,34 @@ public fun MessageBubble(
                 }
             }
 
-            val hasAttachments = content.images.isNotEmpty() || content.files.isNotEmpty()
+            if (!content.isDeleted && content.locations.isNotEmpty()) {
+                content.locations.forEach { location ->
+                    LocationPreview(
+                        location = location,
+                        onColor = onColor,
+                        onClick = onLocationClick?.takeIf { location.hasCoordinates }
+                            ?.let { { it(location) } },
+                        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                    )
+                }
+            }
+
+            if (!content.isDeleted && content.audios.isNotEmpty()) {
+                content.audios.forEach { audio ->
+                    AudioBubble(
+                        audio = audio,
+                        onColor = onColor,
+                        onClick = onAudioClick?.takeIf { audio.isPlayable }
+                            ?.let { { it(audio) } },
+                        modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+                    )
+                }
+            }
+
+            val hasAttachments = content.images.isNotEmpty() ||
+                content.files.isNotEmpty() ||
+                content.locations.isNotEmpty() ||
+                content.audios.isNotEmpty()
             if (content.isDeleted) {
                 Text(
                     text = stringResource(R.string.bubble_message_deleted),
@@ -152,18 +293,32 @@ public fun MessageBubble(
                         },
                     )
                 } else {
-                    Text(
+                    RichMessageText(
                         text = content.text,
-                        style = MaterialTheme.typography.bodyMedium,
                         color = onColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                        highlightColor = MeeshyPalette.Warning.copy(alpha = 0.45f),
+                        mentionDisplayNames = mentionDisplayNames,
+                        highlightTerm = highlightTerm,
+                        trackedLinks = trackedLinks,
                     )
                 }
+            }
+
+            if (!content.isDeleted && content.languageStrip.isNotEmpty()) {
+                LanguageStrip(
+                    chips = content.languageStrip,
+                    onColor = onColor,
+                    onFlagTap = onFlagTap,
+                    modifier = Modifier.padding(top = MeeshySpacing.xs),
+                )
             }
 
             if (content.reactions.isNotEmpty()) {
                 ReactionStrip(
                     reactions = content.reactions,
                     onReactionClick = onReactionClick,
+                    onReactionLongPress = onReactionLongPress,
                     modifier = Modifier.padding(top = MeeshySpacing.xs),
                 )
             }
@@ -175,7 +330,23 @@ public fun MessageBubble(
                     .fillMaxWidth()
                     .padding(top = MeeshySpacing.xs),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                ) {
+                    if (!content.isDeleted) {
+                        EphemeralCountdownBadge(expiresAtIso = content.expiresAtIso)
+                    }
+                    if (content.isStarred && !content.isDeleted) {
+                        Icon(
+                            imageVector = Icons.Filled.Bookmark,
+                            contentDescription = stringResource(R.string.bubble_starred),
+                            tint = onColor.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(14.dp)
+                                .padding(end = MeeshySpacing.xs),
+                        )
+                    }
                     if (content.isTranslated) {
                         Icon(
                             imageVector = Icons.Filled.Translate,
@@ -198,6 +369,149 @@ public fun MessageBubble(
                     DeliveryStatusIcon(
                         status = content.deliveryStatus,
                         onColor = onColor,
+                    )
+                }
+            }
+        }
+        }
+    }
+    }
+    }
+}
+
+/**
+ * "Seen and deleted" tombstone for a consumed view-once message — Android render of the
+ * iOS `BubbleBurnedView`. A flame glyph plus a muted italic label sit in a warning-tinted
+ * capsule, aligned to the sender's side (like the deleted tombstone) rather than centered.
+ */
+@Composable
+private fun BubbleBurnedView(isOutgoing: Boolean, modifier: Modifier = Modifier) {
+    val label = stringResource(R.string.bubble_burned)
+    val a11y = stringResource(R.string.bubble_burned_a11y)
+    val capsule = RoundedCornerShape(MeeshyRadius.pill)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+        horizontalArrangement = if (isOutgoing) Arrangement.End else Arrangement.Start,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            modifier = Modifier
+                .clip(capsule)
+                .background(MeeshyPalette.Warning.copy(alpha = 0.08f))
+                .border(0.5.dp, MeeshyPalette.Warning.copy(alpha = 0.15f), capsule)
+                .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm)
+                .semantics(mergeDescendants = true) { contentDescription = a11y },
+        ) {
+            Icon(
+                imageVector = Icons.Filled.LocalFireDepartment,
+                contentDescription = null,
+                tint = MeeshyPalette.Warning,
+                modifier = Modifier.size(12.dp),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                fontStyle = FontStyle.Italic,
+                color = MeeshyTheme.tokens.textMuted,
+            )
+        }
+    }
+}
+
+/**
+ * Conceals its [content] behind the "tap to reveal" fog + blur when [spec] is non-null;
+ * otherwise renders the bubble body unchanged (zero cost for a normal message). The
+ * boundary clips the conceal to the bubble's rounded shape so the fog never bleeds past
+ * the corners.
+ */
+@Composable
+private fun BubbleBlurRevealBoundary(
+    messageId: String,
+    spec: BubbleBlurRevealSpec?,
+    content: @Composable () -> Unit,
+) {
+    if (spec == null) {
+        content()
+    } else {
+        BubbleBlurReveal(
+            messageId = messageId,
+            spec = spec,
+            shape = RoundedCornerShape(MeeshyRadius.xl),
+        ) { content() }
+    }
+}
+
+/**
+ * Discrete Prisme flag strip under a translated bubble — the original language
+ * plus each configured content language that has content, projected by
+ * [MessageLanguageStrip]. The active language reads its native name in its own
+ * accent colour; the others show flag-only. When [onFlagTap] is present each chip
+ * is tappable to switch the bubble's displayed language (the active flag reverts
+ * to the default resolution); without it the strip stays a read-only indicator.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun LanguageStrip(
+    chips: List<LanguageChip>,
+    onColor: Color,
+    modifier: Modifier = Modifier,
+    onFlagTap: ((String) -> Unit)? = null,
+) {
+    FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        chips.forEach { chip ->
+            val accent = chip.info?.colorHex
+                ?.let(::hexColor)
+                ?.takeIf { it != Color.Unspecified }
+                ?: onColor
+            val flag = chip.info?.flag ?: chip.code.uppercase()
+            val label = chip.info?.name ?: chip.code
+            // A translatable chip (a configured language with no content yet) reads
+            // as a dimmed flag with a "+" affordance — tapping requests it. Content
+            // chips render at full strength; the active one shows its native name.
+            val flagAlpha = if (chip.isTranslatable) 0.55f else 1f
+            val chipLabel = if (chip.isTranslatable) "$label — translate" else label
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(
+                        if (chip.isActive) accent.copy(alpha = 0.16f) else Color.Transparent,
+                    )
+                    .let { base ->
+                        if (onFlagTap == null) base
+                        else base
+                            .clickable { onFlagTap(chip.code) }
+                            .semantics { role = Role.Button }
+                    }
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .semantics(mergeDescendants = true) { contentDescription = chipLabel },
+            ) {
+                Text(
+                    text = flag,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.alpha(flagAlpha),
+                )
+                if (chip.isTranslatable) {
+                    Text(
+                        text = "+",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = onColor.copy(alpha = 0.7f),
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 2.dp),
+                    )
+                } else if (chip.isActive && chip.info != null) {
+                    Text(
+                        text = chip.info.nativeName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accent,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(start = 3.dp),
                     )
                 }
             }
@@ -336,6 +650,124 @@ private fun BubbleFileRow(
     }
 }
 
+/**
+ * Compact preview of a shared-location attachment — Android render of the iOS
+ * `LocationMessageView` / "Position partagée" placeholder. Shows a pin, the place
+ * name (or a generic label), and the coordinates when present; tapping hands the
+ * location's `geo:` URI to the host to open in an external maps app.
+ */
+@Composable
+private fun LocationPreview(
+    location: BubbleLocation,
+    onColor: Color,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val openLabel = stringResource(R.string.bubble_location_open)
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(onColor.copy(alpha = 0.1f))
+            .let { base ->
+                if (onClick == null) base
+                else base.clickable(onClick = onClick).semantics {
+                    role = Role.Button
+                    contentDescription = openLabel
+                }
+            }
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(
+            imageVector = Icons.Filled.LocationOn,
+            contentDescription = null,
+            tint = onColor.copy(alpha = 0.8f),
+            modifier = Modifier.size(20.dp),
+        )
+        Column {
+            Text(
+                text = location.placeName ?: stringResource(R.string.bubble_location_shared),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = onColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (location.hasCoordinates) {
+                Text(
+                    text = "${location.latitude}, ${location.longitude}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = onColor.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Compact audio-message player row — Android render of the iOS `AudioPlayerView`
+ * message-bubble context. Shows a play affordance, the `m:ss` duration (or the
+ * download size when the clip isn't yet available), and the Prisme-resolved
+ * transcription line under it. Tapping a playable clip hands its URL to the host.
+ */
+@Composable
+private fun AudioBubble(
+    audio: BubbleAudio,
+    onColor: Color,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val playLabel = stringResource(R.string.bubble_audio_play)
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(onColor.copy(alpha = 0.1f))
+            .let { base ->
+                if (onClick == null) base
+                else base.clickable(onClick = onClick).semantics {
+                    role = Role.Button
+                    contentDescription = playLabel
+                }
+            }
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+        ) {
+            Icon(
+                imageVector = if (audio.isPlayable) Icons.Filled.PlayArrow else Icons.Filled.Download,
+                contentDescription = null,
+                tint = onColor.copy(alpha = 0.9f),
+                modifier = Modifier.size(24.dp),
+            )
+            val meta = audio.formattedDuration
+                ?: audio.sizeBytes?.takeIf { it > 0 }?.let { formatFileSize(it) }
+            if (meta != null) {
+                Text(
+                    text = meta,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onColor,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+        if (audio.hasTranscription) {
+            Text(
+                text = audio.transcriptionText.orEmpty(),
+                style = MaterialTheme.typography.labelSmall,
+                color = onColor.copy(alpha = 0.75f),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = MeeshySpacing.xs),
+            )
+        }
+    }
+}
+
 @Composable
 @ReadOnlyComposable
 internal fun formatFileSize(bytes: Int): String = when {
@@ -350,14 +782,19 @@ internal fun formatFileSize(bytes: Int): String = when {
 private fun ReplyPreview(
     senderName: String?,
     previewText: String,
+    mediaKind: ReplyMediaKind,
+    thumbnailUrl: String?,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .let { base -> if (onClick == null) base else base.clickable(onClick = onClick) }
             .background(accentColor.copy(alpha = 0.12f))
             .padding(vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
@@ -365,6 +802,18 @@ private fun ReplyPreview(
                 .fillMaxHeight()
                 .background(accentColor),
         )
+        if (thumbnailUrl != null) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .padding(start = MeeshySpacing.xs)
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(accentColor.copy(alpha = 0.15f)),
+            )
+        }
         Column(
             modifier = Modifier.padding(
                 start = MeeshySpacing.xs,
@@ -379,14 +828,177 @@ private fun ReplyPreview(
                     color = accentColor,
                 )
             }
-            Text(
-                text = previewText,
-                style = MaterialTheme.typography.bodySmall,
-                color = accentColor.copy(alpha = 0.8f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val mediaIcon = when (mediaKind) {
+                    ReplyMediaKind.Image -> Icons.Filled.Image
+                    ReplyMediaKind.File -> Icons.Filled.AttachFile
+                    ReplyMediaKind.None -> null
+                }
+                if (mediaIcon != null && thumbnailUrl == null) {
+                    Icon(
+                        imageVector = mediaIcon,
+                        contentDescription = null,
+                        tint = accentColor.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .padding(end = 2.dp)
+                            .size(14.dp),
+                    )
+                }
+                Text(
+                    text = previewText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = accentColor.copy(alpha = 0.8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Quoted preview of the story/mood a message replies to — Android render of the
+ * iOS `BubbleStoryReplyPreview` / `BubbleMoodReplyPreview`. A mood shows its
+ * emoji + preview text; a story shows a camera glyph, the "Story" label, its
+ * optional thumbnail, and its reaction/comment/share metrics.
+ */
+@Composable
+private fun StoryReplyPreview(
+    story: BubbleStoryReply,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(MeeshyRadius.sm))
+            .background(accentColor.copy(alpha = 0.12f))
+            .padding(vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .width(2.dp)
+                .fillMaxHeight()
+                .background(accentColor),
+        )
+        if (!story.isMood && story.thumbnailUrl != null) {
+            AsyncImage(
+                model = story.thumbnailUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .padding(start = MeeshySpacing.xs)
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(MeeshyRadius.sm))
+                    .background(accentColor.copy(alpha = 0.15f)),
             )
         }
+        Column(
+            modifier = Modifier.padding(start = MeeshySpacing.xs, end = MeeshySpacing.sm),
+        ) {
+            if (story.isMood) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = story.moodEmoji.orEmpty(),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (story.previewText.isNotBlank()) {
+                        Text(
+                            text = story.previewText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = accentColor.copy(alpha = 0.8f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(start = MeeshySpacing.xs),
+                        )
+                    }
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.PhotoCamera,
+                        contentDescription = null,
+                        tint = accentColor.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .padding(end = 2.dp)
+                            .size(14.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.bubble_reply_story),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accentColor.copy(alpha = 0.8f),
+                    )
+                }
+                if (story.hasMetrics) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                    ) {
+                        if (story.reactionCount > 0) {
+                            StoryMetric(
+                                icon = Icons.Filled.Favorite,
+                                value = story.reactionCount,
+                                label = stringResource(
+                                    R.string.bubble_story_reactions,
+                                    story.reactionCount,
+                                ),
+                                accentColor = accentColor,
+                            )
+                        }
+                        if (story.commentCount > 0) {
+                            StoryMetric(
+                                icon = Icons.Filled.ChatBubble,
+                                value = story.commentCount,
+                                label = stringResource(
+                                    R.string.bubble_story_comments,
+                                    story.commentCount,
+                                ),
+                                accentColor = accentColor,
+                            )
+                        }
+                        if (story.shareCount > 0) {
+                            StoryMetric(
+                                icon = Icons.Filled.Share,
+                                value = story.shareCount,
+                                label = stringResource(
+                                    R.string.bubble_story_shares,
+                                    story.shareCount,
+                                ),
+                                accentColor = accentColor,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StoryMetric(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: Int,
+    label: String,
+    accentColor: Color,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.semantics { contentDescription = label },
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = accentColor.copy(alpha = 0.7f),
+            modifier = Modifier
+                .padding(end = 2.dp)
+                .size(11.dp),
+        )
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = accentColor.copy(alpha = 0.7f),
+        )
     }
 }
 
@@ -395,6 +1007,7 @@ private fun ReplyPreview(
 private fun ReactionStrip(
     reactions: List<ReactionEntry>,
     onReactionClick: ((String) -> Unit)?,
+    onReactionLongPress: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     FlowRow(
@@ -403,13 +1016,18 @@ private fun ReactionStrip(
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
         reactions.forEach { entry ->
-            ReactionChip(entry = entry, onClick = onReactionClick?.let { { it(entry.emoji) } })
+            ReactionChip(
+                entry = entry,
+                onClick = onReactionClick?.let { { it(entry.emoji) } },
+                onLongClick = onReactionLongPress,
+            )
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?) {
+private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?, onLongClick: (() -> Unit)? = null) {
     val background =
         if (entry.includesMe) MeeshyPalette.Indigo500.copy(alpha = 0.22f)
         else MeeshyTheme.tokens.backgroundTertiary.copy(alpha = 0.6f)
@@ -425,8 +1043,14 @@ private fun ReactionChip(entry: ReactionEntry, onClick: (() -> Unit)?) {
                 }
             }
             .let { base ->
-                if (onClick == null) base
-                else base.clickable(onClick = onClick).semantics { role = Role.Button }
+                if (onClick == null && onLongClick == null) {
+                    base
+                } else {
+                    base.combinedClickable(
+                        onClick = onClick ?: {},
+                        onLongClick = onLongClick,
+                    ).semantics { role = Role.Button }
+                }
             }
             .padding(horizontal = MeeshySpacing.xs, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,

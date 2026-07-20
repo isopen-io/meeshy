@@ -91,6 +91,62 @@ final class MessageTextRendererTests: XCTestCase {
         XCTAssertNotNil(MessageTextRenderer.render("salut 👋 ça va 🎉 bien", color: .primary))
     }
 
+    // MARK: - Tracked links (outbound-link redirect rewrite)
+
+    func test_resolvedLinkURL_exactMatch_rewritesToTrackingRedirect() {
+        let raw = "https://example.com/page"
+        let original = URL(string: raw)!
+        let resolved = MessageTextRenderer.resolvedLinkURL(
+            raw: raw, original: original, trackedLinks: [raw: "tok123"]
+        )
+        XCTAssertEqual(resolved.absoluteString, "https://meeshy.me/l/tok123")
+    }
+
+    func test_resolvedLinkURL_trailingPunctuation_trimsThenMatches() {
+        // The URL regex may capture a trailing '.' the gateway excluded when it
+        // minted the token — the trimmed form must still resolve.
+        let raw = "https://example.com/page."
+        let original = URL(string: raw)!
+        let resolved = MessageTextRenderer.resolvedLinkURL(
+            raw: raw, original: original, trackedLinks: ["https://example.com/page": "tok999"]
+        )
+        XCTAssertEqual(resolved.absoluteString, "https://meeshy.me/l/tok999")
+    }
+
+    func test_resolvedLinkURL_noMatch_keepsOriginal() {
+        let raw = "https://other.com"
+        let original = URL(string: raw)!
+        let resolved = MessageTextRenderer.resolvedLinkURL(
+            raw: raw, original: original, trackedLinks: ["https://example.com": "tok"]
+        )
+        XCTAssertEqual(resolved, original)
+    }
+
+    func test_resolvedLinkURL_nilOrEmptyMap_keepsOriginal() {
+        let raw = "https://example.com"
+        let original = URL(string: raw)!
+        XCTAssertEqual(MessageTextRenderer.resolvedLinkURL(raw: raw, original: original, trackedLinks: nil), original)
+        XCTAssertEqual(MessageTextRenderer.resolvedLinkURL(raw: raw, original: original, trackedLinks: [:]), original)
+    }
+
+    func test_render_withTrackedLinks_doesNotCrash() {
+        // End-to-end: a URL-bearing message with a tracking map renders without
+        // throwing; the displayed text keeps the raw URL.
+        let result = MessageTextRenderer.render(
+            "voir https://example.com/page maintenant",
+            color: .primary,
+            trackedLinks: ["https://example.com/page": "tok123"]
+        )
+        XCTAssertNotNil(result)
+    }
+
+    func test_render_withoutTrackedLinks_matchesNilParam() {
+        // Omitting the param (default nil) is identical to passing nil.
+        let omitted = MessageTextRenderer.render("lien https://example.com", color: .primary)
+        let explicitNil = MessageTextRenderer.render("lien https://example.com", color: .primary, trackedLinks: nil)
+        XCTAssertEqual(omitted, explicitNil)
+    }
+
     // MARK: - highlightRanges (internal)
 
     func test_highlightRanges_findsAllOccurrences() {

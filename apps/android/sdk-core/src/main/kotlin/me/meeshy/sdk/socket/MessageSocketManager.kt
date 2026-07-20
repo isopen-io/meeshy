@@ -13,6 +13,8 @@ import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.model.UnreadUpdateEvent
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.model.MessageDeletedEvent
+import me.meeshy.sdk.model.MessagePinnedEvent
+import me.meeshy.sdk.model.MessageUnpinnedEvent
 import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.AttachmentUpdatedEvent
 import me.meeshy.sdk.model.ConversationUpdatedSocketEvent
@@ -21,6 +23,9 @@ import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.ParticipantBannedEvent
 import me.meeshy.sdk.model.ParticipantRoleUpdatedEvent
 import me.meeshy.sdk.model.ConversationDeletedSocketEvent
+import me.meeshy.sdk.model.LiveLocationStartedEvent
+import me.meeshy.sdk.model.LiveLocationUpdatedEvent
+import me.meeshy.sdk.model.LiveLocationStoppedEvent
 import org.json.JSONObject
 import timber.log.Timber
 import javax.inject.Inject
@@ -41,6 +46,8 @@ class MessageSocketManager @Inject constructor(
     private val _messageReceived = buf<ApiMessage>()
     private val _messageUpdated = buf<ApiMessage>()
     private val _messageDeleted = buf<MessageDeletedEvent>()
+    private val _messagePinned = buf<MessagePinnedEvent>()
+    private val _messageUnpinned = buf<MessageUnpinnedEvent>()
     private val _typingStarted = buf<TypingEvent>()
     private val _typingStopped = buf<TypingEvent>()
     private val _reactionAdded = buf<ReactionUpdateEvent>()
@@ -59,10 +66,15 @@ class MessageSocketManager @Inject constructor(
     private val _participantBanned = buf<ParticipantBannedEvent>()
     private val _participantRoleUpdated = buf<ParticipantRoleUpdatedEvent>()
     private val _readStatusUpdated = buf<ReadStatusUpdatedEvent>()
+    private val _liveLocationStarted = buf<LiveLocationStartedEvent>()
+    private val _liveLocationUpdated = buf<LiveLocationUpdatedEvent>()
+    private val _liveLocationStopped = buf<LiveLocationStoppedEvent>()
 
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.asSharedFlow()
     val messageUpdated: SharedFlow<ApiMessage> = _messageUpdated.asSharedFlow()
     val messageDeleted: SharedFlow<MessageDeletedEvent> = _messageDeleted.asSharedFlow()
+    val messagePinned: SharedFlow<MessagePinnedEvent> = _messagePinned.asSharedFlow()
+    val messageUnpinned: SharedFlow<MessageUnpinnedEvent> = _messageUnpinned.asSharedFlow()
     val typingStarted: SharedFlow<TypingEvent> = _typingStarted.asSharedFlow()
     val typingStopped: SharedFlow<TypingEvent> = _typingStopped.asSharedFlow()
     val reactionAdded: SharedFlow<ReactionUpdateEvent> = _reactionAdded.asSharedFlow()
@@ -81,11 +93,16 @@ class MessageSocketManager @Inject constructor(
     val participantBanned: SharedFlow<ParticipantBannedEvent> = _participantBanned.asSharedFlow()
     val participantRoleUpdated: SharedFlow<ParticipantRoleUpdatedEvent> = _participantRoleUpdated.asSharedFlow()
     val readStatusUpdated: SharedFlow<ReadStatusUpdatedEvent> = _readStatusUpdated.asSharedFlow()
+    val liveLocationStarted: SharedFlow<LiveLocationStartedEvent> = _liveLocationStarted.asSharedFlow()
+    val liveLocationUpdated: SharedFlow<LiveLocationUpdatedEvent> = _liveLocationUpdated.asSharedFlow()
+    val liveLocationStopped: SharedFlow<LiveLocationStoppedEvent> = _liveLocationStopped.asSharedFlow()
 
     fun attach() {
         listen("message:new", _messageReceived)
         listen("message:updated", _messageUpdated)
         listen("message:deleted", _messageDeleted)
+        listen("message:pinned", _messagePinned)
+        listen("message:unpinned", _messageUnpinned)
         listen("typing:start", _typingStarted)
         listen("typing:stop", _typingStopped)
         listen("reaction:added", _reactionAdded)
@@ -104,6 +121,9 @@ class MessageSocketManager @Inject constructor(
         listen("conversation:participant-banned", _participantBanned)
         listen("participant:role-updated", _participantRoleUpdated)
         listen("read-status:updated", _readStatusUpdated)
+        listen("location:live-started", _liveLocationStarted)
+        listen("location:live-updated", _liveLocationUpdated)
+        listen("location:live-stopped", _liveLocationStopped)
     }
 
     /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */

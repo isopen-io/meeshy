@@ -5,6 +5,7 @@ import { useI18n } from '@/hooks/use-i18n';
 import { useUser } from '@/stores/auth-store';
 import { resolveUserPreferredLanguage } from '@/utils/user-language-preferences';
 import { cn } from '@/lib/utils';
+import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { Button } from './Button';
 import type { MobileTranscription, MobileTranscriptionSegment } from '@/services/posts.service';
 
@@ -30,12 +31,7 @@ type Phase = 'idle' | 'recording' | 'transcribing' | 'preview';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDuration(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const min = Math.floor(totalSec / 60);
-  const sec = totalSec % 60;
-  return `${min}:${sec.toString().padStart(2, '0')}`;
-}
+const formatDuration = (ms: number): string => formatClock(ms / 1000);
 
 function getSupportedMimeType(): string {
   const candidates = [

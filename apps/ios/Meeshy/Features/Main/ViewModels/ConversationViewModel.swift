@@ -86,8 +86,8 @@ class ConversationViewModel: ObservableObject {
         }
 
         _messageIdIndex = nil
-        _cachedLastReceivedIndex = nil
-        _cachedLastSentIndex = nil
+        _cachedLastReceivedIndex = .uncomputed
+        _cachedLastSentIndex = .uncomputed
 
         if structureChanged {
             _messagesByDate = nil
@@ -102,20 +102,33 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // Double-optional: nil = not computed, .some(nil) = computed but no match, .some(.some(N)) = found at N
-    private var _cachedLastReceivedIndex: Int?? = nil
+    /// Two-state cache sentinel for Int? properties where both `nil` (absent)
+    /// and a concrete index are valid computed results. Replaces the `Int??`
+    /// pattern (`nil` = uncomputed, `.some(nil)` = absent) with explicit cases
+    /// that are immediately readable without knowing Swift nested-optional semantics.
+    private enum IndexCache {
+        case uncomputed
+        case resolved(Int?)
+
+        var index: Int? {
+            if case .resolved(let i) = self { return i }
+            return nil
+        }
+    }
+
+    private var _cachedLastReceivedIndex: IndexCache = .uncomputed
     var cachedLastReceivedIndex: Int? {
-        if let cached = _cachedLastReceivedIndex { return cached }
+        if case .resolved(let cached) = _cachedLastReceivedIndex { return cached }
         let result = messages.indices.last(where: { !messages[$0].isMe })
-        _cachedLastReceivedIndex = .some(result)
+        _cachedLastReceivedIndex = .resolved(result)
         return result
     }
 
-    private var _cachedLastSentIndex: Int?? = nil
+    private var _cachedLastSentIndex: IndexCache = .uncomputed
     var cachedLastSentIndex: Int? {
-        if let cached = _cachedLastSentIndex { return cached }
+        if case .resolved(let cached) = _cachedLastSentIndex { return cached }
         let result = messages.indices.last(where: { messages[$0].isMe })
-        _cachedLastSentIndex = .some(result)
+        _cachedLastSentIndex = .resolved(result)
         return result
     }
 
@@ -323,6 +336,49 @@ class ConversationViewModel: ObservableObject {
     /// When true, the effects picker sheet is presented
     @Published var showEffectsPicker: Bool = false
 
+    /// True when the current user has not yet granted voice-cloning consent.
+    /// Drives the in-bubble `AudioConsentNotice` nudge on outgoing audio
+    /// messages. Set asynchronously after `start()` via a one-shot
+    /// `VoiceProfileService` call; default is `false` so a network error
+    /// never shows a false positive.
+    @Published var voiceConsentMissing: Bool = false
+
+    /// Pure, testable: maps a `hasConsent` fetch to "missing", fail-safe to false.
+    nonisolated static func resolveVoiceConsentMissing(_ fetchHasConsent: () async throws -> Bool) async -> Bool {
+        do { return try await !fetchHasConsent() } catch { return false }
+    }
+
+    private func loadVoiceConsentStatus() {
+        // Source primaire : l'espace de préférences — la même API que celle
+        // par laquelle le popup accorde le consentement (PATCH
+        // /me/preferences/application). Repli legacy : un consentement
+        // accordé via le wizard voice-profile n'écrit que les champs User —
+        // le statut REST voice-profile couvre ce cas tant que les
+        // préférences sont muettes.
+        if UserPreferencesManager.shared.voiceConsentGranted {
+            voiceConsentMissing = false
+            return
+        }
+        Task { [weak self] in
+            let missing = await Self.resolveVoiceConsentMissing {
+                try await VoiceProfileService.shared.getConsentStatus().hasConsent
+            }
+            await MainActor.run { self?.voiceConsentMissing = missing }
+        }
+    }
+
+    /// Validation du popup de traduction automatique à l'envoi d'un audio
+    /// sans consentement : accorde via l'espace de préférences — la MÊME API
+    /// que la lecture — le consentement de définition du profil vocal ET la
+    /// traduction utilisant ce profil, plus les features audio associées
+    /// (transcription, traduction audio, TTS, profil vocal). L'écriture est
+    /// locale-first et synchronisée au backend par l'outbox des préférences
+    /// (PATCH /me/preferences/application + /audio) — jamais bloquant.
+    func grantVoiceAutoTranslationConsent() {
+        UserPreferencesManager.shared.grantVoiceAutoTranslationConsent()
+        voiceConsentMissing = false
+    }
+
     // MARK: - Audio Continuous Playback (Phase 4)
 
     /// Attachments already played to completion. Excluded from the auto-built
@@ -429,7 +485,10 @@ class ConversationViewModel: ObservableObject {
     // through `serverId(for:)`. The mapping survives until the next reload
     // from cache (which already stores server ids), at which point the
     // optimistic id disappears naturally.
-    var pendingServerIds: [String: String] = [:]
+    var pendingServerIds: [String: String] = [:] {
+        didSet { pendingServerIdSet = Set(pendingServerIds.values) }
+    }
+    private var pendingServerIdSet: Set<String> = []
 
     /// Resolve the authoritative server id for an in-memory message. Falls
     /// back to the supplied id when no mapping exists (the message id is
@@ -521,7 +580,7 @@ class ConversationViewModel: ObservableObject {
     }
 
     func containsMessage(id: String) -> Bool {
-        messageIdIndex[id] != nil || pendingServerIds.values.contains(id)
+        messageIdIndex[id] != nil || pendingServerIdSet.contains(id)
     }
 
     // MARK: - Date-Grouped Messages
@@ -696,7 +755,6 @@ class ConversationViewModel: ObservableObject {
     private let commandHandler: ConversationCommandHandler
     private let mediaHandler: ConversationMediaHandler
     private let searchHandler: ConversationSearchHandler
-    private let translationResolver: TranslationResolver
 
     // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
 
@@ -722,6 +780,8 @@ class ConversationViewModel: ObservableObject {
     private let messageSocket: MessageSocketProviding
     private let networkMonitor: NetworkMonitorProviding
     private let offlineQueue: OfflineMessageQueueing
+    private let activeCallService: ActiveCallServiceProviding
+    private let liveCallJoin: LiveCallJoinContext
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
     /// Captured at init so the heavy side-effects (DB observation, initial
@@ -859,8 +919,12 @@ class ConversationViewModel: ObservableObject {
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         dependencies: ConversationDependencies = .live,
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
-        offlineQueue: OfflineMessageQueueing = OfflineQueue.shared
+        offlineQueue: OfflineMessageQueueing = OfflineQueue.shared,
+        activeCallService: ActiveCallServiceProviding = ActiveCallService.shared,
+        liveCallJoin: LiveCallJoinContext = .live
     ) {
+        self.activeCallService = activeCallService
+        self.liveCallJoin = liveCallJoin
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
         self.initialUnreadCount = unreadCount
@@ -886,18 +950,15 @@ class ConversationViewModel: ObservableObject {
         // Built before MessageStore/socket so subsequent delegations always
         // have a non-nil handler to call. The handlers don't drive any state
         // yet; they mirror the legacy @Published values via the messages
-        // sink below so `searchHandler` / `mediaHandler` / `translationResolver`
-        // can read off `stateStore.messages` without forking the source of truth.
+        // sink below so `searchHandler` / `mediaHandler` can read off
+        // `stateStore.messages` without forking the source of truth.
         let stateStore = ConversationStateStore()
         self.stateStore = stateStore
         self.commandHandler = ConversationCommandHandler(
             state: stateStore,
             conversationId: conversationId,
             messageService: messageService,
-            persistence: dependencies.persistence,
-            authManager: authManager,
-            messageSocket: messageSocket,
-            reportService: reportService
+            persistence: dependencies.persistence
         )
         self.mediaHandler = ConversationMediaHandler(state: stateStore)
         self.searchHandler = ConversationSearchHandler(
@@ -906,7 +967,6 @@ class ConversationViewModel: ObservableObject {
             messageService: messageService,
             persistence: dependencies.persistence
         )
-        self.translationResolver = TranslationResolver(state: stateStore, authManager: authManager)
         let store = MessageStore(
             conversationId: conversationId,
             persistence: dependencies.persistence
@@ -980,6 +1040,7 @@ class ConversationViewModel: ObservableObject {
         subscribeToAudioCoordinatorFinishedEvents()
         mirrorMessagesIntoStateStore()
         hydrateCurrentConversationFromCache()
+        loadVoiceConsentStatus()
         // Cross-conversation unread aggregator powers the back-button pill.
         // `setCurrentlyOpenConversation(conversationId)` (called above) makes the
         // sync engine EXCLUDE this conversation from `totalConversationsUnread`,
@@ -1071,26 +1132,48 @@ class ConversationViewModel: ObservableObject {
     /// socket delivery that raced the REST load). Deduplicates by `id` so a
     /// message received from both the initial REST response and the socket
     /// never appears twice. Result is sorted by `createdAt`.
+    ///
+    /// Duplicate prevention: when a server ACK flips a message's display id from
+    /// localId (e.g. "cid_…") to serverId (e.g. "mongo_…"), `incoming` contains
+    /// the server-id version but the OLD optimistic row is still in `messages`
+    /// under its original id. Without correction, the preserve-logic keeps the
+    /// old row alongside the new one → duplicate bubble. `pendingServerIds`
+    /// maps localId → serverId synchronously before `applyEvent` fires the GRDB
+    /// refresh, so it is always populated in time.
     private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
         let incomingIds = Set(incoming.map(\.id))
-        let preserved = messages.filter { !incomingIds.contains($0.id) }
+
+        // Detect optimistic rows superseded by a server-ack id-flip:
+        // if pendingServerIds maps msg.id → some id that IS in incoming, the
+        // old optimistic row must not be preserved (it would duplicate the
+        // acked row, which is already in incoming under the server id).
+        let supersededIds = Set(messages.compactMap { msg -> String? in
+            guard let sid = pendingServerIds[msg.id], incomingIds.contains(sid) else { return nil }
+            return msg.id
+        })
+
+        let preserved = messages.filter { !incomingIds.contains($0.id) && !supersededIds.contains($0.id) }
         let result = preserved.isEmpty ? incoming : (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
 
-        // BUG1 diagnostics — this merge is supposed to NEVER drop a displayed row
-        // (it preserves anything not in `incoming`). If this fires, the loss is an
-        // id-identity problem (e.g. an optimistic cid replaced by a serverId so
-        // the "same" message changes id and the old row is neither matched nor
-        // preserved). Logs the count delta + a sample of dropped ids + how many
-        // were in-flight/failed so we can correlate with the send timeline.
+        // Diagnostic: log when a message disappears from the display unexpectedly.
+        // Superseded rows (known id-flip) are EXPECTED drops and logged at info.
+        // Unknown drops are bugs and logged at error.
         let beforeIds = Set(messages.map(\.id))
-        let droppedIds = beforeIds.subtracting(Set(result.map(\.id)))
-        if !droppedIds.isEmpty {
-            let inFlight = messages.filter { droppedIds.contains($0.id) }
-                .filter { m in
-                    let s = String(describing: m.deliveryStatus)
-                    return s.contains("sending") || s.contains("clock") || s.contains("failed") || s.contains("sent") || s.contains("queued")
-                }
-            Logger.messages.error("[ConversationViewModel][BUG1] merge DROPPED \(droppedIds.count) display row(s) before=\(self.messages.count) incoming=\(incoming.count) result=\(result.count) inFlightOrSent=\(inFlight.count) ids=\(droppedIds.sorted().prefix(8).joined(separator: ","))")
+        let resultIds = Set(result.map(\.id))
+        let allDroppedIds = beforeIds.subtracting(resultIds)
+        if !allDroppedIds.isEmpty {
+            let trueDrops = allDroppedIds.subtracting(supersededIds)
+            if !trueDrops.isEmpty {
+                let inFlight = messages.filter { trueDrops.contains($0.id) }
+                    .filter { m in
+                        let s = String(describing: m.deliveryStatus)
+                        return s.contains("sending") || s.contains("clock") || s.contains("failed") || s.contains("sent") || s.contains("queued")
+                    }
+                Logger.messages.error("[ConversationViewModel][BUG1] merge DROPPED \(trueDrops.count) display row(s) before=\(self.messages.count) incoming=\(incoming.count) result=\(result.count) inFlightOrSent=\(inFlight.count) ids=\(trueDrops.sorted().prefix(8).joined(separator: ","))")
+            }
+            if !supersededIds.isEmpty {
+                Logger.messages.info("[ConversationViewModel] merge suppressed \(supersededIds.count) superseded optimistic row(s) after server-ack id-flip ids=\(supersededIds.sorted().prefix(8).joined(separator: ","))")
+            }
         }
         return result
     }
@@ -1193,7 +1276,7 @@ class ConversationViewModel: ObservableObject {
 
     /// Mirror the legacy `@Published var messages` into the new
     /// `ConversationStateStore.messages` so the split handlers
-    /// (`searchHandler`, `mediaHandler`, `translationResolver`) can read
+    /// (`searchHandler`, `mediaHandler`) can read
     /// off the shared store while the legacy ViewModel still owns the
     /// canonical source. Removed once the migration of the message
     /// pipeline (init/load/send/edit/delete) into `commandHandler` is
@@ -1302,6 +1385,46 @@ class ConversationViewModel: ObservableObject {
     /// durable outbox quickly instead of pinning the optimistic `.sending`
     /// clock for a full minute on a single hung cellular attempt.
     static let sendRESTTimeoutSeconds: Double = 12
+
+    /// Phase 2 — seeds the local `MediaConsumptionStore` from the server-synced
+    /// per-user consumption surfaced on freshly loaded attachments, so the
+    /// in-bubble waveform tint (audio) / progress bar (video) reflect progress
+    /// made on other devices the moment the conversation opens. The store merges
+    /// with MAX semantics, so a further-along LOCAL position is never regressed
+    /// by a staler server value (and vice-versa). App-side orchestration: it
+    /// derives the playback fraction from the attachment duration and decides
+    /// when to seed — the store itself stays an opaque building block.
+    private func seedMediaConsumption(from messages: [Message]) {
+        for message in messages {
+            for attachment in message.attachments {
+                guard let consumption = attachment.currentUserConsumption else { continue }
+                let durationMs = attachment.duration ?? 0
+                let positionMs: Int?
+                let complete: Bool
+                switch attachment.type {
+                case .audio:
+                    positionMs = consumption.lastPlayPositionMs
+                    complete = consumption.listenedComplete
+                case .video:
+                    positionMs = consumption.lastWatchPositionMs
+                    complete = consumption.watchedComplete
+                default:
+                    continue
+                }
+                // Nothing to seed without either completion or a measurable position.
+                guard complete || (positionMs != nil && durationMs > 0) else { continue }
+                // `record` floors `complete` to fraction 1, so 0 here is safe
+                // when only completion is known (no position/duration).
+                let fraction: Double
+                if durationMs > 0, let pos = positionMs {
+                    fraction = Double(pos) / Double(durationMs)
+                } else {
+                    fraction = 0
+                }
+                MediaConsumptionStore.shared.record(fraction: fraction, complete: complete, for: attachment.id)
+            }
+        }
+    }
 
     func loadMessages() async {
         guard !isLoadingInitial else { return }
@@ -1491,6 +1614,10 @@ class ConversationViewModel: ObservableObject {
             // Keep legacy CacheCoordinator in sync so other parts of the app
             // (ConversationList preview, unread badge) that still read from it remain correct.
             let freshMessages = await processAPIMessages(response.data)
+            // Phase 2 — seed the local consumption store from the server-synced
+            // per-user progress so the waveform tint / video progress bar reflect
+            // cross-device consumption at a glance (MAX-merged with local).
+            seedMediaConsumption(from: freshMessages)
             scheduleTranscriptionRetry(for: response.data)
             let snapshot = freshMessages
             await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
@@ -1658,10 +1785,11 @@ class ConversationViewModel: ObservableObject {
             // rows from GRDB, so going through the sync engine would leave the
             // GRDB window stuck on the initial load and latch
             // hasOlderMessages to false on the very first scroll trigger.
+            let olderPageLimit = 50
             let response = try await messageService.listBefore(
                 conversationId: conversationId,
                 before: beforeValue,
-                limit: 50,
+                limit: olderPageLimit,
                 includeReplies: true,
                 includeTranslations: true
             )
@@ -1689,9 +1817,14 @@ class ConversationViewModel: ObservableObject {
             let didLoad = await messageStore.loadOlder(before: oldestCreatedAt)
             if didLoad { prefetchRecentMedia() }
 
-            // Server is the source of truth for pagination state.
+            // Server is the source of truth for pagination state. Fallback :
+            // les gateways antérieurs au fix de schéma Fastify strippaient
+            // `cursorPagination` de la réponse — `?? false` verrouillait alors
+            // la pagination après une seule page. Une page pleine (>= limit,
+            // le mode cursor pouvait renvoyer limit+1) implique une suite.
             nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? false
+            hasOlderMessages = response.cursorPagination?.hasMore
+                ?? (response.data.count >= olderPageLimit)
         } catch {
             // Transient failure — keep hasOlderMessages so the next scroll
             // retries. Debounce prevents tight retry loops.
@@ -1742,13 +1875,19 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Audio Continuous Playback (Phase 4)
 
-    /// Re-initiate ("call back") a call from a tapped call-summary notice.
-    /// Mirrors the conversation header's call entry point: direct (1:1) calls
-    /// only, re-using the SAME media type (audio/video) as the summarized call.
-    /// The peer display name is resolved best-effort from a received message so
-    /// the CallKit / in-app outgoing UI shows a name, not a raw id.
+    /// Re-initiate ("call back") a call from a tapped call-summary notice —
+    /// or JOIN it when the notice is the LIVE message (`kind: 'call-live'`,
+    /// "Appel … en cours"). Mirrors the conversation header's call entry
+    /// point: direct (1:1) calls only, re-using the SAME media type
+    /// (audio/video) as the summarized call. The peer display name is
+    /// resolved best-effort from a received message so the CallKit / in-app
+    /// outgoing UI shows a name, not a raw id.
     func callBack(for summary: CallSummaryMetadata) {
         guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
+        if summary.isLive {
+            Task { await joinOngoingCall(summary) }
+            return
+        }
         let displayName = resolvedPeerDisplayName
             ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
         CallManager.shared.startCall(
@@ -1757,6 +1896,59 @@ class ConversationViewModel: ObservableObject {
             displayName: displayName,
             isVideo: summary.callType == .video
         )
+    }
+
+    /// Rejoint l'appel EN COURS annoncé par la bulle vivante — 4 branches :
+    ///   1. ce device est déjà sur CET appel (actif ou en négociation) →
+    ///      ramener l'UI d'appel au premier plan ;
+    ///   2. ce device SONNE sur cet appel (bannière call-waiting) → laisser la
+    ///      bannière/CallKit porter le geste de réponse, pas de double-join ;
+    ///   3. l'appel est actif côté serveur (revalidé via active-call) →
+    ///      `rejoinActiveCall` (réhydratation à froid — app relancée mi-appel) ;
+    ///   4. l'appel n'existe plus → toast « L'appel est terminé » (la bulle
+    ///      sera éditée au terminal dès que le message:edited arrive).
+    /// Internal (pas private) pour la testabilité des branches.
+    func joinOngoingCall(_ summary: CallSummaryMetadata) async {
+        // 1 — déjà sur cet appel : l'UI d'appel revient au premier plan.
+        if liveCallJoin.currentCallId() == summary.callId, !liveCallJoin.isIdle() {
+            liveCallJoin.bringCallUIForward()
+            return
+        }
+        // 2 — cet appel sonne en attente sur ce device : répondre reste le
+        // geste de la bannière (jamais de rejoin concurrent).
+        if liveCallJoin.hasPendingIncomingCall(summary.callId) {
+            return
+        }
+        // 3/4 — réhydratation à froid : revalider côté serveur avant tout média.
+        do {
+            let session = try await activeCallService.activeCall(conversationId: conversationId)
+            guard let session, session.id == summary.callId else {
+                FeedbackToastManager.shared.show(
+                    String(localized: "bubble.call.join.ended", defaultValue: "L'appel est terminé", bundle: .main),
+                    type: .info
+                )
+                return
+            }
+            let remote = session.remoteParticipant(currentUserId: currentUserId)
+            let displayName = remote?.user?.displayName
+                ?? remote?.user?.username
+                ?? resolvedPeerDisplayName
+                ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
+            let joined = liveCallJoin.rejoinActiveCall(
+                summary.callId,
+                conversationId,
+                remote?.userId ?? participantUserId ?? "",
+                displayName,
+                summary.callType == .video
+            )
+            if !joined {
+                Logger.messages.warning("[ConversationVM] rejoinActiveCall refused (state non-idle) for \(summary.callId, privacy: .public)")
+            }
+        } catch {
+            FeedbackToastManager.shared.showError(
+                String(localized: "bubble.call.join.failed", defaultValue: "Impossible de rejoindre l'appel", bundle: .main)
+            )
+        }
     }
 
     /// Best-effort peer display name from the most recent received message in
@@ -1925,11 +2117,12 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    /// Send-time fallback for `originalLanguage` when the composer supplies
-    /// none. Forced to French — the keyboard layout must never drive content
-    /// language (Prisme Linguistique). The composer itself starts in `fr` and
-    /// `TextAnalyzer` re-detects from the typed text.
-    private func defaultComposeLanguage() -> String { "fr" }
+    /// Langue de composition : détectée depuis le contenu (on-device), repli sur la
+    /// langue primaire de l'utilisateur puis "fr". Pure → testable sans authManager.
+    nonisolated static func composeLanguage(for content: String, preferred: [String]) -> String {
+        LanguageDetection.detectLanguageCode(for: content, fallback: preferred.first)
+            ?? preferred.first ?? "fr"
+    }
 
     /// Stable identity of a logical message, used to dedup an accidental
     /// double-tap. Two taps producing the same key within
@@ -2327,6 +2520,13 @@ class ConversationViewModel: ObservableObject {
         // Déclarés hors du `do` : le bloc `catch` (repli socket) les relit.
         var finalContent: String? = text.isEmpty ? nil : text
         var isEncrypted = false
+        // Spec 2026-07-08 (message-send-failure-retry-flow) — chaque tentative
+        // de transport est journalisée dans `send_attempts` pour la carte
+        // « Historique d'envoi » de la vue détails. Non-nil uniquement quand le
+        // POST REST a réellement démarré, pour que le catch (atteignable aussi
+        // par un échec de chiffrement pré-transport) n'enregistre pas de
+        // fausse tentative REST.
+        var restAttemptStartedAt: Date? = nil
         do {
             var encryptionMode: String? = nil
 
@@ -2340,14 +2540,19 @@ class ConversationViewModel: ObservableObject {
                     encryptionMode = "E2EE"
                 } catch {
                     Logger.messages.error("Failed to encrypt message: \(error.localizedDescription)")
-                    // For MVP, we'll fall back to plaintext if encryption fails or session isn't established
-                    // In a production secure messaging app, we should throw an error here to prevent accidental plaintext sends.
+                    #if DEBUG
+                    // Debug-only fallback: log and continue with plaintext so dev builds don't block on E2EE setup issues.
+                    #else
+                    // Production: never silently downgrade an E2EE session to plaintext.
+                    try? await messagePersistence.markOptimisticFailed(localId: tempId, reason: "encryption_failed")
+                    throw error
+                    #endif
                 }
             }
 
             let body = SendMessageRequest(
                 content: finalContent,
-                originalLanguage: originalLanguage ?? defaultComposeLanguage(),
+                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                 replyToId: replyToId,
                 storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
@@ -2383,16 +2588,18 @@ class ConversationViewModel: ObservableObject {
                 && !pendingEffects.hasAnyEffect
             if socketFirstEligible {
                 Logger.messages.info("SendFlow socket-first START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — message:send before REST")
+                let socketFirstStartedAt = Date()
                 if let socketAck = await messageSocket.sendViaSocketFallback(
                     conversationId: conversationId,
                     content: finalContent,
                     attachmentIds: [],
                     replyToId: replyToId,
                     storyReplyToId: storyReplyToId,
-                    originalLanguage: originalLanguage ?? defaultComposeLanguage(),
+                    originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                     isEncrypted: false,
                     clientMessageId: tempId
                 ) {
+                    await recordSendAttempt(tempId, transport: .socketFirst, startedAt: socketFirstStartedAt, outcome: .success)
                     await finalizeSuccessfulSend(
                         tempId: tempId,
                         serverId: socketAck.messageId,
@@ -2403,6 +2610,7 @@ class ConversationViewModel: ObservableObject {
                     )
                     return true
                 }
+                await recordSendAttempt(tempId, transport: .socketFirst, startedAt: socketFirstStartedAt, outcome: .failure, errorMessage: "no ACK")
                 Logger.messages.info("SendFlow socket-first MISS tempId=\(tempId, privacy: .public) — no ACK, falling through to REST")
             }
 
@@ -2418,6 +2626,7 @@ class ConversationViewModel: ObservableObject {
             // a full minute before the socket fallback + durable outbox can take
             // over. On timeout the throw routes into the catch below (socket
             // re-emit with the SAME clientMessageId → gateway dedups).
+            restAttemptStartedAt = Date()
             let responseData = try await withSendTimeout(seconds: Self.sendRESTTimeoutSeconds) {
                 try await self.messageService.send(
                     conversationId: self.conversationId, request: body
@@ -2425,6 +2634,7 @@ class ConversationViewModel: ObservableObject {
             }
             let serverId = responseData.id
             let serverCreatedAt = responseData.createdAt
+            await recordSendAttempt(tempId, transport: .rest, startedAt: restAttemptStartedAt ?? sendStartedAt, outcome: .success)
             Logger.messages.debug("SendFlow POST OK tempId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public)")
 
             await finalizeSuccessfulSend(
@@ -2437,6 +2647,9 @@ class ConversationViewModel: ObservableObject {
             )
             return true
         } catch {
+            if let restStartedAt = restAttemptStartedAt {
+                await recordSendAttempt(tempId, transport: .rest, startedAt: restStartedAt, outcome: .failure, errorMessage: error.localizedDescription)
+            }
             // Permanent rejection: the other party blocked us (or we blocked
             // them from another device). Retrying never succeeds, so skip the
             // ~10s socket fallback + outbox retry — mark the row failed and tell
@@ -2465,6 +2678,7 @@ class ConversationViewModel: ObservableObject {
                 || pendingEffects.hasAnyEffect
             if !hasSpecialProps {
                 Logger.messages.warning("SendFlow socket-fallback START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — REST failed, awaiting socket ack up to ~10s (isSending held)")
+                let socketFallbackStartedAt = Date()
                 let socketAck = await messageSocket.sendViaSocketFallback(
                     conversationId: conversationId,
                     content: finalContent,
@@ -2474,6 +2688,13 @@ class ConversationViewModel: ObservableObject {
                     originalLanguage: originalLanguage ?? "fr",
                     isEncrypted: isEncrypted,
                     clientMessageId: tempId
+                )
+                await recordSendAttempt(
+                    tempId,
+                    transport: .socketFallback,
+                    startedAt: socketFallbackStartedAt,
+                    outcome: socketAck != nil ? .success : .failure,
+                    errorMessage: socketAck == nil ? "no ACK" : nil
                 )
                 if let socketAck {
                     pendingServerIds[tempId] = socketAck.messageId
@@ -2532,6 +2753,27 @@ class ConversationViewModel: ObservableObject {
 
             return false
         }
+    }
+
+    // MARK: - Send Attempt Journal
+
+    /// Journalise une tentative de transport dans `send_attempts` (spec
+    /// 2026-07-08 message-send-failure-retry-flow). Best-effort : un échec
+    /// d'écriture ne doit jamais interrompre le flux d'envoi.
+    private func recordSendAttempt(
+        _ tempId: String,
+        transport: SendAttemptRecord.Transport,
+        startedAt: Date,
+        outcome: SendAttemptRecord.Outcome,
+        errorMessage: String? = nil
+    ) async {
+        try? await messagePersistence.recordSendAttempt(
+            localId: tempId,
+            transport: transport,
+            startedAt: startedAt,
+            outcome: outcome,
+            errorMessage: errorMessage
+        )
     }
 
     // MARK: - Retry Failed Message
@@ -2659,7 +2901,7 @@ class ConversationViewModel: ObservableObject {
             replyToId: replyToId
         )
         let replyToJson = resolvedReplyRef.flatMap { try? JSONEncoder().encode($0) }
-        let resolvedOriginalLanguage = originalLanguage ?? defaultComposeLanguage()
+        let resolvedOriginalLanguage = originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages)
         let record = MessageRecord(
             localId: tempId, serverId: nil,
             conversationId: conversationId, senderId: currentUserId,
@@ -2798,6 +3040,10 @@ class ConversationViewModel: ObservableObject {
     func toggleReaction(messageId: String, emoji: String) {
         guard consumeReactionToken() else { return }
         guard let idx = messageIndex(for: messageId) else { return }
+        // Un message systeme n'est pas reactable : l'overlay menu gate deja
+        // l'affordance, l'action gate aussi pour couvrir tout autre call site
+        // (le gateway rejette en 400 en derniere barriere).
+        guard messages[idx].messageSource != .system else { return }
 
         // Own reactions are ALWAYS keyed by the `currentUserId` sentinel — the
         // canonical "my reaction" marker that `summarizeReactions` and
@@ -2833,6 +3079,15 @@ class ConversationViewModel: ObservableObject {
                 await OutboxFlushTrigger.flushNow()
             }
         } else {
+            // Modele 1-reaction-par-user (miroir de toggleAttachmentReaction et
+            // du swap serveur) : poser un emoji different REMPLACE ma reaction
+            // precedente au lieu de l'empiler. Les emojis des autres
+            // participants ne sont jamais touches.
+            let previousOwnEmojis = Array(Set(
+                messages[idx].reactions
+                    .filter { $0.participantId == participantId && $0.emoji != emoji }
+                    .map(\.emoji)
+            ))
             // Marque la reaction comme "nouvelle" AVANT l'ecriture async : quand
             // le store observe l'ajout et re-rend la bulle, la nouvelle pill
             // verra `shouldAnimate == true` et jouera la comete. Un scroll
@@ -2840,12 +3095,26 @@ class ConversationViewModel: ObservableObject {
             ReactionAnimationGate.markAdded(messageId: messageId, emoji: emoji)
             let reactionId = UUID().uuidString
             Task { [weak self] in
+                for oldEmoji in previousOwnEmojis {
+                    try? await self?.messagePersistence.removeReaction(
+                        localId: messageId, emoji: oldEmoji, participantId: participantId
+                    )
+                }
                 try? await self?.messagePersistence.appendReaction(
                     localId: messageId, reactionId: reactionId,
                     messageId: remoteId, participantId: participantId, emoji: emoji
                 )
             }
             Task {
+                // FIFO outbox : les removes partent avant l'add. Offline, le
+                // coalescing add(A)+remove(A) annule les deux rows — seul
+                // l'add du nouvel emoji atteint le serveur. Le remove d'une
+                // reaction deja swappee cote serveur est idempotent (R-GW2).
+                for oldEmoji in previousOwnEmojis {
+                    try? await OfflineQueue.shared.enqueueReaction(
+                        messageId: remoteId, emoji: oldEmoji, action: .remove, conversationId: convId
+                    )
+                }
                 try? await OfflineQueue.shared.enqueueReaction(
                     messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
                 )
@@ -2891,6 +3160,12 @@ class ConversationViewModel: ObservableObject {
         }
         messages[mIdx].attachments[aIdx].reactionSummary = summary.isEmpty ? nil : summary
         messages[mIdx].attachments[aIdx].currentUserReactions = mine.isEmpty ? nil : mine
+        // Persist the optimistic attachment-reaction through GRDB so it survives
+        // a cold reload of the conversation — parité avec les réactions
+        // message-level (appendReaction/removeReaction). Sans ce write-through la
+        // pill optimiste vit uniquement en mémoire et disparaît dès que la conv
+        // est rechargée (avant que le serveur ne re-broadcast le delta).
+        persistAttachmentReactions(messageId: messageId, attachments: messages[mIdx].attachments)
     }
 
     /// Applique un delta serveur : remplace le reactionSummary (comptes
@@ -2901,6 +3176,21 @@ class ConversationViewModel: ObservableObject {
         guard let mIdx = messages.firstIndex(where: { $0.attachments.contains { $0.id == attachmentId } }),
               let aIdx = messages[mIdx].attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
         messages[mIdx].attachments[aIdx].reactionSummary = reactionSummary.isEmpty ? nil : reactionSummary
+        // Le delta serveur est lui aussi persisté pour que le compte autoritaire
+        // soit servi tel quel au prochain cold-load (sans attendre un refetch REST).
+        persistAttachmentReactions(messageId: messages[mIdx].id, attachments: messages[mIdx].attachments)
+    }
+
+    /// Write-through des réactions par-image vers GRDB. Encode l'array
+    /// d'attachments complet (les réactions sont des champs Codable de
+    /// `MeeshyMessageAttachment`) et le passe à `updateAttachmentsJson`. Fire-and-forget
+    /// (miroir du chemin `appendReaction`/`deleteAttachment`) : un échec d'écriture
+    /// retombe sur la source de vérité serveur au prochain refetch.
+    private func persistAttachmentReactions(messageId: String, attachments: [MeeshyMessageAttachment]) {
+        let json = try? JSONEncoder().encode(attachments)
+        Task { [weak self] in
+            try? await self?.messagePersistence.updateAttachmentsJson(localId: messageId, attachmentsJson: json)
+        }
     }
 
     // MARK: - Fetch Reaction Details
@@ -2948,6 +3238,10 @@ class ConversationViewModel: ObservableObject {
         case .everyone:
             // Optimistic: mark as deleted locally + blank content
             try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
+            // Drop the starred snapshot so the Starred Messages list doesn't keep
+            // surfacing a message that was deleted for everyone. Keyed by the
+            // server id (StarredMessageSnapshot.id is the canonical message id).
+            StarredMessagesStore.shared.remove(messageId: serverId(for: messageId))
             // Offline: route the delete through the durable outbox (flushed on
             // reconnect, T10) instead of losing it. `clientMessageId` is the
             // message's local id so deleting a still-unsent offline message
@@ -3198,12 +3492,15 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Reconnection Sync (called by ConversationSocketHandler)
 
     func syncMissedMessages() async {
-        // The high-water mark is the newest message we already hold. With no
-        // local messages there is nothing to backfill *from* — a full load
-        // happens on conversation open instead, so no-op rather than refetch
-        // from the top. `.max()` is order-independent (doesn't assume the
-        // store sort).
-        guard let newestLocal = messages.map(\.createdAt).max() else { return }
+        // The high-water mark is the newest SERVER-TIMESTAMPED message we already
+        // hold. Optimistic own-sends still in flight carry a LOCAL device-clock
+        // `createdAt`; if the clock runs ahead of the server they would poison the
+        // watermark and the gateway's strict `createdAt > after` (server time)
+        // would silently skip real missed messages. `SyncWatermark.newest` (SDK
+        // rule) excludes them. With no server-timestamped message there is nothing
+        // to backfill *from* — a full load happens on conversation open instead,
+        // so no-op rather than refetch from the top.
+        guard let newestLocal = SyncWatermark.newest(among: messages) else { return }
 
         // Page size and total cap mirror the contiguous-backfill contract: a
         // missed-message gap of any size is filled by paging forward, not just
@@ -3343,7 +3640,11 @@ class ConversationViewModel: ObservableObject {
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? false
+            // Fallback optimiste pour les gateways qui strippaient
+            // `cursorPagination`/`hasNewer` (schéma Fastify) : une fenêtre non
+            // vide laisse la pagination ouverte ; le prochain loadOlderMessages
+            // la refermera proprement sur une page vide.
+            hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
             hasNewerMessages = response.hasNewer ?? false
             isInJumpedState = true
         } catch {
@@ -3407,7 +3708,11 @@ class ConversationViewModel: ObservableObject {
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             nextMessageCursor = response.cursorPagination?.nextCursor
-            hasOlderMessages = response.cursorPagination?.hasMore ?? false
+            // Fallback optimiste pour les gateways qui strippaient
+            // `cursorPagination`/`hasNewer` (schéma Fastify) : une fenêtre non
+            // vide laisse la pagination ouverte ; le prochain loadOlderMessages
+            // la refermera proprement sur une page vide.
+            hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
             hasNewerMessages = response.hasNewer ?? false
             isInJumpedState = true
 
@@ -3944,9 +4249,19 @@ class ConversationViewModel: ObservableObject {
 // MARK: - ConversationSocketDelegate Conformance
 
 extension ConversationViewModel: ConversationSocketDelegate {
+    /// Read-receipt precision gate input: the scroll controller pushes the
+    /// near-bottom flag here via `onNearBottomChanged`, so the socket handler can
+    /// refuse to auto-mark-read a message that landed off-screen while the user
+    /// was reading history.
+    var isViewportAtBottom: Bool { isCurrentlyNearBottom }
+
     func handleParticipantRoleUpdated(participantId: String, newRole: String) {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
         _topActiveMembers = nil
+        let convId = conversationId
+        Task {
+            await CacheCoordinator.shared.participants.invalidate(for: convId)
+        }
         objectWillChange.send()
     }
 
@@ -4048,4 +4363,41 @@ extension ConversationViewModel: ConversationSocketDelegate {
             }
         }
     }
+}
+
+// MARK: - Live call join seam
+
+/// Seam de testabilité pour `ConversationViewModel.joinOngoingCall` — par
+/// défaut lit/actionne `CallManager.shared` (singleton WebRTC intestable en
+/// unit) ; les tests injectent des closures espionnes pour couvrir les 4
+/// branches sans toucher au sous-système d'appel réel.
+@MainActor
+struct LiveCallJoinContext {
+    var currentCallId: () -> String?
+    var isIdle: () -> Bool
+    var hasPendingIncomingCall: (String) -> Bool
+    var bringCallUIForward: () -> Void
+    var rejoinActiveCall: (
+        _ callId: String,
+        _ conversationId: String,
+        _ remoteUserId: String,
+        _ remoteUsername: String,
+        _ isVideo: Bool
+    ) -> Bool
+
+    static let live = LiveCallJoinContext(
+        currentCallId: { CallManager.shared.currentCallId },
+        isIdle: { CallManager.shared.callState == .idle },
+        hasPendingIncomingCall: { CallManager.shared.pendingIncomingCall?.callId == $0 },
+        bringCallUIForward: { CallManager.shared.displayMode = .fullScreen },
+        rejoinActiveCall: { callId, conversationId, remoteUserId, remoteUsername, isVideo in
+            CallManager.shared.rejoinActiveCall(
+                callId: callId,
+                conversationId: conversationId,
+                remoteUserId: remoteUserId,
+                remoteUsername: remoteUsername,
+                isVideo: isVideo
+            )
+        }
+    )
 }

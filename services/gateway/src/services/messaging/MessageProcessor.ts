@@ -13,6 +13,7 @@ import { EncryptionService } from '../EncryptionService';
 import { NotificationService, protectedPreview } from '../notifications/NotificationService';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
+import { attachmentFullSelect } from '../attachments/attachmentIncludes';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
@@ -176,6 +177,26 @@ export class MessageProcessor {
       logger.error('[MessageProcessor] Error processing links', error);
       return content;
     }
+  }
+
+  /**
+   * Construit le mapping `{ url, token }` des URLs BRUTES d'un contenu pour
+   * `metadata.trackingLinks` — rend le lien cliquable + tracé `/l/<token>` côté client
+   * SANS réécrire le contenu (l'aperçu vidéo et l'URL lisible sont préservés).
+   * Délègue à la source UNIQUE `TrackingLinkService.collectContentTrackingLinks`
+   * (partagée avec posts/stories/commentaires). Jamais bloquant : le helper avale
+   * toute erreur de tracking et retourne `[]`.
+   */
+  private async buildRawUrlTrackingLinks(
+    content: string,
+    conversationId: string,
+    senderId?: string
+  ): Promise<Array<{ url: string; token: string }>> {
+    return this.trackingLinkService.collectContentTrackingLinks({
+      content,
+      conversationId,
+      createdBy: senderId,
+    });
   }
 
   /**
@@ -380,6 +401,18 @@ export class MessageProcessor {
       ? await this.capturePostReplyTo(data.storyReplyToId)
       : null;
 
+    // Tracking des URLs brutes du message : mapping `url → token` rangé dans
+    // `metadata.trackingLinks`. Le client rend le lien (texte + façade vidéo) vers
+    // `/l/<token>` (capture du clic + redirection) tout en gardant l'URL/aperçu.
+    // Ignoré pour les messages chiffrés (contenu vide côté serveur).
+    const trackingLinks = encryptionContext.isEncrypted
+      ? []
+      : await this.buildRawUrlTrackingLinks(processedContent, data.conversationId, data.senderId);
+
+    const messageMetadata: Record<string, unknown> = {};
+    if (postReplyTo) messageMetadata.postReplyTo = postReplyTo;
+    if (trackingLinks.length > 0) messageMetadata.trackingLinks = trackingLinks;
+
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
     //
     // Phase 4 §6.2 — INSERT direct + catch P2002 atomique. Le findUnique
@@ -397,7 +430,9 @@ export class MessageProcessor {
       messageSource: data.messageSource || 'user',
       replyToId: data.replyToId,
       storyReplyToId: data.storyReplyToId || null,
-      ...(postReplyTo ? { metadata: { postReplyTo } } : {}),
+      ...(Object.keys(messageMetadata).length > 0
+        ? { metadata: messageMetadata as Prisma.InputJsonValue }
+        : {}),
       forwardedFromId: data.forwardedFromId,
       forwardedFromConversationId: data.forwardedFromConversationId,
       isEncrypted: encryptionContext.isEncrypted,
@@ -463,7 +498,11 @@ export class MessageProcessor {
                       }
                     }
                   }
-                }
+                },
+                // Parité avec le chemin REST (messages.ts) : le snapshot du
+                // message cité doit porter ses pièces jointes, sinon l'aperçu
+                // de citation n'affiche rien sur les messages reçus en socket.
+                attachments: { select: attachmentFullSelect, take: 4 }
               }
             }
           }
@@ -517,7 +556,10 @@ export class MessageProcessor {
                       }
                     }
                   }
-                }
+                },
+                // Parité REST : porter les pièces jointes du message cité
+                // (sinon l'aperçu de citation est vide via le dédup socket).
+                attachments: { select: attachmentFullSelect, take: 4 }
               }
             }
           }
@@ -587,12 +629,12 @@ export class MessageProcessor {
       (message as Message & { attachments: unknown[] }).attachments = refreshedAttachments;
     }
 
-    // ÉTAPE 5: Mettre à jour les liens de tracking avec le messageId
-    await performanceLogger.withTiming(
+    // ÉTAPE 5: Mettre à jour les liens de tracking avec le messageId (fire-and-forget)
+    performanceLogger.withTiming(
       'messaging.trackingLinks',
       () => this.updateTrackingLinksWithMessageId(processedContent, data, message.id),
       corrWithMsg
-    );
+    ).catch(err => logger.error('[MessageProcessor] trackingLinks update failed', err));
 
     // ÉTAPE 6: Traiter les mentions et déclencher TOUTES les notifications
     // (Mentions, Réponses, Messages réguliers)
@@ -828,7 +870,13 @@ export class MessageProcessor {
   ): Promise<void> {
     try {
       // 1. Gérer les mentions en DB (validation + création)
-      const validatedMentionUserIds = await this.processMentionsInDB(data, message, processedContent);
+      // Short-circuit: skip all DB work when no @ in content and no explicit mentionedUserIds.
+      // This avoids participant lookup + username resolution queries for the majority of messages.
+      const hasPotentialMentions = (data.mentionedUserIds && data.mentionedUserIds.length > 0)
+        || processedContent.includes('@');
+      const validatedMentionUserIds = hasPotentialMentions
+        ? await this.processMentionsInDB(data, message, processedContent)
+        : [];
 
       // 2. Déclencher les notifications (Mentions, Réponses, Messages)
       if (this.notificationService) {

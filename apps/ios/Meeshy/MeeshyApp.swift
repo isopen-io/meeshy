@@ -27,12 +27,20 @@ struct MeeshyApp: App {
     @State private var crashReportsToShow: [CrashDiagnostic] = []
     @State private var showCrashSheet = false
     @State private var hasSurfacedCrashReports = false
+    /// True once we've actually reached `.background` (socket suspended), so the
+    /// next `.active` knows to rearm. A transient `.inactive→.active` leaves it
+    /// false → no needless socket churn (#11).
+    @State private var didEnterBackground = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
 
     private var shouldShowOnboarding: Bool {
         !hasCompletedOnboarding && !authManager.isAuthenticated
     }
+
+    // Kept alive for the process lifetime so the Combine pipeline is never
+    // deallocated. A static var on the App struct survives SwiftUI re-evaluations.
+    private static var nearCapacityCancellable: AnyCancellable?
 
     init() {
         // Task 1.3 — register the BGProcessingTask identifier BEFORE the
@@ -53,6 +61,23 @@ struct MeeshyApp: App {
         // nonisolated flag — the SDK stays call-agnostic (SDK purity).
         MessageSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
         SocialSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
+
+        // Surface a one-shot toast when the offline outbox reaches 80% of its
+        // 500-item capacity. removeDuplicates() in nearCapacityPublisher ensures
+        // the toast fires exactly once per true→false→true crossing, not on
+        // every new enqueue while near capacity.
+        Self.nearCapacityCancellable = OfflineQueue.shared.nearCapacityPublisher
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { _ in
+                Task { @MainActor in
+                    FeedbackToastManager.shared.showError(
+                        String(localized: "offline.queue.near_capacity",
+                               defaultValue: "File d'envoi presque pleine — reconnectez-vous pour vider la file.",
+                               bundle: .main)
+                    )
+                }
+            }
     }
 
     var body: some Scene {
@@ -104,7 +129,7 @@ struct MeeshyApp: App {
                 .overlay(alignment: .top) {
                     if let toast = toastManager.currentToast {
                         FeedbackToastView(toast: toast)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .transition(.feedbackToastReveal)
                             .padding(.top, MeeshySpacing.xxl)
                             .onTapGesture {
                                 if let action = toastManager.onTapAction {
@@ -116,7 +141,7 @@ struct MeeshyApp: App {
                             .zIndex(999)
                     }
                 }
-                .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
+                .meeshyAnimation(MeeshyAnimation.springBouncy, value: toastManager.currentToast)
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }
@@ -286,6 +311,15 @@ struct MeeshyApp: App {
                     // This runs at every boot (not just once) so items from the
                     // previous session are retried as soon as the app is active.
                     Task.detached(priority: .background) {
+                        // bootRecovery resets any rows that were left in the
+                        // `.inflight` state by a prior crash mid-dispatch. Without
+                        // this, those rows are invisible to flush() (which only
+                        // selects `.pending`) until the next background/foreground
+                        // cycle triggers BackgroundTransitionCoordinator which also
+                        // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
+                        // NOT fire on the initial `.active` state, so the coordinator
+                        // path is skipped on cold start.
+                        _ = try? await OfflineQueue.shared.bootRecovery()
                         let flusher = OutboxFlusher(
                             pool: bootPool,
                             dispatcher: OutboxDispatcher(),
@@ -366,8 +400,10 @@ struct MeeshyApp: App {
                         // après que la vue principale soit affichée.
                         Task { [authManager] in
                             _ = authManager  // capture explicite (lint)
-                            await requestPushPermissionIfNeeded()
-                            VoIPPushManager.shared.register()
+                            await Self.runPushBootstrapSequence(
+                                voipRegister: { VoIPPushManager.shared.register() },
+                                requestPushPermission: requestPushPermissionIfNeeded
+                            )
                             await NotificationToastManager.shared.refreshUnreadCount()
                             await NotificationCoordinator.shared.syncNow()
                         }
@@ -439,11 +475,22 @@ struct MeeshyApp: App {
                         // incoming calls use the in-app banner (socket) instead of a
                         // VoIP push / CallKit.
                         MessageSocketManager.shared.emitAppForeground(true)
-                        Task { await handleForegroundTransition() }
+                        // Only rearm the socket + backfill if we ACTUALLY backgrounded.
+                        // A transient .inactive→.active (Control Center, notification
+                        // banner, app-switcher peek, Face ID) never suspended the
+                        // socket, so force-reconnecting a healthy socket here is pure
+                        // churn — disconnect/reconnect + the presence-refresh loop (#11).
+                        // Cold launch also lands here with the flag false: RootView's
+                        // own connect() handles the initial connection.
+                        if didEnterBackground {
+                            didEnterBackground = false
+                            Task { await handleForegroundTransition() }
+                        }
                         // Drain any mark-as-read actions the user tapped from the
                         // widget while the app was suspended.
                         Task { await WidgetActionFlusher.shared.flush() }
                     case .background:
+                        didEnterBackground = true
                         // CALL-FIX 2026-06-06 — tell the gateway we're backgrounded
                         // FIRST (while the socket is still alive, before the
                         // coordinator may suspend it) so incoming calls fall back to
@@ -467,8 +514,13 @@ struct MeeshyApp: App {
                         // Capture dbPool before crossing the actor boundary.
                         let pool = dependencies.dbPool
                         Task.detached(priority: .background) {
-                            try? DatabaseMaintenance.runIncrementalVacuum(on: pool)
-                            try? DatabaseMaintenance.runOptimize(on: pool)
+                            do {
+                                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                                try DatabaseMaintenance.runOptimize(on: pool)
+                            } catch {
+                                Logger(subsystem: "me.meeshy.app", category: "maintenance")
+                                    .error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
+                            }
                         }
                     case .inactive:
                         break
@@ -493,6 +545,9 @@ struct MeeshyApp: App {
                         // publishers would be left without subscribers.
                         NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
                         NotificationCoordinator.shared.start()
+                        // A5.3 — resync notifications quand SyncSeqTracker
+                        // détecte un trou de séquence (_seq) sur notification:new.
+                        NotificationGapResyncCoordinator.shared.start()
                         Task { await CacheCoordinator.shared.start() }
                         // SOTA audit Pilier 22 V2 — register the publish-queue
                         // handler + listeners so any pending stories from a
@@ -561,6 +616,19 @@ struct MeeshyApp: App {
                         // namespaced by userId and would otherwise expose
                         // user A's data to user B on the next login.
                         Task { await CacheCoordinator.shared.reset() }
+                        // Purge the device's VoIP registration (PushKit +
+                        // keychain-backed token record) — without this, a
+                        // different user logging in on this device inherits
+                        // user A's VoIP push registration until the
+                        // registration cooldown naturally expires.
+                        Task { await VoIPPushManager.shared.unregisterAndClearToken() }
+                        // End any active call before the sockets go down —
+                        // otherwise the call is orphaned locally: the peer
+                        // keeps ringing/connecting to a device that vanished
+                        // without sending a hangup signal.
+                        if CallManager.shared.callState.isActive {
+                            CallManager.shared.endCall()
+                        }
                         MessageSocketManager.shared.disconnect()
                         SocialSocketManager.shared.disconnect()
                         // Drop the store subscriptions so an event from user A
@@ -614,9 +682,9 @@ struct MeeshyApp: App {
         switch newPhase {
         case .background:
             if !ConversationAudioCoordinator.sharedForTesting.isPlaying {
-                #if DEBUG
-                MediaSessionCoordinator.shared.testProbe?.deactivateCount += 1
-                #endif
+                // `deactivateForBackground()` owns the `deactivateCount` probe
+                // increment (post `callActive` guard) — do NOT pre-count here or
+                // a single background transition double-counts.
                 await MediaSessionCoordinator.shared.deactivateForBackground()
             }
         default:
@@ -635,6 +703,22 @@ struct MeeshyApp: App {
         }
     }
 
+    /// VoIP registration must run unconditionally, before the notification-
+    /// permission request. PushKit needs no user permission at all, but
+    /// `requestPushPermission` awaits the system permission alert, which can
+    /// stay on screen indefinitely if the user backgrounds the app instead
+    /// of dismissing it. Sequencing it first previously left `PKPushRegistry`
+    /// uncreated — and no VoIP token registered with the backend — for as
+    /// long as that alert was pending, silently dropping any call placed to
+    /// the device in that window (most commonly right after a fresh install).
+    static func runPushBootstrapSequence(
+        voipRegister: () -> Void,
+        requestPushPermission: () async -> Void
+    ) async {
+        voipRegister()
+        await requestPushPermission()
+    }
+
     // MARK: - Crash Diagnostics Surfacing
 
     /// Drains the queue of crash/hang reports captured since the last
@@ -649,9 +733,8 @@ struct MeeshyApp: App {
         let reports = CrashDiagnosticsManager.shared.consumePending()
         guard let mostRecent = reports.first else { return }
 
-        let isoFormatter = ISO8601DateFormatter()
         for report in reports {
-            let when = isoFormatter.string(from: report.timestamp)
+            let when = report.timestamp.formatted(.iso8601)
             Logger.crash.error("""
                 [\(report.kind.rawValue, privacy: .public)] \
                 \(when, privacy: .public) — \
@@ -662,17 +745,17 @@ struct MeeshyApp: App {
 
         crashReportsToShow = reports
 
-        let kindLabel: String
-        switch mostRecent.kind {
-        case .nsException: kindLabel = "Exception"
-        case .crash: kindLabel = "Crash"
-        case .hang: kindLabel = "Blocage"
-        case .cpuException: kindLabel = "Pic CPU"
-        case .diskWriteException: kindLabel = "Ecriture disque"
-        }
+        let kindLabel = mostRecent.kind.localizedLabel
         let extra = reports.count > 1 ? " (+\(reports.count - 1))" : ""
         toastManager.show(
-            "\(kindLabel) precedent\(extra) : \(mostRecent.summary)",
+            String(
+                format: String(
+                    localized: "crash.toast.previous",
+                    defaultValue: "%1$@ précédent%2$@ : %3$@",
+                    bundle: .main
+                ),
+                kindLabel, extra, mostRecent.summary
+            ),
             type: .info
         ) { [self] in
             showCrashSheet = true
@@ -794,14 +877,6 @@ struct SplashScreen: View {
 
     private var isDark: Bool { theme.mode.isDark }
 
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-    }
-
-    private var buildNumber: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-    }
-
     var body: some View {
         ZStack {
             // Animated gradient background
@@ -855,7 +930,7 @@ struct SplashScreen: View {
 
                 // App Name
                 Text("Meeshy")
-                    .font(.system(size: 46, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(46, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
@@ -871,8 +946,8 @@ struct SplashScreen: View {
                     .padding(.bottom, 8)
 
                 // Tagline
-                Text(String(localized: "Break the language barrier", defaultValue: "Break the language barrier"))
-                    .font(.system(size: 16, weight: .medium))
+                Text(String(localized: "splash.tagline", bundle: .main))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(height: 40)
                     .opacity(showSubtitle ? 1 : 0)
@@ -880,32 +955,10 @@ struct SplashScreen: View {
 
                 Spacer()
 
-                // Footer : version + signature + brand logo
-                VStack(spacing: 6) {
-                    Text("Meeshy \(appVersion) · \(buildNumber)")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.7))
-
-                    Text(String(localized: "splash.madeWithLove", defaultValue: "Made with ❤️ by Services CEO", bundle: .main))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.7))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-
-                    Image("AppIconFooter")
-                        .renderingMode(.template)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 21, height: 21)
-                        .foregroundColor(MeeshyColors.error)
-                        .opacity(0.9)
-                        .padding(.top, 2)
-                        .accessibilityHidden(true)
-                }
-                .opacity(showSubtitle ? 1 : 0)
-                .padding(.bottom, 24)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO."))
+                // Footer : version + signature + brand logo (shared — see BrandSignature)
+                BrandSignature()
+                    .opacity(showSubtitle ? 1 : 0)
+                    .padding(.bottom, 24)
             }
         }
         .onAppear {

@@ -62,6 +62,11 @@ final class ContactsListViewModelTests: XCTestCase {
     /// new contact arrives with full FriendRequestUser details (name,
     /// avatar, presence) that the cache alone can't provide.
     func test_friendshipCacheAddition_triggersBackgroundRefetch() async {
+        // `sut` is bound (not `_`) on purpose: the ViewModel owns the Combine
+        // subscription to `FriendshipCache.$version`. Discarding it releases the
+        // ViewModel immediately, tearing down the subscription before the cache
+        // mutation propagates — so the refetch never fires. `withExtendedLifetime`
+        // below keeps it alive across the awaits without an "unused" warning.
         let (sut, friendService) = makeSUT()
         let newFriend = FriendRequestFixture.make(
             id: "req-new",
@@ -82,11 +87,13 @@ final class ContactsListViewModelTests: XCTestCase {
         for _ in 0..<5 { await Task.yield() }
         try? await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertGreaterThanOrEqual(
-            friendService.receivedRequestsCallCount,
-            1,
-            "Cache addition must trigger a SWR refetch to hydrate the user record"
-        )
+        withExtendedLifetime(sut) {
+            XCTAssertGreaterThanOrEqual(
+                friendService.receivedRequestsCallCount,
+                1,
+                "Cache addition must trigger a SWR refetch to hydrate the user record"
+            )
+        }
     }
 
     // MARK: - Fresh cache + lag detection
@@ -124,6 +131,108 @@ final class ContactsListViewModelTests: XCTestCase {
             1,
             "A fresh cache that lags behind FriendshipCache must trigger a background revalidate"
         )
+    }
+
+    // MARK: - Load Friends
+
+    func test_loadFriends_filtersAcceptedOnly() async {
+        let (sut, mock) = makeSUT()
+        let accepted = FriendRequestFixture.make(id: "r1", senderId: "other1", receiverId: "me", status: "accepted", senderUsername: "alice")
+        let pending = FriendRequestFixture.make(id: "r2", senderId: "other2", receiverId: "me", status: "pending", senderUsername: "bob")
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [accepted, pending]))
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+
+        await sut.loadFriends()
+
+        XCTAssertEqual(sut.friends.count, 1)
+        XCTAssertEqual(sut.friends.first?.username, "alice")
+    }
+
+    func test_loadFriends_mergesSentAndReceived() async {
+        let (sut, mock) = makeSUT()
+        let received = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice")
+        let sent = FriendRequestFixture.make(id: "r2", senderId: "me", receiverId: "bob", status: "accepted", receiverUsername: "bob")
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [received]))
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [sent]))
+
+        await sut.loadFriends()
+
+        XCTAssertEqual(sut.friends.count, 2)
+        let usernames = Set(sut.friends.map(\.username))
+        XCTAssertTrue(usernames.contains("alice"))
+        XCTAssertTrue(usernames.contains("bob"))
+    }
+
+    func test_loadFriends_deduplicates() async {
+        let (sut, mock) = makeSUT()
+        let fromReceived = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice")
+        let fromSent = FriendRequestFixture.make(id: "r2", senderId: "me", receiverId: "alice", status: "accepted", receiverUsername: "alice")
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [fromReceived]))
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [fromSent]))
+
+        await sut.loadFriends()
+
+        XCTAssertEqual(sut.friends.count, 1)
+    }
+
+    // MARK: - Filtering
+
+    func test_filterOnline_showsOnlyOnlineUsers() async {
+        let (sut, mock) = makeSUT()
+        let online = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice", senderIsOnline: true)
+        let offline = FriendRequestFixture.make(id: "r2", senderId: "bob", receiverId: "me", status: "accepted", senderUsername: "bob", senderIsOnline: false)
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [online, offline]))
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+
+        await sut.loadFriends()
+        sut.setFilter(.online)
+
+        XCTAssertEqual(sut.filteredFriends.count, 1)
+        XCTAssertEqual(sut.filteredFriends.first?.username, "alice")
+    }
+
+    func test_filterOffline_showsOnlyOfflineUsers() async {
+        let (sut, mock) = makeSUT()
+        let online = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice", senderIsOnline: true)
+        let offline = FriendRequestFixture.make(id: "r2", senderId: "bob", receiverId: "me", status: "accepted", senderUsername: "bob", senderIsOnline: false)
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [online, offline]))
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+
+        await sut.loadFriends()
+        sut.setFilter(.offline)
+
+        XCTAssertEqual(sut.filteredFriends.count, 1)
+        XCTAssertEqual(sut.filteredFriends.first?.username, "bob")
+    }
+
+    // MARK: - Search
+
+    func test_search_filtersLocallyByUsername() async {
+        let (sut, mock) = makeSUT()
+        let alice = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice")
+        let bob = FriendRequestFixture.make(id: "r2", senderId: "bob", receiverId: "me", status: "accepted", senderUsername: "bob")
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [alice, bob]))
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+
+        await sut.loadFriends()
+        sut.search("ali")
+
+        XCTAssertEqual(sut.filteredFriends.count, 1)
+        XCTAssertEqual(sut.filteredFriends.first?.username, "alice")
+    }
+
+    // MARK: - Sorting
+
+    func test_sorting_onlineFirst() async {
+        let (sut, mock) = makeSUT()
+        let offline = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice", senderIsOnline: false)
+        let online = FriendRequestFixture.make(id: "r2", senderId: "bob", receiverId: "me", status: "accepted", senderUsername: "bob", senderIsOnline: true)
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [offline, online]))
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+
+        await sut.loadFriends()
+
+        XCTAssertEqual(sut.filteredFriends.first?.username, "bob")
     }
 
     // MARK: - Helper

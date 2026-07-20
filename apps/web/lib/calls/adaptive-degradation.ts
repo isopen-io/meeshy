@@ -74,6 +74,7 @@ export function createDegradationState(): DegradationState {
 function tierForLevel(level: ConnectionQualityLevel): VideoSendTier {
   if (level === 'excellent' || level === 'good') return 'high';
   if (level === 'fair') return 'medium';
+  /* istanbul ignore next -- defensive fallback: tierForLevel is only called from the non-poor path in reduceDegradation, where level is always 'excellent'|'good'|'fair'; 'poor' is handled before calling this function */
   return 'low';
 }
 

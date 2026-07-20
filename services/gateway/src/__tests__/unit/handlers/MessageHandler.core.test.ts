@@ -67,8 +67,10 @@ jest.mock('../../../services/ConversationMessageStatsService', () => ({
 }));
 
 const mockResolveMentionedUsers: any = jest.fn(async () => []);
+const mockResolveUsernamesToIds: any = jest.fn(async () => []);
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: (...a: any[]) => mockResolveMentionedUsers(...a),
+  resolveUsernamesToIds: (...a: any[]) => mockResolveUsernamesToIds(...a),
 }));
 
 const mockIsBlockedBetween: any = jest.fn(async () => false);
@@ -97,6 +99,7 @@ jest.mock('../../../services/messaging/postReplySnapshot', () => ({
 
 jest.mock('../../../services/attachments/attachmentIncludes', () => ({
   attachmentForwardPreviewSelect: { id: true, mimeType: true },
+  attachmentMediaSelect: { id: true, mimeType: true, url: true },
 }));
 
 jest.mock('../../../services/MessagingService', () => ({ MessagingService: jest.fn() }));
@@ -537,6 +540,10 @@ describe('MessageHandler.handleMessageSend', () => {
     expect(messagingService.handleMessage).toHaveBeenCalled();
     expect(mockPerformanceLogger.withTiming).toHaveBeenCalled();
     expect(stats.messages_processed).toBe(1);
+
+    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
+    expect(statsCalls.length).toBeGreaterThan(0);
+    expect(statsCalls[0][5]).toBe('fr');
   });
 
   it('skips broadcastNewMessage when isDuplicate is true', async () => {
@@ -975,6 +982,40 @@ describe('MessageHandler.handleMessageSendWithAttachments', () => {
     expect(statsCalls.length).toBeGreaterThan(0);
     expect(statsCalls[0][4]).toEqual(expect.arrayContaining(['audio']));
   });
+
+  it('forwards the saved message originalLanguage to the stats service (languageDistribution)', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const data = makeAttachmentData();
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+
+    const attachmentService = makeMockAttachmentService([
+      { id: '61a41a4b5c5e4f4a5c5e4f4a', uploadedBy: 'user-1', mimeType: 'image/jpeg' },
+    ]);
+    const messagingService = makeMockMessagingService({
+      attachments: [{ id: 'att-1', mimeType: 'image/jpeg' }],
+      originalLanguage: 'de',
+    });
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => []) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+
+    const { handler } = makeHandler({
+      connectedUsers: connectedUsers as any,
+      socketToUser,
+      attachmentService,
+      messagingService,
+      prisma,
+    });
+
+    await handler.handleMessageSendWithAttachments(socket, data as any, cb);
+
+    const statsCalls: any = mockConversationMessageStatsOnNewMessage.mock.calls;
+    expect(statsCalls.length).toBeGreaterThan(0);
+    expect(statsCalls[0][5]).toBe('de');
+  });
 });
 
 // ============================================================
@@ -1240,6 +1281,35 @@ describe('MessageHandler.broadcastNewMessage', () => {
     const toArgs = io._to.mock.calls.map((c: any[]) => c[0]);
     expect(toArgs).toContain('user:user-a');
     expect(toArgs).toContain('user:user-b');
+
+    // ConversationUpdatedEventData requires `updatedBy`. With no sender user
+    // (anonymous), the payload falls back to the participant senderId — never
+    // omitting the field (a client reading updatedBy.id would otherwise crash).
+    const updated = io._emit.mock.calls.find(
+      (c: any[]) => c[0] === 'conversation:updated',
+    );
+    expect(updated).toBeDefined();
+    expect(updated![1]).toMatchObject({ updatedBy: { id: 'participant-1' } });
+  });
+
+  it('CONVERSATION_UPDATED carries updatedBy = sender User.id when present', async () => {
+    const io = makeMockIo();
+    const prisma = makeMockPrisma({
+      participant: { findMany: jest.fn(async () => [{ userId: 'user-a' }]) },
+      message: { findUnique: jest.fn(async () => ({ translations: [] })) },
+    });
+    const readStatusService = makeMockReadStatusService();
+    const connectedUsers = new Map<string, SocketUser>();
+    const { handler } = makeHandler({ io, prisma, connectedUsers: connectedUsers as any, readStatusService });
+
+    const msg = makeMessage();
+    await handler.broadcastNewMessage(msg, 'conv-abc');
+
+    const updated = io._emit.mock.calls.find(
+      (c: any[]) => c[0] === 'conversation:updated',
+    );
+    expect(updated).toBeDefined();
+    expect(updated![1]).toMatchObject({ updatedBy: { id: 'user-sender' } });
   });
 
   it('catches error in CONVERSATION_UPDATED silently', async () => {
@@ -1512,8 +1582,11 @@ describe('MessageHandler._emitMessageNewByLanguage', () => {
     await handler.broadcastNewMessage(msg, 'conv-abc');
 
     expect(mockFilterMessagePayloadForLanguages).toHaveBeenCalledTimes(2);
-    // 2 emits from lang filter + conversation:updated (but CONVERSATION_UPDATED may not be emitted without userId participants)
-    expect(io._emit).toHaveBeenCalledTimes(2);
+    // 2 trimmed per-language emits to the LOCAL sockets + 1 cross-node broadcast
+    // of the full payload to the room (adapter-propagated, excepting the local
+    // sockets) so recipients on other gateway nodes still receive message:new.
+    // No CONVERSATION_UPDATED here (no userId participants).
+    expect(io._emit).toHaveBeenCalledTimes(3);
   });
 
   it('skips groups with empty socketIds', async () => {
@@ -1781,14 +1854,16 @@ describe('MessageHandler._resolveMentionUserIds (via handleMessageSend notifyAge
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
 
     const agentClient = { sendEvent: jest.fn(async () => {}) };
-    const userFindMany = jest.fn(async () => [{ id: 'user-bob' }]);
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },
       message: { findUnique: jest.fn(async () => ({ translations: [] })) },
-      user: { findMany: userFindMany, findFirst: jest.fn(async () => null) },
+      user: { findFirst: jest.fn(async () => null) },
     });
 
     const messagingService = makeMockMessagingService({ validatedMentions: ['bob'] });
+    // Delegates mention resolution to the canonical resolveUsernamesToIds (SSOT);
+    // its case-insensitive query shape is locked in MentionService.test.ts.
+    mockResolveUsernamesToIds.mockResolvedValue(['user-bob']);
 
     const { handler } = makeHandler({
       connectedUsers: connectedUsers as any,
@@ -1800,9 +1875,7 @@ describe('MessageHandler._resolveMentionUserIds (via handleMessageSend notifyAge
 
     await handler.handleMessageSend(socket, data as any, jest.fn());
 
-    const findManyCalls: any = (userFindMany as any).mock.calls;
-    expect(findManyCalls.length).toBeGreaterThan(0);
-    expect(findManyCalls[0][0]).toMatchObject({ where: { username: { in: ['bob'] } } });
+    expect(mockResolveUsernamesToIds).toHaveBeenCalledWith(expect.anything(), ['bob']);
     const sendEventCalls: any = (agentClient.sendEvent as any).mock.calls;
     expect(sendEventCalls.length).toBeGreaterThan(0);
     expect(sendEventCalls[0][0]).toMatchObject({ mentionedUserIds: ['user-bob'] });
@@ -1818,10 +1891,12 @@ describe('MessageHandler._resolveMentionUserIds (via handleMessageSend notifyAge
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },
       message: { findUnique: jest.fn(async () => ({ translations: [] })) },
-      user: { findMany: jest.fn(async () => { throw new Error('DB'); }), findFirst: jest.fn(async () => null) },
+      user: { findFirst: jest.fn(async () => null) },
     });
 
     const messagingService = makeMockMessagingService({ validatedMentions: ['bob'] });
+    // Resolver throws → handler swallows and forwards an empty mention list.
+    mockResolveUsernamesToIds.mockRejectedValue(new Error('DB'));
 
     const { handler } = makeHandler({
       connectedUsers: connectedUsers as any,
@@ -2626,9 +2701,9 @@ describe('MessageHandler — branch coverage boosters', () => {
     const agentSendEvent: any = jest.fn(async () => {});
     const agentClient = { sendEvent: agentSendEvent };
 
-    // Message with sender.displayName = null, sender.username = 'alice_user'
+    // Message with sender.displayName = null, sender.user.username = 'alice_user'
     const messagingService = makeMockMessagingService({
-      sender: { id: 'p1', userId: 'user-1', displayName: null, username: 'alice_user', avatar: null },
+      sender: { id: 'p1', userId: 'user-1', displayName: null, username: 'alice_user', avatar: null, user: { username: 'alice_user' } },
     });
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },
@@ -3297,5 +3372,501 @@ describe('MessageHandler — branch coverage boosters', () => {
     const emitCalls = io._emit.mock.calls.filter((c: any[]) => c[0] === 'message:new');
     const payload = emitCalls[0]?.[1] ?? {};
     expect(payload.forwardedFrom).toBeUndefined();
+  });
+});
+
+// ============================================================
+// TESTS: handleMessageEdit
+// ============================================================
+
+describe('MessageHandler.handleMessageEdit', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCheckLimit.mockResolvedValue(true);
+  });
+
+  function makeEditData(overrides: Record<string, unknown> = {}) {
+    return {
+      messageId: 'aabbccddee1122334455aabb',
+      content: 'updated content',
+      ...overrides,
+    };
+  }
+
+  function makeExistingMessage(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'aabbccddee1122334455aabb',
+      conversationId: 'conv-abc',
+      senderId: 'participant-1',
+      content: 'original content',
+      originalLanguage: 'fr',
+      sender: { id: 'participant-1', userId: 'user-1', displayName: 'Alice', avatar: null },
+      attachments: [],
+      ...overrides,
+    };
+  }
+
+  it('rejects unauthenticated socket', async () => {
+    mockGetConnectedUser.mockReturnValue(null);
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const { handler } = makeHandler();
+    await handler.handleMessageEdit(socket, makeEditData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(socket.emit).toHaveBeenCalledWith('error', expect.any(Object));
+  });
+
+  it('rejects anonymous users', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup({ isAnonymous: true, userId: undefined });
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser });
+    await handler.handleMessageEdit(socket, makeEditData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+
+  it('rejects invalid schema (empty content)', async () => {
+    mockValidateSocketEvent.mockReturnValueOnce({
+      success: false,
+      error: 'content is required',
+    });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser });
+    await handler.handleMessageEdit(socket, makeEditData({ content: '' }), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+
+  it('returns not-found when message does not belong to user', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const prisma = makeMockPrisma({
+      message: { findFirst: jest.fn(async () => null), updateMany: jest.fn() },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    await handler.handleMessageEdit(socket, makeEditData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(prisma.message.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects the edit and does not broadcast when the message was deleted between read and write (concurrent delete race)', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const existingMessage = makeExistingMessage();
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => existingMessage),
+        updateMany: jest.fn(async () => ({ count: 0 })),
+      },
+    });
+    const io = makeMockIo();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
+
+    await handler.handleMessageEdit(socket, makeEditData(), callback);
+
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: expect.stringContaining('not found') })
+    );
+    expect(io._emit).not.toHaveBeenCalled();
+  });
+
+  it('edits message, emits MESSAGE_EDITED to room, calls callback with success', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const existingMessage = makeExistingMessage();
+    const retranslationAsync: any = jest.fn(async () => undefined);
+    const mockTranslationService = { retranslateMessageAsync: retranslationAsync };
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => existingMessage),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+    });
+    const io = makeMockIo();
+    const { handler } = makeHandler({
+      connectedUsers: connectedUsers as any,
+      socketToUser,
+      prisma,
+      io,
+    });
+    (handler as any).translationService = mockTranslationService;
+
+    await handler.handleMessageEdit(socket, makeEditData(), callback);
+
+    expect(prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: existingMessage.id, deletedAt: null },
+      data: expect.objectContaining({ content: 'updated content', isEdited: true }),
+    }));
+    expect(io._emit).toHaveBeenCalledWith('message:edited', expect.objectContaining({
+      id: existingMessage.id,
+      conversationId: existingMessage.conversationId,
+    }));
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(retranslationAsync).toHaveBeenCalledWith(existingMessage.id, expect.objectContaining({ content: 'updated content' }));
+  });
+
+  it('preserves attachments in the MESSAGE_EDITED broadcast so editing a caption does not drop the photo/video/audio client-side', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const existingAttachment = { id: 'att-1', mimeType: 'image/jpeg', url: 'https://cdn/att-1.jpg' };
+    const existingMessage = makeExistingMessage({ attachments: [existingAttachment] });
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => existingMessage),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+    });
+    const io = makeMockIo();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
+    (handler as any).translationService = { retranslateMessageAsync: jest.fn(async () => undefined) };
+    mockSerializeAttachment.mockImplementation((att: any) => att);
+
+    await handler.handleMessageEdit(socket, makeEditData(), callback);
+
+    expect(io._emit).toHaveBeenCalledWith('message:edited', expect.objectContaining({
+      attachments: [existingAttachment],
+    }));
+  });
+
+  it('trims whitespace from content before saving', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData({ content: '  trimmed  ' }) });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => makeExistingMessage()),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    (handler as any).translationService = { retranslateMessageAsync: jest.fn(async () => undefined) };
+
+    await handler.handleMessageEdit(socket, makeEditData({ content: '  trimmed  ' }), callback);
+
+    expect(prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ content: 'trimmed' }),
+    }));
+  });
+
+  it('handles DB errors gracefully and returns failure to callback', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const prisma = makeMockPrisma({
+      message: { findFirst: jest.fn(async () => { throw new Error('DB error'); }) },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    await handler.handleMessageEdit(socket, makeEditData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(socket.emit).toHaveBeenCalledWith('error', expect.any(Object));
+  });
+
+  it('callback is optional — no throw when omitted', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => makeExistingMessage()),
+        updateMany: jest.fn(async () => ({ count: 1 })),
+      },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    (handler as any).translationService = { retranslateMessageAsync: jest.fn(async () => undefined) };
+    await expect(handler.handleMessageEdit(socket, makeEditData())).resolves.not.toThrow();
+  });
+});
+
+// ============================================================
+// TESTS: handleMessageDelete
+// ============================================================
+
+describe('MessageHandler.handleMessageDelete', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function makeDeleteData(overrides: Record<string, unknown> = {}) {
+    return {
+      messageId: 'aabbccddee1122334455aabb',
+      ...overrides,
+    };
+  }
+
+  function makeMessageForDelete(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'aabbccddee1122334455aabb',
+      conversationId: 'conv-abc',
+      senderId: 'participant-1',
+      sender: { id: 'participant-1', userId: 'user-1' },
+      conversation: {
+        createdAt: new Date('2025-01-01'),
+        lastMessageAt: new Date('2026-02-01'),
+        participants: [{ role: 'member' }],
+      },
+      attachments: [],
+      ...overrides,
+    };
+  }
+
+  it('rejects unauthenticated socket', async () => {
+    mockGetConnectedUser.mockReturnValue(null);
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const { handler } = makeHandler();
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+
+  it('rejects anonymous users', async () => {
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup({ isAnonymous: true, userId: undefined });
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+
+  it('rejects invalid schema (invalid messageId format)', async () => {
+    mockValidateSocketEvent.mockReturnValueOnce({ success: false, error: 'invalid messageId' });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser });
+    await handler.handleMessageDelete(socket, makeDeleteData({ messageId: 'bad' }), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+
+  it('returns not-found when message does not exist', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const prisma = makeMockPrisma({
+      message: { findFirst: jest.fn(async () => null), update: jest.fn() },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('denies deletion when user is neither author, conversation admin, nor global admin', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const otherMessage = makeMessageForDelete({
+      sender: { id: 'participant-other', userId: 'user-other' },
+      conversation: { createdAt: new Date(), participants: [{ role: 'member' }] },
+    });
+    const prisma = makeMockPrisma({
+      message: { findFirst: jest.fn(async () => otherMessage), update: jest.fn() },
+      user: { findUnique: jest.fn(async () => ({ role: 'USER' })) },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(prisma.message.update).not.toHaveBeenCalled();
+  });
+
+  it('allows message author to delete their own message', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const message = makeMessageForDelete();
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => message),
+        update: jest.fn(async () => ({})),
+        findUnique: jest.fn(async () => null),
+      },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    });
+    const io = makeMockIo();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+
+    expect(prisma.message.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: message.id },
+      data: expect.objectContaining({ deletedAt: expect.any(Date) }),
+    }));
+    expect(io._emit).toHaveBeenCalledWith('message:deleted', expect.objectContaining({
+      messageId: message.id,
+      conversationId: message.conversationId,
+    }));
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('allows conversation admin to delete another user message', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const message = makeMessageForDelete({
+      sender: { id: 'participant-other', userId: 'user-other' },
+      conversation: { createdAt: new Date(), participants: [{ role: 'admin' }] },
+    });
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => message),
+        update: jest.fn(async () => ({})),
+      },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    });
+    const io = makeMockIo();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('allows global BIGBOSS to delete any message', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const message = makeMessageForDelete({
+      sender: { id: 'participant-other', userId: 'user-other' },
+      conversation: { createdAt: new Date(), participants: [{ role: 'member' }] },
+    });
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => message),
+        update: jest.fn(async () => ({})),
+      },
+      user: { findUnique: jest.fn(async () => ({ role: 'BIGBOSS' })) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    });
+    const io = makeMockIo();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(io._emit).toHaveBeenCalledWith('message:deleted', expect.any(Object));
+  });
+
+  it('deletes attachments when message has attachments', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const message = makeMessageForDelete({
+      attachments: [{ id: 'att-1' }, { id: 'att-2' }],
+    });
+    const deleteAttachment: any = jest.fn(async () => undefined);
+    const attachmentService = { deleteAttachment };
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => message),
+        update: jest.fn(async () => ({})),
+      },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, attachmentService: attachmentService as any });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+
+    expect(deleteAttachment).toHaveBeenCalledWith('att-1');
+    expect(deleteAttachment).toHaveBeenCalledWith('att-2');
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('recomputes conversation lastMessageAt after deletion, guarded against cursor regression', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const message = makeMessageForDelete();
+    const lastMsgDate = new Date('2026-01-15');
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce(message)
+          .mockResolvedValueOnce({ createdAt: lastMsgDate }),
+        update: jest.fn(async () => ({})),
+      },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+
+    // Optimistic-concurrency guard: the write only lands while lastMessageAt is
+    // still the value read at handler start. A `message:new` committing in the
+    // gap advances lastMessageAt, the guard mismatches (updateMany count 0), and
+    // the cursor never regresses backward onto the just-deleted message.
+    expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: message.conversationId,
+        lastMessageAt: message.conversation.lastMessageAt,
+      },
+      data: { lastMessageAt: lastMsgDate },
+    });
+  });
+
+  it('falls back to conversation.createdAt when no message remains, still guarded', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const message = makeMessageForDelete();
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce(message)
+          .mockResolvedValueOnce(null),
+        update: jest.fn(async () => ({})),
+      },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+
+    expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: message.conversationId,
+        lastMessageAt: message.conversation.lastMessageAt,
+      },
+      data: { lastMessageAt: message.conversation.createdAt },
+    });
+  });
+
+  it('handles DB errors gracefully and returns failure to callback', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const prisma = makeMockPrisma({
+      message: { findFirst: jest.fn(async () => { throw new Error('DB error'); }) },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(socket.emit).toHaveBeenCalledWith('error', expect.any(Object));
+  });
+
+  it('callback is optional — no throw when omitted', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const message = makeMessageForDelete();
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => message),
+        update: jest.fn(async () => ({})),
+      },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    await expect(handler.handleMessageDelete(socket, makeDeleteData())).resolves.not.toThrow();
   });
 });

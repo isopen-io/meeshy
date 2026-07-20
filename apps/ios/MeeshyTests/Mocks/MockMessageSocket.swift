@@ -38,11 +38,15 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let liveLocationUpdated = PassthroughSubject<LiveLocationUpdatedEvent, Never>()
     let liveLocationStopped = PassthroughSubject<LiveLocationStoppedEvent, Never>()
     let translationReceived = PassthroughSubject<TranslationEvent, Never>()
+    let translationFailed = PassthroughSubject<TranslationFailedEvent, Never>()
     let transcriptionReady = PassthroughSubject<TranscriptionReadyEvent, Never>()
+    let transcriptionFailed = PassthroughSubject<TranscriptionFailedEvent, Never>()
     let audioTranslationReady = PassthroughSubject<AudioTranslationEvent, Never>()
     let audioTranslationProgressive = PassthroughSubject<AudioTranslationEvent, Never>()
     let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
+    let audioTranslationFailed = PassthroughSubject<AudioTranslationFailedEvent, Never>()
     let didReconnect = PassthroughSubject<Void, Never>()
+    let connectionRTT = PassthroughSubject<Double, Never>()
     let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     let conversationNew = PassthroughSubject<ConversationNewEvent, Never>()
     let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
@@ -65,6 +69,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let attachmentUpdated = PassthroughSubject<AttachmentUpdatedEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
     let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+    let userPreferencesConversationUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
     let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
     let participantSelfLeft = PassthroughSubject<ParticipantLeftEvent, Never>()
     let participantBanned = PassthroughSubject<ParticipantBannedEvent, Never>()
@@ -72,6 +77,11 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
     let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
     let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
+    let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
+    let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
+    let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
+    let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
+    let callTranslatedSegmentReceived = PassthroughSubject<CallTranslatedSegmentData, Never>()
 
     // MARK: - Call Tracking
 
@@ -104,6 +114,13 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var callToggleVideoCallCount = 0
     var callEndCallCount = 0
     var callHeartbeatCallCount = 0
+    var callBackgroundedCallCount = 0
+    var callForegroundedCallCount = 0
+    var callScreenCaptureDetectedCallCount = 0
+    var callAnalyticsCallCount = 0
+    var lastCallAnalyticsPayload: [String: Any]?
+    var emitCallTranscriptionSegmentCallCount = 0
+    var lastEmittedTranscriptionSegment: CallTranscriptionSegmentPayload?
 
     // MARK: - Protocol Methods
 
@@ -237,6 +254,28 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callHeartbeatCallCount += 1
     }
 
+    func emitCallBackgrounded(callId: String, participantId: String) {
+        callBackgroundedCallCount += 1
+    }
+
+    func emitCallForegrounded(callId: String, participantId: String) {
+        callForegroundedCallCount += 1
+    }
+
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {
+        callScreenCaptureDetectedCallCount += 1
+    }
+
+    func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {
+        emitCallTranscriptionSegmentCallCount += 1
+        lastEmittedTranscriptionSegment = segment
+    }
+
+    func emitCallAnalytics(callId: String, payload: [String: Any]) {
+        callAnalyticsCallCount += 1
+        lastCallAnalyticsPayload = payload
+    }
+
     // MARK: - Simulation Helpers
 
     func simulateMessage(_ message: APIMessage) {
@@ -294,5 +333,12 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callToggleVideoCallCount = 0
         callEndCallCount = 0
         callHeartbeatCallCount = 0
+        callBackgroundedCallCount = 0
+        callForegroundedCallCount = 0
+        callScreenCaptureDetectedCallCount = 0
+        callAnalyticsCallCount = 0
+        lastCallAnalyticsPayload = nil
+        emitCallTranscriptionSegmentCallCount = 0
+        lastEmittedTranscriptionSegment = nil
     }
 }

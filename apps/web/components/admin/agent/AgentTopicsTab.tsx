@@ -117,31 +117,31 @@ export function AgentTopicsTab() {
                   </td>
                 </tr>
               )}
-              {topics.map((t) => (
+              {topics.map((topic) => (
                 <tr
-                  key={t.id}
+                  key={topic.id}
                   className="border-t border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40"
                 >
                   <td className="px-3 py-2">
-                    <span className={t.isActive ? 'text-emerald-600' : 'text-slate-400'}>
-                      {t.isActive ? '✓' : '✗'}
+                    <span className={topic.isActive ? 'text-emerald-600' : 'text-slate-400'}>
+                      {topic.isActive ? '✓' : '✗'}
                     </span>
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs">{t.slug}</td>
-                  <td className="px-3 py-2">{t.label}</td>
-                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{t.cooldownMinutes} min</td>
-                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{t.keywordPatterns.length}</td>
+                  <td className="px-3 py-2 font-mono text-xs">{topic.slug}</td>
+                  <td className="px-3 py-2">{topic.label}</td>
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{topic.cooldownMinutes} min</td>
+                  <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{topic.keywordPatterns.length}</td>
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex items-center gap-1">
                       <button
-                        onClick={() => setEditing(t)}
+                        onClick={() => setEditing(topic)}
                         title={t('agent.topics.editTitle')}
                         className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-indigo-600 dark:text-indigo-400"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(t.id, false)}
+                        onClick={() => handleDelete(topic.id, false)}
                         title={t('agent.topics.disableTitle')}
                         aria-label="Disable topic"
                         className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-orange-600 dark:text-orange-400"
@@ -149,7 +149,7 @@ export function AgentTopicsTab() {
                         <EyeOff className="h-4 w-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(t.id, true)}
+                        onClick={() => handleDelete(topic.id, true)}
                         title={t('agent.topics.deleteTitle')}
                         aria-label="Delete topic"
                         className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-red-600 dark:text-red-400"

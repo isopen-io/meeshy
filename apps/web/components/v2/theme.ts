@@ -1,102 +1,105 @@
 /**
- * Global Pulse Design System - Theme Configuration
+ * Meeshy Design System - Theme Configuration
  *
- * A distinctive design system for Meeshy that celebrates
- * global connectivity and cultural diversity.
+ * Palette alignée sur la v1 (indigo / slate / gris). Les NOMS de tokens
+ * (terracotta, deepTeal, royalIndigo…) sont conservés pour compatibilité
+ * avec les composants existants ; seules leurs VALEURS pointent désormais
+ * vers la palette v1. L'ancienne identité « Global Pulse » (terracotta) a
+ * été retirée avec l'application v2.
  *
  * Supports light and dark modes following Web Interface Guidelines.
  */
 
-// Light mode colors
+// Light mode colors — palette v1 (indigo / slate)
 const lightColors = {
   // Base Palette
-  warmCanvas: '#FFF8F3',
-  deepInk: '#16161A',
-  parchment: '#F5EDE3',
-  charcoal: '#2B2D42',
+  warmCanvas: '#F8FAFC',
+  deepInk: '#0F172A',
+  parchment: '#F1F5F9',
+  charcoal: '#1E293B',
 
   // Surfaces
-  background: '#FFF8F3',
+  background: '#F8FAFC',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  border: '#E5E5E5',
-  borderSubtle: '#F0F0F0',
+  border: '#E2E8F0',
+  borderSubtle: '#F1F5F9',
 
-  // Brand Colors
-  terracotta: '#E76F51',
-  terracottaLight: '#F4A261',
-  deepTeal: '#264653',
-  goldAccent: '#E9C46A',
+  // Brand Colors (v1 indigo)
+  terracotta: '#4F46E5',
+  terracottaLight: '#818CF8',
+  deepTeal: '#4338CA',
+  goldAccent: '#F59E0B',
 
   // Language-Inspired Accents
-  asianRuby: '#C1292E',
-  saffron: '#F4A261',
-  jadeGreen: '#2A9D8F',
-  royalIndigo: '#5E60CE',
-  sakuraPink: '#F28482',
+  asianRuby: '#E11D48',
+  saffron: '#F59E0B',
+  jadeGreen: '#10B981',
+  royalIndigo: '#6366F1',
+  sakuraPink: '#EC4899',
 
-  // Semantic Text
-  textPrimary: '#2B2D42',
-  textSecondary: '#6B7280',
-  textMuted: '#9CA3AF',
+  // Semantic Text (slate)
+  textPrimary: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#94A3B8',
   textInverse: '#FFFFFF',
 
   // Status
-  success: '#2A9D8F',
-  warning: '#F4A261',
-  error: '#E76F51',
-  info: '#5E60CE',
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+  info: '#4F46E5',
 
   // Interactive
-  hover: 'rgba(0, 0, 0, 0.04)',
-  active: 'rgba(0, 0, 0, 0.08)',
-  focus: 'rgba(231, 111, 81, 0.3)',
+  hover: 'rgba(15, 23, 42, 0.04)',
+  active: 'rgba(15, 23, 42, 0.08)',
+  focus: 'rgba(79, 70, 229, 0.3)',
 };
 
-// Dark mode colors - carefully crafted for accessibility
+// Dark mode colors - carefully crafted for accessibility (slate / indigo)
 const darkColors = {
   // Base Palette
-  warmCanvas: '#0D0D0F',
-  deepInk: '#FAFAFA',
-  parchment: '#1A1A1E',
-  charcoal: '#E5E5E7',
+  warmCanvas: '#0F172A',
+  deepInk: '#F8FAFC',
+  parchment: '#1E293B',
+  charcoal: '#E2E8F0',
 
   // Surfaces
-  background: '#0D0D0F',
-  surface: '#1A1A1E',
-  surfaceElevated: '#242428',
-  border: '#2E2E32',
-  borderSubtle: '#232327',
+  background: '#0F172A',
+  surface: '#1E293B',
+  surfaceElevated: '#334155',
+  border: '#334155',
+  borderSubtle: '#1E293B',
 
-  // Brand Colors (adjusted for dark mode contrast)
-  terracotta: '#F08A70',
-  terracottaLight: '#F5B080',
-  deepTeal: '#3A8A9A',
-  goldAccent: '#F0D080',
+  // Brand Colors (v1 indigo, brightened for dark mode)
+  terracotta: '#818CF8',
+  terracottaLight: '#A5B4FC',
+  deepTeal: '#6366F1',
+  goldAccent: '#FBBF24',
 
   // Language-Inspired Accents (brightened for dark mode)
-  asianRuby: '#E54B50',
-  saffron: '#F5B080',
-  jadeGreen: '#40C4B0',
-  royalIndigo: '#8082E8',
-  sakuraPink: '#F5A09E',
+  asianRuby: '#FB7185',
+  saffron: '#FBBF24',
+  jadeGreen: '#34D399',
+  royalIndigo: '#A5B4FC',
+  sakuraPink: '#F472B6',
 
   // Semantic Text
-  textPrimary: '#F5F5F5',
-  textSecondary: '#A0A0A8',
-  textMuted: '#707078',
-  textInverse: '#16161A',
+  textPrimary: '#F1F5F9',
+  textSecondary: '#94A3B8',
+  textMuted: '#64748B',
+  textInverse: '#0F172A',
 
   // Status (brightened for visibility)
-  success: '#40C4B0',
-  warning: '#F5B080',
-  error: '#F08A70',
-  info: '#8082E8',
+  success: '#34D399',
+  warning: '#FBBF24',
+  error: '#F87171',
+  info: '#818CF8',
 
   // Interactive
   hover: 'rgba(255, 255, 255, 0.06)',
   active: 'rgba(255, 255, 255, 0.12)',
-  focus: 'rgba(240, 138, 112, 0.4)',
+  focus: 'rgba(129, 140, 248, 0.4)',
 };
 
 export const theme = {
@@ -123,23 +126,23 @@ export const theme = {
     md: '0 4px 20px rgba(0, 0, 0, 0.08)',
     lg: '0 10px 40px rgba(0, 0, 0, 0.12)',
     xl: '0 20px 60px rgba(0, 0, 0, 0.15)',
-    terracotta: '0 4px 14px rgba(231, 111, 81, 0.4)',
-    teal: '0 4px 14px rgba(38, 70, 83, 0.3)',
+    terracotta: '0 4px 14px rgba(79, 70, 229, 0.4)',
+    teal: '0 4px 14px rgba(67, 56, 202, 0.3)',
   },
 
   // Language color mapping
   languageColors: {
-    fr: '#5E60CE', // Royal Indigo
-    en: '#2A9D8F', // Jade Green
-    es: '#F4A261', // Saffron
-    zh: '#C1292E', // Asian Ruby
-    ja: '#F28482', // Sakura Pink
-    ar: '#E9C46A', // Gold
-    de: '#264653', // Deep Teal
-    pt: '#2A9D8F', // Jade Green
-    ru: '#5E60CE', // Royal Indigo
-    ko: '#C1292E', // Asian Ruby
-    default: '#6B7280',
+    fr: '#6366F1', // Indigo
+    en: '#10B981', // Emerald
+    es: '#F59E0B', // Amber
+    zh: '#E11D48', // Rose
+    ja: '#EC4899', // Pink
+    ar: '#F59E0B', // Amber
+    de: '#4338CA', // Deep Indigo
+    pt: '#10B981', // Emerald
+    ru: '#6366F1', // Indigo
+    ko: '#E11D48', // Rose
+    default: '#64748B',
   },
 } as const;
 

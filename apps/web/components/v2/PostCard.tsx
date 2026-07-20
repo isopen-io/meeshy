@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { useI18n } from '@/hooks/use-i18n';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
@@ -251,14 +252,14 @@ function PostCard({
               <div key={m.id} className="relative bg-[var(--gp-parchment)] aspect-square overflow-hidden">
                 {m.mimeType.startsWith('image/') && (
                   <img
-                    src={m.thumbnailUrl ?? m.fileUrl}
+                    src={buildAttachmentUrl(m.thumbnailUrl ?? m.fileUrl) ?? undefined}
                     alt={m.alt ?? t('post.imageAlt', { index: String(i + 1) })}
                     className="w-full h-full object-cover"
                     loading="lazy"
                   />
                 )}
                 {m.mimeType.startsWith('video/') && (
-                  <video src={m.fileUrl} className="w-full h-full object-cover" muted />
+                  <video src={buildAttachmentUrl(m.fileUrl) ?? undefined} className="w-full h-full object-cover" muted />
                 )}
               </div>
             ))}

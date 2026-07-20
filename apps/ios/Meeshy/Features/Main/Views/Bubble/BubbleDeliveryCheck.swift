@@ -16,6 +16,10 @@ struct BubbleDeliveryCheck: View, Equatable {
     /// never bold): indigo400 in dark mode / on the dark overlay capsule,
     /// indigo600 in light mode. Computed by the caller.
     let readTint: Color
+    /// The optimistic message's `createdAt`, only meaningful while
+    /// `status == .sending`. Drives the reveal debounce in `SendingClockGlyph`
+    /// so a send that round-trips in under 200ms never flashes a clock icon.
+    var sendStartedAt: Date? = nil
 
     private var isInFlight: Bool {
         switch status {
@@ -27,7 +31,7 @@ struct BubbleDeliveryCheck: View, Equatable {
     var body: some View {
         if isOffline, isInFlight {
             Image(systemName: "hourglass")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.offlinePending))
         } else {
@@ -41,23 +45,26 @@ struct BubbleDeliveryCheck: View, Equatable {
         case .invisible:
             EmptyView()
         case .sending:
-            Image(systemName: "clock")
-                .font(.system(size: 10))
-                .foregroundColor(tint)
-                .accessibilityLabel(Self.label(.sending))
+            SendingClockGlyph(sendStartedAt: sendStartedAt, tint: tint)
         case .clock:
             Image(systemName: "clock")
-                .font(.system(size: 10))
+                .font(MeeshyFont.relative(10))
                 .foregroundColor(tint.opacity(0.7))
                 .accessibilityLabel(Self.label(.sending))
         case .slow:
-            Image(systemName: "clock.badge.exclamationmark")
-                .font(.system(size: 10, weight: .semibold))
+            // Spec 2026-07-08 (message-send-failure-retry-flow, règle 2) : un
+            // message encore en re-tentative automatique affiche une horloge
+            // SIMPLE — le badge exclamation lisait comme un aperçu d'échec
+            // alors que l'échec est un état terminal (`.failed`) atteint
+            // seulement après épuisement du budget outbox. La teinte warning
+            // distingue toujours l'envoi lent/retenté d'un envoi frais.
+            Image(systemName: "clock")
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.slow))
         case .sent:
             Image(systemName: "checkmark")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(tint)
                 .accessibilityLabel(Self.label(.sent))
         case .delivered:
@@ -68,7 +75,7 @@ struct BubbleDeliveryCheck: View, Equatable {
                 .accessibilityLabel(Self.label(.read))
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10, weight: .bold))
+                .font(MeeshyFont.relative(10, weight: .bold))
                 .foregroundColor(MeeshyColors.error)
                 .accessibilityLabel(Self.label(.failed))
         }
@@ -76,8 +83,8 @@ struct BubbleDeliveryCheck: View, Equatable {
 
     private func doubleCheck(weight: Font.Weight, size: CGFloat, color: Color, width: CGFloat) -> some View {
         ZStack(alignment: .leading) {
-            Image(systemName: "checkmark").font(.system(size: size, weight: weight))
-            Image(systemName: "checkmark").font(.system(size: size, weight: weight)).offset(x: 4)
+            Image(systemName: "checkmark").font(MeeshyFont.relative(size, weight: weight))
+            Image(systemName: "checkmark").font(MeeshyFont.relative(size, weight: weight)).offset(x: 4)
         }
         .foregroundColor(color)
         .frame(width: width)
@@ -110,6 +117,58 @@ struct BubbleDeliveryCheck: View, Equatable {
             return String(localized: "bubble.delivery.read", defaultValue: "Lu", bundle: .main)
         case .failed:
             return String(localized: "bubble.delivery.failed", defaultValue: "Échec de l'envoi", bundle: .main)
+        }
+    }
+
+    /// Debounces the "sending" clock glyph — spec §6.2 / backlog B.4: a send
+    /// that round-trips in under 200ms must never flash a clock icon the user
+    /// has no time to perceive. Hidden while under the threshold, revealed via
+    /// a self-cancelling `.task` once the send genuinely lingers. Internal
+    /// `@State` is safe here (leaf view, no singleton dependency) and is torn
+    /// down automatically when `status` moves off `.sending` and this branch
+    /// is no longer instantiated.
+    struct SendingClockGlyph: View {
+        let sendStartedAt: Date?
+        let tint: Color
+
+        static let revealDelay: TimeInterval = 0.2
+
+        @State private var isRevealed: Bool
+
+        init(sendStartedAt: Date?, tint: Color) {
+            self.sendStartedAt = sendStartedAt
+            self.tint = tint
+            _isRevealed = State(initialValue: Self.shouldRevealImmediately(sendStartedAt: sendStartedAt, now: Date()))
+        }
+
+        /// Pure decision extracted for testability: does the clock show up
+        /// right away (no start time, or the delay has already elapsed —
+        /// e.g. the row scrolled into view late), or does it start hidden?
+        static func shouldRevealImmediately(sendStartedAt: Date?, now: Date) -> Bool {
+            guard let sendStartedAt else { return true }
+            return now.timeIntervalSince(sendStartedAt) >= revealDelay
+        }
+
+        var body: some View {
+            Group {
+                if isRevealed {
+                    Image(systemName: "clock")
+                        .font(MeeshyFont.relative(10))
+                        .foregroundColor(tint)
+                        .accessibilityLabel(BubbleDeliveryCheck.label(.sending))
+                } else {
+                    EmptyView()
+                }
+            }
+            .task {
+                guard !isRevealed, let sendStartedAt else { return }
+                let remaining = Self.revealDelay - Date().timeIntervalSince(sendStartedAt)
+                if remaining > 0 {
+                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                }
+                guard !Task.isCancelled else { return }
+                isRevealed = true
+            }
         }
     }
 }

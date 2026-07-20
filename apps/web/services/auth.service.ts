@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { SocketIOUser } from '@/types';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { buildApiUrl } from '@/lib/config';
@@ -85,7 +86,7 @@ class AuthService {
 
       return data;
     } catch (error) {
-      console.error('Erreur lors de la connexion:', error);
+      logger.error('[Service]', 'Erreur lors de la connexion', { error });
 
       // Si erreur, nettoyer par précaution
       authManager.clearAllSessions();
@@ -114,7 +115,7 @@ class AuthService {
         });
       }
     } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
+      logger.error('[Service]', 'Erreur lors de la déconnexion', { error });
     } finally {
       // NOUVEAU: Utiliser AuthManager pour nettoyage complet
       authManager.clearAllSessions();
@@ -151,7 +152,7 @@ class AuthService {
 
       return data;
     } catch (error) {
-      console.error('Erreur lors de la récupération du profil:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération du profil', { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur'
@@ -195,7 +196,7 @@ class AuthService {
 
       return data;
     } catch (error) {
-      console.error('Erreur lors du rafraîchissement du token:', error);
+      logger.error('[Service]', 'Erreur lors du rafraîchissement du token', { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur'
