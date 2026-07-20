@@ -12,6 +12,7 @@ import type { TranslationCompletedEvent } from '../zmq-translation/types';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { isUrlOnly } from '../../utils/url-content';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 
 const log = enhancedLogger.child({ module: 'PostTranslationService' });
 
@@ -73,7 +74,13 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = originalLanguage ?? detectLanguage(content);
+    // Canonicalize the source (`en-US`/`pt-BR`/`EN` → `en`/`pt`/`en`) BEFORE the
+    // filter: the create-post schema admits regional/BCP-47 codes verbatim, and a
+    // non-normalized source would fail `l !== sourceLang`, leaking the source
+    // language back into the target set (wasted en→en NLLB job + a redundant
+    // "translation" stored under the source language, breaking the Prisme). Falls
+    // back to content detection when the code is absent or irreducibly unknown.
+    const sourceLang = normalizeLanguageCode(originalLanguage) ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
     /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */
@@ -121,29 +128,36 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = post.originalLanguage ?? detectLanguage(post.content);
+    // Canonicalize BOTH source and target (the on-demand schema also admits
+    // `min(2).max(5)`, so `en-US`/`pt-BR` reach here): the same-language guard,
+    // the translations-cache check, the ZMQ request, and thus the persisted
+    // `translations.<code>` key must all use the canonical 2-letter code the rest
+    // of the Prisme reads — otherwise a regional target re-runs an already-cached
+    // translation and stores a divergent duplicate key.
+    const sourceLang = normalizeLanguageCode(post.originalLanguage) ?? detectLanguage(post.content);
+    const target = normalizeLanguageCode(targetLanguage) ?? targetLanguage;
 
-    if (sourceLang === targetLanguage) {
-      log.info('PostTranslation: target same as source, skipping', { postId, targetLanguage });
+    if (sourceLang === target) {
+      log.info('PostTranslation: target same as source, skipping', { postId, targetLanguage: target });
       return;
     }
 
     // Check if translation already exists
     const translations = (post.translations ?? null) as Record<string, unknown> | null;
-    if (translations?.[targetLanguage]) {
-      log.info('PostTranslation: translation already cached', { postId, targetLanguage });
+    if (translations?.[target]) {
+      log.info('PostTranslation: translation already cached', { postId, targetLanguage: target });
       return;
     }
 
     const messageId = `post:${postId}`;
 
-    log.info('PostTranslation: on-demand request', { postId, sourceLang, targetLanguage });
+    log.info('PostTranslation: on-demand request', { postId, sourceLang, targetLanguage: target });
 
     try {
       await this.zmqClient.translateToMultipleLanguages(
         post.content,
         sourceLang,
-        [targetLanguage],
+        [target],
         messageId,
         `post_context:${postId}`,
       );
@@ -164,7 +178,10 @@ export class PostTranslationService {
       return;
     }
 
-    const sourceLang = originalLanguage ?? detectLanguage(content);
+    // Same canonicalization as translatePost — the comment schema admits regional
+    // codes (`min(2).max(16)`), so normalize before filtering to keep the source
+    // out of its own target set.
+    const sourceLang = normalizeLanguageCode(originalLanguage) ?? detectLanguage(content);
     const targetLanguages = TOP_LANGUAGES.filter(l => l !== sourceLang);
 
     /* istanbul ignore next -- TOP_LANGUAGES always has >=5 elements; filtering one still yields >=4 */

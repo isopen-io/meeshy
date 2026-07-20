@@ -244,6 +244,75 @@ describe('PostTranslationService', () => {
     });
   });
 
+  describe('language-code normalization (Prisme SSOT)', () => {
+    // A client may supply a BCP-47 / regional / uppercase source code
+    // (`en-US`, `pt-BR`, `EN`, `fr_FR`) — the create/update/comment Zod schemas
+    // admit `min(2).max(5|16)` verbatim. The dispatcher MUST canonicalize it via
+    // normalizeLanguageCode BEFORE the "don't translate into the source" filter,
+    // else the source language leaks back into the target set (wasted en→en NLLB
+    // job + redundant translation stored under a code the rest of the Prisme reads
+    // as 2-letter lowercase).
+    it('translatePost: normalizes a regional originalLanguage (en-US → en) before filtering targets', async () => {
+      const { service, zmqClient } = makeService();
+      await service.translatePost('post-1', 'Hello world', 'en-US');
+      expect(zmqClient.translateToMultipleLanguages).toHaveBeenCalledTimes(1);
+      const [, sourceLang, targets] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+      expect(sourceLang).toBe('en');
+      expect(targets).not.toContain('en');
+    });
+
+    it('translatePost: normalizes an uppercase originalLanguage (EN → en) before filtering targets', async () => {
+      const { service, zmqClient } = makeService();
+      await service.translatePost('post-1', 'Hello world', 'EN');
+      const [, sourceLang, targets] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+      expect(sourceLang).toBe('en');
+      expect(targets).not.toContain('en');
+    });
+
+    it('translateComment: normalizes a regional originalLanguage (pt-BR → pt) before filtering targets', async () => {
+      const { service, zmqClient } = makeService();
+      await service.translateComment('comment-1', 'post-1', 'Olá mundo', 'pt-BR');
+      const [, sourceLang, targets] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+      expect(sourceLang).toBe('pt');
+      expect(targets).not.toContain('pt');
+    });
+
+    it('translateOnDemand: normalizes a regional source (en-US) so a matching target is skipped', async () => {
+      const { service, zmqClient } = makeService({
+        post: { content: 'Hello', originalLanguage: 'en-US', translations: null },
+      });
+      await service.translateOnDemand('post-1', 'en');
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+    });
+
+    it('translateOnDemand: normalizes a regional target (en-US → en) against the source', async () => {
+      const { service, zmqClient } = makeService({
+        post: { content: 'Hello', originalLanguage: 'en', translations: null },
+      });
+      await service.translateOnDemand('post-1', 'en-US');
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+    });
+
+    it('translateOnDemand: normalizes the target against the translations cache (pt-BR → pt)', async () => {
+      const { service, zmqClient } = makeService({
+        post: { content: 'Hello', originalLanguage: 'en', translations: { pt: { text: 'Olá' } } },
+      });
+      await service.translateOnDemand('post-1', 'pt-BR');
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+    });
+
+    it('translateOnDemand: sends the NORMALIZED target to ZMQ (pt-BR → pt) so the stored key stays canonical', async () => {
+      const { service, zmqClient } = makeService({
+        post: { content: 'Hello', originalLanguage: 'en', translations: {} },
+      });
+      await service.translateOnDemand('post-1', 'pt-BR');
+      expect(zmqClient.translateToMultipleLanguages).toHaveBeenCalledTimes(1);
+      const [, sourceLang, targets] = (zmqClient.translateToMultipleLanguages as jest.Mock).mock.calls[0] as [string, string, string[], string, string];
+      expect(sourceLang).toBe('en');
+      expect(targets).toEqual(['pt']);
+    });
+  });
+
   describe('translateComment', () => {
     it('skips URL-only comment content (links preserved verbatim, never sent to NLLB)', async () => {
       const { service, zmqClient } = makeService();
