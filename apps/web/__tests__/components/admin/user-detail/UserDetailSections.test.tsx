@@ -231,6 +231,27 @@ function makeConversation(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function makeAdminMessage(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'msg-1',
+    content: 'Hello from Alice',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    editedAt: null,
+    deletedAt: null,
+    replyToId: null,
+    createdAt: '2024-06-01T10:00:00Z',
+    sender: {
+      id: 'p-1', userId: 'u-1', type: 'user', displayName: 'Alice', avatar: null, nickname: null,
+      user: { id: 'u-1', username: 'alice', displayName: 'Alice', avatar: null },
+    },
+    attachmentCount: 0,
+    ...overrides,
+  };
+}
+
 function makeMedia(overrides: Record<string, unknown> = {}) {
   return {
     id: 'media-1',
@@ -1660,6 +1681,163 @@ describe('UserConversationsSection', () => {
     await waitFor(() => expect(screen.getByText(/usersDetail.viewMembers/)).toBeInTheDocument());
     fireEvent.click(screen.getByText(/usersDetail.viewMembers/));
     await waitFor(() => expect(screen.getByText('usersDetail.membersModalTitle')).toBeInTheDocument());
+  });
+});
+
+// =============================================================================
+// UserConversationsSection — ConversationMessagesModal (infinite load)
+// =============================================================================
+
+describe('ConversationMessagesModal', () => {
+  const OriginalIO = global.IntersectionObserver;
+  let ioCallbacks: IntersectionObserverCallback[] = [];
+
+  beforeEach(() => {
+    ioCallbacks = [];
+    global.IntersectionObserver = class {
+      constructor(cb: IntersectionObserverCallback) {
+        ioCallbacks.push(cb);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    } as unknown as typeof IntersectionObserver;
+  });
+
+  afterEach(() => {
+    global.IntersectionObserver = OriginalIO;
+  });
+
+  const triggerSentinel = () => {
+    act(() => {
+      ioCallbacks.forEach(cb =>
+        cb([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)
+      );
+    });
+  };
+
+  const openModal = async (conv: Record<string, unknown>) => {
+    render(<UserConversationsSection userId="user-1" />);
+    await waitFor(() => expect(screen.getByText(/usersDetail.viewMessages/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(/usersDetail.viewMessages/));
+  };
+
+  it('shows a view messages button on group conversations', async () => {
+    mockGet.mockResolvedValue(paginatedResponse([makeConversation({ type: 'group' })]));
+    render(<UserConversationsSection userId="user-1" />);
+    await waitFor(() => expect(screen.getByText(/usersDetail.viewMessages/)).toBeInTheDocument());
+  });
+
+  it('shows a view messages button on direct conversations too', async () => {
+    mockGet.mockResolvedValue(paginatedResponse([makeConversation({ type: 'direct' })]));
+    render(<UserConversationsSection userId="user-1" />);
+    await waitFor(() => expect(screen.getByText(/usersDetail.viewMessages/)).toBeInTheDocument());
+  });
+
+  it('opens the modal and renders the messages with their sender', async () => {
+    const conv = makeConversation({ type: 'group' });
+    mockGet
+      .mockResolvedValueOnce(paginatedResponse([conv]))
+      .mockResolvedValueOnce(paginatedResponse([makeAdminMessage()]));
+    await openModal(conv);
+    await waitFor(() => expect(screen.getByText('Hello from Alice')).toBeInTheDocument());
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+    expect(screen.getByText('@alice')).toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith(
+      '/admin/conversations/conv-1/messages',
+      expect.objectContaining({ offset: 0 })
+    );
+  });
+
+  it('shows the empty state when the conversation has no messages', async () => {
+    const conv = makeConversation({ type: 'group' });
+    mockGet
+      .mockResolvedValueOnce(paginatedResponse([conv]))
+      .mockResolvedValueOnce(paginatedResponse([]));
+    await openModal(conv);
+    await waitFor(() => expect(screen.getByText('usersDetail.noMessages')).toBeInTheDocument());
+  });
+
+  it('loads the next page when the sentinel becomes visible (infinite load)', async () => {
+    const conv = makeConversation({ type: 'group' });
+    mockGet
+      .mockResolvedValueOnce(paginatedResponse([conv]))
+      .mockResolvedValueOnce(paginatedResponse(
+        [makeAdminMessage({ id: 'msg-1', content: 'First page message' })],
+        { hasMore: true, total: 2 }
+      ))
+      .mockResolvedValueOnce(paginatedResponse(
+        [makeAdminMessage({ id: 'msg-2', content: 'Second page message' })],
+        { hasMore: false, total: 2 }
+      ));
+    await openModal(conv);
+    await waitFor(() => expect(screen.getByText('First page message')).toBeInTheDocument());
+    triggerSentinel();
+    await waitFor(() => expect(screen.getByText('Second page message')).toBeInTheDocument());
+    expect(screen.getByText('First page message')).toBeInTheDocument();
+  });
+
+  it('does not fetch again when there is no more page', async () => {
+    const conv = makeConversation({ type: 'group' });
+    mockGet
+      .mockResolvedValueOnce(paginatedResponse([conv]))
+      .mockResolvedValueOnce(paginatedResponse(
+        [makeAdminMessage()],
+        { hasMore: false, total: 1 }
+      ));
+    await openModal(conv);
+    await waitFor(() => expect(screen.getByText('Hello from Alice')).toBeInTheDocument());
+    const callsBefore = mockGet.mock.calls.length;
+    triggerSentinel();
+    expect(mockGet.mock.calls.length).toBe(callsBefore);
+  });
+
+  it('flags deleted and edited messages', async () => {
+    const conv = makeConversation({ type: 'group' });
+    mockGet
+      .mockResolvedValueOnce(paginatedResponse([conv]))
+      .mockResolvedValueOnce(paginatedResponse([
+        makeAdminMessage({ id: 'msg-del', content: 'Removed content', deletedAt: '2024-06-02T00:00:00Z' }),
+        makeAdminMessage({ id: 'msg-edit', content: 'Edited content', isEdited: true }),
+      ]));
+    await openModal(conv);
+    await waitFor(() => expect(screen.getByText('usersDetail.deletedBadge')).toBeInTheDocument());
+    expect(screen.getByText('usersDetail.editedBadge')).toBeInTheDocument();
+  });
+
+  it('shows the attachment count when a message has attachments', async () => {
+    const conv = makeConversation({ type: 'group' });
+    mockGet
+      .mockResolvedValueOnce(paginatedResponse([conv]))
+      .mockResolvedValueOnce(paginatedResponse([makeAdminMessage({ attachmentCount: 3 })]));
+    await openModal(conv);
+    await waitFor(() => expect(screen.getByText('3')).toBeInTheDocument());
+  });
+
+  it('closes the messages modal via the close button', async () => {
+    const conv = makeConversation({ type: 'group' });
+    mockGet
+      .mockResolvedValueOnce(paginatedResponse([conv]))
+      .mockResolvedValueOnce(paginatedResponse([makeAdminMessage()]));
+    await openModal(conv);
+    await waitFor(() => expect(screen.getByText('Hello from Alice')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByText('Hello from Alice')).not.toBeInTheDocument());
+  });
+
+  it('keeps the modal open when the messages fetch fails', async () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const conv = makeConversation({ type: 'group' });
+    mockGet
+      .mockResolvedValueOnce(paginatedResponse([conv]))
+      .mockRejectedValueOnce(new Error('Messages fetch failed'));
+    await openModal(conv);
+    await waitFor(() => expect(consoleSpy).toHaveBeenCalled());
+    consoleSpy.mockRestore();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
 });
 

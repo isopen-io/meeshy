@@ -12,7 +12,7 @@ struct DataStorageView: View {
     @State private var showClearConfirm = false
     @State private var isClearing = false
 
-    private let accentColor = "E67E22"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -120,14 +120,14 @@ struct DataStorageView: View {
 
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.data.storage.section.actions", defaultValue: "Actions", bundle: .main), icon: "gear", color: "6B7280")
+            sectionHeader(title: String(localized: "settings.data.storage.section.actions", defaultValue: "Actions", bundle: .main), icon: "gear", color: MeeshyColors.neutral500Hex)
 
             Button {
                 HapticFeedback.medium()
                 showClearConfirm = true
             } label: {
                 HStack(spacing: 12) {
-                    fieldIcon("trash.fill", color: "EF4444")
+                    fieldIcon("trash.fill", color: MeeshyColors.errorHex)
 
                     Text(String(localized: "settings.data.storage.action.clear", defaultValue: "Vider le cache", bundle: .main))
                         .font(MeeshyFont.relative(14, weight: .medium))
@@ -144,7 +144,7 @@ struct DataStorageView: View {
                 .padding(.vertical, 10)
             }
             .disabled(isClearing)
-            .background(sectionBackground(tint: "6B7280"))
+            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
             .accessibilityLabel(String(localized: "settings.data.storage.action.clear.label", defaultValue: "Vider le cache media", bundle: .main))
             .accessibilityHint(String(localized: "settings.data.storage.action.clear.hint", defaultValue: "Supprime tous les medias mis en cache localement", bundle: .main))
         }
