@@ -14,6 +14,29 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 178i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **178i (branche `claude/laughing-thompson-v3u8qn`, base `main` HEAD `cfc839e`)** :
+>   Structure VoiceOver de `EmailVerificationView` (écran auth « saisie du code email à 6 chiffres »).
+>   Surface **fraîche** jamais auditée a11y (grep `accessibility` = 0), **déjà 100 % localisée** et en
+>   polices sémantiques Dynamic Type (`.system(.title)`, `.subheadline`, `.headline`, monospaced) →
+>   **0 migration Dynamic Type, 0 littéral i18n**. 7 déficits VoiceOver corrigés : (1) champ code annoncé
+>   par son placeholder `« 000000 »` → `.accessibilityLabel` (« Code de vérification ») + `.accessibilityHint` ;
+>   (2) bouton **Vérifier** réduit à un spinner pendant `isVerifying` → **bouton anonyme** → label stable
+>   stateful (`verifyButtonAccessibilityLabel`) ; (3) idem bouton **Renvoyer** (`resendButtonAccessibilityLabel`,
+>   3 états) ; (4) glyphe héros `envelope.open.fill` → `.accessibilityHidden(true)` ; (5) rangée d'erreur
+>   (triangle + message) → `.combine` ; (6) grand titre → `.isHeader` ; (7) overlay de succès jamais surfacé
+>   → `.combine` + `.isModal` (focus VoiceOver déplacé, fond ignoré). 4 clés i18n neuves en `defaultValue`
+>   inline (`emailVerification.code.a11yLabel/.a11yHint`, `.verifying.a11y`, `.resending.a11y`) — **pas d'édit
+>   `.xcstrings`** ; états terminaux réutilisent les clés existantes. 1 fichier, 0 logique, 0 test neuf
+>   (`EmailVerificationViewModelTests` couvre le ViewModel, pas la View). 0 contention (aucune PR iOS ouverte
+>   ne touche ce fichier). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `EmailVerificationView` SOLDÉ 178i** : typographie déjà sémantique + structure VoiceOver posée
+>   (label champ code, labels boutons stateful, glyphes décoratifs masqués/combinés, `.isHeader`, overlay
+>   succès modal). Ne plus reprendre.
+> - **Base de départ 179i : `main` HEAD**. Candidats frais VoiceOver-structure hors PR ouvertes :
+>   `CreateShareLinkView`, `TrackingLinkDetailView`, `StatusComposerView`, `AffiliateCreateView`,
+>   `MessageLanguageDetailView`. Toujours vérifier l'absence de contention avec les PR iOS ouvertes.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un
