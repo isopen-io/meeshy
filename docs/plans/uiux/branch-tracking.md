@@ -14,6 +14,23 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 194i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **194i (branche `claude/laughing-thompson-0lonrh`, base `main` HEAD `995ed53`)** :
+>   Consolidation palette de marque de `TermsOfServiceView` (Réglages → Conditions d'utilisation).
+>   Ferme la **2e et dernière** moitié du pointeur « siblings restants » de 180i (#2142), déjà
+>   entamé par 186i (`DataStorageView`, #2154). 1 hex brut hors-marque éradiqué :
+>   `accentColor = "45B7D1"` (cyan « river blue » Flat-UI ; pilotait back / icônes `N.circle.fill` /
+>   surface+bordure des cartes de section) → `MeeshyColors.brandPrimaryHex` (`6366F1`, indigo500 —
+>   même cible que 186i DataStorage + 180i Affiliate). Swap `String`→`String` type-identique, 0
+>   changement de call-site. `import MeeshyUI` déjà présent → 0 import neuf. 1 fichier, 1 ligne,
+>   0 logique, 0 clé i18n, 0 test. `grep '"[0-9A-Fa-f]{6}"'` → 0 hex brut restant.
+>   `search_pull_requests … TermsOfServiceView` → 0 → aucune contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `TermsOfServiceView` palette SOLDÉ 194i** : cyan `45B7D1` éradiqué. HORS SCOPE (non touché) :
+>   dict `sections` légal bilingue fr/en in-file + picker segmenté = pass légal/i18n dédié (pointeur 180i).
+> - **✅ Pointeur « siblings restants » 180i CLÔTURÉ EN ENTIER** : le trio Settings-adjacent
+>   (`AffiliateView`/`AffiliateCreateView` 180i, `DataStorageView` 186i, `TermsOfServiceView` 194i)
+>   utilise désormais uniformément `brandPrimaryHex`. Plus d'accent hors-marque dans cette famille.
+> - **✅ 186i MERGÉ (#2154)** : `DataStorageView` palette (`E67E22`+`EF4444`+`6B7280` → tokens) — dans `main`.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 186i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **186i (branche `claude/laughing-thompson-0lonrh`, base `main` HEAD `64f943d`)** :
 >   Consolidation palette de marque de `DataStorageView` (Réglages → Stockage / cache media).
