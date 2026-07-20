@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 181i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **181i (en cours, branche `claude/laughing-thompson-n2i97z`, base `main` HEAD `e5f9cb6`)** :
+>   Correction Dynamic Type à la **source** du primitive partagé `EmptyStateView`
+>   (`packages/MeeshySDK/Sources/MeeshyUI/Primitives/EmptyStateView.swift`), consommé par **12+ écrans**.
+>   Découverte : le fil de migrations d'empty-states bespoke → `EmptyStateView` (168i, 179i, et d'autres
+>   en file) traînait un **tradeoff Dynamic Type répété** — le composant partagé lui-même figeait 4 polices
+>   en `.system(size:)` (icône héros 36/52, titre 15/18, sous-titre 12/14, label bouton 13/14) qui **ne
+>   scalent PAS** avec le réglage Dynamic Type. Chaque migration régressait donc potentiellement le scaling.
+>   Fix racine (vs. contournement par consommateur) : swap des 4 `.system(size:)` → `MeeshyFont.relative(...)`
+>   (`Theme/Accessibility.swift`, déjà public, même module MeeshyUI, déjà utilisé par JoinFlow). Mêmes tailles
+>   de base → **rendu identique au réglage par défaut**, scaling correct aux autres réglages. Les 12+
+>   consommateurs héritent du fix d'un coup. **0 changement de signature** → tous les call sites compilent
+>   inchangés. 1 fichier, 4 lignes, 0 logique, 0 clé i18n, 0 test touché (grep `EmptyStateView` dans
+>   `MeeshySDK/Tests` + `MeeshyTests` = 0). Numéros 178i/179i/180i déjà réutilisés par le fleet → 181i choisi.
+>   Gate = CI `iOS Tests` + build SDK. PR à venir.
+> - **⚠️ `EmptyStateView` Dynamic Type SOLDÉ** : ne plus réintroduire `.system(size:)` ici — tout tweak de
+>   taille passe par `MeeshyFont.relative`. Corollaire : migrer un empty-state bespoke vers `EmptyStateView`
+>   n'est **plus** une régression Dynamic Type (retire le footnote attaché à chaque itération de migration).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **179i (branche `claude/laughing-thompson-duee1f`, base `main` HEAD `e9e38a9`)** :
 >   Labels VoiceOver des compteurs like/comment/repost du feed (`TextPostCell` + `MediaPostCell`,
