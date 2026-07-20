@@ -177,6 +177,21 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         }
     }
 
+    /// Scheme épinglé sur le chrome posé SUR le canvas (header, FABs, bulles,
+    /// history) : suit le fond RÉEL de la slide, jamais le thème de l'app.
+    /// Couvre les DEUX chemins média : legacy `hasBackgroundImage`
+    /// (selectedImage) ET les `mediaObjects` modernes `isBackground == true`
+    /// (chip Background) — ce dernier échappait au calcul et laissait le
+    /// chrome en `.light` (pastel aléatoire) sur un letterbox blur sombre,
+    /// boutons inexploitables (captures user 2026-07-20). Même règle que le
+    /// reader (`hasVisualBackgroundMedia` → `.dark`).
+    var canvasChromeScheme: ColorScheme {
+        CanvasChromeScheme.scheme(
+            background: backgroundColor,
+            hasMediaBackground: hasBackgroundImage || currentEffects.hasVisualBackgroundMedia
+        )
+    }
+
     /// Format `effects.background` : hex SANS « # » ou `gradient:HEX1:HEX2`
     /// (cf. le restore SyncRestore qui re-préfixe le hex nu).
     func applyBackgroundColorToCurrentSlide() {
@@ -230,6 +245,23 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// pas Equatable et SwiftUI ne peut donc pas détecter une mutation
     /// de valeur intra-clé). Cf. `ComposerImageCacheReader.version`.
     @Published var loadedImagesVersion: UInt64 = 0
+
+    /// Enregistre (ou retire, si `image == nil`) le bitmap importé/édité d'un
+    /// média sous sa clé ET **bump `loadedImagesVersion`** dans la foulée.
+    /// Le `StoryComposerCanvasView` ne reconstruit son `ComposerImageCacheReader`
+    /// — donc ne stampe le bitmap sur le canvas — QUE lorsque cette version
+    /// change (cf. `StoryCanvasRepresentable.updateUIView`). Muter `loadedImages`
+    /// directement sans ce bump laisse le reader périmé : un média fraîchement
+    /// ajouté ne s'affiche jamais et le canvas reste noir (bug user 2026-07-20).
+    /// Toute *nouvelle* écriture dans `loadedImages` DOIT passer par ici.
+    func registerLoadedImage(_ image: UIImage?, for id: String) {
+        if let image {
+            loadedImages[id] = image
+        } else {
+            loadedImages.removeValue(forKey: id)
+        }
+        loadedImagesVersion &+= 1
+    }
 
     /// Captions / transcription metadata produced by `MeeshyVideoEditorView`
     /// when the user transcribes a foreground video then taps « Terminer ».
