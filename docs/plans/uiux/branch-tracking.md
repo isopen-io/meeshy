@@ -14,6 +14,37 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 176i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **176i (en cours, branche `claude/laughing-thompson-wnfiis`, base `main` HEAD `115b262`)** :
+>   Localisation de `ConversationEncryptionDetailSheet` (feuille de statut/activation E2E ouverte
+>   depuis `ConversationInfoSheet.swift:960`). Le fichier route déjà **toutes** ses chaînes (~25) via
+>   `String(localized:defaultValue:bundle:)` ; **une seule** échappait : le path d'échec de
+>   `loadStatus()` (ligne 250) assignait le littéral **anglais codé en dur** `"Unable to read
+>   status: \(error.localizedDescription)"` directement à `errorMessage` — rendu verbatim dans la
+>   `Section` d'erreur → un francophone hors-ligne voyait de l'anglais brut dans une feuille sinon
+>   100 % localisée. Fix : wrap dans l'idiome maison avec `defaultValue` interpolé (précédent
+>   `EmailVerificationView:82`, `StatusBarView:88`, `UploadProgressBar:43`) — **1 clé neuve**
+>   `conversation.encryption.detail.readStatusError`, code-only, 0 `.xcstrings`. Le catch frère
+>   d'`activate()` (ligne 272) assigne `error.localizedDescription` **sans préfixe app** (chaîne
+>   système déjà localisée) → laissé intact. 1 fichier, 0 logique / 0 visuel / 0 test neuf. Dynamic
+>   Type : fonts sémantiques uniquement → rien à faire. VoiceOver : icônes d'état (`lock.shield.fill`
+>   / `lock.open` / `lock.fill`) toujours accompagnées d'un label texte adjacent → pas d'info
+>   couleur-seule, **ne pas re-flagger**. Gate = CI `iOS Tests`.
+> - **⚠️ Essaim iOS très dense** : au moment du choix, PRs ouvertes jusqu'à **175i** (numéros réutilisés :
+>   plusieurs 167i/168i/169i). **176i choisi strictement > tous en vol.** Composants déjà pris (NE PAS
+>   re-flagger) : `LinkPreviewCard`, `LoadMoreRepliesCell` (les 2 candidats notés en 167i sont pris),
+>   `ContactsHubView`, `ContactsListTab`, `StarredMessagesView`, `ParticipantsView`, `MiniAudioPlayerBar`,
+>   `CommunityLinkDetailView`, `MagicLinkView`, `ConversationPreferencesTab`, `SharePickerView`,
+>   `ActiveSessionsView`, `ShareLinkDetailView`, `MessageEditsDetailView`, `BookmarksView`,
+>   `MessageTranscriptionDetailView`, `StatsTimelineChart`, `BubbleExpandableText`, `EditProfileView`,
+>   `DeleteAccountView`, `MessageViewsDetailView`.
+> - **Base de départ 177i+ : `main` HEAD** (resync ; supprimer la branche mergée). Candidats frais
+>   non pris surfacés au scan : `StatusComposerView` (compteur `\(count)/122` non formaté locale-aware),
+>   `MediaPostCell`/`TextPostCell` (boutons UIKit like/comment/repost icône-seule sans label VoiceOver),
+>   `FeedCommentsSheet`, `AudioFullscreenView`, `ReelAudioBackdrop`.
+
+| 176i | claude/laughing-thompson-wnfiis (iOS i18n `ConversationEncryptionDetailSheet` : unique littéral anglais codé en dur `"Unable to read status: …"` du path échec `loadStatus()` ligne 250 — rendu verbatim dans la Section d'erreur → wrap dans `String(localized:defaultValue:bundle:)` avec `defaultValue` interpolé (précédent EmailVerificationView:82/StatusBarView:88/UploadProgressBar:43), 1 clé neuve `conversation.encryption.detail.readStatusError` code-only 0 xcstrings ; catch frère `activate()` ligne 272 laissé intact (chaîne système déjà localisée) ; Dynamic Type déjà OK fonts sémantiques ; VoiceOver icônes d'état accompagnées de labels texte → pas d'info couleur-seule ; 1 fichier, 0 logique/0 visuel/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
 >   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
