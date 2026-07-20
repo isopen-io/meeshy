@@ -300,6 +300,9 @@ struct ConversationMediaGalleryView: View {
                         .adaptiveGlass(in: Capsule())
                         .contentTransition(.numericText())
                         .animation(.spring(response: 0.3), value: currentIndex)
+                        // « / » lu « barre oblique » → « Média X sur Y » (163i).
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(positionAccessibilityLabel)
                 }
 
                 Spacer()
@@ -347,6 +350,16 @@ struct ConversationMediaGalleryView: View {
                 }
             }
         }
+    }
+
+    /// Position du média courant prononcée par VoiceOver (« Média X sur Y »)
+    /// au lieu du compteur « X / Y » lu « barre oblique » (doctrine 163i).
+    private var positionAccessibilityLabel: Text {
+        Text(String(
+            localized: "media.gallery.position",
+            defaultValue: "Média \(currentIndex + 1) sur \(allAttachments.count)",
+            bundle: .main
+        ))
     }
 
     // MARK: - Video Transport Controls (for the currently playing video)
@@ -414,12 +427,40 @@ struct ConversationMediaGalleryView: View {
                 }
                 Spacer()
             }
+            // La ligne « 1920 × 850 KB » se lit fragmentée et le « × » comme
+            // « signe de multiplication ». Un seul élément annonce le média en
+            // clair (type + dimensions + taille), joint locale-aware / RTL via
+            // ListFormatter (doctrine 164i).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(metadataAccessibilityLabel(att))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(
             LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
         )
+    }
+
+    /// Résumé VoiceOver de la ligne de métadonnées : type de média + dimensions
+    /// prononçables (« L par H pixels », pas le glyphe « × ») + taille de
+    /// fichier, joints de façon locale-aware/RTL.
+    private func metadataAccessibilityLabel(_ att: MessageAttachment) -> String {
+        var parts: [String] = [
+            att.type == .video
+                ? String(localized: "media.gallery.kind.video", defaultValue: "Vidéo", bundle: .main)
+                : String(localized: "media.gallery.kind.image", defaultValue: "Image", bundle: .main)
+        ]
+        if let w = att.width, let h = att.height, w > 0, h > 0 {
+            parts.append(String(
+                localized: "media.gallery.dimensions",
+                defaultValue: "\(w) par \(h) pixels",
+                bundle: .main
+            ))
+        }
+        if att.fileSize > 0 {
+            parts.append(att.fileSizeFormatted)
+        }
+        return ListFormatter.localizedString(byJoining: parts)
     }
 
     // MARK: - Actions
