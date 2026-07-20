@@ -14,6 +14,22 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 189i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **189i (en cours, branche `claude/laughing-thompson-juziz7`, base `main` HEAD `61737ef`)** :
+>   `.accessibilityValue` pour les 5 sliders de `VideoFilterControlView` (contrôle de color-grading
+>   dans l'overlay d'effets vidéo en appel — `VideoFiltersPanel`). Chaque `filterSlider` portait
+>   `.accessibilityLabel` mais **pas de `.accessibilityValue`** → un `Slider` SwiftUI natif adjustable
+>   annonce alors sa position brute en **% du range** : trompeur ("50 %" au neutre `0` pour Brightness
+>   `-0.5…0.5` ; % sans rapport pour Temperature piloté par binding normalisé `0…1`). Fix : `.accessibilityValue(
+>   formatValue(value.wrappedValue, neutral:))` — **réutilise exactement** l'expression du `Text` de valeur
+>   déjà affiché (parité garantie, delta relatif au neutre `+0.2`/`0`) ; + `.accessibilityHidden(true)` sur les
+>   `Text` label (déjà porté par le slider) et valeur (fondu dans `accessibilityValue`) → **1 seul élément
+>   adjustable par rangée**. Écran déjà 100 % i18n / Dynamic Type / Indigo / header. 1 fichier, 0 logique,
+>   0 visuel, 0 clé i18n neuve (valeur numérique locale-neutre), 0 test (aucun test ne référence la vue).
+>   0 contention (aucune PR iOS ouverte ne touche ce fichier). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `VideoFilterControlView` valeurs VoiceOver SOLDÉ 189i** : ne plus réintroduire de `Slider` nu sans
+>   `.accessibilityValue`. Restent candidats : `VideoFiltersPanel` (`presetSelector`/`advancedToggles`),
+>   `MessageOverlayMenu` (slider) — fichiers distincts, vérifier contention.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 151i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
 > - **151i (terminée, branche `claude/laughing-thompson-xp2i27`, base `main` HEAD `cd93248`)** :
 >   Structure **VoiceOver** de `EditProfileView` (écran d'édition de profil, 408 lignes). Dynamic Type déjà
