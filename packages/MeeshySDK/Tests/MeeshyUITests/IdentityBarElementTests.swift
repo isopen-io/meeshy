@@ -131,12 +131,56 @@ final class UserIdentityBarLayoutTests: XCTestCase {
         XCTAssertEqual(IdentityBarElement.presence(.online).id, "presence:online")
     }
 
-    func test_presence_offline_rendersNoIndicator() {
-        // Règle 1/3/5 : l'élément `.presence` ne rend RIEN pour `offline` —
-        // le gating central est `showsIndicator` (PresenceStyle), consommé
-        // par le renderer de UserIdentityBar.
-        XCTAssertFalse(PresenceState.offline.showsIndicator)
-        XCTAssertTrue(PresenceState.idle.showsIndicator)
+    /// Règle 1/3/5 : l'élément `.presence` ne rend RIEN pour `offline`.
+    /// Le corps SwiftUI n'est pas introspectable sans ViewInspector — pattern
+    /// établi du repo pour ce cas : garde par analyse de source (cf.
+    /// `ComposerToolPanelHostTimelineTests.sdkSource`,
+    /// `StoryGroupIntroOverlayGuardTests`). La valeur `showsIndicator` est
+    /// déjà verrouillée par `PresenceStyleTests` ; ici on garde le RENDERER :
+    /// le dot doit être gaté par `if state.showsIndicator` dans
+    /// `renderElement`, sinon supprimer le gate laisserait la suite verte.
+    func test_presence_offline_rendersNoIndicator() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Primitives/UserIdentityBar.swift")
+        guard let rendererRange = source.range(
+            of: "private func renderElement(_ element: IdentityBarElement) -> some View {"
+        ) else {
+            XCTFail("UserIdentityBar doit exposer renderElement(_:)")
+            return
+        }
+        guard let caseRange = source.range(
+            of: "case .presence(let state):",
+            range: rendererRange.upperBound..<source.endIndex
+        ) else {
+            XCTFail("renderElement doit rendre l'élément .presence")
+            return
+        }
+        let tail = source[caseRange.upperBound...]
+        let blockEnd = tail.range(of: "case .")?.lowerBound ?? source.endIndex
+        let block = String(tail[..<blockEnd])
+        guard let gateRange = block.range(of: "if state.showsIndicator") else {
+            XCTFail(
+                "Le renderer .presence doit gater sur `if state.showsIndicator` : " +
+                "offline (>5 min) ne rend AUCUN indicateur — jamais de dot gris."
+            )
+            return
+        }
+        guard let dotRange = block.range(of: "Circle()") else {
+            XCTFail("Le renderer .presence doit rendre le dot via Circle().")
+            return
+        }
+        XCTAssertLessThan(
+            gateRange.lowerBound, dotRange.lowerBound,
+            "Le dot Circle() doit être rendu À L'INTÉRIEUR du gate showsIndicator, pas avant."
+        )
+    }
+
+    private func sdkSource(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
     }
 
     func test_barWithFlags_doesNotCrash() {

@@ -93,6 +93,19 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
 
     // MARK: - Gestes composés sur StoryGroupIntroOverlay
 
+    func test_storyGroupIntroOverlay_hasOnBackAndDoubleTapGestures() throws {
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let block = try body(
+            of: "private struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
+        )
+        XCTAssertTrue(block.contains("let onBack: () -> Void"),
+                      "StoryGroupIntroOverlay doit exposer onBack (tap gauche).")
+        XCTAssertTrue(block.contains("SpatialTapGesture(count: 2)"),
+                      "Le double-tap (n'importe où → premier slide) doit être câblé.")
+        XCTAssertTrue(block.contains("exclusively(before:"),
+                      "Le double-tap doit être prioritaire sur le tap simple (sinon il ne fire jamais).")
+    }
+
     // MARK: - Badge de présence : règle 1/3/5, offline = AUCUN badge
 
     func test_presenceBadge_rendersNothingWhenOffline() throws {
@@ -113,18 +126,5 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
             "VoiceOver doit suivre la même règle que le badge visuel : présence " +
             "annoncée seulement quand un indicateur est affiché (online/away/idle)."
         )
-    }
-
-    func test_storyGroupIntroOverlay_hasOnBackAndDoubleTapGestures() throws {
-        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
-        let block = try body(
-            of: "private struct StoryGroupIntroOverlay: View {", in: viewerSource, closing: "\n}"
-        )
-        XCTAssertTrue(block.contains("let onBack: () -> Void"),
-                      "StoryGroupIntroOverlay doit exposer onBack (tap gauche).")
-        XCTAssertTrue(block.contains("SpatialTapGesture(count: 2)"),
-                      "Le double-tap (n'importe où → premier slide) doit être câblé.")
-        XCTAssertTrue(block.contains("exclusively(before:"),
-                      "Le double-tap doit être prioritaire sur le tap simple (sinon il ne fire jamais).")
     }
 }
