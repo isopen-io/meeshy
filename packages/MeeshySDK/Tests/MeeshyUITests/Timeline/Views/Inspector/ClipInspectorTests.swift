@@ -97,35 +97,44 @@ final class ClipInspectorTests: XCTestCase {
 
     func test_visibleSections_default_hidesDetailsAndAnimation() {
         let sections = ClipInspector.visibleSections(
-            kind: .video, isDetailsExpanded: false, isAnimationExpanded: false)
-        XCTAssertEqual(sections, [.header, .volume, .toggles, .actions])
+            kind: .video, isBackground: false, isDetailsExpanded: false, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .timing, .volume, .toggles, .actions])
     }
 
-    func test_visibleSections_detailsExpanded_insertsDetailsAfterHeader() {
+    func test_visibleSections_detailsExpanded_insertsDetailsAfterTiming() {
         let sections = ClipInspector.visibleSections(
-            kind: .video, isDetailsExpanded: true, isAnimationExpanded: false)
-        XCTAssertEqual(sections, [.header, .details, .volume, .toggles, .actions])
+            kind: .video, isBackground: false, isDetailsExpanded: true, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .timing, .details, .volume, .toggles, .actions])
     }
 
     func test_visibleSections_animationExpanded_appendsConfigBelowActions() {
         let sections = ClipInspector.visibleSections(
-            kind: .video, isDetailsExpanded: false, isAnimationExpanded: true)
-        XCTAssertEqual(sections, [.header, .volume, .toggles, .actions, .animation])
+            kind: .video, isBackground: false, isDetailsExpanded: false, isAnimationExpanded: true)
+        XCTAssertEqual(sections, [.header, .timing, .volume, .toggles, .actions, .animation])
     }
 
     func test_visibleSections_textAndImageClips_haveNoVolume() {
         for kind in [ClipInspector.ClipSnapshot.Kind.text, .image] {
             let sections = ClipInspector.visibleSections(
-                kind: kind, isDetailsExpanded: false, isAnimationExpanded: false)
-            XCTAssertEqual(sections, [.header, .toggles, .actions],
+                kind: kind, isBackground: false, isDetailsExpanded: false, isAnimationExpanded: false)
+            XCTAssertEqual(sections, [.header, .timing, .toggles, .actions],
                            "\(kind) n'a pas de piste audio — pas de section volume")
         }
     }
 
     func test_visibleSections_bothExpanded_showsEverythingInOrder() {
         let sections = ClipInspector.visibleSections(
-            kind: .audio, isDetailsExpanded: true, isAnimationExpanded: true)
-        XCTAssertEqual(sections, [.header, .details, .volume, .toggles, .actions, .animation])
+            kind: .audio, isBackground: false, isDetailsExpanded: true, isAnimationExpanded: true)
+        XCTAssertEqual(sections, [.header, .timing, .details, .volume, .toggles, .actions, .animation])
+    }
+
+    // Un FOND couvre toute la slide : début/durée sont ignorés par le moteur —
+    // afficher la barre de timing serait un contrôle sans effet (capture user
+    // 2026-07-20 : steppers « 0:0… » affichés ET ignorés sur un clip Background).
+    func test_visibleSections_backgroundClip_hidesTiming() {
+        let sections = ClipInspector.visibleSections(
+            kind: .video, isBackground: true, isDetailsExpanded: false, isAnimationExpanded: false)
+        XCTAssertEqual(sections, [.header, .volume, .toggles, .actions])
     }
 
     // MARK: - Confirmation de suppression (jamais de delete direct)

@@ -63,6 +63,7 @@ struct EditProfileView: View {
             Text(String(localized: "profile.edit.title", defaultValue: "Modifier le profil", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -140,6 +141,7 @@ struct EditProfileView: View {
                         .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -175,7 +177,8 @@ struct EditProfileView: View {
     }
 
     private var bioField: some View {
-        HStack(alignment: .top, spacing: 12) {
+        let bioLabel = String(localized: "profile.edit.field.bio", defaultValue: "Bio", bundle: .main)
+        return HStack(alignment: .top, spacing: 12) {
             Image(systemName: "text.quote")
                 .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo400)
@@ -185,11 +188,13 @@ struct EditProfileView: View {
                         .fill(MeeshyColors.indigo400.opacity(0.12))
                 )
                 .padding(.top, 2)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "profile.edit.field.bio", defaultValue: "Bio", bundle: .main))
+                Text(bioLabel)
                     .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
+                    .accessibilityHidden(true)
 
                 TextField(
                     String(localized: "profile.edit.field.bio.placeholder", defaultValue: "Parlez de vous...", bundle: .main),
@@ -199,6 +204,7 @@ struct EditProfileView: View {
                 .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(3...6)
+                .accessibilityLabel(bioLabel)
                 .adaptiveOnChange(of: viewModel.bio) { _, newValue in
                     if newValue.count > viewModel.bioMaxLength {
                         viewModel.bio = String(newValue.prefix(viewModel.bioMaxLength))
@@ -318,6 +324,7 @@ struct EditProfileView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
+                .accessibilityHidden(true)
 
             Text(String(localized: "profile.edit.success", defaultValue: "Profil mis a jour", bundle: .main))
                 .font(MeeshyFont.relative(16, weight: .semibold))
@@ -333,6 +340,8 @@ struct EditProfileView: View {
                 )
         )
         .transition(.scale.combined(with: .opacity))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isStaticText)
     }
 
     // MARK: - Reusable Components
@@ -348,6 +357,9 @@ struct EditProfileView: View {
                 .tracking(1.2)
         }
         .padding(.leading, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func editableField(
@@ -363,15 +375,18 @@ struct EditProfileView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(MeeshyColors.indigo400.opacity(0.12))
                 )
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
+                    .accessibilityHidden(true)
 
                 TextField(placeholder, text: text)
                     .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(theme.textPrimary)
+                    .accessibilityLabel(title)
             }
 
             Spacer()
@@ -404,5 +419,7 @@ struct EditProfileView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(value)")
     }
 }

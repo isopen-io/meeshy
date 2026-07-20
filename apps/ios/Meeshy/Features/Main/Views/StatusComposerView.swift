@@ -157,6 +157,7 @@ struct StatusComposerView: View {
                 )
                 .scaleEffect(selectedEmoji == emoji ? 1.1 : 1.0)
         }
+        .accessibilityAddTraits(selectedEmoji == emoji ? [.isSelected] : [])
     }
 
     // MARK: - Text Input
@@ -264,6 +265,7 @@ struct StatusComposerView: View {
                                     AnyShapeStyle(theme.inputBackground))
                         )
                     }
+                    .accessibilityAddTraits(selectedVisibility == vis ? [.isSelected] : [])
                 }
             }
             .padding(.horizontal, MeeshySpacing.xs)

@@ -31,6 +31,7 @@ struct RequestsTab: View {
         HStack(spacing: 10) {
             ForEach(RequestFilter.allCases, id: \.self) { filter in
                 let count = filter == .received ? viewModel.receivedRequests.count : viewModel.sentRequests.count
+                let isSelected = activeFilter == filter
                 Button {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         activeFilter = filter
@@ -38,29 +39,44 @@ struct RequestsTab: View {
                     HapticFeedback.light()
                 } label: {
                     HStack(spacing: 4) {
-                        Text(filter.rawValue)
+                        Text(filterTitle(filter))
                             .font(.footnote.weight(.semibold))
                         if count > 0 {
                             Text("(\(count))")
                                 .font(.caption.weight(.bold))
                         }
                     }
-                    .foregroundColor(activeFilter == filter ? .white : MeeshyColors.indigo500)
+                    .foregroundColor(isSelected ? .white : MeeshyColors.indigo500)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(
-                        Capsule().fill(activeFilter == filter ? MeeshyColors.indigo500 : Color.clear)
+                        Capsule().fill(isSelected ? MeeshyColors.indigo500 : Color.clear)
                     )
                     .overlay(
-                        Capsule().stroke(activeFilter == filter ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
+                        Capsule().stroke(isSelected ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
                     )
                 }
-                .accessibilityLabel(String(format: String(localized: "contacts.requests.filter-a11y", defaultValue: "%@, %d demandes", bundle: .main), filter.rawValue, count))
+                .accessibilityLabel(String(format: String(localized: "contacts.requests.filter-a11y", defaultValue: "%@, %d demandes", bundle: .main), filterTitle(filter), count))
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
             Spacer()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+    }
+
+    /// Localized display title for a request filter. `RequestFilter.rawValue`
+    /// stays the stable identity/persistence key (raw FR literals); this helper
+    /// is the only shipped-to-screen surface, so it goes through `String(localized:)`
+    /// with properly accented French defaults. Mirrors the 176i `tabTitle(_:)`
+    /// doctrine for `ContactsHubView`.
+    private func filterTitle(_ filter: RequestFilter) -> String {
+        switch filter {
+        case .received:
+            return String(localized: "contacts.requests.filter.received", defaultValue: "Reçues", bundle: .main)
+        case .sent:
+            return String(localized: "contacts.requests.filter.sent", defaultValue: "Envoyées", bundle: .main)
+        }
     }
 
     // MARK: - Content

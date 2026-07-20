@@ -794,6 +794,10 @@ private struct AudioFullscreenPage: View {
                             )
                         )
                 }
+                // Selection is otherwise conveyed by color (black-on-accent) only —
+                // expose it as a trait so VoiceOver announces the active speed.
+                .accessibilityLabel(speed.label)
+                .accessibilityAddTraits(player.speed == speed ? [.isSelected] : [])
             }
         }
     }
@@ -1040,6 +1044,9 @@ private struct AudioFullscreenPage: View {
             .padding(.vertical, 5)
             .background(Capsule().fill(isSelected ? langColor.opacity(0.6) : Color.white.opacity(0.07)))
         }
+        // The active listening language is signaled only by fill/weight — expose
+        // it as a VoiceOver trait so the selected language pill is distinguishable.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Helpers
