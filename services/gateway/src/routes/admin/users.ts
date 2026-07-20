@@ -1445,4 +1445,81 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation participants' });
     }
   });
+
+  /**
+   * GET /admin/conversations/:conversationId/messages - Paginated messages of a
+   * conversation, newest first (for the messages modal in the admin user fiche).
+   * Deleted messages are included (moderation view) and flagged via deletedAt.
+   * Requires canViewUsers permission.
+   */
+  fastify.get<{
+    Params: { conversationId: string };
+    Querystring: { offset?: string; limit?: string };
+  }>('/admin/conversations/:conversationId/messages', {
+    preHandler: [fastify.authenticate, requireUserViewAccess]
+  }, async (request, reply) => {
+    try {
+      const { conversationId } = request.params;
+      const { offset = '0', limit } = request.query;
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
+
+      const conversation = await fastify.prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { id: true }
+      });
+      if (!conversation) {
+        return sendNotFound(reply, 'Conversation non trouvée');
+      }
+
+      const where = { conversationId };
+      const [messages, total] = await Promise.all([
+        fastify.prisma.message.findMany({
+          where,
+          select: {
+            id: true,
+            content: true,
+            originalLanguage: true,
+            messageType: true,
+            messageSource: true,
+            isEdited: true,
+            editedAt: true,
+            deletedAt: true,
+            replyToId: true,
+            createdAt: true,
+            sender: {
+              select: {
+                id: true,
+                userId: true,
+                type: true,
+                displayName: true,
+                avatar: true,
+                nickname: true,
+                user: { select: { id: true, username: true, displayName: true, avatar: true } }
+              }
+            },
+            _count: { select: { attachments: true } }
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.message.count({ where })
+      ]);
+
+      const data = messages.map(({ _count, ...rest }) => ({
+        ...rest,
+        attachmentCount: _count?.attachments ?? 0
+      }));
+
+      return sendPaginatedSuccess(reply, data, {
+        total,
+        offset: offsetNum,
+        limit: limitNum,
+        hasMore: offsetNum + messages.length < total
+      });
+    } catch (error) {
+      fastify.log.error({ err: error }, 'Error fetching conversation messages');
+      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation messages' });
+    }
+  });
 }

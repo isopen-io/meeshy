@@ -5,29 +5,34 @@ import Foundation
 /// bare count (e.g. "5"); without these labels VoiceOver announces "5, button"
 /// with no indication of what the number means.
 ///
-/// The singular/plural form is selected in Swift and resolved through
-/// `String(localized:)` on a per-form key. Inline Automatic Grammar Agreement
-/// (`^[…](inflect: true)`) is deliberately NOT used here: it only resolves when
-/// the string is backed by a compiled String Catalog, so an inline `defaultValue`
-/// alone leaves the raw `^[…]` markup at runtime. Explicit per-form keys keep the
-/// labels localizable (translators can localize each form) without depending on a
-/// catalog or `.stringsdict`.
+/// The singular/plural form is resolved explicitly in the development language
+/// (en). Inline Automatic Grammar Agreement markup (`^[…](inflect: true)`) is
+/// NOT used here: without a String Catalog entry the localized lookup falls
+/// back to `defaultValue`, and that fallback path does not resolve the inflect
+/// markup at runtime on iOS 18.x — the raw markup would leak into VoiceOver.
+/// Proper multi-language plurals would require a `.xcstrings` plural variant.
 enum PostStatAccessibility {
     static func likesLabel(_ count: Int) -> String {
-        count == 1
-            ? String(localized: "feed.post.stat.likes.one", defaultValue: "\(count) like", bundle: .main)
-            : String(localized: "feed.post.stat.likes.other", defaultValue: "\(count) likes", bundle: .main)
+        String(
+            localized: "feed.post.stat.likes",
+            defaultValue: "\(count) \(count == 1 ? "like" : "likes")",
+            bundle: .main
+        )
     }
 
     static func commentsLabel(_ count: Int) -> String {
-        count == 1
-            ? String(localized: "feed.post.stat.comments.one", defaultValue: "\(count) comment", bundle: .main)
-            : String(localized: "feed.post.stat.comments.other", defaultValue: "\(count) comments", bundle: .main)
+        String(
+            localized: "feed.post.stat.comments",
+            defaultValue: "\(count) \(count == 1 ? "comment" : "comments")",
+            bundle: .main
+        )
     }
 
     static func repostsLabel(_ count: Int) -> String {
-        count == 1
-            ? String(localized: "feed.post.stat.reposts.one", defaultValue: "\(count) repost", bundle: .main)
-            : String(localized: "feed.post.stat.reposts.other", defaultValue: "\(count) reposts", bundle: .main)
+        String(
+            localized: "feed.post.stat.reposts",
+            defaultValue: "\(count) \(count == 1 ? "repost" : "reposts")",
+            bundle: .main
+        )
     }
 }
