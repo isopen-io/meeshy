@@ -14,6 +14,29 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 178i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Contexte** : essaim `laughing-thompson` très dense — PR ouvertes iOS de 140i à **177i**
+>   (`ReportMessageSheet` #2076). Numéro **178i** choisi strictement > plus haut en vol (177i).
+> - **178i (terminée, branche `claude/laughing-thompson-opq5zi`, base `main` HEAD `ee34b79`)** :
+>   VoiceOver **statut actif/inactif** + i18n de `ShareLinksView` (écran « Mes liens »). Jumeau
+>   structurel de `CommunityLinksView` (déjà poli). **2 déficits réels** : (1) l'état actif/inactif
+>   d'un lien n'était porté que par **la couleur/forme du glyphe de badge** (`link`/shareAccent vs
+>   `link.badge.minus`/neutral500), glyphe `.accessibilityHidden(true)` → **VoiceOver aveugle au
+>   statut** (viol. WCAG 1.4.1 « never rely only on colour ») ; (2) compteur `"\(currentUses) rejoints"`
+>   = **concaténation** nombre + mot localisé isolé (casse pluralisation/ordre des mots). Fix idiome
+>   155i/164i, **0 changement visuel** : `joinedCountLabel` (clé `share.links.joined_count`, unité
+>   interpolée unique) remplace la concat ; `rowAccessibilityLabel` compose « displayName, Actif/Inactif,
+>   N rejoints[, conv] » (clés `share.links.status.active/.inactive`) ; `.accessibilityElement(children:
+>   .ignore)` + `.accessibilityLabel` sur **le seul VStack texte** (bouton copier + NavigationLink
+>   préservés). 3 clés code-only `defaultValue` (famille `share.links.*` = 0 entrée xcstrings) → **0 édit
+>   catalogue**. 1 fichier, 0 logique / 0 réseau / 0 test neuf. Aucun test ne référence la vue (grep = 0) ;
+>   2 call sites (`RootView`, `iPadRootView+Panels`) sans args inchangés. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** `ShareLinksView` : VoiceOver statut + concat i18n soldés 178i. Les 2 glyphes
+>   `.system(size:)` (badge 40×40, héros vide 40pt) sont figés + masqués à dessein.
+> - **Base de départ 179i : `main` HEAD** (resync ; supprimer la branche mergée). **Différé 179i+** :
+>   `CreateShareLinkView` (sheet de création, non audité), `AudioFullscreenView`, `FeedCommentsSheet`,
+>   `ReelAudioBackdrop`. Vérifier collision essaim via `list_pull_requests` avant de choisir.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un
