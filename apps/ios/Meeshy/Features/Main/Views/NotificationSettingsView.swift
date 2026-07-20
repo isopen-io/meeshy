@@ -204,6 +204,10 @@ struct NotificationSettingsView: View {
                 .foregroundColor(Color(hex: accentColor))
                 .multilineTextAlignment(.trailing)
                 .frame(width: 60)
+                // The visible row title is a sibling element (row is not `.combine`d, so the
+                // Toggle rows stay tappable) → VoiceOver would announce only the field value
+                // ("22:00") with no context. Label mirrors the sibling toggles' pattern.
+                .accessibilityLabel(String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main))
             }
 
             settingsRow(icon: "clock.badge.checkmark", title: String(localized: "settings.notifications.dnd_end", defaultValue: "Heure fin", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
@@ -215,6 +219,7 @@ struct NotificationSettingsView: View {
                 .foregroundColor(Color(hex: accentColor))
                 .multilineTextAlignment(.trailing)
                 .frame(width: 60)
+                .accessibilityLabel(String(localized: "settings.notifications.dnd_end", defaultValue: "Heure fin", bundle: .main))
             }
 
             settingsRow(icon: "calendar", title: String(localized: "settings.notifications.dnd_days", defaultValue: "Jours", bundle: .main), color: MeeshyColors.warningHex) {
