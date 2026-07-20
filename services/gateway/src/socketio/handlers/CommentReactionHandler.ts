@@ -113,6 +113,13 @@ export class CommentReactionHandler {
         return;
       }
 
+      const viewable = await this._assertCommentPostViewable(validated.commentId, userId);
+      if (!viewable.allowed) {
+        this.logger.warn('[CommentReactionHandler] comment:reaction-add denied (visibility)', { userId, commentId: validated.commentId });
+        if (callback) callback({ success: false, error: viewable.error });
+        return;
+      }
+
       const reaction = await this.commentReactionService.addReaction({
         commentId: validated.commentId,
         userId,
@@ -213,6 +220,13 @@ export class CommentReactionHandler {
         return;
       }
 
+      const viewable = await this._assertCommentPostViewable(validated.commentId, userId);
+      if (!viewable.allowed) {
+        this.logger.warn('[CommentReactionHandler] comment:reaction-remove denied (visibility)', { userId, commentId: validated.commentId });
+        if (callback) callback({ success: false, error: viewable.error });
+        return;
+      }
+
       const removed = await this.commentReactionService.removeReaction({
         commentId: validated.commentId,
         userId,
@@ -281,6 +295,13 @@ export class CommentReactionHandler {
       const syncAllowed = await reactionRateLimiter.checkLimit(userId, COMMENT_REACTION_RATE_LIMIT);
       if (!syncAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
+      const viewable = await this._assertCommentPostViewable(data.commentId, userId);
+      if (!viewable.allowed) {
+        this.logger.warn('[CommentReactionHandler] comment:request-sync denied (visibility)', { userId, commentId: data.commentId });
+        if (callback) callback({ success: false, error: viewable.error });
         return;
       }
 
@@ -364,5 +385,53 @@ export class CommentReactionHandler {
     userId: string
   ): Promise<boolean> {
     return canUserViewPost(this.prisma, post, userId);
+  }
+
+  /**
+   * Frontière d'autorisation « interagir ⊆ voir » pour les réactions de
+   * commentaire. Résout le post porteur du commentaire **depuis le `commentId`**
+   * (relation `PostComment.post`) — jamais depuis un `postId` fourni par le
+   * client, qui serait falsifiable — puis vérifie que `userId` a le droit de le
+   * voir. Un commentaire dont le post est introuvable ou supprimé
+   * (`deletedAt !== null`) est traité comme non visible. Mirror strict de
+   * `PostReactionHandler.handleJoinPost` : rejet `Comment not found` (absent /
+   * supprimé) ou `Forbidden` (visibilité refusée).
+   */
+  private async _assertCommentPostViewable(
+    commentId: string,
+    userId: string
+  ): Promise<{ allowed: true } | { allowed: false; error: string }> {
+    const comment = await this.prisma.postComment.findUnique({
+      where: { id: commentId },
+      select: {
+        post: {
+          select: {
+            authorId: true,
+            visibility: true,
+            visibilityUserIds: true,
+            deletedAt: true,
+          },
+        },
+      },
+    });
+
+    const post = comment?.post;
+    if (!post || post.deletedAt !== null) {
+      return { allowed: false, error: 'Comment not found' };
+    }
+
+    const canView = await this._canUserViewPost(
+      {
+        authorId: post.authorId,
+        visibility: post.visibility,
+        visibilityUserIds: post.visibilityUserIds,
+      },
+      userId
+    );
+    if (!canView) {
+      return { allowed: false, error: 'Forbidden' };
+    }
+
+    return { allowed: true };
   }
 }

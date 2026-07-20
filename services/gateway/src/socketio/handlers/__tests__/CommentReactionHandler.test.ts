@@ -53,6 +53,7 @@ jest.mock('../../../services/posts/postVisibility', () => ({
 }));
 
 const { validateSocketEvent } = require('../../../middleware/validation');
+const { canUserViewPost } = require('../../../services/posts/postVisibility');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -74,9 +75,19 @@ function makeSocket(id = SOCKET_ID): Socket {
 function makePrisma(overrides: Record<string, any> = {}): PrismaClient {
   return {
     postComment: {
+      // The same mock serves two call sites: the visibility gate
+      // (_assertCommentPostViewable, select: { post }) and the notification
+      // builder (select: { authorId, content }). It therefore returns both
+      // shapes; a visible PUBLIC post keeps every happy-path green.
       findUnique: jest.fn<any>().mockResolvedValue({
         authorId: 'comment-author-1',
         content: 'Great post!',
+        post: {
+          authorId: 'post-author-1',
+          visibility: 'PUBLIC',
+          visibilityUserIds: [],
+          deletedAt: null,
+        },
       }),
     },
     post: {
@@ -163,6 +174,8 @@ describe('CommentReactionHandler', () => {
     jest.clearAllMocks();
     rateLimiterMockObj.checkLimit.mockReset();
     rateLimiterMockObj.checkLimit.mockResolvedValue(true);
+    (canUserViewPost as jest.Mock<any>).mockReset();
+    (canUserViewPost as jest.Mock<any>).mockResolvedValue(true);
     (validateSocketEvent as jest.Mock<any>).mockImplementation((_schema: unknown, data: unknown) => ({
       success: true,
       data,
@@ -210,6 +223,44 @@ describe('CommentReactionHandler', () => {
       await handler.handleAddReaction(makeSocket(), { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' }, callback);
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Rate limit exceeded' }));
+    });
+
+    it('denies with Forbidden when the comment post is not viewable, without calling addReaction', async () => {
+      (canUserViewPost as jest.Mock<any>).mockResolvedValueOnce(false);
+      const { handler, commentReactionService } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleAddReaction(makeSocket(), { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Forbidden' });
+      expect(commentReactionService.addReaction).not.toHaveBeenCalled();
+    });
+
+    it('denies with Comment not found when the comment post is missing or deleted', async () => {
+      const { handler, commentReactionService } = buildHandler({
+        prisma: {
+          postComment: { findUnique: jest.fn<any>().mockResolvedValue({ authorId: 'a', content: 'x', post: null }) },
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleAddReaction(makeSocket(), { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Comment not found' });
+      expect(commentReactionService.addReaction).not.toHaveBeenCalled();
+    });
+
+    it('resolves the authoritative post from the commentId, not the client postId', async () => {
+      const findUnique = jest.fn<any>().mockResolvedValue({
+        authorId: 'a',
+        content: 'x',
+        post: { authorId: 'post-author-1', visibility: 'PUBLIC', visibilityUserIds: [], deletedAt: null },
+      });
+      const { handler } = buildHandler({ prisma: { postComment: { findUnique } } });
+
+      await handler.handleAddReaction(makeSocket(), { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' }, jest.fn());
+
+      expect(findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: COMMENT_ID } }));
     });
 
     it('returns error when addReaction returns null', async () => {
@@ -355,6 +406,37 @@ describe('CommentReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Only registered users can react' }));
     });
 
+    it('denies with Forbidden when the comment post is not viewable, without calling removeReaction', async () => {
+      (canUserViewPost as jest.Mock<any>).mockResolvedValueOnce(false);
+      const { handler, commentReactionService } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleRemoveReaction(makeSocket(), { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Forbidden' });
+      expect(commentReactionService.removeReaction).not.toHaveBeenCalled();
+    });
+
+    it('denies with Comment not found when the comment post is missing or deleted', async () => {
+      const { handler, commentReactionService } = buildHandler({
+        prisma: {
+          postComment: {
+            findUnique: jest.fn<any>().mockResolvedValue({
+              authorId: 'a',
+              content: 'x',
+              post: { authorId: 'post-author-1', visibility: 'PUBLIC', visibilityUserIds: [], deletedAt: new Date() },
+            }),
+          },
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleRemoveReaction(makeSocket(), { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Comment not found' });
+      expect(commentReactionService.removeReaction).not.toHaveBeenCalled();
+    });
+
     it('is idempotent when removeReaction returns false (reaction already absent)', async () => {
       // Already gone (concurrent removal / retry / double-tap un-like) — reply
       // success so the client doesn't roll its optimistic un-like back.
@@ -453,6 +535,34 @@ describe('CommentReactionHandler', () => {
       await handler.handleRequestSync(makeSocket(), { commentId: COMMENT_ID }, callback);
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'User not authenticated' }));
+    });
+
+    it('denies with Forbidden when the comment post is not viewable, without leaking reactions', async () => {
+      (canUserViewPost as jest.Mock<any>).mockResolvedValueOnce(false);
+      const { handler, commentReactionService } = buildHandler({
+        commentReactionService: {
+          getCommentReactions: jest.fn<any>().mockResolvedValue([{ emoji: '👍', users: [{ userId: 'secret-reactor' }] }]),
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleRequestSync(makeSocket(), { commentId: COMMENT_ID }, callback);
+
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Forbidden' });
+      expect(commentReactionService.getCommentReactions).not.toHaveBeenCalled();
+    });
+
+    it('denies with Comment not found when the comment post is missing', async () => {
+      const { handler, commentReactionService } = buildHandler({
+        prisma: { postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) } },
+        commentReactionService: { getCommentReactions: jest.fn<any>().mockResolvedValue([]) },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleRequestSync(makeSocket(), { commentId: COMMENT_ID }, callback);
+
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Comment not found' });
+      expect(commentReactionService.getCommentReactions).not.toHaveBeenCalled();
     });
 
     it('returns success with reaction list on happy path', async () => {
