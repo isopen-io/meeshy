@@ -2,6 +2,17 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-20, `status-unreacted-socket`) — cross-module nullable property blocks Kotlin smart-cast
+A reducer that reads a nullable property twice — `val current = entry.reactionSummary?.get(emoji) ?: return this` then
+`entry.reactionSummary.toMutableMap()` — fails to compile with **`Smart cast to 'Map<...>' is impossible, because
+'reactionSummary' is a public API property declared in different module`**. `StatusEntry.reactionSummary` lives in
+`:core:model`; a `:feature:feed` reducer cannot smart-cast a public property owned by another module (the compiler can't
+prove no other thread nulled it between reads). Fix: **bind it to a local `val` once** — `val summary =
+entry.reactionSummary ?: return this` — then read every subsequent access through the local. Same trap will hit any
+`:feature:*` code that null-checks-then-dereferences a `:core:model`/`:sdk-core` public `var`/`val`. Prefer a single
+local binding over repeated `?.`/`!!`. (The existing `reacted` reducer sidesteps it by dereferencing exactly once:
+`(entry.reactionSummary ?: emptyMap()).toMutableMap()`.)
+
 ## Lesson (2026-07-20, `status-strings-i18n`) — `ThemeStoreTest` DataStore flake under parallel `check`; and TDD for a pure-resource i18n slice
 Two things worth remembering:
 1. **Flaky, not a regression.** A full-repo `assembleDebug testDebugUnitTest` occasionally fails **one** test:

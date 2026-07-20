@@ -2044,6 +2044,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       echo of an already-present status leaves it in place` (2 of 42 fail, no collateral). SDK purity: the DTOs +
       event bus are stateless building blocks in `:core:model` / `:sdk-core`; the "which delta does what to the bar"
       orchestration stays in the `:feature:feed` VM.
+- [x] Statuses **realtime `status:unreacted`** (live bar reaction-removal) — **landed** (slice `status-unreacted-socket`,
+      2026-07-20): the symmetric inverse of the `status:reacted` handler, decoding the gateway's `status:unreacted`
+      (canonical `SERVER_EVENTS`, shared `StatusUnreactedEventData`). A **SOTA symmetry the iOS `StatusViewModel` bar
+      handlers lack** — iOS never folds reaction-removal into the bar. `SocialSocketManager` now `listen`s
+      `status:unreacted` into a new `statusUnreacted` `SharedFlow` decoding `SocketStatusUnreactedData{statusId,userId,
+      emoji}` (same shape as `SocketStatusReactedData`). A new pure `StatusBarListState.unreacted(statusId, emoji)`
+      reducer drops one reaction, **clamped ≥0 and removing the spent bucket** when it hits zero (so no empty entry
+      renders), inert (same instance) when the status is absent **or** carries no such reaction. `StatusesViewModel`
+      folds the delta into the live bar **skipping the un-reactor's own echo** (`payload.userId != currentUserId()`,
+      symmetric to `reacted`). +8 tests (5 `StatusBarListStateTest`: decrement, remove-bucket-at-zero, inert-absent-id,
+      inert-no-such-reaction, inert-no-reactions; 1 `SocialSocketManagerTest`: `status:unreacted` decode; 2
+      `StatusesViewModelTest`: other-user-decrements, own-echo-ignored). Mutation-proven RED: neutralising the own-echo
+      guard (`if (true)`) fails **exactly** `a status unreacted echo of the viewer's own unreaction is ignored`.
+      SDK purity: DTO + flow in `:core:model`/`:sdk-core`, the fold orchestration in the `:feature:feed` VM.
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)
