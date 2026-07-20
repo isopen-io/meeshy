@@ -20,7 +20,10 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// désalignent des pistes (bug introduit 2026-07-18 : colonne passée à 32
     /// pendant que cet offset restait à 72, ~40pt de décalage). Remises en
     /// lockstep à 52 (colonne deux-lignes icône+durée / type).
-    public nonisolated static var laneLabelWidth: CGFloat { 52 }
+    // 84 pt : « 12,0 s » + type lisibles en entier — à 52 la durée tronquait
+    // en « 12,… » (capture user 2026-07-20). Lockstep avec
+    // `TrackBarView.labelColumnWidth` (test dédié).
+    public nonisolated static var laneLabelWidth: CGFloat { 84 }
     public nonisolated static var horizontalPadding: CGFloat { 12 }
     /// Leading inset applied to the playhead overlay — the time axis origin
     /// in scroll-content coordinates.
@@ -100,8 +103,10 @@ public struct TimelineScrubArea<TracksContent: View>: View {
         self.tracks = tracks
     }
 
-    /// Bornes de zoom partagées avec les boutons du transport.
-    public nonisolated static var zoomRange: ClosedRange<CGFloat> { 0.25...4.0 }
+    /// Bornes de zoom partagées avec les boutons du transport — élargies à
+    /// 5 % – 800 % (retour user 2026-07-20) : 5 % embrasse une timeline de
+    /// plusieurs minutes d'un coup d'œil, 800 % permet le calage fin < 0,1 s.
+    public nonisolated static var zoomRange: ClosedRange<CGFloat> { 0.05...8.0 }
 
     /// Zoom cible d'un pinch : ancre capturée au début du geste × facteur de
     /// magnification, clampé aux bornes. Pure — testable sans geste SwiftUI.

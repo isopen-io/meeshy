@@ -76,28 +76,20 @@ struct FriendRequestListView: View {
 
     // MARK: - Empty State
 
+    // HIG-native content-unavailable state (real `ContentUnavailableView` on
+    // iOS 17+, faithful iOS 16 fallback) — replaces the hand-rolled VStack
+    // whose frozen `.system(size: 48)` hero glyph ignored Dynamic Type. The
+    // native icon scales with Dynamic Type and groups title + description for
+    // VoiceOver out of the box. Same glyph + existing i18n keys reused (0 new
+    // keys), parity with StarredMessagesView (175i) / AddParticipantSheet (176i).
+    // maxHeight fill keeps it vertically centred like the former Spacer sandwich.
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-
-            // Figé : icône héros décorative d'état vide (≥40pt) — masquée à
-            // VoiceOver, le sens est porté par le titre + sous-titre ci-dessous.
-            Image(systemName: "person.2.slash")
-                .font(.system(size: 48, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-
-            Text(String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main))
-                .font(.headline)
-                .foregroundColor(theme.textMuted)
-
-            Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted.opacity(0.7))
-
-            Spacer()
-        }
-        .accessibilityElement(children: .combine)
+        AdaptiveContentUnavailableView(
+            String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main),
+            systemImage: "person.2.slash",
+            description: Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Request Row

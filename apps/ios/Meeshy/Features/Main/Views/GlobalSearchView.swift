@@ -305,6 +305,7 @@ struct GlobalSearchView: View {
                         Text(String(localized: "search.recent", defaultValue: "Recherches recentes"))
                             .font(MeeshyFont.relative(14, weight: .bold))
                             .foregroundColor(theme.textPrimary)
+                            .accessibilityAddTraits(.isHeader)
 
                         Spacer()
 
@@ -355,16 +356,17 @@ struct GlobalSearchView: View {
             Spacer()
 
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    viewModel.removeRecentSearch(query)
-                }
-                HapticFeedback.light()
+                removeRecentSearch(query)
             } label: {
                 Image(systemName: "xmark")
                     .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
-            .accessibilityLabel(String(localized: "accessibility.remove_recent_search", defaultValue: "Supprimer des recherches recentes") + ": \(query)")
+            // La rangée est un élément VoiceOver combiné (bouton « relancer la
+            // recherche ») : le bouton de suppression imbriqué serait absorbé et
+            // son action deviendrait injoignable. Masqué ici, ré-exposé via
+            // `.accessibilityAction(named:)` sur la rangée (doctrine 183i).
+            .accessibilityHidden(true)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -382,6 +384,16 @@ struct GlobalSearchView: View {
         .accessibilityLabel(String(localized: "accessibility.recent_search_label", defaultValue: "Recherche recente") + ": \(query)")
         .accessibilityHint(String(localized: "accessibility.recent_search_hint", defaultValue: "Relance la recherche"))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: Text(String(localized: "accessibility.remove_recent_search", defaultValue: "Supprimer des recherches recentes"))) {
+            removeRecentSearch(query)
+        }
+    }
+
+    private func removeRecentSearch(_ query: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            viewModel.removeRecentSearch(query)
+        }
+        HapticFeedback.light()
     }
 
     // MARK: - Messages Results

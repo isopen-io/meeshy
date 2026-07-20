@@ -138,11 +138,11 @@ struct CameraView: View {
 
     private var modeSwitcher: some View {
         HStack(spacing: 24) {
-            modeTab("Photo", selected: !isVideoMode) {
+            modeTab(String(localized: "camera.mode.photo", defaultValue: "Photo", bundle: .main), selected: !isVideoMode) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isVideoMode = false }
                 HapticFeedback.light()
             }
-            modeTab("Video", selected: isVideoMode) {
+            modeTab(String(localized: "camera.mode.video", defaultValue: "Vidéo", bundle: .main), selected: isVideoMode) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isVideoMode = true }
                 HapticFeedback.light()
             }
@@ -155,6 +155,7 @@ struct CameraView: View {
                 .font(MeeshyFont.relative(14, weight: selected ? .bold : .medium))
                 .foregroundColor(selected ? .white : .white.opacity(0.5))
         }
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     @ViewBuilder
@@ -180,6 +181,7 @@ struct CameraView: View {
                     .frame(width: 60, height: 60)
             }
         }
+        .accessibilityLabel(String(localized: "camera.capture.photo", defaultValue: "Prendre une photo", bundle: .main))
     }
 
     private var videoRecordButton: some View {
@@ -206,6 +208,9 @@ struct CameraView: View {
                 }
             }
         }
+        .accessibilityLabel(camera.isRecordingVideo
+            ? String(localized: "camera.record.stop", defaultValue: "Arrêter l'enregistrement", bundle: .main)
+            : String(localized: "camera.record.start", defaultValue: "Démarrer l'enregistrement", bundle: .main))
     }
 
     private var recordingIndicator: some View {
@@ -220,6 +225,9 @@ struct CameraView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
         .background(Capsule().fill(.black.opacity(0.5)))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "camera.recording", defaultValue: "Enregistrement en cours", bundle: .main))
+        .accessibilityValue(formatDuration(camera.recordingDuration))
     }
 
     private func formatDuration(_ t: TimeInterval) -> String {

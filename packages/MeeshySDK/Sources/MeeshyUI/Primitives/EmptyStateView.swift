@@ -38,7 +38,7 @@ public struct EmptyStateView: View {
             Spacer()
 
             Image(systemName: icon)
-                .font(.system(size: compact ? 36 : 52, weight: .light))
+                .font(MeeshyFont.relative(compact ? 36 : 52, weight: .light))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
                 .padding(.bottom, compact ? 0 : 4)
 
@@ -47,13 +47,13 @@ public struct EmptyStateView: View {
             }
 
             Text(title)
-                .font(.system(size: compact ? 15 : 18, weight: .bold))
+                .font(MeeshyFont.relative(compact ? 15 : 18, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             if !subtitle.isEmpty {
                 Text(subtitle)
-                    .font(.system(size: compact ? 12 : 14))
+                    .font(MeeshyFont.relative(compact ? 12 : 14))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
@@ -84,7 +84,7 @@ public struct EmptyStateView: View {
             action()
         } label: {
             Text(label)
-                .font(.system(size: compact ? 13 : 14, weight: .semibold))
+                .font(MeeshyFont.relative(compact ? 13 : 14, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal, compact ? 16 : 24)
                 .padding(.vertical, compact ? 8 : 10)

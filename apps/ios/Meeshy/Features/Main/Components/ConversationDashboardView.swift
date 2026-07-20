@@ -402,6 +402,10 @@ struct ConversationDashboardView: View {
                             Capsule().fill(isSelected ? accent : Color.clear)
                         )
                 }
+                // Selection is otherwise signalled by fill + weight only — the
+                // `.isSelected` trait lets VoiceOver announce the active period
+                // (mirror of CallsTab.chip / GlobalSearchView.tabButton doctrine).
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
         .padding(3)
