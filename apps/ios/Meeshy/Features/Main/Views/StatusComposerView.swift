@@ -157,6 +157,7 @@ struct StatusComposerView: View {
                 )
                 .scaleEffect(selectedEmoji == emoji ? 1.1 : 1.0)
         }
+        .accessibilityAddTraits(selectedEmoji == emoji ? [.isSelected] : [])
     }
 
     // MARK: - Text Input
@@ -183,11 +184,14 @@ struct StatusComposerView: View {
         // Character count
             .overlay(alignment: .bottomTrailing) {
                 if !statusText.isEmpty {
-                    Text("\(statusText.count)/122")
-                        .font(MeeshyFont.relative(10, weight: .medium))
-                        .foregroundColor(statusText.count > 100 ? MeeshyColors.error : theme.textMuted)
-                        .padding(.trailing, MeeshySpacing.md)
-                        .padding(.bottom, -18)
+                    CharacterCountLabel(
+                        count: statusText.count,
+                        limit: 122,
+                        warningThreshold: 101,
+                        font: MeeshyFont.relative(10, weight: .medium)
+                    )
+                    .padding(.trailing, MeeshySpacing.md)
+                    .padding(.bottom, -18)
                 }
             }
     }
@@ -264,6 +268,7 @@ struct StatusComposerView: View {
                                     AnyShapeStyle(theme.inputBackground))
                         )
                     }
+                    .accessibilityAddTraits(selectedVisibility == vis ? [.isSelected] : [])
                 }
             }
             .padding(.horizontal, MeeshySpacing.xs)

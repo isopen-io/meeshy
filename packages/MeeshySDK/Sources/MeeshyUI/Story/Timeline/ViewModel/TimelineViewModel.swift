@@ -66,6 +66,12 @@ public final class TimelineViewModel: ObservableObject {
     /// The canvas uses it to switch between seek-paused (scrub) and
     /// play-muted-in-sync (engine owns the audio) preview strategies.
     public var onPlaybackStateChanged: ((Bool) -> Void)?
+
+    /// Fin NATURELLE de lecture (le moteur a atteint `slideDuration`) —
+    /// distincte d'une pause manuelle. Émise APRÈS le retour de la tête au
+    /// début : l'abonné (canvas du composer) reçoit d'abord le scrub(0) du
+    /// `didSet`, puis peut rendre l'état STATIQUE sans ré-armement de preview.
+    public var onPlaybackEnded: (() -> Void)?
     /// Mirror of `engine.isMuted` so SwiftUI views (TransportBar mute button)
     /// re-render on toggle. The engine remains the audio-routing source of
     /// truth — this stored property is the @Published view-state seam that
@@ -197,7 +203,14 @@ public final class TimelineViewModel: ObservableObject {
             self?.currentTime = time
         }
         engine.onPlaybackEnd = { [weak self] in
-            self?.isPlaying = false
+            guard let self else { return }
+            self.isPlaying = false
+            // Fin de lecture = retour au début (convention transport). La
+            // tête laissée à `slideDuration` figeait le canvas du composer
+            // sur le dernier instant — éléments hors fenêtre masqués — au
+            // lieu de l'état statique du design (capture user 2026-07-20).
+            self.scrub(to: 0, precise: true)
+            self.onPlaybackEnded?()
         }
         engine.onError = { [weak self] error in
             self?.errorMessage = error.localizedDescription

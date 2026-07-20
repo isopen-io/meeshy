@@ -203,6 +203,10 @@ struct MessageMoreSheet: View {
         // VoiceOver : annonce le seul libellé (évite la double-lecture
         // « glyphe + texte », ex. « globe, Langue »). Le Button conserve son trait.
         .accessibilityLabel(labelText(item))
+        // L'état « ouvert » d'une pastille d'exploration (contenu inline déplié)
+        // n'était signalé que par la couleur (fill/stroke/label) — invisible pour
+        // VoiceOver (WCAG 1.4.1). Le trait .isSelected l'annonce, iOS le localise.
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
     // MARK: - Item Classification & Color
@@ -254,6 +258,10 @@ struct MessageMoreSheet: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
+                // Bouton icône seule (xmark.circle.fill) qui replie le contenu
+                // d'exploration inline — sans label, VoiceOver lisait le nom du
+                // symbole. Clé SSOT réutilisée (0 clé neuve).
+                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
             }
             .padding(.horizontal, 4)
 

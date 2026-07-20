@@ -393,6 +393,10 @@ struct OnboardingView: View {
         }
         .padding(.horizontal, 8)
         .allowsHitTesting(false)
+        // Decorative demo bubbles (untranslated Spanish/Japanese sample text).
+        // Folding them into the page's combined VoiceOver element would read as
+        // confusing noise — let the page title speak for this slide instead.
+        .accessibilityHidden(true)
     }
 
     // MARK: - Page Indicators
@@ -412,6 +416,38 @@ struct OnboardingView: View {
                     )
                     .animation(MeeshyAnimation.springDefault, value: currentPage)
             }
+        }
+        // The decorative capsules replace the native page dots
+        // (`.page(indexDisplayMode: .never)`), so they carry no meaning for
+        // VoiceOver. Expose the strip as a single adjustable element mirroring
+        // `UIPageControl`: it announces "Page N of M" and lets VoiceOver users
+        // flick up/down to page — the same navigation the swipe/next button give.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(pageIndicatorA11yLabel)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment where currentPage < pages.count - 1:
+                goToPage(currentPage + 1)
+            case .decrement where currentPage > 0:
+                goToPage(currentPage - 1)
+            default:
+                break
+            }
+        }
+    }
+
+    private var pageIndicatorA11yLabel: String {
+        String(
+            format: String(localized: "onboarding.pages.a11y", bundle: .main),
+            currentPage + 1,
+            pages.count
+        )
+    }
+
+    private func goToPage(_ index: Int) {
+        HapticFeedback.light()
+        withAnimation(MeeshyAnimation.springDefault) {
+            currentPage = index
         }
     }
 

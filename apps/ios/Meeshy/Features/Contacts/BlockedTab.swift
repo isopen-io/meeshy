@@ -21,6 +21,8 @@ struct BlockedTab: View {
                     ProgressView().tint(MeeshyColors.indigo500)
                     Spacer()
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "blocked.users.loading.a11y", defaultValue: "Chargement en cours", bundle: .main))
             } else if viewModel.blockedUsers.isEmpty {
                 emptyState
             } else {
@@ -71,6 +73,7 @@ struct BlockedTab: View {
                 accentColor: color,
                 avatarURL: user.avatar
             )
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(user.name)
@@ -82,6 +85,7 @@ struct BlockedTab: View {
                     .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -101,24 +105,16 @@ struct BlockedTab: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
         .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.blockedUsers.count)
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: "hand.raised.slash")
-                .font(.system(.largeTitle).weight(.light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-            Text(String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloque", bundle: .main))
-                .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textMuted)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+        EmptyStateView(
+            icon: "hand.raised.slash",
+            title: String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloque", bundle: .main),
+            subtitle: String(localized: "contacts.blocked.empty-subtitle", defaultValue: "Les personnes que vous bloquez apparaitront ici.", bundle: .main)
+        )
     }
 }

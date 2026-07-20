@@ -54,9 +54,13 @@ struct ComposerToolPanelHost: View {
                 .padding(.top, 8)
 
             // Tool-specific body — Phase 2 placeholder. Wired in Phase 4.
+            // `alignment: .top` : un contenu plus haut que la fenêtre du panel
+            // déborde vers le BAS (hors sheet) — centré, il remontait SOUS la
+            // rangée de chips et la bande d'opérations de la timeline se
+            // superposait aux outils (capture user 2026-07-20).
             placeholderPanel
-                .frame(height: panelHeight - 50)
-                .padding(.horizontal, 16)
+                .frame(height: panelHeight - 50, alignment: .top)
+                .padding(.horizontal, Self.horizontalPadding(for: tool))
                 .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity)
@@ -183,6 +187,15 @@ struct ComposerToolPanelHost: View {
 
     /// Hauteur par défaut d'un panneau d'outil avant tout redimensionnement au
     /// grabber. Pure et testable indépendamment du montage SwiftUI.
+    /// Marge horizontale du CONTENU du panel. La timeline occupe TOUTE la
+    /// largeur de la sheet (retour user 2026-07-20 : son transport et ses
+    /// lanes étaient posés avec une marge gauche/droite héritée du conteneur
+    /// commun des outils) — son scroller horizontal gère ses propres insets.
+    /// Les autres outils gardent l'inset lisible de 16 pt.
+    nonisolated static func horizontalPadding(for tool: StoryToolMode) -> CGFloat {
+        tool == .timeline ? 0 : 16
+    }
+
     static func defaultPanelHeight(for tool: StoryToolMode) -> CGFloat {
         switch tool {
         case .media:    return 220
@@ -191,7 +204,10 @@ struct ComposerToolPanelHost: View {
         case .text:     return 280
         case .texture:  return 236  // couleurs + rangée « Ouverture » (C1)
         case .filters:  return 180
-        case .timeline: return 320  // scrubber + pistes clips (2026-07-14, band comme les autres outils)
+        case .timeline: return 392  // opérations + transport + scrubber + 3 pistes
+                                    // compactes + footer (2026-07-20 : +72 pour la
+                                    // bande d'opérations — à 320 elle débordait
+                                    // sous les chips d'outils)
         }
     }
 

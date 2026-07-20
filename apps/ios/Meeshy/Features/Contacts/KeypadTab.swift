@@ -58,6 +58,11 @@ struct KeypadTab: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "keypad.delete.a11y", defaultValue: "Effacer", bundle: .main))
+                .accessibilityHint(String(localized: "keypad.delete.a11y.hint", defaultValue: "Efface le dernier caractère", bundle: .main))
+                .accessibilityAction(named: Text(String(localized: "keypad.clear.a11y", defaultValue: "Tout effacer", bundle: .main))) {
+                    viewModel.clear()
+                    HapticFeedback.medium()
+                }
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.4).onEnded { _ in
                         viewModel.clear()
@@ -157,13 +162,14 @@ struct KeypadTab: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(name)
+            .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvre le profil", bundle: .main))
 
             dialMenu(for: user, displayName: name)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(name)
     }
 
     private func dialMenu(for user: UserSearchResult, displayName: String) -> some View {
