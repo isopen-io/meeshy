@@ -655,4 +655,150 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
       );
     });
   });
+
+  // -------------------------------------------------------------------------
+  // GW6(b) — no active voip token → standard APNs alert fallback (Mac,
+  // expired PushKit token). The alert reuses the SAME payload (data.type
+  // 'call' + callId + iceServers + isVideo) so tapping it routes through the
+  // existing `.incomingCallAlert` navigation on iOS.
+  // -------------------------------------------------------------------------
+
+  describe('GW6(b) — alert fallback when callee has no active voip token', () => {
+    function makePrismaWithVoipTokens(offlineMemberId: string, voipUserIds: string[]) {
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: offlineMemberId }]),
+      });
+      (prisma as any).pushToken = {
+        findMany: jest.fn<any>().mockResolvedValue(voipUserIds.map(userId => ({ userId }))),
+      };
+      return prisma;
+    }
+
+    it('falls back to a standard apns alert when the callee has no active voip token', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-no-voip-token';
+      const prisma = makePrismaWithVoipTokens(offlineMemberId, []);
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: offlineMemberId,
+          types: ['apns'],
+          payload: expect.objectContaining({
+            callId: CALL_ID,
+            data: expect.objectContaining({
+              type: 'call',
+              callId: CALL_ID,
+              conversationId: CONV_ID,
+              isVideo: 'false',
+              iceServers: expect.any(String),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('keeps the voip push type when the callee has an active voip token', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const offlineMemberId = 'user-with-voip-token';
+      const prisma = makePrismaWithVoipTokens(offlineMemberId, [offlineMemberId]);
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: offlineMemberId,
+          types: ['voip'],
+        })
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // GW6(c) — stale-foreground guard: a socket that claims appForeground=true
+  // but whose last inbound packet is older than the staleness window is a
+  // zombie (app crashed without emitting presence:app-state=false). It must
+  // NOT suppress the VoIP push — the client dedups by callId anyway.
+  // -------------------------------------------------------------------------
+
+  describe('GW6(c) — stale appForeground socket still gets the call push', () => {
+    function makeIoWithMemberSocket(socketData: Record<string, unknown>) {
+      const memberSocket = { id: 'member-socket-1', emit: jest.fn<any>(), data: socketData };
+      const fetchSockets = jest.fn<any>().mockResolvedValue([memberSocket]);
+      const io = {
+        to: jest.fn<any>().mockReturnValue({ emit: jest.fn<any>() }),
+        in: jest.fn<any>().mockReturnValue({ fetchSockets }),
+      };
+      return { io, memberSocket };
+    }
+
+    it('sends the call push when appForeground=true but the socket is stale (>30s)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const memberId = 'user-zombie-foreground';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: memberId }]),
+      });
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIoWithMemberSocket({
+        appForeground: true,
+        lastSeenAt: Date.now() - 60_000,
+      });
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: memberId })
+      );
+    });
+
+    it('does NOT push when appForeground=true and the socket is fresh (in-app UI rings)', async () => {
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const memberId = 'user-live-foreground';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: memberId }]),
+      });
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIoWithMemberSocket({
+        appForeground: true,
+        lastSeenAt: Date.now() - 1_000,
+      });
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      expect(mockSendToUser).not.toHaveBeenCalled();
+    });
+  });
 });

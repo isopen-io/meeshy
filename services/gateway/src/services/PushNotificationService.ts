@@ -282,9 +282,21 @@ export class PushNotificationService {
   }
 
   /**
+   * GW6 — a call push is any send targeting a `voip` token OR carrying a
+   * call-management data type (`call` ring, `call_cancel` / `call_answered_elsewhere`
+   * stop-ring). `missed_call` is deliberately NOT in this set: it is a regular
+   * notification governed by missedCallEnabled/pushEnabled.
+   */
+  private isCallRelatedPush(options: SendPushOptions): boolean {
+    if (options.types?.includes('voip')) return true;
+    const dataType = options.payload.data?.type;
+    return dataType === 'call' || dataType === 'call_cancel' || dataType === 'call_answered_elsewhere';
+  }
+
+  /**
    * Vérifie si les push sont autorisés selon UserPreferences.notification
    */
-  private async isPushAllowed(userId: string, bypassDnd = false): Promise<boolean> {
+  private async isPushAllowed(userId: string, bypassDnd = false, isCallPush = false): Promise<boolean> {
     try {
       const userPrefs = await this.prisma.userPreferences.findUnique({
         where: { userId },
@@ -292,6 +304,11 @@ export class PushNotificationService {
       });
       const raw = (userPrefs?.notification ?? {}) as Record<string, unknown>;
       const prefs: NotifPrefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
+
+      // GW6 — call pushes are a dedicated category: only `callsEnabled`
+      // governs them. Neither pushEnabled:false nor the DND window applies
+      // (calls ring through DND — producers also set bypassDnd:true).
+      if (isCallPush) return prefs.callsEnabled ?? true;
 
       if (!prefs.pushEnabled) return false;
 
@@ -341,7 +358,7 @@ export class PushNotificationService {
     const { userId, payload, types, platforms, bypassDnd } = options;
 
     // Vérifier les préférences push utilisateur (UserPreferences.notification)
-    const pushAllowed = await this.isPushAllowed(userId, bypassDnd);
+    const pushAllowed = await this.isPushAllowed(userId, bypassDnd, this.isCallRelatedPush(options));
     if (!pushAllowed) {
       pushLogger.info('Push blocked by user preferences', { userId });
       return [];

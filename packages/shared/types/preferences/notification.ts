@@ -15,6 +15,10 @@ export const NotificationPreferenceSchema = z.object({
   // Types de notifications
   newMessageEnabled: z.boolean().default(true),
   missedCallEnabled: z.boolean().default(true),
+  // Appels entrants (VoIP/CallKit + pushes de gestion call_*) — catégorie
+  // produit distincte : `pushEnabled:false` ne coupe JAMAIS les appels
+  // (parité FaceTime/WhatsApp/Signal). Seul ce toggle les gouverne.
+  callsEnabled: z.boolean().default(true),
   voicemailEnabled: z.boolean().default(true),
   systemEnabled: z.boolean().default(true),
   conversationEnabled: z.boolean().default(true),
@@ -61,6 +65,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   vibrationEnabled: true,
   newMessageEnabled: true,
   missedCallEnabled: true,
+  callsEnabled: true,
   voicemailEnabled: true,
   systemEnabled: true,
   conversationEnabled: true,
