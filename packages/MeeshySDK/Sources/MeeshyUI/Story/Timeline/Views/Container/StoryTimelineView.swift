@@ -15,15 +15,21 @@ public struct StoryTimelineView: View {
     @State private var isExpanded: Bool = false
 
     private let previewSlot: (() -> AnyView)?
+    /// Enregistrement de la story (export MP4) — rendu dans le transport, juste
+    /// après la lecture (`TransportBar.onSave`). `nil` = pas de bouton.
+    private let onExport: (() -> Void)?
 
     public init(viewModel: TimelineViewModel,
+                onExport: (() -> Void)? = nil,
                 @ViewBuilder previewSlot: @escaping () -> some View) {
         self.viewModel = viewModel
+        self.onExport = onExport
         self.previewSlot = { AnyView(previewSlot()) }
     }
 
-    public init(viewModel: TimelineViewModel) {
+    public init(viewModel: TimelineViewModel, onExport: (() -> Void)? = nil) {
         self.viewModel = viewModel
+        self.onExport = onExport
         self.previewSlot = nil
     }
 
@@ -322,7 +328,8 @@ public struct StoryTimelineView: View {
             onZoomReset: { viewModel.zoomScale = 1.0 },
             onUndo: { viewModel.undo() },
             onRedo: { viewModel.redo() },
-            onSnapToggle: { viewModel.toggleSnap() }
+            onSnapToggle: { viewModel.toggleSnap() },
+            onSave: onExport
         )
     }
 

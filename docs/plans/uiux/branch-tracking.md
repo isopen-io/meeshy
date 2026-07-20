@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
+>   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un
+>   **`VStack` bespoke** ré-implémentant à la main le composant SDK partagé `MeeshyUI.EmptyStateView`
+>   (déjà consommé par **10 sites** : `BlockedUsersView`, `MyStoriesView`, `ConversationListHelpers`,
+>   `SharePickerView`, `GlobalSearchView`, `ParticipantsView`, `WidgetPreviewView`, `CallsTab`,
+>   `ConversationListView`, `StoryViewerView+Content`). 4 déficits : (1) **duplication** d'un pattern
+>   partagé ; (2) **VoiceOver fragmenté** (titre + sous-titre = 2 focus, aucun `children: .combine`) ;
+>   (3) **`.font(.system(size: 48))` figé** local ; (4) divergence visuelle (glyphe gris muet vs. héros
+>   indigo animé du composant partagé). Fix = remplacer le `VStack` par `EmptyStateView(icon:title:subtitle:)`
+>   + `import MeeshyUI`, en réutilisant **les 2 clés i18n existantes** (`bookmarks.empty.title/subtitle`)
+>   et en conservant le layout top-ancré (`.padding(.top, 80)`). A11y `children: .combine` + label combiné,
+>   glyphe indigo, animation d'entrée hérités gratuitement du composant. Typographie titre/sous-titre déjà
+>   sémantique (Dynamic Type non cassé) — le déficit était reuse + structure VoiceOver, pas le scaling.
+>   1 fichier, 0 logique, 0 ViewModel, 0 clé i18n neuve, 0 `.xcstrings`, 0 test touché. `theme` conservé
+>   (`backgroundGradient`). Aucun test ne référence l'empty-state (grep : tests = `BookmarksViewModel` seul).
+>   Aucune PR iOS ouverte ne touche `BookmarksView` → 0 contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `BookmarksView` empty-state SOLDÉ** : délègue désormais au primitive partagé. Ne plus ré-hand-roll —
+>   tout futur ajustement d'empty-state passe par `MeeshyUI.EmptyStateView` (bénéficie aux 11 consommateurs).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
 >   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
@@ -1850,3 +1870,11 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Base de départ 178i : `main` HEAD** (resync ; supprimer la branche mergée). **Différé 178i+** (surfaces fraîches, 1/itération, vérifier collision via `list_pull_requests`) : `PeopleDiscoveryView` / `DiscoveryTab` (`ContactsShared.swift:30-33` — raw values FR non accentuées `"Decouvrir"/"Demandes"/"Bloques"` en `Text` **et** `.accessibilityLabel`, candidat **i18n**) ; `CrashReportSheet` (`ShareLink` icône-only sans label + rangée expand `.onTapGesture` sans `.isButton`/hint) ; `VideoFullscreenPlayer` (`VideoLegacySupport.swift` — `xmark` dismiss icône-only sans label + `.system(size:28)` figé).
 
 | 177i | claude/laughing-thompson-r9ubq7 (iOS VoiceOver `ReportMessageSheet` — liste radio de motifs de signalement : état sélectionné auparavant porté par couleur accent + glyphe `checkmark.circle.fill` seuls (WCAG 1.4.1) → `.accessibilityAddTraits(isSelected ? [.isSelected] : [])` sur le `Button` (état localisé iOS, 0 clé) + `.accessibilityHidden(true)` sur icône catégorie & checkmark décoratifs (Button agrège déjà label+description + `.isButton`) ; pas de `.combine` ; surface déjà 100 % localisée + fonts sémantiques → 0 migration Dynamic Type/0 clé i18n ; 1 fichier, 0 logique/0 visuel/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
+> **POINTEUR iOS AUTORITAIRE (mis à jour 175i, 2026-07-19)** — piste iOS (suffixe `i`).
+> - **Essaim iOS très dense** : PRs 165i→174i ouvertes (#2028…#2062). Numéro **175i** choisi strictement > plus haut en vol (174i `ParticipantsView` #2062).
+> - **175i (terminée, branche `claude/laughing-thompson-zz7wzb`, base `main` HEAD `fff57e8`)** : état vide de **`StarredMessagesView`** (liste des messages favoris). Le `VStack` custom (icône `.system(size: 56)` indigo400 + 2 `Text`) était une **réimplémentation manuelle** de ce que fournit déjà le composant design-system `AdaptiveContentUnavailableView` (`ContentUnavailableView` natif iOS 17+, fallback fidèle iOS 16), lui-même **déjà adopté** par `FeedView` et `CreateShareLinkView`. Remplacé par `AdaptiveContentUnavailableView(title, systemImage: "star.circle", description:)` en **réutilisant les clés i18n existantes** (`starred.messages.empty.title` / `.subtitle`) → alignement HIG, dédup design-system, VoiceOver titre+description groupé natif, suppression du **dernier `.system(size:)`** du fichier. Les rangées `StarredRow` (VoiceOver `.combine` + `.isButton` + hint + action, fonts `MeeshyFont.relative`, palette accent, context menu) et toute la navigation/store **inchangées**. 1 fichier, 0 logique / 0 réseau / **0 clé i18n neuve** / 0 test neuf. Gate = CI `iOS Tests`.
+> - **⚠️ NE PLUS re-flagger** `StarredMessagesView` : Dynamic Type déjà OK (fonts relatives), état vide natif soldé 175i, rangées a11y complètes.
+> - **Base de départ 176i : `main` HEAD** (toujours resync ; supprimer la branche mergée). **Piste 176i+** : traquer d'autres états vides custom réimplémentant `ContentUnavailableView` (`BookmarksView` en vol #2038/#2034, `AudioFullscreenView`, `GlobalSearchView`, `SharePickerView` déjà partiellement traités — vérifier collision essaim) ; grandes surfaces Dynamic Type restantes (`ConversationView+Composer` 13, `FeedView` 7).
+
+| 175i | claude/laughing-thompson-zz7wzb (iOS HIG+dédup `StarredMessagesView` : état vide custom `VStack` (icône `.system(size:56)` indigo400 + 2 Text) → `AdaptiveContentUnavailableView` (natif `ContentUnavailableView` iOS 17+, fallback iOS 16), déjà adopté par FeedView/CreateShareLinkView ; réutilise clés i18n `starred.messages.empty.title/.subtitle` ; VoiceOver titre+description groupé natif, dernier `.system(size:)` du fichier supprimé ; StarredRow + navigation/store inchangés ; 1 fichier, 0 logique/0 clé i18n neuve/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
