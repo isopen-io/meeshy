@@ -27,7 +27,7 @@ struct ContactsHubView: View {
     var body: some View {
         VStack(spacing: 0) {
             CollapsibleHeader(
-                title: selectedTab.rawValue,
+                title: tabTitle(selectedTab),
                 scrollOffset: scrollOffset,
                 onBack: { router.pop() },
                 titleColor: theme.textPrimary,
@@ -76,7 +76,7 @@ struct ContactsHubView: View {
                     Image(systemName: tab.icon)
                         .font(.footnote.weight(.medium))
 
-                    Text(tab.rawValue)
+                    Text(tabTitle(tab))
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
 
@@ -98,7 +98,22 @@ struct ContactsHubView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
         }
-        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tab.rawValue)\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tabTitle(tab))\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    /// Localized display name for a People-hub tab. The raw enum value stays the
+    /// stable French key used for `.tag`/persistence; VoiceOver and the visible
+    /// label read this localized string instead.
+    private func tabTitle(_ tab: PeopleTab) -> String {
+        switch tab {
+        case .calls:
+            return String(localized: "contacts.tab.calls", defaultValue: "Appels", bundle: .main)
+        case .keypad:
+            return String(localized: "contacts.tab.keypad", defaultValue: "Clavier", bundle: .main)
+        case .contacts:
+            return String(localized: "contacts.tab.contacts", defaultValue: "Contacts", bundle: .main)
+        }
     }
 
     private func badgeCount(for tab: PeopleTab) -> Int {

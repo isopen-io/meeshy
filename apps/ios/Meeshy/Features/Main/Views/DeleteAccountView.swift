@@ -167,12 +167,21 @@ struct DeleteAccountView: View {
                         .autocapitalization(.allCharacters)
                         .disableAutocorrection(true)
                         .accessibilityLabel(String(localized: "account.delete.confirmation.label", defaultValue: "Phrase de confirmation", bundle: .main))
+                        // Announce the match state so VoiceOver users get the same
+                        // feedback the sighted checkmark conveys — otherwise the
+                        // transition from invalid to valid (which unlocks the
+                        // destructive button) is silent to them.
+                        .accessibilityValue(confirmationPhraseAccessibilityValue)
 
                     if confirmationText == requiredPhrase {
                         Image(systemName: "checkmark.circle.fill")
                             .font(MeeshyFont.relative(20))
                             .foregroundColor(MeeshyColors.success)
                             .transition(.scale.combined(with: .opacity))
+                            // Decorative confirmation: its meaning is carried by the
+                            // field's accessibilityValue, so hide it to avoid a
+                            // dangling unlabeled element for VoiceOver.
+                            .accessibilityHidden(true)
                     }
                 }
                 .padding(12)
@@ -332,6 +341,12 @@ struct DeleteAccountView: View {
             attributed[range].font = MeeshyFont.relative(14, weight: .bold, design: .monospaced)
         }
         return Text(attributed)
+    }
+
+    private var confirmationPhraseAccessibilityValue: String {
+        confirmationText == requiredPhrase
+            ? String(localized: "account.delete.confirmation.value.matched", defaultValue: "Phrase correcte", bundle: .main)
+            : String(localized: "account.delete.confirmation.value.pending", defaultValue: "Phrase incomplete", bundle: .main)
     }
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
