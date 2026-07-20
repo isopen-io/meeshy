@@ -247,7 +247,9 @@ struct ConversationEncryptionDetailSheet: View {
             status = try await E2EAPI.shared.fetchEncryptionStatus(conversationId: conversationId)
         } catch {
             Self.logger.error("loadStatus failed: \(error.localizedDescription)")
-            errorMessage = "Unable to read status: \(error.localizedDescription)"
+            errorMessage = String(localized: "conversation.encryption.detail.readStatusError",
+                                  defaultValue: "Unable to read status: \(error.localizedDescription)",
+                                  bundle: .main)
         }
     }
 

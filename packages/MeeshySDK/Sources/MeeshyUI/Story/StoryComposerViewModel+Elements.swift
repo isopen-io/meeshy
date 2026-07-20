@@ -261,7 +261,19 @@ extension StoryComposerViewModel {
     }
 
     @discardableResult
+    /// Point d'entrée protocolaire (`StoryComposerProviding`) : génère un id
+    /// frais et délègue à la variante `id`-explicite.
     func addMediaObject(kind: StoryMediaKind, toSlideId: String? = nil) -> StoryMediaObject? {
+        addMediaObject(kind: kind, toSlideId: toSlideId, id: UUID().uuidString)
+    }
+
+    /// Variante avec id explicite. Le composer passe l'`objectId` qui a servi à
+    /// nommer le fichier temp `{objectId}.{ext}` : ainsi `obj.id` == nom-de-fichier
+    /// == `composerKey` dérivé par `StoryBackgroundLayer.configure`. Sans cet
+    /// alignement, le bitmap du fond (stocké sous `obj.id` dans `loadedImages`)
+    /// n'est jamais retrouvé par la clé issue du fichier → fond `.clear` →
+    /// canvas noir (bug user 2026-07-20).
+    func addMediaObject(kind: StoryMediaKind, toSlideId: String? = nil, id: String) -> StoryMediaObject? {
         guard canAddMedia else { return nil }
         // Resolve the target slide. If the caller pinned a specific id (e.g., the
         // PhotosPicker started on slide 0 and the user switched to slide 1 mid-load),
@@ -286,6 +298,7 @@ extension StoryComposerViewModel {
         let hasSlideLevelBgImage = slideImages[slides[targetSlideIndex].id] != nil
         let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil && !hasSlideLevelBgImage
         let obj = StoryMediaObject(
+            id: id,
             postMediaId: "",
             kind: kind,
             placement: "media",

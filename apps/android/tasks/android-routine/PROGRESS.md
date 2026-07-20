@@ -1,5 +1,200 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **camera-covered ("dark frame") detection core** landed (slice `call-dark-frame-detection`,
+> feature-parity §H → "Camera-covered detection during video calls" — an unchecked §H box; the build-order Calls
+> area's next high-value pure slice, following the many pure decision cores already landed there). Parity source:
+> iOS `DarkFrameDetector` (`apps/ios/Meeshy/Features/Main/Services/DarkFrameDetector.swift`) — a stateful class whose
+> streak logic is **untestable** (its `DarkFrameDetectorTests` can only poke the callbacks, never a real
+> `CVPixelBuffer`). We split it into two pure `:core:model` cores, both fully TDD-covered — a strict SOTA upgrade.
+> **(1)** `DarkFramePolicy` — the SSOT detector as a total, side-effect-free reducer
+> `reduce(DarkFrameState, averageBrightness) → DarkFrameDecision(state, DarkFrameEvent)` with **count-based
+> hysteresis**: the cover latches only after `consecutiveThreshold` (30, iOS default) consecutive frames whose average
+> luma is **strictly below** `darkThreshold` (15.0f, iOS default) — so a single dim frame (blink/passing shadow) never
+> trips it — and clears the instant a bright frame returns (iOS's responsive restore; the confirm/restore asymmetry IS
+> the hysteresis). Emits `Covered`/`Uncovered` **exactly once** per stretch (idempotent while covered — further dark
+> frames stay silent, don't re-fire). **SOTA improvement:** iOS's `consecutiveDarkFrames` is an unbounded `Int` that
+> counts into the millions over a multi-hour covered stream; ours **clamps the streak at the threshold** so
+> `DarkFrameState` (one counter + one flag + one last-reading) is O(1) and never overflows. **(2)** `FrameLuminance`
+> — the framework-agnostic other half: pure `averageOfYPlane(yPlane, width, height, rowStride, step)` porting the iOS
+> Y-plane luma averaging (sub-sampled every `step`=8 px, `rowStride`-aware so I420 row padding is skipped,
+> **unsigned-byte correct** — `0xFF` reads 255 not −1), returning `null` on degenerate geometry (non-positive dim/step,
+> stride<width, plane too small, empty) rather than a fake `0.0` pitch-black reading that would falsely trip the cover
+> detector — mirroring iOS's `guard … else return` early-outs. Nothing depends on `org.webrtc`. **+24 behavioural
+> tests** — `DarkFramePolicyTest` (13: single-frame streak open, sub-threshold no-cover, threshold-latch-fires-once,
+> covered-idempotent, **clamp-bounded-counter**, uncover-on-bright, partial-streak-clear, initial-bright-noop,
+> boundary-at-threshold-is-bright, full cover→uncover→cover cycle, last-reading-recorded, default-iOS-thresholds),
+> `FrameLuminanceTest` (11: uniform average, unsigned-255, pitch-black-0, step-skips-pixels, default-step-8,
+> row-padding-ignored, non-positive width/height/step→null, stride<width→null, plane-too-small→null, empty→null).
+> **Mutation check (RED proof):** removing the streak clamp (`minOf(…, threshold)` → `…+1`) fails **exactly** `the dark
+> streak counter is clamped so it never grows unbounded while covered` (13 tests, 1 failed, no collateral) —
+> behavioural, not tautological. **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through the proxy;
+> `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (the two new suites 24/24) + full
+> `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 2 production files + 2 test
+> + tracking; **SDK purity** — both cores are stateless building blocks in `:core:model` (a pure reducer + a pure
+> function), zero framework deps; the WebRTC frame-source actuator + UI hint stay app-side, pending; **SSOT** — one
+> reducer, one sampler, mirrors the `VideoSurvivalPolicy`/`ThermalCeiling` pure-policy pattern; **UDF** — immutable
+> `DarkFrameState`, transitions pure; no coverage floor lowered, no test weakened). **Next slice:** wire the actuator —
+> a `:feature:calls`/`:sdk-core` WebRTC `VideoProcessor`/`VideoSink` seam that reads the captured I420 Y plane →
+> `FrameLuminance` → `DarkFramePolicy`, folds the `Covered`/`Uncovered` edge into `CallViewModel`, and surfaces a
+> discreet in-call "camera may be covered" hint (closing the §H box to `[x]`); OR another §H pure core (in-call
+> transcription/translation) or the tracked Kover 90% coverage-gate infra follow-up.
+
+> On 2026-07-20 the **statuses realtime `status:unreacted` wiring** landed (slice `status-unreacted-socket`,
+> feature-parity §G → "Statuses realtime `status:unreacted`" — the symmetric-inverse follow-up the
+> `status-realtime-socket` slice flagged as Next). Parity source: the gateway's canonical `SERVER_EVENTS`
+> `status:unreacted` (shared `StatusUnreactedEventData{statusId,userId,emoji}`, emitted on every reaction removal). A
+> **SOTA symmetry the iOS `StatusViewModel` bar handlers lack** — iOS folds `status:reacted` into the bar but never a
+> removal. **(1)** new `@Serializable` `:core:model` DTO `SocketStatusUnreactedData{statusId,userId,emoji}` (same shape
+> as `SocketStatusReactedData`, mirror of the shared type). **(2)** `SocialSocketManager` gains the `statusUnreacted`
+> `SharedFlow` + `listen("status:unreacted", …)` in `attach()` (same `buf()`/`asSharedFlow()`/`listen` harness).
+> **(3)** a new pure `StatusBarListState.unreacted(statusId, emoji)` reducer — the inverse of `reacted`: drop one
+> reaction, **clamped ≥0 and removing the spent bucket at zero** (so no empty entry renders), **inert (same instance)**
+> when the status is absent OR carries no such reaction (a redundant/foreign unreact never churns state nor drives a
+> count negative). **(4)** `StatusesViewModel.subscribeToSocketEvents()` folds the delta into the live `listState`
+> **skipping the un-reactor's own echo** (`payload.userId != currentUserId()`, symmetric to `reacted` — the viewer's
+> own removal is already applied optimistically). **+8 tests** — `StatusBarListStateTest` (+5: decrement,
+> remove-bucket-at-zero, inert-absent-id, inert-no-such-reaction, inert-no-reactions), `SocialSocketManagerTest` (+1:
+> `status:unreacted` JSON decode via the captured-handler harness), `StatusesViewModelTest` (+2: other-user-decrements
+> after two reacts, own-echo-ignored). **Mutation check (RED proof):** neutralising the own-echo guard (`if (true)`)
+> fails **exactly** `a status unreacted echo of the viewer's own unreaction is ignored` (44 tests, 1 failed, no
+> collateral) — behavioural, not tautological; the reducer's inert-instance tests (`isSameInstanceAs`) prove the two
+> no-op guards structurally. **Note (compile fix):** the reducer's `entry.reactionSummary?.get(...)` then
+> `.toMutableMap()` tripped a cross-module smart-cast error (`reactionSummary` is a public API property in `:core:model`)
+> — resolved by binding `val summary = entry.reactionSummary ?: return this` once, then reading through the local (no
+> behaviour change). **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through the proxy; `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model` compile green, `:sdk-core:testDebugUnitTest` green (`SocialSocketManagerTest`
+> 13/13, was 12 + 1), `:feature:feed:testDebugUnitTest` green (`StatusBarListStateTest` 18/18 was 13 + 5,
+> `StatusesViewModelTest` 44/44 was 42 + 2), full `:app:assembleDebug` + the three test modules → **BUILD SUCCESSFUL**.
+> Reviewer **PASS** (diff `apps/android` only — 1 DTO + 1 flow + 1 reducer + 1 VM fold (4 production) + 3 test +
+> tracking; **SDK purity** — DTO + event bus are stateless building blocks in `:core:model`/`:sdk-core`, the fold
+> orchestration stays in the `:feature:feed` VM; **SSOT** — reuses the `reacted`/own-echo-guard pattern, one reducer,
+> one guard; **UDF** — immutable `StatusBarListState`, transitions pure, collector on `viewModelScope`
+> (cancellation-safe); **coherence** — the bar now reflects reaction removals live, a strict superset of iOS; no
+> coverage floor lowered, no test weakened). **Next slice:** §H — Calls WebRTC core is the next build-order area's
+> highest-value unchecked box (1:1 audio/video, ICE/STUN — the pure signalling/negotiation state machine first), OR the
+> tracked Kover 90% coverage-gate infra follow-up. Statuses are now feature-complete for realtime (created/updated/
+> deleted/reacted/unreacted) + L1/L2 cache + i18n + composer + popover parity.
+
+> On 2026-07-20 the **statuses realtime socket wiring** landed (slice `status-realtime-socket`, feature-parity §G →
+> "Statuses realtime socket wiring" — the live-bar follow-up the `status-strings-i18n` slice flagged as Next). Parity
+> source: iOS `StatusViewModel.subscribeToSocketEvents` (handlers for `status:created` / `status:updated` /
+> `status:deleted` / `status:reacted`). **Naming:** the prompt's `status:new` / `status:reaction` do not exist in the
+> codebase; the canonical `SERVER_EVENTS` (source of truth `packages/shared/types/socketio-events.ts`) are
+> `status:created/updated/deleted/reacted/unreacted`. **(1)** four new `@Serializable` `:core:model` DTOs
+> (`SocketStatusCreatedData{status: ApiPost, clientMutationId?}`, `SocketStatusUpdatedData{status}`,
+> `SocketStatusDeletedData{statusId, authorId}`, `SocketStatusReactedData{statusId, userId, emoji}` — mirrors of the
+> iOS structs, `authorId` defaulted for defensive decode). **(2)** `SocialSocketManager` gains the four
+> `statusCreated/Updated/Deleted/Reacted` `SharedFlow`s + `listen("status:created"…)` lines in `attach()` (same
+> `buf()`/`asSharedFlow()`/`listen` harness as the post/story events; `RealtimeSessionCoordinator.attach()` already
+> drives it — no coordinator change). **(3)** a new pure `StatusBarListState.updated(entry)` reducer (replace in place
+> by id, **inert when absent** so a foreign update never smuggles an entry in). **(4)** `StatusesViewModel` injects
+> `SocialSocketManager` (5th ctor param) and folds the deltas in a new `subscribeToSocketEvents()` launched from
+> `init`: `status:created` → `toStatusEntry()` then `created` **only if not already present** (iOS `if !contains` — no
+> re-hoist, no dup; the viewer's own echo is inert since `setStatus` already inserted the server id); `status:updated`
+> → `updated`; `status:deleted` → `removed`; `status:reacted` → `reacted` **guarded by `payload.userId !=
+> currentUserId()`** (skip the reactor's own echo, already applied optimistically by `react`). A non-`STATUS` payload
+> (`toStatusEntry` → null) is ignored. Deltas fold into `listState` only — the next `fetchFirstPage` reconciles the
+> authoritative page (matches iOS's in-memory `statuses` mutation; the L1/L2 cache tiers are reconciled by
+> fetch/publish, not per-delta — noted as a deliberate scope choice to avoid a socket delta for one mode's feed
+> polluting the other's persisted bar, since one Android VM drives both feeds). **+15 tests** — `StatusBarListStateTest`
+> (+2: updated in-place-preserving-position, updated-absent-inert), `SocialSocketManagerTest` (+4: created/updated/
+> deleted/reacted JSON decode via the captured-handler harness), `StatusesViewModelTest` (+9: created-hoist,
+> created-echo-leaves-in-place, non-status-ignored, updated-in-place, updated-absent-inert, deleted-drop,
+> reacted-other-bumps, reacted-own-echo-ignored). **Mutation check (RED proof):** neutralising the own-echo guard
+> (`|| true`) fails **exactly** `a status reacted echo of the viewer's own reaction is ignored`; neutralising the
+> created present-guard fails **exactly** `a status created echo of an already-present status leaves it in place`
+> (42 tests, 2 failed, no collateral) — behavioural, not tautological. The created-echo test asserts **position
+> preserved** (`[b, a]` stays `[b, a]`), not just "no duplicate", so it catches the guard removal the `created`
+> reducer's own dedup would otherwise mask. **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through
+> the proxy; `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green, `:sdk-core:testDebugUnitTest`
+> **849** green (`SocialSocketManagerTest` 12/12, was 8 + 4), `:feature:feed:testDebugUnitTest` green
+> (`StatusesViewModelTest` 42/42 was 33 + 9, `StatusBarListStateTest` 13/13 was 11 + 2), full `:app:assembleDebug` +
+> the three test modules → **BUILD SUCCESSFUL**. (One flaky `:sdk-core` `MediaDownloadPreferencesStoreTest`
+> `TimeoutCancellationException` under parallel all-module load appeared on the first pass — the documented DataStore/
+> Robolectric parallel-load family, same as `ThemeStoreTest`; **passes green in isolation** and green on the final
+> gate run; a module this diff does not touch.) Reviewer **PASS** (diff `apps/android` only — 4 production
+> (SocketEvents DTOs, SocialSocketManager flows, StatusBarListState reducer, StatusesViewModel wiring) + 3 test +
+> tracking; **SDK purity** — DTOs + event bus are stateless building blocks in `:core:model`/`:sdk-core`, the
+> "which delta does what" orchestration stays in the `:feature:feed` VM; **SSOT** — reuses `toStatusEntry`,
+> `created`/`updated`/`removed`/`reacted` reducers, one own-echo guard; **UDF** — immutable `StatusBarListState`,
+> transitions pure, collectors on `viewModelScope` (cancellation-safe); **coherence** — the bar now updates live like
+> iOS; no coverage floor lowered, no test weakened). **Next slice:** §G — extend the socket wiring to
+> `status:unreacted` (decrement-and-clamp reducer, a symmetric SOTA improvement iOS lacks in its bar handlers), OR
+> pivot to the next build-order area's highest-value unchecked box (§H Calls WebRTC core, or another §-area gap) —
+> statuses are now feature-complete for realtime + cache + i18n + composer + popover parity.
+
+> On 2026-07-20 the **statuses-area FR/ES/PT localisation** landed (slice `status-strings-i18n`, feature-parity §G →
+> "Statuses area i18n" — the tracked i18n follow-up the `status-feed-mode-toggle` / `status-bar-l2-cache` slices
+> flagged: the whole `status_*` family shipped in `values/` only). Prisme parity: a user whose device is FR/ES/PT must
+> render native content, never fall through to an English default. **(1)** the 26-key `status_*` family
+> (`status_bar_*` / `status_feed_*` / `status_composer_*`) is now fully translated in `values-fr` / `values-es` /
+> `values-pt`, preserving each string's positional format specifiers exactly (`%1$s`, `%2$s`, `%1$d/%2$d`, …).
+> Translations reuse the module's/app's existing term choices (e.g. FR "Contacts"/"Communautés"/"Privé",
+> ES "Comunidades"/"Contactos", PT "Comunidades"/"Contatos"). **(2)** new **behavioural guard**
+> `FeedStringLocalizationParityTest` (+2 tests, plain JVM, parses the module's own `res/values*/strings.xml`):
+> `every base string key is translated in every shipped locale` (no silent English fallthrough) and
+> `translated values keep the same positional format specifiers as the base` (a drifted/dropped arg is a runtime
+> `FormatException` crash — parity here is correctness, not cosmetics). Deliberately **full-module**, not scoped to
+> `status_*`, so any future feed key added without its FR/ES/PT siblings turns red before it ships. **Mutation check
+> (RED proof):** pre-translation the parity test failed with **exactly** the 26 missing `status_*` keys per locale
+> (`{fr=[status_bar_me, …], es=[…], pt=[…]}`); the format-specifier test stayed green (it only inspects present keys),
+> so RED was scoped precisely to the gap. This is a pure resource/parity slice — **no product logic touched**.
+> **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:feature:feed:testDebugUnitTest` **509**
+> green (`FeedStringLocalizationParityTest` 2/2, was 507 + 2), full `:app:assembleDebug` → **BUILD SUCCESSFUL**.
+> Full-repo `assembleDebug testDebugUnitTest` = **4688 tests, 1 failed** — the sole failure is
+> `ThemeStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction` in `:sdk-core` (a DataStore/Robolectric
+> `TimeoutCancellationException` at 5000 ms under parallel all-module load), a module this diff does **not** touch; it
+> **passes green in isolation** on re-run (`:sdk-core:testDebugUnitTest --tests ThemeStoreTest` → BUILD SUCCESSFUL),
+> confirming pre-existing test-infra flakiness, not a regression (see NOTES.md). Reviewer **PASS** (diff `apps/android`
+> only — 3 locale XML + 1 test + tracking; **SDK purity** — pure resource localisation, no code moved; **SSOT** — the
+> parity guard is now the single enforcement point for feed locale completeness; **coherence** — no UI change, native
+> content in every shipped locale as the Prisme demands; no coverage floor lowered, no test weakened).
+> **Next slice:** §G — statuses **realtime socket wiring** (`status:new` / `status:reaction` push into the bar) for
+> live parity with iOS `StatusViewModel` socket handlers; then extend the locale-parity guard pattern to the other
+> feature modules that still have `values/`-only keys, if any surface.
+
+> On 2026-07-19 the **disk L2 status cache** landed (slice `status-bar-l2-cache`, feature-parity §G →
+> "Instant-app status bar — disk L2 cache" — the cold-launch follow-up the `status-bar-l1-cache` slice flagged in its
+> own KDoc). Parity source: iOS `StatusViewModel.loadStatuses` reads from `CacheCoordinator.statuses`, whose disk tier
+> survives a process death; Android's L1 `StatusBarCache` only spans the process, so a cold launch always fell to the
+> skeleton. **(1)** new Room `status_bar_cache` table (`StatusBarCacheEntity` + `StatusBarCacheDao`, DB v10→11 in
+> `:core:database`, registered + Hilt-provided). **(2)** new `StatusBarCacheRepository` (`:sdk-core/status`,
+> `@Singleton`) — the disk (L2) tier, mirroring `ProfileStatsCacheRepository` **exactly**: `cachedBar(mode)` replays the
+> raw feed or `null` (cold / undecodable), `persistBar(mode, statuses)` write-through, `invalidate(mode)`; keyed per
+> mode (`statuses:friends` / `statuses:discover`, iOS `statuses_<mode>`). Row-presence is the sync marker: absent →
+> cold `null`, present `[]` → real synced-empty feed; an undecodable payload is a cache miss (never a crash). It holds
+> no network dep / no product decision — a pure keyed store, so it sits in `:sdk-core` next to `ProfileStatsCacheRepository`.
+> **(3)** `StatusesViewModel` wired L2 into the `CacheResult.Empty` (cold-L1) branch via a new private `DiskCachePlan`
+> (`NONE`/`SEED`/`INVALIDATE`): `SEED` reads the disk bar and paints it instantly before the first network call —
+> guarded by `!listState.hasLoaded` **and** an `activeMode == mode.value` re-check so a mode switch during the suspend
+> read can't paint the wrong feed; the network first page then **replaces** the seed and is written through to **both**
+> tiers; `setStatus`/`clearStatus` write through to L2 on success; `refresh` runs `INVALIDATE` (drops the disk row) then
+> reloads. **Improvement kept:** an *expired* L1 snapshot is still served while it revalidates (SWR, from the L1 slice).
+> **+17 tests** — `StatusBarCacheRepositoryTest` (9, Robolectric in-memory Room, mirroring `ProfileStatsCacheRepositoryTest`:
+> cold-null, round-trip-in-order, per-mode keying, two-feeds-independent, newest-wins, synced-empty≠cold, invalidate-scope,
+> undecodable→null, rich-field round-trip); `StatusesViewModelTest` (+8: cold-launch-disk-seed, cold-disk→skeleton,
+> network-write-through, warm-L1-never-reads-disk, refresh-invalidates+writes-through, publish-write-through,
+> clear-write-through, failed-clear-no-disk-write). **Mutation check (RED proof):** structural RED (tests don't compile
+> without `StatusBarCacheRepository`/the VM's 4th param); behaviourally, flipping the seed's `activeMode == mode.value`
+> guard to `!=` fails **exactly** `a cold launch seeds the bar from the disk cache before the network answers`, and
+> dropping the network write-through fails **exactly** `the first network page is written through to the disk cache` +
+> `refresh invalidates the disk row then writes the fresh page through` (507 tests, 3 failed) — behavioural, not
+> tautological. **Note:** the existing `cold load shows a skeleton` test needed a `coEvery { diskCache.cachedBar(any()) }
+> returns null` default in `setUp` — relaxed mockk hands back an *empty list* (not null) for a nullable `List` return,
+> which the new SEED path would treat as a synced-empty disk and falsely paint (suppressing the skeleton); the stub makes
+> the cold-disk precondition explicit and matches the production repository's `null`. Not a weakening — the assertion is
+> unchanged. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:sdk-core:testDebugUnitTest` **845**
+> green (was 836 + 9), `:feature:feed:testDebugUnitTest` **507** green (`StatusesViewModelTest` 34/34, was 26 + 8),
+> `:core:database:testDebugUnitTest` 27 green, full `assembleDebug` + `testDebugUnitTest` → **BUILD SUCCESSFUL**.
+> Reviewer **PASS** (diff `apps/android` only — 3 production + 3 infra (entity/dao/db+module) + 2 test + tracking;
+> **SDK purity** — `StatusBarCacheRepository` is a pure keyed store in `:sdk-core`, the *when* orchestration stays in the
+> `:feature:feed` VM; **SSOT** — one disk-cache pattern shared with `ProfileStatsCacheRepository`, one keyed table;
+> **UDF** — immutable `StateFlow`, transitions pure, cancellation-safe; **Instant-App** — cold launch now paints from
+> disk before the network, skeleton only on a truly-cold disk; **coherence** — no UI change, pure behaviour; no coverage
+> floor lowered, no test weakened). **Next slice:** §G — localise the `status_*` string family (FR/ES/PT) to close the
+> tracked i18n gap (the whole `status_bar_*` / `status_*` family is default-only today), then the statuses realtime
+> socket wiring (`status:new` / `status:reaction` push into the bar) for live parity with iOS.
+
 > On 2026-07-19 the **Friends / Discover status-feed toggle** landed (slice `status-feed-mode-toggle`,
 > feature-parity §G → "Friends/Discover status-feed toggle" — the UI the `statuses-viewmodel` /
 > `status-bar-l1-cache` slices built `StatusesViewModel.setMode` for but never surfaced). iOS ships **only** the

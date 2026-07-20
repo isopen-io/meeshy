@@ -67,7 +67,8 @@ public struct TimelineInspectorHost: View {
                 fadeInDuration: Float(media.fadeIn ?? 0),
                 fadeOutDuration: Float(media.fadeOut ?? 0),
                 isLooping: media.loop,
-                isBackground: media.isBackground
+                isBackground: media.isBackground,
+                name: media.name
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
@@ -81,7 +82,27 @@ public struct TimelineInspectorHost: View {
                 fadeInDuration: audio.fadeIn ?? 0,
                 fadeOutDuration: audio.fadeOut ?? 0,
                 isLooping: audio.loop ?? false,
-                isBackground: audio.isBackground ?? false
+                isBackground: audio.isBackground ?? false,
+                name: audio.name
+            )
+        }
+        // Le texte a aussi un début/durée/fondu (et un nom) éditables — sans
+        // cette branche, un long-press sur un TEXTE n'ouvrirait aucun inspecteur.
+        // Pas de volume ni de boucle pour le texte (slider masqué via
+        // hasAudioAffordances(.text) == false).
+        if let text = viewModel.project.textObjects.first(where: { $0.id == id }) {
+            return ClipInspector.ClipSnapshot(
+                id: text.id,
+                displayName: text.text,
+                kind: .text,
+                startTime: Float(text.startTime ?? 0),
+                duration: Float(text.duration ?? 0),
+                volume: 1.0,
+                fadeInDuration: Float(text.fadeIn ?? 0),
+                fadeOutDuration: Float(text.fadeOut ?? 0),
+                isLooping: false,
+                isBackground: false,
+                name: text.name
             )
         }
         return nil
@@ -234,6 +255,12 @@ public struct TimelineInspectorHost: View {
                 viewModel.dragClip(id: clipId, deltaTimeSeconds: delta, isCommitted: true)
             },
             onDurationAdjusted: { [viewModel] delta in
+                viewModel.trimClipEnd(id: clipId, deltaTimeSeconds: delta)
+            },
+            onNameChanged: { [viewModel] name in
+                viewModel.setClipName(id: clipId, name: name)
+            },
+            onEndAdjusted: { [viewModel] delta in
                 viewModel.trimClipEnd(id: clipId, deltaTimeSeconds: delta)
             }
         )

@@ -145,6 +145,89 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `status created payload nests the mood post under status`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.statusCreated.test {
+            handlers.getValue("status:created").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"status":{"id":"st1","type":"STATUS","moodEmoji":"😀",""" +
+                            """"author":{"id":"u1","username":"alice"}},"clientMutationId":null}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.status.id).isEqualTo("st1")
+            assertThat(event.status.moodEmoji).isEqualTo("😀")
+            assertThat(event.status.author?.id).isEqualTo("u1")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `status updated payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.statusUpdated.test {
+            handlers.getValue("status:updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"status":{"id":"st2","type":"STATUS","moodEmoji":"🎉",""" +
+                            """"content":"edited","author":{"id":"u2"}}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.status.id).isEqualTo("st2")
+            assertThat(event.status.content).isEqualTo("edited")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `status deleted payload carries the status and author ids`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.statusDeleted.test {
+            handlers.getValue("status:deleted").invoke(
+                arrayOf(JSONObject("""{"statusId":"st3","authorId":"u3"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.statusId).isEqualTo("st3")
+            assertThat(event.authorId).isEqualTo("u3")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `status reacted payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.statusReacted.test {
+            handlers.getValue("status:reacted").invoke(
+                arrayOf(JSONObject("""{"statusId":"st4","userId":"u4","emoji":"😂"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.statusId).isEqualTo("st4")
+            assertThat(event.userId).isEqualTo("u4")
+            assertThat(event.emoji).isEqualTo("😂")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `status unreacted payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.statusUnreacted.test {
+            handlers.getValue("status:unreacted").invoke(
+                arrayOf(JSONObject("""{"statusId":"st9","userId":"u7","emoji":"😂"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.statusId).isEqualTo("st9")
+            assertThat(event.userId).isEqualTo("u7")
+            assertThat(event.emoji).isEqualTo("😂")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `comment reaction-removed payload is decoded and emitted`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.commentReactionRemoved.test {

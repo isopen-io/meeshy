@@ -15,7 +15,12 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// Width of the `TrackBarView` sticky label column. The ruler and the
     /// playhead are both offset by this amount so x=0 of the time axis lands
     /// exactly on the lane origin.
-    public nonisolated static var laneLabelWidth: CGFloat { 72 }
+    /// Offset ruler/playhead = largeur de la colonne d'étiquette collante.
+    /// DOIT égaler `TrackBarView.labelColumnWidth` sinon les ticks du ruler se
+    /// désalignent des pistes (bug introduit 2026-07-18 : colonne passée à 32
+    /// pendant que cet offset restait à 72, ~40pt de décalage). Remises en
+    /// lockstep à 52 (colonne deux-lignes icône+durée / type).
+    public nonisolated static var laneLabelWidth: CGFloat { 52 }
     public nonisolated static var horizontalPadding: CGFloat { 12 }
     /// Leading inset applied to the playhead overlay — the time axis origin
     /// in scroll-content coordinates.
