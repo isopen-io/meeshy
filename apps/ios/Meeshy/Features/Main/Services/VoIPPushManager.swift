@@ -58,7 +58,7 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// G4c — POST seam + auth probe, injectable for tests. Production uses
     /// `APIClient.shared` for both.
     private let tokenRegistrar: VoIPTokenRegistering
-    private let authTokenAvailable: () -> Bool
+    private let authTokenAvailable: @MainActor () -> Bool
 
     /// Cached snapshot of the last registered record so the cooldown check
     /// stays synchronous — the keychain read is performed asynchronously in
@@ -72,7 +72,7 @@ final class VoIPPushManager: NSObject, ObservableObject {
     init(
         tokenStore: VoIPTokenStoring,
         registrar: VoIPTokenRegistering = APIVoIPTokenRegistrar(),
-        authTokenAvailable: @escaping () -> Bool = { APIClient.shared.authToken != nil }
+        authTokenAvailable: @escaping @MainActor () -> Bool = { APIClient.shared.authToken != nil }
     ) {
         self.tokenStore = tokenStore
         self.tokenRegistrar = registrar

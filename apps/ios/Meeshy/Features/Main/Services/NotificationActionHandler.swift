@@ -91,15 +91,15 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let replyQueue: NotificationReplyQueueing
     private let injectedPersistence: OptimisticMessagePersisting?
     private let backgroundTasks: BackgroundTaskScheduling
-    private let authTokenProvider: () -> String?
-    private let applyAuthToken: (String?) -> Void
-    private let currentUserId: () -> String?
-    private let preferredLanguage: () -> String?
-    private let isRegisteredUser: () -> Bool
-    private let openNotification: ([AnyHashable: Any]) -> Void
-    private let localMarkRead: (String) -> Void
-    private let removeDeliveredForConversation: (String) -> Void
-    private let removeDeliveredForPost: (String) -> Void
+    private let authTokenProvider: @MainActor () -> String?
+    private let applyAuthToken: @MainActor (String?) -> Void
+    private let currentUserId: @MainActor () -> String?
+    private let preferredLanguage: @MainActor () -> String?
+    private let isRegisteredUser: @MainActor () -> Bool
+    private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
+    private let localMarkRead: @MainActor (String) -> Void
+    private let removeDeliveredForConversation: @MainActor (String) -> Void
+    private let removeDeliveredForPost: @MainActor (String) -> Void
 
     /// Resolved lazily so tests never touch `DependencyContainer.shared`
     /// (which opens the on-disk GRDB pool).
@@ -115,29 +115,29 @@ final class NotificationActionHandler: NotificationActionHandling {
         replyQueue: NotificationReplyQueueing = OfflineQueue.shared,
         messagePersistence: OptimisticMessagePersisting? = nil,
         backgroundTasks: BackgroundTaskScheduling = UIApplicationBackgroundTaskScheduler(),
-        authTokenProvider: @escaping () -> String? = { AuthManager.shared.authToken },
-        applyAuthToken: @escaping (String?) -> Void = { APIClient.shared.authToken = $0 },
-        currentUserId: @escaping () -> String? = { AuthManager.shared.currentUser?.id },
-        preferredLanguage: @escaping () -> String? = {
+        authTokenProvider: @escaping @MainActor () -> String? = { AuthManager.shared.authToken },
+        applyAuthToken: @escaping @MainActor (String?) -> Void = { APIClient.shared.authToken = $0 },
+        currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        preferredLanguage: @escaping @MainActor () -> String? = {
             AuthManager.shared.currentUser?.preferredContentLanguages.first
         },
-        isRegisteredUser: @escaping () -> Bool = {
+        isRegisteredUser: @escaping @MainActor () -> Bool = {
             guard let user = AuthManager.shared.currentUser else { return false }
             return user.isAnonymous != true
         },
-        openNotification: @escaping ([AnyHashable: Any]) -> Void = {
+        openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
             PushNotificationManager.shared.handleNotification(userInfo: $0)
         },
-        localMarkRead: @escaping (String) -> Void = { conversationId in
+        localMarkRead: @escaping @MainActor (String) -> Void = { conversationId in
             NotificationCoordinator.shared.markConversationRead(conversationId)
             NotificationCenter.default.post(name: .conversationMarkedRead, object: conversationId)
         },
-        removeDeliveredForConversation: @escaping (String) -> Void = { conversationId in
+        removeDeliveredForConversation: @escaping @MainActor (String) -> Void = { conversationId in
             NotificationActionHandler.removeDeliveredNotifications(
                 matching: { ($0["conversationId"] as? String) == conversationId }
             )
         },
-        removeDeliveredForPost: @escaping (String) -> Void = { postId in
+        removeDeliveredForPost: @escaping @MainActor (String) -> Void = { postId in
             NotificationActionHandler.removeDeliveredNotifications(
                 matching: { ($0["postId"] as? String) == postId }
             )

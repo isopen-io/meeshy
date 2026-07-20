@@ -14,7 +14,10 @@ final class NSEDecryptorTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private final class KeychainReaderSpy {
+    /// `nonisolated` so `spy.read` converts to the plain `(String) -> Data?`
+    /// parameter of `NSEDecryptor.decrypt` (a MainActor-isolated method
+    /// reference would not). Single-threaded test usage — no synchronization.
+    private nonisolated final class KeychainReaderSpy {
         private(set) var requestedAccounts: [String] = []
         var storage: [String: Data] = [:]
 
