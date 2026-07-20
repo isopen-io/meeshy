@@ -635,5 +635,13 @@ extension StoryPublishQueue {
     func _testSetFailedItems(_ items: [StoryPublishQueueItem]) {
         self.failedItems = items
     }
+
+    /// Clears any publish handler left over by a previous test. The queue is a
+    /// singleton actor, so a throwing handler leaked from an earlier test lets
+    /// `retryFailedItem`'s fire-and-forget drain re-fail the item concurrently
+    /// with the current test's assertions.
+    func _testResetPublishHandler() {
+        onPublish = nil
+    }
 }
 #endif
