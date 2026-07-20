@@ -1,6 +1,57 @@
 {
   "sourceLanguage" : "fr",
   "strings" : {
+    "feed.post.stat.comments" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "^[%lld comment](inflect: true)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "^[%lld commentaire](inflect: true)"
+          }
+        }
+      }
+    },
+    "feed.post.stat.likes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "^[%lld like](inflect: true)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld j'aime"
+          }
+        }
+      }
+    },
+    "feed.post.stat.reposts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "^[%lld repost](inflect: true)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "^[%lld repartage](inflect: true)"
+          }
+        }
+      }
+    },
     "story.mine.row.a11y" : {
       "extractionState" : "manual",
       "localizations" : {
