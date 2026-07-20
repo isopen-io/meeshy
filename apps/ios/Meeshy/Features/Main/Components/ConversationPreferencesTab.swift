@@ -156,16 +156,16 @@ struct ConversationPreferencesTab: View {
     // MARK: - Sections
 
     private var displaySection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.display", defaultValue: "My display", bundle: .main), icon: "paintbrush.fill", color: "A855F7") {
+        settingsSection(title: String(localized: "conversation.prefs.section.display", defaultValue: "My display", bundle: .main), icon: "paintbrush.fill", color: accentColor) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "pencil")
                         // Decorative glyph in a fixed 28×28 badge — kept fixed (86i doctrine:
                         // a scalable glyph would overflow the fixed frame) + hidden (the label carries the meaning).
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: "A855F7"))
+                        .foregroundColor(accent)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "A855F7").opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: 8).fill(accent.opacity(0.12)))
                         .accessibilityHidden(true)
                     Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Custom name", bundle: .main))
                         .font(MeeshyFont.relative(13, weight: .semibold))
@@ -211,7 +211,7 @@ struct ConversationPreferencesTab: View {
             Button {
                 showEmojiPicker = true
             } label: {
-                settingsRow(icon: "heart.fill", iconColor: "A855F7", title: String(localized: "conversation.prefs.reaction", defaultValue: "Reaction", bundle: .main)) {
+                settingsRow(icon: "heart.fill", iconColor: accentColor, title: String(localized: "conversation.prefs.reaction", defaultValue: "Reaction", bundle: .main)) {
                     HStack(spacing: 6) {
                         if let r = viewModel.prefs.reaction, !r.isEmpty {
                             Text(r).font(MeeshyFont.relative(24))
