@@ -14,6 +14,36 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 185i, 2026-07-20)** — piste iOS (suffixe `i`).
+> - **Contexte** : essaim `laughing-thompson` très dense — PR iOS ouvertes jusqu'à 184i
+>   (#2135 `StatusComposerView`). Numéro **185i** choisi strictement > plus haut en vol.
+>   Base `main` HEAD `0b2df50` (#2125 `MediaDownloadSettingsView` 179i mergé). La prior work
+>   de cette branche (scroll-to-bottom 178i) est déjà dans `main` (PR #2112) → branche resync
+>   à neuf depuis `main` HEAD.
+> - **185i (terminée, branche `claude/laughing-thompson-7aib3t`, base `main` HEAD `0b2df50`)** :
+>   dédup design-system de l'état vide de **`TrackingLinksView`** (liste des liens de tracking de
+>   campagne). Le `trackingEmptyState` était un `VStack` fait-main (glyphe hero
+>   `chart.bar.fill` `.system(size: 40)` **figé** + titre + sous-titre + `.combine` manuel) —
+>   réimplémentation exacte du composant canonique `EmptyStateView`
+>   (`MeeshyUI/Primitives/`), déjà adopté par le **frère direct** `ShareLinksView` (178i,
+>   `compact: true`). Follow-up explicitement listé dans le doc 178i. Remplacé par
+>   `EmptyStateView(icon: "chart.bar.fill", title:, subtitle:, accentColor: accentHex,
+>   compact: true)` en **réutilisant les clés i18n existantes** (`tracking.links.empty.title`
+>   / `.subtitle`) → **0 clé neuve**. Gains : dédup, +animation spring, **suppression du
+>   `.system(size: 40)` figé** (glyphe natif borné cohérent), VoiceOver label combiné natif ;
+>   accent de marque `trackingAccentHex` préservé. 0 `import` ajouté (`EmptyStateView` déjà en
+>   portée via `@_exported import MeeshyUI`). Rangées/stats/header/ViewModel inchangés. 1 fichier,
+>   0 logique / 0 réseau / **0 clé i18n neuve** / 0 test neuf. `CommunityLinksView` (dernier
+>   frère) écarté : a11y rangées en vol #2134. Gate = CI `iOS Tests`.
+> - **⚠️ NE PLUS re-flagger** `TrackingLinksView` : état vide natif/dédup soldé 185i, `.isHeader`
+>   déjà posé (titre + section header), Dynamic Type OK (fonts relatives), glyphe rangée 40×40 figé
+>   à dessein (doctrine 86i).
+> - **Base de départ 186i : `main` HEAD** (resync ; supprimer la branche mergée). **Différé 186i+** :
+>   même dédup empty-state sur `CommunityLinksView` (`communityLinksSection` inline) — vérifier
+>   collision essaim via `list_pull_requests` avant.
+
+| 185i | claude/laughing-thompson-7aib3t (iOS design-system dedup `TrackingLinksView` : état vide custom `VStack` (glyphe `chart.bar.fill` `.system(size:40)` figé + titre + sous-titre + `.combine`) → `EmptyStateView(compact: true)` (canonique MeeshyUI, déjà adopté par frère `ShareLinksView` 178i) ; réutilise clés i18n `tracking.links.empty.title/.subtitle` (0 clé neuve) ; −`.system(size:40)` figé, +animation spring, VoiceOver label combiné natif, accent `trackingAccentHex` préservé ; 0 import (déjà via `@_exported import MeeshyUI`) ; rangées/stats/header/ViewModel inchangés ; 1 fichier, 0 logique/0 réseau/0 clé i18n neuve/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **179i (en cours, branche `claude/laughing-thompson-k9l43k`, base `main` HEAD `fc38a0b`)** :
 >   Consolidation palette de marque + en-têtes VoiceOver de `MediaDownloadSettingsView`
