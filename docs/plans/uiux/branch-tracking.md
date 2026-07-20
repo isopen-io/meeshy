@@ -14,6 +14,28 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 182i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **182i (en cours, branche `claude/laughing-thompson-i5vrp1`, base `main` HEAD `5f44f0c`)** :
+>   Dynamic Type + VoiceOver de `ReplyCell` (rangée de réponse indentée dans un fil de commentaires
+>   déplié — `CommentListViewController`, registration reply `depth: 1`). Suite directe du candidat
+>   listé fin 176i (« ReplyCell/TopLevelCommentCell, mêmes `.systemFont(ofSize:)` figés »). Cellule
+>   UIKit d'affichage pur (pas de contrôle interactif, contrairement à `TopLevelCommentCell`). 3 déficits :
+>   (1) **0 Dynamic Type** — 3 labels figés `.systemFont(ofSize: 13 semibold / 14 / 11)` ; (2) **0
+>   structure a11y** — cellule non-élément → VoiceOver balayait nom auteur + corps + horodatage en 3
+>   fragments déconnectés (pas d'identité qui/quoi/quand) ; (3) **troncature nom** — `nameLabel`/
+>   `timestampLabel` à `numberOfLines = 1` → clip aux grandes tailles. Fix : `UIFontMetrics(forTextStyle:
+>   footnote/body/caption2).scaledFont(for:)` (graine = tailles d'origine → **0 changement visuel à la
+>   taille par défaut**, scaling au-delà) + `adjustsFontForContentSizeCategory` ; `numberOfLines = 0` sur
+>   nom + horodatage ; `isAccessibilityElement = true` + `accessibilityLabel` composé
+>   (« {nom}, reply. {contenu}. {temps} ») via helper statique pur + `String(localized:defaultValue:)` ;
+>   `prepareForReuse` nettoie désormais aussi `timestampLabel` (fuite d'horodatage périmé au recyclage).
+>   1 fichier, 0 logique (contrat `configure(with:depth:)` inchangé), 0 test (aucun test ne référence la
+>   cellule — grep = 0). 1 clé i18n neuve `comments.reply.a11yLabel` inline (pas d'édit `.xcstrings`).
+>   Contention vérifiée : 30 PR iOS ouvertes (178i–181i), aucune ne touche `ReplyCell`. Gate = CI
+>   `iOS Tests`. PR à venir.
+> - **⚠️ `ReplyCell` Dynamic Type + VoiceOver SOLDÉ** : ne plus reprendre. Suite sibling possible :
+>   `TopLevelCommentCell` (mêmes fonts figées **+** titre `"Reply"` en dur + boutons like/reply non-Dynamic
+>   Type → scope i18n + a11y-contrôles plus large, itération dédiée).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 165i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
 > - **165i (terminée, branche `claude/laughing-thompson-wnteas`, base `main` HEAD `b36ffd7`)** :
 >   Dynamic Type + VoiceOver de `StatsTimelineChart` (graphique d'activité Swift Charts, écran stats).
