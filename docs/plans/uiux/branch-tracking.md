@@ -14,6 +14,30 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 186i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Contexte essaim** : PR iOS ouvertes 140i→**185i** (`MessageLanguageDetailView` #2137).
+>   Numéro **186i** choisi strictement > plus haut en vol (185i).
+> - **186i (terminée, branche `claude/laughing-thompson-qdzrzc`, base `main` HEAD `9d41333`)** :
+>   Contrôle de pagination accessible pour **`OnboardingView`** (carrousel de premier lancement,
+>   5 slides — écran **jamais audité**). `TabView` en `.page(indexDisplayMode: .never)` → les points
+>   natifs sont supprimés et remplacés par une bande de `Capsule` custom **muette à VoiceOver**.
+>   **2 déficits** : (1) `pageIndicators` n'expose ni position ni navigation → fix : élément
+>   **adjustable unique** miroir de `UIPageControl` — `.accessibilityElement(children: .ignore)` +
+>   label « Page N sur M » (clé `onboarding.pages.a11y`, format `%1$lld…%2$lld`, ajoutée au catalogue
+>   **5 langues** de/en/es/fr/pt-BR, cohérent avec les 15 clés `onboarding.*`) +
+>   `.accessibilityAdjustableAction` increment/decrement bornés → `goToPage(_:)` (réutilise
+>   `withAnimation(springDefault)` + `HapticFeedback.light`, comme swipe/Next). (2) slide 4 :
+>   `mockConversationPreview` (3 bulles démo, texte es/ja non traduit, `allowsHitTesting(false)`) était
+>   fusionné par `.accessibilityElement(children: .combine)` de la page → **bruit VoiceOver** → fix :
+>   `.accessibilityHidden(true)` (la slide n'annonce plus que son titre). **1 fichier Swift + 1 clé i18n**,
+>   0 logique / 0 réseau / 0 test neuf / **0 changement visuel** (couche VoiceOver seule). Reduce Motion
+>   des orbes déjà géré en amont (`FloatingAnimation`). Aucun test ne réf. `OnboardingView` (grep = 0),
+>   aucune PR iOS ne le touche. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** `OnboardingView.pageIndicators` (adjustable/labellisé) ni
+>   `mockConversationPreview` (masqué à dessein). **Différé 187i+** : Reduce Motion du scale-in d'icône
+>   (`animateIcon`), gradients de fond `Color(hex:)` par slide = décor atmosphérique voulu (ne pas migrer).
+> - **Base de départ 187i : `main` HEAD** (resync ; supprimer la branche mergée).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 151i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
 > - **151i (terminée, branche `claude/laughing-thompson-xp2i27`, base `main` HEAD `cd93248`)** :
 >   Structure **VoiceOver** de `EditProfileView` (écran d'édition de profil, 408 lignes). Dynamic Type déjà
