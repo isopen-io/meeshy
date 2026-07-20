@@ -115,7 +115,7 @@ struct TimelineSheetContent: View {
     static let presentsFinishedExportFullscreen = true
 
     var body: some View {
-        TimelineContainerSwitcher(
+        StoryTimelineHost(
             viewModel: composer.timelineViewModel,
             onExport: { exportController.start(composer: composer) }
         )

@@ -68,6 +68,7 @@ class StatusRepository @Inject constructor(
         visibility: String = "PUBLIC",
         audioUrl: String? = null,
         repostOfId: String? = null,
+        viaUsername: String? = null,
     ): NetworkResult<StatusEntry> =
         when (
             val result = apiCall {
@@ -79,6 +80,7 @@ class StatusRepository @Inject constructor(
                         moodEmoji = moodEmoji,
                         audioUrl = audioUrl,
                         repostOfId = repostOfId,
+                        viaUsername = viaUsername,
                     ),
                 )
             }

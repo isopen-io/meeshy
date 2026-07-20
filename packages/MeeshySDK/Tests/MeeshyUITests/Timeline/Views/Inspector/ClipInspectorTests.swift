@@ -152,4 +152,39 @@ final class ClipInspectorTests: XCTestCase {
         XCTAssertEqual(deleteCount, 1)
         XCTAssertFalse(confirmation.isPresented)
     }
+
+    // MARK: - Timing lié début / fin / durée (fin = début + durée)
+
+    func test_resolveLinkedTiming_editDuration_movesEndKeepsStart() {
+        let r = ClipInspector.resolveLinkedTiming(
+            field: .duration, start: 2, end: 6, duration: 5, slideDuration: 20)
+        XCTAssertEqual(r.start, 2, accuracy: 0.001)
+        XCTAssertEqual(r.duration, 5, accuracy: 0.001)
+        XCTAssertEqual(r.end, 7, accuracy: 0.001)   // start + duration
+    }
+
+    func test_resolveLinkedTiming_editEnd_keepsStartRecomputesDuration() {
+        let r = ClipInspector.resolveLinkedTiming(
+            field: .end, start: 2, end: 8, duration: 4, slideDuration: 20)
+        XCTAssertEqual(r.start, 2, accuracy: 0.001)
+        XCTAssertEqual(r.end, 8, accuracy: 0.001)
+        XCTAssertEqual(r.duration, 6, accuracy: 0.001)   // end - start
+    }
+
+    func test_resolveLinkedTiming_editStart_movesClipKeepsDuration() {
+        let r = ClipInspector.resolveLinkedTiming(
+            field: .start, start: 3, end: 6, duration: 4, slideDuration: 20)
+        XCTAssertEqual(r.start, 3, accuracy: 0.001)
+        XCTAssertEqual(r.duration, 4, accuracy: 0.001)   // duration preserved
+        XCTAssertEqual(r.end, 7, accuracy: 0.001)        // start + duration
+    }
+
+    func test_resolveLinkedTiming_clampsDurationNonNegativeAndEndWithinSlide() {
+        let neg = ClipInspector.resolveLinkedTiming(
+            field: .end, start: 5, end: 3, duration: 2, slideDuration: 20)
+        XCTAssertGreaterThanOrEqual(neg.duration, 0)      // end < start clamps duration to 0
+        let over = ClipInspector.resolveLinkedTiming(
+            field: .duration, start: 18, end: 19, duration: 10, slideDuration: 20)
+        XCTAssertLessThanOrEqual(over.end, 20)            // end clamped to slideDuration
+    }
 }

@@ -226,6 +226,31 @@ describe('generateConversationIdentifier', () => {
     // Suffix should be digits (YYYYMMDDHHMMSS format)
     expect(result).toMatch(/-\d{14}$/);
   });
+
+  it('transliterates accents instead of deleting them (SSOT parity)', () => {
+    // Drifted local impl deleted the `é` entirely → `mshy_caf-…`.
+    // The shared SSOT strips the diacritic but keeps the base letter → `cafe`.
+    const result = generateConversationIdentifier('Café');
+    expect(result).toContain('cafe');
+    expect(result).not.toMatch(/mshy_caf-/);
+  });
+
+  it('maps German characters to roman equivalents (SSOT parity)', () => {
+    // ü→ue, ö→oe, ß→ss — the drifted local impl dropped all three.
+    const result = generateConversationIdentifier('Münchner Größe');
+    expect(result).toContain('muenchner-groesse');
+  });
+
+  it('uses a UTC timestamp consistent with the conversations path (SSOT parity)', () => {
+    // The shared SSOT builds the timestamp from getUTC* methods so identifiers
+    // are stable across server timezones; the drifted copy used local time.
+    const before = new Date();
+    const result = generateConversationIdentifier('utc check');
+    const stamp = result.match(/-(\d{14})$/)?.[1];
+    expect(stamp).toBeDefined();
+    const utcYear = before.getUTCFullYear().toString();
+    expect(stamp!.startsWith(utcYear)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
