@@ -167,6 +167,21 @@ struct ShareLinksView: View {
         .padding(.vertical, 24)
     }
 
+    // Single interpolated localized unit (was a number concatenated with a
+    // standalone word — broke pluralization/word-order across locales).
+    private func joinedCountLabel(_ count: Int) -> String {
+        String(localized: "share.links.joined_count", defaultValue: "\(count) rejoints", bundle: .main)
+    }
+
+    private func rowAccessibilityLabel(_ link: MyShareLink) -> String {
+        let status = link.isActive
+            ? String(localized: "share.links.status.active", defaultValue: "Actif", bundle: .main)
+            : String(localized: "share.links.status.inactive", defaultValue: "Inactif", bundle: .main)
+        var parts = [link.displayName, status, joinedCountLabel(link.currentUses)]
+        if let conv = link.conversationTitle { parts.append(conv) }
+        return parts.joined(separator: ", ")
+    }
+
     private func shareLinkRow(_ link: MyShareLink) -> some View {
         HStack(spacing: 12) {
             ZStack {
@@ -188,7 +203,7 @@ struct ShareLinksView: View {
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 HStack(spacing: 6) {
-                    Text("\(link.currentUses) \(String(localized: "share.links.joined_label", defaultValue: "rejoints", bundle: .main))")
+                    Text(joinedCountLabel(link.currentUses))
                         .font(.caption)
                         .foregroundColor(MeeshyColors.shareAccent)
                     if let conv = link.conversationTitle {
@@ -199,6 +214,12 @@ struct ShareLinksView: View {
                     }
                 }
             }
+            // The active/inactive state was signalled ONLY by the (hidden) badge
+            // glyph's colour/shape — invisible to VoiceOver. Fold the row's text
+            // into one element and surface the status word explicitly so it no
+            // longer relies on colour alone (WCAG 1.4.1; doctrine 155i/164i).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(rowAccessibilityLabel(link))
 
             Spacer()
 

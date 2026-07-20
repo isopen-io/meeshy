@@ -1,37 +1,35 @@
-# Plan — Iteration 178i — ShareLinksView
+# Plan — Iteration-178i — `ShareLinksView` VoiceOver status + i18n
 
-**Date** : 2026-07-20
-**Branche** : `claude/laughing-thompson-nbspy1`
-**Base** : `main` HEAD `d5038c5`
-**Fichier** : `apps/ios/Meeshy/Features/Main/Views/ShareLinksView.swift`
+**Date:** 2026-07-20 · **Scope:** iOS only · **Branch:** `claude/laughing-thompson-opq5zi`
+**Base:** `main` HEAD `ee34b79`
 
-## Objectif
+## Objective
 
-Deux correctifs UI/UX auto-contenus, sans changement de logique :
-1. Dédupliquer l'état vide fait-main vers le composant design-system
-   `EmptyStateView` (HIG, cohérence, animation, moins de code).
-2. Rendre le titre d'en-tête atteignable via le rotor « En-têtes » VoiceOver
-   (`.accessibilityAddTraits(.isHeader)`), comme tous les écrans frères.
+Close two real gaps in `ShareLinksView` (the "Mes liens" management screen):
+1. Active/inactive link status is conveyed by colour alone (badge glyph is
+   hidden from VoiceOver) → WCAG 1.4.1 violation.
+2. The `N rejoints` counter is built by concatenating a number with a standalone
+   localized word → breaks pluralization/word-order.
 
-## Étapes
+## Steps
 
-- [x] Resync branche depuis `main` HEAD (175i mergée #2064 supprimée).
-- [x] Vérifier `ShareLinksView` non réclamé par un PR en vol (≠ `ShareLinkDetailView` #2040).
-- [x] Confirmer la signature `EmptyStateView(icon:title:subtitle:accentColor:compact:)` et les tokens `MeeshyColors.shareAccent(Hex)`.
-- [x] Confirmer le pattern `.isHeader` sur les 5 écrans frères.
-- [x] Fix A : remplacer `emptyState` par `EmptyStateView(..., compact: true)` en réutilisant les clés i18n existantes.
-- [x] Fix B : ajouter `.accessibilityAddTraits(.isHeader)` au titre d'en-tête.
-- [x] Vérifier équilibre accolades + absence de référence morte.
-- [ ] Commit + push + PR 178i.
-- [ ] Gate : CI `iOS Tests` (build iOS non runnable en local Linux).
+1. [x] Sync branch from latest `main`; confirm no open PR / prior iteration
+   touches `ShareLinksView` (`list_pull_requests`; swarm 140i→177i checked).
+2. [x] Confirm `MyShareLink` exposes `isActive`, `currentUses`,
+   `conversationTitle`, `displayName` (SDK `ShareLinkModels.swift`).
+3. [x] Add `joinedCountLabel(_:)` — single interpolated localized unit
+   (`share.links.joined_count`), replace the concatenated visible caption.
+4. [x] Add `rowAccessibilityLabel(_:)` — `displayName, status, N rejoints[, conv]`
+   with localized "Actif"/"Inactif" (`share.links.status.active`/`.inactive`).
+5. [x] Apply `.accessibilityElement(children: .ignore)` + `.accessibilityLabel`
+   to the row's text `VStack` only (copy button + NavigationLink preserved).
+6. [x] Verify: old `share.links.joined_label` reference gone; new keys code-only
+   (0 `Localizable.xcstrings` edits); no test references the view.
+7. [x] Write analysis + plan docs; update `branch-tracking.md`.
+8. [ ] Commit, push, open PR; gate on CI `iOS Tests`.
 
-## Contraintes respectées
+## Constraints honoured
 
-- 1 fichier, 0 logique, 0 clé i18n neuve, 0 test neuf.
-- Accent de marque préservé (`shareAccentHex`).
-- Rangées / stats / navigation / ViewModel inchangés.
-
-## Suite (179i+)
-
-Dédup empty-state sur `CommunityLinksView` et `TrackingLinksView`
-(mêmes réimplémentations manuelles), sous réserve de collision essaim.
+- 1 file, 0 logic, 0 network, 0 new test, 0 xcstrings edit.
+- Label-level only — no visual/layout/colour change; frozen glyphs untouched.
+- iOS 16.0+ APIs only (app floor); idiom parity with 155i/164i.
