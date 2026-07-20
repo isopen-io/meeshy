@@ -68,6 +68,8 @@ struct BlockedUsersView: View {
             Text(String(localized: "blocked.users.title", defaultValue: "Utilisateurs bloques", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                // Titre d'ecran -> trait En-tete pour le rotor VoiceOver (178i, parite 168i ActiveSessionsView).
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -100,6 +102,8 @@ struct BlockedUsersView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
+        // Skeletons purement decoratifs -> hors du rotor VoiceOver (178i, parite 169i).
+        .accessibilityHidden(true)
     }
 
     private var skeletonRow: some View {
@@ -171,24 +175,33 @@ struct BlockedUsersView: View {
         let color = DynamicColorGenerator.colorForName(user.name)
 
         return HStack(spacing: 12) {
-            MeeshyAvatar(
-                name: user.name,
-                context: .userListItem,
-                accentColor: color,
-                avatarURL: user.avatar
-            )
+            // Bloc identite (avatar + nom + @username) groupe en UN seul element VoiceOver
+            // au lieu de 3 arrets fragmentes (178i, parite 168i ActiveSessionsView). L'avatar
+            // porte deja `.accessibilityLabel(name)` en interne -> masque pour ne pas doubler
+            // le nom ; VoiceOver lit « <nom>, @<username> » d'une traite. Le bouton Debloquer
+            // reste un element actionnable distinct (sibling, hors du groupe).
+            HStack(spacing: 12) {
+                MeeshyAvatar(
+                    name: user.name,
+                    context: .userListItem,
+                    accentColor: color,
+                    avatarURL: user.avatar
+                )
+                .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(user.name)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(user.name)
+                        .font(MeeshyFont.relative(15, weight: .semibold))
+                        .foregroundColor(theme.textPrimary)
+                        .lineLimit(1)
 
-                Text("@\(user.username)")
-                    .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .lineLimit(1)
+                    Text("@\(user.username)")
+                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(1)
+                }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
