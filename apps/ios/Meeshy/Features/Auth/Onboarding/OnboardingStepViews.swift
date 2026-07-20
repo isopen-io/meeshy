@@ -894,6 +894,9 @@ struct StepLanguageView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .bounceOnTap(scale: 0.94)
+        // L'onglet actif n'est signale que par le fill/texte (couleur) : on ajoute le trait
+        // `.isSelected` pour que VoiceOver annonce le segment courant (WCAG 1.4.1).
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     private func languageCard(_ lang: MeeshyUI.LanguageOption) -> some View {
@@ -919,6 +922,7 @@ struct StepLanguageView: View {
                 Spacer()
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill").font(MeeshyFont.relative(20)).foregroundColor(color)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(12)
@@ -930,6 +934,9 @@ struct StepLanguageView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .bounceOnTap(scale: 0.94)
+        // La selection est signalee visuellement par un checkmark (masque a VoiceOver ci-dessus)
+        // + couleur : on porte l'etat via le trait `.isSelected` pour l'annonce VoiceOver.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var conversationExampleCard: some View {
