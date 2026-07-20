@@ -2160,7 +2160,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
-- [ ] Camera-covered ("dark frame") detection during video calls
+- [~] Camera-covered ("dark frame") detection during video calls — **pure detection
+      core landed** (slice `call-dark-frame-detection`): the `core:model`
+      `DarkFramePolicy` is the SSOT camera-covered detector — a total, side-effect-free
+      reducer (`reduce(DarkFrameState, averageBrightness) → DarkFrameDecision`) ported
+      from iOS `DarkFrameDetector`, with **count-based hysteresis**: the cover latches
+      only after `consecutiveThreshold` (30, iOS default) consecutive frames whose
+      average luma is **strictly below** `darkThreshold` (15.0f, iOS default), so a
+      single dim frame never trips it, and clears the instant a bright frame returns
+      (iOS's responsive restore). It emits `Covered`/`Uncovered` **exactly once** per
+      stretch (idempotent while covered) and, a strict SOTA upgrade on iOS's unbounded
+      `Int`, **clamps the streak counter** at the threshold so `DarkFrameState` is O(1)
+      over a multi-hour covered stream (never overflows). The framework-agnostic other
+      half, pure `FrameLuminance.averageOfYPlane(...)`, ports the iOS Y-plane luma
+      averaging (sub-sampled, `rowStride`-aware so row padding is skipped, unsigned-byte
+      correct) and returns `null` on degenerate geometry rather than a fake pitch-black
+      reading. +24 behavioural tests (13 policy, 11 sampler). Mutation (RED proof):
+      removing the streak clamp fails **exactly** the bounded-counter test (13, 1 failed,
+      no collateral). **Pending:** the WebRTC `VideoProcessor`/`VideoSink` actuator seam
+      (read the captured frame's I420 Y plane → `FrameLuminance` → `DarkFramePolicy`) +
+      the in-call "camera may be covered" UI hint.
 - [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
       (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
       iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
