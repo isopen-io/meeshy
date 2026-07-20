@@ -14,6 +14,22 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 187i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **187i (en cours, branche `claude/laughing-thompson-n2i97z`, base `main` HEAD `995ed53`)** :
+>   Dedup design-system de `FriendRequestListView` (liste des demandes d'amis) — empty-state **`VStack`
+>   bespoke** → primitive partagé `MeeshyUI.EmptyStateView` (13e consommateur ; même geste que 168i
+>   BookmarksView / 179i BlockedTab). Suite directe de **181i** : maintenant que `EmptyStateView` scale
+>   en Dynamic Type (`MeeshyFont.relative`), la migration est **strictement non-régressive** (l'icône
+>   héros bespoke était figée `.system(size: 48)` ; le composant partagé la scale désormais). 3 déficits :
+>   (1) duplication d'un pattern partagé ; (2) icône héros figée non-scalante ; (3) glyphe gris muet vs.
+>   héros indigo animé. Fix = `EmptyStateView(icon:"person.2.slash", title:…, subtitle:…)` en réutilisant
+>   **les 2 clés i18n existantes** (`friends.requests.empty.title/subtitle`) → **0 clé neuve**, 0 `.xcstrings`.
+>   `import MeeshyUI` déjà présent. A11y `children: .combine` + label combiné hérités du composant.
+>   1 fichier, 0 logique, 0 ViewModel, 0 test touché ; `theme` conservé (13 autres usages) ; 2 call sites
+>   inchangés. Hors hot zones du fleet (Story/Timeline, TrackingLinks, DataStorageView) → faible contention.
+>   Numéro 187i choisi (178i–186i déjà consommés par le fleet). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `FriendRequestListView` empty-state SOLDÉ** : délègue au primitive partagé. Ne plus ré-hand-roll.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 186i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **186i (branche `claude/laughing-thompson-0lonrh`, base `main` HEAD `64f943d`)** :
 >   Consolidation palette de marque de `DataStorageView` (Réglages → Stockage / cache media).
