@@ -207,7 +207,7 @@ export class StatusService {
     }
 
     this.activityCache.set(userId, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Renouveler le TTL Redis de présence
     this.cache.set(`presence:user:${userId}`, String(now), this.PRESENCE_TTL_SECONDS).catch(() => {});
@@ -249,7 +249,7 @@ export class StatusService {
     }
 
     this.connectionCache.set(userId, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
@@ -289,7 +289,7 @@ export class StatusService {
     }
 
     this.activityCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Renouveler le TTL Redis de présence
     this.cache.set(`presence:anon:${participantId}`, String(now), this.PRESENCE_TTL_SECONDS).catch(() => {});
@@ -333,7 +333,7 @@ export class StatusService {
     }
 
     this.connectionCache.set(cacheKey, now);
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.participant.update({
@@ -359,28 +359,50 @@ export class StatusService {
    * au bout de 5 min alors qu'il est en ligne. Au plus une écriture DB par
    * minute et par utilisateur ; bypass le throttle activité 5 s via
    * forceUpdateLastSeen (le gate 60 s espace déjà les écritures).
+   *
+   * Après le write DB, le refresh est broadcast via presenceCallback
+   * (USER_STATUS avec lastActiveAt frais) : les viewers DÉJÀ connectés
+   * re-reçoivent un timestamp neuf avant l'expiration de leur garde 5 min —
+   * sans ce push, seule la DB serait fraîche et le connecté-passif passerait
+   * offline chez eux (leur store ne resync que sur focus/online).
    */
   noteHeartbeat(userId: string, isAnonymous: boolean = false): void {
+    this.metrics.totalRequests++;
+
     const guardKey = isAnonymous ? `anon_activity_${userId}` : userId;
     if (this.disconnectedUsers.has(guardKey)) return;
 
     const cacheKey = isAnonymous ? `anon_heartbeat_${userId}` : `heartbeat_${userId}`;
     const now = Date.now();
     const lastBeat = this.heartbeatCache.get(cacheKey) || 0;
-    if (now - lastBeat < this.HEARTBEAT_THROTTLE_MS) return;
+    if (now - lastBeat < this.HEARTBEAT_THROTTLE_MS) {
+      this.metrics.throttledRequests++;
+      return;
+    }
 
     this.heartbeatCache.set(cacheKey, now);
+    this.metrics.cacheSize = this.computeCacheSize();
 
     this.forceUpdateLastSeen(userId, isAnonymous)
       .then(() => {
         this.metrics.successfulUpdates++;
         this.metrics.activityUpdates++;
+        if (this.presenceCallback) {
+          this.presenceCallback(userId, true, isAnonymous);
+        }
         logger.debug(`✓ ${isAnonymous ? 'Anonymous' : 'User'} ${userId} lastActiveAt updated (heartbeat)`);
       })
       .catch(err => {
         this.metrics.failedUpdates++;
         logger.error(`❌ Failed to update lastActiveAt on heartbeat (${userId}):`, err);
       });
+  }
+
+  private computeCacheSize(): number {
+    return this.activityCache.size
+      + this.connectionCache.size
+      + this.onlineEnsureCache.size
+      + this.heartbeatCache.size;
   }
 
   /**
@@ -466,7 +488,7 @@ export class StatusService {
       }
     }
 
-    this.metrics.cacheSize = this.activityCache.size + this.connectionCache.size + this.onlineEnsureCache.size;
+    this.metrics.cacheSize = this.computeCacheSize();
 
     if (deletedCount > 0) {
       logger.debug(`🧹 Cache cleanup: ${deletedCount} entrées supprimées (taille: ${this.metrics.cacheSize})`);
@@ -542,7 +564,7 @@ export class StatusService {
       throttledRequests: 0,
       successfulUpdates: 0,
       failedUpdates: 0,
-      cacheSize: this.activityCache.size + this.connectionCache.size,
+      cacheSize: this.computeCacheSize(),
       activityUpdates: 0,
       connectionUpdates: 0
     };

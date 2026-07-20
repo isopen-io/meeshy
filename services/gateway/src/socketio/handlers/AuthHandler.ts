@@ -454,6 +454,26 @@ export class AuthHandler {
     }
   }
 
+  // Engine-level pong (Socket.IO ping/pong, every ~25s on EVERY client
+  // platform). The applicative CLIENT_EVENTS.HEARTBEAT above only exists on
+  // web (90s) and iOS (30s) — Android emits none, so without this path a
+  // passive-connected Android user would fall past the 5min anti-stale guard
+  // of the 1/3/5 presence rule and read offline while the socket is alive.
+  // Throttled 60s inside StatusService: at most one DB write + broadcast/min.
+  handleEnginePong(socket: Socket): void {
+    const userIdOrToken = this.socketToUser.get(socket.id);
+    if (!userIdOrToken) return;
+
+    const user = this.connectedUsers.get(userIdOrToken);
+    if (!user) return;
+
+    try {
+      this.statusService.noteHeartbeat(userIdOrToken, user.isAnonymous);
+    } catch (error) {
+      logger.debug('engine pong presence refresh failed (best-effort)', { userId: userIdOrToken, error });
+    }
+  }
+
   // Retries beyond the initial attempt for a rejected conversation room join.
   // Total attempts per room = 1 + JOIN_RETRY_ATTEMPTS. Bounded so a permanently
   // broken adapter can never spin forever; each retry re-attempts only the rooms

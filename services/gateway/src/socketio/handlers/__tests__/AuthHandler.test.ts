@@ -1088,4 +1088,56 @@ describe('AuthHandler', () => {
       expect(emitCall![1].latencyHintMs).toBeUndefined();
     });
   });
+
+  describe('handleEnginePong', () => {
+    it('should refresh presence via the throttled heartbeat path (clients with no applicative heartbeat)', () => {
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      authHandler.handleEnginePong(createMockSocket());
+
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should pass the anonymous flag through to noteHeartbeat', () => {
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'fr'
+      });
+
+      authHandler.handleEnginePong(createMockSocket());
+
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('anon-123', true);
+    });
+
+    it('should ignore pongs from unauthenticated sockets', () => {
+      authHandler.handleEnginePong(createMockSocket({ id: 'unknown-socket' }));
+
+      expect(mockStatusService.noteHeartbeat).not.toHaveBeenCalled();
+    });
+
+    it('should not throw when noteHeartbeat throws (best-effort)', () => {
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      (mockStatusService.noteHeartbeat as jest.Mock).mockImplementation(() => {
+        throw new Error('DB timeout');
+      });
+
+      expect(() => authHandler.handleEnginePong(createMockSocket())).not.toThrow();
+    });
+  });
 });

@@ -767,5 +767,57 @@ describe('StatusService', () => {
       });
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
+
+    it('broadcasts the refresh through presenceCallback so already-connected viewers un-stale their 5min guard', async () => {
+      const callback = jest.fn();
+      service.setPresenceCallback(callback);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(callback).toHaveBeenCalledWith('user-1', true, false);
+    });
+
+    it('passes the anonymous flag through the presence broadcast', async () => {
+      const callback = jest.fn();
+      service.setPresenceCallback(callback);
+      service.noteHeartbeat('anon-1', true);
+      await flushPromises();
+      expect(callback).toHaveBeenCalledWith('anon-1', true, true);
+    });
+
+    it('does not broadcast a throttled beat (at most one broadcast per 60s window)', async () => {
+      const callback = jest.fn();
+      service.setPresenceCallback(callback);
+      service.noteHeartbeat('user-1', false);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not broadcast when the DB refresh fails', async () => {
+      mockPrisma.user.update.mockRejectedValueOnce(new Error('db down'));
+      const callback = jest.fn();
+      service.setPresenceCallback(callback);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it('keeps the metrics invariant successfulUpdates <= totalRequests (counts total + throttled)', async () => {
+      service.noteHeartbeat('user-1', false);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      const metrics = service.getMetrics();
+      expect(metrics.totalRequests).toBe(2);
+      expect(metrics.throttledRequests).toBe(1);
+      expect(metrics.successfulUpdates).toBe(1);
+      expect(metrics.successfulUpdates).toBeLessThanOrEqual(metrics.totalRequests);
+    });
+
+    it('includes heartbeatCache entries in the cacheSize metric', async () => {
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      service.clearOldCacheEntries();
+      expect(service.getMetrics().cacheSize).toBe(2);
+    });
   });
 });
