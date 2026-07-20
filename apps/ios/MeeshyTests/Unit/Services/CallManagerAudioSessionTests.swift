@@ -1096,7 +1096,10 @@ final class VideoFiltersPanelAccessibilityTests: XCTestCase {
         guard let chipRange = source.range(of: "private func presetChip(_ preset: VideoFilterPreset)") else {
             XCTFail("presetChip(_:) builder not found"); return
         }
-        let endIdx = source.index(chipRange.upperBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        // Bound the search to the whole presetChip body (up to the next declaration)
+        // — the `.accessibilityAddTraits` modifier sits on the last line of the builder.
+        let nextDecl = source.range(of: "private func presetLabel", range: chipRange.upperBound..<source.endIndex)
+        let endIdx = nextDecl?.lowerBound ?? source.endIndex
         let vicinity = String(source[chipRange.lowerBound..<endIdx])
         XCTAssertTrue(
             vicinity.contains(".accessibilityAddTraits(") && vicinity.contains(".isSelected"),
