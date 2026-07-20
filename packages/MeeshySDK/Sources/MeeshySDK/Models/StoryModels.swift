@@ -321,6 +321,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var isLocked: Bool?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
+    /// Optional author-assigned clip name (persisted, backward-compatible).
+    public var name: String?
 
     enum CodingKeys: String, CodingKey {
         case id, text, x, y, scale, rotation, zIndex, anchor
@@ -330,7 +332,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         case borderColor, borderWidth
         case translations, sourceLanguage
         case startTime, duration, fadeIn, fadeOut
-        case isLocked, keyframes
+        case isLocked, keyframes, name
         // Legacy keys — decoder only
         case content, textSize, displayDuration
     }
@@ -359,7 +361,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 fadeIn: Double? = nil,
                 fadeOut: Double? = nil,
                 isLocked: Bool? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
+                keyframes: [StoryKeyframe]? = nil,
+                name: String? = nil) {
         self.id = id
         self.text = text
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
@@ -377,6 +380,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.isLocked = isLocked
         self.keyframes = keyframes
+        self.name = name
     }
 
     // MARK: - Custom Codable (backward compat: content→text, textSize→fontSize, displayDuration→duration)
@@ -436,6 +440,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
         isLocked = try c.decodeIfPresent(Bool.self, forKey: .isLocked)
         keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -467,6 +472,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
         try c.encodeIfPresent(isLocked, forKey: .isLocked)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
+        try c.encodeIfPresent(name, forKey: .name)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }
@@ -585,6 +591,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
 
     // Heritage (kept)
     public var sourceLanguage: String?
+    /// Optional author-assigned clip name (persisted, backward-compatible).
+    public var name: String?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
     /// ThumbHash du contenu (première frame pour vidéo, image décompressée
@@ -615,7 +623,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case aspectRatio, anchor, intrinsicDuration
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
-        case sourceLanguage, keyframes, thumbHash
+        case sourceLanguage, keyframes, thumbHash, name
     }
 
     public init(id: String = UUID().uuidString,
@@ -638,7 +646,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
-                thumbHash: String? = nil) {
+                thumbHash: String? = nil,
+                name: String? = nil) {
         self.id = id
         self.postMediaId = postMediaId
         self.mediaURL = mediaURL
@@ -658,6 +667,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.sourceLanguage = sourceLanguage
         self.keyframes = keyframes
         self.thumbHash = thumbHash
+        self.name = name
     }
 
     // Custom init(from decoder:) for legacy backward compat
@@ -697,6 +707,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         // malformé / malveillant (slide effects JSON externe → cache disque).
         let rawThumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         thumbHash = (rawThumbHash?.count ?? 0) > Self.maxThumbHashLength ? nil : rawThumbHash
+        name = try c.decodeIfPresent(String.self, forKey: .name)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -724,6 +735,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
         try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
+        try c.encodeIfPresent(name, forKey: .name)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }
@@ -755,7 +767,8 @@ extension StoryMediaObject {
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
-                thumbHash: String? = nil) {
+                thumbHash: String? = nil,
+                name: String? = nil) {
         self.init(id: id,
                   postMediaId: postMediaId,
                   mediaURL: mediaURL,
@@ -774,7 +787,8 @@ extension StoryMediaObject {
                   fadeIn: fadeIn, fadeOut: fadeOut,
                   sourceLanguage: sourceLanguage,
                   keyframes: keyframes,
-                  thumbHash: thumbHash)
+                  thumbHash: thumbHash,
+                  name: name)
     }
 }
 
@@ -805,11 +819,13 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var fadeIn: Float?               // fade-in (secondes)
     public var fadeOut: Float?              // fade-out (secondes)
     public var sourceLanguage: String?
+    /// Optional author-assigned clip name (persisted, backward-compatible).
+    public var name: String?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, placement, x, y, volume, waveformSamples
         case isBackground, backgroundAudioVariants, zIndex
-        case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
+        case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -820,7 +836,8 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
-                sourceLanguage: String? = nil) {
+                sourceLanguage: String? = nil,
+                name: String? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.placement = placement; self.x = x; self.y = y
         self.volume = volume; self.waveformSamples = waveformSamples
@@ -829,6 +846,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         self.startTime = startTime; self.duration = duration
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
+        self.name = name
     }
 }
 
@@ -3162,13 +3180,14 @@ public struct SetClipPropertyCommand: EditCommand {
         case loop(old: Bool?, new: Bool?)
         case isBackground(old: Bool?, new: Bool?)
         case isLocked(old: Bool?, new: Bool?)
+        case name(old: String?, new: String?)
 
         private enum CodingKeys: String, CodingKey {
-            case type, oldFloat, newFloat, oldBool, newBool
+            case type, oldFloat, newFloat, oldBool, newBool, oldString, newString
         }
 
         private enum Tag: String, Codable {
-            case volume, fadeIn, fadeOut, loop, isBackground, isLocked
+            case volume, fadeIn, fadeOut, loop, isBackground, isLocked, name
         }
 
         public init(from decoder: Decoder) throws {
@@ -3199,6 +3218,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
                 let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
                 self = .isLocked(old: old, new: new)
+            case .name:
+                let old = try c.decodeIfPresent(String.self, forKey: .oldString)
+                let new = try c.decodeIfPresent(String.self, forKey: .newString)
+                self = .name(old: old, new: new)
             }
         }
 
@@ -3229,6 +3252,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 try c.encode(Tag.isLocked, forKey: .type)
                 try c.encodeIfPresent(old, forKey: .oldBool)
                 try c.encodeIfPresent(new, forKey: .newBool)
+            case .name(let old, let new):
+                try c.encode(Tag.name, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldString)
+                try c.encodeIfPresent(new, forKey: .newString)
             }
         }
     }
@@ -3295,6 +3322,8 @@ public struct SetClipPropertyCommand: EditCommand {
             media.isBackground = (useNew ? new : old) ?? false
         case .isLocked:
             break
+        case .name(let old, let new):
+            media.name = useNew ? new : old
         }
     }
 
@@ -3316,6 +3345,8 @@ public struct SetClipPropertyCommand: EditCommand {
             audio.isBackground = useNew ? new : old
         case .isLocked:
             break
+        case .name(let old, let new):
+            audio.name = useNew ? new : old
         }
     }
 
@@ -3331,6 +3362,8 @@ public struct SetClipPropertyCommand: EditCommand {
         case .fadeOut(let old, let new):
             let val: Double? = useNew ? new : old
             text.fadeOut = val
+        case .name(let old, let new):
+            text.name = useNew ? new : old
         case .volume, .loop, .isBackground:
             break
         }

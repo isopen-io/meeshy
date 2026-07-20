@@ -113,7 +113,9 @@ jest.mock('@meeshy/shared/types/attachment-audio', () => ({
 const mockResolveUserLanguagesOrdered: MockFn = jest.fn().mockReturnValue(['fr', 'en']);
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   resolveUserLanguagesOrdered: (...args: unknown[]) =>
-    mockResolveUserLanguagesOrdered(...args)
+    mockResolveUserLanguagesOrdered(...args),
+  generateConversationIdentifier: (title?: string) =>
+    `mshy_${(title ?? 'x').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'x'}-20260101000000`
 }));
 
 jest.mock('../../../utils/translation-transformer', () => ({
@@ -257,27 +259,11 @@ describe('MessageTranslationService — branch supplement', () => {
     jest.clearAllMocks();
   });
 
-  // =========================================================================
-  // 1. _generateConversationIdentifier — private method, accessed directly
-  // =========================================================================
-  describe('_generateConversationIdentifier', () => {
-    it('generates a random unique id when called without a title', () => {
-      // Covers: if (title) → FALSE branch (line 305) + lines 318-319
-      const result: string = (svc as any)['_generateConversationIdentifier']();
-      expect(result).toMatch(/^mshy_[a-z0-9]+-\d{14}$/);
-    });
-
-    it('generates a random unique id when title sanitizes to an empty string', () => {
-      // '!!!' → all non-alphanum removed → '' → if (sanitizedTitle.length > 0) FALSE branch (line 313)
-      const result: string = (svc as any)['_generateConversationIdentifier']('!!!');
-      expect(result).toMatch(/^mshy_[a-z0-9]+-\d{14}$/);
-    });
-
-    it('returns sanitized-title form when title has valid characters', () => {
-      const result: string = (svc as any)['_generateConversationIdentifier']('Hello World');
-      expect(result).toMatch(/^mshy_hello-world-\d{14}$/);
-    });
-  });
+  // Note: conversation-identifier generation was consolidated onto the shared
+  // SSOT `generateConversationIdentifier` (@meeshy/shared/utils/conversation-helpers);
+  // the former private `_generateConversationIdentifier` copy was removed. Its
+  // sanitization contract is covered by the shared util's own tests and by the
+  // gateway delegation tests (identifier-generator.test.ts, link-helpers.test.ts).
 
   // =========================================================================
   // 2. _processTranslationsAsync — memory cache HIT path

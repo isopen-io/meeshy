@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Per-clip editor surface. Stateless on its own — receives a snapshot, emits
-/// callbacks for every field commit. The owning container (`QuickTimelineView`
-/// or `ProTimelineView`) wires those callbacks back to `TimelineViewModel`.
+/// callbacks for every field commit. The owning container (`StoryTimelineView`
+/// `TimelineInspectorHost` wires those callbacks back to `TimelineViewModel`.
 ///
 /// ### State sync contract
 /// The inspector holds local `@State` for the slider/toggle values to keep
@@ -30,16 +30,20 @@ public struct ClipInspector: View {
         public let fadeOutDuration: Float
         public let isLooping: Bool
         public let isBackground: Bool
+        /// Nom personnalisé de la piste (nil = utilise `displayName` par défaut).
+        public let name: String?
 
         public init(id: String, displayName: String, kind: Kind,
                     startTime: Float, duration: Float, volume: Float,
                     fadeInDuration: Float, fadeOutDuration: Float,
-                    isLooping: Bool, isBackground: Bool) {
+                    isLooping: Bool, isBackground: Bool,
+                    name: String? = nil) {
             self.id = id; self.displayName = displayName; self.kind = kind
             self.startTime = startTime; self.duration = duration
             self.volume = volume
             self.fadeInDuration = fadeInDuration; self.fadeOutDuration = fadeOutDuration
             self.isLooping = isLooping; self.isBackground = isBackground
+            self.name = name
         }
     }
 
@@ -103,15 +107,47 @@ public struct ClipInspector: View {
     public let onStartAdjusted: (Float) -> Void
     /// Ajustement de la DURÉE par pas (la fin bouge, le début reste).
     public let onDurationAdjusted: (Float) -> Void
+    /// Renommage du clip (nil/vide = retour au nom par défaut).
+    public let onNameChanged: (String?) -> Void
+    /// Ajustement de la FIN (garde le début, recalcule la durée).
+    public let onEndAdjusted: (Float) -> Void
 
     /// Pas des steppers début/durée.
     public static let timeStep: Float = 0.1
+
+    // MARK: - Timing lié (début / fin / durée)
+
+    public enum TimingField: Sendable, Equatable { case start, end, duration }
+
+    /// Résout les trois valeurs liées début/fin/durée sous la contrainte
+    /// `fin = début + durée`, selon le champ édité. Clamps : durée ≥ 0,
+    /// fin ≤ slideDuration, début ≥ 0. Pure — testée sans monter la vue.
+    public static func resolveLinkedTiming(field: TimingField,
+                                           start: Float, end: Float,
+                                           duration: Float,
+                                           slideDuration: Float) -> (start: Float, end: Float, duration: Float) {
+        switch field {
+        case .start:
+            let s = max(0, min(start, slideDuration))
+            let e = min(slideDuration, s + max(0, duration))
+            return (s, e, e - s)
+        case .duration:
+            let s = max(0, start)
+            let e = min(slideDuration, s + max(0, duration))
+            return (s, e, e - s)
+        case .end:
+            let s = max(0, start)
+            let e = max(s, min(end, slideDuration))
+            return (s, e, e - s)
+        }
+    }
 
     @State private var volume: Float
     @State private var fadeIn: Float
     @State private var fadeOut: Float
     @State private var loop: Bool
     @State private var background: Bool
+    @State private var draftName: String
     @State private var isDetailsExpanded = false
     @State private var isAnimationExpanded = false
     @State private var deleteConfirmation = DeleteConfirmation()
@@ -128,7 +164,9 @@ public struct ClipInspector: View {
                 onDelete: @escaping () -> Void,
                 onClose: @escaping () -> Void = {},
                 onStartAdjusted: @escaping (Float) -> Void = { _ in },
-                onDurationAdjusted: @escaping (Float) -> Void = { _ in }) {
+                onDurationAdjusted: @escaping (Float) -> Void = { _ in },
+                onNameChanged: @escaping (String?) -> Void = { _ in },
+                onEndAdjusted: @escaping (Float) -> Void = { _ in }) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -141,11 +179,14 @@ public struct ClipInspector: View {
         self.onClose = onClose
         self.onStartAdjusted = onStartAdjusted
         self.onDurationAdjusted = onDurationAdjusted
+        self.onNameChanged = onNameChanged
+        self.onEndAdjusted = onEndAdjusted
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
         _loop = State(initialValue: clip.isLooping)
         _background = State(initialValue: clip.isBackground)
+        _draftName = State(initialValue: clip.name ?? "")
     }
 
     // MARK: - Test helpers
@@ -250,6 +291,7 @@ public struct ClipInspector: View {
             fadeOut = newClip.fadeOutDuration
             loop = newClip.isLooping
             background = newClip.isBackground
+            draftName = newClip.name ?? ""
         }
         .alert(
             String(localized: "story.timeline.inspector.delete.confirmTitle",
@@ -282,10 +324,16 @@ public struct ClipInspector: View {
                 .font(.headline)
                 .foregroundStyle(MeeshyColors.indigo500)
                 .accessibilityHidden(true)
-            Text(clip.displayName)
-                .font(.headline)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            TextField(
+                String(localized: "story.timeline.inspector.name.placeholder",
+                       defaultValue: "Nom de la piste", bundle: .module),
+                text: $draftName
+            )
+            .font(.headline)
+            .textInputAutocapitalization(.words)
+            .submitLabel(.done)
+            .onSubmit { onNameChanged(draftName) }
+            .lineLimit(1)
             Spacer(minLength: 0)
             Button {
                 withAnimation(reduceMotion ? .none : .spring(response: 0.35, dampingFraction: 0.85)) {
@@ -340,12 +388,19 @@ public struct ClipInspector: View {
     }
 
     private var metadataRow: some View {
-        HStack(spacing: 16) {
+        let end = clip.startTime + clip.duration
+        return HStack(spacing: 12) {
             steppableTimeField(
                 title: String(localized: "story.timeline.inspector.start",
                               defaultValue: "Début", bundle: .module),
                 value: clip.startTime,
                 onAdjust: onStartAdjusted
+            )
+            steppableTimeField(
+                title: String(localized: "story.timeline.inspector.end",
+                              defaultValue: "Fin", bundle: .module),
+                value: end,
+                onAdjust: onEndAdjusted
             )
             steppableTimeField(
                 title: String(localized: "story.timeline.inspector.duration",
