@@ -1,5 +1,44 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **camera-covered ("dark frame") detection core** landed (slice `call-dark-frame-detection`,
+> feature-parity §H → "Camera-covered detection during video calls" — an unchecked §H box; the build-order Calls
+> area's next high-value pure slice, following the many pure decision cores already landed there). Parity source:
+> iOS `DarkFrameDetector` (`apps/ios/Meeshy/Features/Main/Services/DarkFrameDetector.swift`) — a stateful class whose
+> streak logic is **untestable** (its `DarkFrameDetectorTests` can only poke the callbacks, never a real
+> `CVPixelBuffer`). We split it into two pure `:core:model` cores, both fully TDD-covered — a strict SOTA upgrade.
+> **(1)** `DarkFramePolicy` — the SSOT detector as a total, side-effect-free reducer
+> `reduce(DarkFrameState, averageBrightness) → DarkFrameDecision(state, DarkFrameEvent)` with **count-based
+> hysteresis**: the cover latches only after `consecutiveThreshold` (30, iOS default) consecutive frames whose average
+> luma is **strictly below** `darkThreshold` (15.0f, iOS default) — so a single dim frame (blink/passing shadow) never
+> trips it — and clears the instant a bright frame returns (iOS's responsive restore; the confirm/restore asymmetry IS
+> the hysteresis). Emits `Covered`/`Uncovered` **exactly once** per stretch (idempotent while covered — further dark
+> frames stay silent, don't re-fire). **SOTA improvement:** iOS's `consecutiveDarkFrames` is an unbounded `Int` that
+> counts into the millions over a multi-hour covered stream; ours **clamps the streak at the threshold** so
+> `DarkFrameState` (one counter + one flag + one last-reading) is O(1) and never overflows. **(2)** `FrameLuminance`
+> — the framework-agnostic other half: pure `averageOfYPlane(yPlane, width, height, rowStride, step)` porting the iOS
+> Y-plane luma averaging (sub-sampled every `step`=8 px, `rowStride`-aware so I420 row padding is skipped,
+> **unsigned-byte correct** — `0xFF` reads 255 not −1), returning `null` on degenerate geometry (non-positive dim/step,
+> stride<width, plane too small, empty) rather than a fake `0.0` pitch-black reading that would falsely trip the cover
+> detector — mirroring iOS's `guard … else return` early-outs. Nothing depends on `org.webrtc`. **+24 behavioural
+> tests** — `DarkFramePolicyTest` (13: single-frame streak open, sub-threshold no-cover, threshold-latch-fires-once,
+> covered-idempotent, **clamp-bounded-counter**, uncover-on-bright, partial-streak-clear, initial-bright-noop,
+> boundary-at-threshold-is-bright, full cover→uncover→cover cycle, last-reading-recorded, default-iOS-thresholds),
+> `FrameLuminanceTest` (11: uniform average, unsigned-255, pitch-black-0, step-skips-pixels, default-step-8,
+> row-padding-ignored, non-positive width/height/step→null, stride<width→null, plane-too-small→null, empty→null).
+> **Mutation check (RED proof):** removing the streak clamp (`minOf(…, threshold)` → `…+1`) fails **exactly** `the dark
+> streak counter is clamped so it never grows unbounded while covered` (13 tests, 1 failed, no collateral) —
+> behavioural, not tautological. **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through the proxy;
+> `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (the two new suites 24/24) + full
+> `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 2 production files + 2 test
+> + tracking; **SDK purity** — both cores are stateless building blocks in `:core:model` (a pure reducer + a pure
+> function), zero framework deps; the WebRTC frame-source actuator + UI hint stay app-side, pending; **SSOT** — one
+> reducer, one sampler, mirrors the `VideoSurvivalPolicy`/`ThermalCeiling` pure-policy pattern; **UDF** — immutable
+> `DarkFrameState`, transitions pure; no coverage floor lowered, no test weakened). **Next slice:** wire the actuator —
+> a `:feature:calls`/`:sdk-core` WebRTC `VideoProcessor`/`VideoSink` seam that reads the captured I420 Y plane →
+> `FrameLuminance` → `DarkFramePolicy`, folds the `Covered`/`Uncovered` edge into `CallViewModel`, and surfaces a
+> discreet in-call "camera may be covered" hint (closing the §H box to `[x]`); OR another §H pure core (in-call
+> transcription/translation) or the tracked Kover 90% coverage-gate infra follow-up.
+
 > On 2026-07-20 the **statuses realtime `status:unreacted` wiring** landed (slice `status-unreacted-socket`,
 > feature-parity §G → "Statuses realtime `status:unreacted`" — the symmetric-inverse follow-up the
 > `status-realtime-socket` slice flagged as Next). Parity source: the gateway's canonical `SERVER_EVENTS`
