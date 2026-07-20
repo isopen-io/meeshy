@@ -83,8 +83,11 @@ export interface SendPushOptions {
   // Skip the DND-hours/days check in `isPushAllowed` — for call-management
   // pushes only (incoming VoIP ring, its silent cancel, answered-elsewhere).
   // A DND schedule is meant for message notifications; every comparable
-  // product (FaceTime, WhatsApp, Signal) still rings through it. Does NOT
-  // bypass `pushEnabled: false`, which is an explicit opt-out of all push.
+  // product (FaceTime, WhatsApp, Signal) still rings through it. Note (GW6):
+  // call pushes are a dedicated category — `isPushAllowed` short-circuits on
+  // `callsEnabled` alone for them, so neither this flag nor `pushEnabled:
+  // false` governs call pushes (see isCallRelatedPush / the isCallPush
+  // early-return). `pushEnabled: false` still blocks every NON-call push.
   bypassDnd?: boolean;
 }
 
