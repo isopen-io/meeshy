@@ -239,4 +239,24 @@ nonisolated enum NotificationPayloadHelpers {
         }
         return "MEESHY_SOCIAL_COMMENTABLE"
     }
+
+    /// G4d — call categories are SPLIT by call state so a terminated call
+    /// never shows an « Answer » button:
+    ///  - `incoming_call` (regular-APNs ringing path — China devices, VoIP
+    ///    fallback) → `MEESHY_CALL_INCOMING` [answer, decline] ;
+    ///  - terminal states (`missed_call`, `call_ended`, `call_declined`,
+    ///    `call_recording_ready`) → `MEESHY_CALL_MISSED` [callback, view].
+    /// Returns `nil` for non-call types. Identifiers are a cross-layer
+    /// contract shared with the gateway `category` push field and
+    /// `AppDelegate.registerNotificationCategories`.
+    nonisolated static func callCategoryIdentifier(type: String) -> String? {
+        switch type {
+        case "incoming_call":
+            return "MEESHY_CALL_INCOMING"
+        case "missed_call", "call_ended", "call_declined", "call_recording_ready":
+            return "MEESHY_CALL_MISSED"
+        default:
+            return nil
+        }
+    }
 }

@@ -559,4 +559,142 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertEqual(ctx.postService.addCommentCallCount, 0)
         XCTAssertTrue(ctx.queue.enqueuedKinds.isEmpty)
     }
+
+    // MARK: - R5 — friend request ACCEPT/DECLINE actually call the API
+
+    private func friendRequestUserInfo(
+        friendRequestId: String? = "fr1",
+        senderId: String? = "senderA"
+    ) -> [AnyHashable: Any] {
+        var info: [AnyHashable: Any] = ["type": "friend_request"]
+        if let friendRequestId { info["friendRequestId"] = friendRequestId }
+        if let senderId { info["senderId"] = senderId }
+        return info
+    }
+
+    private func makeFriendRequest(id: String, senderId: String) -> FriendRequest {
+        FriendRequest(
+            id: id,
+            senderId: senderId,
+            receiverId: "user1",
+            status: "pending",
+            createdAt: Date()
+        )
+    }
+
+    func test_handle_accept_friendRequest_respondsViaRestWithoutNavigation() async {
+        let ctx = makeSUT()
+        ctx.friendService.respondResult = .success(makeFriendRequest(id: "fr1", senderId: "senderA"))
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.accept.rawValue,
+            userInfo: friendRequestUserInfo(friendRequestId: "fr1"),
+            replyText: nil
+        )
+
+        XCTAssertEqual(ctx.friendService.respondCallCount, 1)
+        XCTAssertEqual(ctx.friendService.lastRespondRequestId, "fr1")
+        XCTAssertEqual(ctx.friendService.lastRespondAccepted, true)
+        XCTAssertEqual(ctx.openedNotifications(), 0,
+                       "Accept runs in background — the request must be accepted, not navigated to")
+    }
+
+    func test_handle_decline_friendRequest_respondsRejected() async {
+        let ctx = makeSUT()
+        ctx.friendService.respondResult = .success(makeFriendRequest(id: "fr1", senderId: "senderA"))
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.decline.rawValue,
+            userInfo: friendRequestUserInfo(friendRequestId: "fr1"),
+            replyText: nil
+        )
+
+        XCTAssertEqual(ctx.friendService.respondCallCount, 1)
+        XCTAssertEqual(ctx.friendService.lastRespondAccepted, false)
+        XCTAssertEqual(ctx.openedNotifications(), 0)
+    }
+
+    func test_handle_accept_withoutFriendRequestId_resolvesRequestViaSenderId() async {
+        let ctx = makeSUT()
+        ctx.friendService.receivedRequestsResult = .success(
+            OffsetPaginatedAPIResponse(
+                success: true,
+                data: [
+                    makeFriendRequest(id: "frOther", senderId: "someoneElse"),
+                    makeFriendRequest(id: "fr9", senderId: "senderA")
+                ],
+                pagination: nil,
+                error: nil
+            )
+        )
+        ctx.friendService.respondResult = .success(makeFriendRequest(id: "fr9", senderId: "senderA"))
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.accept.rawValue,
+            userInfo: friendRequestUserInfo(friendRequestId: nil, senderId: "senderA"),
+            replyText: nil
+        )
+
+        XCTAssertEqual(ctx.friendService.receivedRequestsCallCount, 1)
+        XCTAssertEqual(ctx.friendService.lastRespondRequestId, "fr9",
+                       "The pending request from the notifying sender must be resolved and answered")
+        XCTAssertEqual(ctx.friendService.lastRespondAccepted, true)
+    }
+
+    func test_handle_accept_unresolvableRequest_fallsBackToNavigation() async {
+        let ctx = makeSUT()
+        ctx.friendService.receivedRequestsResult = .success(
+            OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
+        )
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.accept.rawValue,
+            userInfo: friendRequestUserInfo(friendRequestId: nil, senderId: "senderA"),
+            replyText: nil
+        )
+
+        XCTAssertEqual(ctx.friendService.respondCallCount, 0)
+        XCTAssertEqual(ctx.openedNotifications(), 1,
+                       "When the request cannot be resolved, surface the app instead of dropping the intent")
+    }
+
+    func test_handle_accept_nonFriendRequestType_fallsBackToNavigation() async {
+        let ctx = makeSUT()
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.accept.rawValue,
+            userInfo: ["type": "new_message", "conversationId": "conv1"],
+            replyText: nil
+        )
+
+        XCTAssertEqual(ctx.friendService.respondCallCount, 0)
+        XCTAssertEqual(ctx.openedNotifications(), 1)
+    }
+
+    func test_handle_accept_anonymousSession_isLoggedNoop() async {
+        let ctx = makeSUT(isRegisteredUser: false)
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.accept.rawValue,
+            userInfo: friendRequestUserInfo(),
+            replyText: nil
+        )
+
+        XCTAssertEqual(ctx.friendService.respondCallCount, 0)
+        XCTAssertEqual(ctx.openedNotifications(), 0)
+    }
+
+    func test_handle_accept_restFailure_doesNotCrashAndEndsBackgroundTask() async {
+        let ctx = makeSUT()
+        ctx.friendService.respondResult = .failure(TestError())
+
+        await ctx.sut.handle(
+            actionIdentifier: MeeshyNotificationAction.accept.rawValue,
+            userInfo: friendRequestUserInfo(friendRequestId: "fr1"),
+            replyText: nil
+        )
+
+        XCTAssertEqual(ctx.friendService.respondCallCount, 1)
+        XCTAssertEqual(ctx.backgroundTasks.endCallCount, 1)
+    }
 }

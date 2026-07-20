@@ -317,13 +317,30 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: []
         )
 
-        // Call category: distinct action set for incoming (ringing) vs missed/ended.
-        // Incoming calls would normally use CallKit/PushKit VoIP; this category
-        // covers the regular-APNs path (missed_call, call_ended, call_declined,
-        // call_recording_ready) where quick callback is the natural action.
-        let callCategory = UNNotificationCategory(
+        // G4d — call categories split by state so a terminated call never
+        // shows an « Answer » button. Ringing normally goes through
+        // CallKit/PushKit VoIP; MEESHY_CALL_INCOMING covers the regular-APNs
+        // ringing path (China devices, no-voip-token fallback).
+        let callIncomingCategory = UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.callIncoming.rawValue,
+            actions: [answerCallAction, declineCallAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
+        let callMissedCategory = UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.callMissed.rawValue,
+            actions: [callbackAction, viewAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
+        // Legacy MEESHY_CALL — kept registered for pushes categorized by a
+        // stale NSE / gateway during the rollout window. Terminal-state action
+        // set (no Answer): the historical bug was « Répondre » on missed calls.
+        let legacyCallCategory = UNNotificationCategory(
             identifier: MeeshyNotificationCategory.call.rawValue,
-            actions: [callbackAction, answerCallAction, declineCallAction, viewAction],
+            actions: [callbackAction, viewAction],
             intentIdentifiers: [],
             options: [.customDismissAction]
         )
@@ -334,7 +351,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             friendRequestCategory,
             socialCategory,
             socialCommentableCategory,
-            callCategory
+            callIncomingCategory,
+            callMissedCategory,
+            legacyCallCategory
         ])
     }
 
@@ -445,6 +464,10 @@ enum MeeshyNotificationCategory: String {
     case friendRequest = "MEESHY_FRIEND_REQUEST"
     case social = "MEESHY_SOCIAL"
     case socialCommentable = "MEESHY_SOCIAL_COMMENTABLE"
+    case callIncoming = "MEESHY_CALL_INCOMING"
+    case callMissed = "MEESHY_CALL_MISSED"
+    /// Legacy single call category — superseded by the incoming/missed split,
+    /// kept for pushes categorized by a stale NSE during rollout.
     case call = "MEESHY_CALL"
 }
 

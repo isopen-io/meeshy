@@ -241,13 +241,18 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 postId: content.userInfo["postId"] as? String
             )
 
-        // Call events — callback / answer / decline actions
+        // Call events — split by state (G4d): ringing exposes answer/decline,
+        // terminal states expose callback/view only (no « Answer » on an
+        // already-ended call).
         case "missed_call",
              "incoming_call",
              "call_ended",
              "call_declined",
              "call_recording_ready":
-            category = "MEESHY_CALL"
+            guard let callCategory = NotificationPayloadHelpers.callCategoryIdentifier(type: rawType) else {
+                return
+            }
+            category = callCategory
 
         default:
             // Unknown / new server-side type: stay quiet and show the default

@@ -198,9 +198,13 @@ final class NotificationActionHandler: NotificationActionHandling {
         case MeeshyNotificationAction.comment.rawValue:
             await handleComment(payload, userInfo: userInfo, replyText: replyText)
 
+        case MeeshyNotificationAction.accept.rawValue:
+            await handleFriendResponse(payload, userInfo: userInfo, accepted: true)
+
+        case MeeshyNotificationAction.decline.rawValue:
+            await handleFriendResponse(payload, userInfo: userInfo, accepted: false)
+
         case MeeshyNotificationAction.view.rawValue,
-             MeeshyNotificationAction.accept.rawValue,
-             MeeshyNotificationAction.decline.rawValue,
              MeeshyNotificationAction.callback.rawValue,
              MeeshyNotificationAction.answerCall.rawValue:
             // All of these surface the app to the relevant screen — the
@@ -424,6 +428,65 @@ final class NotificationActionHandler: NotificationActionHandling {
         }
 
         removeDeliveredForPost(postId)
+    }
+
+    // MARK: - Friend request accept / decline (R5)
+
+    /// R5 — ACCEPT/DECLINE execute the REST response in background instead of
+    /// the historical navigation (which parked a `pendingNotificationPayload`
+    /// that lock-screen taps never consumed — the request was neither
+    /// accepted nor refused). The push carries `senderId` (and
+    /// `friendRequestId` once the gateway enriches its payload); when only
+    /// the sender is known, the pending request is resolved via
+    /// `receivedRequests`.
+    private func handleFriendResponse(
+        _ payload: NotificationPayload,
+        userInfo: [AnyHashable: Any],
+        accepted: Bool
+    ) async {
+        let type = payload.type ?? ""
+        guard type == "friend_request" || type == "contact_request" else {
+            // accept/decline are only registered on MEESHY_FRIEND_REQUEST —
+            // an unexpected type falls back to the historical navigation.
+            openNotification(userInfo)
+            return
+        }
+        guard isRegisteredUser() else {
+            logger.warning("friend request action from an anonymous session — ignoring")
+            return
+        }
+
+        do {
+            guard let requestId = try await resolveFriendRequestId(payload, userInfo: userInfo) else {
+                logger.warning("friend request action without resolvable request id — falling back to navigation")
+                openNotification(userInfo)
+                return
+            }
+            _ = try await friendService.respond(requestId: requestId, accepted: accepted)
+            logger.info("friend request \(requestId, privacy: .public) \(accepted ? "accepted" : "declined", privacy: .public) from notification")
+            if let senderId = payload.senderId {
+                Self.removeDeliveredNotifications(
+                    matching: {
+                        ($0["type"] as? String) == type
+                            && ($0["senderId"] as? String) == senderId
+                    }
+                )
+            }
+        } catch {
+            logger.error("friend request \(accepted ? "accept" : "decline", privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func resolveFriendRequestId(
+        _ payload: NotificationPayload,
+        userInfo: [AnyHashable: Any]
+    ) async throws -> String? {
+        if let explicit = userInfo["friendRequestId"] as? String, !explicit.isEmpty {
+            return explicit
+        }
+        guard let senderId = payload.senderId else { return nil }
+        let pending = try await friendService.receivedRequests(offset: 0, limit: 50)
+        return pending.data.first(where: { $0.senderId == senderId })?.id
     }
 
     // MARK: - Notification hygiene

@@ -539,4 +539,27 @@ final class NotificationPayloadHelpersTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - callCategoryIdentifier (G4d — no « Answer » on ended calls)
+
+    func test_callCategoryIdentifier_incomingCall_returnsIncoming() {
+        XCTAssertEqual(
+            NotificationPayloadHelpers.callCategoryIdentifier(type: "incoming_call"),
+            "MEESHY_CALL_INCOMING"
+        )
+    }
+
+    func test_callCategoryIdentifier_terminalCallTypes_returnMissed() {
+        for type in ["missed_call", "call_ended", "call_declined", "call_recording_ready"] {
+            XCTAssertEqual(
+                NotificationPayloadHelpers.callCategoryIdentifier(type: type),
+                "MEESHY_CALL_MISSED",
+                "\(type) is a terminal call state — it must NOT expose an Answer action"
+            )
+        }
+    }
+
+    func test_callCategoryIdentifier_nonCallType_returnsNil() {
+        XCTAssertNil(NotificationPayloadHelpers.callCategoryIdentifier(type: "new_message"))
+    }
 }
