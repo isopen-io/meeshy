@@ -946,6 +946,8 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        // HIG: la sélection est signalée par la couleur seule — trait VoiceOver requis
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
@@ -1606,6 +1608,8 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
+        // HIG: la sélection est signalée par la couleur seule — trait VoiceOver requis
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
@@ -1822,6 +1826,8 @@ struct MessageDetailSheet: View {
                     )
             )
         }
+        // HIG: le checkmark n'a pas de label a11y — trait VoiceOver requis pour l'état sélectionné
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Forward Tab Content
