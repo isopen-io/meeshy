@@ -119,11 +119,24 @@ final class UserIdentityBarLayoutTests: XCTestCase {
     }
 
     func test_barWithPresenceStates_doesNotCrash() {
-        let states: [PresenceState] = [.online, .away, .offline]
+        let states: [PresenceState] = [.online, .away, .idle, .offline]
         for state in states {
             let bar = UserIdentityBar(name: "Eve", leadingSecondary: [.presence(state)])
             XCTAssertNotNil(bar.body)
         }
+    }
+
+    func test_element_presence_hasStableId() {
+        XCTAssertEqual(IdentityBarElement.presence(.idle).id, "presence:idle")
+        XCTAssertEqual(IdentityBarElement.presence(.online).id, "presence:online")
+    }
+
+    func test_presence_offline_rendersNoIndicator() {
+        // Règle 1/3/5 : l'élément `.presence` ne rend RIEN pour `offline` —
+        // le gating central est `showsIndicator` (PresenceStyle), consommé
+        // par le renderer de UserIdentityBar.
+        XCTAssertFalse(PresenceState.offline.showsIndicator)
+        XCTAssertTrue(PresenceState.idle.showsIndicator)
     }
 
     func test_barWithFlags_doesNotCrash() {

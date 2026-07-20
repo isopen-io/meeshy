@@ -43,6 +43,10 @@ enum DiscoveryTab: String, CaseIterable, Hashable {
 
 // MARK: - Filter Enums
 
+/// Filtres de l'annuaire. `online`/`offline` partitionnent sur le flag binaire
+/// backend `isOnline` — contexte LABELLISÉ explicite, distinct de la règle
+/// d'affichage des dots 1/3/5 (`UserPresence.state`) : un contact « Hors
+/// ligne » du filtre peut encore porter un dot orange/gris (< 5 min).
 enum ContactFilter: String, CaseIterable {
     case all = "Tous"
     case online = "En ligne"

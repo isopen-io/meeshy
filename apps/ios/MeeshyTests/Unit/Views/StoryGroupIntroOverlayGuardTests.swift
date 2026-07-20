@@ -93,6 +93,28 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
 
     // MARK: - Gestes composés sur StoryGroupIntroOverlay
 
+    // MARK: - Badge de présence : règle 1/3/5, offline = AUCUN badge
+
+    func test_presenceBadge_rendersNothingWhenOffline() throws {
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let block = try body(of: "private var presenceBadge: some View {", in: viewerSource)
+        XCTAssertTrue(
+            block.contains("state.showsIndicator"),
+            "Le badge de présence de l'intro doit gater sur showsIndicator : " +
+            "au-delà de 5 min (offline), AUCUN badge — jamais de dot gris « Hors ligne »."
+        )
+    }
+
+    func test_accessibilitySummary_omitsPresenceWhenOffline() throws {
+        let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
+        let block = try body(of: "private var accessibilitySummary: String {", in: viewerSource)
+        XCTAssertTrue(
+            block.contains("showsIndicator"),
+            "VoiceOver doit suivre la même règle que le badge visuel : présence " +
+            "annoncée seulement quand un indicateur est affiché (online/away/idle)."
+        )
+    }
+
     func test_storyGroupIntroOverlay_hasOnBackAndDoubleTapGestures() throws {
         let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
         let block = try body(

@@ -226,14 +226,17 @@ public struct UserIdentityBar: View {
 
         case .presence(let state):
             // Couleurs + libellé via le mapping central (PresenceStyle) :
-            // vert online/recent, orange away, gris offline.
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(state.dotColor)
-                    .frame(width: 6, height: 6)
-                Text(state.localizedLabel)
-                    .font(.system(size: 11))
-                    .foregroundColor(state.dotColor)
+            // vert online, orange away, gris idle. Règle 1/3/5 : `offline`
+            // n'émet RIEN (gating central `showsIndicator`).
+            if state.showsIndicator {
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(state.dotColor)
+                        .frame(width: 6, height: 6)
+                    Text(state.localizedLabel)
+                        .font(.system(size: 11))
+                        .foregroundColor(state.dotColor)
+                }
             }
 
         case .memberSince(let value):
