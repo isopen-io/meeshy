@@ -14,6 +14,34 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 196i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Essaim iOS très dense** : PR ouvertes jusqu'à **195i** (#2188…#2200). Numéro **196i** choisi
+>   strictement > plus haut en vol. `ActiveSessionsView` **absente de toute PR ouverte** (vérifié
+>   `list_pull_requests`, 30 PR) + non re-flaggée depuis 168i.
+> - **196i (terminée, branche `claude/laughing-thompson-jv0fs5`, base `main` HEAD `d1c2287`)** :
+>   design-system dedup de l'**état vide de `ActiveSessionsView`** (écran « Sessions actives »).
+>   L'empty-state était un **`Text` NU sans icône** (`sessions_empty` + `MeeshyFont.relative(15)`
+>   muet) sandwiché entre 2 `Spacer()` — le **dernier empty-state icon-less** du cluster après que
+>   185i a soldé son frère `FriendRequestListView`. Remplacé par
+>   `AdaptiveContentUnavailableView(title, systemImage:"laptopcomputer.and.iphone", description:)`
+>   (natif `ContentUnavailableView` iOS 17+, fallback iOS 16 fidèle ; déjà adopté FeedView/
+>   StarredMessagesView 175i/AddParticipantSheet 176i/CreateShareLinkView/FriendRequestListView 185i)
+>   + `.frame(maxWidth/maxHeight: .infinity)` (conserve le centrage). **Titre réutilise la clé
+>   `sessions_empty`** (0 édition catalogue) ; **1 clé neuve** `sessions_empty_subtitle` (défaut FR
+>   inline → exemptée de `LocalizationConsistencyTests`, convention 185i `friends.requests.empty.subtitle`).
+>   Gains : HIG (composant natif), SF Symbol + texte scale Dynamic Type (était fonte figée),
+>   sous-titre de guidage (était titre-seul), VoiceOver titre+desc groupé natif, −1 empty-state bespoke.
+>   Les **4 guards a11y 168i tiennent** (`.combine`/`.accessibilityHidden`/`.isHeader`/`sessions_revoke`
+>   préservés — header/rangées/révoquer inchangés). **+1 guard neuf**
+>   `test_emptyState_usesNativeContentUnavailableView`. 1 fichier prod + 1 méthode test, 0 logique/
+>   0 réseau/0 ViewModel/0 couleur/0 catalogue. Gate = CI `iOS Tests`.
+> - **⚠️ NE PLUS re-flagger** l'empty-state de `ActiveSessionsView` (natif/dedup/sous-titre soldés 196i).
+> - **Base de départ 197i+ : `main` HEAD** (toujours resync ; supprimer la branche mergée). **Piste
+>   197i+** : autres empty-states custom réimplémentant `ContentUnavailableView`/`EmptyStateView`
+>   (`VoiceProfileManageView` `.system(size:64)`, `AffiliateView` `.system(size:36)`) ; littéraux FR de
+>   `MessageViewsDetailView.sendAttemptsCard` (vérifier collision #2199/#2194/#2186) — auditer via
+>   `list_pull_requests` avant de choisir.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 183i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **183i (branche `claude/laughing-thompson-8vaq6w`, base `main` HEAD `64f943d`)** :
 >   Consolidation design-system de `ProfileUserPostsList` (liste de publications de l'onglet « Postes »

@@ -73,14 +73,28 @@ struct ActiveSessionsView: View {
                 .tint(MeeshyColors.indigo500)
             Spacer()
         } else if viewModel.sessions.isEmpty {
-            Spacer()
-            Text(String(localized: "sessions_empty", defaultValue: "Aucune session active"))
-                .font(MeeshyFont.relative(15, weight: .medium))
-                .foregroundColor(theme.textMuted)
-            Spacer()
+            emptyState
         } else {
             sessionsList
         }
+    }
+
+    // MARK: - Empty State
+
+    // Bare `Text` (icon-less, non-grouped) replaced by the shared native
+    // `ContentUnavailableView` wrapper (iOS 17+, faithful iOS 16 fallback) —
+    // parity with FriendRequestListView (185i) / StarredMessagesView (175i).
+    // Adds a semantic SF Symbol that scales with Dynamic Type, a guiding
+    // subtitle, and native title+description VoiceOver grouping. The existing
+    // `sessions_empty` key is reused for the title (0 catalog edit). maxHeight
+    // fill keeps it vertically centred like the former Spacer sandwich.
+    private var emptyState: some View {
+        AdaptiveContentUnavailableView(
+            String(localized: "sessions_empty", defaultValue: "Aucune session active"),
+            systemImage: "laptopcomputer.and.iphone",
+            description: Text(String(localized: "sessions_empty_subtitle", defaultValue: "Vos appareils connectes apparaitront ici."))
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Sessions List
