@@ -113,10 +113,11 @@ struct VideoFullscreenPlayer: View {
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28))
+                            .font(MeeshyFont.relative(28))
                             .foregroundColor(.white.opacity(0.8))
                             .padding()
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                     Spacer()
                 }
                 Spacer()
