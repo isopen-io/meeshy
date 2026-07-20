@@ -14,6 +14,29 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 178i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **178i (branche `claude/laughing-thompson-lhas8y`, base `main` HEAD `4be4510`)** :
+>   VoiceOver des **contrôles de transport** de `AudioFullscreenView` (lecteur audio plein écran —
+>   bulles conv/commentaire/post/réel). Les boutons icône-seule (fermer, ±10 s, play/pause, DL, traduire)
+>   étaient déjà libellés ; 3 déficits sur le transport de lecture : (1) **`seekBar` invisible à VoiceOver**
+>   — scrubber 100 % custom (`Capsule` track + fill + `Circle` thumb piloté par `DragGesture`), aucun
+>   élément a11y → position portée par la seule largeur de remplissage/offset du thumb, **impossible de
+>   scrubber sans la vue** ; (2) **`waveformSection`** = 2e affordance de seek (tap-to-seek) décorative,
+>   80 fragments anonymes ; (3) **vitesse sélectionnée portée par la couleur seule** (capsule accent + texte
+>   noir) dans `speedRow`. Fix : `seekBar` → slider VoiceOver natif (`accessibilityElement` +
+>   `accessibilityLabel` « Position de lecture » + `accessibilityValue` « 0:42 sur 3:15 » suivant le seek-preview
+>   + `accessibilityAdjustableAction` ±10 s réutilisant `player.skip(seconds:)` — **0 nouvelle logique**, haptic
+>   léger) ; `waveformSection` → `.accessibilityHidden(true)` (visualisation décorative + seek dupliqué, le
+>   slider unique reste `seekBar`) ; `speedRow` → `accessibilityLabel` « Vitesse {label} » + trait `.isSelected`
+>   (état actif hors canal couleur). 3 clés inline `defaultValue` neuves (`audio.fullscreen.seek.a11y-label/value`,
+>   `audio.fullscreen.speed.a11y-label`, code-only, **0 `.xcstrings`**, famille `audio.fullscreen.*` existante).
+>   1 fichier, 0 logique / 0 changement visuel / 0 test neuf. Précédent `accessibilityAdjustableAction` : SDK
+>   `DurationHandle`/`PlayheadView`, app `CallView`. Les 6 `.system(size:)` = glyphes chrome figés (doctrine 82i)
+>   inchangés. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `AudioFullscreenView` transport SOLDÉ** (seek bar slider, waveform hidden, speed selected-state). Ne
+>   plus re-flagger ces 3 surfaces. Restant futur : indicateur de page `Text("X / Y")` (~l.483, label « Piste X sur Y »).
+> - **Base de départ 179i : `main` HEAD** (toujours resync ; supprimer la branche mergée).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un

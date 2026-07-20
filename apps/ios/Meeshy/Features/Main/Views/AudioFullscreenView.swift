@@ -651,6 +651,11 @@ private struct AudioFullscreenPage: View {
             }
         }
         .frame(height: 80)
+        // Decorative visualization + duplicate tap-to-seek affordance: the
+        // accessible slider is `seekBar`. Exposing two adjustable scrubbers for
+        // the same position would give VoiceOver conflicting controls, so the
+        // waveform is hidden from the accessibility tree.
+        .accessibilityHidden(true)
     }
 
     private func fallbackHeight(index: Int) -> CGFloat {
@@ -755,6 +760,32 @@ private struct AudioFullscreenPage: View {
             )
         }
         .frame(height: 16)
+        // Custom drag scrubber → expose as a native VoiceOver slider. Without this
+        // the playback position lived only in the fill width + thumb offset (a
+        // geometry/color channel), and there was no way to seek without sight.
+        .accessibilityElement()
+        .accessibilityLabel(String(localized: "audio.fullscreen.seek.a11y-label", defaultValue: "Position de lecture", bundle: .main))
+        .accessibilityValue(seekPositionAccessibilityValue)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: player.skip(seconds: 10)
+            case .decrement: player.skip(seconds: -10)
+            @unknown default: break
+            }
+            HapticFeedback.light()
+        }
+    }
+
+    /// Spoken position for the scrubber ("0:42 sur 3:15") — mirrors the visible
+    /// `timeRow`, following the seek preview while a drag is in flight.
+    private var seekPositionAccessibilityValue: String {
+        let current = formatMediaDuration(isSeeking ? seekValue * estimatedDuration : player.currentTime)
+        let total = formatMediaDuration(estimatedDuration)
+        return String(
+            localized: "audio.fullscreen.seek.a11y-value",
+            defaultValue: "\(current) sur \(total)",
+            bundle: .main
+        )
     }
 
     // MARK: - Time Row
@@ -794,6 +825,15 @@ private struct AudioFullscreenPage: View {
                             )
                         )
                 }
+                // Selected speed was signalled only by the accent fill + black
+                // text (a color-only cue). Name the control and carry the
+                // active state via the `.isSelected` trait for VoiceOver.
+                .accessibilityLabel(String(
+                    localized: "audio.fullscreen.speed.a11y-label",
+                    defaultValue: "Vitesse \(speed.label)",
+                    bundle: .main
+                ))
+                .accessibilityAddTraits(player.speed == speed ? .isSelected : [])
             }
         }
     }
