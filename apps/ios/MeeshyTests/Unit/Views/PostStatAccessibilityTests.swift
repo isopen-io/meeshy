@@ -8,6 +8,11 @@ import XCTest
 /// l'accessibilityLabel doit exposer le SENS du compteur avec accord
 /// singulier/pluriel (Automatic Grammar Agreement, `inflect: true`) —
 /// sinon VoiceOver annonce "5, bouton" sans indiquer de quoi il s'agit.
+///
+/// `@MainActor` : `PostStatAccessibility` vit dans le target app, isolé
+/// main-actor-par-défaut (Swift 6.2) ; les appels synchrones depuis les tests
+/// doivent donc partager cet acteur (même contrat que `MessageDayLabelTests`).
+@MainActor
 final class PostStatAccessibilityTests: XCTestCase {
 
     // MARK: - Le compteur est toujours présent dans le label
