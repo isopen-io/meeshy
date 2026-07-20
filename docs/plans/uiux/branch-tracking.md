@@ -14,6 +14,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 195i, 2026-07-20)** — piste iOS (suffixe `i`).
+> - **Essaim iOS très dense** : `list_pull_requests` (open, 23 PR) montre des PR iOS jusqu'à **194i** (#2184/#2177 `TermsOfServiceView`, #2188 `ChangePasswordView` 193i, #2185/#2180/#2178/#2182/#2181/#2179 `MessageDetailSheet` 192i/193i, #2186 `MessageViewsDetailView`, #2183/#2147 `FriendRequestListView`, #2176 `ConversationInfoSheet`, #2175 `DataStorageView`). Numéro **195i** choisi strictement > 194i (plus haut en vol). `ThemedConversationRow` **absent de toute PR ouverte** → 0 collision.
+> - **195i (terminée, branche `claude/laughing-thompson-wf9d4a`, base `main` HEAD `b2f2382`)** : a11y VoiceOver de **`ThemedConversationRow`** (rangée de la liste de conversations). Sur iPad/macOS split-view la rangée active est signalée par le VISUEL seul (teinte accent + barre latérale 3pt + bordure renforcée), le bloc a11y exposant `label`/`value`/`hint`/`.isButton` mais **aucun trait `.isSelected`** → violation WCAG 1.4.1 « jamais la couleur seule » (doctrine 149i/155i/163i/176i/177i/178i/185i/186i). Fix : `.accessibilityAddTraits(isSelected ? [.isSelected] : [])` après le `.isButton` existant. `isSelected` déjà en portée + déjà dans le `==` de l'`Equatable` → **0 régression « Zero Unnecessary Re-render »**. Défaut `false` sur iPhone (NavigationStack) → comportement identique, seul split-view bénéficie. 1 fichier, +4 lignes (3 de commentaire), 0 logique/0 réseau/0 layout/0 clé i18n neuve/0 test neuf/0 changement visuel. Fichier absent de toute PR ouverte. Gate = CI `iOS Tests`.
+> - **⚠️ NE PLUS re-flagger** `ThemedConversationRow` pour l'état sélectionné VoiceOver (soldé 195i) : label combiné riche + value unread + hint déjà complets.
+> - **Base de départ 196i+ : `main` HEAD** (resync ; supprimer la branche mergée). **Piste 196i+** : autres rangées de liste à sélection visuelle split-view (`ConversationListView`, cellules de recherche) → même trait `.isSelected` manquant ; vérifier collision essaim via `list_pull_requests`.
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 183i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **183i (branche `claude/laughing-thompson-8vaq6w`, base `main` HEAD `64f943d`)** :
 >   Consolidation design-system de `ProfileUserPostsList` (liste de publications de l'onglet « Postes »
