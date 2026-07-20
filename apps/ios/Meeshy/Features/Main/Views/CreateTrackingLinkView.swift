@@ -51,7 +51,13 @@ struct CreateTrackingLinkView: View {
 
     private var formSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            formField(String(localized: "tracking.link.create.field.url", defaultValue: "URL de destination *", bundle: .main), placeholder: "https://meeshy.me", text: $destinationUrl)
+            formField(
+                String(localized: "tracking.link.create.field.url", defaultValue: "URL de destination *", bundle: .main),
+                placeholder: "https://meeshy.me",
+                text: $destinationUrl,
+                accessibilityLabel: String(localized: "tracking.link.create.field.url.a11y", defaultValue: "URL de destination", bundle: .main),
+                hint: String(localized: "a11y.tracking.field.required", defaultValue: "Champ obligatoire", bundle: .main)
+            )
                 .keyboardType(.URL).textInputAutocapitalization(.never)
             formField(String(localized: "tracking.link.create.field.name", defaultValue: "Nom interne", bundle: .main), placeholder: String(localized: "tracking.link.create.field.name.placeholder", defaultValue: "ex: Campagne Instagram", bundle: .main), text: $name)
         }
@@ -71,9 +77,14 @@ struct CreateTrackingLinkView: View {
                     Spacer()
                     Image(systemName: showUtmFields ? "chevron.up" : "chevron.down")
                         .font(.caption).foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 20)
+            .accessibilityHint(String(localized: "a11y.tracking.utm.hint", defaultValue: "Affiche ou masque les paramètres UTM", bundle: .main))
+            .accessibilityValue(showUtmFields
+                ? String(localized: "accessibility.section_expanded", defaultValue: "Développée", bundle: .main)
+                : String(localized: "accessibility.section_collapsed", defaultValue: "Réduite", bundle: .main))
 
             if showUtmFields {
                 VStack(spacing: 10) {
@@ -121,18 +132,28 @@ struct CreateTrackingLinkView: View {
         )
         .disabled(!isValid || isCreating).opacity(!isValid || isCreating ? 0.5 : 1)
         .padding(.horizontal, 20)
+        .accessibilityLabel(String(localized: "tracking.link.create.button", defaultValue: "Créer le lien", bundle: .main))
+        .accessibilityValue(isCreating
+            ? String(localized: "a11y.tracking.create.in-progress", defaultValue: "Création en cours", bundle: .main)
+            : "")
+        .accessibilityHint(isValid
+            ? ""
+            : String(localized: "a11y.tracking.create.disabled.hint", defaultValue: "Saisissez une URL de destination valide pour créer le lien", bundle: .main))
     }
 
     @ViewBuilder
-    private func formField(_ label: String, placeholder: String, text: Binding<String>) -> some View {
+    private func formField(_ label: String, placeholder: String, text: Binding<String>, accessibilityLabel: String? = nil, hint: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.caption.weight(.medium))
                 .foregroundColor(theme.textSecondary)
+                .accessibilityHidden(true)
             TextField(placeholder, text: text)
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 10)
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityLabel(accessibilityLabel ?? label)
+                .accessibilityHint(hint ?? "")
         }
     }
 
@@ -157,8 +178,10 @@ struct CreateTrackingLinkView: View {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
+                    let message = error.localizedDescription
+                    errorMessage = message
                     isCreating = false
+                    AccessibilityNotification.Announcement(message).post()
                 }
             }
         }
