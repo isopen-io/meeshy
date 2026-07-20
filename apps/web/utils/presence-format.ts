@@ -47,8 +47,8 @@ export function formatPresenceLabel(o: FormatPresenceLabelOptions): string {
 }
 
 /**
- * Couleur du libellé selon la règle de présence canonique : vert quand actif
- * (online/recent), orange en absence courte (away), gris hors ligne. Délègue
+ * Couleur du libellé selon la règle de présence canonique 1/3/5 : vert online,
+ * orange en absence courte (away), gris inactif (idle) et hors ligne. Délègue
  * le calcul d'état à `getUserPresenceStatus` (source de vérité partagée) et
  * le mapping couleur à `PRESENCE_TEXT_CLASS` (mapping central web).
  */

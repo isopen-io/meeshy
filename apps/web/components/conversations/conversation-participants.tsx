@@ -55,7 +55,7 @@ export function ConversationParticipants({
   const getUserById = useUserStore(state => state.getUserById);
   const _tick = useUserStatusTick();
 
-  // Listes actifs (vert : online + recent) / inactifs via getUserStatus (temps reel)
+  // Listes actifs (dot rendu : online + away + idle, < 5min) / hors ligne via getUserStatus (temps reel)
   const onlineAll = participants.filter(p => {
     const storeUser = p.userId ? getUserById(p.userId) : undefined;
     return isPresenceActive(getUserStatus(storeUser || p.user as ParticipantUser));

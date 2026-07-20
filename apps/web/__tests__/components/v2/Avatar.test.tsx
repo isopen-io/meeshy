@@ -1,11 +1,11 @@
 /**
  * Avatar v2 — pastille de presence.
- * Regle produit : online (isOnline backend OU <=60s) et recent (<=5min) → VERT
- * emerald-400 fixe, online pulse en plus ; away (5-30min) → ORANGE amber-400
- * fixe ; offline (>30min) → GRIS. Couleurs fixes (pas les tokens thème
- * --gp-success/--gp-warning) pour un hex identique light/dark et cross-platform.
- * Aucun dot quand le caller ne fournit AUCUNE donnée de présence (ni presence
- * ni isOnline). `presence` prime sur le binaire `isOnline`.
+ * Regle produit 1/3/5 : online (isOnline backend OU <=60s) → VERT emerald-400
+ * fixe + pulse ; away (1-3min) → ORANGE amber-400 fixe ; idle (3-5min) → GRIS
+ * gray-400 AFFICHÉ ; offline (>5min) → AUCUN dot. Couleurs fixes (pas les
+ * tokens thème --gp-success/--gp-warning) pour un hex identique light/dark et
+ * cross-platform. Aucun dot quand le caller ne fournit AUCUNE donnée de
+ * présence (ni presence ni isOnline). `presence` prime sur le binaire `isOnline`.
  */
 
 import { render } from '@testing-library/react';
@@ -26,21 +26,22 @@ describe('Avatar v2 presence dot', () => {
     expect(dot?.className).not.toContain('bg-amber-400');
   });
 
-  it('renders a green (non-pulsing) dot for presence="recent"', () => {
-    const { container } = render(<Avatar name="John" presence="recent" />);
-
-    const dot = getDot(container);
-    expect(dot).not.toBeNull();
-    expect(dot?.className).toContain('bg-emerald-400');
-    expect(dot?.className).not.toContain('animate-pulse');
-  });
-
   it('renders an orange dot for presence="away"', () => {
     const { container } = render(<Avatar name="John" presence="away" />);
 
     const dot = getDot(container);
     expect(dot).not.toBeNull();
     expect(dot?.className).toContain('bg-amber-400');
+    expect(dot?.className).not.toContain('bg-emerald-400');
+  });
+
+  it('renders a grey dot for presence="idle" (gris AFFICHÉ 3-5min)', () => {
+    const { container } = render(<Avatar name="John" presence="idle" />);
+
+    const dot = getDot(container);
+    expect(dot).not.toBeNull();
+    expect(dot?.className).toContain('bg-gray-400');
+    expect(dot?.className).not.toContain('animate-pulse');
     expect(dot?.className).not.toContain('bg-emerald-400');
   });
 
@@ -53,8 +54,8 @@ describe('Avatar v2 presence dot', () => {
   it('exports the central v2 presence map (consumed by ConversationItem)', () => {
     expect(presenceDotClassV2.online).toContain('bg-emerald-400');
     expect(presenceDotClassV2.online).toContain('animate-pulse');
-    expect(presenceDotClassV2.recent).toBe('bg-emerald-400');
     expect(presenceDotClassV2.away).toBe('bg-amber-400');
+    expect(presenceDotClassV2.idle).toBe('bg-gray-400');
     expect(presenceDotClassV2.offline).toBe('bg-gray-400');
   });
 

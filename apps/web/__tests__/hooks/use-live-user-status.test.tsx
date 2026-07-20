@@ -61,7 +61,7 @@ describe('useLiveUserStatus', () => {
   });
 
   it('recomputes relative status decay on the store tick (online → away without any user mutation)', () => {
-    const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     act(() => {
       useUserStore.getState().mergeParticipants([buildUser({ id: 'user-1', isOnline: undefined, lastActiveAt: new Date() })]);
     });
@@ -70,7 +70,7 @@ describe('useLiveUserStatus', () => {
     expect(result.current).toBe('online');
 
     act(() => {
-      useUserStore.getState().updateUserStatus('user-1', { lastActiveAt: sixMinutesAgo });
+      useUserStore.getState().updateUserStatus('user-1', { lastActiveAt: twoMinutesAgo });
     });
 
     expect(result.current).toBe('away');
