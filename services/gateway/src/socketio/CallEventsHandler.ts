@@ -19,6 +19,7 @@ import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
+import { toCallParticipantView } from './callParticipantView';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
@@ -61,7 +62,6 @@ import type {
   CallMissedEvent,
   CallInitiateAck,
   CallJoinAck,
-  ConnectionQuality,
   // CallEndReason imported as value from @meeshy/shared/prisma/client above
   // (the Prisma generated enum is both a value AND a type, so we don't
   // need the type-only re-export from video-call.ts which duplicates it).
@@ -1537,20 +1537,7 @@ export class CallEventsHandler {
               displayName: full.initiator.displayName || undefined,
               avatar: full.initiator.avatar
             },
-            participants: full.participants.map(p => ({
-              id: p.id,
-              callSessionId: p.callSessionId,
-              userId: p.participant?.userId || p.participantId,
-              role: p.role,
-              joinedAt: p.joinedAt,
-              leftAt: p.leftAt,
-              isAudioEnabled: p.isAudioEnabled,
-              isVideoEnabled: p.isVideoEnabled,
-              connectionQuality: (p.connectionQuality as unknown as ConnectionQuality | null),
-              username: p.participant?.user?.username || p.participant?.displayName,
-              displayName: p.participant?.displayName || p.participant?.user?.displayName,
-              avatar: p.participant?.user?.avatar || p.participant?.avatar
-            }))
+            participants: full.participants.map(toCallParticipantView)
           };
           const iceServers = this.callService.generateIceServers(userId);
           socket.emit(CALL_EVENTS.INITIATED, { ...event, iceServers });
@@ -1664,20 +1651,7 @@ export class CallEventsHandler {
             displayName: callSession.initiator.displayName || undefined,
             avatar: callSession.initiator.avatar
           },
-          participants: callSession.participants.map(p => ({
-            id: p.id,
-            callSessionId: p.callSessionId,
-            userId: p.participant?.userId || p.participantId,
-            role: p.role,
-            joinedAt: p.joinedAt,
-            leftAt: p.leftAt,
-            isAudioEnabled: p.isAudioEnabled,
-            isVideoEnabled: p.isVideoEnabled,
-            connectionQuality: (p.connectionQuality as unknown as ConnectionQuality | null),
-            username: p.participant?.user?.username || p.participant?.displayName,
-            displayName: p.participant?.displayName || p.participant?.user?.displayName,
-            avatar: p.participant?.user?.avatar || p.participant?.avatar
-          }))
+          participants: callSession.participants.map(toCallParticipantView)
         };
 
         // ACK to initiator with callId, mode AND iceServers — the iceServers
@@ -2016,20 +1990,7 @@ export class CallEventsHandler {
         // Prepare event data
         const joinedEvent: CallParticipantJoinedEvent = {
           callId: callSession.id,
-          participant: {
-            id: participant.id,
-            callSessionId: participant.callSessionId,
-            userId: participant.participant?.userId || participant.participantId,
-            role: participant.role,
-            joinedAt: participant.joinedAt,
-            leftAt: participant.leftAt,
-            isAudioEnabled: participant.isAudioEnabled,
-            isVideoEnabled: participant.isVideoEnabled,
-            connectionQuality: (participant.connectionQuality as unknown as ConnectionQuality | null),
-            username: participant.participant?.user?.username || participant.participant?.displayName,
-            displayName: participant.participant?.displayName || participant.participant?.user?.displayName,
-            avatar: participant.participant?.user?.avatar || participant.participant?.avatar
-          },
+          participant: toCallParticipantView(participant),
           mode: callSession.mode
         };
 
