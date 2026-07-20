@@ -2156,7 +2156,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       frozen at the final length on the ended screen, and `null` for a call that never connected. The
       connected screen renders the running clock; the ended screen appends the final length. +18
       behavioural tests (6 formatter, 5 presenter, 7 VM).
-- [ ] Live in-call transcription overlay (on-device speech-to-text, leader/follower)
+- [~] Live in-call transcription overlay (on-device speech-to-text, leader/follower) —
+      **pure captions core landed** (slice `call-captions-mode`): the `core:model`
+      `CaptionsMode` is the SSOT for the live-captions button's 3-state cycle
+      (`Off → Translated → Original → Off`), a faithful port of iOS `CaptionsMode`
+      (`apps/ios/Meeshy/Features/Main/Models/CaptionsMode.swift`): `from(isTranscribing,
+      showOriginalText)` derives the mode from the two authoritative flags with
+      `isTranscribing` priority (a stale `showOriginalText` never surfaces `Original`
+      while off), `next` always re-enters on `Translated` (never straight to `Original`),
+      and `isShowingCaptions` gates the overlay. The pure `CallCaptionResolver` projects a
+      `CallCaptionSegment` onto the on-screen `CaptionLine` under the current mode following
+      the **Prisme Linguistique**: `Translated` shows the translation as native content and
+      **falls back to the original words when none exists** (Prisme rule 1 — never a blank
+      line), `Original` always shows the speaker's own words, `Off` yields nothing, and a
+      blank-text segment renders no line; `resolveAll` drops blanks and keeps renderable
+      lines in order. +24 behavioural tests. Mutation (RED proof): neutralising the
+      blank-translation→absent fallback fails **exactly** the blank-translation test (1
+      failed, no collateral). **Pending:** the app-side `EdgeTranscription` STT actuator
+      (Android `SpeechRecognizer`), the socket transcript transport, and the accent-coherent
+      overlay UI + captions button that consume this core.
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
