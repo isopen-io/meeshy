@@ -52,20 +52,25 @@ public struct ClipInspector: View {
     // MARK: - Sections (modale allégée)
 
     /// Régions de la modale, dans l'ordre de rendu. La modale « surchargée »
-    /// (retour user 2026-07-11) n'expose plus que l'essentiel : les détails
-    /// (début/durée, hints) vivent derrière le bouton (i) du header, la
-    /// configuration d'animation (fondus + étape au playhead) derrière
-    /// l'icône losange de la rangée d'actions.
+    /// (retour user 2026-07-11) n'expose plus que l'essentiel : la barre de
+    /// timing tactile (`timing`) est l'affordance principale de début/durée
+    /// (capture user 2026-07-20 : « du bout du doigt ») ; les steppers fins et
+    /// hints vivent derrière le bouton (i), la configuration d'animation
+    /// (fondus + étape au playhead) derrière le bouton Animation.
     public enum Section: String, CaseIterable, Sendable, Equatable {
-        case header, details, volume, toggles, actions, animation
+        case header, timing, details, volume, toggles, actions, animation
     }
 
-    /// Résout les sections visibles pour un état donné. Pure — testée sans
-    /// monter la vue (voir `ClipInspectorTests.test_visibleSections_*`).
+    /// Résout les sections visibles pour un état donné. Un clip FOND couvre
+    /// toute la slide : début/durée sont ignorés par le moteur, la barre de
+    /// timing disparaît (contrôle sans effet). Pure — testée sans monter la
+    /// vue (voir `ClipInspectorTests.test_visibleSections_*`).
     public static func visibleSections(kind: ClipSnapshot.Kind,
+                                       isBackground: Bool,
                                        isDetailsExpanded: Bool,
                                        isAnimationExpanded: Bool) -> [Section] {
         var sections: [Section] = [.header]
+        if !isBackground { sections.append(.timing) }
         if isDetailsExpanded { sections.append(.details) }
         if hasAudioAffordances(kind: kind) { sections.append(.volume) }
         sections.append(.toggles)
@@ -111,6 +116,11 @@ public struct ClipInspector: View {
     public let onNameChanged: (String?) -> Void
     /// Ajustement de la FIN (garde le début, recalcule la durée).
     public let onEndAdjusted: (Float) -> Void
+    /// Trim du DÉBUT (fin fixe — la durée se réduit d'autant). Poignée gauche
+    /// de la barre de timing, câblée sur `TimelineViewModel.trimClipStart`.
+    public let onStartTrimmed: (Float) -> Void
+    /// Durée totale de la slide — étendue de la barre de timing tactile.
+    public let slideDuration: Float
 
     /// Pas des steppers début/durée.
     public static let timeStep: Float = 0.1
@@ -166,7 +176,9 @@ public struct ClipInspector: View {
                 onStartAdjusted: @escaping (Float) -> Void = { _ in },
                 onDurationAdjusted: @escaping (Float) -> Void = { _ in },
                 onNameChanged: @escaping (String?) -> Void = { _ in },
-                onEndAdjusted: @escaping (Float) -> Void = { _ in }) {
+                onEndAdjusted: @escaping (Float) -> Void = { _ in },
+                onStartTrimmed: @escaping (Float) -> Void = { _ in },
+                slideDuration: Float = 0) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -181,6 +193,8 @@ public struct ClipInspector: View {
         self.onDurationAdjusted = onDurationAdjusted
         self.onNameChanged = onNameChanged
         self.onEndAdjusted = onEndAdjusted
+        self.onStartTrimmed = onStartTrimmed
+        self.slideDuration = slideDuration
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
@@ -257,10 +271,14 @@ public struct ClipInspector: View {
 
     public var body: some View {
         let sections = Self.visibleSections(kind: clip.kind,
+                                            isBackground: background,
                                             isDetailsExpanded: isDetailsExpanded,
                                             isAnimationExpanded: isAnimationExpanded)
         VStack(alignment: .leading, spacing: 12) {
             header
+            if sections.contains(.timing) {
+                timingSection
+            }
             if sections.contains(.details) {
                 detailsSection
             }
@@ -364,12 +382,27 @@ public struct ClipInspector: View {
         }
     }
 
-    /// Panneau (i) : début/durée éditables + hints contextuels. Sorti du
-    /// corps de la modale — ces informations restent à un tap, sans charger
-    /// la surface par défaut.
+    /// Barre de trim tactile — l'affordance PRINCIPALE de début/durée
+    /// (capture user 2026-07-20 : steppers « 0:0… » tronqués, « définir
+    /// début/durée du bout du doigt »). Les steppers fins ±0,1 s restent
+    /// derrière le bouton (i) pour l'ajustement de précision.
+    private var timingSection: some View {
+        ClipTimingBar(
+            start: clip.startTime,
+            duration: clip.duration,
+            slideDuration: slideDuration,
+            onMoveCommitted: onStartAdjusted,
+            onTrimStartCommitted: onStartTrimmed,
+            onTrimEndCommitted: onEndAdjusted
+        )
+    }
+
+    /// Panneau (i) : steppers fins ±0,1 s + hints contextuels. Sorti du corps
+    /// de la modale — ces informations restent à un tap, sans charger la
+    /// surface par défaut. Pour un clip FOND, début/durée sont ignorés par le
+    /// moteur : on ne montre QUE le hint (pas de contrôles sans effet).
     private var detailsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            metadataRow
             if background {
                 Text(String(localized: "story.timeline.inspector.background.hint",
                             defaultValue: "Le fond couvre toute la slide — début/durée ignorés. Désactivez « Fond » pour caler ce média sur la timeline.",
@@ -377,6 +410,8 @@ public struct ClipInspector: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            } else {
+                metadataRow
             }
         }
         .padding(10)
@@ -413,7 +448,9 @@ public struct ClipInspector: View {
 
     /// Champ temps éditable par pas de ±0,1 s — l'affichage seul rendait la
     /// modale « peu compréhensible » : des valeurs qu'on lit mais qu'on ne
-    /// peut pas toucher (retour user 2026-07-11).
+    /// peut pas toucher (retour user 2026-07-11). Affichage COMPACT
+    /// (`0:03.5`) : le format ms `0:03.500` tronquait en « 0:0… » sur trois
+    /// colonnes en popover (capture user 2026-07-20).
     private func steppableTimeField(title: String, value: Float,
                                     onAdjust: @escaping (Float) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -422,7 +459,7 @@ public struct ClipInspector: View {
                 .foregroundStyle(.secondary)
             HStack(spacing: 6) {
                 stepButton(systemName: "minus.circle.fill") { onAdjust(-Self.timeStep) }
-                Text(Self.formatTime(seconds: value))
+                Text(TransportBar.formatTimeCompact(seconds: value))
                     .font(.system(.callout, design: .monospaced))
                     .monospacedDigit()
                 stepButton(systemName: "plus.circle.fill") { onAdjust(Self.timeStep) }
@@ -435,9 +472,9 @@ public struct ClipInspector: View {
     private func stepButton(systemName: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.body)
+                .font(.title3)
                 .foregroundStyle(MeeshyColors.indigo400)
-                .contentShape(Rectangle().inset(by: -6))
+                .contentShape(Rectangle().inset(by: -8))
         }
         .buttonStyle(.plain)
     }
@@ -596,9 +633,12 @@ public struct ClipInspector: View {
         }
     }
 
-    /// Deux icônes, deux intentions : le losange déplie la configuration
-    /// d'animation PAR-DESSOUS (il n'anime rien lui-même), la corbeille
-    /// demande confirmation avant la suppression définitive.
+    /// Deux boutons, deux intentions LISIBLES : « Animation » déplie la
+    /// configuration PAR-DESSOUS (il n'anime rien lui-même), « Supprimer »
+    /// demande confirmation avant la suppression définitive. Icône + TEXTE
+    /// obligatoires — les pastilles icône-seule teintées (losange indigo sur
+    /// verre indigo, corbeille rouge sur verre rouge) ne portaient ni leur
+    /// sens ni leur contraste (capture user 2026-07-20).
     ///
     /// Composition Liquid Glass (iOS 26 via `Compatibility/AdaptiveGlass`) :
     /// la SURFACE de la modale reste en matériau (le verre ne peut pas
@@ -629,11 +669,13 @@ public struct ClipInspector: View {
                 Button {
                     deleteConfirmation.request()
                 } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(MeeshyColors.error)
-                        .frame(width: 36, height: 36)
-                        .adaptiveGlass(in: Circle(), tint: MeeshyColors.error, interactive: true)
+                    Label(String(localized: "story.timeline.clip.delete", bundle: .module),
+                          systemImage: "trash")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .frame(height: 36)
+                        .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.error)
                         .contentShape(Rectangle().inset(by: -4))
                 }
                 .buttonStyle(.plain)
@@ -645,19 +687,25 @@ public struct ClipInspector: View {
         }
     }
 
-    /// État replié = glass régulier teinté ; déplié = glass prominent (le
-    /// contrôle actif se détache, blanc sur indigo — parité avec le fallback).
+    /// État replié = glass régulier teinté, foreground adaptatif au scheme
+    /// (`glassControlForeground` : blanc en sombre, indigo950 en clair) ;
+    /// déplié = glass prominent, blanc sur indigo — le contrôle actif se
+    /// détache, parité avec le fallback.
     @ViewBuilder
     private var animationToggleLabel: some View {
-        let icon = Image(systemName: "diamond.fill")
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(isAnimationExpanded ? .white : MeeshyColors.indigo500)
-            .frame(width: 36, height: 36)
+        let label = Label(String(localized: "story.timeline.inspector.animation",
+                                 defaultValue: "Animation", bundle: .module),
+                          systemImage: "diamond.fill")
+            .font(.footnote.weight(.semibold))
+            .padding(.horizontal, 14)
+            .frame(height: 36)
         if isAnimationExpanded {
-            icon.adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.indigo500)
+            label.foregroundStyle(.white)
+                .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
                 .contentShape(Rectangle().inset(by: -4))
         } else {
-            icon.adaptiveGlass(in: Circle(), tint: MeeshyColors.indigo500, interactive: true)
+            label.glassControlForeground()
+                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
                 .contentShape(Rectangle().inset(by: -4))
         }
     }
