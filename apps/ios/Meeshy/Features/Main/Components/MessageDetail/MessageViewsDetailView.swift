@@ -152,6 +152,7 @@ struct MessageViewsDetailView: View {
             HStack(spacing: 4) {
                 Image(systemName: filter.icon)
                     .font(.caption2.weight(.medium))
+                    .accessibilityHidden(true)
                 Text(filter.label)
                     .font(.caption.weight(.medium))
                 if let count {
@@ -178,6 +179,7 @@ struct MessageViewsDetailView: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
