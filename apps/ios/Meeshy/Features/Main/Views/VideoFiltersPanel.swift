@@ -43,6 +43,7 @@ struct VideoFiltersPanel: View {
             Image(systemName: "camera.filters")
                 .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo400)
+                .accessibilityHidden(true)
             Text(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
                 .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
@@ -101,6 +102,7 @@ struct VideoFiltersPanel: View {
         }
         .meeshyTapTarget()
         .pressable()
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
     private func presetLabel(_ preset: VideoFilterPreset) -> String {
