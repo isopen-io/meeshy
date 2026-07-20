@@ -15,6 +15,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 ## Current State
 
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **169i (branche `claude/laughing-thompson-c1tn4n`, base `main` HEAD `97e34d6`)** :
+>   Localisation + VoiceOver de `MessageEditsDetailView` (onglet « Historique des modifications »
+>   de la feuille de détail d'un message — `MessageDetail/`). Deux déficits, mêmes que les frères déjà
+>   soldés (`MessageReactionsDetailView`, `MessageForwardDetailView`, `AttachmentLoadingTile`,
+>   `UploadProgressBar`) : (1) **5 sites de littéraux FR bruts** dans `Text(...)` hors idiome
+>   `String(localized:defaultValue:bundle:)` (« Aucune modification »/« Historique », détail pluralisé
+>   « N versions précédentes », hint empty-state, « Actuel », « Version N ») ; (2) **0 accessibilité** —
+>   la distinction **actuel vs. révision passée était portée UNIQUEMENT par la couleur** de la barre
+>   verticale (`accent` plein vs. `opacity(0.4)`), invisible à VoiceOver, et les lignes/bannière étaient
+>   balayées en fragments. Fix : 6 helpers localisés (`message-detail.edits.*`, `defaultValue` inline,
+>   auto-extraits au build — pas d'édit `.xcstrings`) ; lignes → `.accessibilityElement(children: .ignore)`
+>   + label (identité « Actuel »/« Version N », qui reporte la distinction couleur en texte) + value
+>   (heure + contenu), barre couleur `.accessibilityHidden(true)` ; bannière → `children: .combine`
+>   + `.isHeader`, badge compteur redondant masqué. 1 fichier, 0 logique (FR rendu byte-identique via
+>   `defaultValue`), 0 test. Aucun test/SDK ne référence la vue ni les clés (grep = 0) → 0 blast radius.
+>   Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `MessageEditsDetailView` SOLDÉ** (i18n + VoiceOver). Ne plus ré-introduire de littéral FR brut ;
+>   toute nouvelle string passe par `String(localized:defaultValue:bundle:)`. La barre couleur ne doit
+>   JAMAIS redevenir le seul porteur de l'état actuel/passé — l'identité vit dans le label VoiceOver.
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un
 >   **`VStack` bespoke** ré-implémentant à la main le composant SDK partagé `MeeshyUI.EmptyStateView`
