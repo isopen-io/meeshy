@@ -117,6 +117,7 @@ struct VideoFullscreenPlayer: View {
                             .foregroundColor(.white.opacity(0.8))
                             .padding()
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                     Spacer()
                 }
                 Spacer()
