@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **in-call video-filter config + preset + auto-degrade cores** landed (slice
+> `call-video-filter-config`, feature-parity §H → "In-call video filters (colour presets, low-light boost,
+> background blur, skin smoothing)" — an unchecked §H box; the build-order Calls area's next high-value pure
+> slice, following the many pure decision cores already landed there). Parity source: iOS `VideoFilterConfig`
+> / `VideoFilterPreset` / `VideoFilterPipeline.updateAutoDegradation`
+> (`apps/ios/Meeshy/Features/Main/Services/VideoFilterPipeline.swift`). Three pure `:core:model` cores, all
+> fully TDD-covered. **(1)** `VideoFilterConfig` — the immutable SSOT the WebRTC capture-frame actuator
+> consumes: colorimetry (temperature 6500 / tint / brightness / contrast 1.0 / saturation 1.0 / exposure) +
+> the two GPU-heavy advanced passes (`backgroundBlurEnabled`+radius 10.0, `skinSmoothingEnabled`+intensity
+> 0.4) + the `hasAdvancedFilters` predicate; `DEFAULT` is the neutral disabled pass-through. **(2)**
+> `VideoFilterPreset` (`Natural`/`Warm`/`Cool`/`Vivid`/`Muted`) — each carries a **stable persisted `id`**
+> (`fromId` round-trips it, unknown → `null`) and projects to an **enabled** config at exact iOS parity
+> (warm = 7500K/+5 tint/+0.02 bright/1.05 contrast/1.1 sat; cool = 5500K/−5/1.05/0.95; vivid = +0.03/1.15/
+> 1.3/+0.1 exp; muted = −0.02/0.9/0.7/−0.1 exp); no preset enables an advanced pass (opt-in separately).
+> **(3)** `VideoFilterDegradePolicy` — the pure **two-tier count-based hysteresis** reducer (state =
+> `VideoFilterDegradeState{overStreak, underStreak, isAutoDegraded}` + `reduce(state, elapsedMs) →
+> VideoFilterDegradeDecision(state, VideoFilterDegradeEvent{None/Degraded/Restored})`): skin smoothing (the
+> pricier pass) sheds first at **half** the over-budget threshold (`isSmoothingDegraded`), the full advanced
+> pass latches off after `overBudgetThreshold` (10) consecutive frames strictly > 25ms and restores only after
+> `underBudgetThreshold` (30) consecutive frames strictly < 15ms — the confirm(10)/restore(30) asymmetry IS the
+> hysteresis (quick to shed load, slow to re-add, so a call never flickers between tiers); a between-budget
+> frame resets only the under-streak (iOS parity). `effectiveConfig(config, state)` is the SSOT projection —
+> `backgroundBlurEnabled && !isAutoDegraded`, `skinSmoothingEnabled && !isSmoothingDegraded`, colorimetry always
+> preserved — that both the actuator and any "filters throttled" UI hint read from. **SOTA upgrade:** iOS buries
+> the degrade logic in a stateful `nonisolated` class whose `consecutiveOver/UnderBudgetFrames` are unbounded
+> `Int`s (untestable without a live GPU, and counting into the millions across a multi-minute call); Android is
+> a total, side-effect-free reducer whose **both counters are clamped** so `VideoFilterDegradeState` is O(1) over
+> any call length. **+30 behavioural tests** — `VideoFilterConfigTest` (13: default-neutral, blur-alone/
+> smoothing-alone/both advanced predicate, every-preset-enabled, natural/warm/cool/vivid/muted exact colorimetry,
+> no-preset-advanced, id round-trip, unknown-id→null), `VideoFilterDegradePolicyTest` (17: initial, smoothing-at-
+> half-before-full, smoothing-not-before-half, full-degrade-at-threshold, degrade-fires-once, sustained-restore,
+> under-while-healthy-no-restore, over-resets-under, between-resets-only-under, over-clamp, under-clamp, degrade-
+> budget-boundary-strict, restore-budget-boundary-strict, effectiveConfig healthy/smoothing-only/fully-degraded/
+> preset-colorimetry-preserved). **Mutation check (RED proof):** removing the over-budget clamp
+> (`minOf(…, overBudgetThreshold)` → `…+1`) fails **exactly** `the over-budget counter is clamped so it never
+> grows unbounded while degraded` (17 tests run, 1 failed, no collateral) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through the proxy; `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (the two new suites 30/30) + full
+> `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only — 2 production files +
+> 2 test + tracking; **SDK purity** — a config data class + a preset enum + a pure reducer, all stateless building
+> blocks in `:core:model`, zero framework deps; the WebRTC `VideoProcessor` GPU actuator + filter panel UI stay
+> app-side, pending; **SSOT** — one config, one preset table, one degrade reducer + `effectiveConfig` projection,
+> mirrors the `DarkFramePolicy`/`VideoSurvivalPolicy` pure-policy pattern; **UDF** — immutable
+> `VideoFilterDegradeState`, transitions pure; no coverage floor lowered, no test weakened). **Next slice:** the
+> §H video-filter actuator — a `:feature:calls`/`:sdk-core` WebRTC `VideoProcessor`/`VideoSink` seam that maps
+> the captured frame through `effectiveConfig` (RenderEffect/GPU colorimetry + ML-Kit segmentation blur + face-
+> detect smoothing, folding `FrameLuminance` for the low-light boost) + the accent-coherent filter panel UI
+> (preset chips + advanced toggles), closing the §H box to `[x]`; OR another §H pure core (in-call translation
+> data channel / audio effects) or the tracked Kover 90% coverage-gate infra follow-up.
+
 > On 2026-07-20 the **live in-call captions core** landed (slice `call-captions-mode`, feature-parity §H →
 > "Live in-call transcription overlay" — an unchecked §H box; the build-order Calls area's next high-value
 > pure slice, following the many pure decision cores already landed there). Parity source: iOS `CaptionsMode`
