@@ -663,6 +663,7 @@ struct MessageDetailSheet: View {
                             .font(.caption2.weight(.medium))
                             .foregroundColor(langColor.opacity(0.6))
                     }
+                    .accessibilityLabel(String(localized: "message-detail.a11y.retranslate", defaultValue: "Retraduire", bundle: .main))
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.caption.weight(.medium))
@@ -702,6 +703,7 @@ struct MessageDetailSheet: View {
             )
         }
         .disabled(isTranslating)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func translateTo(_ targetLang: String, from sourceLang: String) async {
