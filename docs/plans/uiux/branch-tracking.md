@@ -14,6 +14,27 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **⚠️ Collision de numéro évitée** : une session concurrente a ouvert **178i** sur `ReelAudioBackdrop`
+>   (Reduce Motion + VoiceOver décoratif, PR **#2113**, branche `claude/laughing-thompson-r9ubq7`) —
+>   d'où le renommage de la présente itération en **179i**. `ReelAudioBackdrop` est donc désormais
+>   **traité** (ne plus le reprendre comme candidat futur).
+> - **179i (en cours, branche `claude/laughing-thompson-2h2ylu`, base `main` HEAD `3c4d772`, PR #2109)** :
+>   Accessibilité VoiceOver de `VideoFullscreenPlayer` (`VideoLegacySupport.swift` — lecteur vidéo
+>   plein écran des previews composer / conversation, 2 call sites `ConversationView`). Déficit :
+>   le **seul** bouton de fermeture d'une modale plein écran (`xmark.circle.fill`) n'avait **aucun**
+>   `.accessibilityLabel` → piège VoiceOver (impossible de découvrir comment sortir). Fix additif :
+>   `.accessibilityLabel(common.close)` (clé app-wide réutilisée) + `.accessibilityHint`
+>   (`video.fullscreen.close-hint`, 1 clé neuve inline `defaultValue`, pas d'`.xcstrings`). Police
+>   `.system(size: 28)` du glyphe de chrome **volontairement figée** (doctrine 82i, cadre tap fixe —
+>   identique au close de `VoiceProfileWizardView`) + annotée pour tarir les passes Dynamic Type futures.
+>   1 fichier, 0 logique, 0 API, 0 test (grep = 0 réf). 2 call sites inchangés. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `VideoFullscreenPlayer` close a11y SOLDÉ (179i)** : ne plus reprendre (label/hint posés, glyphe figé annoté).
+> - **Reste identifié (futures itérations)** : `MessageViewsDetailView.swift` (~1000 l — a raté la passe
+>   i18n + couleurs sémantiques de ses siblings : dizaines de littéraux FR/EN, `.yellow/.green/.red` bruts,
+>   capsules de filtre non labellisées → gros diff, itération dédiée). (`ReelAudioBackdrop` retiré : traité
+>   par 178i / PR #2113.)
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un

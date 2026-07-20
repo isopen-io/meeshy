@@ -113,10 +113,13 @@ struct VideoFullscreenPlayer: View {
                 HStack {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark.circle.fill")
+                            // Doctrine 82i : glyphe de chrome dans un cadre tap fixe (padding) — figé comme les autres close buttons.
                             .font(.system(size: 28))
                             .foregroundColor(.white.opacity(0.8))
                             .padding()
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+                    .accessibilityHint(String(localized: "video.fullscreen.close-hint", defaultValue: "Ferme la vidéo en plein écran", bundle: .main))
                     Spacer()
                 }
                 Spacer()
