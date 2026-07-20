@@ -14,6 +14,31 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **179i (en cours, branche `claude/laughing-thompson-n2i97z`, base `main` HEAD `f4ac661`)** :
+>   Consolidation design-system de `BlockedTab` (onglet « Bloqués » du hub Contacts `PeopleDiscoveryView`).
+>   L'empty-state était un **`VStack` bespoke** ré-implémentant à la main le primitive SDK partagé
+>   `MeeshyUI.EmptyStateView` — alors que son **frère dans le même dossier**, `CallsTab` (aussi hébergé
+>   par `PeopleDiscoveryView`), délègue déjà à `EmptyStateView(icon:title:subtitle:)`. 4 déficits :
+>   (1) **duplication** d'un pattern partagé (12e consommateur après le 168i BookmarksView) ;
+>   (2) **VoiceOver appauvri** (glyphe `.accessibilityHidden`, titre seul en focus, pas de
+>   `children: .combine`) ; (3) **glyphe gris muet** `theme.textMuted.opacity(0.4)` vs. héros indigo
+>   animé du composant partagé ; (4) **empty-state titre-seul** sans sous-titre de guidage (tous les
+>   autres empty-states ont titre + sous-titre explicatif). Fix = remplacer le `VStack` par
+>   `EmptyStateView(icon:"hand.raised.slash", title:…, subtitle:…)`, en réutilisant la clé i18n
+>   existante `contacts.blocked.empty` + **1 clé neuve** `contacts.blocked.empty-subtitle` (inline
+>   `String(localized:defaultValue:bundle:)`, 0 `.xcstrings`, même idiome que `CallsTab`). A11y
+>   `children: .combine` + label combiné, glyphe indigo, animation d'entrée hérités gratuitement.
+>   `import MeeshyUI` déjà présent. 1 fichier, 0 logique, 0 ViewModel, 0 test touché. `theme` conservé
+>   (`blockedRow`) ; `isDark` déjà mort AVANT ce changement (computed property, aucun warning) — laissé
+>   intact (hors scope). Aucun test ne référence `BlockedTab` (grep `MeeshyTests/` = 0). Call site
+>   unique `PeopleDiscoveryView:139` inchangé. Aucune PR iOS ouverte ne touche `BlockedTab` (≠
+>   `BlockedUsersView`, fichier distinct déjà consommateur) → 0 contention. 178i réservé par PRs
+>   ShareLinksView ouvertes → numéro 179i choisi. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `BlockedTab` empty-state SOLDÉ** : délègue désormais au primitive partagé, aligné sur `CallsTab`.
+>   Ne plus ré-hand-roll — tout futur ajustement d'empty-state passe par `MeeshyUI.EmptyStateView`
+>   (bénéficie aux 12 consommateurs).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 178i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **178i (en cours, branche `claude/laughing-thompson-4hn4bq`, base `main` HEAD `3c4d772`)** :
 >   Localisation + VoiceOver de la **carte historique d'envoi** de `MessageViewsDetailView` (onglet
