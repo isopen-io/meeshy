@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 150i, 2026-07-16)** — piste iOS indépendante (suffixe `i`).
+> - **150i (en cours, branche `claude/laughing-thompson-11e8cz`, base `main` HEAD `60503a1`)** :
+>   Feedback VoiceOver de validation de la phrase de confirmation de `DeleteAccountView` (flux
+>   destructif de suppression de compte). Le passage « phrase invalide → phrase exacte » — qui fait
+>   apparaître un checkmark vert ET déverrouille le bouton irréversible — était **purement visuel**.
+>   Fix : `.accessibilityValue` sur le `TextField` de confirmation (« Phrase correcte » / « Phrase
+>   incomplete ») + checkmark de validation masqué (`.accessibilityHidden(true)`). 1 fichier, 0
+>   logique, 0 test neuf, 2 clés i18n a11y inline. **0 PR ouverte ne touche `DeleteAccountView` → 0
+>   contention.** Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `DeleteAccountView` feedback validation SOLDÉ** : ne plus reprendre (champ `.accessibilityValue`
+>   + checkmark masqué). Hero ≥40pt (l.268) déjà figé 84i.
+> - **Base de départ 151i : `main` HEAD**. ⚠️ Stack de PR iOS 140i–149i (#1966→#1984) encore **ouvertes
+>   non mergées** (a11y : ThemedBackButton, MyStoriesView, FriendRequestListView, StoryExpiredContent,
+>   MessageViewsDetailView, ConversationDashboard, VoiceProfileManageView, StatsTimelineChart,
+>   StoryViewerContainer, ChangePasswordView) → **éviter ces fichiers** tant qu'ouvertes. Sinon :
+>   `StoryViewerView+Content` (i18n + `@State private` cross-file), traîne 2/1 `.system`
+>   (`ContextActionMenu`, `SecurityVerificationView`, `AudioPostComposerView`,
+>   `ConversationBackgroundComponents`, `BubbleStandardLayout`, `WebRTCVideoView`), ou passe
+>   state-of-the-art a11y au tarissement.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 165i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
 > - **165i (terminée, branche `claude/laughing-thompson-wnteas`, base `main` HEAD `b36ffd7`)** :
 >   Dynamic Type + VoiceOver de `StatsTimelineChart` (graphique d'activité Swift Charts, écran stats).
@@ -1913,6 +1932,15 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 
 ---
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 157i, 2026-07-17)** — piste iOS (suffixe `i`).
+> - **Contexte** : essaim iOS très dense — 17 PR a11y ouvertes (140i→156i, #1966→#2001) saturent l'axe **Dynamic Type + VoiceOver**. Base `main` HEAD `cc3132d` (le commit android/feed #2005 de la branche précédente a mergé → branche redémarrée à neuf depuis `main`).
+> - **157i (terminée, branche `claude/laughing-thompson-5h7uia`, base `main` HEAD `cc3132d`)** : **axe LOCALISATION** (pas Dynamic Type — déjà fait sur cette surface, résidus `.system(size:)` = glyphes déco/chrome figés doctrine 82i/86i) sur `FeedView+Attachments.swift` (composer de post feed). **F1** : 10 sites de toasts `FeedbackToastManager` en **français hardcodé** (non-traduisibles + fautes d'accent « publie »/« Echec ») → `String(localized: "feed.post.toast.*", defaultValue:, bundle: .main)` — **5 clés neuves** source `fr` accents corrigés (`pendingOffline`/`published`/`publishError`/`audioPublished`/`audioPublishError`), 2 littéraux d'erreur audio divergents unifiés. **F2** : `feedLabelForAttachment` + `sheetLabelForAttachment` retournaient « Photo/Vidéo/Audio/Fichier/Position » hardcodés (réimplémentation) → réutilisent les clés **SSOT `attachment.label.*`** (mêmes clés/defaults que `ConversationView+Composer.attachmentLabel` & `FeedCommentsSheet`) — **0 clé neuve**, cohérence cross-surface. Clés référencées **code-only via `defaultValue`** (convention projet, `sourceLanguage: fr`) → **0 édition xcstrings**, 0 logique, 0 test neuf. 1 fichier, +23/−20. Gate = CI `iOS Tests`.
+> - **Numéro 157i** = strictement > plus haut en vol (156i `BubbleExpandableText` #2001) pour éviter collision de doc.
+> - **⚠️ NE PLUS re-flagger** `FeedView+Attachments` : toasts + labels d'attachement soldés 157i ; Dynamic Type déjà migré (résidus `.system(size:)` = glyphes figés à dessein) ; les 6 `.accessibilityLabel` de la toolbar (clé = phrase FR) sont **déjà traduisibles** — ne pas rekey (orpheline les traductions).
+> - **Base de départ 158i : `main` HEAD** (toujours resync ; supprimer la branche mergée).
+> - **Différé prioritaire 158i+** : axe localisation reste fertile hors essaim Dynamic Type — auditer les `showSuccess("…")`/`showError("…")` français hardcodés ailleurs (ex: `StatusViewModel`, autres composers) ; gros lots Dynamic Type critiques toujours en attente `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationView+Composer` (12, prudent).
+
+| 157i | claude/laughing-thompson-5h7uia (iOS localisation `FeedView+Attachments` : F1 = 10 toasts FR hardcodés → `String(localized: "feed.post.toast.*")` (5 clés neuves source `fr`, accents corrigés publié/Échec, 2 erreurs audio unifiées) ; F2 = 2 helpers de label d'attachement réimplémentés → réutilisent SSOT `attachment.label.*` (0 clé neuve, parité `ConversationView+Composer`/`FeedCommentsSheet`) ; code-only via `defaultValue`, 0 édition xcstrings/0 logique/0 test neuf ; 1 fichier +23/−20 ; gate = CI `iOS Tests`) | ⏳ | ⏳ |
 > **POINTEUR iOS (156i, 2026-07-17)** — piste iOS (suffixe `i`).
 > - **156i (terminée, branche `claude/laughing-thompson-xzwk39`, base `main` HEAD `99c40d4`)** : Dynamic Type + VoiceOver de `BubbleExpandableText` (faux bouton « Voir plus » de la bulle, dépliage à sens unique). **1/1** `.font(.system(size: 12, .semibold))` → `MeeshyFont.relative` (vrai libellé, `.frame(minHeight:)` = hauteur mini, pas de gel). **VoiceOver** : `.accessibilityAction { expand() }` (le libellé n'est PAS un `Button` — `.highPriorityGesture` custom pour battre le long-press parent — donc la double-tape n'atteignait pas le geste ; action par défaut câblée explicitement) + `.accessibilityHint` (`bubble.expand.more.hint`, 5 langues de/en/es/fr/pt-BR). **Reduce Motion** respecté dans `expand()` via `@Environment(\.accessibilityReduceMotion)`. Logique de dépliage extraite en `private func expand()` (partagée tap + a11y, 0 duplication). Palette tokenisée 0 swap, `import MeeshyUI` présent. 2 fichiers (vue + xcstrings, insertion chirurgicale), 0 logique / 0 test neuf (parité 139i/155i). Gate = CI `iOS Tests`.
 > - **NE PLUS re-flagger** `BubbleExpandableText` (Dynamic Type + VoiceOver soldés 156i).
