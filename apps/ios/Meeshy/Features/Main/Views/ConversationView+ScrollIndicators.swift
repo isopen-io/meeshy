@@ -62,23 +62,28 @@ extension ConversationView {
     }
 
     private var scrollToBottomAccessibilityLabel: String {
+        let action = String(localized: "conversation.scroll-to-bottom.a11y",
+                            defaultValue: "Défiler vers le bas", bundle: .main)
         if scrollState.unreadBadgeCount > 0 {
-            return "\(scrollState.unreadBadgeCount) messages non lus, defiler vers le bas"
+            let unread = String(format: String(localized: "conversation.scroll-to-bottom.a11y-unread",
+                                defaultValue: "%d messages non lus", bundle: .main),
+                                scrollState.unreadBadgeCount)
+            return "\(unread), \(action)"
         }
         if hasTypingIndicator {
-            return "\(typingLabel), defiler vers le bas"
+            return "\(typingLabel), \(action)"
         }
-        return "Defiler vers le bas"
+        return action
     }
 
     var unreadAttachmentTypeLabel: String? {
         guard let att = unreadAttachment else { return nil }
         switch att.type {
-        case .image: return "Photo"
-        case .video: return "Video"
-        case .audio: return "Audio"
-        case .file: return "Fichier"
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
+        case .audio: return String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
+        case .file: return String(localized: "attachment.label.file", defaultValue: "File", bundle: .main)
+        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
         }
     }
 
@@ -122,9 +127,9 @@ extension ConversationView {
     var typingLabel: String {
         let names = typingObserver.typingUsernames
         switch names.count {
-        case 1: return "\(names[0]) écrit"
-        case 2: return "\(names[0]) et \(names[1]) écrivent"
-        default: return "\(names.count) personnes écrivent"
+        case 1: return String(format: String(localized: "typing.named", bundle: .main), names[0])
+        case 2: return String(format: String(localized: "typing.double", bundle: .main), names[0], names[1])
+        default: return String(localized: "typing.several", bundle: .main)
         }
     }
 

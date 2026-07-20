@@ -23,27 +23,31 @@ const mockFirebaseMessagingSend = jest.fn();
 const mockFirebaseInitializeApp = jest.fn();
 const mockFirebaseCredentialCert = jest.fn().mockReturnValue({});
 
-// Shared shape for both default and named-export sides of the mock.
-// Production uses `import * as admin from 'firebase-admin'` (or `import admin
-// from 'firebase-admin'`) and then accesses `admin.apps`, `admin.initializeApp`,
-// `admin.credential`, `admin.messaging()`. Under ts-jest's CJS interop, those
-// land on the top-level namespace, not on `.default`, so we expose both.
-const mockFirebaseMessagingFactory = jest.fn(() => ({
+// firebase-admin 14 modular API: production imports `getApps`/`initializeApp`/
+// `cert` from 'firebase-admin/app' and `getMessaging` from
+// 'firebase-admin/messaging' (the v13 namespace `admin.apps`/`admin.credential`/
+// `admin.messaging()` no longer exists).
+const mockFirebaseGetApps = jest.fn(() => []);
+const mockFirebaseGetMessaging = jest.fn(() => ({
   send: mockFirebaseMessagingSend,
 }));
-const firebaseAdminMockShape = {
-  apps: [],
+const firebaseAppMockShape = {
+  getApps: mockFirebaseGetApps,
   initializeApp: mockFirebaseInitializeApp,
-  credential: {
-    cert: mockFirebaseCredentialCert,
-  },
-  messaging: mockFirebaseMessagingFactory,
+  cert: mockFirebaseCredentialCert,
+};
+const firebaseMessagingMockShape = {
+  getMessaging: mockFirebaseGetMessaging,
 };
 
-jest.mock('firebase-admin', () => ({
+jest.mock('firebase-admin/app', () => ({
   __esModule: true,
-  default: firebaseAdminMockShape,
-  ...firebaseAdminMockShape,
+  ...firebaseAppMockShape,
+}));
+
+jest.mock('firebase-admin/messaging', () => ({
+  __esModule: true,
+  ...firebaseMessagingMockShape,
 }));
 
 // APNS mock
@@ -219,12 +223,14 @@ describe('PushNotificationService', () => {
     // Reset module cache to get fresh config
     jest.resetModules();
 
-    // Re-apply mocks after module reset. Mirror the top-level mock shape so
-    // both `admin.X` and `admin.default.X` resolve under ts-jest CJS interop.
-    jest.doMock('firebase-admin', () => ({
+    // Re-apply mocks after module reset (firebase-admin 14 modular subpaths).
+    jest.doMock('firebase-admin/app', () => ({
       __esModule: true,
-      default: firebaseAdminMockShape,
-      ...firebaseAdminMockShape,
+      ...firebaseAppMockShape,
+    }));
+    jest.doMock('firebase-admin/messaging', () => ({
+      __esModule: true,
+      ...firebaseMessagingMockShape,
     }));
 
     jest.doMock('@parse/node-apn', () => ({
