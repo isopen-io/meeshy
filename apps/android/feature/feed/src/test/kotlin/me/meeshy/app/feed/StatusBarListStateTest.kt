@@ -110,4 +110,24 @@ class StatusBarListStateTest {
 
         assertThat(base.reacted("zzz", "❤️")).isEqualTo(base)
     }
+
+    @Test
+    fun `updated replaces the entry in place preserving its position`() {
+        val base = StatusBarListState.Empty
+            .appended(page(entry("a"), entry("b"), entry("c")))
+
+        val state = base.updated(StatusEntry(id = "b", userId = "u", moodEmoji = "🎉", content = "edited"))
+
+        assertThat(state.statuses.map { it.id }).containsExactly("a", "b", "c").inOrder()
+        val updated = state.statuses[1]
+        assertThat(updated.moodEmoji).isEqualTo("🎉")
+        assertThat(updated.content).isEqualTo("edited")
+    }
+
+    @Test
+    fun `updated is inert for a status not in the list`() {
+        val base = StatusBarListState.Empty.appended(page(entry("a")))
+
+        assertThat(base.updated(entry("zzz"))).isEqualTo(base)
+    }
 }

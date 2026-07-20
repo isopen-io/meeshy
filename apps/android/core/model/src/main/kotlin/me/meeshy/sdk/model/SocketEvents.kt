@@ -288,6 +288,42 @@ data class SocketStoryReactedData(
     val emoji: String,
 )
 
+/**
+ * `status:created` — a friend published a mood status. The created post is nested
+ * under [status] (mirror of iOS `SocketStatusCreatedData`); the gateway does not echo
+ * a [clientMutationId] for statuses, so an own-status echo is de-duplicated by id.
+ */
+@Serializable
+data class SocketStatusCreatedData(
+    val status: ApiPost,
+    val clientMutationId: String? = null,
+)
+
+/** `status:updated` — a mood status was edited; [status] carries the full new post. */
+@Serializable
+data class SocketStatusUpdatedData(
+    val status: ApiPost,
+)
+
+/** `status:deleted` — a mood status was removed. Mirror of iOS `SocketStatusDeletedData`. */
+@Serializable
+data class SocketStatusDeletedData(
+    val statusId: String,
+    val authorId: String = "",
+)
+
+/**
+ * `status:reacted` — a user reacted to a mood status. Carries no aggregate count
+ * (mirror of iOS `SocketStatusReactedData`), so the bar increments by one, skipping
+ * the reactor's own echo (guarded in the ViewModel).
+ */
+@Serializable
+data class SocketStatusReactedData(
+    val statusId: String,
+    val userId: String,
+    val emoji: String,
+)
+
 @Serializable
 data class SocketStoryUnreactedData(
     val storyId: String,

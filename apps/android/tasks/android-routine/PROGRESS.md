@@ -1,5 +1,53 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **statuses realtime socket wiring** landed (slice `status-realtime-socket`, feature-parity §G →
+> "Statuses realtime socket wiring" — the live-bar follow-up the `status-strings-i18n` slice flagged as Next). Parity
+> source: iOS `StatusViewModel.subscribeToSocketEvents` (handlers for `status:created` / `status:updated` /
+> `status:deleted` / `status:reacted`). **Naming:** the prompt's `status:new` / `status:reaction` do not exist in the
+> codebase; the canonical `SERVER_EVENTS` (source of truth `packages/shared/types/socketio-events.ts`) are
+> `status:created/updated/deleted/reacted/unreacted`. **(1)** four new `@Serializable` `:core:model` DTOs
+> (`SocketStatusCreatedData{status: ApiPost, clientMutationId?}`, `SocketStatusUpdatedData{status}`,
+> `SocketStatusDeletedData{statusId, authorId}`, `SocketStatusReactedData{statusId, userId, emoji}` — mirrors of the
+> iOS structs, `authorId` defaulted for defensive decode). **(2)** `SocialSocketManager` gains the four
+> `statusCreated/Updated/Deleted/Reacted` `SharedFlow`s + `listen("status:created"…)` lines in `attach()` (same
+> `buf()`/`asSharedFlow()`/`listen` harness as the post/story events; `RealtimeSessionCoordinator.attach()` already
+> drives it — no coordinator change). **(3)** a new pure `StatusBarListState.updated(entry)` reducer (replace in place
+> by id, **inert when absent** so a foreign update never smuggles an entry in). **(4)** `StatusesViewModel` injects
+> `SocialSocketManager` (5th ctor param) and folds the deltas in a new `subscribeToSocketEvents()` launched from
+> `init`: `status:created` → `toStatusEntry()` then `created` **only if not already present** (iOS `if !contains` — no
+> re-hoist, no dup; the viewer's own echo is inert since `setStatus` already inserted the server id); `status:updated`
+> → `updated`; `status:deleted` → `removed`; `status:reacted` → `reacted` **guarded by `payload.userId !=
+> currentUserId()`** (skip the reactor's own echo, already applied optimistically by `react`). A non-`STATUS` payload
+> (`toStatusEntry` → null) is ignored. Deltas fold into `listState` only — the next `fetchFirstPage` reconciles the
+> authoritative page (matches iOS's in-memory `statuses` mutation; the L1/L2 cache tiers are reconciled by
+> fetch/publish, not per-delta — noted as a deliberate scope choice to avoid a socket delta for one mode's feed
+> polluting the other's persisted bar, since one Android VM drives both feeds). **+15 tests** — `StatusBarListStateTest`
+> (+2: updated in-place-preserving-position, updated-absent-inert), `SocialSocketManagerTest` (+4: created/updated/
+> deleted/reacted JSON decode via the captured-handler harness), `StatusesViewModelTest` (+9: created-hoist,
+> created-echo-leaves-in-place, non-status-ignored, updated-in-place, updated-absent-inert, deleted-drop,
+> reacted-other-bumps, reacted-own-echo-ignored). **Mutation check (RED proof):** neutralising the own-echo guard
+> (`|| true`) fails **exactly** `a status reacted echo of the viewer's own reaction is ignored`; neutralising the
+> created present-guard fails **exactly** `a status created echo of an already-present status leaves it in place`
+> (42 tests, 2 failed, no collateral) — behavioural, not tautological. The created-echo test asserts **position
+> preserved** (`[b, a]` stays `[b, a]`), not just "no duplicate", so it catches the guard removal the `created`
+> reducer's own dedup would otherwise mask. **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download 403s through
+> the proxy; `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green, `:sdk-core:testDebugUnitTest`
+> **849** green (`SocialSocketManagerTest` 12/12, was 8 + 4), `:feature:feed:testDebugUnitTest` green
+> (`StatusesViewModelTest` 42/42 was 33 + 9, `StatusBarListStateTest` 13/13 was 11 + 2), full `:app:assembleDebug` +
+> the three test modules → **BUILD SUCCESSFUL**. (One flaky `:sdk-core` `MediaDownloadPreferencesStoreTest`
+> `TimeoutCancellationException` under parallel all-module load appeared on the first pass — the documented DataStore/
+> Robolectric parallel-load family, same as `ThemeStoreTest`; **passes green in isolation** and green on the final
+> gate run; a module this diff does not touch.) Reviewer **PASS** (diff `apps/android` only — 4 production
+> (SocketEvents DTOs, SocialSocketManager flows, StatusBarListState reducer, StatusesViewModel wiring) + 3 test +
+> tracking; **SDK purity** — DTOs + event bus are stateless building blocks in `:core:model`/`:sdk-core`, the
+> "which delta does what" orchestration stays in the `:feature:feed` VM; **SSOT** — reuses `toStatusEntry`,
+> `created`/`updated`/`removed`/`reacted` reducers, one own-echo guard; **UDF** — immutable `StatusBarListState`,
+> transitions pure, collectors on `viewModelScope` (cancellation-safe); **coherence** — the bar now updates live like
+> iOS; no coverage floor lowered, no test weakened). **Next slice:** §G — extend the socket wiring to
+> `status:unreacted` (decrement-and-clamp reducer, a symmetric SOTA improvement iOS lacks in its bar handlers), OR
+> pivot to the next build-order area's highest-value unchecked box (§H Calls WebRTC core, or another §-area gap) —
+> statuses are now feature-complete for realtime + cache + i18n + composer + popover parity.
+
 > On 2026-07-20 the **statuses-area FR/ES/PT localisation** landed (slice `status-strings-i18n`, feature-parity §G →
 > "Statuses area i18n" — the tracked i18n follow-up the `status-feed-mode-toggle` / `status-bar-l2-cache` slices
 > flagged: the whole `status_*` family shipped in `values/` only). Prisme parity: a user whose device is FR/ES/PT must

@@ -2022,6 +2022,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       deliberately full-module so any future feed key added without its FR/ES/PT siblings turns red before it ships.
       Mutation-proven RED: pre-translation the parity test failed with exactly the 26 missing `status_*` keys per
       locale. Pure resource/parity slice — no product logic touched.
+- [x] Statuses **realtime socket wiring** (live bar updates) — **landed** (slice `status-realtime-socket`,
+      2026-07-20): full parity with iOS `StatusViewModel.subscribeToSocketEvents`. The social event bus gains four
+      status flows — `SocialSocketManager` now `listen`s `status:created` / `status:updated` / `status:deleted` /
+      `status:reacted` (canonical `SERVER_EVENTS` names — the prompt's `status:new`/`status:reaction` are informal
+      labels), each decoding a new `@Serializable` `:core:model` DTO (`SocketStatusCreatedData{status: ApiPost}`,
+      `SocketStatusUpdatedData`, `SocketStatusDeletedData{statusId,authorId}`, `SocketStatusReactedData{statusId,
+      userId,emoji}` — mirrors of the iOS structs). `StatusesViewModel` folds the deltas straight into the live
+      `StatusBarListState`: a friend's `status:created` hoists via `created` (mapped through `toStatusEntry`,
+      **de-duplicated + not re-hoisted if already present** — iOS `if !contains`); `status:updated` replaces in
+      place via the new pure `StatusBarListState.updated` reducer (inert when absent); `status:deleted` drops via
+      `removed`; `status:reacted` bumps via `reacted`, **skipping the reactor's own echo** (`payload.userId !=
+      currentUserId()`, since `react` already applied it optimistically). A non-`STATUS` payload (`toStatusEntry` →
+      null) is ignored. Deltas fold into `listState` only; the next network `fetchFirstPage` reconciles the
+      authoritative page (matches iOS's in-memory mutation — the cache tiers are reconciled by fetch/publish, not by
+      each socket delta). +15 tests (2 `StatusBarListStateTest`: `updated` in-place/inert; 4 `SocialSocketManagerTest`:
+      created/updated/deleted/reacted decode; 9 `StatusesViewModelTest`: created-hoist, created-echo-in-place,
+      non-status-ignored, updated-in-place, updated-absent-inert, deleted-drop, reacted-other-bumps, reacted-own-echo-
+      ignored). Mutation-proven RED: neutralising the own-echo guard fails **exactly** `a status reacted echo of the
+      viewer's own reaction is ignored`; neutralising the created present-guard fails **exactly** `a status created
+      echo of an already-present status leaves it in place` (2 of 42 fail, no collateral). SDK purity: the DTOs +
+      event bus are stateless building blocks in `:core:model` / `:sdk-core`; the "which delta does what to the bar"
+      orchestration stays in the `:feature:feed` VM.
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)

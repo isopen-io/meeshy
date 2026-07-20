@@ -15,11 +15,13 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.status.StatusBarCache
 import me.meeshy.sdk.status.StatusBarCacheRepository
 import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.status.StatusRepository
 import me.meeshy.sdk.status.orderedForBar
+import me.meeshy.sdk.status.toStatusEntry
 import javax.inject.Inject
 
 /**
@@ -56,6 +58,7 @@ class StatusesViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val statusBarCache: StatusBarCache,
     private val statusBarCacheRepository: StatusBarCacheRepository,
+    private val socialSocket: SocialSocketManager,
 ) : ViewModel() {
 
     private val mode = MutableStateFlow(StatusFeedMode.FRIENDS)
@@ -76,8 +79,56 @@ class StatusesViewModel @Inject constructor(
                 project(list, user, st, m)
             }.collect { projected -> _state.value = projected }
         }
+        subscribeToSocketEvents()
         loadInitial()
     }
+
+    /**
+     * Fold realtime social-socket deltas into the live bar — parity with iOS
+     * `StatusViewModel.subscribeToSocketEvents`. A `status:created` from a friend is
+     * hoisted to the front (de-duplicated by id, so the viewer's own echo — the gateway
+     * emits no client mutation id for statuses — is inert since [setStatus] already
+     * inserted it); a `status:updated` replaces the entry in place; a `status:deleted`
+     * drops it; a `status:reacted` bumps the reaction count, **skipping the reactor's
+     * own echo** ([react] already applied it optimistically). A payload that does not
+     * map to a mood status (a non-`STATUS` post) is ignored. Deltas fold straight into
+     * [listState]; the next network [fetchFirstPage] reconciles the authoritative page.
+     */
+    private fun subscribeToSocketEvents() {
+        viewModelScope.launch {
+            socialSocket.statusCreated.collect { payload ->
+                val entry = payload.status.toStatusEntry() ?: return@collect
+                if (listState.value.statuses.none { it.id == entry.id }) {
+                    listState.update { it.created(entry) }
+                }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.statusUpdated.collect { payload ->
+                val entry = payload.status.toStatusEntry() ?: return@collect
+                listState.update { it.updated(entry) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.statusDeleted.collect { payload ->
+                listState.update { it.removed(payload.statusId) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.statusReacted.collect { payload ->
+                if (payload.userId != currentUserId()) {
+                    listState.update { it.reacted(payload.statusId, payload.emoji) }
+                }
+            }
+        }
+    }
+
+    /**
+     * The signed-in user's id, or null for an anonymous session — used to drop the
+     * viewer's own `status:reacted` echo (already applied optimistically by [react]).
+     * Mirrors the iOS `payload.userId != currentUser?.id` guard.
+     */
+    private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
 
     /**
      * First page. Guarded so a re-entrant call (e.g. an `onAppear` re-fire) while a
