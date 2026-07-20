@@ -6,8 +6,10 @@ import XCTest
 ///
 /// Contrat : le titre visible du bouton n'affiche que le nombre nu ("5") ;
 /// l'accessibilityLabel doit exposer le SENS du compteur avec accord
-/// singulier/pluriel (Automatic Grammar Agreement, `inflect: true`) —
-/// sinon VoiceOver annonce "5, bouton" sans indiquer de quoi il s'agit.
+/// singulier/pluriel résolu explicitement — sinon VoiceOver annonce
+/// "5, bouton" sans indiquer de quoi il s'agit. (L'AGA inline
+/// `^[…](inflect: true)` est proscrit ici : sans entrée String Catalog,
+/// le markup fuit en brut sur iOS 18.x — cf. `ExplicitPluralLabelTests`.)
 ///
 /// `@MainActor` : `PostStatAccessibility` vit dans le target app, isolé
 /// main-actor-par-défaut (Swift 6.2) ; les appels synchrones depuis les tests
