@@ -21,8 +21,12 @@ struct MessageEditsDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             timelineBanner(
                 icon: "pencil.and.list.clipboard",
-                text: revisions.isEmpty ? "Aucune modification" : "Historique",
-                detail: revisions.isEmpty ? "Ce message n'a pas ete modifie" : "\(revisions.count) version\(revisions.count > 1 ? "s" : "") precedente\(revisions.count > 1 ? "s" : "")",
+                text: revisions.isEmpty
+                    ? String(localized: "message-detail.edits.none-title", defaultValue: "Aucune modification", bundle: .main)
+                    : String(localized: "message-detail.edits.history-title", defaultValue: "Historique", bundle: .main),
+                detail: revisions.isEmpty
+                    ? String(localized: "message-detail.edits.none-detail", defaultValue: "Ce message n'a pas été modifié", bundle: .main)
+                    : previousVersionsDetail(revisions.count),
                 count: revisions.isEmpty ? nil : "\(revisions.count)",
                 accent: accent
             )
@@ -30,7 +34,7 @@ struct MessageEditsDetailView: View {
             if revisions.isEmpty {
                 emptyStateView(
                     icon: "pencil.slash",
-                    text: "L'historique des modifications apparait ici",
+                    text: String(localized: "message-detail.edits.empty", defaultValue: "L'historique des modifications apparaît ici", bundle: .main),
                     accent: accent
                 )
             } else {
@@ -38,7 +42,7 @@ struct MessageEditsDetailView: View {
                 // sees the "as-is" content as the anchor, then the
                 // chronological revisions below it.
                 editRevisionRow(
-                    header: "Actuel",
+                    header: String(localized: "message-detail.edits.current", defaultValue: "Actuel", bundle: .main),
                     content: message.content,
                     timestamp: message.editedAt ?? message.updatedAt,
                     accent: accent,
@@ -47,7 +51,7 @@ struct MessageEditsDetailView: View {
 
                 ForEach(Array(revisions.enumerated()), id: \.element.id) { index, revision in
                     editRevisionRow(
-                        header: "Version \(revisions.count - index)",
+                        header: String(format: String(localized: "message-detail.edits.version-n", defaultValue: "Version %d", bundle: .main), revisions.count - index),
                         content: revision.content,
                         timestamp: revision.editedAt,
                         accent: accent,
@@ -91,6 +95,10 @@ struct MessageEditsDetailView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
         )
+        // Single VoiceOver stop per revision: "Actuel, 14:30, <contenu>".
+        // The colored rail is decorative (state is carried by the header text,
+        // never by color alone).
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Shared Components (copied from MessageDetailSheet)
@@ -100,6 +108,7 @@ struct MessageEditsDetailView: View {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(text)
@@ -122,6 +131,9 @@ struct MessageEditsDetailView: View {
                         Capsule()
                             .fill(accent.opacity(0.12))
                     )
+                    // Numeric badge duplicates the count already spelled out in
+                    // `detail` ("3 versions précédentes") — hidden from VoiceOver.
+                    .accessibilityHidden(true)
             }
         }
         .padding(12)
@@ -133,22 +145,35 @@ struct MessageEditsDetailView: View {
                         .stroke(accent.opacity(0.12), lineWidth: 0.5)
                 )
         )
+        // Header banner reads as one stop: title + detail sentence.
+        .accessibilityElement(children: .combine)
     }
 
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
         VStack(spacing: 8) {
+            // Decorative empty-state glyph — kept at a fixed 28pt (illustration,
+            // not text) and hidden from VoiceOver via the `.combine` parent.
             Image(systemName: icon)
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Formatting
+
+    private func previousVersionsDetail(_ count: Int) -> String {
+        let format = count == 1
+            ? String(localized: "message-detail.edits.previous-one", defaultValue: "%d version précédente", bundle: .main)
+            : String(localized: "message-detail.edits.previous-other", defaultValue: "%d versions précédentes", bundle: .main)
+        return String(format: format, count)
+    }
 
     private func formatTimeFR(_ date: Date) -> String {
         date.formatted(.dateTime.hour().minute())

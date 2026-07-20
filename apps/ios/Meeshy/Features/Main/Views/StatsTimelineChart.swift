@@ -21,6 +21,8 @@ struct StatsTimelineChart: View {
                 )
                 .foregroundStyle(Color(hex: color))
                 .interpolationMethod(.catmullRom)
+                .accessibilityLabel(shortDate(point.date))
+                .accessibilityValue(messagesValue(point.messages))
 
                 AreaMark(
                     x: .value("Date", shortDate(point.date)),
@@ -34,6 +36,7 @@ struct StatsTimelineChart: View {
                     )
                 )
                 .interpolationMethod(.catmullRom)
+                .accessibilityHidden(true)
             }
         }
         .chartXAxis {
@@ -75,6 +78,13 @@ struct StatsTimelineChart: View {
             localized: "stats.timeline.chart.a11y.summary",
             defaultValue: "\(total) messages total, peak of \(peak) in one day, \(latest) on the most recent day",
             bundle: .main
+        )
+    }
+
+    private func messagesValue(_ count: Int) -> String {
+        String(
+            format: String(localized: "stats.timeline.point.a11y", defaultValue: "%d messages", bundle: .main),
+            count
         )
     }
 
