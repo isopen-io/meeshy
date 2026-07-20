@@ -1,5 +1,51 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **country / dial-code catalogue core** landed (slice `auth-country-catalog`,
+> feature-parity §A → advances "Phone entry with searchable country-code picker" `[ ]` → `[~]`).
+> This is the highest-value pure core in the Auth build-order area (first in the parity sequence,
+> 19 unchecked boxes, previously login-only). Parity source: iOS `CountryPicker`
+> (`packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/CountryPicker.swift`). One pure, immutable
+> `:core:model` object (`CountryCatalog` + a `Country` data class), fully TDD-covered. It carries the
+> **verbatim** E.164 `dialCodes` table (241 ISO 3166-1 alpha-2 → dial-code entries) and the `priority`
+> head ordering, and exposes the pure resolvers the picker + any flag-display site need: **(1)**
+> `flag(iso)` derives the emoji flag from a 2-letter ISO code via Unicode regional indicators, returning
+> the `🌐` globe for anything that is not exactly two ASCII letters (wrong length, digits, accented
+> letters); **(2)** `flagForCountryCode(iso?)` gates that on catalogue membership (null / unknown → globe);
+> **(3)** `dialCode(iso?)` looks up the dial code case-insensitively; **(4)** `isoForPhoneNumber(number?)`
+> deduces the country from an international number by the **longest** matching dial code, preferring the
+> priority country on a shared prefix (`+44`→`GB` over GG/JE/IM, `+1`→`US` over CA, `+7`→`RU` over KZ) then
+> a **deterministic** ISO-alphabetical tie-break — an SOTA improvement over iOS, which falls back to a
+> `Locale`-dependent name sort for the obscure non-priority collisions (`+590`→BL); it normalises a
+> `00`-international prefix to `+`, and returns `null` for a null/empty number, a number with no leading `+`,
+> or one matching no dial code; **(5)** `flagForPhoneNumber` chains 4→1; **(6)** `build(displayName)` returns
+> the full list sorted priority-first (in `priority` order) then by localized name, with the name resolver
+> **injected** so the core stays `Locale`-free and JVM-testable (the app supplies
+> `java.util.Locale("", iso).getDisplayCountry(...)`); **(7)** `country(forPhoneNumber, displayName)` returns
+> the full `Country`; **(8)** `search(query, countries)` filters case-insensitively over name / dial code /
+> ISO with an empty query passing through unchanged; **(9)** `accessibilityLabel` = `"name, +dial"`.
+> **SOTA note:** iOS keeps the tables + logic inside a SwiftUI `View`; Android lifts the whole thing into a
+> pure stateless SSOT object so every resolver is unit-testable and reusable by any flag-display site (a
+> stored `MeeshyUser.phoneNumber` / `registrationCountry`), not just the picker sheet. **+29 behavioural
+> tests** (`CountryCatalogTest` — flag valid/lowercase/wrong-length/non-letter/globe; flagForCountryCode
+> known/null/unknown; dialCode known/lowercase/null/unknown; isoForPhoneNumber plain-E164 / `00`-normalise /
+> priority-tie US+RU+GB / longest-match AG / non-priority alpha-tie BL / null-empty-non-international /
+> no-match-and-bare-`+`; flagForPhoneNumber resolved/globe; build size+key-set / priority-prefix /
+> name-sorted-tail / attached-fields; country full-entry / null; search empty-passthrough / by-name /
+> by-dial / by-iso / no-match; accessibilityLabel format). Flag expectations are hardcoded emoji literals,
+> independent of the production construction (not tautological). **Mutation check (RED proof):** dropping the
+> priority rank from the tie-break (`minWith(compareBy({ rank[it] }, { it }))` → `minOrNull()`, i.e. plain
+> ISO-alpha min) fails **exactly** `isoForPhoneNumber_prefersPriorityCountryOnSharedDialCode` (29 run, 1
+> failed, no collateral) — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (new suite 29/29) + full `:app:assembleDebug`
+> → **BUILD SUCCESSFUL** (4m48s). Reviewer **PASS** (diff `apps/android` only — 1 new production file + 1
+> test + tracking; **SDK purity** — a data class + a pure stateless catalogue object in `:core:model`, zero
+> framework/`Locale` deps, the searchable-picker sheet + phone field stay app-side, pending; **SSOT** — one
+> catalogue, one flag/phone resolver reused by every flag-display site; **Prisme/UX** — N/A pure data; no
+> coverage floor lowered, no test weakened). **Next slice:** the app-side searchable country-picker sheet +
+> phone-entry composable (once the registration-wizard scaffold exists) with `java.util.Locale`-backed
+> display names, closing §A L283 toward `[x]`; OR another §A pure core (username/email/phone live-availability
+> debounce+suggestions, region→language inference at signup); OR the tracked Kover 90% coverage-gate infra.
+
 > On 2026-07-20 the **Prisme device-locale 4th-priority + BCP-47 normalisation core** landed (slice
 > `prisme-device-locale-priority`, feature-parity §D → advances "Automatic per-user translation display
 > (resolution: system → regional → custom → original)" `[ ]` → `[~]`). This is the single most product-central
