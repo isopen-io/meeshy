@@ -55,6 +55,7 @@ struct TrackingLinkDetailView: View {
                 Image(systemName: "chart.bar.fill").font(.title2)
                     .foregroundColor(link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500)
             }
+            .accessibilityHidden(true)
             Text(link.displayName).font(.headline.weight(.bold)).foregroundColor(theme.textPrimary)
             Text(link.shortUrl).font(.system(.caption, design: .monospaced))
                 .foregroundColor(theme.textSecondary).lineLimit(1)
@@ -68,6 +69,10 @@ struct TrackingLinkDetailView: View {
         .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccentHex))
             .overlay(RoundedRectangle(cornerRadius: 20)
                 .stroke(MeeshyColors.trackingAccent.opacity(0.2), lineWidth: 1)))
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(link.isActive
+            ? String(localized: "common.active", defaultValue: "Actif", bundle: .main)
+            : String(localized: "common.inactive", defaultValue: "Inactif", bundle: .main))
     }
 
     private func utmTag(_ value: String, color: Color) -> some View {
@@ -85,14 +90,11 @@ struct TrackingLinkDetailView: View {
                                color: copiedFeedback ? MeeshyColors.success : MeeshyColors.trackingAccent) {
                 UIPasteboard.general.string = link.shortUrl
                 HapticFeedback.success()
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "tracking.link.detail.a11y.copied", defaultValue: "Lien copié", bundle: .main))
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
-            detailActionButton(String(localized: "tracking.link.detail.share", defaultValue: "Partager", bundle: .main), icon: "square.and.arrow.up", color: MeeshyColors.trackingAccent) {
-                guard let url = URL(string: link.shortUrl) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                presentVC(av)
-            }
+            shareActionButton
             detailActionButton(String(localized: "tracking.link.detail.qr", defaultValue: "QR Code", bundle: .main), icon: "qrcode", color: MeeshyColors.brandPrimary) {
                 generateQRAndShare()
             }
@@ -104,16 +106,40 @@ struct TrackingLinkDetailView: View {
 
     private func detailActionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 5) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
-                        .frame(width: 46, height: 46)
-                    Image(systemName: icon).font(.body)
-                        .foregroundColor(color)
+            actionButtonLabel(label, icon: icon, color: color)
+        }
+    }
+
+    // Native ShareLink for the tracking URL — replaces a hand-rolled
+    // UIActivityViewController + top-VC walk. iPad popover anchoring is
+    // handled by the system, matching the app's dominant share idiom.
+    private var shareActionButton: some View {
+        let label = String(localized: "tracking.link.detail.share", defaultValue: "Partager", bundle: .main)
+        return Group {
+            if let url = URL(string: link.shortUrl) {
+                ShareLink(item: url) {
+                    actionButtonLabel(label, icon: "square.and.arrow.up", color: MeeshyColors.trackingAccent)
                 }
-                Text(label).font(.caption2.weight(.medium)).foregroundColor(theme.textSecondary)
+            } else {
+                ShareLink(item: link.shortUrl) {
+                    actionButtonLabel(label, icon: "square.and.arrow.up", color: MeeshyColors.trackingAccent)
+                }
             }
-        }.frame(maxWidth: .infinity)
+        }
+    }
+
+    private func actionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 5) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
+                    .frame(width: 46, height: 46)
+                Image(systemName: icon).font(.body)
+                    .foregroundColor(color)
+            }
+            .accessibilityHidden(true)
+            Text(label).font(.caption2.weight(.medium)).foregroundColor(theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Main stats
@@ -128,6 +154,7 @@ struct TrackingLinkDetailView: View {
             if let last = link.lastClickedAt {
                 HStack {
                     Image(systemName: "clock").foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
                     Text(String(localized: "tracking.link.detail.lastClick", defaultValue: "Dernier clic : \(last.formatted(date: .abbreviated, time: .shortened))", bundle: .main))
                         .font(.footnote).foregroundColor(theme.textMuted)
                 }
@@ -139,6 +166,7 @@ struct TrackingLinkDetailView: View {
     private func bigStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon).font(.title2).foregroundColor(Color(hex: color))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(value).font(.title2.weight(.bold)).foregroundColor(theme.textPrimary)
                 Text(label).font(.caption).foregroundColor(theme.textSecondary)
@@ -148,6 +176,7 @@ struct TrackingLinkDetailView: View {
         .padding(14).frame(maxWidth: .infinity)
         .background(RoundedRectangle(cornerRadius: 14).fill(theme.surfaceGradient(tint: color))
             .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Geo breakdown
@@ -169,6 +198,7 @@ struct TrackingLinkDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: icon).font(.footnote).foregroundColor(color)
+                    .accessibilityHidden(true)
                 sectionTitle(title)
             }
             if items.isEmpty {
@@ -203,6 +233,7 @@ struct TrackingLinkDetailView: View {
             Text("\(count)").font(.caption.weight(.semibold)).foregroundColor(theme.textSecondary)
                 .frame(width: 30, alignment: .trailing)
         }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Timeline des clics
@@ -212,6 +243,7 @@ struct TrackingLinkDetailView: View {
             HStack {
                 Image(systemName: "list.bullet.clipboard").font(.footnote)
                     .foregroundColor(MeeshyColors.trackingAccent)
+                    .accessibilityHidden(true)
                 sectionTitle(String(localized: "tracking.link.detail.recentClicks", defaultValue: "DERNIERS CLICS", bundle: .main))
                 Spacer()
                 if viewModel.isLoadingMore { ProgressView().scaleEffect(0.7) }
@@ -236,6 +268,7 @@ struct TrackingLinkDetailView: View {
                 Image(systemName: deviceIcon(click.device)).font(.subheadline)
                     .foregroundColor(deviceColor(click.device))
             }
+            .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     if let country = click.country { Text(countryFlag(country)).font(.callout) }
@@ -260,9 +293,13 @@ struct TrackingLinkDetailView: View {
                     .font(.caption2).foregroundColor(theme.textMuted)
                 Circle().fill(click.redirectStatus == "confirmed" ? MeeshyColors.success : MeeshyColors.error)
                     .frame(width: 6, height: 6)
+                    .accessibilityLabel(click.redirectStatus == "confirmed"
+                        ? String(localized: "tracking.link.detail.a11y.redirectConfirmed", defaultValue: "Redirection confirmée", bundle: .main)
+                        : String(localized: "tracking.link.detail.a11y.redirectFailed", defaultValue: "Redirection échouée", bundle: .main))
             }
         }
         .padding(.horizontal, 12).padding(.vertical, 10)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - UTM info
@@ -290,6 +327,7 @@ struct TrackingLinkDetailView: View {
 
     private func sectionTitle(_ text: String) -> some View {
         Text(text).font(.caption.weight(.semibold)).foregroundColor(theme.textSecondary).kerning(0.8)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func infoRow(_ label: String, value: String) -> some View {
@@ -299,6 +337,7 @@ struct TrackingLinkDetailView: View {
             Text(value).font(.footnote.weight(.medium)).foregroundColor(theme.textPrimary).lineLimit(1)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
+        .accessibilityElement(children: .combine)
     }
 
     private func deviceIcon(_ device: String?) -> String {
