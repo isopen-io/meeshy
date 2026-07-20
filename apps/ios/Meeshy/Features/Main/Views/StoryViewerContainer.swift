@@ -111,8 +111,11 @@ struct StoryViewerContainer: View {
         ZStack {
             VStack(spacing: 16) {
                 Image(systemName: "exclamationmark.circle")
+                    // Doctrine 84i/86i : glyphe hero d'etat d'erreur (~38pt, decoratif) → fige ;
+                    // le titre ci-dessous porte le sens. Masque de VoiceOver.
                     .font(.system(size: 38, weight: .regular))
                     .foregroundColor(.white.opacity(0.8))
+                    .accessibilityHidden(true)
 
                 Text(String(localized: "story.viewer.notFound.title", defaultValue: "Story introuvable", bundle: .main))
                     .foregroundColor(.white)
@@ -161,11 +164,14 @@ struct StoryViewerContainer: View {
                 Spacer()
                 Button { isPresented = false } label: {
                     Image(systemName: "xmark")
+                        // Doctrine 82i : glyphe dans un cadre de tap fixe 32×32 → fige
+                        // (le scaler deborderait du cercle). Bouton labellise ci-dessous.
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(Color.white.opacity(0.2)))
                 }
+                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 .padding(.trailing, 16)
                 .padding(.top, 8)
             }

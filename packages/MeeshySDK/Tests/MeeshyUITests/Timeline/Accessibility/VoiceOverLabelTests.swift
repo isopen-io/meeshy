@@ -5,7 +5,7 @@ import SwiftUI
 
 /// Task 59 — Every interactive element has a non-empty VoiceOver label.
 ///
-/// Strategy: each key referenced by `TransportBar` / `TimelineToolbar` via
+/// Strategy: each key referenced by `TransportBar` via
 /// `.accessibilityLabel(LocalizedStringKey(...))` is resolved through
 /// `Bundle.module` (the MeeshyUI resource bundle that ships
 /// `Localizable.xcstrings`). If the bundle has no translation for a key,
@@ -65,16 +65,12 @@ final class VoiceOverLabelTests: XCTestCase {
         assertLocalized("story.timeline.transport.unmute")
     }
 
-    func test_transportBar_modeLabels_nonEmpty() {
-        assertLocalized("story.timeline.mode.switchToPro")
-        assertLocalized("story.timeline.mode.switchToQuick")
-    }
 
-    // MARK: - TimelineToolbar static label helpers
+    // MARK: - Snap chip static label helpers (transport bar, vue unifiée)
 
     func test_toolbar_snapAccessibilityKey_nonEmpty() {
-        let onKey = TimelineToolbar.snapAccessibilityKey(isOn: true)
-        let offKey = TimelineToolbar.snapAccessibilityKey(isOn: false)
+        let onKey = TransportBar.snapAccessibilityKey(isOn: true)
+        let offKey = TransportBar.snapAccessibilityKey(isOn: false)
         // Keys must differ so VoiceOver conveys state change
         XCTAssertNotEqual(onKey, offKey)
         // And both keys must resolve to real localized strings
@@ -102,12 +98,4 @@ final class VoiceOverLabelTests: XCTestCase {
         _ = bar.body
     }
 
-    func test_timelineToolbar_body_doesNotCrash() {
-        let toolbar = TimelineToolbar(
-            canUndo: true, canRedo: false, isSnapEnabled: true,
-            rulerResolutionSeconds: 0.5,
-            onUndo: {}, onRedo: {}, onSnapToggle: {}
-        )
-        _ = toolbar.body
-    }
 }

@@ -191,7 +191,7 @@ struct StoryActionSidebarView: View {
             if railPlan.showsReact {
                 StoryActionButton(
                     icon: "heart.fill",
-                    label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
+                    label: storyReactionCount > 0 ? "\(storyReactionCount)" : String(localized: "story.viewer.action.react", defaultValue: "Réagir", bundle: .main),
                     isActive: showEmojiStrip || storyCurrentUserHasReacted,
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500,
@@ -244,7 +244,7 @@ struct StoryActionSidebarView: View {
             if railPlan.showsReply {
                 StoryActionButton(
                     icon: "arrowshape.turn.up.left.fill",
-                    label: "Répondre"
+                    label: String(localized: "story.viewer.action.reply", defaultValue: "Répondre", bundle: .main)
                 ) {
                     HapticFeedback.light()
                     guard let story = currentStory, let group = currentGroup else { return }
@@ -270,7 +270,7 @@ struct StoryActionSidebarView: View {
             // envoyer uniquement » pour le non-auteur).
             StoryActionButton(
                 icon: "paperplane.fill",
-                label: storyShareCount > 0 ? "\(storyShareCount)" : "Envoyer"
+                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main)
             ) {
                 HapticFeedback.light()
                 pauseTimer()
@@ -290,7 +290,7 @@ struct StoryActionSidebarView: View {
             if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
-                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : "Partager"
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Partager", bundle: .main)
                 ) {
                     guard let story = currentStory else { return }
                     HapticFeedback.light()
@@ -304,19 +304,23 @@ struct StoryActionSidebarView: View {
                             )
                             await MainActor.run {
                                 HapticFeedback.success()
-                                FeedbackToastManager.shared.show("Story republiée")
+                                FeedbackToastManager.shared.show(
+                                    String(localized: "story.viewer.repost.success", defaultValue: "Story republiée", bundle: .main))
                             }
                         } catch APIError.serverError(404, _) {
                             await MainActor.run {
-                                FeedbackToastManager.shared.showError("La story n'est plus disponible")
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "story.viewer.repost.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
                             }
                         } catch APIError.serverError(403, _) {
                             await MainActor.run {
-                                FeedbackToastManager.shared.showError("Cette story ne peut pas être repartagée")
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "story.viewer.repost.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
                             }
                         } catch {
                             await MainActor.run {
-                                FeedbackToastManager.shared.showError("Échec de la republication")
+                                FeedbackToastManager.shared.showError(
+                                    String(localized: "story.viewer.repost.error", defaultValue: "Échec de la republication", bundle: .main))
                             }
                         }
                     }
@@ -324,7 +328,7 @@ struct StoryActionSidebarView: View {
             } else if railPlan.showsViews {
                 StoryActionButton(
                     icon: "eye.fill",
-                    label: storyViewCount > 0 ? "\(storyViewCount)" : "Vues"
+                    label: storyViewCount > 0 ? "\(storyViewCount)" : String(localized: "story.viewer.action.views", defaultValue: "Vues", bundle: .main)
                 ) {
                     HapticFeedback.light()
                     pauseTimer()
@@ -341,7 +345,7 @@ struct StoryActionSidebarView: View {
             if railPlan.showsExport {
                 StoryActionButton(
                     icon: "square.and.arrow.up.fill",
-                    label: "Exporter"
+                    label: String(localized: "story.viewer.action.export", defaultValue: "Exporter", bundle: .main)
                 ) {
                     HapticFeedback.light()
                     pauseTimer()
@@ -355,7 +359,9 @@ struct StoryActionSidebarView: View {
             if railPlan.showsSound {
                 StoryActionButton(
                     icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                    label: isGlobalMuted ? "Mute" : "Son",
+                    label: isGlobalMuted
+                        ? String(localized: "story.viewer.action.mute", defaultValue: "Muet", bundle: .main)
+                        : String(localized: "story.viewer.action.sound", defaultValue: "Son", bundle: .main),
                     isActive: !isGlobalMuted,
                     activeColor: MeeshyColors.indigo400,
                     activeGlow: isGlobalMuted ? nil : MeeshyColors.indigo400
@@ -407,7 +413,7 @@ struct StoryActionSidebarView: View {
             if railPlan.showsTranslations {
                 StoryActionButton(
                     icon: "textformat.abc",
-                    label: "Traductions",
+                    label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
                     isActive: showLanguageOptions,
                     activeColor: MeeshyColors.indigo400,
                     activeGlow: MeeshyColors.indigo400
@@ -557,7 +563,8 @@ struct StoryHeaderView: View {
             shareableStoryLink = ShareableLink(url: fallback)
             HapticFeedback.light()
         } else {
-            FeedbackToastManager.shared.showError("Lien indisponible")
+            FeedbackToastManager.shared.showError(
+                String(localized: "story.viewer.share.link.unavailable", defaultValue: "Lien indisponible", bundle: .main))
         }
     }
 
@@ -644,7 +651,10 @@ struct StoryHeaderView: View {
                                 avatarURL: group.avatarURL,
                                 onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                                 contextMenuItems: [
-                                    AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                                    AvatarContextMenuItem(
+                                        label: String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main),
+                                        icon: "person.fill"
+                                    ) {
                                         selectedProfileUser = .from(storyGroup: group)
                                     }
                                 ]

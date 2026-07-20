@@ -267,10 +267,10 @@ public struct MeeshyVideoEditorView: View {
                         .foregroundStyle(theme.warning)
                     Text("Export impossible")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.textPrimary)
                     Text(message)
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(theme.textSecondary)
                         .multilineTextAlignment(.center)
                     HStack(spacing: 12) {
                         overlayButton("Fermer", filled: false) { viewModel.cancelExport() }
@@ -280,7 +280,7 @@ public struct MeeshyVideoEditorView: View {
                     progressRing
                     Text(viewModel.exportPhase == .preparing ? "Préparation…" : "Export \(Int(exportProgress * 100)) %")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(theme.textPrimary)
                     overlayButton("Annuler", filled: false) { viewModel.cancelExport() }
                 }
             }
@@ -297,14 +297,14 @@ public struct MeeshyVideoEditorView: View {
     private var progressRing: some View {
         ZStack {
             Circle()
-                .stroke(.white.opacity(0.15), lineWidth: 6)
+                .stroke(theme.textMuted.opacity(0.3), lineWidth: 6)
             Circle()
                 .trim(from: 0, to: max(0.02, exportProgress))
                 .stroke(accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Image(systemName: "film")
                 .font(.system(size: 20))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(theme.textSecondary)
         }
         .frame(width: 78, height: 78)
         .animation(.easeOut(duration: 0.2), value: exportProgress)

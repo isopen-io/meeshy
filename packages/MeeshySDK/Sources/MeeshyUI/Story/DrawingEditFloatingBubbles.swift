@@ -28,9 +28,9 @@ struct DrawingEditFloatingBubbles: View {
             Spacer(minLength: 4)
             // Retour arrière / avant — juste à gauche du X (spec user 2026-06-01).
             actionBubble(symbol: "arrow.uturn.backward", enabled: canUndo,
-                         label: "Annuler le dernier trait", action: onUndo)
+                         label: String(localized: "story.drawEdit.undo", defaultValue: "Annuler le dernier trait", bundle: .module), action: onUndo)
             actionBubble(symbol: "arrow.uturn.forward", enabled: canRedo,
-                         label: "Rétablir le trait annulé", action: onRedo)
+                         label: String(localized: "story.drawEdit.redo", defaultValue: "Rétablir le trait annulé", bundle: .module), action: onRedo)
             dismissBubble()
         }
     }
@@ -47,7 +47,7 @@ struct DrawingEditFloatingBubbles: View {
             .onTapGesture { if enabled { HapticFeedback.light(); action() } }
             .accessibilityLabel(label)
             .accessibilityAddTraits(.isButton)
-            .accessibilityHint(enabled ? "" : "Indisponible")
+            .accessibilityHint(enabled ? "" : String(localized: "story.drawEdit.unavailable", defaultValue: "Indisponible", bundle: .module))
     }
 
     @ViewBuilder
@@ -83,8 +83,8 @@ struct DrawingEditFloatingBubbles: View {
                 HapticFeedback.medium()
                 onDismiss()
             }
-            .accessibilityLabel("Terminer l'édition du dessin")
-            .accessibilityHint("Ferme les contrôles de dessin")
+            .accessibilityLabel(String(localized: "story.drawEdit.finish", defaultValue: "Terminer l'édition du dessin", bundle: .module))
+            .accessibilityHint(String(localized: "story.drawEdit.finish.hint", defaultValue: "Ferme les contrôles de dessin", bundle: .module))
             .accessibilityAddTraits(.isButton)
     }
 }

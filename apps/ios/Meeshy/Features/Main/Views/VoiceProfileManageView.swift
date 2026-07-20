@@ -62,10 +62,13 @@ struct VoiceProfileManageView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
+                // Chrome de fermeture : glyphe dans une affordance de tap d'en-tête —
+                // gardé figé, doctrine 82i/87i. Libellé VoiceOver ajouté (146i).
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 28))
                     .foregroundStyle(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -90,6 +93,7 @@ struct VoiceProfileManageView: View {
         VStack(spacing: 24) {
             Spacer()
 
+            // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i), masqué à VoiceOver (146i).
             Image(systemName: "person.wave.2.fill")
                 .font(.system(size: 64))
                 .foregroundStyle(
@@ -99,6 +103,7 @@ struct VoiceProfileManageView: View {
                         endPoint: .bottomTrailing
                     )
                 )
+                .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.empty.title", defaultValue: "Aucun profil vocal", bundle: .main))
                 .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
@@ -170,9 +175,13 @@ struct VoiceProfileManageView: View {
 
     private func statusCard(_ profile: VoiceProfile) -> some View {
         HStack(spacing: 12) {
+            // Glyphe de statut décoratif : le libellé texte adjacent porte le sens →
+            // masqué à VoiceOver (évite l'annonce du nom brut du symbole), scale sous
+            // Dynamic Type pour rester harmonisé avec le libellé (146i).
             Image(systemName: statusIcon(for: profile.status))
-                .font(.system(size: 28))
+                .font(MeeshyFont.relative(28))
                 .foregroundColor(statusColor(for: profile.status))
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(statusLabel(for: profile.status))
@@ -203,6 +212,7 @@ struct VoiceProfileManageView: View {
                 .fill(theme.backgroundSecondary)
         )
         .padding(.horizontal, 16)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Info Card

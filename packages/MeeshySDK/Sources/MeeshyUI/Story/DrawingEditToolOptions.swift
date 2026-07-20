@@ -148,9 +148,9 @@ struct DrawingEditToolOptions: View {
 
     private var smoothingOptions: some View {
         HStack(spacing: 10) {
-            smoothingChip(.raw, "scribble", "Brut")
-            smoothingChip(.curve, "scribble.variable", "Courbe")
-            smoothingChip(.line, "line.diagonal", "Droite")
+            smoothingChip(.raw, "scribble", String(localized: "story.drawEdit.smoothing.raw", defaultValue: "Brut", bundle: .module))
+            smoothingChip(.curve, "scribble.variable", String(localized: "story.drawEdit.smoothing.curve", defaultValue: "Courbe", bundle: .module))
+            smoothingChip(.line, "line.diagonal", String(localized: "story.drawEdit.smoothing.line", defaultValue: "Droite", bundle: .module))
         }
     }
 
@@ -198,9 +198,9 @@ struct DrawingEditToolOptions: View {
 
     static func label(for tool: StrokeTool) -> String {
         switch tool {
-        case .pen:    return "Stylo"
-        case .marker: return "Marqueur"
-        case .eraser: return "Gomme"
+        case .pen:    return String(localized: "story.drawEdit.strokeTool.pen", defaultValue: "Stylo", bundle: .module)
+        case .marker: return String(localized: "story.drawEdit.strokeTool.marker", defaultValue: "Marqueur", bundle: .module)
+        case .eraser: return String(localized: "story.drawEdit.strokeTool.eraser", defaultValue: "Gomme", bundle: .module)
         }
     }
 

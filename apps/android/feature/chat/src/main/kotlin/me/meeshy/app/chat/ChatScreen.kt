@@ -1,6 +1,12 @@
 package me.meeshy.app.chat
 
+import android.content.ContentResolver
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -153,6 +159,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import me.meeshy.feature.chat.R
+import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MessageDeletability
 import me.meeshy.sdk.model.MessageEditability
@@ -391,6 +398,7 @@ fun ChatScreen(
                     onCancelEdit = viewModel::cancelEdit,
                     onCancelReply = viewModel::cancelReply,
                     onRemoveClipboard = viewModel::removeClipboardContent,
+                    onPickFile = viewModel::sendFileAttachment,
                 )
             }
         },
@@ -2218,6 +2226,37 @@ private fun MentionSuggestionStrip(
     }
 }
 
+/** The bytes + display name + declared content-type read back from a picked content Uri. */
+private data class PickedAttachment(
+    val bytes: ByteArray,
+    val fileName: String,
+    val mimeType: String?,
+)
+
+/**
+ * Reads a document/photo the user picked from the system picker into memory,
+ * resolving its display name and the platform's declared content-type. Returns
+ * `null` when the stream cannot be opened (a revoked grant / deleted document) so
+ * the composer silently ignores the pick rather than crashing. The byte read and
+ * cursor query are the Android-framework glue behind the pure send pipeline.
+ */
+private fun readPickedAttachment(context: Context, uri: Uri): PickedAttachment? {
+    val resolver = context.contentResolver
+    val bytes = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }
+        .getOrNull() ?: return null
+    val fileName = queryDisplayName(resolver, uri) ?: uri.lastPathSegment ?: "attachment"
+    return PickedAttachment(bytes = bytes, fileName = fileName, mimeType = resolver.getType(uri))
+}
+
+private fun queryDisplayName(resolver: ContentResolver, uri: Uri): String? =
+    runCatching {
+        resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0) cursor.getString(index) else null
+        }
+    }.getOrNull()
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatComposer(
@@ -2234,7 +2273,15 @@ private fun ChatComposer(
     onCancelEdit: () -> Unit,
     onCancelReply: () -> Unit,
     onRemoveClipboard: () -> Unit,
+    onPickFile: (bytes: ByteArray, fileName: String, mimeType: String?) -> Unit,
 ) {
+    val context = LocalContext.current
+    val filePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent(),
+    ) { uri ->
+        val picked = uri?.let { readPickedAttachment(context, it) } ?: return@rememberLauncherForActivityResult
+        onPickFile(picked.bytes, picked.fileName, picked.mimeType)
+    }
     Surface(color = MeeshyTheme.tokens.backgroundPrimary) {
         Column(
             modifier = Modifier
@@ -2338,6 +2385,13 @@ private fun ChatComposer(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (!isEditing) {
+                        IconButton(onClick = { filePicker.launch("*/*") }) {
+                            Icon(
+                                imageVector = Icons.Filled.AttachFile,
+                                contentDescription = stringResource(R.string.chat_attach_file),
+                                tint = MeeshyTheme.tokens.textSecondary,
+                            )
+                        }
                         IconButton(onClick = onOpenEffects) {
                             Icon(
                                 imageVector = Icons.Filled.AutoAwesome,

@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
-import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
+import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -202,7 +202,7 @@ export function registerSearchRoutes(
             id: sender.id,
             userId: sender.userId,
             username: sender.user?.username ?? null,
-            displayName: sender.displayName ?? sender.user?.displayName ?? null,
+            displayName: resolveParticipantDisplayName(sender),
             avatar: resolveParticipantAvatar(sender),
             isOnline: senderPresenceVis.get(sender.userId ?? '')?.showOnline === false
               ? false

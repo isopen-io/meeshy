@@ -15,7 +15,6 @@ struct IncomingCallView: View {
     // Audit P2-iOS-9 — see CallView; skip repeating animations for
     // motion-sensitive users.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var theme: ThemeManager { ThemeManager.shared }
     @State private var ringScale: CGFloat = 0.8
     @State private var ringOpacity: Double = 1.0
     @State private var avatarBounce: Bool = false
@@ -147,6 +146,8 @@ struct IncomingCallView: View {
                 .frame(width: 110, height: 110)
 
             Text(initial)
+                // doctrine 82i — initiale bornée par le cercle d'avatar fixe 110×110 ;
+                // décorative (déjà aplatie par le `.accessibilityHidden(true)` du ring parent)
                 .font(.system(size: 44, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
@@ -178,6 +179,8 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: "phone.down.fill")
+                            // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
+                            // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
                             .font(.system(size: 28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)
@@ -198,6 +201,8 @@ struct IncomingCallView: View {
                 } label: {
                     VStack(spacing: 10) {
                         Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
+                            // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
+                            // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
                             .font(.system(size: 28, weight: .medium))
                             .foregroundColor(.white)
                             .frame(width: 70, height: 70)

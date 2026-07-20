@@ -49,6 +49,8 @@ import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.MessagePinnedEvent
@@ -576,6 +578,136 @@ class ChatViewModelTest {
                 attachments = any(),
             )
         }
+    }
+
+    @Test
+    fun sending_a_picked_file_uploads_it_and_sends_a_typed_message() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
+        advanceUntilIdle()
+
+        h.vm.sendFileAttachment("PDFBYTES".toByteArray(), "report.pdf", declaredMimeType = null)
+        advanceUntilIdle()
+
+        val itemSlot = slot<MediaUploadItem>()
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        assertThat(itemSlot.captured.fileName).isEqualTo("report.pdf")
+        assertThat(itemSlot.captured.mimeType).isEqualTo("application/pdf")
+        val attachSlot = slot<List<ApiMessageAttachment>>()
+        coVerify(exactly = 1) {
+            h.repo.sendOptimistic(
+                conversationId = eq("c1"),
+                content = eq(""),
+                originalLanguage = any(),
+                sender = eq(user),
+                replyToId = any(),
+                effects = any(),
+                messageType = eq("file"),
+                attachmentUploadCmids = eq(listOf("upload-cmid")),
+                attachments = capture(attachSlot),
+            )
+        }
+        val attachment = attachSlot.captured.single()
+        assertThat(attachment.id).isEqualTo("upload-cmid")
+        assertThat(attachment.originalName).isEqualTo("report.pdf")
+        assertThat(attachment.mimeType).isEqualTo("application/pdf")
+        assertThat(attachment.fileSize).isEqualTo(8)
+        coVerify { h.workManager.enqueue(any<androidx.work.OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun a_picked_image_is_typed_as_an_image_message() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
+        advanceUntilIdle()
+
+        h.vm.sendFileAttachment("PNG".toByteArray(), "avatar.png", declaredMimeType = "image/png")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            h.repo.sendOptimistic(
+                conversationId = any(),
+                content = any(),
+                originalLanguage = any(),
+                sender = any(),
+                replyToId = any(),
+                effects = any(),
+                messageType = eq("image"),
+                attachmentUploadCmids = any(),
+                attachments = any(),
+            )
+        }
+    }
+
+    @Test
+    fun a_picked_file_keeps_typed_draft_text_as_the_body_and_clears_the_composer() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
+        advanceUntilIdle()
+        h.vm.onDraftChange("see the deck")
+
+        h.vm.sendFileAttachment("PPT".toByteArray(), "deck.pptx", declaredMimeType = null)
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEmpty()
+        coVerify(exactly = 1) {
+            h.repo.sendOptimistic(
+                conversationId = any(),
+                content = eq("see the deck"),
+                originalLanguage = any(),
+                sender = any(),
+                replyToId = any(),
+                effects = any(),
+                messageType = any(),
+                attachmentUploadCmids = any(),
+                attachments = any(),
+            )
+        }
+    }
+
+    @Test
+    fun a_picked_files_octet_stream_declared_type_is_resolved_from_the_filename() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
+        advanceUntilIdle()
+
+        h.vm.sendFileAttachment(
+            "M4V".toByteArray(),
+            "clip.mp4",
+            declaredMimeType = "application/octet-stream",
+        )
+        advanceUntilIdle()
+
+        val itemSlot = slot<MediaUploadItem>()
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        assertThat(itemSlot.captured.mimeType).isEqualTo("video/mp4")
+    }
+
+    @Test
+    fun a_picked_file_with_a_blank_name_falls_back_to_a_default_name() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
+        advanceUntilIdle()
+
+        h.vm.sendFileAttachment("X".toByteArray(), "   ", declaredMimeType = "application/pdf")
+        advanceUntilIdle()
+
+        val itemSlot = slot<MediaUploadItem>()
+        coVerify(exactly = 1) { h.mediaQueue.enqueue(capture(itemSlot)) }
+        assertThat(itemSlot.captured.fileName).isEqualTo("attachment")
+    }
+
+    @Test
+    fun an_empty_pick_is_a_no_op() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user)
+        advanceUntilIdle()
+
+        h.vm.sendFileAttachment(ByteArray(0), "empty.pdf", declaredMimeType = "application/pdf")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { h.mediaQueue.enqueue(any()) }
+        coVerify(exactly = 0) { h.repo.sendOptimistic(any(), any(), any(), any(), any()) }
     }
 
     @Test

@@ -34,7 +34,7 @@ extension StoryCanvasUIView {
         var elements: [UIAccessibilityElement] = []
         for txt in slide.effects.textObjects {
             elements.append(makeAccessibilityElement(
-                label: "Texte : \(txt.text)",
+                label: "\(textAccessibilityPrefix) : \(txt.text)",
                 traits: .staticText,
                 id: txt.id,
                 allowCustomActions: true
@@ -42,7 +42,7 @@ extension StoryCanvasUIView {
         }
         for media in slide.effects.mediaObjects ?? [] {
             elements.append(makeAccessibilityElement(
-                label: media.kind == .video ? "Vidéo" : "Image",
+                label: mediaAccessibilityLabel(kind: media.kind),
                 traits: .image,
                 id: media.id,
                 allowCustomActions: true
@@ -50,7 +50,7 @@ extension StoryCanvasUIView {
         }
         for sticker in slide.effects.stickerObjects ?? [] {
             elements.append(makeAccessibilityElement(
-                label: "Sticker \(sticker.emoji)",
+                label: "\(stickerAccessibilityWord) \(sticker.emoji)",
                 traits: .image,
                 id: sticker.id,
                 allowCustomActions: true
@@ -73,7 +73,9 @@ extension StoryCanvasUIView {
         var elements: [UIAccessibilityElement] = []
         for media in slide.effects.mediaObjects ?? [] where media.isBackground {
             elements.append(makeAccessibilityElement(
-                label: media.kind == .video ? "Vidéo de fond" : "Photo de fond",
+                label: media.kind == .video
+                    ? String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
+                    : String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module),
                 traits: .image,
                 id: media.id,
                 allowCustomActions: false
@@ -90,7 +92,7 @@ extension StoryCanvasUIView {
         }
         for media in slide.effects.mediaObjects ?? [] where !media.isBackground {
             elements.append(makeAccessibilityElement(
-                label: media.kind == .video ? "Vidéo" : "Image",
+                label: mediaAccessibilityLabel(kind: media.kind),
                 traits: .image,
                 id: media.id,
                 allowCustomActions: false
@@ -203,22 +205,42 @@ extension StoryCanvasUIView {
            let scalar = emoji.unicodeScalars.first,
            let name = scalar.properties.nameAlias ?? scalar.properties.name,
            !name.isEmpty {
-            return "Sticker \(name.capitalized)"
+            return "\(stickerAccessibilityWord) \(name.capitalized)"
         }
-        return "Sticker"
+        return stickerAccessibilityWord
+    }
+
+    var stickerAccessibilityWord: String {
+        String(localized: "story.canvas.a11y.sticker", defaultValue: "Sticker", bundle: .module)
+    }
+
+    var textAccessibilityPrefix: String {
+        String(localized: "story.canvas.a11y.textPrefix", defaultValue: "Texte", bundle: .module)
+    }
+
+    func mediaAccessibilityLabel(kind: StoryMediaKind?) -> String {
+        kind == .video
+            ? String(localized: "story.media.video", defaultValue: "Vidéo", bundle: .module)
+            : String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
     }
 
     func makeCustomActions(forId id: String) -> [UIAccessibilityCustomAction] {
         [
-            UIAccessibilityCustomAction(name: "Supprimer") { [weak self] _ in
+            UIAccessibilityCustomAction(
+                name: String(localized: "story.composer.deleteSlide", defaultValue: "Supprimer", bundle: .module)
+            ) { [weak self] _ in
                 self?.deleteItem(id: id)
                 return true
             },
-            UIAccessibilityCustomAction(name: "Dupliquer") { [weak self] _ in
+            UIAccessibilityCustomAction(
+                name: String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module)
+            ) { [weak self] _ in
                 self?.duplicateItem(id: id)
                 return true
             },
-            UIAccessibilityCustomAction(name: "Mettre à l'arrière") { [weak self] _ in
+            UIAccessibilityCustomAction(
+                name: String(localized: "story.canvas.a11y.sendToBack", defaultValue: "Mettre à l'arrière", bundle: .module)
+            ) { [weak self] _ in
                 self?.sendToBack(id: id)
                 return true
             },

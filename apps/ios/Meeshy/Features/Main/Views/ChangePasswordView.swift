@@ -64,12 +64,14 @@ struct ChangePasswordView: View {
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
             Text(String(localized: "auth.password.change.title", defaultValue: "Mot de passe", bundle: .main))
                 .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -189,6 +191,10 @@ struct ChangePasswordView: View {
             Image(systemName: met ? "checkmark.circle.fill" : "circle")
                 .font(.subheadline)
                 .foregroundColor(met ? MeeshyColors.success : theme.textMuted)
+                // Statut porté par la couleur (vert=rempli) + la forme du glyphe. VoiceOver
+                // ne doit pas relire l'icône : l'état passe par le trait `.isSelected` de la
+                // rangée ci-dessous (« ne jamais reposer sur la couleur seule »).
+                .accessibilityHidden(true)
 
             Text(text)
                 .font(.footnote.weight(.medium))
@@ -196,6 +202,10 @@ struct ChangePasswordView: View {
 
             Spacer()
         }
+        .accessibilityElement(children: .combine)
+        // Trait système (localisé « sélectionné » par iOS) → l'état rempli/non-rempli est
+        // annoncé à VoiceOver sans dépendre de la couleur ni introduire de clé i18n.
+        .accessibilityAddTraits(met ? .isSelected : [])
     }
 
     // MARK: - Save Button
@@ -243,14 +253,19 @@ struct ChangePasswordView: View {
 
     private var successOverlay: some View {
         VStack(spacing: 12) {
+            // Héros décoratif ≥40pt : diamètre fixe, exclu du Dynamic Type (doctrine 84i/87i).
+            // Le sens est porté par le texte ci-dessous → masqué de VoiceOver.
             Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
+                .accessibilityHidden(true)
 
             Text(String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifie", bundle: .main))
                 .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
         }
+        // Confirmation transitoire (auto-dismiss 1,5 s) → un seul élément VoiceOver lisible.
+        .accessibilityElement(children: .combine)
         .padding(MeeshySpacing.xxxl)
         .background(
             RoundedRectangle(cornerRadius: 20)
@@ -276,6 +291,9 @@ struct ChangePasswordView: View {
                 .tracking(1.2)
         }
         .padding(.leading, 4)
+        // Parité DeleteAccountView : titre de section navigable au rotor VoiceOver.
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func secureField(

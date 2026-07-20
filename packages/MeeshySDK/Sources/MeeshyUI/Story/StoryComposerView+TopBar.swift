@@ -20,7 +20,8 @@ extension StoryComposerView {
             bandHidden: bandStateMachine.state == .hidden,
             isTextEditing: viewModel.textEditingMode != .inactive,
             isDrawingActive: viewModel.drawingEditingMode.isActive,
-            isViewportZoomed: viewModel.isCanvasZoomed
+            isViewportZoomed: viewModel.isCanvasZoomed,
+            isTimelineVisible: viewModel.isTimelineVisible
         )
     }
 

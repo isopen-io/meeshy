@@ -145,8 +145,8 @@ public struct AudienceUserPickerView: View {
 
     private var title: String {
         mode == .only
-            ? String(localized: "audience.picker.only.title", defaultValue: "Seulement ces personnes")
-            : String(localized: "audience.picker.except.title", defaultValue: "Tout le monde sauf")
+            ? String(localized: "audience.picker.only.title", defaultValue: "Seulement ces personnes", bundle: .module)
+            : String(localized: "audience.picker.except.title", defaultValue: "Tout le monde sauf", bundle: .module)
     }
 
     public var body: some View {
@@ -193,7 +193,7 @@ public struct AudienceUserPickerView: View {
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField(String(localized: "audience.picker.search", defaultValue: "Rechercher…"), text: $vm.query)
+            TextField(String(localized: "audience.picker.search", defaultValue: "Rechercher…", bundle: .module), text: $vm.query)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
             if vm.isSearching {

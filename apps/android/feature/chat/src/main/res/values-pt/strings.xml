@@ -10,6 +10,7 @@
     <string name="chat_send">Enviar</string>
     <string name="chat_record_voice">Gravar mensagem de voz</string>
     <string name="chat_effects_open">Efeitos da mensagem</string>
+    <string name="chat_attach_file">Anexar arquivo</string>
     <string name="chat_effects_title">Efeitos da mensagem</string>
     <string name="chat_effects_done">Concluído</string>
     <string name="chat_effects_section_behavior">Comportamento</string>

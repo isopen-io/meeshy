@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.ApiRepostOf
 import org.junit.Test
 
 class FeedPostBuilderTest {
@@ -21,6 +22,8 @@ class FeedPostBuilderTest {
         author: ApiAuthor? = ApiAuthor(id = "u1", username = "alice", displayName = "Alice"),
         likeCount: Int? = 3,
         isLikedByMe: Boolean? = false,
+        bookmarkCount: Int? = 4,
+        isBookmarkedByMe: Boolean? = false,
         commentCount: Int? = 2,
         repostCount: Int? = 1,
         media: List<ApiPostMedia>? = null,
@@ -32,6 +35,8 @@ class FeedPostBuilderTest {
         author = author,
         likeCount = likeCount,
         isLikedByMe = isLikedByMe,
+        bookmarkCount = bookmarkCount,
+        isBookmarkedByMe = isBookmarkedByMe,
         commentCount = commentCount,
         repostCount = repostCount,
         media = media,
@@ -120,11 +125,23 @@ class FeedPostBuilderTest {
 
     @Test
     fun build_nullCountsBecomeZero() {
-        val p = post(likeCount = null, commentCount = null, repostCount = null)
+        val p = post(likeCount = null, commentCount = null, repostCount = null, bookmarkCount = null)
         val result = FeedPostBuilder.build(p, Prefs(), null)
         assertThat(result.likeCount).isEqualTo(0)
         assertThat(result.commentCount).isEqualTo(0)
         assertThat(result.repostCount).isEqualTo(0)
+        assertThat(result.bookmarkCount).isEqualTo(0)
+    }
+
+    @Test
+    fun build_bookmarkStateComesFromIsBookmarkedByMe() {
+        // A post bookmarked by others (count 4) but not by me must NOT show as bookmarked.
+        val notMine = post(bookmarkCount = 4, isBookmarkedByMe = false)
+        assertThat(FeedPostBuilder.build(notMine, Prefs(), null).isBookmarked).isFalse()
+        assertThat(FeedPostBuilder.build(notMine, Prefs(), null).bookmarkCount).isEqualTo(4)
+
+        val mine = post(bookmarkCount = 1, isBookmarkedByMe = true)
+        assertThat(FeedPostBuilder.build(mine, Prefs(), null).isBookmarked).isTrue()
     }
 
     // --- Prisme language switch (per-post active-language override) ---
@@ -204,5 +221,29 @@ class FeedPostBuilderTest {
         // Prefs target a language the post does not carry → no preferred translation.
         val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), Prefs(systemLanguage = "de"), override = null)
         assertThat(code).isEqualTo("fr")
+    }
+
+    // --- Repost embed wiring (a reposted/quoted post rendered inside the card) ---
+
+    @Test
+    fun build_plainPostHasNoRepostEmbed() {
+        assertThat(FeedPostBuilder.build(post(), Prefs(), null).repostEmbed).isNull()
+    }
+
+    @Test
+    fun build_repostPostCarriesEmbedProjectedFromRepostOf() {
+        val p = post().copy(
+            repostOf = ApiRepostOf(
+                id = "orig-1",
+                type = "POST",
+                content = "Hola",
+                author = ApiAuthor(id = "u9", username = "orig", displayName = "Origen"),
+            ),
+        )
+        val embed = FeedPostBuilder.build(p, Prefs(), null).repostEmbed
+        assertThat(embed).isNotNull()
+        assertThat(embed?.id).isEqualTo("orig-1")
+        assertThat(embed?.authorName).isEqualTo("Origen")
+        assertThat(embed?.content).isEqualTo("Hola")
     }
 }

@@ -13,11 +13,11 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
-import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
 import javax.inject.Inject
 
@@ -28,12 +28,21 @@ data class FeedUiState(
     val errorMessage: String? = null,
     val hasMore: Boolean = true,
     val isLoadingMore: Boolean = false,
+    /** Count of posts that arrived via `post:created` since the last acknowledge/refresh. */
+    val newPostsCount: Int = 0,
+    /**
+     * The fullscreen media gallery currently open (a tap on a post's image tile),
+     * or `null` when the lightbox is dismissed. Ephemeral view state kept in the
+     * flow so a background re-emit never tears the open viewer down.
+     */
+    val imageViewer: FeedGallery? = null,
 )
 
 @HiltViewModel
 class FeedViewModel @Inject constructor(
     private val postRepository: PostRepository,
     private val sessionRepository: SessionRepository,
+    private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
 ) : ViewModel() {
 
@@ -47,8 +56,18 @@ class FeedViewModel @Inject constructor(
      */
     private val activeLanguageOverride = MutableStateFlow<Map<String, String>>(emptyMap())
 
+    /**
+     * Socket-arrived posts (`post:created`) that sit above the cache-projected feed,
+     * plus the "new posts" banner count. Kept outside the cache stream so a just-arrived
+     * post is never erased by a background refresh (the protective realtime-head merge).
+     */
+    private val realtimeHead = MutableStateFlow(FeedRealtimeHead())
+
     /** The raw posts currently displayed — the flag-tap handler resolves against these. */
     private var latestPosts: List<ApiPost> = emptyList()
+
+    /** The cache-projected posts alone (excludes the realtime head), kept across re-emits. */
+    private var latestCachePosts: List<ApiPost> = emptyList()
 
     init {
         viewModelScope.launch {
@@ -63,14 +82,95 @@ class FeedViewModel @Inject constructor(
                 sessionRepository.currentUser,
                 postRepository.feedHasMore,
                 activeLanguageOverride,
-            ) { result, user, hasMore, overrides -> FeedInputs(result, user, hasMore, overrides) }
-                .collect { (result, user, hasMore, overrides) ->
-                    latestPosts = result.postsOrNull() ?: latestPosts
+                realtimeHead,
+            ) { result, user, hasMore, overrides, head -> FeedInputs(result, user, hasMore, overrides, head) }
+                .collect { (result, user, hasMore, overrides, head) ->
+                    val cachePosts = result.postsOrNull() ?: latestCachePosts
+                    latestCachePosts = cachePosts
+                    val cacheIds = cachePosts.mapTo(HashSet()) { it.id }
+
+                    // Prune buffered posts the cache has surfaced (memory hygiene) and release
+                    // like overlays the cache has caught up to; the display work below already
+                    // keeps buffered posts from double-rendering.
+                    val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
+                    val reconciledLikes = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
+                    val reconciled = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
+                    if (reconciled !== head) realtimeHead.value = reconciled
+
+                    // Tombstoned posts (live `post:deleted`) are hidden from both the head and
+                    // the cache-projected list until a refresh drops them from the cache. Live
+                    // like overlays (`post:liked`/`post:unliked`) and bookmark overlays
+                    // (`post:bookmarked`) override the cache count/own-state.
+                    val removed = reconciled.removedIds
+                    val likes = reconciled.likes
+                    val bookmarks = reconciled.bookmarks
+                    val visibleCache = cachePosts
+                        .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
+                        .withLikeOverlays(likes)
+                        .withBookmarkOverlays(bookmarks)
+                    val visibleRealtime = reconciled.posts
+                        .filterNot { it.id in cacheIds || it.id in removed }
+                        .withLikeOverlays(likes)
+                        .withBookmarkOverlays(bookmarks)
+                    latestPosts = visibleRealtime + visibleCache
                     _state.update {
-                        it.applyResult(result, user, config.socketUrl, overrides).copy(hasMore = hasMore)
+                        it.project(
+                            result = result,
+                            cachePosts = visibleCache,
+                            realtimePosts = visibleRealtime,
+                            user = user,
+                            mediaBaseUrl = config.socketUrl,
+                            overrides = overrides,
+                            newPostsCount = reconciled.newPostsCount,
+                        ).copy(hasMore = hasMore)
                     }
                 }
         }
+        viewModelScope.launch {
+            socialSocket.postCreated.collect { payload ->
+                val cacheIds = latestCachePosts.mapTo(HashSet()) { it.id }
+                realtimeHead.update { FeedRealtimeReducer.accept(it, payload.post, cacheIds) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postDeleted.collect { payload ->
+                realtimeHead.update { FeedRealtimeReducer.remove(it, payload.postId) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postLiked.collect { payload ->
+                val mine = if (payload.userId == currentUserId()) true else null
+                realtimeHead.update { FeedRealtimeReducer.like(it, payload.postId, payload.likesCount, mine) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postUnliked.collect { payload ->
+                val mine = if (payload.userId == currentUserId()) false else null
+                realtimeHead.update { FeedRealtimeReducer.like(it, payload.postId, payload.likesCount, mine) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postBookmarked.collect { payload ->
+                realtimeHead.update {
+                    FeedRealtimeReducer.bookmark(it, payload.postId, payload.bookmarkCount, payload.bookmarked)
+                }
+            }
+        }
+    }
+
+    /**
+     * The signed-in user's id, or null for an anonymous session — used to tell the
+     * viewer's own `post:liked`/`post:unliked` echo (flip `isLiked`) from another
+     * user's like (count only). Mirrors the iOS `data.userId == currentUser.id` guard.
+     */
+    private fun currentUserId(): String? = sessionRepository.currentUser.value?.id
+
+    /**
+     * Tap on the "new posts" banner (scroll-to-top): clear the banner count. The posts
+     * already sit at the head, so only the counter resets. Port of iOS `acknowledgeNewPosts`.
+     */
+    fun acknowledgeNewPosts() {
+        realtimeHead.update { FeedRealtimeReducer.acknowledge(it) }
     }
 
     /**
@@ -101,6 +201,23 @@ class FeedViewModel @Inject constructor(
     }
 
     /**
+     * Open the fullscreen media gallery on the image at [imageIndex] of the post
+     * [postId]. Resolves against the projected posts (the URLs already carry the
+     * media base), so an unknown post id — or one with no image — is inert: the
+     * gallery only opens when there is something to show.
+     */
+    fun openImageViewer(postId: String, imageIndex: Int) {
+        val post = _state.value.posts.firstOrNull { it.id == postId } ?: return
+        val gallery = FeedMediaGallery.of(post, imageIndex)
+        _state.update { it.copy(imageViewer = gallery.takeUnless(FeedGallery::isEmpty)) }
+    }
+
+    /** Dismiss the fullscreen media gallery. */
+    fun dismissImageViewer() {
+        _state.update { it.copy(imageViewer = null) }
+    }
+
+    /**
      * Infinite-scroll trigger (port of FeedViewModel.loadMoreIfNeeded): once the
      * given post is within [LOAD_MORE_THRESHOLD] of the tail and more pages remain,
      * fetch the next page. Re-entrancy is guarded by [FeedUiState.isLoadingMore];
@@ -127,6 +244,7 @@ class FeedViewModel @Inject constructor(
     }
 
     fun refresh() {
+        realtimeHead.update { FeedRealtimeReducer.clear(it) }
         _state.update { it.copy(errorMessage = null, isSyncing = true) }
         viewModelScope.launch {
             try {
@@ -151,18 +269,65 @@ class FeedViewModel @Inject constructor(
         }
     }
 
+    fun toggleBookmark(postId: String) {
+        viewModelScope.launch {
+            try {
+                postRepository.toggleBookmark(postId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(errorMessage = e.message) }
+            }
+        }
+    }
+
     private companion object {
         const val LOAD_MORE_THRESHOLD = 5
     }
 }
 
-/** The 4 combined inputs of the feed projection (Kotlin has no built-in Quadruple). */
+/** The combined inputs of the feed projection (Kotlin has no built-in Quintuple). */
 private data class FeedInputs(
     val result: CacheResult<List<ApiPost>>,
     val user: MeeshyUser?,
     val hasMore: Boolean,
     val overrides: Map<String, String>,
+    val head: FeedRealtimeHead,
 )
+
+/**
+ * Overlay each post's live like state (absolute count + viewer-own flip) when a
+ * `post:liked`/`post:unliked` overlay targets it. An absent overlay leaves the post
+ * untouched; a `null` [LikeOverlay.mine] keeps the cache's `isLikedByMe` (another user's
+ * like), so only the count moves. Returns the same list when no overlay applies.
+ */
+private fun List<ApiPost>.withLikeOverlays(likes: Map<String, LikeOverlay>): List<ApiPost> {
+    if (likes.isEmpty()) return this
+    return map { post ->
+        val overlay = likes[post.id] ?: return@map post
+        post.copy(
+            likeCount = overlay.count,
+            isLikedByMe = overlay.mine ?: post.isLikedByMe,
+        )
+    }
+}
+
+/**
+ * Overlay each post's live bookmark state (absolute count + viewer-own flip) when a
+ * `post:bookmarked` overlay targets it. An absent overlay leaves the post untouched.
+ * Because the event is personal, both the count and `isBookmarkedByMe` are authoritative.
+ * Returns the same list when no overlay applies.
+ */
+private fun List<ApiPost>.withBookmarkOverlays(bookmarks: Map<String, BookmarkOverlay>): List<ApiPost> {
+    if (bookmarks.isEmpty()) return this
+    return map { post ->
+        val overlay = bookmarks[post.id] ?: return@map post
+        post.copy(
+            bookmarkCount = overlay.count,
+            isBookmarkedByMe = overlay.mine,
+        )
+    }
+}
 
 /** The posts a cache result carries, or null when it holds none (keep the prior list). */
 private fun CacheResult<List<ApiPost>>.postsOrNull(): List<ApiPost>? = when (this) {
@@ -172,15 +337,6 @@ private fun CacheResult<List<ApiPost>>.postsOrNull(): List<ApiPost>? = when (thi
     CacheResult.Empty -> emptyList()
 }
 
-private fun Map<String, ApiPostTranslationEntry>?.toTranslationRows():
-    List<LanguageResolver.TranslationLike> =
-    this?.map { (code, entry) -> PostTranslationRow(code, entry.text) }.orEmpty()
-
-private data class PostTranslationRow(
-    override val targetLanguage: String,
-    override val translatedContent: String,
-) : LanguageResolver.TranslationLike
-
 private fun List<ApiPost>.toPresentations(
     preferences: LanguageResolver.ContentLanguagePreferences,
     mediaBaseUrl: String,
@@ -188,40 +344,39 @@ private fun List<ApiPost>.toPresentations(
 ): List<FeedPostPresentation> =
     map { FeedPostBuilder.build(it, preferences, mediaBaseUrl, activeLanguageCode = overrides[it.id]) }
 
-private fun FeedUiState.applyResult(
+/**
+ * Projects the cache result plus the real-time head into the UI state. Realtime posts
+ * (already filtered to be disjoint from the cache) are prepended to the cache-projected
+ * list; skeleton shows only when there is genuinely nothing to display.
+ */
+private fun FeedUiState.project(
     result: CacheResult<List<ApiPost>>,
+    cachePosts: List<ApiPost>,
+    realtimePosts: List<ApiPost>,
     user: MeeshyUser?,
     mediaBaseUrl: String,
     overrides: Map<String, String>,
+    newPostsCount: Int,
 ): FeedUiState {
     val prefs = user ?: EmptyContentPreferences
-    return when (result) {
-        is CacheResult.Fresh -> copy(
-            posts = result.value.toPresentations(prefs, mediaBaseUrl, overrides),
-            isSyncing = false,
-            showSkeleton = false,
-            errorMessage = null,
-        )
-        is CacheResult.Stale -> copy(
-            posts = result.value.toPresentations(prefs, mediaBaseUrl, overrides),
-            isSyncing = true,
-            showSkeleton = false,
-        )
-        is CacheResult.Syncing -> copy(
-            posts = result.value?.toPresentations(prefs, mediaBaseUrl, overrides) ?: posts,
-            isSyncing = true,
-            showSkeleton = result.value == null && posts.isEmpty() && errorMessage == null,
-        )
-        CacheResult.Empty -> copy(
-            posts = emptyList(),
-            isSyncing = false,
-            showSkeleton = errorMessage == null,
-        )
+    val projected = realtimePosts.toPresentations(prefs, mediaBaseUrl, overrides) +
+        cachePosts.toPresentations(prefs, mediaBaseUrl, overrides)
+    val clearedError = if (result is CacheResult.Fresh) null else errorMessage
+    val isSyncing = when (result) {
+        is CacheResult.Fresh -> false
+        is CacheResult.Stale -> true
+        is CacheResult.Syncing -> true
+        CacheResult.Empty -> false
     }
-}
-
-private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
-    override val systemLanguage: String? = null
-    override val regionalLanguage: String? = null
-    override val customDestinationLanguage: String? = null
+    val showSkeleton = when (result) {
+        is CacheResult.Fresh, is CacheResult.Stale -> false
+        is CacheResult.Syncing, CacheResult.Empty -> projected.isEmpty() && clearedError == null
+    }
+    return copy(
+        posts = projected,
+        isSyncing = isSyncing,
+        showSkeleton = showSkeleton,
+        errorMessage = clearedError,
+        newPostsCount = newPostsCount,
+    )
 }

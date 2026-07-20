@@ -112,7 +112,9 @@ jest.mock('@meeshy/shared/types/attachment-audio', () => ({
 const mockResolveUserLanguagesOrdered: MockFn = jest.fn().mockReturnValue(['fr', 'en']);
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   resolveUserLanguagesOrdered: (...args: unknown[]) =>
-    mockResolveUserLanguagesOrdered(...args)
+    mockResolveUserLanguagesOrdered(...args),
+  generateConversationIdentifier: (title?: string) =>
+    `mshy_${(title ?? 'x').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'x'}-20260101000000`
 }));
 
 // translation-transformer
