@@ -21,11 +21,6 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.export.exporting",
         "story.timeline.export.failedTitle",
         "story.timeline.export.previewTitle",
-        // Mode
-        "story.timeline.mode.quick",
-        "story.timeline.mode.pro",
-        "story.timeline.mode.switchToQuick",
-        "story.timeline.mode.switchToPro",
         // Toolbar
         "story.timeline.toolbar.snap",
         "story.timeline.toolbar.undo",

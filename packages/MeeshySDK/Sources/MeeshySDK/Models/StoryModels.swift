@@ -75,15 +75,6 @@ public enum StoryTextWeight: String, Codable, CaseIterable, Sendable {
     case normal     // normal
     case semibold   // semi-gras
     case bold       // gras
-
-    public var displayName: String {
-        switch self {
-        case .thin: return "Fin"
-        case .normal: return "Normal"
-        case .semibold: return "Semi"
-        case .bold: return "Gras"
-        }
-    }
 }
 
 // MARK: - Story Filter
@@ -258,17 +249,6 @@ public enum StoryTextFrameShape: String, Codable, CaseIterable, Sendable {
     case cloud       // bulle de pensée nuage (path-based)
     case speech      // bulle de conversation BD avec queue (path-based)
 
-    public var displayName: String {
-        switch self {
-        case .rounded: return "Arrondi"
-        case .pill: return "Pilule"
-        case .rectangle: return "Carré"
-        case .diamond: return "Losange"
-        case .cloud: return "Nuage"
-        case .speech: return "Bulle BD"
-        }
-    }
-
     /// Les formes historiques se rendent par `cornerRadius` sur la calque ;
     /// les nouvelles formes passent par un tracé `CGPath` dédié (losange,
     /// nuage, bulle BD). Le renderer et l'export s'appuient sur ce flag pour
@@ -341,6 +321,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var isLocked: Bool?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
+    /// Optional author-assigned clip name (persisted, backward-compatible).
+    public var name: String?
 
     enum CodingKeys: String, CodingKey {
         case id, text, x, y, scale, rotation, zIndex, anchor
@@ -350,7 +332,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         case borderColor, borderWidth
         case translations, sourceLanguage
         case startTime, duration, fadeIn, fadeOut
-        case isLocked, keyframes
+        case isLocked, keyframes, name
         // Legacy keys — decoder only
         case content, textSize, displayDuration
     }
@@ -379,7 +361,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 fadeIn: Double? = nil,
                 fadeOut: Double? = nil,
                 isLocked: Bool? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
+                keyframes: [StoryKeyframe]? = nil,
+                name: String? = nil) {
         self.id = id
         self.text = text
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
@@ -397,6 +380,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.isLocked = isLocked
         self.keyframes = keyframes
+        self.name = name
     }
 
     // MARK: - Custom Codable (backward compat: content→text, textSize→fontSize, displayDuration→duration)
@@ -456,6 +440,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
         isLocked = try c.decodeIfPresent(Bool.self, forKey: .isLocked)
         keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -487,6 +472,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
         try c.encodeIfPresent(isLocked, forKey: .isLocked)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
+        try c.encodeIfPresent(name, forKey: .name)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }
@@ -605,6 +591,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
 
     // Heritage (kept)
     public var sourceLanguage: String?
+    /// Optional author-assigned clip name (persisted, backward-compatible).
+    public var name: String?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
     /// ThumbHash du contenu (première frame pour vidéo, image décompressée
@@ -635,7 +623,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case aspectRatio, anchor, intrinsicDuration
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
-        case sourceLanguage, keyframes, thumbHash
+        case sourceLanguage, keyframes, thumbHash, name
     }
 
     public init(id: String = UUID().uuidString,
@@ -658,7 +646,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
-                thumbHash: String? = nil) {
+                thumbHash: String? = nil,
+                name: String? = nil) {
         self.id = id
         self.postMediaId = postMediaId
         self.mediaURL = mediaURL
@@ -678,6 +667,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.sourceLanguage = sourceLanguage
         self.keyframes = keyframes
         self.thumbHash = thumbHash
+        self.name = name
     }
 
     // Custom init(from decoder:) for legacy backward compat
@@ -717,6 +707,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         // malformé / malveillant (slide effects JSON externe → cache disque).
         let rawThumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         thumbHash = (rawThumbHash?.count ?? 0) > Self.maxThumbHashLength ? nil : rawThumbHash
+        name = try c.decodeIfPresent(String.self, forKey: .name)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -744,6 +735,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
         try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
+        try c.encodeIfPresent(name, forKey: .name)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }
@@ -775,7 +767,8 @@ extension StoryMediaObject {
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
                 keyframes: [StoryKeyframe]? = nil,
-                thumbHash: String? = nil) {
+                thumbHash: String? = nil,
+                name: String? = nil) {
         self.init(id: id,
                   postMediaId: postMediaId,
                   mediaURL: mediaURL,
@@ -794,7 +787,8 @@ extension StoryMediaObject {
                   fadeIn: fadeIn, fadeOut: fadeOut,
                   sourceLanguage: sourceLanguage,
                   keyframes: keyframes,
-                  thumbHash: thumbHash)
+                  thumbHash: thumbHash,
+                  name: name)
     }
 }
 
@@ -825,11 +819,13 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var fadeIn: Float?               // fade-in (secondes)
     public var fadeOut: Float?              // fade-out (secondes)
     public var sourceLanguage: String?
+    /// Optional author-assigned clip name (persisted, backward-compatible).
+    public var name: String?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, placement, x, y, volume, waveformSamples
         case isBackground, backgroundAudioVariants, zIndex
-        case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
+        case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage, name
     }
 
     public init(id: String = UUID().uuidString, postMediaId: String = "",
@@ -840,7 +836,8 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
                 startTime: Float? = nil, duration: Float? = nil,
                 loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
-                sourceLanguage: String? = nil) {
+                sourceLanguage: String? = nil,
+                name: String? = nil) {
         self.id = id; self.postMediaId = postMediaId
         self.placement = placement; self.x = x; self.y = y
         self.volume = volume; self.waveformSamples = waveformSamples
@@ -849,6 +846,7 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
         self.startTime = startTime; self.duration = duration
         self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
+        self.name = name
     }
 }
 
@@ -1032,6 +1030,55 @@ public struct StorySlide: Identifiable, Codable, Sendable {
     }
 }
 
+extension StoryEffects {
+    /// Core "longest data wins" rule, extracted from `StorySlide.contentDerivedDuration()`
+    /// so `TimelineProject` (which carries the same three arrays but isn't a
+    /// `StorySlide`) can call the identical algorithm during live editing —
+    /// see `TimelineViewModel.recomputeSlideDuration()`. Pure function, no
+    /// change in behavior versus the code it replaces (design doc 2026-07-18).
+    public static func contentDerivedDuration(
+        mediaObjects: [StoryMediaObject]?,
+        audioPlayerObjects: [StoryAudioPlayerObject]?,
+        textObjects: [StoryTextObject]
+    ) -> TimeInterval {
+        let bgVideoDur = mediaObjects?
+            .first(where: { $0.isBackground && $0.kind == .video })?
+            .duration
+        let bgAudioDur = audioPlayerObjects?
+            .first(where: { $0.isBackground == true })?
+            .duration
+            .map { Double($0) }
+
+        let totalWords = textObjects.reduce(0) { acc, text in
+            acc + text.text.split(separator: " ").count
+        }
+        let textDur: TimeInterval = {
+            guard totalWords > StorySlide.longTextThresholdWords else {
+                return StorySlide.defaultStaticDuration
+            }
+            let extraWords = totalWords - StorySlide.longTextThresholdWords
+            return StorySlide.defaultStaticDuration
+                + Double(extraWords) * StorySlide.longTextSecondsPerWord
+        }()
+
+        let mediaWindows = (mediaObjects ?? [])
+            .compactMap { media in media.duration.map { (media.startTime ?? 0) + $0 } }
+        let audioWindows = (audioPlayerObjects ?? [])
+            .compactMap { audio in audio.duration.map { Double($0) + Double(audio.startTime ?? 0) } }
+        let longestData = (mediaWindows + audioWindows).max() ?? 0
+
+        let target = max(textDur, StorySlide.defaultStaticDuration, longestData)
+
+        let bgLoopPeriods = [bgVideoDur, bgAudioDur].compactMap { $0 }.filter { $0 > 0.001 }
+        let bgResult: TimeInterval = bgLoopPeriods.reduce(target) { effective, period in
+            let extended = period >= target ? period : (target / period).rounded(.up) * period
+            return max(effective, extended)
+        }
+
+        return max(bgResult, longestData)
+    }
+}
+
 extension StorySlide {
     /// SINGLE SOURCE OF TRUTH pour la durée d'un slide story.
     /// User spec 2026-05-28 : « rassembler les choses dans un seul lieu,
@@ -1083,67 +1130,14 @@ extension StorySlide {
         // Directive user 2026-07-14 : « la timeline prend la durée automatique
         // de la donnée la plus longue (audio, vidéo) » — TOUTES sources : bg ET
         // fg, vidéo ET audio, chacune mesurée par sa FENÊTRE `startTime + duration`.
-
-        // Composante 1 : média de fond à BOUCLER (vidéo prioritaire, sinon
-        // audio de fond). Sa durée naturelle sert de motif de loop pour couvrir
-        // la cible sans étirer une image figée.
-        let bgVideoDur = effects.mediaObjects?
-            .first(where: { $0.isBackground && $0.kind == .video })?
-            .duration
-        let bgAudioDur = effects.audioPlayerObjects?
-            .first(where: { $0.isBackground == true })?
-            .duration
-            .map { Double($0) }
-
-        // Composante 2 : texte long. >30 mots → 6 s + (mots-30)/6 secondes.
-        let totalWords = effects.textObjects.reduce(0) { acc, text in
-            acc + text.text.split(separator: " ").count
-        }
-        let textDur: TimeInterval = {
-            guard totalWords > Self.longTextThresholdWords else {
-                return Self.defaultStaticDuration
-            }
-            let extraWords = totalWords - Self.longTextThresholdWords
-            return Self.defaultStaticDuration
-                + Double(extraWords) * Self.longTextSecondsPerWord
-        }()
-
-        // Composante 3 : la donnée la plus longue, TOUTES sources confondues.
-        // Chaque piste est mesurée par la fin de sa fenêtre (`startTime + duration`)
-        // pour qu'une vidéo/un audio décalé ne soit jamais tronqué. Inclut
-        // désormais l'audio FOREGROUND (voix, musique posée) et le bg audio
-        // complet — auparavant ignorés (seul le 1er bg vidéo/audio comptait).
-        let mediaWindows = (effects.mediaObjects ?? [])
-            .compactMap { media in media.duration.map { (media.startTime ?? 0) + $0 } }
-        let audioWindows = (effects.audioPlayerObjects ?? [])
-            .compactMap { audio in audio.duration.map { Double($0) + Double(audio.startTime ?? 0) } }
-        let longestData = (mediaWindows + audioWindows).max() ?? 0
-
-        // Cible = max(texte, 6 s, donnée la plus longue).
-        let target = max(textDur, Self.defaultStaticDuration, longestData)
-
-        // Background media bouclé pour atteindre la cible (ou sa durée naturelle si
-        // plus longue). TOUTES les périodes de boucle de fond présentes sont
-        // considérées (vidéo ET audio si les deux coexistent) — avant ce fix,
-        // `bgVideoDur ?? bgAudioDur` ignorait totalement la période audio dès
-        // qu'un bg vidéo existait, pouvant laisser l'audio de fond coupé en
-        // plein cycle (directive user : « la répétition ... TOMBE TOUJOURS en
-        // facteur »). Pour chaque période, on arrondit la cible au multiple
-        // supérieur puis on prend le MAX à travers les sources, pour que la
-        // source dont la période exige le plus grand arrondi complète son
-        // dernier cycle. Ceci ne garantit pas un alignement simultané parfait
-        // des DEUX périodes quand elles sont incommensurables (nécessiterait
-        // un calcul type PPCM, hors de portée — risquerait de gonfler la
-        // durée du slide de façon déraisonnable) ; le cas dominant réel (une
-        // seule source de fond bouclée) reste, lui, toujours exact.
-        let bgLoopPeriods = [bgVideoDur, bgAudioDur].compactMap { $0 }.filter { $0 > 0.001 }
-        let bgResult: TimeInterval = bgLoopPeriods.reduce(target) { effective, period in
-            let extended = period >= target ? period : (target / period).rounded(.up) * period
-            return max(effective, extended)
-        }
-
-        // Le résultat couvre au moins la donnée la plus longue.
-        return max(bgResult, longestData)
+        // Core algorithm lives on `StoryEffects.contentDerivedDuration(...)` so
+        // `TimelineProject` (same three arrays, not a `StorySlide`) can call it
+        // too during live editing — see `TimelineViewModel.recomputeSlideDuration()`.
+        StoryEffects.contentDerivedDuration(
+            mediaObjects: effects.mediaObjects,
+            audioPlayerObjects: effects.audioPlayerObjects,
+            textObjects: effects.textObjects
+        )
     }
 
     /// Effective slide duration that completes any background looping video to a full repetition.
@@ -1171,15 +1165,6 @@ public enum StoryTransitionEffect: String, Codable, CaseIterable, Sendable {
     case slide
     /// Révélation circulaire : clipShape cercle qui s'élargit (0.4s easeOut) à l'entrée
     case reveal
-
-    public var label: String {
-        switch self {
-        case .fade:   return "Fondu"
-        case .zoom:   return "Zoom"
-        case .slide:  return "Glissement"
-        case .reveal: return "Révélation"
-        }
-    }
 
     public var iconName: String {
         switch self {
@@ -2351,18 +2336,30 @@ public struct TimelineProject: Codable, Sendable {
     public var textObjects: [StoryTextObject]
     public var clipTransitions: [StoryClipTransition]
 
+    /// Read-only snapshot of the slide's inter-slide entry/exit animation,
+    /// captured at `init(from:)` for the Timeline chrome lane to display.
+    /// NOT round-tripped by `apply(to:)` — editing opening/closing stays the
+    /// job of `OpeningEffectChips` above the canvas, same as before this
+    /// property existed. Purely informational here.
+    public var openingEffect: StoryTransitionEffect?
+    public var closingEffect: StoryTransitionEffect?
+
     public init(slideId: String,
                 slideDuration: Float,
                 mediaObjects: [StoryMediaObject] = [],
                 audioPlayerObjects: [StoryAudioPlayerObject] = [],
                 textObjects: [StoryTextObject] = [],
-                clipTransitions: [StoryClipTransition] = []) {
+                clipTransitions: [StoryClipTransition] = [],
+                openingEffect: StoryTransitionEffect? = nil,
+                closingEffect: StoryTransitionEffect? = nil) {
         self.slideId = slideId
         self.slideDuration = slideDuration
         self.mediaObjects = mediaObjects
         self.audioPlayerObjects = audioPlayerObjects
         self.textObjects = textObjects
         self.clipTransitions = clipTransitions
+        self.openingEffect = openingEffect
+        self.closingEffect = closingEffect
     }
 
     public init(from slide: StorySlide) {
@@ -2377,6 +2374,8 @@ public struct TimelineProject: Codable, Sendable {
         self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
         self.textObjects = slide.effects.textObjects
         self.clipTransitions = slide.effects.clipTransitions ?? []
+        self.openingEffect = slide.effects.opening
+        self.closingEffect = slide.effects.closing
     }
 
     public func apply(to slide: inout StorySlide) {
@@ -3181,13 +3180,14 @@ public struct SetClipPropertyCommand: EditCommand {
         case loop(old: Bool?, new: Bool?)
         case isBackground(old: Bool?, new: Bool?)
         case isLocked(old: Bool?, new: Bool?)
+        case name(old: String?, new: String?)
 
         private enum CodingKeys: String, CodingKey {
-            case type, oldFloat, newFloat, oldBool, newBool
+            case type, oldFloat, newFloat, oldBool, newBool, oldString, newString
         }
 
         private enum Tag: String, Codable {
-            case volume, fadeIn, fadeOut, loop, isBackground, isLocked
+            case volume, fadeIn, fadeOut, loop, isBackground, isLocked, name
         }
 
         public init(from decoder: Decoder) throws {
@@ -3218,6 +3218,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
                 let new = try c.decodeIfPresent(Bool.self, forKey: .newBool)
                 self = .isLocked(old: old, new: new)
+            case .name:
+                let old = try c.decodeIfPresent(String.self, forKey: .oldString)
+                let new = try c.decodeIfPresent(String.self, forKey: .newString)
+                self = .name(old: old, new: new)
             }
         }
 
@@ -3248,6 +3252,10 @@ public struct SetClipPropertyCommand: EditCommand {
                 try c.encode(Tag.isLocked, forKey: .type)
                 try c.encodeIfPresent(old, forKey: .oldBool)
                 try c.encodeIfPresent(new, forKey: .newBool)
+            case .name(let old, let new):
+                try c.encode(Tag.name, forKey: .type)
+                try c.encodeIfPresent(old, forKey: .oldString)
+                try c.encodeIfPresent(new, forKey: .newString)
             }
         }
     }
@@ -3314,6 +3322,8 @@ public struct SetClipPropertyCommand: EditCommand {
             media.isBackground = (useNew ? new : old) ?? false
         case .isLocked:
             break
+        case .name(let old, let new):
+            media.name = useNew ? new : old
         }
     }
 
@@ -3335,6 +3345,8 @@ public struct SetClipPropertyCommand: EditCommand {
             audio.isBackground = useNew ? new : old
         case .isLocked:
             break
+        case .name(let old, let new):
+            audio.name = useNew ? new : old
         }
     }
 
@@ -3350,6 +3362,8 @@ public struct SetClipPropertyCommand: EditCommand {
         case .fadeOut(let old, let new):
             let val: Double? = useNew ? new : old
             text.fadeOut = val
+        case .name(let old, let new):
+            text.name = useNew ? new : old
         case .volume, .loop, .isBackground:
             break
         }

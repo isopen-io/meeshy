@@ -151,4 +151,19 @@ struct BandStateMachineTests {
         sm.tapFAB(.timeline)
         #expect(sm.state == .toolPanel(.timeline))
     }
+
+    /// The switch-chip row (`ComposerToolPanelHost`) routes every tap through
+    /// `tapTile`, not `tapFAB` — this is the exact path the composer uses when
+    /// the user is already inside another tool panel and taps the Timeline
+    /// chip to switch directly. The machine itself has been generic here
+    /// since `tapTile` no longer special-cases `.timeline` (see the file
+    /// header note above) — this test locks that contract in explicitly,
+    /// mirroring `tapFABTimelineSwapsOpenPanel` for the tile-tap entry point.
+    @Test("tapTile(.timeline) while another panel is open swaps to it, like any other tool")
+    func tapTileTimelineSwapsOpenPanel() {
+        var sm = BandStateMachine()
+        sm.tapTile(.text)
+        sm.tapTile(.timeline)
+        #expect(sm.state == .toolPanel(.timeline))
+    }
 }

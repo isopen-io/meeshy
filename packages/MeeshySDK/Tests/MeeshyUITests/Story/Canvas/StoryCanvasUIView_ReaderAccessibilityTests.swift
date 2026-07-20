@@ -38,6 +38,18 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
 
     // MARK: - Regression: edit-mode behaviour preserved
 
+    /// Localized text prefix — resolved through the same catalog key as the
+    /// production code (`story.canvas.a11y.textPrefix`) so the assertion
+    /// stays correct regardless of the test host's locale, rather than
+    /// pinning one hardcoded language's literal.
+    private var textPrefix: String {
+        String(localized: "story.canvas.a11y.textPrefix", defaultValue: "Texte", bundle: .module)
+    }
+
+    private var imageLabel: String {
+        String(localized: "story.media.image", defaultValue: "Image", bundle: .module)
+    }
+
     func test_accessibilityElements_inEditMode_returnsExisting() {
         let slide = makeSlide(
             texts: [StoryTextObject(id: "t1", text: "Hello")],
@@ -47,9 +59,9 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
         let view = makeView(slide: slide, mode: .edit)
 
         let labels = elements(view).map(\.accessibilityLabel)
-        XCTAssertTrue(labels.contains("Texte : Hello"),
-                      "Edit mode must keep the legacy 'Texte : …' prefix for the composer.")
-        XCTAssertTrue(labels.contains("Image"))
+        XCTAssertTrue(labels.contains("\(textPrefix) : Hello"),
+                      "Edit mode must keep the localized text prefix for the composer.")
+        XCTAssertTrue(labels.contains(imageLabel))
         XCTAssertTrue(labels.contains(where: { $0?.hasPrefix("Sticker") == true }))
         XCTAssertEqual(elements(view).count, 3)
     }
@@ -58,10 +70,10 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
         let slide = makeSlide(texts: [StoryTextObject(id: "t1", text: "Hello")])
         let view = makeView(slide: slide, mode: .edit)
 
-        let text = elements(view).first(where: { $0.accessibilityLabel == "Texte : Hello" })
+        let text = elements(view).first(where: { $0.accessibilityLabel == "\(textPrefix) : Hello" })
         XCTAssertNotNil(text?.accessibilityCustomActions)
         XCTAssertEqual(text?.accessibilityCustomActions?.count, 3,
-                       "Edit mode must keep Supprimer/Dupliquer/Mettre à l'arrière custom actions.")
+                       "Edit mode must keep delete/duplicate/send-to-back custom actions.")
     }
 
     // MARK: - Reader mode (P2 bug fix)
@@ -113,8 +125,10 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
         let imgView = makeView(slide: imgSlide, mode: .play)
         let vidView = makeView(slide: vidSlide, mode: .play)
 
-        XCTAssertEqual(elements(imgView).first?.accessibilityLabel, "Photo de fond")
-        XCTAssertEqual(elements(vidView).first?.accessibilityLabel, "Vidéo de fond")
+        let expectedPhoto = String(localized: "story.canvas.a11y.backgroundPhoto", defaultValue: "Photo de fond", bundle: .module)
+        let expectedVideo = String(localized: "story.canvas.a11y.backgroundVideo", defaultValue: "Vidéo de fond", bundle: .module)
+        XCTAssertEqual(elements(imgView).first?.accessibilityLabel, expectedPhoto)
+        XCTAssertEqual(elements(vidView).first?.accessibilityLabel, expectedVideo)
     }
 
     func test_accessibilityElements_textInPreferredLanguage() {

@@ -1,5 +1,273 @@
 # @meeshy/gateway
 
+## 1.13.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - Modernize ContactCardView with design tokens and relative fonts (#2054)
+  - consolidate generateConversationIdentifier onto shared SSOT (182) (#2060)
+  - native ContentUnavailableView for StarredMessagesView empty state (175i) (#2064)
+  - BookmarksView empty state → shared EmptyStateView (168i) (#2095)
+  - composer glass chrome follows the REAL slide backdrop (story-chrome-scheme-media-bg)
+  - move the export action into the transport as a "Save" button (after Play)
+  - landscape canvas shrinks (never cropped) as the sheet grows + gap above the sheet
+  - pure camera-covered (dark-frame) detection core (call-dark-frame-detection) (#2094)
+  - landscape canvas hugs the sheet, sheet overlays it past the visibility cap
+  - realtime status:unreacted — live bar reaction-removal (status-unreacted-socket) (#2075)
+  - kill the black letterbox — blurred bg fill + centered landscape canvas
+  - realtime socket wiring — live bar updates (status-realtime-socket) (#2073)
+  - localise the status\_\* string family (FR/ES/PT) (status-strings-i18n) (#2070)
+  - surface freshly-added media bitmaps to the composer canvas reader
+  - offline pending banners — warning amber + truncation-safe
+  - disk L2 status-bar cache — cold-launch parity across process death (status-bar-l2-cache) (#2068)
+  - tappable '...' menu on My Stories rows — adds Enregistrer (Photos) and Transférer (conversation forward)
+  - pending-stories banner dismiss, upload badge tap passthrough, failed-publish history
+  - port enriched track labels + persisted clip name/timing config onto the unified timeline
+  - Friends/Discover status-feed toggle (status-feed-mode-toggle) (#2065)
+  - bound the debounce cache to stop unbounded per-user memory growth (#2057)
+  - reaction picker in the mood-status popover (status-popover-reaction-picker) (#2063)
+  - transport controls no longer clip off-screen (chrome lane width leak)
+  - L1 in-memory status-bar cache (cache-first paint) (status-bar-l1-cache) (#2061)
+  - popover Republish action + repost-seeded composer (#2058)
+  - status composer sheet + pure StatusComposerDraft (status-composer) (#2055)
+  - Compose StatusBarView mood-pill rail + pure cell builder (status-bar-compose) (#2052)
+  - StatusesViewModel + pure bar-accumulation state (statuses-viewmodel) (#2050)
+  - StatusRepository transport + status feed endpoints (status-repository) (#2048)
+  - one unified timeline — Simple/Pro toggle, ProTimelineView, TimelineMode and TimelineToolbar removed
+  - mood-status model + expiry/mapper SSOT (status-mood-core) (#2046)
+  - snap toggle joins the transport bar (unified view keeps every Pro control)
+  - extract TimelineInspectorHost — quick view gains clip/keyframe/transition inspectors
+  - normalize language codes emitted by getUserLanguageChoices (180i) (#2044)
+  - comment composer @-mention remote directory merge (#2042)
+  - localize + VoiceOver structure for UploadProgressBar (167i) (#2037)
+  - also reload timeline snapshot on activeTool -> .timeline
+  - reload timeline snapshot when the timeline tab actually becomes visible
+  - chrome lane now reflects the live-picked opening/closing effect, not a stale slide snapshot
+
+## 1.12.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - comment composer @-mention autocomplete + shared mention SSOT (#2029)
+  - fullscreen media gallery on collage tile tap (#2027)
+  - adaptive multi-image collage layouts (1–5+ media) (#2026)
+  - read-only chrome lane shows opening/closing transitions on the ruler
+  - no-op drag release also cleared pre-drag duration baseline
+  - per-comment Prisme language switcher (#2023)
+  - drag-end duration toast never fired — compare against pre-drag baseline
+  - slide duration always reflects current content, not a stale pin
+  - extract contentDerivedDuration core onto StoryEffects (no behavior change)
+  - merge Dissolve into Crossfade — it rendered identically everywhere
+  - VoiceOver for InviteFriendsSheet options summary (164i)
+  - render @-mentions + rich text in comments (#2021)
+  - shrink track label column to icon-only, reclaim width for the lane
+  - real Liquid Glass for composer band on iOS 26+
+  - Dynamic Type + a11y for MessageViewsDetailView empty/error states
+  - live header comment-count badge — comment:added/deleted resync (#2019)
+  - Dynamic Type + VoiceOver for AudioCarouselView page indicator (163i)
+  - live comment heart reactions — comment:reaction-added/removed sync (#2016)
+  - adopt design tokens and a11y in JoinFlow
+  - Dynamic Type + VoiceOver for StoryViewerView+Content (162i)
+  - live comment:deleted — deleted comments/replies vanish from the open thread (#2014)
+  - preserve MyStoryRow selection-trait guard literal (161i)
+  - Dynamic Type + VoiceOver for MyStoriesView (161i)
+  - post-detail realtime room — live comment:added in the open post (#2012)
+  - VoiceOver parity for MessageForwardDetailView (160i)
+  - auto-preview replies — first replies show without a tap (#2010)
+  - VoiceOver grouping for AttachmentLoadingTile (159i)
+  - VoiceOver pass for SecurityVerificationView (158i)
+  - reply composition — optimistic replies targeting a comment (#2007)
+  - composer chrome overlaps sheet + loop-fill visualization
+  - comment replies — 1-level expandable threads ("View N replies") (#2005)
+  - Liquid Glass + alignment gaps, video export overlay dark bug
+  - Timeline mode switcher a11y label + empty-state picker dead-end
+  - comment likes — optimistic heart toggle (#2004)
+  - localize drawing toolbar (tools, undo/redo, stroke list, smoothing)
+  - localize text-edit toolbar, offline-queue banner, draft-resume a11y
+  - post-detail threaded comments — optimistic send + Prisme thread (#2003)
+  - localize video editor category and tool titles
+  - localize story canvas VoiceOver accessibility labels
+  - repost / quote embed cell (a reposted post rendered inside the card) (#2002)
+  - localize export-as-video sheet subtitle, verify export flow
+  - localize EXCEPT/ONLY audience picker title + search placeholder
+  - full-screen post detail screen (fixes non-reel tap dead-end) (#2000)
+  - visibility picker was hardcoded French (5th localization gap)
+  - "Slide opening" transition chips were hardcoded French
+  - Timeline switch-chip did nothing from any other open panel
+  - improve accessibility and i18n of iPadResizableHandle
+  - My Stories list thumbnail shows the actual composed content
+  - reader + Mes stories were entirely unlocalized (84 keys)
+  - VoiceOver for MessageReactionsDetailView (155i)
+  - user-profile posts feed — cursor pagination + generalized post-list SSOT (#1997)
+  - VoiceOver + content selection for AudioPostComposerView (154i)
+  - bookmarked posts (saved) feed — cursor pagination + optimistic un-bookmark (#1995)
+  - VoiceOver grouping for MessageDetailSentimentTab gauge (153i)
+  - bookmark/un-bookmark — optimistic toggle + live post:bookmarked overlay (#1993)
+  - live post:liked/unliked count sync — like overlay (#1992)
+  - Dynamic Type freeze + dead-code cleanup for IncomingCallView (152i)
+  - live post:deleted removal — tombstone overlay (#1990)
+  - new-posts banner + realtime-head merge (#1989)
+  - file/photo attachment picker → REST send (#1987)
+  - @-mention autocomplete — debounced remote directory merge (#1985)
+  - ChangePasswordView validation checklist + rotor + success hero (149i)
+  - send message with attachments — durable upload→graft chain + clipboard-content send (#1983)
+  - VoiceOver labels for StoryViewerContainer error state (148i)
+  - report a message (typed reasons + detail) (#1981)
+  - Dynamic Type + VoiceOver data summary for StatsTimelineChart (147i)
+  - in-app browser routing + rich-card image band (#1979)
+  - VoiceOver + Dynamic Type for VoiceProfileManageView (146i)
+  - live-location socket start/update/stop wiring → session badges (#1977)
+  - VoiceOver grouping for ConversationDashboard stat gauges (145i)
+  - large-paste detection → clipboard-content preview (#1975)
+  - live-location timed-session core + badge/duration-picker UI (#1973)
+  - VoiceOver structure for StoryExpiredContent (143i)
+  - async OpenGraph link-preview cache — dedupe/negative-cache/logout-purge (#1971)
+  - VoiceOver structure for FriendRequestListView (142i)
+  - pure OpenGraph link-preview core + tracker stripping (#1969)
+  - in-overlay interactive audio preview transport SSOT (#1967)
+  - Dynamic Type for ThemedBackButton chevron (140i)
+  - iMessage-style voice-recording pill logic + UI (#1965)
+  - floating preview-bubble overlay layout law + lifted hero (#1964)
+  - pure overlay drag-to-detail gesture law SSOT (#1963)
+  - pure action-grid SSOT for the long-press overlay menu (#1962)
+  - iOS modernization, design tokens, and CI fix
+  - modernize iOS app for HIG, A11Y, and reliability
+  - persistent sparkle-canvas twinkle treatment (#1960)
+  - one-shot shake/zoom/explode/waoo appearance transforms (#1959)
+  - one-shot confetti/fireworks appearance particles (#1957)
+  - render message effects on received bubbles (#1956)
+  - composer message-effects picker + real send wiring (#1955)
+  - view-once "Seen and deleted" burned tombstone (#1954)
+  - corrige les findings de la revue de code post-implémentation
+  - sélection multiple + suppression groupée dans Mes stories
+  - StorySelectionResolver — sélection multiple filtrée contre la liste vivante
+  - bouton créer une story depuis la liste Mes stories
+  - tap avatar « Ma story » ouvre la liste au lieu du player direct
+  - taper une story dans Mes stories ouvre la story tapée, pas toujours la 1re
+  - StoryIndexResolver — résout l'index de lecture par postId
+  - vignette Mes stories proportionnelle au ratio réel du contenu
+  - FeedMedia.aspectRatio — dérivé de width/height pour les vignettes proportionnelles
+  - StoryThumbnailSizing — largeur de vignette proportionnelle au contenu
+  - blurred / view-once "tap to reveal" lifecycle (#1953)
+  - reader stays alive through Notification Center peek, unify group-switch intro, fix reposted-story playback stall
+  - timeline opens inline in the composer band, modal sheet removed
+  - ComposerToolPanelHost renders a real inline timeline panel
+  - StoryCanvasFraming.isCarded gains timelineActive
+  - BandStateMachine stops special-casing .timeline
+  - canvas follows background's continuous aspect ratio, clamped 9:21-21:9
+  - text size slider tracks live pinch scale, resets scale on manual resize
+  - pull-to-refresh reloads stories, not just posts
+  - collapse ephemeral bubble when its self-destruct timer expires (#1952)
+  - durée de boucle du fond = max(vidéo, audio) + pause sur scenePhase + entrée voisin
+  - aperçu menu natif standalone + confirmation suppression média/signalement
+  - désactiver CallKit en Chine (Guideline 5 MIIT) + retirer bluetooth-peripheral inutilisé
+  - save-to-gallery from the image viewer (#1951)
+  - ephemeral self-destruct countdown badge (#1950)
+  - message-effects render-plan + persistent treatment layer (#1949)
+  - message-effects send-path wire encoding (#1947)
+  - effet snap au cadrage de l'arrière-plan (centre + bords)
+  - vue « Mes stories envoyées » + menu d'actions
+  - preview joue le son d'arrière-plan + durée audio à l'import
+  - pickers audience & forward cache-first + liste des vues (profil/mood/présence)
+  - contours du canvas visibles + timeline = durée de la donnée la plus longue
+  - message-effects composer editor + ephemeral-duration enum (#1946)
+  - chips « Arrière-plan » / « Premier plan » pilotant la couche manipulable du canvas
+  - retenir sut (souscription Combine vivante) + retirer clé morte story.viewer.viewsCount
+  - message-effects wire contract + resolver (#1945)
+  - gallery neighbour prefetch ±2 (#1944)
+  - gallery per-page author + date header (#1943)
+  - StoryItem porte impressionCount + sheet « vu par » = viewCount autoritatif + impressions
+  - unifie les compteurs vues/impressions entre Détail, Réel, Feed et Story
+  - erreurs de compile + warnings Swift 6 du bundle de tests
+  - conversation media gallery per-page caption (iOS captionMap parity) (#1942)
+  - notification-row relative timestamp (iOS NotificationRowView parity) (#1941)
+  - lecture de story plus fluide — haptics, swipe continu, republications, audio de fond (#1939)
+  - per-type notification row accent colour (iOS NotificationRowView parity) (#1940)
+  - conversation-row relative timestamp (iOS ThemedConversationRow parity) (#1937)
+  - long relative-time rendering layer + profile "last seen" line (#1936)
+  - error-recovery force-end évince aussi signalSessionCache (#1931)
+  - ne pas empiler l'offre « Réessayer » sur l'appel en attente promu (#1927)
+  - count only active memberships in totalConversations (iter 173) (#1926)
+  - REST likeComment enforces max-1-reaction-per-user (socket parity) (#1933)
+  - résout l'avatar des feuilles de détail via la source unique (fallback compte + chaîne-vide) (#1934)
+  - retire la pill pop-up « réseau faible » au profit d'indicateurs discrets (iOS + web)
+  - relative-time short rendering layer + feed wiring (time-relative-format-strings) (#1935)
+  - résout getTranslationFromJSON insensible à la casse (#1905)
+  - resolveParticipantAvatar treats blank strings as absent (#1925)
+  - per-conversation message ordering SSOT (chat-message-ordering) (#1924)
+  - relative-time long-framing SSOT pure core (§Q) (#1923)
+  - conversation-wide fullscreen media gallery (§C) (#1902)
+  - catch escaping swap-remove broadcast rejection (#1897)
+  - accept NANP local phone format (555) 123-4567 (#1901)
+  - résout le nom auteur via getUserDisplayName (displayName vide → username) (#1903)
+  - relative-time classification SSOT pure core (§Q) (#1904)
+  - consecutive-sender message grouping (§C) (#1900)
+  - ThumbHash blur-placeholder encoder pure core (§P) (#1899)
+  - ThumbHash blur-placeholder decoder pure core (§P) (#1898)
+  - durcit l'isolation Swift 6 (private(set) scale + nonisolated fadePresets)
+  - décodage résilient d'ActiveCallParticipant (fallback userId → user.id)
+  - supprime le refresh REST, s'appuie sur presence:snapshot socket
+  - remplace le chunking par push-only — supprime le pull REST (#8)
+  - live-waveform pure core (metering + rolling window + interpolation) (#1896)
+  - diffuse call:ended au pair sur les chemins REST end/leave (parité socket)
+  - aplatit l'identité participant dans les réponses REST (crash-recovery iOS)
+  - remplacement de pile atomique pour les deep-links (#16)
+  - dedup forceReregister sur le cooldown (anti PushKit churn #13)
+  - reconcilie call:error CALL_ENDED au lieu de toaster 'already ended' (#12)
+  - ne rearme la socket qu'apres un vrai background (#11)
+  - garde les emits fire-and-forget sur l'etat connecte (#10)
+  - elargit le timeout ACK call:join a 6s (anti false NOT-ACKed #9)
+  - chunk le refresh presence (50/req concurrent) au lieu d'1 URL de 200 ids (#8)
+  - differe la synchro colorScheme->mode hors passe d'update (#7)
+  - batch le flush en 1 POST anti-429 (#6)
+  - borne le flush engagement en transition BG (anti-watchdog #5)
+  - URL contenant m+<token> — fin des parts chevauchantes (F91) (#1893)
+  - context-aware image compression plan (§P) (#1895)
+  - open-source licenses screen (§L static screens complete) (#1894)
+  - bannière call-waiting — contenu (suite de 44a708d56)
+  - bannière call-waiting — swap « Terminer & répondre » (parité iOS/Android)
+  - finalise la bulle « en cours » sur les chemins REST end/leave (bulles orphelines)
+  - découple RootView/iPadRootView du churn ConversationListViewModel (re-render idle)
+  - découple RootView/iPadRootView du churn CallManager — cause du watchdog 0x8BADF00D
+  - buffer answer signals for late-rejoining callers (§4.6) (#1889)
+  - Help & Support screen (§L static screens) (#1892)
+  - guard translatedAudios in handleAudioProcessCompleted against missing field (#1890)
+  - offer retry on call:ended, not just the connect watchdog (#1891)
+  - busy-path — auto-décline un 2e appel entrant pendant un appel actif (parité iOS/Android)
+  - retry sur échec transitoire signalé par le serveur/pair (parité iOS/web)
+  - retry-on-failure — « Réessayer » un appel échoué transitoirement (parité web/Android)
+  - retry-on-failure — « Réessayer » un appel échoué transitoirement (parité web)
+  - retry-on-failure — « Réessayer » après un échec transitoire d'appel
+  - sort per-sender buckets so the unread-count binary search holds regardless of row order (#1888)
+  - expose callFailureRate — la KPI de fiabilité n°1 dans l'endpoint
+  - avgRtt/avgPacketLoss n'incluent plus les appels jamais connectés (0 déflatant)
+  - le web émet enfin call:analytics au raccroché — fin du trou de télémétrie
+  - les échecs failed(message) s'agrègent en un seul bucket « failed »
+  - la sentinelle -1 « jamais connecté » ne pollue plus la moyenne de setup time
+  - endpoint admin de fiabilité des appels — le côté LECTURE de call:analytics
+  - align no-answer ring timeout to 45s, matching iOS convention (#1879)
+  - la pill « Rejoindre » se masque quand ce device est déjà en appel
+  - câble onRejoinCall — rejoint l'appel existant via le deep-link entrant autoAnswer
+  - pill « Rejoindre » dans le header — parité iOS (b69509366)
+  - ChatViewModelTest — harness field est `vm`, pas `viewModel`
+  - pill « Rejoindre l'appel » après crash/relaunch mid-call — parité iOS/web
+  - derive comment like-state from the comment's own reactions (#1880)
+  - guard RTCPeerConnectionDelegate callbacks against a torn-down connection (#1883)
+  - normalize call:end's client-supplied reason before casting to CallEndReason (#1885)
+  - unify ToS + Privacy Policy into one data-driven legal screen (§L) (#1887)
+  - About screen — pure version/link/info SSOTs + Compose glue (§L) (#1886)
+  - crash-report diagnostics viewer with share (§L) (#1884)
+  - découverte active-call — modèles + API REST (parité rejoin, tranche 1)
+  - blank-aware participant displayName via shared SSOT
+  - repost of a repost now renders — remap storyEffects media ids on snapshot
+  - add pure storyEffects media-id remap helper
+  - revert pytest + httpcore bumps from PR #1907/#1910 (unresolvable pins)
+  - revert numpy bump from PR #1909 (documented ESPnet/chatterbox-tts ceiling)
+
 ## 1.11.0
 
 ### Minor Changes

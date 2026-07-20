@@ -42,7 +42,6 @@ struct AttachmentLoadingTile: View {
                             )
                     }
                     .offset(x: 5, y: -5)
-                    .accessibilityLabel(String(localized: "attachment.loading.cancel-a11y", defaultValue: "Annuler le chargement", bundle: .main))
                 }
             }
 
@@ -53,6 +52,24 @@ struct AttachmentLoadingTile: View {
                 .frame(width: max(size, 60))
         }
         .animation(.easeInOut(duration: 0.2), value: stageKey)
+        // VoiceOver reads the tile as ONE element: the media kind is the label
+        // and the preparation stage is the value, so the spinner, terse on-tile
+        // glyph labels and decorative icons no longer fragment into separate
+        // swipes. `.updatesFrequently` makes VoiceOver re-announce the value on
+        // refocus as the stage advances (loading → compressing → …). Cancel is a
+        // rotor action so it no longer relies on hitting the 18pt corner button.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(kindLabel)
+        .accessibilityValue(accessibilityStageValue)
+        .accessibilityAddTraits(isPreparing ? .updatesFrequently : [])
+        .accessibilityActions {
+            if let onCancel {
+                Button(String(localized: "attachment.loading.cancel-a11y", defaultValue: "Annuler le chargement", bundle: .main)) {
+                    HapticFeedback.light()
+                    onCancel()
+                }
+            }
+        }
     }
 
     // MARK: - Tile body
@@ -163,12 +180,53 @@ struct AttachmentLoadingTile: View {
 
     private var label: String {
         if case .failed(let msg) = prep.stage, !msg.isEmpty { return msg }
+        return kindLabel
+    }
+
+    /// Media kind, independent of stage — used both as the on-tile fallback
+    /// label and as the VoiceOver accessibility label (which must stay the
+    /// media kind even in the `.failed` state, where the error goes to value).
+    private var kindLabel: String {
         switch prep.kind {
         case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
         case .video: return String(localized: "attachment.kind.video", defaultValue: "Video", bundle: .main)
         case .audio: return String(localized: "attachment.kind.audio", defaultValue: "Audio", bundle: .main)
         case .file:  return String(localized: "attachment.kind.file", defaultValue: "File", bundle: .main)
         case .location: return String(localized: "attachment.kind.location", defaultValue: "Location", bundle: .main)
+        }
+    }
+
+    // MARK: - Accessibility
+
+    /// Preparation stage as a full VoiceOver phrase (the on-tile `stageLabel`
+    /// is terse — "Preview", "Hash" — to fit the 56pt tile; VoiceOver gets the
+    /// unabbreviated wording instead). Read as the accessibility *value* so it
+    /// pairs with `kindLabel` → "Photo, Compressing".
+    private var accessibilityStageValue: String {
+        switch prep.stage {
+        case .loading:
+            return String(localized: "attachment.loading.a11y-loading", defaultValue: "Chargement en cours", bundle: .main)
+        case .compressing:
+            return String(localized: "attachment.loading.a11y-compressing", defaultValue: "Compression en cours", bundle: .main)
+        case .thumbnailing:
+            return String(localized: "attachment.loading.a11y-thumbnailing", defaultValue: "Génération de l'aperçu", bundle: .main)
+        case .hashing:
+            return String(localized: "attachment.loading.a11y-hashing", defaultValue: "Finalisation", bundle: .main)
+        case .ready:
+            return String(localized: "attachment.loading.a11y-ready", defaultValue: "Prêt", bundle: .main)
+        case .failed(let message):
+            let base = String(localized: "attachment.loading.a11y-failed", defaultValue: "Échec du chargement", bundle: .main)
+            return message.isEmpty ? base : "\(base) — \(message)"
+        }
+    }
+
+    /// True while the attachment is still moving toward a terminal state, so
+    /// VoiceOver keeps the `.updatesFrequently` trait and re-announces stage
+    /// changes on refocus. Cleared on `.ready` / `.failed`.
+    private var isPreparing: Bool {
+        switch prep.stage {
+        case .ready, .failed: return false
+        default: return true
         }
     }
 

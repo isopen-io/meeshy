@@ -54,7 +54,11 @@ import me.meeshy.app.chat.StarredMessagesScreen
 import me.meeshy.app.contacts.ContactsScreen
 import me.meeshy.app.conversations.ConversationListScreen
 import me.meeshy.app.conversations.NewConversationScreen
+import me.meeshy.app.feed.BookmarksScreen
+import me.meeshy.app.feed.UserPostsScreen
 import me.meeshy.app.feed.FeedScreen
+import me.meeshy.app.feed.PostDetailScreen
+import me.meeshy.app.feed.PostDetailViewModel
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.reels.ReelsScreen
 import me.meeshy.app.profile.ProfileScreen
@@ -89,6 +93,8 @@ object Routes {
     const val CONVERSATION_SINGULAR_DEEP_LINK = "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
+    const val SAVED_POSTS = "feed/saved"
+    const val POST_DETAIL = "feed/post/{${PostDetailViewModel.POST_ID_ARG}}"
     const val CALLS = "calls"
     const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
@@ -108,6 +114,7 @@ object Routes {
     const val STARRED = "starred"
     const val PROFILE_USER = "profile/{userId}"
     const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
+    const val USER_POSTS = "profile/{userId}/posts"
     const val REPORT_USER = "report/{${ReportUserViewModel.USER_ID_ARG}}?${ReportUserViewModel.USERNAME_ARG}={${ReportUserViewModel.USERNAME_ARG}}"
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
@@ -116,8 +123,11 @@ object Routes {
     val CALL = CallRoute.PATTERN
 
     fun reels(seed: String? = null): String = if (seed == null) "reels" else "reels?seed=$seed"
+
+    fun postDetail(postId: String): String = "feed/post/$postId"
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
+    fun userPosts(userId: String): String = "profile/$userId/posts"
     fun reportUser(userId: String, username: String): String =
         "report/$userId?${ReportUserViewModel.USERNAME_ARG}=${Uri.encode(username)}"
     fun story(userId: String): String = "story/$userId"
@@ -339,6 +349,26 @@ fun MeeshyApp(
             composable(Routes.FEED) {
                 FeedScreen(
                     onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+                    onOpenSaved = { navController.navigate(Routes.SAVED_POSTS) },
+                )
+            }
+            composable(Routes.SAVED_POSTS) {
+                BookmarksScreen(
+                    onBack = { navController.popBackStack() },
+                    onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
+                )
+            }
+            composable(
+                route = Routes.POST_DETAIL,
+                arguments = listOf(
+                    navArgument(PostDetailViewModel.POST_ID_ARG) { type = NavType.StringType },
+                ),
+            ) {
+                PostDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                 )
             }
             composable(Routes.CALLS) {
@@ -442,6 +472,17 @@ fun MeeshyApp(
                     onReport = { userId, username ->
                         navController.navigate(Routes.reportUser(userId, username))
                     },
+                    onViewPosts = { userId -> navController.navigate(Routes.userPosts(userId)) },
+                )
+            }
+            composable(
+                route = Routes.USER_POSTS,
+                arguments = listOf(navArgument("userId") { type = NavType.StringType }),
+            ) {
+                UserPostsScreen(
+                    onBack = { navController.popBackStack() },
+                    onPostClick = { postId -> navController.navigate(Routes.reels(seed = postId)) },
+                    onOpenPost = { postId -> navController.navigate(Routes.postDetail(postId)) },
                 )
             }
             composable(

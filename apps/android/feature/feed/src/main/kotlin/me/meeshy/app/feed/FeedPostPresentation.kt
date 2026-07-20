@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
-import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
 import me.meeshy.ui.component.bubble.LanguageChip
@@ -40,11 +39,14 @@ data class FeedPostPresentation(
     val images: List<FeedPostImage>,
     val likeCount: Int,
     val isLiked: Boolean,
+    val bookmarkCount: Int,
+    val isBookmarked: Boolean,
     val commentCount: Int,
     val repostCount: Int,
     val isPinned: Boolean,
     val isEdited: Boolean,
     val isReel: Boolean,
+    val repostEmbed: RepostEmbedPresentation?,
 )
 
 object FeedPostBuilder {
@@ -72,8 +74,8 @@ object FeedPostBuilder {
             .map { media ->
                 FeedPostImage(
                     id = media.id,
-                    url = resolveMediaUrl(media.fileUrl!!, mediaBaseUrl),
-                    thumbnailUrl = media.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    url = resolveFeedMediaUrl(media.fileUrl!!, mediaBaseUrl),
+                    thumbnailUrl = media.thumbnailUrl?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
                     width = media.width,
                     height = media.height,
                 )
@@ -87,7 +89,7 @@ object FeedPostBuilder {
             authorName = (post.author?.displayName ?: post.author?.username)
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = post.author?.avatar
-                ?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             createdAtIso = post.createdAt,
             content = resolveContent(post, preferences, activeCode, activeIsOriginal),
             isTranslated = isTranslated,
@@ -102,11 +104,14 @@ object FeedPostBuilder {
             images = images,
             likeCount = post.likeCount ?: 0,
             isLiked = post.isLikedByMe == true,
+            bookmarkCount = post.bookmarkCount ?: 0,
+            isBookmarked = post.isBookmarkedByMe == true,
             commentCount = post.commentCount ?: 0,
             repostCount = post.repostCount ?: 0,
             isPinned = post.isPinned == true,
             isEdited = post.isEdited == true,
             isReel = post.type.equals("reel", ignoreCase = true),
+            repostEmbed = RepostEmbedBuilder.build(post.repostOf, preferences, mediaBaseUrl),
         )
     }
 
@@ -149,24 +154,9 @@ object FeedPostBuilder {
             it.key.normalizedCode() == this && it.value.text.isNotBlank()
         } == true
 
-    private fun Map<String, ApiPostTranslationEntry>?.toTranslationRows():
-        List<LanguageResolver.TranslationLike> =
-        this?.map { (code, entry) -> PostTranslationRow(code, entry.text) }.orEmpty()
-
-    private data class PostTranslationRow(
-        override val targetLanguage: String,
-        override val translatedContent: String,
-    ) : LanguageResolver.TranslationLike
-
     private fun String?.normalizedCode(): String? =
         this?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
 
     private val ApiPostMedia.isImage: Boolean
         get() = mimeType?.startsWith("image/") == true
-
-    private fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
-        url.startsWith("http") -> url
-        mediaBaseUrl == null -> url
-        else -> mediaBaseUrl.trimEnd('/') + (if (url.startsWith("/")) url else "/$url")
-    }
 }

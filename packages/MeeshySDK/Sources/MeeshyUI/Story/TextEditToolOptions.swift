@@ -5,6 +5,31 @@ import MeeshySDK
 /// est dépliée. Chaque option écrit directement dans le `StoryTextObject` via
 /// le binding — le canvas et le champ d'édition se mettent à jour live.
 /// V1 : presets uniquement (pas de picker système ni de slider continu libre).
+/// Localized titles for `StoryTextWeight`/`StoryTextFrameShape` — lives here
+/// (MeeshyUI) and not on the enums themselves (MeeshySDK core, no resource
+/// bundle). Same pattern as `OpeningEffectChips.title(for:)`.
+enum TextEditLabels {
+    static func title(for weight: StoryTextWeight) -> String {
+        switch weight {
+        case .thin:     return String(localized: "story.textEdit.weight.thin", defaultValue: "Fin", bundle: .module)
+        case .normal:   return String(localized: "story.textEdit.weight.normal", defaultValue: "Normal", bundle: .module)
+        case .semibold: return String(localized: "story.textEdit.weight.semibold", defaultValue: "Semi", bundle: .module)
+        case .bold:     return String(localized: "story.textEdit.weight.bold", defaultValue: "Gras", bundle: .module)
+        }
+    }
+
+    static func title(for shape: StoryTextFrameShape) -> String {
+        switch shape {
+        case .rounded:   return String(localized: "story.textEdit.frame.rounded", defaultValue: "Arrondi", bundle: .module)
+        case .pill:      return String(localized: "story.textEdit.frame.pill", defaultValue: "Pilule", bundle: .module)
+        case .rectangle: return String(localized: "story.textEdit.frame.rectangle", defaultValue: "Carré", bundle: .module)
+        case .diamond:   return String(localized: "story.textEdit.frame.diamond", defaultValue: "Losange", bundle: .module)
+        case .cloud:     return String(localized: "story.textEdit.frame.cloud", defaultValue: "Nuage", bundle: .module)
+        case .speech:    return String(localized: "story.textEdit.frame.speech", defaultValue: "Bulle BD", bundle: .module)
+        }
+    }
+}
+
 struct TextEditToolOptions: View {
     let tool: TextEditTool
     @Binding var textObject: StoryTextObject
@@ -80,7 +105,7 @@ struct TextEditToolOptions: View {
                         textObject.fontWeight = weight.rawValue
                         HapticFeedback.light()
                     } label: {
-                        Text(weight.displayName)
+                        Text(TextEditLabels.title(for: weight))
                             .font(.system(size: 14, weight: weight.swiftUIWeight))
                             .foregroundStyle(isSel ? Color.white : Color.primary)
                             .frame(minWidth: 54)
@@ -197,24 +222,24 @@ struct TextEditToolOptions: View {
     private var backgroundOptions: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                bgChip(label: "Aucun", isSel: isBgNone) {
+                bgChip(label: String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module), isSel: isBgNone) {
                     textObject.backgroundStyle = StoryTextBackgroundStyle.none
                     textObject.textBg = nil
                 }
-                bgChip(label: "Verre", isSel: isBgGlass) {
+                bgChip(label: String(localized: "story.textEdit.bg.glass", defaultValue: "Verre", bundle: .module), isSel: isBgGlass) {
                     textObject.backgroundStyle = .glass(radius: 24)
                     textObject.textBg = nil
                 }
-                bgSolidChip(hex: "000000", label: "Noir")
-                bgSolidChip(hex: "000000A6", label: "Noir 65%")
-                bgSolidChip(hex: "FFFFFF", label: "Blanc")
-                bgSolidChip(hex: "FFFFFFA6", label: "Blanc 65%")
-                bgSolidChip(hex: "6366F1", label: "Indigo")
-                bgSolidChip(hex: "6366F1A6", label: "Indigo 65%")
-                bgSolidChip(hex: "F472B6", label: "Rose")
-                bgSolidChip(hex: "34D399", label: "Vert")
-                bgSolidChip(hex: "FBBF24", label: "Ambre")
-                bgSolidChip(hex: "F87171", label: "Rouge")
+                bgSolidChip(hex: "000000", label: String(localized: "story.textEdit.bg.black", defaultValue: "Noir", bundle: .module))
+                bgSolidChip(hex: "000000A6", label: String(localized: "story.textEdit.bg.black65", defaultValue: "Noir 65%", bundle: .module))
+                bgSolidChip(hex: "FFFFFF", label: String(localized: "story.textEdit.bg.white", defaultValue: "Blanc", bundle: .module))
+                bgSolidChip(hex: "FFFFFFA6", label: String(localized: "story.textEdit.bg.white65", defaultValue: "Blanc 65%", bundle: .module))
+                bgSolidChip(hex: "6366F1", label: String(localized: "story.textEdit.bg.indigo", defaultValue: "Indigo", bundle: .module))
+                bgSolidChip(hex: "6366F1A6", label: String(localized: "story.textEdit.bg.indigo65", defaultValue: "Indigo 65%", bundle: .module))
+                bgSolidChip(hex: "F472B6", label: String(localized: "story.textEdit.bg.pink", defaultValue: "Rose", bundle: .module))
+                bgSolidChip(hex: "34D399", label: String(localized: "story.textEdit.bg.green", defaultValue: "Vert", bundle: .module))
+                bgSolidChip(hex: "FBBF24", label: String(localized: "story.textEdit.bg.amber", defaultValue: "Ambre", bundle: .module))
+                bgSolidChip(hex: "F87171", label: String(localized: "story.textEdit.bg.red", defaultValue: "Rouge", bundle: .module))
             }
         }
     }
@@ -239,7 +264,7 @@ struct TextEditToolOptions: View {
                         }
                         HapticFeedback.light()
                     } label: {
-                        Text(shape.displayName)
+                        Text(TextEditLabels.title(for: shape))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(isSel ? Color.white : Color.primary)
                             .padding(.horizontal, 14)

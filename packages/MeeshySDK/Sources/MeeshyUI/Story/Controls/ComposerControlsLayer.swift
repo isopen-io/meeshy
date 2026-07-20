@@ -34,6 +34,15 @@ public struct ComposerControlsLayer: View {
     /// la band est repliée (FABs seuls / dessin immersif) — le canvas reste plein.
     var onBandHeightChange: ((CGFloat) -> Void)? = nil
 
+    /// Reporte la position Y (coord GLOBALES écran) du BORD SUPÉRIEUR réel de la
+    /// band. Contrairement à `onBandHeightChange` (taille de layout, qui peut
+    /// sous-estimer si le contenu déborde son `.frame(height:)` ou reste stale
+    /// après un resize), `minY` global reflète TOUJOURS le haut visuellement
+    /// rendu — le parent y colle le bas du canvas pour qu'il ne soit JAMAIS
+    /// recouvert (bug troncature 2026-07-20). `.greatestFiniteMagnitude` = band
+    /// repliée (aucune réserve).
+    var onBandTopYChange: ((CGFloat) -> Void)? = nil
+
     public init(
         viewModel: StoryComposerViewModel,
         bandStateMachine: Binding<BandStateMachine>,
@@ -46,6 +55,7 @@ public struct ComposerControlsLayer: View {
         bandMinHeight: CGFloat,
         bandMaxHeight: CGFloat,
         onBandHeightChange: ((CGFloat) -> Void)? = nil,
+        onBandTopYChange: ((CGFloat) -> Void)? = nil,
         onOpenMediaCrop: @escaping (String) -> Void,
         onOpenStickerPicker: (() -> Void)? = nil
     ) {
@@ -60,6 +70,7 @@ public struct ComposerControlsLayer: View {
         self.bandMinHeight = bandMinHeight
         self.bandMaxHeight = bandMaxHeight
         self.onBandHeightChange = onBandHeightChange
+        self.onBandTopYChange = onBandTopYChange
         self.onOpenMediaCrop = onOpenMediaCrop
         self.onOpenStickerPicker = onOpenStickerPicker
     }
@@ -172,9 +183,7 @@ public struct ComposerControlsLayer: View {
                 // FABs posés SUR le canvas : leur lisibilité suit la
                 // luminance du FOND de la slide, pas le thème de l'app
                 // (capture user 2026-07-11 — indigo sombre sur bleu nuit).
-                .environment(\.colorScheme, CanvasChromeScheme.scheme(
-                    background: viewModel.backgroundColor,
-                    hasMediaBackground: viewModel.hasBackgroundImage))
+                .environment(\.colorScheme, viewModel.canvasChromeScheme)
             }
 
             // C3 — état « chrome caché » (barre d'outils masquée par
@@ -204,21 +213,32 @@ public struct ComposerControlsLayer: View {
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
                     showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                    // La machine gère `.timeline` de façon générique depuis le
+                    // refactor 2026-07-14 (`BandStateMachineTests.
+                    // tapTileTimelineSwapsOpenPanel`) — le spécial-cas qui
+                    // sautait `tapTile`/`selectTool` pour `.timeline` datait
+                    // de l'ère « timeline en sheet » et empêchait le switch-chip
+                    // Timeline de fonctionner depuis un AUTRE panneau déjà
+                    // ouvert (bug reproduit simulateur : le chip restait sans
+                    // effet, aucun panneau ne changeait). `isTimelineVisible`
+                    // reste nécessaire pour `resolveEffectiveBandState` côté
+                    // FAB/bouton top-bar (entrée depuis `.hidden`).
                     onTapTile: { tool in
-                        if tool == .timeline {
-                            viewModel.isTimelineVisible = true
-                        } else {
-                            viewModel.isTimelineVisible = false
-                            bandStateMachine.tapTile(tool)
-                            viewModel.selectTool(tool)
-                        }
+                        viewModel.isTimelineVisible = (tool == .timeline)
+                        bandStateMachine.tapTile(tool)
+                        viewModel.selectTool(tool)
                     },
                     onBackFromToolPanel: {
-                        if viewModel.isTimelineVisible {
-                            viewModel.isTimelineVisible = false
-                        } else {
-                            bandStateMachine.backFromToolPanel()
-                        }
+                        // Toujours les DEUX (même schéma que `onResizeDismiss`
+                        // ci-dessous) : `onTapTile` peut désormais avoir fait
+                        // transiter `bandStateMachine` en `.toolPanel(.timeline)`
+                        // (switch-chip) OU l'avoir laissée `.hidden` (FAB/bouton
+                        // top-bar, override `isTimelineVisible` seul) — le
+                        // conditionnel précédent ne fermait que l'un des deux
+                        // chemins selon l'entrée. `backFromToolPanel()` est un
+                        // no-op sûr quand l'état n'est pas `.toolPanel`.
+                        viewModel.isTimelineVisible = false
+                        bandStateMachine.backFromToolPanel()
                     },
                     onCloseFormatPanel: {
                         bandStateMachine.closeFormatPanel()
@@ -300,9 +320,18 @@ public struct ComposerControlsLayer: View {
                 .background(
                     GeometryReader { p in
                         Color.clear
-                            .onAppear { onBandHeightChange?(p.size.height) }
+                            .onAppear {
+                                onBandHeightChange?(p.size.height)
+                                onBandTopYChange?(p.frame(in: .global).minY)
+                            }
                             .adaptiveOnChange(of: p.size.height) { _, h in
                                 onBandHeightChange?(h)
+                            }
+                            // Le HAUT réel de la band (coord globales) — source de
+                            // vérité pour la réserve du canvas (immunise frame/
+                            // overflow/stale). Suivre minY directement.
+                            .adaptiveOnChange(of: p.frame(in: .global).minY) { _, y in
+                                onBandTopYChange?(y)
                             }
                     }
                 )
@@ -314,7 +343,11 @@ public struct ComposerControlsLayer: View {
         // Band repliée (FABs seuls / dessin immersif) → réserve 0 : le canvas
         // redevient plein écran, les FABs flottent par-dessus.
         .adaptiveOnChange(of: effectiveBandState == .hidden) { _, hidden in
-            if hidden { onBandHeightChange?(0) }
+            if hidden {
+                onBandHeightChange?(0)
+                // Band repliée → aucun bord haut à réserver (canvas plein écran).
+                onBandTopYChange?(.greatestFiniteMagnitude)
+            }
         }
         .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
             // Slide switch invalidates any open formatPanel (id from previous slide).
