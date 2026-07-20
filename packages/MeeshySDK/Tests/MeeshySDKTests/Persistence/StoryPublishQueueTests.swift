@@ -16,6 +16,7 @@ final class StoryPublishQueueTests: XCTestCase {
             .appendingPathComponent("StoryPublishQueueTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         queue = StoryPublishQueue.shared
+        await queue._testResetPublishHandler()
         await queue.clearAll()
     }
 
