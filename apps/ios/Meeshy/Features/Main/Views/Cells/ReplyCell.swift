@@ -57,7 +57,7 @@ final class ReplyCell: UICollectionViewCell {
     }
 
     func configure(with record: CommentRecord, depth: Int = 1) {
-        let name = record.authorDisplayName ?? record.authorUsername
+        let name = record.authorDisplayName ?? record.authorUsername ?? ""
         let content = record.content
         let time = RelativeTimeFormatter.shortString(for: record.createdAt)
         nameLabel.text = name

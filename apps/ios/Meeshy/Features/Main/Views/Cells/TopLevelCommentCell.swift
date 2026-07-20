@@ -82,7 +82,7 @@ final class TopLevelCommentCell: UICollectionViewCell {
     }
 
     func configure(with record: CommentRecord) {
-        let name = record.authorDisplayName ?? record.authorUsername
+        let name = record.authorDisplayName ?? record.authorUsername ?? ""
         let content = record.content
         let time = RelativeTimeFormatter.shortString(for: record.createdAt)
         nameLabel.text = name

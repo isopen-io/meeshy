@@ -64,6 +64,19 @@ nothing when activated (misleading per HIG).
 - Pattern is a 1:1 mirror of merged 182i (`ReplyCell`) and 176i
   (`LoadMoreRepliesCell`), which passed the same gate.
 
+## CI follow-up (compile fix)
+
+The first CI run (iOS Tests, run 29745037121) failed to **compile** — not a
+test failure. `CommentRecord.authorDisplayName` and `.authorUsername` are both
+`String?`, so `authorDisplayName ?? authorUsername` is `String?` and cannot be
+passed to `accessibilityLabel(name: String)`. This broke **both** the new
+`TopLevelCommentCell` and the already-merged `ReplyCell` (182i) — a latent
+semantic merge conflict: `ReplyCell` 182i and the change that made
+`authorUsername` optional were each green in isolation but red once both landed
+on `main`, so `main` was already red before this PR. Fixed in both cells by
+coalescing to `?? ""`, which preserves the prior display behavior exactly (a nil
+name previously rendered an empty `UILabel`).
+
 ## Completion
 
 **RESOLVED** — `TopLevelCommentCell` Dynamic Type + VoiceOver grouping +
