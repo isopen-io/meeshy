@@ -240,38 +240,28 @@ struct AddParticipantSheet: View {
 
     // MARK: - Search Prompt
 
+    // État de guidage initial (query < 2 car.) : composant design-system natif
+    // `AdaptiveContentUnavailableView` (`ContentUnavailableView` iOS 17+, fallback
+    // iOS 16) — remplace un `VStack` custom (glyphe `.system(size:32)` figé + Text).
+    // Gains : HIG, dédup, l'icône scale avec Dynamic Type, regroupement VoiceOver natif.
     private var searchPrompt: some View {
-        VStack(spacing: 12) {
-            // Glyphe décoratif d'état vide — laissé figé (illustration, pas du texte)
-            // et masqué de VoiceOver via le `.combine` parent.
-            Image(systemName: "person.badge.plus")
-                .font(.system(size: 32, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-            Text(String(localized: "participants.add.prompt", defaultValue: "Recherchez par nom ou @pseudo", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
-        .accessibilityElement(children: .combine)
+        AdaptiveContentUnavailableView(
+            String(localized: "participants.add.prompt", defaultValue: "Recherchez par nom ou @pseudo", bundle: .main),
+            systemImage: "person.badge.plus"
+        )
+        .padding(.top, 40)
     }
 
     // MARK: - Empty Results
 
+    // Recherche sans résultat : même composant natif que `searchPrompt` — cas
+    // canonique d'un état « contenu indisponible » (HIG), clé i18n réutilisée.
     private var emptyResults: some View {
-        VStack(spacing: 12) {
-            // Glyphe décoratif d'état vide — laissé figé (illustration, pas du texte)
-            // et masqué de VoiceOver via le `.combine` parent.
-            Image(systemName: "person.slash")
-                .font(.system(size: 32, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-            Text(String(localized: "participants.add.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
-        .accessibilityElement(children: .combine)
+        AdaptiveContentUnavailableView(
+            String(localized: "participants.add.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main),
+            systemImage: "person.slash"
+        )
+        .padding(.top, 40)
     }
 
     // MARK: - Skeleton Row
