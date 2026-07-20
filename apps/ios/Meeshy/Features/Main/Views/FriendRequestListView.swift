@@ -76,28 +76,19 @@ struct FriendRequestListView: View {
 
     // MARK: - Empty State
 
+    // État vide via le composant design-system `AdaptiveContentUnavailableView`
+    // (`ContentUnavailableView` natif iOS 17+, fallback fidèle iOS 16) — remplace
+    // un `VStack` custom (glyphe `.system(size: 48)` figé + Text `.headline`/
+    // `.subheadline`). Gains : HIG, dédup (déjà adopté par StarredMessagesView/
+    // FeedView/CreateShareLinkView/AddParticipantSheet), l'icône scale avec
+    // Dynamic Type, regroupement VoiceOver titre+description natif. Clés i18n
+    // existantes réutilisées (0 clé neuve).
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-
-            // Figé : icône héros décorative d'état vide (≥40pt) — masquée à
-            // VoiceOver, le sens est porté par le titre + sous-titre ci-dessous.
-            Image(systemName: "person.2.slash")
-                .font(.system(size: 48, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-
-            Text(String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main))
-                .font(.headline)
-                .foregroundColor(theme.textMuted)
-
-            Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted.opacity(0.7))
-
-            Spacer()
-        }
-        .accessibilityElement(children: .combine)
+        AdaptiveContentUnavailableView(
+            String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main),
+            systemImage: "person.2.slash",
+            description: Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
+        )
     }
 
     // MARK: - Request Row
