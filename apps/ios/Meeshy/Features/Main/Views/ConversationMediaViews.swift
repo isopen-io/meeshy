@@ -95,6 +95,8 @@ struct DownloadBadgeView: View {
         .task {
             await downloader.checkCache(attachment)
         }
+        .accessibilityLabel(String(localized: "a11y.media.download.action", defaultValue: "Télécharger", bundle: .main))
+        .accessibilityValue(totalSizeText)
     }
 
     private var centredIdleBadge: some View {
@@ -184,6 +186,8 @@ struct DownloadBadgeView: View {
             .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.6)))
         }
         .padding(4)
+        .accessibilityLabel(String(localized: "a11y.media.download.cancel", defaultValue: "Annuler le téléchargement", bundle: .main))
+        .accessibilityValue(downloader.progress.formatted(.percent))
     }
 }
 
