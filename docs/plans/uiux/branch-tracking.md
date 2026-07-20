@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 180i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **180i (en cours, branche `claude/laughing-thompson-k9l43k`, base `main` HEAD post-#2125/#2130)** :
+>   Consolidation palette de marque de la **paire Parrainage** `AffiliateView` + `AffiliateCreateView`
+>   (exécute le pointeur « migrer la paire ensemble » laissé par 179i). Les deux vues partageaient
+>   la **même** constante hors-marque `private let accentColor = "2ECC71"` (émeraude Flat-UI) qui pilote
+>   tout l'accent d'écran (Cancel/Create, tints TextField, back/`+`, 3 stat cards, en-tête section,
+>   surfaces token-row, état vide, bouton Copier). Fix : `accentColor = MeeshyColors.brandPrimaryHex`
+>   (`6366F1`, indigo500) dans les 2 fichiers — swap `String`→`String` type-identique, 0 changement de
+>   call-site (déjà consommé par `Color(hex:)` + `ThemeManager.surfaceGradient/border(tint:)`). En bonus
+>   cohérence : l'icône **Partager** de la token-row (`AffiliateView` l.267) mésusait le token sémantique
+>   `MeeshyColors.success` (vert = succès) pour une action neutre coincée entre Copier (accent) et
+>   Supprimer (error rouge) → réalignée sur `Color(hex: accentColor)` (indigo, comme Copier). `success`
+>   vert reste réservé au stat « Inscrits » (l.228, correct). `MeeshyColors` déjà référencé dans les 2
+>   fichiers (`.error`/`.success`) → 0 import neuf. 2 fichiers, 3 lignes, 0 logique, 0 clé i18n, 0 test.
+>   `search_pull_requests … Affiliate` → 0 → aucune contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `AffiliateView`/`AffiliateCreateView` palette SOLDÉ 180i** : émeraude `2ECC71` éradiquée, Partager
+>   réaligné. Non repris (hors périmètre couleur) : hero état-vide `.system(size:36)` (doctrine ≥36pt figé),
+>   share manuel `UIActivityViewController` (candidat `ShareLink`), error `Text` non annoncé (pass a11y dédié).
+>   Frères legacy restants : `DataStorageView` (`E67E22`+`EF4444`), `TermsOfServiceView` (`45B7D1` cyan).
+> - **✅ 179i MERGÉ (#2125)** : `MediaDownloadSettingsView` palette + en-têtes VoiceOver — dans `main`.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 181i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **181i (en cours, branche `claude/laughing-thompson-giniq4`, base `main` HEAD `6faded3`)** :
 >   VoiceOver de `KeypadTab.resultRow` (People hub → onglet Clavier). La ligne de résultat
