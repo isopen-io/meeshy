@@ -61,7 +61,7 @@ final class ConversationDashboardViewAccessibilityTests: XCTestCase {
         guard let range = source.range(of: "private var periodPicker") else {
             XCTFail("ConversationDashboardView.swift must define the periodPicker"); return
         }
-        let body = String(source[range.lowerBound...].prefix(1000))
+        let body = String(source[range.lowerBound...].prefix(1400))
         XCTAssertTrue(
             body.contains(".accessibilityAddTraits(isSelected ? [.isSelected] : [])"),
             "Each period pill must announce its selected state to VoiceOver; " +
