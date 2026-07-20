@@ -461,6 +461,8 @@
 		OAA0000000000002F02 /* OptimisticAttachmentAdopterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */; };
 		OB2900000000002F29 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OB2900000000001F29 /* OnboardingView.swift */; };
 		OBDP01A1A1A1A1A1A1A10001 /* OutboxDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = OBDP01A1A1A1A1A1A1A10002 /* OutboxDispatcher.swift */; };
+		NAH0001000100010001B001 /* NotificationActionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = NAH0001000100010001F001 /* NotificationActionHandler.swift */; };
+		NAHT001000100010001B001 /* NotificationActionHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NAHT001000100010001F001 /* NotificationActionHandlerTests.swift */; };
 		P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = P2PWRTC000000001F01 /* P2PWebRTCClient.swift */; };
 		PDTL0001000100010001001 /* PostDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDTL0001000100010001000 /* PostDetailViewModelTests.swift */; };
 		PP2500000000002F25 /* ParticipantsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PP2500000000001F25 /* ParticipantsView.swift */; };
@@ -1061,6 +1063,8 @@
 		OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimisticAttachmentAdopterTests.swift; sourceTree = "<group>"; };
 		OB2900000000001F29 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		OBDP01A1A1A1A1A1A1A10002 /* OutboxDispatcher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OutboxDispatcher.swift; sourceTree = "<group>"; };
+		NAH0001000100010001F001 /* NotificationActionHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationActionHandler.swift; sourceTree = "<group>"; };
+		NAHT001000100010001F001 /* NotificationActionHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationActionHandlerTests.swift; sourceTree = "<group>"; };
 		P2PWRTC000000001F01 /* P2PWebRTCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2PWebRTCClient.swift; sourceTree = "<group>"; };
 		PDTL0001000100010001000 /* PostDetailViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailViewModelTests.swift; sourceTree = "<group>"; };
 		PP2500000000001F25 /* ParticipantsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantsView.swift; sourceTree = "<group>"; };
@@ -1599,6 +1603,7 @@
 				CANP0001000100010001F001 /* ConversationAudioCoordinator+NowPlaying.swift */,
 				FCFL01A1A1A1A1A1A1A10002 /* MeeshyFocusFilter.swift */,
 				OBDP01A1A1A1A1A1A1A10002 /* OutboxDispatcher.swift */,
+				NAH0001000100010001F001 /* NotificationActionHandler.swift */,
 				WDFL01B1B1B1B1B1B1B10002 /* WidgetActionFlusher.swift */,
 				LABR01C1C1C1C1C1C1C10002 /* LiveActivityBridge.swift */,
 				4AA21AF99ADCE48E973EBF13 /* BackgroundTransitionCoordinator.swift */,
@@ -2135,6 +2140,7 @@
 				NTFY0001000100010001000 /* NotificationTests.swift */,
 				NPHT003 /* NotificationPayloadHelpersTests.swift */,
 				NSEDT001 /* NSEDecryptorTests.swift */,
+				NAHT001000100010001F001 /* NotificationActionHandlerTests.swift */,
 				1C90BB2C475926F97226B943 /* ConversationLockManagerTests.swift */,
 				A0340CB5A3610F80C0D53F08 /* MediaCompressorTests.swift */,
 				OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */,
@@ -2702,6 +2708,7 @@
 				ACRV0002000200020002F001 /* AudioCarouselView.swift in Sources */,
 				FCFL01A1A1A1A1A1A1A10001 /* MeeshyFocusFilter.swift in Sources */,
 				OBDP01A1A1A1A1A1A1A10001 /* OutboxDispatcher.swift in Sources */,
+				NAH0001000100010001B001 /* NotificationActionHandler.swift in Sources */,
 				WDFL01B1B1B1B1B1B1B10001 /* WidgetActionFlusher.swift in Sources */,
 				LABR01C1C1C1C1C1C1C10001 /* LiveActivityBridge.swift in Sources */,
 				AD353A36327B0E4A819E01D3 /* BackgroundTransitionCoordinator.swift in Sources */,
@@ -2824,6 +2831,7 @@
 				NPHT004 /* NotificationPayloadHelpersTests.swift in Sources */,
 				NSEDC003 /* NSEDecryptor.swift in Sources */,
 				NSEDT002 /* NSEDecryptorTests.swift in Sources */,
+				NAHT001000100010001B001 /* NotificationActionHandlerTests.swift in Sources */,
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
 				OAA0000000000002F02 /* OptimisticAttachmentAdopterTests.swift in Sources */,

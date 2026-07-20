@@ -511,6 +511,12 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
     }
 
     /// Called when the user interacts with a notification (tap, action button, etc.).
+    ///
+    /// R1 — the actual work lives in `NotificationActionHandler` (injectable,
+    /// unit-tested). The handler wraps itself in a `beginBackgroundTask` and
+    /// `completionHandler()` fires AFTER the awaited work — previously it was
+    /// called synchronously while the work ran in a detached Task, letting
+    /// iOS suspend the process mid-send on background cold-launch.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
@@ -522,81 +528,12 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         logger.info("Notification response: action=\(actionIdentifier)")
 
         Task { @MainActor in
-            let payload = NotificationPayload(userInfo: userInfo)
-
-            switch actionIdentifier {
-            case UNNotificationDefaultActionIdentifier:
-                PushNotificationManager.shared.handleNotification(userInfo: userInfo)
-            case UNNotificationDismissActionIdentifier:
-                // User swiped the banner away — nothing to navigate to.
-                break
-            case MeeshyNotificationAction.markRead.rawValue:
-                if let conversationId = payload.conversationId {
-                    NotificationCoordinator.shared.markConversationRead(conversationId)
-                    NotificationCenter.default.post(
-                        name: .conversationMarkedRead,
-                        object: conversationId
-                    )
-                    try? await ConversationService.shared.markRead(
-                        conversationId: conversationId
-                    )
-                    // Dismiss any banners still showing for this conversation in
-                    // Notification Center so the badge stays aligned with the
-                    // coordinator's count (otherwise the user sees the banner
-                    // linger after they already marked it read from the lock
-                    // screen action).
-                    removeDeliveredNotifications(for: conversationId)
-                }
-            case MeeshyNotificationAction.reply.rawValue:
-                if let replyText,
-                   let conversationId = payload.conversationId {
-                    let request = SendMessageRequest(
-                        content: replyText,
-                        replyToId: payload.messageId
-                    )
-                    _ = try? await MessageService.shared.send(
-                        conversationId: conversationId,
-                        request: request
-                    )
-                    NotificationCoordinator.shared.markConversationRead(conversationId)
-                }
-            case MeeshyNotificationAction.view.rawValue,
-                 MeeshyNotificationAction.accept.rawValue,
-                 MeeshyNotificationAction.decline.rawValue,
-                 MeeshyNotificationAction.callback.rawValue,
-                 MeeshyNotificationAction.answerCall.rawValue:
-                // All of these surface the app to the relevant screen — the
-                // deep-link router decides the destination based on payload.type
-                // (incoming_call opens the call UI, missed_call opens the thread).
-                PushNotificationManager.shared.handleNotification(userInfo: userInfo)
-            case MeeshyNotificationAction.declineCall.rawValue:
-                // Silent decline — no navigation. The VoIP layer handles the
-                // actual decline via CallKit; APNs declineCall is just
-                // bookkeeping so we don't reopen the call screen.
-                break
-            default:
-                PushNotificationManager.shared.handleNotification(userInfo: userInfo)
-            }
-        }
-
-        completionHandler()
-    }
-
-    // MARK: - Notification Hygiene
-
-    /// Remove any already-delivered banners that belong to the given
-    /// conversation. Without this, after a user taps "Mark as read" on the
-    /// lock-screen action the message-new banner still sits in Notification
-    /// Center, so the coordinator's badge count and the visible banner stack
-    /// drift (user sees 0 unread but a banner for that conversation).
-    fileprivate nonisolated func removeDeliveredNotifications(for conversationId: String) {
-        let center = UNUserNotificationCenter.current()
-        center.getDeliveredNotifications { notifications in
-            let matching = notifications
-                .filter { ($0.request.content.userInfo["conversationId"] as? String) == conversationId }
-                .map(\.request.identifier)
-            guard !matching.isEmpty else { return }
-            center.removeDeliveredNotifications(withIdentifiers: matching)
+            await NotificationActionHandler.shared.handle(
+                actionIdentifier: actionIdentifier,
+                userInfo: userInfo,
+                replyText: replyText
+            )
+            completionHandler()
         }
     }
 }
