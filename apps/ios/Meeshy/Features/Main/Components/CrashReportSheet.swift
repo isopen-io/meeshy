@@ -12,28 +12,42 @@ struct CrashReportSheet: View {
                 ForEach(reports) { report in
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                kindBadge(report.kind)
-                                Spacer()
-                                Text(report.timestamp, style: .relative)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                            let isExpanded = expandedId == report.id
+
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    kindBadge(report.kind)
+                                    Spacer()
+                                    Text(report.timestamp, style: .relative)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
+                                        .accessibilityHidden(true)
+                                }
+
+                                Text(report.summary)
+                                    .font(.subheadline.weight(.medium))
                             }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    expandedId = isExpanded ? nil : report.id
+                                }
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityValue(isExpanded
+                                ? String(localized: "crash.reports.row.expanded", defaultValue: "Détails affichés", bundle: .main)
+                                : String(localized: "crash.reports.row.collapsed", defaultValue: "Détails masqués", bundle: .main))
+                            .accessibilityHint(String(localized: "crash.reports.row.hint", defaultValue: "Affiche ou masque les détails techniques", bundle: .main))
 
-                            Text(report.summary)
-                                .font(.subheadline.weight(.medium))
-
-                            if expandedId == report.id {
+                            if isExpanded {
                                 Text(report.details)
                                     .font(.caption2.monospaced())
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                expandedId = expandedId == report.id ? nil : report.id
                             }
                         }
                     }
@@ -50,6 +64,7 @@ struct CrashReportSheet: View {
                     ShareLink(item: formatAllReports()) {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    .accessibilityLabel(String(localized: "crash.reports.share", defaultValue: "Partager les rapports", bundle: .main))
                 }
             }
         }

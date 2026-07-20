@@ -2091,3 +2091,10 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Base de départ 176i : `main` HEAD** (toujours resync ; supprimer la branche mergée). **Piste 176i+** : traquer d'autres états vides custom réimplémentant `ContentUnavailableView` (`BookmarksView` en vol #2038/#2034, `AudioFullscreenView`, `GlobalSearchView`, `SharePickerView` déjà partiellement traités — vérifier collision essaim) ; grandes surfaces Dynamic Type restantes (`ConversationView+Composer` 13, `FeedView` 7).
 
 | 175i | claude/laughing-thompson-zz7wzb (iOS HIG+dédup `StarredMessagesView` : état vide custom `VStack` (icône `.system(size:56)` indigo400 + 2 Text) → `AdaptiveContentUnavailableView` (natif `ContentUnavailableView` iOS 17+, fallback iOS 16), déjà adopté par FeedView/CreateShareLinkView ; réutilise clés i18n `starred.messages.empty.title/.subtitle` ; VoiceOver titre+description groupé natif, dernier `.system(size:)` du fichier supprimé ; StarredRow + navigation/store inchangés ; 1 fichier, 0 logique/0 clé i18n neuve/0 test neuf ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
+---
+## Iteration-178i — `CrashReportSheet` disclosure affordance + VoiceOver (2026-07-20)
+- **Working branch:** `claude/laughing-thompson-nan0ai` (base: latest `origin/main`, merged 2026-07-20)
+- **File:** `apps/ios/Meeshy/Features/Main/Components/CrashReportSheet.swift` (1 file, 0 logic, 0 new test)
+- **Change:** (a) added native `chevron.down`/`chevron.right` disclosure indicator (was zero visual affordance for a tap-to-expand row); (b) extracted tappable header into a combined VoiceOver element with `.isButton` trait + expanded/collapsed `.accessibilityValue` + hint, keeping the monospaced `details` block outside so `textSelection` survives; (c) `.accessibilityLabel` on the icon-only `ShareLink`. New strings inline `String(localized:defaultValue:)` — 0 catalog churn.
+- **Gate:** CI `iOS Tests` (macOS runner). Sync status: ✅ synced with main.
