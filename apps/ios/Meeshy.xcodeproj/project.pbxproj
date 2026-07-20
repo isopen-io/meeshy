@@ -355,7 +355,6 @@
 		F26D79092FA787560019DD5F /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = FB000200020002000200020001 /* FirebaseCore */; };
 		F26D790A2FA787560019DD5F /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = FB000200020002000200020002 /* FirebaseAnalytics */; };
 		F26D790B2FA787560019DD5F /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = FB000200020002000200020003 /* FirebaseCrashlytics */; };
-		F26D790C2FA787560019DD5F /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = FB000200020002000200020004 /* FirebaseMessaging */; };
 		F26D790D2FA787560019DD5F /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = FB000200020002000200020005 /* FirebasePerformance */; };
 		F4C7456988D1A94EA54DBAEE /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C83758F8E8BD422CF1E9551E /* ConversationListView.swift */; };
 		F7273BAD84FB8B7281518D59 /* ContactsListTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */; };
@@ -1194,7 +1193,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F26D790D2FA787560019DD5F /* FirebasePerformance in Frameworks */,
-				F26D790C2FA787560019DD5F /* FirebaseMessaging in Frameworks */,
 				F26D790B2FA787560019DD5F /* FirebaseCrashlytics in Frameworks */,
 				F26D790A2FA787560019DD5F /* FirebaseAnalytics in Frameworks */,
 				F26D79092FA787560019DD5F /* FirebaseCore in Frameworks */,
@@ -2282,7 +2280,6 @@
 				FB000200020002000200020001 /* FirebaseCore */,
 				FB000200020002000200020002 /* FirebaseAnalytics */,
 				FB000200020002000200020003 /* FirebaseCrashlytics */,
-				FB000200020002000200020004 /* FirebaseMessaging */,
 				FB000200020002000200020005 /* FirebasePerformance */,
 			);
 			productName = Meeshy;
@@ -3460,11 +3457,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = FB000100010001000100010001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCrashlytics;
-		};
-		FB000200020002000200020004 /* FirebaseMessaging */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = FB000100010001000100010001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseMessaging;
 		};
 		FB000200020002000200020005 /* FirebasePerformance */ = {
 			isa = XCSwiftPackageProductDependency;

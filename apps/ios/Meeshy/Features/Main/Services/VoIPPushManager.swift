@@ -7,6 +7,21 @@ import os
 nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "voip-push")
 nonisolated private let perfLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
 
+/// G4c — injectable seam around the `/users/register-device-token` POST so
+/// the failure→retry policy is unit-testable without `APIClient.shared`.
+protocol VoIPTokenRegistering {
+    func register(_ body: RegisterDeviceTokenRequest) async throws
+}
+
+struct APIVoIPTokenRegistrar: VoIPTokenRegistering {
+    func register(_ body: RegisterDeviceTokenRequest) async throws {
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
+            endpoint: "/users/register-device-token",
+            body: body
+        )
+    }
+}
+
 @MainActor
 final class VoIPPushManager: NSObject, ObservableObject {
     static let shared = VoIPPushManager()
@@ -40,6 +55,11 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// instance always uses the keychain-backed default.
     private let tokenStore: VoIPTokenStoring
 
+    /// G4c — POST seam + auth probe, injectable for tests. Production uses
+    /// `APIClient.shared` for both.
+    private let tokenRegistrar: VoIPTokenRegistering
+    private let authTokenAvailable: () -> Bool
+
     /// Cached snapshot of the last registered record so the cooldown check
     /// stays synchronous — the keychain read is performed asynchronously in
     /// `setUp()` and on `forceReregister()`.
@@ -49,8 +69,14 @@ final class VoIPPushManager: NSObject, ObservableObject {
         self.init(tokenStore: KeychainVoIPTokenStore())
     }
 
-    init(tokenStore: VoIPTokenStoring) {
+    init(
+        tokenStore: VoIPTokenStoring,
+        registrar: VoIPTokenRegistering = APIVoIPTokenRegistrar(),
+        authTokenAvailable: @escaping () -> Bool = { APIClient.shared.authToken != nil }
+    ) {
         self.tokenStore = tokenStore
+        self.tokenRegistrar = registrar
+        self.authTokenAvailable = authTokenAvailable
         super.init()
         // Audit P2-CC-1 — observe AuthManager.isAuthenticated transitions
         // false→true so a VoIP token that arrived pre-login can be retried.
@@ -105,7 +131,23 @@ final class VoIPPushManager: NSObject, ObservableObject {
     func forceReregister() {
         unregister()
         register()
+        // G4c — a token whose backend POST failed earlier is parked in
+        // `pendingTokenToRegister`. PushKit will usually re-emit the token
+        // (triggering a fresh POST), but not on iOS-app-on-Mac / CN where
+        // `register()` is gated — retry the parked token explicitly.
+        Task { [weak self] in
+            await self?.retryPendingTokenRegistration()
+        }
         logger.info("VoIP push force re-registration triggered")
+    }
+
+    /// G4c — retries the backend registration of a token whose POST failed
+    /// (network error) or arrived pre-login. No-op when nothing is parked.
+    /// Called on foreground (`forceReregister`) and on login (auth sink).
+    func retryPendingTokenRegistration() async {
+        guard let token = pendingTokenToRegister else { return }
+        logger.info("Retrying parked VoIP token registration")
+        await registerTokenWithBackend(token)
     }
 }
 
@@ -319,7 +361,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // retry from `authBecameAvailable`. Previously the token was
         // silently dropped and the user received no VoIP pushes until the
         // next cold start.
-        guard APIClient.shared.authToken != nil else {
+        guard authTokenAvailable() else {
             pendingTokenToRegister = token
             logger.info("VoIP token received before auth — queued for retry on login")
             return
@@ -357,17 +399,23 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         )
 
         do {
-            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
-                endpoint: "/users/register-device-token",
-                body: body
-            )
+            try await tokenRegistrar.register(body)
             let record = VoIPTokenRecord(token: token, at: now)
-            try? await tokenStore.save(token: token, at: now)
+            do {
+                try await tokenStore.save(token: token, at: now)
+            } catch {
+                logger.error("Failed to persist VoIP token record: \(error.localizedDescription)")
+            }
             lastRegisteredRecord = record
             pendingTokenToRegister = nil
             logger.info("VoIP token registered with backend (env=\(PushNotificationManager.apnsEnvironment))")
         } catch {
-            logger.error("Failed to register VoIP token: \(error.localizedDescription)")
+            // G4c — park the token so the next trigger (foreground
+            // forceReregister, socket reconnect, login) retries the POST.
+            // The cooldown is NOT armed on failure, so the retry is never
+            // swallowed by the idempotence guard.
+            pendingTokenToRegister = token
+            logger.error("Failed to register VoIP token — parked for retry: \(error.localizedDescription)")
         }
     }
 }
@@ -384,6 +432,14 @@ extension VoIPPushManager {
     /// cooldown without touching the keychain.
     func debug_setLastRegisteredRecord(_ record: VoIPTokenRecord?) {
         lastRegisteredRecord = record
+    }
+
+    /// Test-only accessor on the parked token (G4c retry policy).
+    var debug_pendingTokenToRegister: String? { pendingTokenToRegister }
+
+    /// Test-only driver for the private backend registration flow.
+    func debug_registerTokenWithBackend(_ token: String) async {
+        await registerTokenWithBackend(token)
     }
 }
 #endif

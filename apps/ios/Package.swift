@@ -63,11 +63,12 @@ let package = Package(
         .target(
             name: "Meeshy",
             dependencies: [
-                // Firebase Products (only what's actively used)
+                // Firebase Products (only what's actively used).
+                // G7 (2026-07-20): FirebaseMessaging removed — push is pure
+                // APNs (no import, no MessagingDelegate, no fcmToken anywhere).
                 .product(name: "FirebaseCore", package: "firebase-ios-sdk"),
                 .product(name: "FirebaseAnalytics", package: "firebase-ios-sdk"),
                 .product(name: "FirebaseCrashlytics", package: "firebase-ios-sdk"),
-                .product(name: "FirebaseMessaging", package: "firebase-ios-sdk"),
                 .product(name: "FirebasePerformance", package: "firebase-ios-sdk"),
 
                 // Real-time Communication

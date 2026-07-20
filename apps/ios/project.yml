@@ -24,6 +24,10 @@ settings:
   SWIFT_UPCOMING_FEATURE_NONISOLATED_NONSENDING_BY_DEFAULT: "YES"
 
 targets:
+  # G7 (2026-07-20) — FirebaseMessaging was removed from the Meeshy target's
+  # linked package products (pbxproj): push is pure APNs (the gateway routes to
+  # api.push.apple.com itself), no code ever imported FirebaseMessaging. Do NOT
+  # re-link it when migrating package dependencies into this file.
   Meeshy:
     type: application
     platform: iOS
