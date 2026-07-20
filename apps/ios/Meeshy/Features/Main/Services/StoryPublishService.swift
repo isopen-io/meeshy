@@ -53,6 +53,12 @@ final class StoryPublishService: ObservableObject {
     /// badges — pattern used by WhatsApp, Telegram for offline messaging.
     @Published private(set) var pendingCount: Int = 0
 
+    /// Permanently-failed items waiting for a manual retry or discard,
+    /// surfaced by `MyStoriesView` alongside the published stories. Mirrors
+    /// `StoryPublishQueue.failedPendingItems` — refreshed at the same points
+    /// as `pendingCount` (see `refreshQueueState`).
+    @Published private(set) var failedItems: [StoryPublishQueueItem] = []
+
     /// Executor that actually runs queued uploads. Set by the view that owns
     /// the StoryViewModel (typically RootView via .onAppear). Held weakly so
     /// a logout / view-rebuild does not trap stale references.
@@ -130,7 +136,7 @@ final class StoryPublishService: ObservableObject {
             if migrated > 0 {
                 Logger.stories.info("StoryQueueMigrator: \(migrated) legacy item(s) migrated into StoryPublishQueue")
             }
-            await self.refreshPendingCount()
+            await self.refreshQueueState()
         }
         sweepOrphanedQueueMediaDirectories()
 
@@ -156,11 +162,11 @@ final class StoryPublishService: ObservableObject {
         // is accurate whether the user just unlocked the device or relaunched
         // the app.
         Task { [weak self] in
-            await self?.refreshPendingCount()
+            await self?.refreshQueueState()
         }
         NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
             .sink { [weak self] _ in
-                Task { await self?.refreshPendingCount() }
+                Task { await self?.refreshQueueState() }
             }
             .store(in: &cancellables)
 
@@ -193,7 +199,24 @@ final class StoryPublishService: ObservableObject {
     /// today since users have no way to recover lost drafts after this.
     func clearAll() async {
         await StoryPublishQueue.shared.clearAll()
-        await refreshPendingCount()
+        await refreshQueueState()
+    }
+
+    /// Moves a permanently-failed item back into the active retry queue and
+    /// kicks off an immediate drain attempt. Called from `MyStoriesView`'s
+    /// failed-items history row.
+    func retry(_ item: StoryPublishQueueItem) async {
+        await StoryPublishQueue.shared.retryFailedItem(item.id)
+        await refreshQueueState()
+    }
+
+    /// Abandons a failed item for good : removes it from the history and
+    /// deletes its local media. The caller must also clear any optimistic
+    /// `pending_<uuid>` row still referencing `item.tempStoryId` (see
+    /// `StoryViewModel.removeOptimisticStories`).
+    func discard(_ item: StoryPublishQueueItem) async {
+        await StoryPublishQueue.shared.discardFailedItem(item.id)
+        await refreshQueueState()
     }
 
     // MARK: - Handler registration
@@ -226,7 +249,7 @@ final class StoryPublishService: ObservableObject {
                    defaultValue: "Story enfin publiée",
                    bundle: .main)
         )
-        Task { await refreshPendingCount() }
+        Task { await refreshQueueState() }
     }
 
     private func handleFailure(_ payload: StoryPublishFailure) {
@@ -249,14 +272,14 @@ final class StoryPublishService: ObservableObject {
         }
         logger.error("Story \(payload.tempStoryId, privacy: .public) publish failed : \(message, privacy: .public)")
         FeedbackToastManager.shared.showError(message)
-        Task { await refreshPendingCount() }
+        Task { await refreshQueueState() }
     }
 
-    // MARK: - Pending count cache
+    // MARK: - Pending / failed state cache
 
-    private func refreshPendingCount() async {
-        let count = await StoryPublishQueue.shared.count
-        pendingCount = count
+    private func refreshQueueState() async {
+        pendingCount = await StoryPublishQueue.shared.count
+        failedItems = await StoryPublishQueue.shared.failedPendingItems
     }
 }
 

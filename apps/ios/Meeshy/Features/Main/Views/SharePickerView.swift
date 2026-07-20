@@ -188,6 +188,7 @@ struct SharePickerView: View {
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .submitLabel(.search)
 
             if !searchText.isEmpty {
                 Button {
@@ -217,6 +218,7 @@ struct SharePickerView: View {
             Spacer()
             ProgressView()
                 .tint(MeeshyColors.indigo400)
+                .accessibilityLabel(String(localized: "share.loading", defaultValue: "Chargement des conversations\u{2026}", bundle: .main))
             Spacer()
         }
     }
@@ -307,6 +309,7 @@ struct SharePickerView: View {
             ProgressView()
                 .scaleEffect(0.8)
                 .frame(width: 26, height: 26)
+                .accessibilityLabel(String(localized: "share.sending", defaultValue: "Envoi en cours\u{2026}", bundle: .main))
         } else {
             Button {
                 shareToConversation(conv)
@@ -317,7 +320,7 @@ struct SharePickerView: View {
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .disabled(sendingToId != nil)
-            .accessibilityLabel("\(String(localized: "share.sendTo", defaultValue: "Send to", bundle: .main)) \(conv.name)")
+            .accessibilityLabel("\(String(localized: "share.sendTo", defaultValue: "Send to", bundle: .main)) \(conv.displayName)")
         }
     }
 

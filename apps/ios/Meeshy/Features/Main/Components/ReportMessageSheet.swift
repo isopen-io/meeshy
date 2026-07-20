@@ -93,6 +93,7 @@ struct ReportMessageSheet: View {
                     .font(.callout)
                     .foregroundColor(isSelected ? accent : theme.textSecondary)
                     .frame(width: 24)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(type.label)
@@ -111,6 +112,7 @@ struct ReportMessageSheet: View {
                         .font(.title3)
                         .foregroundColor(accent)
                         .transition(.scale.combined(with: .opacity))
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 14)
@@ -124,6 +126,7 @@ struct ReportMessageSheet: View {
                     )
             )
         }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 

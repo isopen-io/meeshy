@@ -69,6 +69,10 @@
     <string name="status_bar_via">via @%1$s</string>
     <string name="status_bar_expired">Expired</string>
     <string name="status_bar_republish">Republish</string>
+    <string name="status_bar_react">React with %1$s</string>
+    <string name="status_feed_friends">Friends</string>
+    <string name="status_feed_discover">Discover</string>
+    <string name="status_feed_toggle_label">Status feed</string>
     <string name="status_composer_title">Status</string>
     <string name="status_composer_republishing">Republishing @%1$s</string>
     <string name="status_composer_mood_question">How are you feeling?</string>
