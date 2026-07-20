@@ -182,8 +182,19 @@ public actor StoryPublishQueue {
     /// next attempt. Beyond `maxRetries` the item is failed permanently.
     private static let retryDelays: [TimeInterval] = [30, 120, 600, 3600, 7200]
     private static let queueFileName = "story_publish_queue.json"
+    /// Cap on the retry-able failure history (`failedItems`). Local media is
+    /// preserved for these items (unlike `items`, which drops media on any
+    /// terminal disposition) so the user can retry from `MyStoriesView` —
+    /// the cap bounds how much abandoned media can accumulate on disk.
+    private static let maxFailedItems = 20
+    private static let failedQueueFileName = "story_publish_failed_queue.json"
 
     private var items: [StoryPublishQueueItem] = []
+    /// Items that failed permanently (max retries, missing media, server
+    /// rejection). Unlike a plain `processNext()` disposal, these are kept
+    /// (with their local media) so the UI can list them and offer a manual
+    /// retry — see `failedPendingItems`, `retryFailedItem`, `discardFailedItem`.
+    private var failedItems: [StoryPublishQueueItem] = []
     private var isProcessing = false
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
@@ -229,6 +240,7 @@ public actor StoryPublishQueue {
 
     private init() {
         items = Self.loadItemsFromDisk()
+        failedItems = Self.loadFailedItemsFromDisk()
         Task { await self.observeConnection() }
     }
 
@@ -289,6 +301,36 @@ public actor StoryPublishQueue {
         items
     }
 
+    /// Items that failed permanently and are waiting for a manual retry or
+    /// discard from the UI (`MyStoriesView`). Their local media is preserved
+    /// (unlike `pendingItems`' terminal successes) so a retry can reuse it.
+    public var failedPendingItems: [StoryPublishQueueItem] {
+        failedItems
+    }
+
+    /// Moves a permanently-failed item back into the active retry queue,
+    /// resetting its retry budget, and kicks off an immediate drain attempt.
+    public func retryFailedItem(_ itemId: String) {
+        guard let idx = failedItems.firstIndex(where: { $0.id == itemId }) else { return }
+        var item = failedItems.remove(at: idx)
+        item.retryCount = 0
+        item.lastError = nil
+        items.append(item)
+        saveToDisk()
+        saveFailedItemsToDisk()
+        Task { await self.processNext() }
+    }
+
+    /// Permanently abandons a failed item : removes it from history and
+    /// deletes its local media. The caller is responsible for clearing any
+    /// optimistic UI row still referencing the item's `tempStoryId`.
+    public func discardFailedItem(_ itemId: String) {
+        guard let idx = failedItems.firstIndex(where: { $0.id == itemId }) else { return }
+        let item = failedItems.remove(at: idx)
+        removeLocalMedia(of: item)
+        saveFailedItemsToDisk()
+    }
+
     /// Draft recovery — the most recent queued story that has been stuck
     /// (unpublished) for longer than `olderThan` seconds, so the composer can
     /// pre-fill it as a draft (the "pas envoyé dans la minute → offline" rule).
@@ -310,13 +352,20 @@ public actor StoryPublishQueue {
     public func clearAll() {
         // E9/E10 — un clearAll (logout multi-compte) emporte aussi les copies
         // médias locales de chaque item : les stories en attente d'un compte
-        // ne doivent laisser ni queue ni fichiers au compte suivant.
+        // ne doivent laisser ni queue ni fichiers au compte suivant. Ça
+        // couvre aussi l'historique des échecs (failedItems), sinon un échec
+        // du compte précédent resterait consultable/retryable par le suivant.
         for item in items {
             removeLocalMedia(of: item)
         }
+        for item in failedItems {
+            removeLocalMedia(of: item)
+        }
         items.removeAll()
+        failedItems.removeAll()
         inFlightIds.removeAll()
         saveToDisk()
+        saveFailedItemsToDisk()
     }
 
     // MARK: - Processing Loop
@@ -405,15 +454,30 @@ public actor StoryPublishQueue {
         }
 
         // Apply the dispositions atomically before notifying observers.
-        // E10 — une disposition TERMINALE (succès OU échec permanent) emporte
-        // ses copies média locales : sans ce cleanup, chaque publication via
-        // la queue laissait son dossier `meeshy_offline_queue/<tempStoryId>/`
-        // orphelin sur disque (fuite confirmée it.12).
-        for id in successIds + permanentFailureIds {
+        // E10 — une disposition de SUCCÈS emporte ses copies média locales :
+        // sans ce cleanup, chaque publication via la queue laissait son
+        // dossier `meeshy_offline_queue/<tempStoryId>/` orphelin sur disque
+        // (fuite confirmée it.12). Un échec PERMANENT, en revanche, migre vers
+        // `failedItems` SANS supprimer son média — pour permettre un retry
+        // manuel depuis `MyStoriesView` (cf. `addToFailedItems`).
+        for id in successIds {
             if let item = items.first(where: { $0.id == id }) {
                 removeLocalMedia(of: item)
             }
             items.removeAll { $0.id == id }
+        }
+        for id in permanentFailureIds {
+            guard let idx = items.firstIndex(where: { $0.id == id }) else { continue }
+            var item = items.remove(at: idx)
+            switch failurePayloads.first(where: { $0.queueId == id })?.reason {
+            case .missingLocalMedia:
+                item.lastError = "Un média local est introuvable"
+            case .unrecoverable(let message):
+                item.lastError = message
+            case .maxRetriesReached, .none:
+                break // keep the lastError already set from the final retry attempt
+            }
+            addToFailedItems(item)
         }
         saveToDisk()
 
@@ -427,6 +491,18 @@ public actor StoryPublishQueue {
         if !successIds.isEmpty || !permanentFailureIds.isEmpty {
             logger.info("Processed: \(successIds.count) succeeded, \(permanentFailureIds.count) permanently failed, \(self.items.count) still pending")
         }
+    }
+
+    /// Appends a permanently-failed item to the retry-able history, dropping
+    /// the oldest entry (and its media) once `maxFailedItems` is exceeded —
+    /// same drop-oldest pattern as `enqueue`'s `maxQueueSize` guard.
+    private func addToFailedItems(_ item: StoryPublishQueueItem) {
+        failedItems.append(item)
+        if failedItems.count > Self.maxFailedItems {
+            let dropped = failedItems.removeFirst()
+            removeLocalMedia(of: dropped)
+        }
+        saveFailedItemsToDisk()
     }
 
     /// E10 — supprime les copies média locales d'un item en disposition
@@ -478,19 +554,45 @@ public actor StoryPublishQueue {
         return cacheDir.appendingPathComponent(Self.queueFileName)
     }
 
+    private var failedQueueFileURL: URL {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: cacheDir.path) {
+            try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        }
+        return cacheDir.appendingPathComponent(Self.failedQueueFileName)
+    }
+
     private func saveToDisk() {
+        Self.save(items, to: queueFileURL, encoder: encoder, logger: logger)
+    }
+
+    private func saveFailedItemsToDisk() {
+        Self.save(failedItems, to: failedQueueFileURL, encoder: encoder, logger: logger)
+    }
+
+    private static func save(_ items: [StoryPublishQueueItem], to url: URL, encoder: JSONEncoder, logger: Logger) {
         do {
             let data = try encoder.encode(items)
-            try data.write(to: queueFileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         } catch {
-            logger.error("Failed to save story publish queue: \(error.localizedDescription)")
+            logger.error("Failed to save story publish queue file \(url.lastPathComponent): \(error.localizedDescription)")
         }
     }
 
     private static func loadItemsFromDisk() -> [StoryPublishQueueItem] {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
-        let url = cacheDir.appendingPathComponent(queueFileName)
+        return loadItems(from: cacheDir.appendingPathComponent(queueFileName))
+    }
+
+    private static func loadFailedItemsFromDisk() -> [StoryPublishQueueItem] {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let cacheDir = documents.appendingPathComponent("meeshy_cache", isDirectory: true)
+        return loadItems(from: cacheDir.appendingPathComponent(failedQueueFileName))
+    }
+
+    private static func loadItems(from url: URL) -> [StoryPublishQueueItem] {
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
 
         do {
@@ -525,6 +627,13 @@ extension StoryPublishQueue {
     /// state without round-tripping through the disk persistence layer.
     func _testSetItems(_ items: [StoryPublishQueueItem]) {
         self.items = items
+    }
+
+    /// Seeds the failed-items history directly, bypassing `processNext()` and
+    /// disk persistence — lets tests exercise `retryFailedItem`/
+    /// `discardFailedItem`/the cap without driving a real publish failure.
+    func _testSetFailedItems(_ items: [StoryPublishQueueItem]) {
+        self.failedItems = items
     }
 }
 #endif

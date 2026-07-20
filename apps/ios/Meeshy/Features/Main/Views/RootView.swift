@@ -1947,33 +1947,41 @@ private struct PendingSettingsBannerInline: View {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(MeeshyColors.indigo950)
 
                     Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(MeeshyColors.indigo950)
+                        .lineLimit(1)
+                        .layoutPriority(1)
 
-                    Spacer()
+                    Spacer(minLength: MeeshySpacing.sm)
 
+                    // cf. PendingStoryBannerInline : la version FR est plus longue —
+                    // shrink-avant-troncature pour rester lisible.
                     Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
                         .font(MeeshyFont.relative(10, weight: .regular))
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .truncationMode(.tail)
                 }
                 .padding(.horizontal, MeeshySpacing.md + 2)
                 .padding(.vertical, MeeshySpacing.sm)
+                // Ambre `warning` cohérent avec PendingStoryBannerInline (état
+                // en attente / hors-ligne) ; texte foncé pour le contraste.
                 .background(
                     LinearGradient(
                         colors: [
-                            MeeshyColors.indigo500.opacity(0.92),
-                            MeeshyColors.indigo700.opacity(0.88)
+                            MeeshyColors.warning,
+                            Color(hex: "F59E0B")
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
+                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -1998,47 +2006,83 @@ private struct PendingSettingsBannerInline: View {
 
 /// Surfaces the count of stories waiting in `StoryPublishQueue` (typically
 /// composed offline). Mirrors `PendingSettingsBannerInline`. Self-hides
-/// when the queue drains. Inlined to avoid a project.pbxproj edit.
+/// when the queue drains, OR when the user swipes it away (up/left/right —
+/// user request 2026-07-19: it had no gesture at all before). A manual
+/// dismiss only holds for the CURRENT `pendingCount` — it reappears the
+/// moment the count changes (a new story queued, or one resolves), so a
+/// swipe never permanently hides a genuinely new situation.
 private struct PendingStoryBannerInline: View {
     @StateObject private var publishService = StoryPublishService.shared
+    @State private var dismissedAtCount: Int?
+
+    private var isVisible: Bool {
+        publishService.pendingCount > 0 && dismissedAtCount != publishService.pendingCount
+    }
 
     var body: some View {
         Group {
-            if publishService.pendingCount > 0 {
+            if isVisible {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "photo.stack")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(MeeshyColors.indigo950)
 
                     Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(MeeshyColors.indigo950)
+                        .lineLimit(1)
+                        .layoutPriority(1)
 
-                    Spacer()
+                    Spacer(minLength: MeeshySpacing.sm)
 
+                    // Texte secondaire : la version FR ("Publication au retour en
+                    // ligne") est plus longue que l'anglaise — `minimumScaleFactor`
+                    // la réduit avant de tronquer, pour qu'elle reste lisible en
+                    // portrait étroit / Dynamic Type agrandi.
                     Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
                         .font(MeeshyFont.relative(10, weight: .regular))
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(MeeshyColors.indigo950.opacity(0.72))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .truncationMode(.tail)
                 }
                 .padding(.horizontal, MeeshySpacing.md + 2)
                 .padding(.vertical, MeeshySpacing.sm)
+                // Ambre `warning` (design system : "Attention / pending") au lieu
+                // de l'indigo de marque, pour signaler un état hors-ligne/en
+                // attente ; texte foncé (indigo950) pour un contraste lisible sur
+                // l'ambre clair.
                 .background(
                     LinearGradient(
                         colors: [
-                            MeeshyColors.indigo500.opacity(0.92),
-                            MeeshyColors.indigo700.opacity(0.88)
+                            MeeshyColors.warning,
+                            Color(hex: "F59E0B")
                         ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: MeeshyShadow.medium.radius, y: 2)
+                .shadow(color: MeeshyColors.warning.opacity(0.35), radius: MeeshyShadow.medium.radius, y: 2)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .transition(.move(edge: .top).combined(with: .opacity))
+                .gesture(
+                    DragGesture(minimumDistance: 15)
+                        .onEnded { value in
+                            guard PendingBannerDismissResolver.shouldDismiss(translation: value.translation) else { return }
+                            dismiss()
+                        }
+                )
+                .accessibilityAction(named: Text(String(localized: "common.dismiss", defaultValue: "Masquer", bundle: .main))) {
+                    dismiss()
+                }
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: publishService.pendingCount)
+    }
+
+    private func dismiss() {
+        dismissedAtCount = publishService.pendingCount
+        HapticFeedback.light()
     }
 }

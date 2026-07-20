@@ -48,7 +48,17 @@ public struct TransitionChromeLane: View {
                 badge(for: closingEffect, alignment: .trailing)
             }
         }
-        .frame(width: geometry.width(for: slideDuration), height: 18)
+        // Bandeau à la largeur VISIBLE (badge ouverture calé à gauche, fermeture
+        // à droite), PAS à la largeur pleine durée (`geometry.width(for:
+        // slideDuration)`). Cette dernière valait ex. 500 pt pour un slide de 10 s
+        // et, la chrome lane vivant HORS du scroller horizontal, elle (a) laissait
+        // le badge de fermeture toujours hors écran et (b) — un VStack se
+        // dimensionnant sur son enfant le plus large — élargissait tout le
+        // conteneur timeline au-delà de la fenêtre, sur-largeur re-proposée à la
+        // barre de transport au-dessus qui rognait alors la lecture / le son.
+        // `maxWidth: .infinity` = on remplit la fenêtre, les deux badges restent
+        // visibles à leurs bords, et plus aucune largeur intrinsèque ne fuit.
+        .frame(maxWidth: .infinity, minHeight: 18, maxHeight: 18)
         .accessibilityElement(children: .combine)
     }
 

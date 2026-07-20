@@ -22,45 +22,46 @@ public struct AnonymousJoinFormView: View {
 
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 formHeader
                 requiredFields
                 optionalFields
                 errorBanner
                 submitButton
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .padding(.bottom, 32)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xxxl)
         }
     }
 
     // MARK: - Header
 
     private var formHeader: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             HStack {
                 Button(action: onBack) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xs + 2) {
                         Image(systemName: "chevron.left")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                         Text(String(localized: "joinFlow.form.back", defaultValue: "Retour", bundle: .module))
-                            .font(.system(size: 14, weight: .medium))
+                            .font(MeeshyFont.relative(14, weight: .medium))
                     }
                     .foregroundColor(MeeshyColors.indigo400)
+                    .meeshyTapTarget()
                 }
 
                 Spacer()
             }
 
             Text(String(localized: "joinFlow.form.title", defaultValue: "Rejoindre la conversation", bundle: .module))
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             if let title = viewModel.linkInfo?.conversation.title {
                 Text(title)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(theme.textSecondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -70,9 +71,9 @@ public struct AnonymousJoinFormView: View {
     // MARK: - Required Fields
 
     private var requiredFields: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.lg) {
             Text(String(localized: "joinFlow.form.requiredSection", defaultValue: "Informations requises", bundle: .module))
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(theme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -125,9 +126,9 @@ public struct AnonymousJoinFormView: View {
                           viewModel.linkInfo?.requireEmail != true
 
         if hasOptional {
-            VStack(spacing: 14) {
+            VStack(spacing: MeeshySpacing.lg) {
                 Text(String(localized: "joinFlow.form.optionalSection", defaultValue: "Optionnel", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -167,7 +168,7 @@ public struct AnonymousJoinFormView: View {
         keyboardType: UIKeyboardType = .default,
         autocapitalization: TextInputAutocapitalization = .never
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .foregroundStyle(focusedField == field ? MeeshyColors.indigo400 : .secondary)
                 .frame(width: 20)
@@ -179,14 +180,14 @@ public struct AnonymousJoinFormView: View {
                 .autocorrectionDisabled()
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .strokeBorder(
                     focusedField == field ? MeeshyColors.indigo400.opacity(0.6) : Color.clear,
                     lineWidth: 1
@@ -197,7 +198,7 @@ public struct AnonymousJoinFormView: View {
     // MARK: - Birthday Picker
 
     private var birthdayPicker: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "gift.fill")
                 .foregroundStyle(MeeshyColors.indigo600)
                 .frame(width: 20)
@@ -211,10 +212,10 @@ public struct AnonymousJoinFormView: View {
             .datePickerStyle(.compact)
             .foregroundColor(theme.textPrimary)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
         )
     }
@@ -222,13 +223,13 @@ public struct AnonymousJoinFormView: View {
     // MARK: - Language Picker
 
     private var languagePicker: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "globe")
                 .foregroundStyle(MeeshyColors.info)
                 .frame(width: 20)
 
             Text(String(localized: "joinFlow.form.language", defaultValue: "Langue", bundle: .module))
-                .font(.system(size: 14))
+                .font(MeeshyFont.relative(14))
                 .foregroundColor(theme.textSecondary)
 
             Spacer()
@@ -251,10 +252,10 @@ public struct AnonymousJoinFormView: View {
             }
             .tint(MeeshyColors.indigo400)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
         )
     }
@@ -264,17 +265,17 @@ public struct AnonymousJoinFormView: View {
     @ViewBuilder
     private var errorBanner: some View {
         if let error = viewModel.errorMessage {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.sm + 2) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundColor(MeeshyColors.error)
                 Text(error)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
             }
-            .padding(14)
+            .padding(MeeshySpacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
             )
         }
@@ -286,20 +287,20 @@ public struct AnonymousJoinFormView: View {
         Button {
             Task { await viewModel.submitJoin() }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if viewModel.isSubmitting {
                     ProgressView()
                         .tint(.white)
                 } else {
                     Image(systemName: "arrow.right.circle.fill")
-                        .font(.system(size: 18))
+                        .font(MeeshyFont.relative(18))
                     Text(String(localized: "joinFlow.form.submit", defaultValue: "Rejoindre", bundle: .module))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                 }
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, MeeshySpacing.lg)
             .background(
                 Group {
                     if viewModel.isFormValid {
@@ -313,13 +314,13 @@ public struct AnonymousJoinFormView: View {
                     }
                 }
             )
-            .cornerRadius(16)
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
             .shadow(
                 color: viewModel.isFormValid ? MeeshyColors.indigo500.opacity(0.3) : .clear,
-                radius: 12, x: 0, y: 6
+                radius: MeeshyShadow.strong.radius, x: 0, y: 6
             )
         }
         .disabled(!viewModel.isFormValid || viewModel.isSubmitting)
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 }

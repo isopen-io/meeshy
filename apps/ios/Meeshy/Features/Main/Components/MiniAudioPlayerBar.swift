@@ -118,30 +118,43 @@ struct MiniAudioPlayerBar: View {
     @ViewBuilder
     private func content(for context: ActiveAudioContext) -> some View {
         HStack(spacing: 10) {
-            // Avatar conv (fallback indigo gradient placeholder)
-            Circle()
-                .fill(LinearGradient(
-                    colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
-                    startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 36, height: 36)
-                .overlay(
-                    Text(String(context.senderName.prefix(1)).uppercased())
-                        .font(.footnote.weight(.bold))
-                        .foregroundColor(.white))
+            // Now-playing cluster (avatar + track meta + progress). Tapping it
+            // opens the source conversation — so VoiceOver exposes it as a single
+            // button rather than as disconnected monogram / name / percent
+            // fragments, and the whole-card tap action stays reachable non-visually.
+            HStack(spacing: 10) {
+                // Avatar conv (fallback indigo gradient placeholder)
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 36, height: 36)
+                    .overlay(
+                        Text(String(context.senderName.prefix(1)).uppercased())
+                            .font(.footnote.weight(.bold))
+                            .foregroundColor(.white))
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(context.senderName)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text(context.conversationName)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                ProgressView(value: max(0, min(1, coordinator.progress)))
-                    .progressViewStyle(.linear)
-                    .tint(MeeshyColors.indigo500)
-                    .frame(height: 2)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(context.senderName)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text(context.conversationName)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    ProgressView(value: max(0, min(1, coordinator.progress)))
+                        .progressViewStyle(.linear)
+                        .tint(MeeshyColors.indigo500)
+                        .frame(height: 2)
+                }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(nowPlayingAccessibilityLabel(for: context))
+            .accessibilityValue(progressAccessibilityValue)
+            .accessibilityHint(openConversationAccessibilityHint)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAddTraits(coordinator.isPlaying ? .updatesFrequently : [])
+            .accessibilityAction { openConversation(for: context) }
 
             Spacer(minLength: 4)
 
@@ -186,13 +199,39 @@ struct MiniAudioPlayerBar: View {
         .clipShape(Capsule())
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
-        .onTapGesture {
-            if let router = routerForTesting {
-                router(context.conversationId)
-            } else {
-                onTapBody()
-            }
+        .onTapGesture { openConversation(for: context) }
+    }
+
+    /// Opens the conversation driving the active audio. Wired to BOTH the
+    /// whole-card tap gesture and the VoiceOver activation of the now-playing
+    /// cluster, so the sighted and non-visual paths share one implementation.
+    private func openConversation(for context: ActiveAudioContext) {
+        if let router = routerForTesting {
+            router(context.conversationId)
+        } else {
+            onTapBody()
         }
+    }
+
+    private func nowPlayingAccessibilityLabel(for context: ActiveAudioContext) -> String {
+        String(
+            localized: "mini_player.a11y.now-playing",
+            defaultValue: "Lecture audio de \(context.senderName), \(context.conversationName)",
+            bundle: .main
+        )
+    }
+
+    private var progressAccessibilityValue: String {
+        max(0, min(1, coordinator.progress))
+            .formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    private var openConversationAccessibilityHint: String {
+        String(
+            localized: "mini_player.a11y.open-hint",
+            defaultValue: "Ouvrir la conversation",
+            bundle: .main
+        )
     }
 
     // MARK: - Test helpers
@@ -201,10 +240,6 @@ struct MiniAudioPlayerBar: View {
     func simulateTapCloseForTesting() { coordinator.close() }
     func simulateTapBodyForTesting() {
         guard let context = displayedContext else { return }
-        if let router = routerForTesting {
-            router(context.conversationId)
-        } else {
-            onTapBody()
-        }
+        openConversation(for: context)
     }
 }
