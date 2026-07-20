@@ -14,6 +14,30 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 186i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Contexte essaim** : PR iOS ouvertes 140i→**185i** (`MessageLanguageDetailView` #2137).
+>   Numéro **186i** choisi strictement > plus haut en vol (185i).
+> - **186i (terminée, branche `claude/laughing-thompson-qdzrzc`, base `main` HEAD `9d41333`)** :
+>   Contrôle de pagination accessible pour **`OnboardingView`** (carrousel de premier lancement,
+>   5 slides — écran **jamais audité**). `TabView` en `.page(indexDisplayMode: .never)` → les points
+>   natifs sont supprimés et remplacés par une bande de `Capsule` custom **muette à VoiceOver**.
+>   **2 déficits** : (1) `pageIndicators` n'expose ni position ni navigation → fix : élément
+>   **adjustable unique** miroir de `UIPageControl` — `.accessibilityElement(children: .ignore)` +
+>   label « Page N sur M » (clé `onboarding.pages.a11y`, format `%1$lld…%2$lld`, ajoutée au catalogue
+>   **5 langues** de/en/es/fr/pt-BR, cohérent avec les 15 clés `onboarding.*`) +
+>   `.accessibilityAdjustableAction` increment/decrement bornés → `goToPage(_:)` (réutilise
+>   `withAnimation(springDefault)` + `HapticFeedback.light`, comme swipe/Next). (2) slide 4 :
+>   `mockConversationPreview` (3 bulles démo, texte es/ja non traduit, `allowsHitTesting(false)`) était
+>   fusionné par `.accessibilityElement(children: .combine)` de la page → **bruit VoiceOver** → fix :
+>   `.accessibilityHidden(true)` (la slide n'annonce plus que son titre). **1 fichier Swift + 1 clé i18n**,
+>   0 logique / 0 réseau / 0 test neuf / **0 changement visuel** (couche VoiceOver seule). Reduce Motion
+>   des orbes déjà géré en amont (`FloatingAnimation`). Aucun test ne réf. `OnboardingView` (grep = 0),
+>   aucune PR iOS ne le touche. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** `OnboardingView.pageIndicators` (adjustable/labellisé) ni
+>   `mockConversationPreview` (masqué à dessein). **Différé 187i+** : Reduce Motion du scale-in d'icône
+>   (`animateIcon`), gradients de fond `Color(hex:)` par slide = décor atmosphérique voulu (ne pas migrer).
+> - **Base de départ 187i : `main` HEAD** (resync ; supprimer la branche mergée).
+>
 > **POINTEUR iOS AUTORITAIRE (mis à jour 191i, 2026-07-20)** — piste iOS (suffixe `i`).
 > - **Essaim iOS saturé** : PR ouvertes de 169i à **190i** (#2163 `CreateTrackingLinkView`). Numéro **191i** choisi strictement > 190i (plus haut en vol). Candidats du pointeur 184i déjà pris — `ConversationDashboardView periodPicker` (#2158/#2167), `GlobalSearchView` (#2164), `AudioFullscreenView` (#2144). **NE PAS re-flagger.**
 > - **191i (terminée, branche `claude/laughing-thompson-q2rrku`, base `main` HEAD `62f338f` ; branche resync sur main — travaux antérieurs (`PostStatAccessibility`/`LoadMoreRepliesCell`/`MessageViewsDetailView` inflect plural) déjà tous dans main via #2165, branche redémarrée depuis `origin/main`)** : atteignabilité VoiceOver de **`StatusBubbleOverlay`** (pop-up d'humeur/status, différé explicitement par 184i comme itération dédiée à cause des contrôles imbriqués). 3 défauts : (1) **répondre = `.onTapGesture` nu** → aucune action VoiceOver (WCAG 2.1.1), le `.accessibilityHint` préexistant était sur un conteneur non-élément donc perdu ; (2) **`ProgressView` audio sans `.accessibilityValue`** ; (3) **aucun chemin de fermeture VoiceOver** (overlay ZStack, tap-outside = `Color.clear` non focalisable). `.combine` inadapté (imbrique boutons lecture audio + republier → avalés/ambigus). Fix (idiome 183i) : bulle = **1 seul élément** `.accessibilityElement(children: .ignore)` + `.accessibilityLabel` composé (contenu/« Humeur audio » + ancienneté + via) + `.accessibilityValue` (% lecture audio via `Double.formatted(.percent…)`, **0 clé**) + `.accessibilityAddTraits(.isButton)` gaté `onReplyTapped != nil` + `.accessibilityAction { répondre }` (activation par défaut = répondre, miroir du tap tactile) + `.accessibilityActions { Lire/Arrêter (audio), Republier (autres) }` (rotor, réutilise strings existantes) + `.accessibilityAction(.escape) { dismiss() }` (scrub 2 doigts). Label inerte du bouton audio interne retiré. **1 clé neuve inline** `status.bubble.audio.a11yLabel` (0 xcstrings). **0 visuel / 0 logique / 0 test neuf** (aucun test ne référence la vue). 1 fichier. Gate = CI `iOS Tests`.
