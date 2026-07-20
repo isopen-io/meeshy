@@ -2156,9 +2156,61 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       frozen at the final length on the ended screen, and `null` for a call that never connected. The
       connected screen renders the running clock; the ended screen appends the final length. +18
       behavioural tests (6 formatter, 5 presenter, 7 VM).
-- [ ] Live in-call transcription overlay (on-device speech-to-text, leader/follower)
-- [ ] In-call translation data channel (dual-stream clean audio)
-- [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
+- [~] Live in-call transcription overlay (on-device speech-to-text, leader/follower) —
+      **pure captions core landed** (slice `call-captions-mode`): the `core:model`
+      `CaptionsMode` is the SSOT for the live-captions button's 3-state cycle
+      (`Off → Translated → Original → Off`), a faithful port of iOS `CaptionsMode`
+      (`apps/ios/Meeshy/Features/Main/Models/CaptionsMode.swift`): `from(isTranscribing,
+      showOriginalText)` derives the mode from the two authoritative flags with
+      `isTranscribing` priority (a stale `showOriginalText` never surfaces `Original`
+      while off), `next` always re-enters on `Translated` (never straight to `Original`),
+      and `isShowingCaptions` gates the overlay. The pure `CallCaptionResolver` projects a
+      `CallCaptionSegment` onto the on-screen `CaptionLine` under the current mode following
+      the **Prisme Linguistique**: `Translated` shows the translation as native content and
+      **falls back to the original words when none exists** (Prisme rule 1 — never a blank
+      line), `Original` always shows the speaker's own words, `Off` yields nothing, and a
+      blank-text segment renders no line; `resolveAll` drops blanks and keeps renderable
+      lines in order. +24 behavioural tests. Mutation (RED proof): neutralising the
+      blank-translation→absent fallback fails **exactly** the blank-translation test (1
+      failed, no collateral). **P2P transcript transport core landed** (slice
+      `call-datachannel-protocol`): the pure `core:model` `DataChannelCodec` + `DataChannelInbound`
+      is the SSOT codec for the in-band WebRTC data channel (iOS labels it `"transcription"`),
+      classifying an inbound frame into `Bye(reason)` / `Caption(segment)` / `Ignored` and
+      encoding the outbound `bye` / `ping` / `caption` frames. Faithful port of iOS
+      `DataChannelControlMessage` / `DataChannelInbound.decode` (`WebRTCTypes.swift`): a `bye`
+      is the WhatsApp-style instant hangup shortcut, a `ping` is inert on receive, and any
+      malformed/unknown/empty frame degrades to `Ignored` (never throws). **SOTA extension:** the
+      same channel doubles as the captions transport — a `caption` frame carries a
+      `CallCaptionSegment` straight to the remote overlay with no server round-trip, and a
+      decoded caption is **always forced `isLocal = false`** (a wire `isLocal` claim can never
+      make a received caption render as "you"). +30 behavioural tests. Mutation (RED proof):
+      neutralising the blank-translation→null drop fails **exactly** the blank-translation test
+      (1 failed, no collateral). **Pending:** the app-side `EdgeTranscription` STT actuator
+      (Android `SpeechRecognizer`), the `WebRtcEngine` data-channel seam that feeds
+      `DataChannelCodec` and routes `Bye`/`Caption`, and the accent-coherent overlay UI +
+      captions button that consume these cores.
+- [ ] In-call translation data channel (dual-stream clean audio) — distinct from the caption
+      transport above; this is the separate *clean-audio* stream for far-end translation, still
+      pending.
+- [~] In-call video filters (colour presets, low-light boost, background blur, skin smoothing) —
+      **pure config + preset + auto-degrade cores landed** (slice `call-video-filter-config`): the
+      `core:model` `VideoFilterConfig` (colorimetry temperature/tint/brightness/contrast/saturation/
+      exposure + the two advanced passes background-blur/skin-smoothing + `hasAdvancedFilters`) is the
+      SSOT the WebRTC capture-frame actuator consumes; `VideoFilterPreset` (Natural/Warm/Cool/Vivid/
+      Muted, each with a stable `id` + `fromId` round-trip) projects to an enabled config at exact iOS
+      parity. `VideoFilterDegradePolicy` is the pure two-tier count-based hysteresis reducer ported from
+      iOS `VideoFilterPipeline.updateAutoDegradation`/`isSmoothingDegraded`: skin smoothing (pricier) sheds
+      at half the over-budget threshold, the full advanced pass latches off at the threshold (10 slow
+      frames >25ms) and restores only after a sustained under-budget streak (30 fast frames <15ms) — the
+      confirm/restore asymmetry IS the hysteresis; `effectiveConfig(config, state)` is the SSOT projection
+      both actuator and any "filters throttled" UI hint read from. **SOTA upgrade:** iOS buries this in a
+      stateful `nonisolated` class with unbounded `Int` counters (untestable without a live GPU); Android
+      is a total reducer whose two counters are **clamped** so state is O(1) over a multi-minute call.
+      +30 behavioural tests. Mutation (RED proof): removing the over-budget clamp fails **exactly** the
+      unbounded-counter test (17 tests, 1 failed, no collateral). **Pending:** the WebRTC `VideoProcessor`/
+      `VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation blur + face-detect smoothing)
+      that applies `effectiveConfig` per captured frame, the low-light boost pass (folding `FrameLuminance`),
+      and the accent-coherent filter panel UI (preset chips + advanced toggles).
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [~] Camera-covered ("dark frame") detection during video calls — **pure detection
       core landed** (slice `call-dark-frame-detection`): the `core:model`

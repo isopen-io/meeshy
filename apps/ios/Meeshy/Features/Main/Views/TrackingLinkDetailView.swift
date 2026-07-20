@@ -94,11 +94,7 @@ struct TrackingLinkDetailView: View {
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
-            detailActionButton(String(localized: "tracking.link.detail.share", defaultValue: "Partager", bundle: .main), icon: "square.and.arrow.up", color: MeeshyColors.trackingAccent) {
-                guard let url = URL(string: link.shortUrl) else { return }
-                let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-                presentVC(av)
-            }
+            shareActionButton
             detailActionButton(String(localized: "tracking.link.detail.qr", defaultValue: "QR Code", bundle: .main), icon: "qrcode", color: MeeshyColors.brandPrimary) {
                 generateQRAndShare()
             }
@@ -110,17 +106,40 @@ struct TrackingLinkDetailView: View {
 
     private func detailActionButton(_ label: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 5) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
-                        .frame(width: 46, height: 46)
-                    Image(systemName: icon).font(.body)
-                        .foregroundColor(color)
+            actionButtonLabel(label, icon: icon, color: color)
+        }
+    }
+
+    // Native ShareLink for the tracking URL — replaces a hand-rolled
+    // UIActivityViewController + top-VC walk. iPad popover anchoring is
+    // handled by the system, matching the app's dominant share idiom.
+    private var shareActionButton: some View {
+        let label = String(localized: "tracking.link.detail.share", defaultValue: "Partager", bundle: .main)
+        return Group {
+            if let url = URL(string: link.shortUrl) {
+                ShareLink(item: url) {
+                    actionButtonLabel(label, icon: "square.and.arrow.up", color: MeeshyColors.trackingAccent)
                 }
-                .accessibilityHidden(true)
-                Text(label).font(.caption2.weight(.medium)).foregroundColor(theme.textSecondary)
+            } else {
+                ShareLink(item: link.shortUrl) {
+                    actionButtonLabel(label, icon: "square.and.arrow.up", color: MeeshyColors.trackingAccent)
+                }
             }
-        }.frame(maxWidth: .infinity)
+        }
+    }
+
+    private func actionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
+        VStack(spacing: 5) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
+                    .frame(width: 46, height: 46)
+                Image(systemName: icon).font(.body)
+                    .foregroundColor(color)
+            }
+            .accessibilityHidden(true)
+            Text(label).font(.caption2.weight(.medium)).foregroundColor(theme.textSecondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Main stats
