@@ -30,48 +30,19 @@ public struct StoryTimelineHost: View {
         // Glass material lives on the sheet itself
         // (`.presentationBackground(.ultraThinMaterial)`); doubling it here
         // would flatten the canvas blur. We leave this container transparent.
-        VStack(spacing: 0) {
-            header
-            container
-        }
+        //
+        // L'export N'EST PLUS un bouton d'en-tête (il chevauchait la dernière
+        // chip du tool switcher). Il vit désormais dans le transport, juste
+        // après la lecture (`TransportBar.onSave`, user 2026-07-20).
+        container
     }
 
     @ViewBuilder
     private var container: some View {
         if let previewSlot {
-            StoryTimelineView(viewModel: viewModel, previewSlot: previewSlot)
+            StoryTimelineView(viewModel: viewModel, onExport: onExport, previewSlot: previewSlot)
         } else {
-            StoryTimelineView(viewModel: viewModel)
-        }
-    }
-
-    /// Export en trailing (pattern éditeurs vidéo : action en haut à droite) —
-    /// le transport row est déjà saturé en portrait. La rangée reste même
-    /// sans export pour dégager le drag indicator système (~14pt).
-    private var header: some View {
-        HStack {
-            Spacer(minLength: 0)
-            exportHeaderButton
-        }
-        .padding(.top, 16)
-        .padding(.bottom, 10)
-        .padding(.horizontal, 12)
-    }
-
-    @ViewBuilder
-    private var exportHeaderButton: some View {
-        if let onExport {
-            Button(action: onExport) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 34, height: 34)
-                    .contentShape(Rectangle().inset(by: -5))
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(MeeshyColors.indigo600)
-            .accessibilityLabel(String(localized: "story.timeline.export.button",
-                                       defaultValue: "Exporter en vidéo MP4",
-                                       bundle: .module))
+            StoryTimelineView(viewModel: viewModel, onExport: onExport)
         }
     }
 }

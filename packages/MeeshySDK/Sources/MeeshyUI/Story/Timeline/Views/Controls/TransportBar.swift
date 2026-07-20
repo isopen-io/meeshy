@@ -29,6 +29,10 @@ public struct TransportBar: View {
     public let onUndo: () -> Void
     public let onRedo: () -> Void
     public let onSnapToggle: () -> Void
+    /// Enregistrement de la story (export MP4 watermarké + effets/transitions →
+    /// Fichiers/Photothèque). Rendu juste après le bouton lecture (user
+    /// 2026-07-20). `nil` = surfaces sans export (le bouton n'apparaît pas).
+    public let onSave: (() -> Void)?
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,
                 zoomScale: CGFloat, isMuted: Bool,
@@ -42,7 +46,8 @@ public struct TransportBar: View {
                 onZoomReset: @escaping () -> Void,
                 onUndo: @escaping () -> Void = {},
                 onRedo: @escaping () -> Void = {},
-                onSnapToggle: @escaping () -> Void = {}) {
+                onSnapToggle: @escaping () -> Void = {},
+                onSave: (() -> Void)? = nil) {
         self.isPlaying = isPlaying; self.currentTime = currentTime; self.duration = duration
         self.zoomScale = zoomScale; self.isMuted = isMuted
         self.showsTimeReadout = showsTimeReadout
@@ -52,6 +57,7 @@ public struct TransportBar: View {
         self.onZoomIn = onZoomIn; self.onZoomOut = onZoomOut; self.onZoomReset = onZoomReset
         self.onUndo = onUndo; self.onRedo = onRedo
         self.onSnapToggle = onSnapToggle
+        self.onSave = onSave
     }
 
     public static func formatTime(seconds: Float) -> String {
@@ -111,6 +117,10 @@ public struct TransportBar: View {
         // `.frame(maxWidth: .infinity, alignment: .trailing)`, pas via un Spacer.
         HStack(spacing: 0) {
             playButton
+            if let onSave {
+                saveButton(onSave)
+                    .padding(.leading, 10)
+            }
             ViewThatFits(in: .horizontal) {
                 trailingCluster(showTime: showsTimeReadout, showZoomLabel: true, spacing: 10)
                 trailingCluster(showTime: false, showZoomLabel: true, spacing: 10)
@@ -203,6 +213,23 @@ public struct TransportBar: View {
             ? "story.timeline.transport.pause"
             : "story.timeline.transport.play",
             bundle: .module))
+    }
+
+    /// Bouton « Enregistrer » — juste après la lecture. Déclenche l'export MP4
+    /// watermarké (effets + transitions) puis la sauvegarde Fichiers/Photothèque
+    /// (cf. `TimelineExportFlow`). Icône descendante (save) plutôt que partage.
+    private func saveButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "square.and.arrow.down")
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle().inset(by: -6))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(MeeshyColors.indigo600)
+        .accessibilityLabel(String(localized: "story.timeline.export.button",
+                                   defaultValue: "Enregistrer la story en vidéo",
+                                   bundle: .module))
     }
 
     private var timeReadout: some View {
