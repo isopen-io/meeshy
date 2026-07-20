@@ -63,9 +63,9 @@ final class PresenceManager: ObservableObject {
         // (e.g. iOS background → foreground transition). Wiping the map the
         // moment `isConnected` flips to false caused all avatars to lose
         // their online dots during every resume, which felt like the app
-        // "forgot" who was online. The `.away` computed state still kicks in
-        // after 5 min of inactivity, so stale data decays gracefully.
-        // Presence will be refreshed when `user:status` events resume.
+        // "forgot" who was online. The computed decay (away at 1 min, idle at
+        // 3 min, offline at 5 min) still applies, so stale data degrades
+        // gracefully. Presence will be refreshed when `user:status` events resume.
 
         // Hydrate from disk off-main: fills entries not yet populated by a
         // real-time socket event (live updates take precedence via merging).
@@ -77,10 +77,10 @@ final class PresenceManager: ObservableObject {
             self.presenceMap = loaded.merging(self.presenceMap) { _, liveEntry in liveEntry }
         }
 
-        // Recalculate every 60s — déclenche un re-render seulement si un utilisateur
-        // traverse une frontière d'état dans cette fenêtre : online → away à 300s
-        // d'inactivité, ou away → offline à 1800s après déconnexion
-        recalcTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+        // Recalcule toutes les 30s — déclenche un re-render seulement si un
+        // utilisateur traverse une frontière d'état 1/3/5 dans cette fenêtre :
+        // online → away à 60s, away → idle à 180s, idle → offline à 300s.
+        recalcTimer = Timer.scheduledTimer(withTimeInterval: Self.recalcInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
                 let hasTransition = self.presenceMap.values.contains { Self.isNearStateFlip($0) }
@@ -136,13 +136,18 @@ final class PresenceManager: ObservableObject {
         return UserPresence(isOnline: isOnline ?? false, lastActiveAt: lastActiveAt).state
     }
 
+    /// Cadence du timer de recalcul. Egale a la largeur des fenetres de
+    /// `isNearStateFlip` : chaque transition 1/3/5 est captee par le tick
+    /// qui suit la frontiere (retard maximal d'un tick).
+    nonisolated static let recalcInterval: TimeInterval = 30
+
     nonisolated static func isNearStateFlip(_ presence: UserPresence, now: Date = Date()) -> Bool {
         guard let last = presence.lastActiveAt else { return false }
         let elapsed = now.timeIntervalSince(last)
-        // Fenetres de bascule (60s online→recent, 300s recent→away, 1800s away→offline).
-        return (elapsed > 60 && elapsed <= 120)
-            || (elapsed > 300 && elapsed <= 360)
-            || (elapsed > 1800 && elapsed <= 1860)
+        // Fenetres de bascule 1/3/5 (60s online→away, 180s away→idle, 300s idle→offline).
+        return (elapsed > 60 && elapsed <= 90)
+            || (elapsed > 180 && elapsed <= 210)
+            || (elapsed > 300 && elapsed <= 330)
     }
 
     /// Apply a bulk presence snapshot received via the `presence:snapshot` socket

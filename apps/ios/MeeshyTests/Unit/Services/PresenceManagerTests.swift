@@ -169,39 +169,59 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(state, PresenceState.offline)
     }
 
-    // MARK: - isNearStateFlip(_:now:)
+    // MARK: - isNearStateFlip(_:now:) — fenetres calees sur la regle 1/3/5
 
-    func test_isNearStateFlip_onlineInsideAwayWindow_returnsTrue() {
+    func test_isNearStateFlip_justPastOnlineBoundary_returnsTrue() {
         let now = Date()
-        let presence = AppUserPresence(isOnline: true, lastActiveAt: now.addingTimeInterval(-330))
-        XCTAssertTrue(PresenceManager.isNearStateFlip(presence, now: now))
+        // 61s -> le flip online->away vient de se produire (fenetre 60-90s).
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-61)), now: now))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-75)), now: now))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-90)), now: now))
     }
 
-    func test_isNearStateFlip_onlineOutsideAwayWindow_returnsFalse() {
+    func test_isNearStateFlip_justPastAwayBoundary_returnsTrue() {
         let now = Date()
-        XCTAssertFalse(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: true, lastActiveAt: now.addingTimeInterval(-200)), now: now))
-        XCTAssertFalse(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: true, lastActiveAt: now.addingTimeInterval(-400)), now: now))
+        // 181s -> flip away->idle (fenetre 180-210s).
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-181)), now: now))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-210)), now: now))
     }
 
-    func test_isNearStateFlip_offlineInsideOfflineWindow_returnsTrue() {
+    func test_isNearStateFlip_justPastIdleBoundary_returnsTrue() {
         let now = Date()
-        let presence = AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-1830))
-        XCTAssertTrue(PresenceManager.isNearStateFlip(presence, now: now))
+        // 301s -> flip idle->offline (fenetre 300-330s).
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-301)), now: now))
+        XCTAssertTrue(PresenceManager.isNearStateFlip(
+            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-330)), now: now))
     }
 
-    func test_isNearStateFlip_offlineOutsideOfflineWindow_returnsFalse() {
+    func test_isNearStateFlip_betweenWindows_returnsFalse() {
         let now = Date()
-        XCTAssertFalse(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-1700)), now: now))
-        XCTAssertFalse(PresenceManager.isNearStateFlip(
-            AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-1900)), now: now))
+        for elapsed in [50.0, 100, 150, 250, 350, 1830] {
+            XCTAssertFalse(
+                PresenceManager.isNearStateFlip(
+                    AppUserPresence(isOnline: false, lastActiveAt: now.addingTimeInterval(-elapsed)), now: now),
+                "elapsed \(elapsed)s ne doit traverser aucune fenetre de flip 1/3/5"
+            )
+        }
     }
 
     func test_isNearStateFlip_noLastActiveAt_returnsFalse() {
         XCTAssertFalse(PresenceManager.isNearStateFlip(AppUserPresence(isOnline: true, lastActiveAt: nil)))
         XCTAssertFalse(PresenceManager.isNearStateFlip(AppUserPresence(isOnline: false, lastActiveAt: nil)))
+    }
+
+    // MARK: - Cadence de recalcul
+
+    func test_recalcInterval_coversEveryFlipWindow() {
+        // Timer 30s = largeur des fenetres de flip : chaque transition 1/3/5
+        // est captee par le tick suivant (retard max 30s, contre 60s avant).
+        XCTAssertEqual(PresenceManager.recalcInterval, 30)
     }
 
     // MARK: - seed(from:currentUserId:)
