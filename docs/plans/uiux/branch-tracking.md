@@ -14,6 +14,18 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 193i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **193i (branche `claude/laughing-thompson-qtvf62`, base `main` HEAD `995ed53`, PR #2178)** :
+>   Parité VoiceOver de `MessageDetailSheet.languageRow` avec son jumeau déjà migré
+>   `MessageDetail/MessageLanguageDetailView.languageRow` (traité 185i). Deux écarts soldés :
+>   (1) bouton icône « retraduire » (`arrow.clockwise`, l.659) sans `accessibilityLabel` → ajout de
+>   `message-detail.a11y.retranslate` (**clé existante**, réutilisée du jumeau → 0 clé neuve) ;
+>   (2) ligne sélectionnée sans trait a11y → `.accessibilityAddTraits(isSelected ? [.isSelected] : [])`.
+>   Mirror octet-pour-octet des l.278 + l.318 du jumeau. 1 fichier, +2 lignes, 0 logique, 0 visuel,
+>   0 test. `list_pull_requests` (20 PR) → `MessageDetailSheet.swift` libre. Gate = CI `iOS Tests`.
+> - **⚠️ Restant 194i+** : `MessageDetailSheet.languageRow` + `MessageLanguageDetailView.languageRow`
+>   restent **dupliqués** — candidate extraction composant partagé `LanguageTranslationRow` (design-system),
+>   auditer collision essaim avant (les 2 fichiers évoluent en parallèle).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 186i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **186i (branche `claude/laughing-thompson-0lonrh`, base `main` HEAD `64f943d`)** :
 >   Consolidation palette de marque de `DataStorageView` (Réglages → Stockage / cache media).
