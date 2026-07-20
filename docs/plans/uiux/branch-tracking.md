@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 178i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **178i (en cours, branche `claude/laughing-thompson-4hn4bq`, base `main` HEAD `3c4d772`)** :
+>   Localisation + VoiceOver de la **carte historique d'envoi** de `MessageViewsDetailView` (onglet
+>   « Qui a vu » du détail message, présenté depuis `MessageMoreSheet`). L'écran localisait déjà ses
+>   sous-filtres (`String(localized:defaultValue:bundle:)`, défauts EN inline) ; la carte `sendAttemptsCard`
+>   shippait 6 chaînes **FR brutes** (`"Historique d'envoi"`, `"1ère tentative"`, `"Tentative N"`, labels
+>   transport `"Temps réel"`/`"Repli temps réel"`/`"Re-tentative auto"`) + un **hack pluriel manuel**
+>   `\(count) tentative\(count>1 ? "s":"")`. A11y : chaque rangée d'attempt éclatée en focus fragmentés,
+>   issue succès/échec portée **uniquement** par la couleur de l'icône (vert/rouge). Fix = famille de clés
+>   `message-detail.send-history.*` (défauts EN inline, 0 `.xcstrings`), pluriel via **accord grammatical
+>   automatique** `^[\(count) attempt](inflect: true)` (0 `.stringsdict`), `.accessibilityLabel` sur l'icône
+>   d'issue (« Succeeded »/« Failed » = texte, pas couleur seule), `.accessibilityElement(children: .combine)`
+>   sur la rangée. 1 fichier, 0 logique, 0 test. Hors scope vérifié sain : helpers `*FR` = `date.formatted(
+>   .dateTime…)` **locale-aware** (suffixe FR trompeur, pas un bug) ; polices déjà en text styles Dynamic Type.
+>   Aucune PR iOS ouverte ne touche `MessageViewsDetailView` → 0 contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ Carte `sendAttemptsCard` (send-history) SOLDÉE** : ne plus reprendre. Reste du fichier
+>   (`deliveryBadge`, `emptyStateView`, labels `metaInfoRow` ID/Type/Source/Langue/Chiffrement/Pièces jointes,
+>   « Pas encore écouté/visionné ») encore FR brut → candidat i18n de suivi.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un
