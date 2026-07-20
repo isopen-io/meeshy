@@ -66,6 +66,9 @@ struct EmailVerificationView: View {
                 .font(.system(.largeTitle).weight(.medium))
                 .foregroundStyle(MeeshyColors.brandGradient)
         }
+        // Illustration héros décorative — le sens est porté par le titre + le
+        // sous-titre adjacents ; masquée pour éviter une annonce parasite.
+        .accessibilityHidden(true)
     }
 
     // MARK: - Title
@@ -74,6 +77,7 @@ struct EmailVerificationView: View {
         Text(String(localized: "emailVerification.title", defaultValue: "Verifiez votre email"))
             .font(.system(.title, design: .rounded).weight(.bold))
             .foregroundStyle(theme.textPrimary)
+            .accessibilityAddTraits(.isHeader)
     }
 
     // MARK: - Subtitle
@@ -116,6 +120,10 @@ struct EmailVerificationView: View {
             }
         }
         .disabled(viewModel.isVerifying || viewModel.verificationSuccess)
+        // Sans label, VoiceOver lit le placeholder « 000000 » comme intitulé du
+        // champ — inintelligible. On pose un label + un indice explicites.
+        .accessibilityLabel(String(localized: "emailVerification.code.a11yLabel", defaultValue: "Code de vérification"))
+        .accessibilityHint(String(localized: "emailVerification.code.a11yHint", defaultValue: "Entrez le code à 6 chiffres reçu par email"))
     }
 
     // MARK: - Error View
@@ -137,6 +145,9 @@ struct EmailVerificationView: View {
                     .fill(MeeshyColors.error.opacity(0.1))
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
+            // Glyphe d'alerte décoratif + message fusionnés en un seul élément :
+            // VoiceOver annonce le message d'erreur, pas le triangle isolé.
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -168,6 +179,16 @@ struct EmailVerificationView: View {
         }
         .disabled(!isCodeComplete || viewModel.isVerifying || viewModel.verificationSuccess)
         .padding(.horizontal, 8)
+        // Pendant la vérification le label se réduit à un spinner (aucun texte) →
+        // VoiceOver lirait un bouton anonyme. Label stable et explicite dans les
+        // deux états.
+        .accessibilityLabel(verifyButtonAccessibilityLabel)
+    }
+
+    private var verifyButtonAccessibilityLabel: String {
+        viewModel.isVerifying
+            ? String(localized: "emailVerification.verifying.a11y", defaultValue: "Vérification en cours")
+            : String(localized: "emailVerification.verifyButton", defaultValue: "Verifier")
     }
 
     // MARK: - Resend Section
@@ -200,7 +221,21 @@ struct EmailVerificationView: View {
                 .foregroundStyle(MeeshyColors.indigo400)
             }
             .disabled(viewModel.isResending || viewModel.resendSuccess)
+            // Idem : l'état « renvoi en cours » se réduit à un spinner. Label
+            // stable couvrant les trois états (repos / en cours / confirmé) et
+            // remplaçant la lecture des glyphes décoratifs internes.
+            .accessibilityLabel(resendButtonAccessibilityLabel)
         }
+    }
+
+    private var resendButtonAccessibilityLabel: String {
+        if viewModel.isResending {
+            return String(localized: "emailVerification.resending.a11y", defaultValue: "Envoi du code en cours")
+        }
+        if viewModel.resendSuccess {
+            return String(localized: "emailVerification.resendConfirmed", defaultValue: "Code renvoye !")
+        }
+        return String(localized: "emailVerification.resendButton", defaultValue: "Renvoyer le code")
     }
 
     // MARK: - Success Overlay
@@ -222,9 +257,15 @@ struct EmailVerificationView: View {
                         .font(.system(.title2, design: .rounded).weight(.bold))
                         .foregroundStyle(theme.textPrimary)
                 }
+                // Checkmark décoratif + libellé fusionnés → VoiceOver annonce
+                // « Email vérifié ! » en un seul élément.
+                .accessibilityElement(children: .combine)
             }
             .transition(.opacity)
             .animation(.easeInOut(duration: 0.3), value: viewModel.verificationSuccess)
+            // Overlay de succès plein écran : marqué modal pour que le focus
+            // VoiceOver s'y déplace et que le contenu masqué en dessous soit ignoré.
+            .accessibilityAddTraits(.isModal)
         }
     }
 }

@@ -17,16 +17,24 @@ final class ReplyCell: UICollectionViewCell {
     required init?(coder: NSCoder) { fatalError() }
 
     private func setupViews() {
-        nameLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        nameLabel.font = UIFontMetrics(forTextStyle: .footnote)
+            .scaledFont(for: .systemFont(ofSize: 13, weight: .semibold))
+        nameLabel.adjustsFontForContentSizeCategory = true
+        nameLabel.numberOfLines = 0
         contentView.addSubview(nameLabel)
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        contentLabel.font = .systemFont(ofSize: 14)
+        contentLabel.font = UIFontMetrics(forTextStyle: .body)
+            .scaledFont(for: .systemFont(ofSize: 14))
+        contentLabel.adjustsFontForContentSizeCategory = true
         contentLabel.numberOfLines = 0
         contentView.addSubview(contentLabel)
         contentLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        timestampLabel.font = .systemFont(ofSize: 11)
+        timestampLabel.font = UIFontMetrics(forTextStyle: .caption2)
+            .scaledFont(for: .systemFont(ofSize: 11))
+        timestampLabel.adjustsFontForContentSizeCategory = true
+        timestampLabel.numberOfLines = 0
         timestampLabel.textColor = .tertiaryLabel
         contentView.addSubview(timestampLabel)
         timestampLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -44,18 +52,34 @@ final class ReplyCell: UICollectionViewCell {
             timestampLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             timestampLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -6)
         ])
+
+        isAccessibilityElement = true
     }
 
     func configure(with record: CommentRecord, depth: Int = 1) {
-        nameLabel.text = record.authorDisplayName ?? record.authorUsername
-        contentLabel.text = record.content
-        timestampLabel.text = RelativeTimeFormatter.shortString(for: record.createdAt)
+        let name = record.authorDisplayName ?? record.authorUsername ?? ""
+        let content = record.content
+        let time = RelativeTimeFormatter.shortString(for: record.createdAt)
+        nameLabel.text = name
+        contentLabel.text = content
+        timestampLabel.text = time
         leadingConstraint?.constant = Self.baseIndent + CGFloat(depth) * Self.indentPerDepth
+        accessibilityLabel = Self.accessibilityLabel(name: name, content: content, time: time)
+    }
+
+    static func accessibilityLabel(name: String, content: String, time: String) -> String {
+        String(
+            localized: "comments.reply.a11yLabel",
+            defaultValue: "\(name), reply. \(content). \(time)",
+            bundle: .main
+        )
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         contentLabel.text = nil
         nameLabel.text = nil
+        timestampLabel.text = nil
+        accessibilityLabel = nil
     }
 }
