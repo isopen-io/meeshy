@@ -83,6 +83,19 @@ data class StatusBarListState(
         else copy(statuses = statuses.filterNot { it.id == statusId })
 
     /**
+     * Replace the status carrying [entry]'s id **in place**, preserving its position
+     * (a realtime `status:updated` delta). Inert — returns the same instance — when no
+     * status carries that id, so an update for a status not in this feed never churns
+     * state nor smuggles a foreign entry in. Mirrors iOS `statuses[index] = entry`
+     * guarded by `firstIndex(where:)`.
+     */
+    fun updated(entry: StatusEntry): StatusBarListState {
+        val index = statuses.indexOfFirst { it.id == entry.id }
+        if (index < 0) return this
+        return copy(statuses = statuses.toMutableList().also { it[index] = entry })
+    }
+
+    /**
      * Optimistically bump the [emoji] reaction count on the status with [statusId] by
      * one (mirrors iOS `summary[emoji, default: 0] += 1`). Inert when no status carries
      * that id.

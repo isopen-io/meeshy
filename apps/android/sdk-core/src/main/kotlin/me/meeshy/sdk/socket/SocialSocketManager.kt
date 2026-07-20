@@ -17,6 +17,10 @@ import me.meeshy.sdk.model.SocketStoryCreatedData
 import me.meeshy.sdk.model.SocketStoryViewedData
 import me.meeshy.sdk.model.SocketStoryReactedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
+import me.meeshy.sdk.model.SocketStatusCreatedData
+import me.meeshy.sdk.model.SocketStatusUpdatedData
+import me.meeshy.sdk.model.SocketStatusDeletedData
+import me.meeshy.sdk.model.SocketStatusReactedData
 import org.json.JSONObject
 import timber.log.Timber
 import javax.inject.Inject
@@ -45,6 +49,10 @@ class SocialSocketManager @Inject constructor(
     private val _storyViewed = buf<SocketStoryViewedData>()
     private val _storyReacted = buf<SocketStoryReactedData>()
     private val _storyUnreacted = buf<SocketStoryUnreactedData>()
+    private val _statusCreated = buf<SocketStatusCreatedData>()
+    private val _statusUpdated = buf<SocketStatusUpdatedData>()
+    private val _statusDeleted = buf<SocketStatusDeletedData>()
+    private val _statusReacted = buf<SocketStatusReactedData>()
 
     val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.asSharedFlow()
     val postLiked: SharedFlow<SocketPostLikedData> = _postLiked.asSharedFlow()
@@ -60,6 +68,10 @@ class SocialSocketManager @Inject constructor(
     val storyViewed: SharedFlow<SocketStoryViewedData> = _storyViewed.asSharedFlow()
     val storyReacted: SharedFlow<SocketStoryReactedData> = _storyReacted.asSharedFlow()
     val storyUnreacted: SharedFlow<SocketStoryUnreactedData> = _storyUnreacted.asSharedFlow()
+    val statusCreated: SharedFlow<SocketStatusCreatedData> = _statusCreated.asSharedFlow()
+    val statusUpdated: SharedFlow<SocketStatusUpdatedData> = _statusUpdated.asSharedFlow()
+    val statusDeleted: SharedFlow<SocketStatusDeletedData> = _statusDeleted.asSharedFlow()
+    val statusReacted: SharedFlow<SocketStatusReactedData> = _statusReacted.asSharedFlow()
 
     fun attach() {
         listen("post:created", _postCreated)
@@ -76,6 +88,10 @@ class SocialSocketManager @Inject constructor(
         listen("story:viewed", _storyViewed)
         listen("story:reacted", _storyReacted)
         listen("story:unreacted", _storyUnreacted)
+        listen("status:created", _statusCreated)
+        listen("status:updated", _statusUpdated)
+        listen("status:deleted", _statusDeleted)
+        listen("status:reacted", _statusReacted)
     }
 
     private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {
