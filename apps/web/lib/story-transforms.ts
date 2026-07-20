@@ -215,8 +215,28 @@ function positiveNumber(value: unknown): number | undefined {
   return typeof value === 'number' && value > 0 ? value : undefined;
 }
 
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+// A background media/audio clip is only usable as a loop *period* when it is
+// meaningfully positive — mirrors the Swift `.filter { $0 > 0.001 }` guard that
+// keeps `ceil(target / period)` from blowing up on a near-zero duration.
+function loopPeriod(value: unknown): number | undefined {
+  const n = finiteNumber(value);
+  return n !== undefined && n > 0.001 ? n : undefined;
+}
+
 function asObjectArray(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? (value.filter((v) => v && typeof v === 'object') as Record<string, unknown>[]) : [];
+}
+
+// Timeline window of a media/audio object = `(startTime ?? 0) + duration`.
+// Objects without a duration contribute nothing (matches Swift `duration.map`).
+function timelineWindow(obj: Record<string, unknown>): number | undefined {
+  const dur = finiteNumber(obj.duration);
+  if (dur === undefined) return undefined;
+  return (finiteNumber(obj.startTime) ?? 0) + dur;
 }
 
 export function computeStoryDurationMs(effects: Record<string, unknown> | undefined): number {
@@ -229,14 +249,15 @@ export function computeStoryDurationMs(effects: Record<string, unknown> | undefi
   const audioObjects = asObjectArray(effects?.audioPlayerObjects);
   const textObjects = asObjectArray(effects?.textObjects);
 
-  // Component 1 — background video/audio of natural duration.
-  const bgVideoDur = positiveNumber(
+  // Background loop periods — BOTH the background video AND the background audio
+  // contribute (Swift folds over `[bgVideoDur, bgAudioDur]`); the web port used
+  // to keep only the first one present.
+  const bgVideoDur = loopPeriod(
     mediaObjects.find((m) => m.isBackground === true && m.mediaType === 'video')?.duration,
   );
-  const bgAudioDur = positiveNumber(audioObjects.find((a) => a.isBackground === true)?.duration);
-  const rawMediaDur = bgVideoDur ?? bgAudioDur;
+  const bgAudioDur = loopPeriod(audioObjects.find((a) => a.isBackground === true)?.duration);
 
-  // Component 2 — long text earns reading time (>30 words → 6s + 1s per 6 words).
+  // Long text earns reading time (>30 words → 6s + 1s per 6 words).
   const totalWords = textObjects.reduce((acc, t) => {
     // Mirror parseTextObjects: the canonical key is `text`, `content` is the
     // decoder-only legacy alias. Without the fallback, legacy overlays keyed
@@ -251,22 +272,25 @@ export function computeStoryDurationMs(effects: Record<string, unknown> | undefi
     ? DEFAULT_STATIC_DURATION_S + (totalWords - LONG_TEXT_THRESHOLD_WORDS) * LONG_TEXT_SECONDS_PER_WORD
     : DEFAULT_STATIC_DURATION_S;
 
-  const target = Math.max(textDur, DEFAULT_STATIC_DURATION_S);
+  // Longest data window across EVERY media and audio object (background or
+  // foreground), each measured as `(startTime ?? 0) + duration`. The web port
+  // previously ignored audio windows and startTime offsets entirely.
+  const windows = [...mediaObjects, ...audioObjects]
+    .map(timelineWindow)
+    .filter((w): w is number => w !== undefined);
+  const longestData = windows.length > 0 ? Math.max(...windows) : 0;
 
-  // Background media looped up to the target (or its natural duration if longer).
-  const bgResult = rawMediaDur === undefined
-    ? target
-    : rawMediaDur >= target
-      ? rawMediaDur
-      : Math.ceil(target / rawMediaDur) * rawMediaDur;
+  const target = Math.max(textDur, DEFAULT_STATIC_DURATION_S, longestData);
 
-  // Foreground (non-bg) videos: the slide must at least cover their natural length.
-  const fgMediaMax = mediaObjects
-    .filter((m) => m.isBackground !== true)
-    .map((m) => positiveNumber(m.duration) ?? 0)
-    .reduce((a, b) => Math.max(a, b), 0);
+  // Each background loop is stretched to cover the target (or kept at its
+  // natural length when already longer); the longest such result wins.
+  const bgLoopPeriods = [bgVideoDur, bgAudioDur].filter((p): p is number => p !== undefined);
+  const bgResult = bgLoopPeriods.reduce((effective, period) => {
+    const extended = period >= target ? period : Math.ceil(target / period) * period;
+    return Math.max(effective, extended);
+  }, target);
 
-  return Math.round(Math.max(bgResult, fgMediaMax) * 1000);
+  return Math.round(Math.max(bgResult, longestData) * 1000);
 }
 
 export function postToStoryData(post: Post): StoryData {

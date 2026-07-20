@@ -699,6 +699,62 @@ describe('computeStoryDurationMs', () => {
       }),
     ).toBe(10000);
   });
+
+  // --- Parity with the iOS SSOT (StoryEffects.contentDerivedDuration) ---
+  // The web port previously dropped foreground/background audio windows and
+  // per-object startTime offsets, so these slides auto-advanced too early.
+
+  it('covers a foreground audio player natural duration', () => {
+    // 30s foreground audio → the slide must last its full 30s (was 6s).
+    expect(
+      computeStoryDurationMs({
+        audioPlayerObjects: [{ id: 'a', postMediaId: 'p', isBackground: false, duration: 30 }],
+      }),
+    ).toBe(30000);
+  });
+
+  it('honours a background audio window even when a background video is present', () => {
+    // bg video 5s + bg audio 30s → longest data (30s) wins (was 10s).
+    expect(
+      computeStoryDurationMs({
+        mediaObjects: [{ mediaType: 'video', isBackground: true, duration: 5 }],
+        audioPlayerObjects: [{ id: 'a', isBackground: true, duration: 30 }],
+      }),
+    ).toBe(30000);
+  });
+
+  it('loops BOTH background video and background audio periods, not just the first', () => {
+    // bg video 4s + bg audio 7s, target 6s → video loops to 8s, audio 7s ≥ 6s
+    // stays 7s → max(8, 7) = 8s. The old code only looked at the video.
+    expect(
+      computeStoryDurationMs({
+        mediaObjects: [{ mediaType: 'video', isBackground: true, duration: 4 }],
+        audioPlayerObjects: [{ id: 'a', isBackground: true, duration: 7 }],
+      }),
+    ).toBe(8000);
+  });
+
+  it('extends the window by a foreground clip startTime offset', () => {
+    // bg video 4s + fg clip starting at 10s for 5s → window 15s, then the 4s bg
+    // loops up to ceil(15/4)*4 = 16s (was 5s: startTime + audio ignored).
+    expect(
+      computeStoryDurationMs({
+        mediaObjects: [
+          { mediaType: 'video', isBackground: true, duration: 4 },
+          { mediaType: 'video', isBackground: false, startTime: 10, duration: 5 },
+        ],
+      }),
+    ).toBe(16000);
+  });
+
+  it('includes an audio startTime offset in the longest-data window', () => {
+    // audio starting at 20s for 15s → window 35s (was ignored entirely).
+    expect(
+      computeStoryDurationMs({
+        audioPlayerObjects: [{ id: 'a', isBackground: false, startTime: 20, duration: 15 }],
+      }),
+    ).toBe(35000);
+  });
 });
 
 // =============================================================================
