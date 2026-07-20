@@ -118,6 +118,9 @@ struct MessageTranscriptionDetailView: View {
                         .foregroundColor(theme.textMuted)
                 }
             }
+            // VoiceOver reads the banner as one element (language, confidence, duration)
+            // instead of four fragments; the leading waveform glyph carries no label.
+            .accessibilityElement(children: .combine)
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
@@ -221,6 +224,8 @@ struct MessageTranscriptionDetailView: View {
 
             // Empty state with transcribe button
             VStack(spacing: 12) {
+                // Doctrine 84i/86i : glyphe hero d'etat vide (28pt) figé — decoratif,
+                // masqué à VoiceOver (le libellé « Aucune transcription » porte le sens).
                 Image(systemName: "text.word.spacing")
                     .font(.system(size: 28, weight: .light))
                     .foregroundColor(theme.textMuted.opacity(0.4))
@@ -300,6 +305,7 @@ struct MessageTranscriptionDetailView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "person.wave.2")
                                     .font(.caption2.weight(.medium))
+                                    .accessibilityHidden(true)
                                 Text(String(localized: "message-detail.audio.cloned", defaultValue: "Clone", bundle: .main))
                                     .font(.caption2.weight(.bold))
                                     .minimumScaleFactor(0.8)

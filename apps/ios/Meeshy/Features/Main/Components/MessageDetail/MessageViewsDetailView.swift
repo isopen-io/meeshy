@@ -290,11 +290,11 @@ struct MessageViewsDetailView: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(accent.opacity(0.7))
-                Text("Historique d'envoi")
+                Text(String(localized: "message-detail.send-history.title", defaultValue: "Send history", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
-                Text("\(sendAttempts.count) tentative\(sendAttempts.count > 1 ? "s" : "")")
+                Text(String(localized: "message-detail.send-history.attempt-count", defaultValue: "^[\(sendAttempts.count) attempt](inflect: true)", bundle: .main))
                     .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
@@ -302,7 +302,7 @@ struct MessageViewsDetailView: View {
             if let first = sendAttempts.first {
                 metaInfoRow(
                     icon: "paperplane",
-                    label: "1ère tentative",
+                    label: String(localized: "message-detail.send-history.first-attempt", defaultValue: "1st attempt", bundle: .main),
                     value: formatDateTimeFR(first.startedAt),
                     accent: accent
                 )
@@ -341,10 +341,13 @@ struct MessageViewsDetailView: View {
                 .foregroundColor(isSuccess ? MeeshyColors.success : MeeshyColors.error)
                 .frame(width: 16)
                 .padding(.top, 1)
+                .accessibilityLabel(isSuccess
+                    ? String(localized: "message-detail.send-history.outcome.succeeded", defaultValue: "Succeeded", bundle: .main)
+                    : String(localized: "message-detail.send-history.outcome.failed", defaultValue: "Failed", bundle: .main))
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text("Tentative \(attempt.attemptNumber)")
+                    Text(String(localized: "message-detail.send-history.attempt-number", defaultValue: "Attempt \(attempt.attemptNumber)", bundle: .main))
                         .font(.caption.weight(.medium))
                         .foregroundColor(theme.textPrimary)
                     Text(sendAttemptTransportLabel(attempt.transport))
@@ -370,14 +373,15 @@ struct MessageViewsDetailView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
     }
 
     private func sendAttemptTransportLabel(_ transport: String) -> String {
         switch SendAttemptRecord.Transport(rawValue: transport) {
-        case .socketFirst: return "Temps réel"
+        case .socketFirst: return String(localized: "message-detail.send-history.transport.realtime", defaultValue: "Real-time", bundle: .main)
         case .rest: return "REST"
-        case .socketFallback: return "Repli temps réel"
-        case .outbox: return "Re-tentative auto"
+        case .socketFallback: return String(localized: "message-detail.send-history.transport.realtime-fallback", defaultValue: "Real-time fallback", bundle: .main)
+        case .outbox: return String(localized: "message-detail.send-history.transport.auto-retry", defaultValue: "Auto retry", bundle: .main)
         case nil: return transport
         }
     }
@@ -824,8 +828,11 @@ struct MessageViewsDetailView: View {
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
+                // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
+                // it with Dynamic Type so icon and caption grow in proportion.
                 .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                // Decorative — the caption below already states the empty state.
                 .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
@@ -833,13 +840,20 @@ struct MessageViewsDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        // Read the whole empty state as the single caption, not "image" + text.
+        .accessibilityElement(children: .combine)
     }
 
     private func retryableErrorView(accent: Color) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.slash")
+                // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
+                // it with Dynamic Type so icon and caption grow in proportion.
                 .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                // Decorative — the error caption + Retry button carry the meaning.
+                // Not combined into one element: the button must stay independently
+                // focusable for VoiceOver.
                 .accessibilityHidden(true)
             Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
                 .font(.footnote.weight(.medium))
