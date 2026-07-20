@@ -12,30 +12,40 @@ struct CrashReportSheet: View {
                 ForEach(reports) { report in
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                kindBadge(report.kind)
-                                Spacer()
-                                Text(report.timestamp, style: .relative)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    kindBadge(report.kind)
+                                    Spacer()
+                                    Text(report.timestamp, style: .relative)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Text(report.summary)
+                                    .font(.subheadline.weight(.medium))
                             }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityValue(Text(isExpanded(report)
+                                ? String(localized: "crash.report.expanded", defaultValue: "Développé", bundle: .main)
+                                : String(localized: "crash.report.collapsed", defaultValue: "Réduit", bundle: .main)))
+                            .accessibilityHint(Text(String(localized: "crash.report.expand-hint",
+                                                           defaultValue: "Appuyez pour afficher ou masquer les détails techniques",
+                                                           bundle: .main)))
+                            .accessibilityAction { toggleExpansion(report) }
 
-                            Text(report.summary)
-                                .font(.subheadline.weight(.medium))
-
-                            if expandedId == report.id {
+                            if isExpanded(report) {
                                 Text(report.details)
                                     .font(.caption2.monospaced())
                                     .foregroundStyle(.secondary)
                                     .textSelection(.enabled)
+                                    .accessibilityLabel(Text(String(localized: "crash.report.details-label",
+                                                                    defaultValue: "Détails techniques",
+                                                                    bundle: .main)))
                             }
                         }
                         .contentShape(Rectangle())
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                expandedId = expandedId == report.id ? nil : report.id
-                            }
-                        }
+                        .onTapGesture { toggleExpansion(report) }
                     }
                 }
             }
@@ -50,8 +60,21 @@ struct CrashReportSheet: View {
                     ShareLink(item: formatAllReports()) {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    .accessibilityLabel(Text(String(localized: "crash.reports.share",
+                                                    defaultValue: "Partager les rapports",
+                                                    bundle: .main)))
                 }
             }
+        }
+    }
+
+    private func isExpanded(_ report: CrashDiagnostic) -> Bool {
+        expandedId == report.id
+    }
+
+    private func toggleExpansion(_ report: CrashDiagnostic) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            expandedId = expandedId == report.id ? nil : report.id
         }
     }
 

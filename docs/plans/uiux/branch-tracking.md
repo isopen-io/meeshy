@@ -14,6 +14,30 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 178i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **178i (en cours, branche `claude/laughing-thompson-8599wo`, base `main` HEAD `f7a5195`)** :
+>   VoiceOver-structure + label ShareLink natif + i18n de `CrashReportSheet` (feuille de
+>   diagnostics crash présentée par `MeeshyApp` — état d'erreur). Typo déjà 100 % Dynamic Type
+>   (`.caption2`/`.subheadline` sémantiques) ; titre + « Fermer » + badge `Kind.localizedLabel`
+>   déjà localisés (sévérité portée par le TEXTE, pas la couleur seule). Trois déficits : (1)
+>   **ShareLink icon-only sans `.accessibilityLabel`** → VoiceOver lisait le nom du SF Symbol
+>   (violation HIG) ; (2) **rangée tap-to-expand sans aucune structure a11y** — fragmentée en 3
+>   (badge/heure/résumé), 0 trait `.isButton`, 0 hint, 0 état développé/réduit, 0 action ;
+>   expansion portée uniquement par la géométrie (canal invisible en VoiceOver) ; (3) **blob de
+>   détails non labellisé**. Fix = header groupé `.accessibilityElement(children: .combine)` +
+>   `.isButton` + `.accessibilityValue` (Développé/Réduit) + `.accessibilityHint` +
+>   `.accessibilityAction { toggle }` ; détails gardés HORS du combine (préserve `.textSelection`)
+>   + `.accessibilityLabel` ; ShareLink `.accessibilityLabel`. Refactor support : `isExpanded(_:)`
+>   / `toggleExpansion(_:)` partagés entre tap gesture + action a11y (0 changement de comportement).
+>   1 fichier, 0 logique, 0 test. 5 clés i18n neuves `crash.report(s).*` en `defaultValue` inline FR
+>   (pas d'édit `.xcstrings`). Aucun test ne référence la vue (grep = 0) ; 1 call site (`MeeshyApp`)
+>   inchangé. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `CrashReportSheet` VoiceOver-structure + ShareLink label + i18n SOLDÉ** : ne plus reprendre
+>   (Dynamic Type déjà sémantique, split label/valeur/hint/action posé, sévérité déjà textuelle).
+>   Candidats frais restants du scan : `AttachmentQuickLookPreview` (97 L, a11y:0),
+>   `StatusComposerView` (285 L, a11y:0). Migration éventuelle vers `DisclosureGroup` natif = redesign
+>   (ajoute un chevron) → hors scope « améliorer sans refondre ».
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un
