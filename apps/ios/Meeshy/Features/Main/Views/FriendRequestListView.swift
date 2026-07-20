@@ -76,28 +76,16 @@ struct FriendRequestListView: View {
 
     // MARK: - Empty State
 
+    // Design-system `EmptyStateView` (SSOT), comme les états vides frères du hub
+    // People (`CallsTab`, `BlockedUsersView`) : icône brand + titre + sous-titre,
+    // VoiceOver déjà groupé (`children: .combine` + label composé) et Dynamic Type
+    // relatif. Réutilise les clés i18n existantes (aucune clé neuve).
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Spacer()
-
-            // Figé : icône héros décorative d'état vide (≥40pt) — masquée à
-            // VoiceOver, le sens est porté par le titre + sous-titre ci-dessous.
-            Image(systemName: "person.2.slash")
-                .font(.system(size: 48, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-
-            Text(String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main))
-                .font(.headline)
-                .foregroundColor(theme.textMuted)
-
-            Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted.opacity(0.7))
-
-            Spacer()
-        }
-        .accessibilityElement(children: .combine)
+        EmptyStateView(
+            icon: "person.2.slash",
+            title: String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main),
+            subtitle: String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main)
+        )
     }
 
     // MARK: - Request Row
