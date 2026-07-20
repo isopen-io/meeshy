@@ -946,6 +946,7 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
@@ -1606,6 +1607,7 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
@@ -1822,6 +1824,7 @@ struct MessageDetailSheet: View {
                     )
             )
         }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Forward Tab Content
