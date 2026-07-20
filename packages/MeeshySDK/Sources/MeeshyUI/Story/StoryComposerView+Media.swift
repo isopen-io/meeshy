@@ -285,9 +285,14 @@ extension StoryComposerView {
                     await MainActor.run {
                         viewModel.loadedVideoURLs[objectId] = tempURL
                         if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
-                        if let obj = viewModel.addMediaObject(kind: .video, toSlideId: targetSlideId) {
+                        // `id: objectId` : aligne `obj.id` sur le fichier `{objectId}.<ext>`
+                        // (même raison que le chemin image — cf. addMediaObject(id:)).
+                        if let obj = viewModel.addMediaObject(kind: .video, toSlideId: targetSlideId, id: objectId) {
                             viewModel.loadedVideoURLs[obj.id] = tempURL
-                            if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
+                            // Bump `loadedImagesVersion` via `registerLoadedImage` : même
+                            // raison que le chemin image — le canvas reader doit se
+                            // rafraîchir pour stamper la vignette de la vidéo posée.
+                            if let thumbnail { viewModel.registerLoadedImage(thumbnail, for: obj.id) }
                             // Set mediaURL so StoryMediaLayer.configureVideo can find
                             // the file. Same bridge as the image path — without this,
                             // media.mediaURL is nil and the video layer has no source.
@@ -335,8 +340,14 @@ extension StoryComposerView {
                 let imageFileURL = jpegData != nil ? tempImageURL : nil
                 mediaLoadProgress = 1.0
                 await MainActor.run {
-                    if let obj = viewModel.addMediaObject(kind: .image, toSlideId: targetSlideId) {
-                        viewModel.loadedImages[obj.id] = image
+                    // `id: objectId` aligne `obj.id` sur le nom du fichier temp
+                    // `{objectId}.jpg` → le `composerKey` du StoryBackgroundLayer
+                    // (dérivé du fichier) retrouve le bitmap sous `loadedImages[obj.id]`.
+                    if let obj = viewModel.addMediaObject(kind: .image, toSlideId: targetSlideId, id: objectId) {
+                        // `registerLoadedImage` bump `loadedImagesVersion` : sans ça
+                        // le `ComposerImageCacheReader` du canvas reste périmé et le
+                        // bitmap frais n'est jamais stampé → canvas noir (bug 2026-07-20).
+                        viewModel.registerLoadedImage(image, for: obj.id)
                         // Set mediaURL on the StoryMediaObject so the canvas renderer
                         // can load the image from disk. This is the critical bridge
                         // between the in-memory UIImage and the CALayer pipeline.

@@ -2,6 +2,35 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-20, `status-unreacted-socket`) — cross-module nullable property blocks Kotlin smart-cast
+A reducer that reads a nullable property twice — `val current = entry.reactionSummary?.get(emoji) ?: return this` then
+`entry.reactionSummary.toMutableMap()` — fails to compile with **`Smart cast to 'Map<...>' is impossible, because
+'reactionSummary' is a public API property declared in different module`**. `StatusEntry.reactionSummary` lives in
+`:core:model`; a `:feature:feed` reducer cannot smart-cast a public property owned by another module (the compiler can't
+prove no other thread nulled it between reads). Fix: **bind it to a local `val` once** — `val summary =
+entry.reactionSummary ?: return this` — then read every subsequent access through the local. Same trap will hit any
+`:feature:*` code that null-checks-then-dereferences a `:core:model`/`:sdk-core` public `var`/`val`. Prefer a single
+local binding over repeated `?.`/`!!`. (The existing `reacted` reducer sidesteps it by dereferencing exactly once:
+`(entry.reactionSummary ?: emptyMap()).toMutableMap()`.)
+
+## Lesson (2026-07-20, `status-strings-i18n`) — `ThemeStoreTest` DataStore flake under parallel `check`; and TDD for a pure-resource i18n slice
+Two things worth remembering:
+1. **Flaky, not a regression.** A full-repo `assembleDebug testDebugUnitTest` occasionally fails **one** test:
+   `:sdk-core` `ThemeStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction` with
+   `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 5000 ms` (it `first()`-collects a
+   DataStore-backed `StateFlow` whose async hydration can exceed 5 s when all modules run in parallel on a loaded box).
+   It **passes green in isolation**: `:sdk-core:testDebugUnitTest --tests "me.meeshy.sdk.theme.ThemeStoreTest"` →
+   BUILD SUCCESSFUL. Do **not** "fix" it inside an unrelated slice (it would touch `:sdk-core`, breaking the
+   `apps/android`-scoped diff rule). If it keeps recurring, its own slice should raise the `withTimeout`/`advanceUntilIdle`
+   handling. When a `check` failure lands in a module your diff never touched, re-run that test alone before assuming a break.
+2. **How to TDD a pure-resource (localisation) slice without a tautology.** Don't assert `getString == "literal"` (that
+   just restates the resource). Instead write a **locale-parity guard** that parses the module's own
+   `res/values*/strings.xml` and asserts (a) every base `<string>` key exists in every shipped locale and (b) format
+   specifiers match. It goes RED on exactly the missing keys, GREEN once translated, and durably guards every future key —
+   behavioural, mutation-proven, and non-tautological. Keep the guard **full-module** so it catches the next gap too.
+   Gotcha: kotlinc choked on a KDoc `/** … */` block containing `` `%1$s` `` + em-dashes/ellipses in this test file —
+   rewrote it as plain `//` ASCII comments and it compiled. Prefer `//` comments in resource-parsing test helpers.
+
 ## Lesson (2026-07-19, `status-bar-l2-cache`) — relaxed mockk returns `emptyList()`, not `null`, for a nullable `List` return
 A `mockk(relaxed = true)` whose suspend fun returns `List<T>?` hands back an **empty list**, not `null`, by default —
 mockk builds a non-null default for known collection types. This bit a *pre-existing* test the moment a new cold-cache
@@ -2588,3 +2617,24 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
   can hit its 15s `withTimeout` under a full parallel `assembleDebug testDebugUnitTest` run (real DataStore file I/O
   starved by concurrent modules). Passes deterministically in isolation and on a warm re-run of the full gate. Not
   caused by feed/status slices. If it reddens a gate, re-run — do NOT "fix" by lowering the timeout.
+
+## call-dark-frame-detection (2026-07-20)
+- **Split an untestable iOS stateful class into two pure `:core:model` cores.** iOS `DarkFrameDetector`
+  interleaves luma sampling (needs a `CVPixelBuffer`) with the streak state machine, so its unit tests
+  can only assert the callbacks are settable — the actual cover logic is unverified. Android split:
+  `FrameLuminance.averageOfYPlane` (pure sampling maths) + `DarkFramePolicy.reduce` (pure hysteresis
+  reducer). Both fully behaviourally tested with plain arrays/floats — no framework, no capture buffer.
+  General lesson: when porting an iOS `analyzeX` that mixes a framework read with a decision, extract the
+  decision as a reducer and the read as a pure function; the actuator that bridges them stays app-side.
+- **Counter clamp = a real SOTA win, not gold-plating.** iOS's `consecutiveDarkFrames: Int` increments
+  every dark frame with no ceiling; a lens left covered for hours at 30 fps counts into the millions (and
+  is an overflow smell). Clamping the streak at `consecutiveThreshold` (nothing left to count once
+  latched) makes the state genuinely O(1) and the clamp is itself the cleanest mutation target to prove
+  the test suite is behavioural.
+- **`rowStride` vs `width` is the I420 correctness trap.** A WebRTC I420 Y plane's `strideY` can exceed
+  the visible width (row padding); sampling `y*width + x` instead of `y*rowStride + x` reads padding bytes
+  into the average. `FrameLuminance` takes both and a `rowStride < width` guard returns `null`. The
+  padded-plane test pins this.
+- **`null` on degenerate geometry, never a fabricated `0.0`.** A too-small/empty/zero-dim plane returning
+  `0.0f` would read as "pitch black" and could trip the cover detector on a bad frame. Return `null` =
+  "skip this frame", mirroring iOS `guard … else { return }`.

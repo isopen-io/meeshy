@@ -172,9 +172,7 @@ public struct ComposerControlsLayer: View {
                 // FABs posés SUR le canvas : leur lisibilité suit la
                 // luminance du FOND de la slide, pas le thème de l'app
                 // (capture user 2026-07-11 — indigo sombre sur bleu nuit).
-                .environment(\.colorScheme, CanvasChromeScheme.scheme(
-                    background: viewModel.backgroundColor,
-                    hasMediaBackground: viewModel.hasBackgroundImage))
+                .environment(\.colorScheme, viewModel.canvasChromeScheme)
             }
 
             // C3 — état « chrome caché » (barre d'outils masquée par
