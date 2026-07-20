@@ -390,12 +390,16 @@ struct CreateShareLinkView: View {
                 Image(systemName: icon)
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(accent)
+                    .accessibilityHidden(true)
                 Text(title.uppercased())
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textSecondary)
             }
             .padding(.horizontal, 20)
             .padding(.top, 16)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(.isHeader)
 
             if let subtitle {
                 Text(subtitle)

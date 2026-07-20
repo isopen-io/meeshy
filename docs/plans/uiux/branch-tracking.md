@@ -14,6 +14,32 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 186i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Contexte** : essaim `laughing-thompson` très dense — PR iOS ouvertes de 178i à **185i**
+>   (`MessageLanguageDetailView` #2137). Numéro **186i** choisi strictement > plus haut en vol (185i).
+>   Base de départ : `main` HEAD (resync post-179i #2125).
+> - **186i (terminée, branche `claude/laughing-thompson-9z9lzu`, base `main` HEAD `0b2df50`)** :
+>   traits VoiceOver « en-tête » des **5 sections de formulaire** de `CreateShareLinkView` (sheet de
+>   création de lien de partage, présenté depuis `ShareLinksView`). Vue explicitement **« non auditée »**
+>   au pointeur, 0 test la référence (`grep`), 0 collision essaim. **1 déficit réel** : les 5 titres
+>   `formSection` (Conversation / Identité / Accès / Permissions / Limites) — landmarks primaires d'un
+>   formulaire long — n'avaient **pas** `.accessibilityAddTraits(.isHeader)` → **injoignables au rotor
+>   VoiceOver « En-têtes »** alors que les 6 frères le posent (`ShareLinksView` l.73/133,
+>   `CommunityLinksView` l.57/105, `TrackingLinksView`/`AffiliateView`/`UserStatsView`/`SupportView`).
+>   Fix dans le **seul helper `formSection`** (corrige les 5 sections d'un coup, 0 call-site édité) :
+>   icône d'accent décorative `.accessibilityHidden(true)` ; `.accessibilityElement(children: .ignore)`
+>   + `.accessibilityLabel(title)` (casse **naturelle** au lieu de `.uppercased()` lu en glyphes) ;
+>   `.accessibilityAddTraits(.isHeader)`. Net **+3 lignes**, 1 fichier, 0 logique / 0 réseau / **0 clé
+>   i18n neuve** (`title` déjà localisé à chaque call site) / 0 test neuf. Gate = CI `iOS Tests` (build
+>   iOS non runnable en local Linux).
+> - **⚠️ NE PLUS re-flagger** les en-têtes de `CreateShareLinkView` : `.isHeader` posé sur les 5 sections
+>   via `formSection`. **Différé 187i+** : le label `share.link.create.max_uses` bake un pluriel `"s"`
+>   inline via ternaire Swift (`"\(maxUsesValue) utilisation\(maxUsesValue > 1 ? "s" : "")…"`) dans
+>   `String(localized:defaultValue:)` — anti-pattern pluralisation (casse hors-français), concern i18n
+>   distinct à traiter séparément.
+> - **Base de départ 187i : `main` HEAD** (resync ; supprimer la branche mergée). Vérifier collision
+>   essaim via `list_pull_requests` avant de choisir la cible.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **179i (en cours, branche `claude/laughing-thompson-k9l43k`, base `main` HEAD `fc38a0b`)** :
 >   Consolidation palette de marque + en-têtes VoiceOver de `MediaDownloadSettingsView`
