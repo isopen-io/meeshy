@@ -280,7 +280,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Passwordless magic-link login (email + countdown + resend) via deep link
 - [ ] 8-step gamified registration wizard (username/email/phone live availability + suggestions)
 - [ ] Interactive step progress bar with jump-back to completed steps
-- [ ] Phone entry with searchable country-code picker (skippable)
+- [~] Phone entry with searchable country-code picker (skippable) — **catalogue core shipped**
+      (slice `auth-country-catalog`, 2026-07-20): pure `:core:model` `CountryCatalog` + `Country`
+      (faithful port of iOS `CountryPicker`,
+      `packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/CountryPicker.swift`). Holds the verbatim
+      E.164 `dialCodes` table (241 ISO→dial entries) + the `priority` head ordering, and the pure
+      resolvers: `flag(iso)` (Unicode regional-indicator emoji, `🌐` globe fallback for non-ASCII-letter
+      input), `flagForCountryCode`, `dialCode`, `isoForPhoneNumber` (longest-matching dial code,
+      priority country preferred on a tie — `+44`→`GB`, `+1`→`US`, `+7`→`RU` — then a **deterministic**
+      ISO-alphabetical tie-break where iOS falls back to a locale-dependent name sort; handles `00`→`+`
+      normalisation, rejects non-international / unmatched numbers), `flagForPhoneNumber`,
+      `build(displayName)` (full list priority-first then localized name, name resolver injected so the
+      core stays `Locale`-free / JVM-testable), `country(forPhoneNumber, displayName)`,
+      `search(query, countries)` (case-insensitive over name / dial / ISO, empty query = passthrough),
+      and `accessibilityLabel`. Real consumers today: the correct country flag for a stored
+      `MeeshyUser.phoneNumber` / `registrationCountry`. +29 behavioural tests (`CountryCatalogTest`,
+      every branch of every resolver). Mutation (RED proof): dropping the priority rank from the
+      `isoForPhoneNumber` tie-break (`minWith(compareBy(rank, iso))` → `minOrNull()`) fails **exactly**
+      `isoForPhoneNumber_prefersPriorityCountryOnSharedDialCode` (29 run, 1 failed, no collateral).
+      `:core:model:testDebugUnitTest` green + full `:app:assembleDebug` → BUILD SUCCESSFUL. Diff =
+      `apps/android` only. **Follow-up:** the app-side searchable picker sheet + phone-field composable
+      (needs the registration wizard scaffold) and `java.util.Locale`-backed display-name wiring.
 - [ ] First/last name capture; password strength meter + requirements checklist
 - [ ] System + regional language selection with live translation preview
 - [ ] Profile photo / banner / bio optional step; registration recap + terms acceptance
