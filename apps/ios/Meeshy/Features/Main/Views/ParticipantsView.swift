@@ -524,13 +524,10 @@ struct ParticipantsView: View {
         return parts.joined(separator: ", ")
     }
 
-    // Présence annoncée seulement quand un dot est visible (online/recent/away).
+    // Présence annoncée seulement quand un dot est visible (online/away/idle).
     // `offline` reste muet — parité avec le visuel (offline = pas de dot).
     private func presenceAccessibilityLabel(_ presence: PresenceState) -> String? {
-        switch presence {
-        case .online, .recent, .away: return presence.localizedLabel
-        case .offline: return nil
-        }
+        presence.showsIndicator ? presence.localizedLabel : nil
     }
 
     private func roleDisplayLabel(_ role: String) -> String {

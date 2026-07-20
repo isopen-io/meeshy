@@ -14181,6 +14181,17 @@
         }
       }
     },
+    "presence.idle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Inactif"
+          }
+        }
+      }
+    },
     "presence.offline" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
