@@ -164,7 +164,7 @@ struct DeleteAccountView: View {
                     TextField(requiredPhrase, text: $confirmationText)
                         .font(MeeshyFont.relative(14, weight: .semibold, design: .monospaced))
                         .foregroundColor(theme.textPrimary)
-                        .autocapitalization(.allCharacters)
+                        .textInputAutocapitalization(.characters)
                         .disableAutocorrection(true)
                         .accessibilityLabel(String(localized: "account.delete.confirmation.label", defaultValue: "Phrase de confirmation", bundle: .main))
                         // Announce the match state so VoiceOver users get the same
