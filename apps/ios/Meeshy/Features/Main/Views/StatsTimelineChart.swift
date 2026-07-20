@@ -55,7 +55,30 @@ struct StatsTimelineChart: View {
                     .foregroundStyle(theme.textMuted.opacity(0.15))
             }
         }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "stats.timeline.chart.a11y", defaultValue: "Activity chart over 30 days", bundle: .main))
+        .accessibilityValue(Self.accessibilitySummary(for: timeline))
+    }
+
+    /// VoiceOver value summarising the chart's data so the graph conveys its
+    /// content without sight — total volume, busiest day, and the most recent
+    /// day. Pure and locale-formatted so it can be unit-tested in isolation.
+    static func accessibilitySummary(for timeline: [TimelinePoint]) -> String {
+        guard !timeline.isEmpty else {
+            return String(
+                localized: "stats.timeline.chart.a11y.empty",
+                defaultValue: "No activity recorded yet",
+                bundle: .main
+            )
+        }
+        let total = timeline.reduce(0) { $0 + $1.messages }
+        let peak = timeline.map(\.messages).max() ?? 0
+        let latest = timeline.last?.messages ?? 0
+        return String(
+            localized: "stats.timeline.chart.a11y.summary",
+            defaultValue: "\(total) messages total, peak of \(peak) in one day, \(latest) on the most recent day",
+            bundle: .main
+        )
     }
 
     private func messagesValue(_ count: Int) -> String {

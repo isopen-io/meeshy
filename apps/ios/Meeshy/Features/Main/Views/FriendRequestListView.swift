@@ -39,6 +39,7 @@ struct FriendRequestListView: View {
             Text(String(localized: "friends.requests.title", defaultValue: "Demandes d'amis", bundle: .main))
                 .font(.system(.body, design: .rounded, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -79,9 +80,12 @@ struct FriendRequestListView: View {
         VStack(spacing: 16) {
             Spacer()
 
+            // Figé : icône héros décorative d'état vide (≥40pt) — masquée à
+            // VoiceOver, le sens est porté par le titre + sous-titre ci-dessous.
             Image(systemName: "person.2.slash")
                 .font(.system(size: 48, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
 
             Text(String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main))
                 .font(.headline)
@@ -93,6 +97,7 @@ struct FriendRequestListView: View {
 
             Spacer()
         }
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Request Row
@@ -142,8 +147,10 @@ struct FriendRequestListView: View {
                     .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
-
-            Spacer()
+            // Nom + pseudo + intention + ancienneté lus comme une seule annonce
+            // VoiceOver (au lieu de 4 focus séparés) — les boutons Accepter /
+            // Refuser restent des éléments actionnables distincts.
+            .accessibilityElement(children: .combine)
 
             HStack(spacing: 8) {
                 Button {

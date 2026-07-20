@@ -2,6 +2,167 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-20, `status-unreacted-socket`) — cross-module nullable property blocks Kotlin smart-cast
+A reducer that reads a nullable property twice — `val current = entry.reactionSummary?.get(emoji) ?: return this` then
+`entry.reactionSummary.toMutableMap()` — fails to compile with **`Smart cast to 'Map<...>' is impossible, because
+'reactionSummary' is a public API property declared in different module`**. `StatusEntry.reactionSummary` lives in
+`:core:model`; a `:feature:feed` reducer cannot smart-cast a public property owned by another module (the compiler can't
+prove no other thread nulled it between reads). Fix: **bind it to a local `val` once** — `val summary =
+entry.reactionSummary ?: return this` — then read every subsequent access through the local. Same trap will hit any
+`:feature:*` code that null-checks-then-dereferences a `:core:model`/`:sdk-core` public `var`/`val`. Prefer a single
+local binding over repeated `?.`/`!!`. (The existing `reacted` reducer sidesteps it by dereferencing exactly once:
+`(entry.reactionSummary ?: emptyMap()).toMutableMap()`.)
+
+## Lesson (2026-07-20, `status-strings-i18n`) — `ThemeStoreTest` DataStore flake under parallel `check`; and TDD for a pure-resource i18n slice
+Two things worth remembering:
+1. **Flaky, not a regression.** A full-repo `assembleDebug testDebugUnitTest` occasionally fails **one** test:
+   `:sdk-core` `ThemeStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction` with
+   `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 5000 ms` (it `first()`-collects a
+   DataStore-backed `StateFlow` whose async hydration can exceed 5 s when all modules run in parallel on a loaded box).
+   It **passes green in isolation**: `:sdk-core:testDebugUnitTest --tests "me.meeshy.sdk.theme.ThemeStoreTest"` →
+   BUILD SUCCESSFUL. Do **not** "fix" it inside an unrelated slice (it would touch `:sdk-core`, breaking the
+   `apps/android`-scoped diff rule). If it keeps recurring, its own slice should raise the `withTimeout`/`advanceUntilIdle`
+   handling. When a `check` failure lands in a module your diff never touched, re-run that test alone before assuming a break.
+2. **How to TDD a pure-resource (localisation) slice without a tautology.** Don't assert `getString == "literal"` (that
+   just restates the resource). Instead write a **locale-parity guard** that parses the module's own
+   `res/values*/strings.xml` and asserts (a) every base `<string>` key exists in every shipped locale and (b) format
+   specifiers match. It goes RED on exactly the missing keys, GREEN once translated, and durably guards every future key —
+   behavioural, mutation-proven, and non-tautological. Keep the guard **full-module** so it catches the next gap too.
+   Gotcha: kotlinc choked on a KDoc `/** … */` block containing `` `%1$s` `` + em-dashes/ellipses in this test file —
+   rewrote it as plain `//` ASCII comments and it compiled. Prefer `//` comments in resource-parsing test helpers.
+
+## Lesson (2026-07-19, `status-bar-l2-cache`) — relaxed mockk returns `emptyList()`, not `null`, for a nullable `List` return
+A `mockk(relaxed = true)` whose suspend fun returns `List<T>?` hands back an **empty list**, not `null`, by default —
+mockk builds a non-null default for known collection types. This bit a *pre-existing* test the moment a new cold-cache
+branch (`cachedBar(mode): List<StatusEntry>?` → seed if non-null) started consulting that mock: the empty-list default
+looked like a synced-empty disk and falsely seeded the bar (`hasLoaded = true`), suppressing the skeleton that the old
+test asserted. Fix: give the mock the production default explicitly in `setUp` — `coEvery { diskCache.cachedBar(any()) }
+returns null` — so "cold disk" means `null` exactly as the real repository returns. General rule: when a ViewModel
+gains a new nullable-collection dependency, set its cold/absent default explicitly rather than trusting `relaxed`, and
+re-run the *whole* module's tests (not just the new ones) — a relaxed default can change the behaviour of tests that
+never mention the new collaborator.
+
+## Lesson (2026-07-19, `status-bar-l2-cache`) — source-edit mutation testing must keep the code compiling
+Proving a test is behavioural by hand-mutating the production source only works if the mutation still **compiles** —
+otherwise gradle fails at `compileDebugKotlin` and you learn nothing. First attempt replaced a null-guard condition with
+`if (false)`, which killed the Kotlin smart-cast that made the guarded value non-null → argument-type-mismatch, build
+failed before any test ran. Prefer mutations that preserve types and control flow: flip a boolean guard's operator
+(`==` → `!=`), delete a whole statement (a write-through call), or swap a comparator — never neuter a condition in a way
+that drops a smart-cast. Restore from a `.bak` copy immediately after, and confirm with `grep` that the original lines
+are back before committing.
+
+## Lesson (2026-07-19, `status-bar-l1-cache`) — the `cache/` package is git-ignored; force-add new files there
+The root `.gitignore` line `*/**/cache` matches the `me/meeshy/sdk/cache/` **source** package, not just build
+caches. Already-tracked files there (`cacheFirstFlow.kt`, `CachePolicy.kt`, `CacheResult.kt`) stay tracked, but any
+**new** file dropped into that package is silently ignored — `git add -A` skips it even though it compiles and its
+tests run and pass. Symptom: `git diff --cached --stat` is missing the file, yet the build/tests reference it. Fix:
+`git add -f apps/android/sdk-core/src/.../cache/<NewFile>.kt`. Verify after staging with
+`git diff --cached --name-only | grep cache`. (A cleaner long-term fix — narrowing the ignore to `**/build/**cache`
+— would touch the root `.gitignore`, i.e. outside `apps/android`, so it needs its own explicit run.)
+- **Cache-first without reworking pagination:** to add an L1 cache to a VM that already owns cursor pagination +
+  optimistic mutations, DON'T convert it to `cacheFirstFlow` (that observes a Flow and self-revalidates — it fights a
+  manually-paginated VM). Instead add a tiny snapshot store (`StatusBarCache`, like `ProfileStatsCacheRepository`),
+  read it in a `loadFromCacheThenNetwork(mode)` switch (Fresh→serve no-fetch, Stale/Syncing→serve+revalidate,
+  Empty→skeleton+fetch), and write through after the first page + each mutation. Keep the fresh/stale decision in the
+  shared `classifyCache` SSOT so the snapshot cache and the streaming flow can't drift.
+- **Replace-not-merge on the first page:** when a background refresh re-fetches page 1 over a cache-seeded list, the
+  success path must REPLACE (`listState.value = StatusBarListState().appended(page)`), not merge
+  (`listState.update { it.appended(page) }`) — else a server-side-deleted status lingers. This is invisible for the
+  old cold callers (they reset to cold first, so append==replace) but essential once a seed is present. iOS does
+  `statuses = entries` (replace) on the first page for the same reason.
+
+## Lesson (2026-07-19, `status-popover-republish`) — the iOS "popover republish" lives in `StatusBubbleOverlay`, NOT the read-only `StatusBarView.statusPopover`
+The feature-parity tracker said "popover republish/react action". Two traps: (1) iOS `StatusBarView.statusPopover`
+is **read-only** — the republish button is in a *different* component, `StatusBubbleOverlay` (a conversation-list
+mood bubble), gated `if onRepublish != nil` which the list only wires for **other** users' statuses. So the Android
+parity is: show a "Republish" affordance on a Pill popover, hide it on the own MyStatus popover. Model it purely as
+`statusPopoverModel(entry, now, isOwn)` → `canRepublish = !isOwn`; the caller derives `isOwn = entry.id ==
+myStatus?.id` (null-safe: DISCOVER mode has no myStatus → every pill is republishable, correct). (2) iOS republish
+opens the composer **pre-seeded** (`initialEmoji/initialText/viaUsername/repostOfId/repostAudioUrl`). Port that as a
+`StatusComposerDraft.republish(source)` factory + a `StatusPublishRequest` value the sheet forwards — keeps the
+composer glue dumb and makes the repost attribution unit-testable. The "react" half of the tracker line is a
+separate, larger feature (a reaction picker) and iOS doesn't put it in this popover — deferred.
+- **Adding a trailing param to a mocked method breaks arity-matched MockK stubs.** `StatusRepository.create` grew a
+  6th param (`viaUsername`); every `coEvery/coVerify { repository.create(any() ×5) }` and the positional
+  `create("🔥", null, "PUBLIC", null, null)` verify had to gain the 6th arg. This is required maintenance (the call
+  changed), not test-weakening — the assertions still prove the same behaviour plus the new forwarding.
+
+## Lesson (2026-07-19, `status-bar-compose`) — decompose an iOS `body` HStack into a pure `List<Cell>` builder, keep the Composable glue
+The reviewer/TDD gate exempts `@Composable` glue but demands ≥90% branch coverage on logic. iOS `StatusBarView.body`
+packs the real decisions (add-vs-my leading cell, `error && statuses.isEmpty` retry chip, `statuses.filter { id !=
+myStatus.id }` dedup, trailing `isLoadingMore` spinner) inline in the view. Port them as a **pure
+`buildStatusBarCells(uiState): List<StatusBarCell>`** (a `sealed interface` of slots) + a `statusPopoverModel`
+projection — then the `LazyRow` is a trivial `when(cell)` render. 13 branch-swept tests cover the builder; the
+Composable carries zero untested logic. This is the same "push decisions out of the Composable" pattern as
+`FeedPostPresentation` — apply it to every screen whose iOS analogue has branchy `body` layout.
+- **Wiring a header above an existing `PullToRefreshBox`:** wrap the Scaffold content in a `Column { StatusBarView();
+  PullToRefreshBox(Modifier.weight(1f)) { … } }` and MOVE the `.padding(padding)` from the box to the Column. When
+  editing brace-heavy Compose, a mid-edit build can report `Expecting '}'` at EOF from the *transient* file state —
+  re-verify brace balance (`grep -c '{'` vs `'}'`) and recompile before diagnosing; the second edit fixed it.
+- **The bar owns its own `StatusesViewModel`** via `hiltViewModel()` inside `StatusBarView` — it is independent of
+  the feed's `FeedViewModel`, so the header is a drop-in with no plumbing through `FeedScreen`.
+
+## Lesson (2026-07-19, `statuses-viewmodel`) — a HiltViewModel that needs a runtime "mode" uses a settable StateFlow, not assisted injection
+iOS constructs a separate `StatusViewModel` per `Mode` (friends/discover). A `@HiltViewModel` can't take an
+enum ctor param (Hilt has no default to provide → construction fails), and assisted injection is heavy for a
+tab toggle. Pattern used: inject only repos, hold `private val mode = MutableStateFlow(FRIENDS)`, expose
+`setMode(newMode)` that is **inert on the active mode** (else reset the list + reload). `combine(...)` folds
+`mode` into the projection so `myStatus` can be gated to FRIENDS. One VM drives both bars — cleaner than two
+instances, Hilt-friendly, fully unit-testable. Reuse this for any tabbed feed VM (e.g. a future discover feed).
+Also: pick `myStatus` by `userId == currentUserId` (via the `orderedForBar` SSOT), never the fragile iOS
+`statuses.first` — it survives a server that doesn't return own-first.
+
+## Lesson (2026-07-19, `status-mood-core`) — status TTL is **1h**, NOT 21h (the parity tracker conflated the STORY rule)
+The feature-parity line "Story / status (mood) posts with 21h expiry" (audit part-15) **conflates two
+different rules**. The gateway is unambiguous (`services/gateway/src/services/PostService.ts`):
+`STORY_EXPIRY_HOURS = 21`, **`STATUS_EXPIRY_HOURS = 1`**. A mood status expires **one hour** after
+creation; a story lives 21h. Confirmed in `schema.prisma` (`STATUS // Éphémère 1h`) and the PostService
+tests. **Expiry is server-computed and delivered as `expiresAt`** — clients treat it as authoritative
+and only derive `createdAt + 1h` as a fallback if the server ever omits it (mirror of `StoryGrouping`'s
+`effectiveStoryExpiresAt`, but with the 1h constant). `MoodStatusExpiry` (`:core:model`) is the SSOT.
+When I touch §G/§E parity boxes, keep the two TTLs distinct.
+
+Other findings baked into this slice (from the iOS/gateway research):
+- `StatusEntry` + `StatusCreateRequest`/`ReactionRequest`/`StoryViewRequest` were **already ported**
+  (`core/model/.../Story.kt`); the missing pieces were the `toStatusEntry()` mapper + the expiry law.
+- The iOS `toStatusEntry` **drops** `visibility` + `reactionSummary` even though `APIPost` carries them;
+  the Android mapper carries both through (a genuine parity improvement, tested).
+- iOS `author.name` = `displayName ?? username ?? "Anonymous"` (no blank check). Android's `resolvedName`
+  treats a **blank** displayName/username as absent before falling to `"Anonymous"` (more robust).
+- Statuses ride the generic post API: `type == "STATUS"` post, react via `POST /posts/:id/like {emoji}`,
+  feeds at `GET /posts/feed/statuses` (friends) + `/statuses/discover`. The bar is a **flat server-order
+  list** (NOT grouped-by-user like stories); `myStatus` renders first. `orderedForBar` is that pure law.
+- **Bootstrap grain precedent:** a pure `:core:model`/`:sdk-core` SSOT (law + mapper) with full tests is
+  the accepted first slice for a brand-new area — same shape as `call-sound-policy` (§H) and
+  `StoryGrouping` (§E). The repository + bar VM + Compose come in the next §G slices, consuming this SSOT.
+
+## Lesson (2026-07-18, `feed-comment-mention-autocomplete`) — promote a per-feature SSOT to `:sdk-core` by relocating the package, not renaming every call site; give the second surface its own orchestration
+When a second surface needs the same pure behaviour a `:feature:*` already solved, **promote the pure
+state-machine to `:sdk-core`** rather than re-implementing it. Two mechanics that kept this cheap and safe:
+- **Relocation ≠ mass rewrite.** Moving `ChatMention`/`MentionAutocompleteState` from `me.meeshy.app.chat`
+  to `me.meeshy.sdk.mention` only changes *import lines* at each call site (Kotlin usages reference the
+  simple name), so the churn is tiny even when grep shows dozens of "references". I did rename the object
+  `ChatMention`→`MentionComposer` for a surface-agnostic name in the SDK — that turned the object's own
+  `Xxx.` usages, but those are mostly inside the moved file + the moved test. **`git` auto-detects the
+  move as a rename (R077)** when the new file is ≥50% similar, keeping history.
+- **sdk-core is `explicitApi()`** — every top-level/member decl in the promoted file needs `public`
+  (the primary-constructor `val`s of a `public data class` do NOT, matching the existing story files).
+- **The roster stays per-feature.** `MentionComposer` (filter/insert/merge) is content-agnostic → SDK;
+  but *who can be mentioned* is a product rule that knows `ApiPostComment` → the new `CommentMentionRoster`
+  lives in `:feature:feed`, exactly like chat's `MentionRoster` knows `ApiParticipant`. Same grain test as
+  the gallery lesson.
+- **Composer draft must be ViewModel-owned + folded into the projection flow** (not Compose-local
+  `remember`), because autocomplete needs the current text to recompute the panel, and a realtime
+  re-projection (a `comment:added` landing) would otherwise wipe a half-typed draft. Added a `ComposerDraft`
+  flow as a 4th chained `.combine(...)` input (past the 5-arg `combine` cap) and moved the roster derivation
+  into `project()` (cached in a field the synchronous `onDraftChange` reads). This changed `submit(text)` →
+  `submit()`; the existing tests kept their intent via a `compose(text) = { onDraftChange(text); submit() }`
+  test helper — no assertion weakened.
+- **Full-suite flake:** `:sdk-core InterfaceLanguageStoreTest > dataStore_hydrates…` can fail with a
+  `TimeoutCancellationException` under parallel test load; it **passes in isolation** (`--tests
+  '*InterfaceLanguageStoreTest'`) and is unrelated to any mention change. Not a regression — re-run alone
+  to confirm before chasing it.
+
 ## Lesson (2026-07-18, `feed-media-fullscreen-gallery`) — before building a "viewer/lightbox/overlay", grep for an existing one and mirror its open-state SSOT
 When a slice needs a fullscreen media viewer, DON'T write one. `:sdk-ui` already ships
 `MeeshyImageViewer` (pager + pinch-zoom + ±2 prefetch + save-to-gallery), and `:feature:chat` already
@@ -2415,3 +2576,65 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
 - **Computed properties are serialization-invisible.** `val effects get() = …` inside a `@Serializable data
   class` (custom getter, not a constructor param) is ignored by kotlinx.serialization — same trick as the
   existing `displayContent`/`isTranslated`. Safe way to expose a resolved view over decoded wire fields.
+
+## status-repository (2026-07-19)
+- **CI polling must go through the GitHub MCP tools, not a Monitor `curl` loop.** The agent proxy
+  returns **403** on direct `https://api.github.com/...` (even with `$GITHUB_TOKEN` set — that token
+  is for git-over-http through the proxy, not the REST API). A `Monitor` bash script that curls the
+  Actions API therefore loops on error and never fires. Poll `mcp__github__actions_list`
+  (`list_workflow_runs`, filter by branch) / `mcp__github__pull_request_read` (`get_status`) instead.
+  Foreground `sleep` is blocked; pace re-checks with a `run_in_background` timer that exits, then
+  re-poll via MCP on the completion notification.
+- **`POST /posts/:id/like` accepts an optional `emoji` body** (gateway `interactions.ts`:
+  `LikeSchema.safeParse(body)`, default `❤️`). The Android `PostApi.like(id)` had no body, so a
+  status *react* needed a second same-path Retrofit method `likeWithEmoji(id, PostLikeRequest(emoji))`
+  — two methods on one path is legal (Retrofit keys on the function, not the URL). Kept the plain
+  `like` valid for the existing optimistic post-like path (no ripple into `PostRepository`).
+- **Repository grain = transport + a pure page fold; mapping-to-domain stays the SSOT mapper's job.**
+  `StatusRepository.list` folds via `foldStatusPage` (a verbatim mirror of `PostRepository.foldPostPage`)
+  and reuses `toStatusEntries` — it does NOT re-implement the ApiPost→StatusEntry rule. The bar
+  view-model (next slice) owns accumulation + `orderedForBar` + SWR, exactly like the bookmarks screen
+  owns accumulation over `getBookmarksPage`. Shipping the repo without a VM is consistent with how
+  `status-mood-core` shipped the mapper without wiring — no orphan code, the public surface is the
+  next slice's dependency.
+
+## status-feed-mode-toggle (2026-07-19)
+- **`git checkout <file>` destroys UNCOMMITTED edits — never use it to undo a mutation-proof `sed`.**
+  During the mutation check I `sed`-mutated a production file, ran the test, then `git checkout $f` to
+  restore — but the slice's real edits weren't committed yet, so checkout reverted them to HEAD and wiped
+  the whole slice's production code (the test file still referenced the now-missing symbol → next
+  mutation "failed to compile", a false signal). Correct pattern: `cp $f /tmp/x.bak` before the `sed`,
+  `cp /tmp/x.bak $f` after. Only `git checkout` a file whose slice edits are already committed.
+- **iOS gap = Android opportunity.** iOS's `StatusViewModel` takes `mode` at init and never switches
+  (RootView holds a single `.friends` instance; `.discover` exists in `StatusService` but no UI reaches
+  it). Android's one-VM `setMode` + this toggle is strictly better UX — worth doing even with "no iOS
+  parity to port", because the SDK/VM capability was already built and tested two slices earlier.
+- **Adding a row above a pinned bar:** wrapping `StatusBarView`'s `LazyRow` in a `Column` (toggle + rail)
+  needs no popover-offset change — the `Popup` anchor is emitted as a sibling AFTER the Column, so it
+  still resolves just below the bar (the bar is the Column's last child); `STATUS_BAR_HEIGHT` top-pad
+  stays correct.
+- **Known flake:** `:sdk-core` `MediaDownloadPreferencesStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction`
+  can hit its 15s `withTimeout` under a full parallel `assembleDebug testDebugUnitTest` run (real DataStore file I/O
+  starved by concurrent modules). Passes deterministically in isolation and on a warm re-run of the full gate. Not
+  caused by feed/status slices. If it reddens a gate, re-run — do NOT "fix" by lowering the timeout.
+
+## call-dark-frame-detection (2026-07-20)
+- **Split an untestable iOS stateful class into two pure `:core:model` cores.** iOS `DarkFrameDetector`
+  interleaves luma sampling (needs a `CVPixelBuffer`) with the streak state machine, so its unit tests
+  can only assert the callbacks are settable — the actual cover logic is unverified. Android split:
+  `FrameLuminance.averageOfYPlane` (pure sampling maths) + `DarkFramePolicy.reduce` (pure hysteresis
+  reducer). Both fully behaviourally tested with plain arrays/floats — no framework, no capture buffer.
+  General lesson: when porting an iOS `analyzeX` that mixes a framework read with a decision, extract the
+  decision as a reducer and the read as a pure function; the actuator that bridges them stays app-side.
+- **Counter clamp = a real SOTA win, not gold-plating.** iOS's `consecutiveDarkFrames: Int` increments
+  every dark frame with no ceiling; a lens left covered for hours at 30 fps counts into the millions (and
+  is an overflow smell). Clamping the streak at `consecutiveThreshold` (nothing left to count once
+  latched) makes the state genuinely O(1) and the clamp is itself the cleanest mutation target to prove
+  the test suite is behavioural.
+- **`rowStride` vs `width` is the I420 correctness trap.** A WebRTC I420 Y plane's `strideY` can exceed
+  the visible width (row padding); sampling `y*width + x` instead of `y*rowStride + x` reads padding bytes
+  into the average. `FrameLuminance` takes both and a `rowStride < width` guard returns `null`. The
+  padded-plane test pins this.
+- **`null` on degenerate geometry, never a fabricated `0.0`.** A too-small/empty/zero-dim plane returning
+  `0.0f` would read as "pitch black" and could trip the cover detector on a bad frame. Return `null` =
+  "skip this frame", mirroring iOS `guard … else { return }`.

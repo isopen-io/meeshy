@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,8 +14,16 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.mention.MentionComposer
+import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.mention.applyRemote
+import me.meeshy.sdk.mention.onTextChange
+import me.meeshy.sdk.mention.reset
+import me.meeshy.sdk.mention.select
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
 import me.meeshy.sdk.net.MeeshyConfig
@@ -38,6 +48,8 @@ data class PostCommentsUiState(
     val comments: List<CommentPresentation> = emptyList(),
     val replyThreads: Map<String, ReplyThreadUiState> = emptyMap(),
     val mentionDisplayNames: Map<String, String> = emptyMap(),
+    val draft: String = "",
+    val mention: MentionAutocompleteState = MentionAutocompleteState(),
     val replyTarget: ReplyTarget? = null,
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
@@ -77,6 +89,7 @@ class PostCommentsViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
+    private val mentionSearch: MentionSearch,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -90,7 +103,19 @@ class PostCommentsViewModel @Inject constructor(
 
     /** Per-comment Prisme language override (comment id → chosen language code), set by a flag tap. */
     private val activeLanguages = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    /** The composer's live text + @-mention autocomplete panel, folded into the projection so a
+     *  background re-emit (a socket comment landing) never tears the half-typed draft down. */
+    private val composerDraft = MutableStateFlow(ComposerDraft())
+
+    /** The @-mention candidates for the thread, recomputed on every projection from the loaded
+     *  authors. Cached here so the synchronous [onDraftChange] intent can filter without a suspend. */
+    private var mentionRoster: List<MentionCandidate> = emptyList()
     private var pendingSeq = 0
+
+    /** The in-flight debounced directory lookup for the active `@fragment`; a fresh keystroke or a
+     *  selection cancels it so a stale response never lands in the panel. */
+    private var mentionSearchJob: Job? = null
 
     private val _state = MutableStateFlow(PostCommentsUiState())
     val state: StateFlow<PostCommentsUiState> = _state.asStateFlow()
@@ -102,7 +127,9 @@ class PostCommentsViewModel @Inject constructor(
             }.combine(composer) { inputs, replyTarget ->
                 inputs to replyTarget
             }.combine(activeLanguages) { (inputs, replyTarget), langs ->
-                project(inputs, replyTarget, langs)
+                Triple(inputs, replyTarget, langs)
+            }.combine(composerDraft) { (inputs, replyTarget, langs), draft ->
+                project(inputs, replyTarget, langs, draft)
             }.collect { projected -> _state.value = projected }
         }
         observeRealtime()
@@ -228,20 +255,73 @@ class PostCommentsViewModel @Inject constructor(
     }
 
     /**
+     * A composer keystroke: store the new [value] and recompute the @-mention autocomplete panel
+     * against the thread's roster (the shared [me.meeshy.sdk.mention.MentionComposer] SSOT). Kept in
+     * a folded flow so a realtime re-projection never drops the half-typed draft.
+     */
+    fun onDraftChange(value: String) {
+        composerDraft.update { it.copy(text = value, mention = it.mention.onTextChange(value, mentionRoster)) }
+        maybeSearchRemoteMentions(composerDraft.value.mention.activeQuery)
+    }
+
+    /**
+     * Fires a debounced directory lookup for the active `@fragment` and folds the results into the
+     * panel below the local roster — the feed-comment counterpart of the chat composer's remote merge,
+     * on the same shared [MentionSearch] SSOT. Nothing runs for a dismissed panel or a query under two
+     * significant characters ([MentionComposer.shouldQueryRemote] — the thread roster already covers
+     * those); a fresh keystroke cancels the previous in-flight lookup (300 ms debounce). The signed-in
+     * user is excluded, and the pure [applyRemote] merge drops a slow response whose fragment is already
+     * stale and keeps the local candidates ahead of the directory ones. A failed lookup degrades to the
+     * local roster (the shared [me.meeshy.sdk.mention.DirectoryMentionSearch] already maps failure → empty).
+     */
+    private fun maybeSearchRemoteMentions(query: String?) {
+        mentionSearchJob?.cancel()
+        if (query == null || !MentionComposer.shouldQueryRemote(query)) return
+        val currentUserId = sessionRepository.currentUser.value?.id
+        mentionSearchJob = viewModelScope.launch {
+            delay(MENTION_SEARCH_DEBOUNCE_MS)
+            val remote = try {
+                mentionSearch.search(query.trim())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@launch
+            }.filterNot { it.id == currentUserId }
+            composerDraft.update { it.copy(mention = it.mention.applyRemote(query, remote)) }
+        }
+    }
+
+    /**
+     * Insert the picked [candidate]'s handle into the draft (replacing the trailing `@fragment`),
+     * record it as a draft mention, and dismiss the suggestion panel — the same [select] reducer the
+     * chat composer uses, so both surfaces behave identically. Inert when no mention is in progress.
+     */
+    fun onMentionSelected(candidate: MentionCandidate) {
+        mentionSearchJob?.cancel()
+        composerDraft.update {
+            val (newText, newMention) = it.mention.select(candidate, it.text)
+            it.copy(text = newText, mention = newMention)
+        }
+    }
+
+    /**
      * Send from the composer. Trimmed-blank content, a blank post id, or a send already in
      * flight are inert. When a [ReplyTarget] is active the text is posted as a reply under its
      * parent; otherwise as a top-level comment. Either way the row appears optimistically for
-     * instant feedback, then confirmed with the server row or rolled back if the send fails.
+     * instant feedback, then confirmed with the server row or rolled back if the send fails, and
+     * the composer draft + mention panel reset for the next comment.
      */
-    fun submit(text: String) {
-        val content = text.trim()
+    fun submit() {
+        val content = composerDraft.value.text.trim()
         if (content.isEmpty() || postId.isBlank() || status.value.isSubmitting) return
         composer.value?.let { target ->
             sendReply(target.parentId, content)
+            clearDraft()
             return
         }
         val tempId = "pending-${pendingSeq++}"
         thread.update { it.optimistic(optimisticRow(tempId, content)) }
+        clearDraft()
         status.update { it.copy(isSubmitting = true, error = null) }
         viewModelScope.launch {
             try {
@@ -282,6 +362,12 @@ class PostCommentsViewModel @Inject constructor(
     /** Drop the active reply target — the composer returns to posting a top-level comment. */
     fun cancelReply() {
         composer.value = null
+    }
+
+    /** Reset the composer text + mention tracking after a send. */
+    private fun clearDraft() {
+        mentionSearchJob?.cancel()
+        composerDraft.value = ComposerDraft()
     }
 
     /**
@@ -448,6 +534,7 @@ class PostCommentsViewModel @Inject constructor(
         inputs: ProjectionInputs,
         replyTarget: ReplyTarget?,
         activeLanguages: Map<String, String>,
+        draft: ComposerDraft,
     ): PostCommentsUiState {
         val thread = inputs.thread
         val st = inputs.status
@@ -488,14 +575,16 @@ class PostCommentsViewModel @Inject constructor(
                     hiddenReplyCount = (all.size - shown.size).coerceAtLeast(0),
                 )
             }
-        val mentionDisplayNames = CommentMentionDirectory.build(
-            thread.comments + replyState.repliesByParent.values.flatten(),
-        )
+        val allComments = thread.comments + replyState.repliesByParent.values.flatten()
+        val mentionDisplayNames = CommentMentionDirectory.build(allComments)
+        mentionRoster = CommentMentionRoster.build(allComments, excludeUserId = inputs.user?.id)
         val showSkeleton = st.isLoading && !thread.hasLoaded && thread.comments.isEmpty() && st.error == null
         return PostCommentsUiState(
             comments = rows,
             replyThreads = replyThreads,
             mentionDisplayNames = mentionDisplayNames,
+            draft = draft.text,
+            mention = draft.mention,
             replyTarget = replyTarget,
             isLoading = st.isLoading,
             isLoadingMore = st.isLoadingMore,
@@ -512,6 +601,9 @@ class PostCommentsViewModel @Inject constructor(
         private const val PAGE_SIZE = 20
         private const val HEART_EMOJI = "❤️"
 
+        /** Debounce before a directory lookup fires for the active `@fragment` (mirror of chat). */
+        private const val MENTION_SEARCH_DEBOUNCE_MS = 300L
+
         /** Replies shown in a collapsed preview before the viewer taps "View all". */
         private const val PREVIEW_REPLY_LIMIT = 2
 
@@ -525,6 +617,12 @@ private data class Status(
     val isLoadingMore: Boolean = false,
     val isSubmitting: Boolean = false,
     val error: String? = null,
+)
+
+/** The composer's live text and its @-mention autocomplete panel, folded into the projection. */
+private data class ComposerDraft(
+    val text: String = "",
+    val mention: MentionAutocompleteState = MentionAutocompleteState(),
 )
 
 /** The five reactive inputs folded into the projection, threaded past the 5-arg `combine` cap. */

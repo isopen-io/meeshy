@@ -143,13 +143,22 @@ fun FeedScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = Color.Transparent,
     ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = state.isSyncing,
-            onRefresh = viewModel::refresh,
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            // The mood-statuses rail sits pinned above the feed (iOS parity: StatusBarView
+            // at the top of FeedView), with a Friends/Discover feed toggle above it. Its own
+            // StatusesViewModel drives both feeds (one VM vs iOS's two instances).
+            StatusBarView()
+            PullToRefreshBox(
+                isRefreshing = state.isSyncing,
+                onRefresh = viewModel::refresh,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+            ) {
             when {
                 state.showSkeleton -> FeedSkeleton()
                 state.posts.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -212,6 +221,7 @@ fun FeedScreen(
                     viewModel.acknowledgeNewPosts()
                 },
             )
+            }
         }
     }
     }

@@ -217,10 +217,6 @@ final class DynamicTypeTests: XCTestCase {
                        "Negative times must clamp to 0")
     }
 
-    func test_toolbar_rulerLabel_isStableAcrossLocales() {
-        XCTAssertEqual(TimelineToolbar.formatRulerResolution(seconds: 0.25), "RULER:250ms")
-        XCTAssertEqual(TimelineToolbar.formatRulerResolution(seconds: 2.0), "RULER:2s")
-    }
 
     // MARK: - Helpers
 

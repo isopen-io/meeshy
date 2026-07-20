@@ -14,14 +14,17 @@ struct SecurityVerificationView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: MeeshySpacing.xxl) {
+                    // Hero glyph ≥40pt : décoratif, le titre adjacent porte le sens — masqué VoiceOver (doctrine 74i/86i)
                     Image(systemName: "lock.shield.fill")
                         .font(MeeshyFont.relative(64))
                         .foregroundColor(MeeshyColors.indigo400)
                         .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
+                        .accessibilityHidden(true)
 
                     Text(String(localized: "security.verify.title", defaultValue: "End-to-End Encryption", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
 
                     Text(String(localized: "security.verify.description", defaultValue: "Messages with \(conversationName) are end-to-end encrypted.", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
@@ -71,8 +74,12 @@ struct SecurityVerificationView: View {
                 .background(Color.white)
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                 .shadow(color: theme.textPrimary.opacity(0.1), radius: 10)
+                .accessibilityLabel(String(localized: "security.verify.qr.a11y", defaultValue: "QR code of the safety number, to scan on the other device", bundle: .main))
         }
 
+        // Libellé + numéro fusionnés en un seul élément VoiceOver, avec les
+        // chiffres espacés pour une lecture digit-par-digit (comparaison à voix
+        // haute lors de la vérification), plutôt que lus comme de grands nombres.
         VStack(spacing: MeeshySpacing.sm) {
             Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
@@ -85,6 +92,11 @@ struct SecurityVerificationView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxl)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main)
+                + ", " + spelledSafetyNumber(safetyNumber)
+        )
 
         Text(String(localized: "security.verify.howto", defaultValue: "To verify, compare this number with the one shown on \(conversationName)'s device, or scan their QR code.", bundle: .main))
             .font(MeeshyFont.relative(MeeshyFont.captionSize))
@@ -98,13 +110,16 @@ struct SecurityVerificationView: View {
 
     private var pendingSection: some View {
         VStack(spacing: MeeshySpacing.lg) {
+            // Glyphe d'état ≥40pt : décoratif, le titre adjacent porte le sens — masqué VoiceOver (doctrine 74i/86i)
             Image(systemName: "hourglass.circle")
                 .font(MeeshyFont.relative(40))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             Text(String(localized: "security.verify.unavailable.title", defaultValue: "Verification Unavailable", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                 .foregroundColor(theme.textSecondary)
+                .accessibilityAddTraits(.isHeader)
 
             Text(String(localized: "security.verify.unavailable.description", defaultValue: "Safety number verification will be available once both participants have exchanged their encryption keys.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize))
@@ -123,6 +138,15 @@ struct SecurityVerificationView: View {
             result += String(char)
         }
         return result.isEmpty ? number : result
+    }
+
+    // Chaque chiffre isolé par une espace pour que VoiceOver le lise
+    // individuellement ("1 2 3 4 5") au lieu de le regrouper en grand nombre —
+    // indispensable pour comparer un safety number à voix haute.
+    private func spelledSafetyNumber(_ number: String) -> String {
+        let cleanNumber = number.filter { $0.isNumber }
+        guard !cleanNumber.isEmpty else { return number }
+        return cleanNumber.map(String.init).joined(separator: " ")
     }
 
     // CIContext is expensive to create (it sets up the Core Image / GPU
