@@ -219,18 +219,21 @@ struct ProfileUserPostsList: View {
         shareableLink = ShareableLink(url: url)
     }
 
+    // Empty state deferred to the shared design-system `EmptyStateView`
+    // (canonical icon+title+subtitle, combined VoiceOver label + spring appear)
+    // rather than a hand-rolled VStack — same pattern the peer lists
+    // `BookmarksView`/`ShareLinksView` already reuse. `compact` keeps it sized
+    // for this in-scroll (nested LazyVStack) section, and the shared component
+    // adds the guidance subtitle + a single combined VoiceOver label.
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "square.text.square")
-                .font(.system(size: 44))
-                .foregroundColor(theme.textMuted)
-                .accessibilityHidden(true)
-            Text(String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .main))
-                .font(.body.weight(.semibold))
-                .foregroundColor(theme.textSecondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 60)
+        EmptyStateView(
+            icon: "square.text.square",
+            title: String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .main),
+            subtitle: String(localized: "profile.posts.empty.subtitle", defaultValue: "Les publications apparaîtront ici", bundle: .main),
+            compact: true
+        )
+        .padding(.top, 40)
+        .padding(.bottom, 24)
     }
 }
 
