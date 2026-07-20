@@ -30,6 +30,7 @@ data class MeeshyUser(
     override val systemLanguage: String? = null,
     override val regionalLanguage: String? = null,
     override val customDestinationLanguage: String? = null,
+    override val deviceLocale: String? = null,
     val autoTranslateEnabled: Boolean? = null,
     val phoneNumber: String? = null,
     val phoneVerifiedAt: String? = null,

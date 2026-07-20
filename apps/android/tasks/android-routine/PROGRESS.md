@@ -1,5 +1,56 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **Prisme device-locale 4th-priority + BCP-47 normalisation core** landed (slice
+> `prisme-device-locale-priority`, feature-parity §D → advances "Automatic per-user translation display
+> (resolution: system → regional → custom → original)" `[ ]` → `[~]`). This is the single most product-central
+> pure core: the content-language resolution the whole app displays through. The `:core:model` `LanguageResolver`
+> already fed every bubble/feed/story/compose site, but it encoded the **old** Prisme rule ("device locale must
+> NEVER influence content language") and matched in-app codes only case-insensitively — so a BCP-47 preference
+> (`"pt-BR"`) or an OS locale never resolved, diverging from the shared TS SSOT (`resolveUserLanguage` in
+> `packages/shared/utils/conversation-helpers.ts`, updated 2026-05-26) and the iOS mirror
+> (`MeeshyUser.preferredContentLanguages`). Two changes bring Android to full parity. **(1)** New pure
+> `:core:model` `LanguageCodeNormalizer` — a faithful port of `normalizeLanguageCode` / `iso639ReductionMap`
+> (TS + Swift). It reduces a raw locale identifier to the canonical translation-key code: a **supported** 2-/3-letter
+> code is preserved **verbatim** (`"bas"`→`"bas"`, never truncated to Bashkir `"ba"` — that would silently
+> mistranslate), BCP-47 region/script is stripped (`"fr-FR"`→`"fr"`, `"zh-Hant-HK"`→`"zh"`), an ISO 639-2/639-3
+> code with no direct entry is reduced via an **explicit** table (`"eng"`→`"en"`, `"swe"`→`"sv"` — **not** the
+> Swahili prefix-collision `"sw"`; 639-2/B variants `ger`/`fre`/`chi` covered) with the reduced target
+> **re-validated** against the catalogue (`"orm"`→`"om"` dropped since `om` isn't shipped), `"fil"`/`"tgl"` rejected
+> (never `"fi"`), and any invalid input → `null`. `supportedCodeSet` is derived from `LanguageData.allLanguages`
+> (mirror of iOS `LanguageData.supportedCodeSet`, no hand-copied drift). **(2)**
+> `LanguageResolver.ContentLanguagePreferences` gains `deviceLocale: String? get() = null` (a default getter, so all
+> existing implementers — `MeeshyUser`, every `EmptyContentPreferences`, test fixtures — compile untouched);
+> `resolveUserLanguage` + `preferredContentLanguages` fold the **normalised** deviceLocale in at **4th priority** —
+> strictly after `systemLanguage`/`regionalLanguage`/`customDestinationLanguage`, before the `"fr"` fallback, deduped
+> case-insensitively. This mirrors iOS exactly: it normalises **only** the device locale and keeps in-app codes
+> verbatim (an in-app pref never gets rewritten, only matched case-insensitively downstream). `MeeshyUser` gains a
+> decoded `deviceLocale` field (the gateway persists `User.deviceLocale`), so the arm is live off the `/auth/me`
+> contract; `preferredTranslation` inherits the 4th-priority arm for free (it iterates `preferredContentLanguages`).
+> **SOTA note:** the in-app codes stay verbatim per iOS, but a latent iOS gap — a `"pt-BR"` *in-app* value never
+> matching `pt` translations — is out of scope here because Android's settings picker (like iOS) writes clean
+> 2-letter codes; the only BCP-47 shape that actually reaches resolution is the OS locale, which is exactly what we
+> normalise. **+25 behavioural tests** — `LanguageCodeNormalizerTest` (14: verbatim 2-/3-letter, casing, BCP-47
+> strip, whitespace, 639-2/T + /B reduction, reduction-target re-validation drop, `fil`/`tgl`/`xyz` reject, unknown-
+> 2-letter preserve, null/blank/too-short, non-alphabetic, separator-only) + `LanguageResolverTest` (+11:
+> deviceLocale as 4th priority, normalised, beaten by each in-app tier, beats the `fr` fallback, unusable → `fr`;
+> appended-last, case-insensitive dedup vs in-app, omit-unusable in the ordered list; `preferredTranslation` matches
+> through it; a real `MeeshyUser.deviceLocale` drives it). Every pre-existing resolver test stays green unchanged
+> (in-app casing still preserved). **Mutation check (RED proof):** dropping the reduction-target re-validation
+> (`… && reduced in supportedCodeSet` → `… reduced`) fails **exactly** `normalize_rejectsReductionWhoseTargetIsNotSupported`
+> (14 run, 1 failed, no collateral) — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (new suites 14/14 + 23/23) + `:sdk-ui` + all
+> feature-module `testDebugUnitTest` green + full `:app:assembleDebug` → **BUILD SUCCESSFUL** (the lone full-tree
+> red was the documented `:sdk-core` `ThemeStoreTest` DataStore `TimeoutCancellationException` flake — a module this
+> diff never touches — green in isolation in 29s). Reviewer **PASS** (diff `apps/android` only — 1 new production
+> file + 3 edited `:core:model` files + 2 tests + tracking; **SDK purity** — pure normaliser + resolver in
+> `:core:model`, zero framework deps, the device-locale *sourcing* actuator stays app-side/pending; **SSOT** — one
+> normaliser, `supportedCodeSet` derived from the single catalogue, resolution stays the one `LanguageResolver` every
+> consumer already uses; **Prisme** — device locale strictly 4th, never supplanting an in-app pref, no
+> first-translation fallback; no coverage floor lowered, no existing test weakened). **Next slice:** the app-side
+> device-locale sourcing (inject `Locale.getDefault()` into the resolution context + `X-Device-Locale` request
+> header so the gateway persists it, iOS parity) to close §D L1132 to `[x]`; OR another §D pure core (offline
+> persisted-translations Prisme, ad-hoc blocking text translation); OR the tracked Kover 90% coverage-gate infra.
+
 > On 2026-07-20 the **rolling live-transcript accumulator core** landed (slice `call-transcript-buffer`,
 > feature-parity §H → advances "Live in-call transcription overlay" `[~]` by delivering the SSOT rolling
 > transcript the overlay renders — the missing accumulation layer between the already-landed caption transport

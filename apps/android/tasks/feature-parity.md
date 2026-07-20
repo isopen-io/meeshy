@@ -1129,7 +1129,40 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] AI participant persona profiles + per-participant activity breakdown + trait bars
 
 ## D. Translation — Prisme Linguistique
-- [ ] Automatic per-user translation display (resolution: system → regional → custom → original)
+- [~] Automatic per-user translation display (resolution: system → regional → custom → original) —
+      **resolution SSOT extended to the Prisme étendu (2026-05-26) + BCP-47 normalisation**
+      (slice `prisme-device-locale-priority`, 2026-07-20): the pure `:core:model` `LanguageResolver`
+      already drove content-language resolution everywhere (bubbles, feed, stories, compose stamping)
+      but encoded the **old** rule ("device locale must NEVER influence content language") and matched
+      in-app codes only case-insensitively — so a BCP-47 pref (`"pt-BR"`) or an OS locale never resolved.
+      This slice brings it to full parity with the shared TS SSOT (`resolveUserLanguage` in
+      `packages/shared/utils/conversation-helpers.ts`) + the iOS mirror
+      (`MeeshyUser.preferredContentLanguages`). New pure `:core:model` `LanguageCodeNormalizer` (faithful
+      port of `normalizeLanguageCode` / `iso639ReductionMap`): reduces a raw locale identifier to the
+      canonical translation-key code — supported 2-/3-letter codes preserved **verbatim** (`"bas"`→`"bas"`,
+      never truncated to Bashkir `"ba"`), BCP-47 region/script stripped (`"fr-FR"`→`"fr"`, `"zh-Hant-HK"`→`"zh"`),
+      ISO 639-2/639-3 reduced via an **explicit** table (`"eng"`→`"en"`, `"swe"`→`"sv"` **not** Swahili `"sw"`;
+      639-2/B variants `ger`/`fre`/`chi` covered) with the target **re-validated** against the catalogue
+      (`"orm"`→`"om"` dropped since `om` is not shipped), `"fil"`/`"tgl"` rejected (never `"fi"`), invalid
+      input → `null`. `supportedCodeSet` derived from `LanguageData.allLanguages` (mirror of iOS
+      `LanguageData.supportedCodeSet`). `LanguageResolver.ContentLanguagePreferences` gains
+      `deviceLocale: String? get() = null` (all existing implementers unaffected); `resolveUserLanguage` +
+      `preferredContentLanguages` fold the **normalised** deviceLocale in at **4th priority** — after every
+      in-app pref, before the `"fr"` fallback, deduped case-insensitively — exactly like iOS (which normalises
+      only the device locale, keeping in-app codes verbatim). `MeeshyUser` gains a decoded `deviceLocale`
+      field (gateway persists `User.deviceLocale`), so the arm is live off the `/auth/me` contract.
+      `preferredTranslation` inherits the 4th-priority arm for free. +25 behavioural tests
+      (14 `LanguageCodeNormalizerTest` — every branch: verbatim 2-/3-letter, BCP-47 strip, 639-2/T + /B
+      reduction, re-validation drop, `fil`-reject, unknown-2-letter preserve, all invalid-input rejections;
+      +11 `LanguageResolverTest` — deviceLocale as 4th priority / normalised / beaten by each in-app tier /
+      beats the `fr` fallback / unusable → `fr`, appended-last + case-insensitive dedup + omit-unusable in the
+      ordered list, `preferredTranslation` matches through it, and a real `MeeshyUser.deviceLocale` drives it).
+      Mutation (RED proof): dropping the reduction-target re-validation (`… && reduced in supportedCodeSet` →
+      `… reduced`) fails **exactly** `normalize_rejectsReductionWhoseTargetIsNotSupported` (14 run, 1 failed,
+      no collateral). `:core:model` + `:sdk-ui` + all feature-module `testDebugUnitTest` green; full
+      `:app:assembleDebug` → BUILD SUCCESSFUL. **Follow-up:** app-side device-locale sourcing — inject
+      `Locale.getDefault()` into the resolution context + send the `X-Device-Locale` header (iOS parity) so
+      the gateway persists it; the pure resolution + API-decoded field are complete.
 - [~] Original exploration: long-press → « Voir l'original / la traduction »
       (toggle par message, builder Prisme-aware) ; flag strip read-only shipped
       (slice `chat-translation-language-strip`, 2026-07-10) ; **tap-to-switch active language shipped**
