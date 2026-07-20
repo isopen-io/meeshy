@@ -135,19 +135,29 @@ const LANGUAGE_FLAGS: Record<string, string> = {
 };
 
 /**
- * Obtient le nom d'affichage d'une langue à partir de son code
+ * Obtient le nom d'affichage d'une langue à partir de son code.
+ *
+ * Normalise `.toLowerCase().trim()` avant lookup — parité stricte avec la SSOT
+ * `getLanguageInfo` de `packages/shared/utils/languages.ts`. Les préférences
+ * in-app sont persistées verbatim (un `systemLanguage: 'EN'` stocké est un cas
+ * réel, cf. `conversation-helpers.ts`), donc sans normalisation un code
+ * non-lowercase retombait à tort sur le fallback code brut.
  */
 export function getLanguageDisplayName(languageCode: string | null | undefined): string {
   if (!languageCode) return 'Français'; // Valeur par défaut
-  return LANGUAGE_NAMES[languageCode] || languageCode.toUpperCase();
+  const code = languageCode.toLowerCase().trim();
+  return LANGUAGE_NAMES[code] || code.toUpperCase();
 }
 
 /**
- * Obtient le drapeau emoji d'une langue à partir de son code
+ * Obtient le drapeau emoji d'une langue à partir de son code.
+ *
+ * Même normalisation `.toLowerCase().trim()` que {@link getLanguageDisplayName}
+ * et que la SSOT shared : un `'EN'` stocké doit rendre 🇺🇸, pas le globe 🌐.
  */
 export function getLanguageFlag(languageCode: string | null | undefined): string {
   if (!languageCode) return '🇫🇷'; // Drapeau français par défaut
-  return LANGUAGE_FLAGS[languageCode] || '🌐';
+  return LANGUAGE_FLAGS[languageCode.toLowerCase().trim()] || '🌐';
 }
 
 /**
@@ -166,7 +176,8 @@ export function getLanguageInfo(languageCode: string) {
  * @deprecated Use SUPPORTED_LANGUAGES from @shared/types or language-detection.ts instead
  */
 export function isSupportedLanguage(languageCode: string): boolean {
-  return languageCode in LANGUAGE_NAMES;
+  if (!languageCode) return false;
+  return languageCode.toLowerCase().trim() in LANGUAGE_NAMES;
 }
 
 /**

@@ -155,9 +155,7 @@ struct ReportUserView: View {
                     }
                     .accessibilityLabel(String(localized: "report.user.details.a11y", defaultValue: "Report details", bundle: .main))
 
-                Text("\(details.count)/500")
-                    .font(MeeshyFont.relative(11, weight: .medium))
-                    .foregroundColor(details.count >= 450 ? MeeshyColors.error : theme.textMuted)
+                CharacterCountLabel(count: details.count, limit: 500, warningThreshold: 450)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
