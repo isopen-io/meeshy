@@ -14,6 +14,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 195i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Contexte essaim** : PR iOS ouvertes jusqu'à **194i** (#2176/#2177/#2181 ConversationInfoSheet/TermsOfServiceView/MessageDetailSheet). Numéro **195i** choisi strictement > plus haut en vol.
+> - **195i (terminée, branche `claude/laughing-thompson-ec3a6h`, base `main` HEAD `0972407`)** : VoiceOver selected-state pour les pilules sous-filtre « Vues » de **`MessageViewsDetailView`** (`viewsFilterCapsule`, onglet lecture de `MessageMoreSheet`). Le Button (Envoyé/Remis/Lu/Non vu/Écouté/Vu) signalait son état actif par **couleur seule** (fill/stroke/foreground `isSelected ? accent : …`) et **ne portait AUCUN modificateur d'accessibilité** — WCAG 1.4.1, VoiceOver ne pouvait pas distinguer le filtre appliqué. Fix miroir des 3 vues sœurs déjà soldées (`MessageReactionsDetailView:104`, `MessageReportDetailView:153`, `MessageLanguageDetailView:318`) : `.accessibilityAddTraits(isSelected ? [.isSelected] : [])` sur le Button (`isSelected` déjà en portée). Labels déjà localisés (clés `message-detail.views.*`) → **0 clé neuve**. 1 fichier, +4 lignes (1 modificateur + 3 commentaire), 0 logique / 0 réseau / 0 visuel / 0 test neuf. `MessageViewsDetailView` **absent de toute PR ouverte** (le cluster dense `MessageDetail*` #2178–#2182 vise `MessageDetailSheet`/`MessageLanguageDetailView`). Gate = CI `iOS Tests`.
+> - **⚠️ NE PLUS re-flagger** `MessageViewsDetailView` sous-filtre : selected-state VoiceOver soldé 195i (le send-history était déjà soldé 178i).
+> - **Base de départ 196i+ : `main` HEAD** (toujours resync ; supprimer la branche mergée). **Piste 196i+** : `MessageEffectModifiers.swift:163/186/231` (hardcoded `#6366F1`/`#818CF8` → `MeeshyColors.indigo500/400`), `ConversationPreferencesTab.swift:166/168` (`Color(hex:"A855F7")` — pas zéro-diff, jugement design requis).
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 183i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **183i (branche `claude/laughing-thompson-8vaq6w`, base `main` HEAD `64f943d`)** :
 >   Consolidation design-system de `ProfileUserPostsList` (liste de publications de l'onglet « Postes »

@@ -178,6 +178,10 @@ struct MessageViewsDetailView: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        // Active state is otherwise signalled by fill/stroke/foreground color
+        // alone — expose it to VoiceOver via the trait so the selected filter is
+        // not lost to non-sighted users (HIG: never rely on color to convey state).
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
