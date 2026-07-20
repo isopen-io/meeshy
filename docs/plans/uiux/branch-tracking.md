@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 183i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **183i (branche `claude/laughing-thompson-8vaq6w`, base `main` HEAD `64f943d`)** :
+>   Consolidation design-system de `ProfileUserPostsList` (liste de publications de l'onglet « Postes »
+>   de `UserProfileSheet`). L'`emptyState` était un **`VStack` bespoke** (icône `square.text.square`
+>   size 44 gris muet + titre seul) ré-implémentant le primitive partagé `MeeshyUI.EmptyStateView` —
+>   alors que les listes-pairs `BookmarksView` (168i) et `ShareLinksView` (178i) délèguent déjà.
+>   4 déficits : (1) **duplication** d'un pattern partagé ; (2) **empty-state titre-seul** sans
+>   sous-titre de guidage ; (3) **VoiceOver appauvri** (glyphe hidden, titre seul, pas de
+>   `children: .combine`) ; (4) **pas d'animation** spring. Fix = `EmptyStateView(icon:title:subtitle:
+>   compact: true)` réutilisant la clé i18n existante `profile.posts.empty` + **1 clé neuve**
+>   `profile.posts.empty.subtitle` ajoutée à `Localizable.xcstrings` avec les **5 langues**
+>   (de/en/es/fr/pt-BR — parité avec la clé sœur, localisation-ready). A11y label combiné + accent
+>   indigo de marque + spring hérités gratuitement. 2 fichiers (`ProfileUserPostsList.swift` −8 nets +
+>   `.xcstrings`), 0 logique / 0 réseau / 0 test. `theme` reste référencé (via `isDark`). Aucun clash
+>   avec les PR iOS ouvertes (#2102–#2142 ne touchent pas `ProfileUserPostsList`). Gate = CI
+>   `iOS Tests`. PR à venir.
+> - **⚠️ `ProfileUserPostsList` empty-state SOLDÉ 183i** : ne plus reprendre. Candidats siblings
+>   restants (empty-states bespoke non encore dédupliqués) : voir grep `font(.system(size: 4x))` +
+>   `Text(... empty ...)` — ex. `CommunityLinksView` (l.112, `person.3.fill` size 40).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 186i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **Contexte essaim** : PR iOS ouvertes 140i→**185i** (`MessageLanguageDetailView` #2137).
 >   Numéro **186i** choisi strictement > plus haut en vol (185i).
