@@ -10,8 +10,12 @@ package me.meeshy.sdk.lang
  * Critical rules (see /CLAUDE.md "Regles critiques du Prisme"):
  *  1. If no translation matches a preferred language, show the ORIGINAL content (return null).
  *     Never fall back to translations.first.
- *  2. Device locale must NEVER influence content language — only the in-app configured
- *     systemLanguage / regionalLanguage / customDestinationLanguage do.
+ *  2. Device locale is the 4th priority (Prisme étendu 2026-05-26) — AFTER the in-app
+ *     systemLanguage / regionalLanguage / customDestinationLanguage, BEFORE the "fr" fallback.
+ *     It never supplants an in-app preference; it only fills the gap when none is configured.
+ *     Unlike the in-app codes (kept verbatim, matched case-insensitively downstream), the
+ *     device locale arrives as "fr_FR" / "zh-Hant-HK" and is normalised via
+ *     [LanguageCodeNormalizer] before use. Mirrors iOS `MeeshyUser.preferredContentLanguages`.
  *
  * Blank strings are treated as absent to match the TS source of truth (JS falsy "").
  */
@@ -24,6 +28,12 @@ object LanguageResolver {
         val systemLanguage: String?
         val regionalLanguage: String?
         val customDestinationLanguage: String?
+
+        /**
+         * OS-level locale (`Locale.getDefault()` / persisted `User.deviceLocale`), 4th priority.
+         * Defaults to `null` so existing implementers are unaffected until they provide one.
+         */
+        val deviceLocale: String? get() = null
     }
 
     /** A translation produced for a piece of content. */
@@ -34,27 +44,31 @@ object LanguageResolver {
 
     /**
      * Resolve the single preferred content language.
-     * Order: systemLanguage → regionalLanguage → customDestinationLanguage → "fr".
+     * Order: systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale → "fr".
      */
     fun resolveUserLanguage(prefs: ContentLanguagePreferences): String =
         prefs.systemLanguage.cleaned()
             ?: prefs.regionalLanguage.cleaned()
             ?: prefs.customDestinationLanguage.cleaned()
+            ?: LanguageCodeNormalizer.normalize(prefs.deviceLocale)
             ?: FALLBACK_LANGUAGE
 
     /**
      * Ordered list of preferred content languages, de-duplicated case-insensitively.
-     * Falls back to ["fr"] when nothing is configured.
+     * Order: systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale.
+     * The device locale is normalised (BCP-47 → canonical code) before insertion; the in-app
+     * codes are kept verbatim. Falls back to ["fr"] when nothing usable is configured.
      */
     fun preferredContentLanguages(prefs: ContentLanguagePreferences): List<String> {
         val preferred = mutableListOf<String>()
-        fun add(candidate: String?) {
-            val value = candidate.cleaned() ?: return
+        fun addDistinct(value: String?) {
+            if (value == null) return
             if (preferred.none { it.equals(value, ignoreCase = true) }) preferred.add(value)
         }
-        add(prefs.systemLanguage)
-        add(prefs.regionalLanguage)
-        add(prefs.customDestinationLanguage)
+        addDistinct(prefs.systemLanguage.cleaned())
+        addDistinct(prefs.regionalLanguage.cleaned())
+        addDistinct(prefs.customDestinationLanguage.cleaned())
+        addDistinct(LanguageCodeNormalizer.normalize(prefs.deviceLocale))
         if (preferred.isEmpty()) preferred.add(FALLBACK_LANGUAGE)
         return preferred
     }
