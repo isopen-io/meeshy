@@ -20,30 +20,54 @@ final class TopLevelCommentCell: UICollectionViewCell {
         avatarView.layer.cornerRadius = 16
         avatarView.clipsToBounds = true
         avatarView.backgroundColor = .systemGray5
+        avatarView.isAccessibilityElement = false
         contentView.addSubview(avatarView)
         avatarView.translatesAutoresizingMaskIntoConstraints = false
 
-        nameLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        nameLabel.font = UIFontMetrics(forTextStyle: .subheadline)
+            .scaledFont(for: .systemFont(ofSize: 14, weight: .semibold))
+        nameLabel.adjustsFontForContentSizeCategory = true
+        nameLabel.numberOfLines = 0
+        nameLabel.isAccessibilityElement = false
         contentView.addSubview(nameLabel)
         nameLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        contentLabel.font = .systemFont(ofSize: 15)
+        contentLabel.font = UIFontMetrics(forTextStyle: .body)
+            .scaledFont(for: .systemFont(ofSize: 15))
+        contentLabel.adjustsFontForContentSizeCategory = true
         contentLabel.numberOfLines = 0
         contentView.addSubview(contentLabel)
         contentLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        timestampLabel.font = .systemFont(ofSize: 12)
+        timestampLabel.font = UIFontMetrics(forTextStyle: .caption1)
+            .scaledFont(for: .systemFont(ofSize: 12))
+        timestampLabel.adjustsFontForContentSizeCategory = true
+        timestampLabel.numberOfLines = 0
         timestampLabel.textColor = .tertiaryLabel
+        timestampLabel.isAccessibilityElement = false
         contentView.addSubview(timestampLabel)
         timestampLabel.translatesAutoresizingMaskIntoConstraints = false
 
         likeButton.setImage(UIImage(systemName: "heart"), for: .normal)
+        likeButton.setPreferredSymbolConfiguration(
+            UIImage.SymbolConfiguration(textStyle: .footnote), forImageIn: .normal
+        )
         likeButton.tintColor = .secondaryLabel
+        likeButton.accessibilityLabel = String(
+            localized: "comments.action.like",
+            defaultValue: "Like",
+            bundle: .main
+        )
         contentView.addSubview(likeButton)
         likeButton.translatesAutoresizingMaskIntoConstraints = false
 
-        replyButton.setTitle("Reply", for: .normal)
-        replyButton.titleLabel?.font = .systemFont(ofSize: 12, weight: .medium)
+        replyButton.setTitle(
+            String(localized: "comments.action.reply", defaultValue: "Reply", bundle: .main),
+            for: .normal
+        )
+        replyButton.titleLabel?.font = UIFontMetrics(forTextStyle: .caption1)
+            .scaledFont(for: .systemFont(ofSize: 12, weight: .medium))
+        replyButton.titleLabel?.adjustsFontForContentSizeCategory = true
         replyButton.tintColor = .secondaryLabel
         contentView.addSubview(replyButton)
         replyButton.translatesAutoresizingMaskIntoConstraints = false
@@ -67,17 +91,34 @@ final class TopLevelCommentCell: UICollectionViewCell {
             replyButton.leadingAnchor.constraint(equalTo: likeButton.trailingAnchor, constant: 12),
             timestampLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
         ])
+
+        contentLabel.isAccessibilityElement = true
+        accessibilityElements = [contentLabel, likeButton, replyButton]
     }
 
     func configure(with record: CommentRecord) {
-        nameLabel.text = record.authorDisplayName ?? record.authorUsername
-        contentLabel.text = record.content
-        timestampLabel.text = RelativeTimeFormatter.shortString(for: record.createdAt)
+        let name = record.authorDisplayName ?? record.authorUsername
+        let content = record.content
+        let time = RelativeTimeFormatter.shortString(for: record.createdAt)
+        nameLabel.text = name
+        contentLabel.text = content
+        timestampLabel.text = time
+        contentLabel.accessibilityLabel = Self.accessibilityLabel(name: name, content: content, time: time)
+    }
+
+    static func accessibilityLabel(name: String, content: String, time: String) -> String {
+        String(
+            localized: "comments.comment.a11yLabel",
+            defaultValue: "\(name), comment. \(content). \(time)",
+            bundle: .main
+        )
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         contentLabel.text = nil
         nameLabel.text = nil
+        timestampLabel.text = nil
+        contentLabel.accessibilityLabel = nil
     }
 }

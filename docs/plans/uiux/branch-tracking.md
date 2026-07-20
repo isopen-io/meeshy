@@ -71,7 +71,36 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   `iOS Tests`. PR à venir.
 > - **⚠️ `ReplyCell` Dynamic Type + VoiceOver SOLDÉ** : ne plus reprendre. Suite sibling possible :
 >   `TopLevelCommentCell` (mêmes fonts figées **+** titre `"Reply"` en dur + boutons like/reply non-Dynamic
->   Type → scope i18n + a11y-contrôles plus large, itération dédiée).
+>   Type → scope i18n + a11y-contrôles plus large, itération dédiée). → **FAIT en 187i.**
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 187i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **187i (branche `claude/laughing-thompson-8w91gh`, base `main` HEAD `fd48b02`)** :
+>   Dynamic Type + VoiceOver + i18n de `TopLevelCommentCell` (cellule UIKit `UICollectionViewCell`
+>   d'un commentaire de premier niveau dans `CommentListViewController`, registration `commentReg`).
+>   Suite sibling directe de 182i (`ReplyCell`), mais cellule **interactive** (boutons like/reply) →
+>   traitement a11y différent : le texte est groupé en **UN** élément VoiceOver tandis que les contrôles
+>   restent des éléments séparés et labellisés. 5 déficits : (1) **0 Dynamic Type** — 4 fonts figées
+>   (nom 14 semibold / corps 15 / horodatage 12 / titre reply 12 medium) ; (2) **chaîne en dur** —
+>   `replyButton.setTitle("Reply")` jamais localisé ; (3) **0 structure a11y** — nom+corps+horodatage
+>   balayés en 3 fragments, `likeButton` = cœur SF Symbol **sans texte accessible** (sens porté par le
+>   glyphe seul → WCAG 1.1.1), avatar décoratif exposé ; (4) **troncature** nom/horodatage `numberOfLines
+>   = 1` ; (5) **fuite d'horodatage au recyclage** — `prepareForReuse` ne nettoyait pas `timestampLabel`.
+>   Fix (miroir 182i, adapté cellule interactive) : `UIFontMetrics(forTextStyle: subheadline/body/caption1)
+>   .scaledFont(for:)` graine = tailles d'origine (**0 changement visuel à la taille par défaut**) +
+>   `adjustsFontForContentSizeCategory` ; cœur like scalé via `SymbolConfiguration(textStyle: .footnote)` ;
+>   `numberOfLines = 0` nom + horodatage ; `"Reply"` → `String(localized: "comments.action.reply")` ;
+>   VoiceOver : `contentLabel` = élément texte unique, `accessibilityLabel` composé « {nom}, comment.
+>   {contenu}. {temps} » (helper statique pur `comments.comment.a11yLabel`), avatar/nom/horodatage
+>   `isAccessibilityElement = false`, `likeButton` labellisé « Like » (`comments.action.like`),
+>   `accessibilityElements = [contentLabel, likeButton, replyButton]` (ordre : texte → Like → Reply) ;
+>   `prepareForReuse` nettoie désormais `timestampLabel` + reset a11y. 1 fichier (+49/−8), 0 logique
+>   (contrat `configure(with:)` inchangé — les boutons restent visuels, aucun `addTarget` n'existe → wiring
+>   = décision produit hors scope), 0 couleur modifiée, 3 clés i18n neuves inline (pas d'édit `.xcstrings`).
+>   0 test ne référence la cellule (grep = 0). Contention vérifiée : 19 PR iOS ouvertes (178i–186i),
+>   aucune ne touche les cellules de commentaire. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `TopLevelCommentCell` Dynamic Type + VoiceOver + i18n SOLDÉ** : ne plus reprendre. Reste :
+>   boutons like/reply **non-fonctionnels** (aucun `addTarget` dans le codebase) = question produit
+>   (câbler ou retirer), PAS une tâche de polish UI.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **179i (branche `claude/laughing-thompson-duee1f`, base `main` HEAD `e9e38a9`)** :
 >   Labels VoiceOver des compteurs like/comment/repost du feed (`TextPostCell` + `MediaPostCell`,
