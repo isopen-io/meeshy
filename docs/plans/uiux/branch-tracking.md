@@ -14,8 +14,27 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **179i (en cours, branche `claude/laughing-thompson-bj8jnf`, base `main` HEAD `45ebd23`)** :
+>   Alignement marque Indigo + structure VoiceOver + robustesse Dynamic Type de
+>   `MediaDownloadSettingsView` (réglage du téléchargement auto par type de média). Cas de **copy-drift** :
+>   ses deux helpers privés `sectionHeader`/`fieldIcon` sont des copies mot-pour-mot de `SupportView`
+>   **ayant perdu leurs modifieurs a11y**. 5 déficits (1 fichier, 0 logique, 0 clé neuve, 0 test) :
+>   (1) `accentColor = "E67E22"` (orange hors-marque) pilotait le **checkmark de sélection** (la cue de
+>   marque la plus forte de l'écran) → `MeeshyColors.brandPrimaryHex` (indigo500) ; (2) couleurs de
+>   catégorie hors-marque `"F39C12"` (audio-trad) / `"E74C3C"` (vidéo) → `indigo400Hex` / `brandDeepHex`
+>   (les 4 sections lisent désormais un dégradé Indigo cohérent 500/600/400/700) ; (3) littéraux neutres
+>   `"6B7280"` (×2) → `neutral500Hex` (valeur identique, token sémantique, 0 changement visuel) ;
+>   (4) `sectionHeader` sans `.accessibilityElement(.combine)`/`.isHeader` → sections non navigables par
+>   titre VoiceOver → ajout (miroir `SupportView`) ; (5) `fieldIcon` : glyphe décoratif non masqué +
+>   `MeeshyFont.relative(14)` scalant dans un cadre fixe 28×28 (éclate à grande Dynamic Type) →
+>   `.system(size:14)` + `.accessibilityHidden(true)` + commentaire doctrine (miroir `SupportView`).
+>   Aucun test ne référence la vue → 0 contention. Aucune PR iOS ouverte ne touche ce fichier. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `MediaDownloadSettingsView` couleur de marque + VoiceOver headings + fieldIcon SOLDÉ 179i** :
+>   orange/rouge figés éradiqués, checkmark de sélection en Indigo, headers de section annoncés,
+>   glyphe badge décoratif masqué + taille fixe. i18n + Dynamic Type texte déjà complets. Ne plus reprendre.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 172i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
-> - **172i (en cours, branche `claude/laughing-thompson-ks1h8d`, base `main` HEAD `612872b`)** :
+> - **172i (mergé #2049, branche `claude/laughing-thompson-ks1h8d`, base `main` HEAD `612872b`)** :
 >   Alignement marque Indigo + structure VoiceOver de `MagicLinkView` (connexion par lien magique).
 >   Écran déjà 100 % Dynamic Type / i18n. 3 déficits non-typo : (1) **couleur figée hors-marque**
 >   `Color(hex: "8B5CF6")` (violet Tailwind, ×2 : teinte icône email + bordure focus) → `MeeshyColors.indigo400`

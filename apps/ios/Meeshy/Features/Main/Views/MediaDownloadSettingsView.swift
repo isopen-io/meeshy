@@ -17,7 +17,7 @@ struct MediaDownloadSettingsView: View {
 
     @ObservedObject private var store = MediaDownloadPreferencesStore.shared
 
-    private let accentColor = "E67E22"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -79,11 +79,11 @@ struct MediaDownloadSettingsView: View {
                     binding: $store.preferences.audio
                 )
                 policyPicker(
-                    title: String(localized: "settings.media.download.audio_translation", defaultValue: "Traductions audio", bundle: .main), icon: "character.bubble.fill", color: "F39C12",
+                    title: String(localized: "settings.media.download.audio_translation", defaultValue: "Traductions audio", bundle: .main), icon: "character.bubble.fill", color: MeeshyColors.indigo400Hex,
                     binding: $store.preferences.audioTranslation
                 )
                 policyPicker(
-                    title: String(localized: "settings.media.download.video", defaultValue: "Video", bundle: .main), icon: "play.rectangle.fill", color: "E74C3C",
+                    title: String(localized: "settings.media.download.video", defaultValue: "Video", bundle: .main), icon: "play.rectangle.fill", color: MeeshyColors.brandDeepHex,
                     binding: $store.preferences.video
                 )
                 Spacer().frame(height: 40)
@@ -97,7 +97,7 @@ struct MediaDownloadSettingsView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.media.download.info_header", defaultValue: "Information", bundle: .main), icon: "info.circle.fill", color: "6B7280")
+            sectionHeader(title: String(localized: "settings.media.download.info_header", defaultValue: "Information", bundle: .main), icon: "info.circle.fill", color: MeeshyColors.neutral500Hex)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
@@ -118,7 +118,7 @@ struct MediaDownloadSettingsView: View {
                 .padding(.vertical, 10)
                 .accessibilityElement(children: .combine)
             }
-            .background(sectionBackground(tint: "6B7280"))
+            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
         }
     }
 
@@ -191,6 +191,8 @@ struct MediaDownloadSettingsView: View {
                 .tracking(1.2)
         }
         .padding(.leading, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionBackground(tint: String) -> some View {
@@ -203,13 +205,17 @@ struct MediaDownloadSettingsView: View {
     }
 
     private func fieldIcon(_ name: String, color: String) -> some View {
+        // Fixed size: glyph pinned inside a 28×28 tinted badge — scaling it with
+        // Dynamic Type would burst the fixed frame (doctrine 74i/86i/91i). The
+        // adjacent row label carries the meaning, so the glyph is decorative to VoiceOver.
         Image(systemName: name)
-            .font(MeeshyFont.relative(14, weight: .medium))
+            .font(.system(size: 14, weight: .medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(hex: color).opacity(0.12))
             )
+            .accessibilityHidden(true)
     }
 }
