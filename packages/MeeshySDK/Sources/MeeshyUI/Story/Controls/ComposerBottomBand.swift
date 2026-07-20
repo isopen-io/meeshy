@@ -147,6 +147,11 @@ struct ComposerBottomBand: View {
         .padding(.bottom, 16) // Breathing room above home indicator
         .frame(maxWidth: .infinity)
         .background(bandBackground)
+        // `.compositingGroup()` aplatit le band en UNE silhouette avant
+        // l'ombre : sans lui, `.shadow` se propage à CHAQUE sous-vue opaque —
+        // le bloc timeline pleine largeur projetait sa propre ligne d'ombre
+        // au-dessus du transport (capture user 2026-07-20).
+        .compositingGroup()
         .shadow(color: .black.opacity(0.25), radius: 14, y: -6)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: stateKey)
     }
