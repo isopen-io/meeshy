@@ -10,6 +10,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -17,13 +18,17 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.SocketCommentAddedData
+import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -45,17 +50,22 @@ class PostDetailViewModelTest {
 
     private val repository: PostRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
+    private val socialSocket: SocialSocketManager = mockk(relaxed = true)
+    private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
+    private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(
         id: String = "p1",
         content: String? = "Bonjour",
         translations: Map<String, ApiPostTranslationEntry>? = null,
+        commentCount: Int? = null,
     ) = ApiPost(
         id = id,
         content = content,
         translations = translations,
         originalLanguage = "fr",
+        commentCount = commentCount,
     )
 
     private val bilingual = post(
@@ -84,8 +94,10 @@ class PostDetailViewModelTest {
         currentUser: MeeshyUser? = null,
     ): PostDetailViewModel {
         every { session.currentUser } returns MutableStateFlow(currentUser)
+        every { socialSocket.commentAdded } returns commentAdded
+        every { socialSocket.commentDeleted } returns commentDeleted
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
-        return PostDetailViewModel(repository, session, config, handle)
+        return PostDetailViewModel(repository, session, socialSocket, config, handle)
     }
 
     @Test
@@ -249,5 +261,108 @@ class PostDetailViewModelTest {
         vm.state.test {
             assertThat(awaitItem().post?.content).isEqualTo("Hello")
         }
+    }
+
+    @Test
+    fun `a live comment-added on this post resyncs the badge to the authoritative count`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(commentCount = 3))
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().post?.commentCount).isEqualTo(3)
+            commentAdded.tryEmit(
+                SocketCommentAddedData(postId = "p1", comment = ApiPostComment(id = "c1"), commentCount = 4),
+            )
+            assertThat(awaitItem().post?.commentCount).isEqualTo(4)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a live comment-deleted on this post resyncs the badge to the authoritative count`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(commentCount = 3))
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().post?.commentCount).isEqualTo(3)
+            commentDeleted.tryEmit(
+                SocketCommentDeletedData(postId = "p1", commentId = "c1", commentCount = 2),
+            )
+            assertThat(awaitItem().post?.commentCount).isEqualTo(2)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a live comment event for another post never touches this badge`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(commentCount = 3))
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().post?.commentCount).isEqualTo(3)
+            commentAdded.tryEmit(
+                SocketCommentAddedData(postId = "other", comment = ApiPostComment(id = "x"), commentCount = 99),
+            )
+            commentDeleted.tryEmit(
+                SocketCommentDeletedData(postId = "other", commentId = "x", commentCount = 0),
+            )
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a blank route never subscribes to the comment room`() = runTest {
+        val vm = viewModel(postId = null)
+
+        vm.state.test {
+            assertThat(awaitItem().notFound).isTrue()
+            commentAdded.tryEmit(
+                SocketCommentAddedData(postId = "", comment = ApiPostComment(id = "x"), commentCount = 5),
+            )
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a negative authoritative count is clamped to zero`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(commentCount = 1))
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().post?.commentCount).isEqualTo(1)
+            commentDeleted.tryEmit(
+                SocketCommentDeletedData(postId = "p1", commentId = "c1", commentCount = -4),
+            )
+            assertThat(awaitItem().post?.commentCount).isEqualTo(0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a refresh replaces the live badge with the freshly fetched server truth`() = runTest {
+        coEvery { repository.getPost("p1") } returnsMany listOf(
+            NetworkResult.Success(post(commentCount = 3)),
+            NetworkResult.Success(post(commentCount = 8)),
+        )
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().post?.commentCount).isEqualTo(3)
+            // A live event moves the badge off the initial fetch value…
+            commentAdded.tryEmit(
+                SocketCommentAddedData(postId = "p1", comment = ApiPostComment(id = "c1"), commentCount = 4),
+            )
+            assertThat(awaitItem().post?.commentCount).isEqualTo(4)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        // …then a manual refresh re-establishes the server-authoritative count, dropping the overlay.
+        vm.refresh()
+        assertThat(vm.state.value.post?.commentCount).isEqualTo(8)
     }
 }

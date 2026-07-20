@@ -1,5 +1,6 @@
 package me.meeshy.app.feed
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -62,7 +64,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -78,12 +82,14 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.bubble.LanguageChip
+import me.meeshy.ui.component.media.MediaCollage
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
+import me.meeshy.ui.component.viewer.MeeshyImageViewer
 import me.meeshy.ui.format.RelativeTimeFormat
 import me.meeshy.ui.format.rememberRelativeTimeStrings
 import me.meeshy.ui.format.shortDateTimeLabel
@@ -137,13 +143,22 @@ fun FeedScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = Color.Transparent,
     ) { padding ->
-        PullToRefreshBox(
-            isRefreshing = state.isSyncing,
-            onRefresh = viewModel::refresh,
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            // The mood-statuses rail sits pinned above the feed (iOS parity: StatusBarView
+            // at the top of FeedView), with a Friends/Discover feed toggle above it. Its own
+            // StatusesViewModel drives both feeds (one VM vs iOS's two instances).
+            StatusBarView()
+            PullToRefreshBox(
+                isRefreshing = state.isSyncing,
+                onRefresh = viewModel::refresh,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+            ) {
             when {
                 state.showSkeleton -> FeedSkeleton()
                 state.posts.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -173,6 +188,8 @@ fun FeedScreen(
                             // A tap on the embedded repost opens the ORIGINAL post's detail,
                             // never the outer reposter card.
                             onOpenPost = onOpenPost,
+                            // Tapping an image tile opens the fullscreen media gallery on it.
+                            onImageTap = { index -> viewModel.openImageViewer(post.id, index) },
                         )
                     }
                     if (state.isLoadingMore) {
@@ -204,8 +221,43 @@ fun FeedScreen(
                     viewModel.acknowledgeNewPosts()
                 },
             )
+            }
         }
     }
+    }
+
+    val gallery = state.imageViewer
+    if (gallery != null) {
+        val strings = rememberRelativeTimeStrings()
+        val galleryNow = remember(gallery) { System.currentTimeMillis() }
+        val galleryTimestamps = remember(gallery, strings) {
+            gallery.createdAtIsos.map { iso ->
+                iso?.let { isoToEpochMillisOrNull(it) }?.let { millis ->
+                    RelativeTimeFormat.short(
+                        epochMillis = millis,
+                        referenceMillis = galleryNow,
+                        zone = ZoneId.systemDefault(),
+                        locale = Locale.getDefault(),
+                        strings = strings,
+                    )
+                }
+            }
+        }
+        val galleryContext = LocalContext.current
+        val savedMessage = stringResource(R.string.feed_media_saved)
+        val saveFailedMessage = stringResource(R.string.feed_media_save_failed)
+        MeeshyImageViewer(
+            imageUrls = gallery.imageUrls,
+            initialIndex = gallery.startIndex,
+            onDismiss = viewModel::dismissImageViewer,
+            captions = gallery.captions,
+            authors = gallery.authorNames,
+            timestamps = galleryTimestamps,
+            onImageSaved = { result ->
+                val message = if (result.isSuccess) savedMessage else saveFailedMessage
+                Toast.makeText(galleryContext, message, Toast.LENGTH_SHORT).show()
+            },
+        )
     }
 }
 
@@ -280,6 +332,7 @@ private fun PostCard(
     onFlagTap: (String) -> Unit,
     onClick: () -> Unit,
     onOpenPost: (String) -> Unit,
+    onImageTap: (Int) -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     MeeshyGlassSurface(
@@ -349,7 +402,7 @@ private fun PostCard(
 
             if (post.images.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.md))
-                PostImageGrid(images = post.images)
+                PostImageGrid(images = post.images, onImageTap = onImageTap)
             }
 
             post.repostEmbed?.let { embed ->
@@ -448,12 +501,15 @@ private fun PostLanguageStripRow(
     }
 }
 
-private const val MAX_GRID_IMAGES = 4
+private val COLLAGE_HEIGHT = 260.dp
 
 @Composable
-private fun PostImageGrid(images: List<FeedPostImage>) {
+private fun PostImageGrid(images: List<FeedPostImage>, onImageTap: (Int) -> Unit) {
     val shape = RoundedCornerShape(MeeshyRadius.md)
-    if (images.size == 1) {
+    val openLabel = stringResource(R.string.feed_open_media)
+    val layout = MediaCollage.solve(images.size)
+    if (layout.isEmpty) return
+    if (layout.isSingle) {
         val image = images.first()
         AsyncImage(
             model = image.url,
@@ -463,49 +519,73 @@ private fun PostImageGrid(images: List<FeedPostImage>) {
                 .fillMaxWidth()
                 .aspectRatio(imageAspectRatio(image))
                 .clip(shape)
-                .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
+                .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+                .clickable(onClickLabel = openLabel) { onImageTap(0) },
         )
         return
     }
-    val visible = images.take(MAX_GRID_IMAGES)
-    val hiddenCount = images.size - visible.size
-    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-        visible.chunked(2).forEachIndexed { rowIndex, row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs)) {
-                row.forEachIndexed { columnIndex, image ->
-                    val imageIndex = rowIndex * 2 + columnIndex
-                    val isLastCell = hiddenCount > 0 && imageIndex == visible.lastIndex
-                    Box(
+    Column(
+        modifier = Modifier.height(COLLAGE_HEIGHT),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        layout.rows.forEach { row ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(row.heightWeight),
+            ) {
+                row.cells.forEach { cell ->
+                    CollageTile(
+                        image = images[cell.index],
+                        overflowCount = cell.overflowCount,
+                        shape = shape,
+                        onClick = { onImageTap(cell.index) },
+                        onClickLabel = openLabel,
                         modifier = Modifier
-                            .weight(1f)
-                            .aspectRatio(1f)
-                            .clip(shape)
-                            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
-                    ) {
-                        AsyncImage(
-                            model = image.thumbnailUrl ?: image.url,
-                            contentDescription = stringResource(R.string.feed_image_description),
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                        if (isLastCell) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.45f)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.feed_hidden_images, hiddenCount),
-                                    color = MeeshyPalette.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 20.sp,
-                                )
-                            }
-                        }
-                    }
+                            .weight(cell.widthWeight)
+                            .fillMaxHeight(),
+                    )
                 }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CollageTile(
+    image: FeedPostImage,
+    overflowCount: Int,
+    shape: Shape,
+    onClick: () -> Unit,
+    onClickLabel: String,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
+            .clickable(onClickLabel = onClickLabel, onClick = onClick),
+    ) {
+        AsyncImage(
+            model = image.thumbnailUrl ?: image.url,
+            contentDescription = stringResource(R.string.feed_image_description),
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (overflowCount > 0) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = stringResource(R.string.feed_hidden_images, overflowCount),
+                    color = MeeshyPalette.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                )
             }
         }
     }

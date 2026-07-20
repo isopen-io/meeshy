@@ -44,13 +44,7 @@ extension StoryComposerView {
             // donc la COULEUR DU FOND du slide : le canvas paraît occuper tout
             // l'écran. Noir conservé en carded (contraste voulu de la carte)
             // et sur fond MÉDIA (letterbox cinéma).
-            Rectangle()
-                .fill(canvasIsCarded || viewModel.hasBackgroundImage
-                    ? AnyShapeStyle(Color.black)
-                    : storyBackgroundStyle(
-                        viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")))
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
+            canvasLetterbox
 
             // Canvas core (CALayer) + drawing overlay + viewport modifiers,
             // extracted into `canvasComposerLayer` so the SwiftUI type-checker
@@ -147,6 +141,17 @@ extension StoryComposerView {
                     areFabsVisible = true
                 }
             }
+            // Switching BETWEEN tabs of an already-open tool sheet (the
+            // ComposerToolPanelHost chip row) goes through `selectTool(_:)`,
+            // which changes `activeTool` but never touches `isTimelineVisible`
+            // — so the `isTimelineVisible` trigger below never re-fires when
+            // re-visiting Timeline after changing something (e.g. the opening
+            // effect) on another tab first. Reload here on every genuine
+            // transition INTO `.timeline` so the chrome lane never shows a
+            // stale snapshot.
+            if newTool == .timeline {
+                viewModel.loadCurrentSlideIntoTimeline()
+            }
         }
         .adaptiveOnChange(of: viewModel.isDrawingImmersive) { _, immersive in
             // Bascule liste ⇄ plein écran : le pinceau sélectionné replie le
@@ -183,6 +188,17 @@ extension StoryComposerView {
             // A text edit overlay open on the previous slide references an
             // element that does not exist on the new one — close it.
             viewModel.exitTextEditingMode()
+        }
+        // Timeline sheet visibility is toggled from multiple entry points
+        // (ComposerControlsLayer tile tap, TopBar overflow menu item, ...).
+        // Rather than patching every call site individually (fragile — a new
+        // entry point could silently miss the reload), react centrally here
+        // whenever `isTimelineVisible` flips to true so the chrome lane always
+        // reflects the live opening/closing effects instead of a stale snapshot.
+        .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, visible in
+            if visible {
+                viewModel.loadCurrentSlideIntoTimeline()
+            }
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
@@ -264,6 +280,7 @@ extension StoryComposerView {
                     // EXACTEMENT au-dessus (0 quand la band est repliée / FABs seuls,
                     // état où le canvas reste plein écran).
                     onBandHeightChange: { measuredBottomBandHeight = $0 },
+                    onBandTopYChange: { measuredBandTopY = $0 },
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
                     onOpenStickerPicker: { showStickerPicker = true }
                 )
@@ -311,12 +328,10 @@ extension StoryComposerView {
     /// Scheme épinglé sur le chrome posé sur le canvas (header, bulles,
     /// FABs) : suit la luminance du FOND de la slide, pas le thème de l'app
     /// — icônes claires sur fond sombre, sombres sur fond clair (capture
-    /// user 2026-07-11 : indigo950 illisible sur bleu nuit).
+    /// user 2026-07-11 : indigo950 illisible sur bleu nuit). Délègue au VM,
+    /// source unique partagée avec `ComposerControlsLayer`.
     var canvasChromeScheme: ColorScheme {
-        CanvasChromeScheme.scheme(
-            background: viewModel.backgroundColor,
-            hasMediaBackground: viewModel.hasBackgroundImage
-        )
+        viewModel.canvasChromeScheme
     }
 
     var isComposerEmpty: Bool {
@@ -691,6 +706,7 @@ extension StoryComposerView {
             // Marge basse minimale même sheet repliée → la carte reste détachée du bas du
             // viewport (et de la poignée), sinon elle touchait quasi le bord en collapse.
             let bottomInset = max(presentedSheetHeight, 16) + max(proxy.safeAreaInsets.bottom, 0)
+                + Self.canvasSheetGap
             // « L'import de l'image de fond impose le cadre et forme du Canvas » :
             // un fond paysage bascule le ratio en 16:9 (`currentCanvasRatio`), sinon
             // le canvas reste vertical 9:16 par défaut.
@@ -706,11 +722,13 @@ extension StoryComposerView {
                 sideInset: 14,
                 state: canvasIsCarded ? .carded : .free,
                 cardedCornerRadius: 22,
-                // Canvas PAYSAGE (16:9) : court, il laisse du mou vertical dans la
-                // région réduite → `.top` le colle sous le header (« l'horizontal
-                // bouge entièrement vers le haut »). PORTRAIT (9:16) : scale pour
-                // remplir la région → `.center` (le mou est nul, aucune différence).
-                verticalAlignment: canvasRatio > 1 ? .top : .center,
+                // Carte PAYSAGE (16:9, courte) : `.bottom` — collée juste au-dessus
+                // du sheet d'édition, elle « remonte » avec lui quand il grandit
+                // (user 2026-07-20), letterbox flou (cf. `canvasLetterbox`) au-dessus.
+                // Le sheet est plafonné (`presentedSheetHeight` → `maxSheetKeeping…`)
+                // pour que la carte reste ENTIÈREMENT visible, jamais rognée.
+                // PORTRAIT (9:16) : remplit la région → `.center` (aucun mou).
+                verticalAlignment: canvasRatio > 1 ? .bottom : .center,
                 canvasRatio: canvasRatio))
             let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: canvasRatio)
             // Rayon compensé par `framing.scale` : la carte est rendue à sa taille
@@ -833,27 +851,73 @@ extension StoryComposerView {
     /// solver retombe en plein écran = bas de nouveau masqué). Hors carding → `0`.
     var presentedSheetHeight: CGFloat {
         guard canvasIsCarded else { return 0 }
-        let cap = cappedSheetMaxHeight(screenHeight: composerScreenHeight)
         var height: CGFloat = 0
         if viewModel.textEditingMode != .inactive {
             height = max(height, keyboardHeight + 132)
         }
         if bandStateMachine.state != .hidden {
-            height = max(height, max(composerBandHeight, measuredBottomBandHeight))
+            // Réserve = distance du HAUT RÉEL de la band (coord globales,
+            // `measuredBandTopY`) au bas de l'écran → le canvas se rétracte
+            // EXACTEMENT jusqu'au haut visuellement rendu de la band, jamais
+            // recouvert/tronqué (bug 2026-07-20 : la hauteur de layout
+            // sous-estimait quand le contenu débordait son `.frame` ou restait
+            // stale après resize). Fallback layout tant que `minY` pas encore
+            // mesuré (premier frame).
+            // `.greatestFiniteMagnitude` (sentinelle « band repliée ») EST fini,
+            // donc `isFinite` ne suffit pas : on teste `< composerScreenHeight`
+            // (un vrai haut de band est toujours dans l'écran).
+            let hasBandTop = measuredBandTopY.isFinite && measuredBandTopY < composerScreenHeight
+            let byTop = hasBandTop
+                ? max(0, composerScreenHeight - measuredBandTopY)
+                : max(composerBandHeight, measuredBottomBandHeight)
+            height = max(height, byTop)
         }
         if let fraction = presentedSystemSheetFraction {
             height = max(height, composerScreenHeight * fraction)
         }
-        return min(cap, height)
+        // Plafond de SÉCURITÉ (0.85 H) : jamais atteint par une band réaliste
+        // (max ~60 % avec `composerBandMaxHeight`), il ne fait qu'empêcher un
+        // `measuredBandTopY` transitoire aberrant (0 au montage) d'écraser le
+        // canvas à néant. Le cap 0.70 précédent, lui, TRONQUAIT une band > 70 %.
+        return min(composerScreenHeight * 0.85, height)
     }
 
-    /// Plafond de hauteur réservée : ~70 % de l'écran. Assez haut pour couvrir
-    /// l'empreinte RÉELLE du clavier (`keyboardHeight + 132` ≈ 0.55–0.58 H) et les
-    /// détents `.medium` (~0.5 H) SANS les tronquer — l'ancien plafond 0.42 H
-    /// laissait le bas du canvas sous le clavier / la sheet. Le reste (~30 %) suffit
-    /// pour que le canvas cardé reste une carte pleinement visible.
-    func cappedSheetMaxHeight(screenHeight: CGFloat) -> CGFloat {
-        screenHeight * 0.70
+    /// Petit espace (pt) laissé entre le BAS de la carte canvas et le haut du
+    /// sheet d'édition — la carte ne doit pas être collée au sheet (user
+    /// 2026-07-20). Ajouté au `bottomInset` du solveur de framing.
+    static let canvasSheetGap: CGFloat = 14
+
+    /// Letterbox derrière la carte canvas. Historiquement NOIR (contraste carte
+    /// + « cinéma » pour un média) — mais un fond PAYSAGE réduit le canvas 16:9 à
+    /// une bande, laissant un grand vide noir perçu comme « canvas noir » (user
+    /// 2026-07-20, choix « garder la forme, tuer le noir »). On le remplit
+    /// désormais par un FLOU du média de fond — la carte nette flotte au-dessus de
+    /// sa propre version floutée (look intégré) — ou, à défaut d'image, par la
+    /// couleur de fond de la story.
+    @ViewBuilder
+    var canvasLetterbox: some View {
+        if let bg = composerLetterboxImage {
+            Color.clear
+                .overlay(Image(uiImage: bg).resizable().scaledToFill())
+                .clipped()
+                .blur(radius: 34, opaque: true)
+                .overlay(Color.black.opacity(0.20))
+                .ignoresSafeArea()
+        } else {
+            Rectangle()
+                .fill(storyBackgroundStyle(
+                    viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")))
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
+        }
+    }
+
+    /// Bitmap du média de fond courant, source du flou de `canvasLetterbox`.
+    /// `nil` quand le fond est une couleur/gradient (pas de média de fond chargé).
+    var composerLetterboxImage: UIImage? {
+        guard let bgId = viewModel.currentEffects.mediaObjects?
+            .first(where: { $0.isBackground })?.id else { return nil }
+        return viewModel.loadedImages[bgId]
     }
 
     /// Hauteur de la fenêtre active (et non `UIScreen.main.bounds`) — identique au
@@ -929,7 +993,11 @@ extension StoryComposerView {
                 // CALayer media rendering picks it up on the next rebuild.
                 if kind == .media {
                     if let img = viewModel.loadedImages[oldId] {
-                        viewModel.loadedImages[newId] = img
+                        // `registerLoadedImage` bump la version → le canvas reader se
+                        // rafraîchit et stampe la vignette du clone tout de suite. Un
+                        // simple `loadedImages[newId] = img` laissait le duplicata noir
+                        // (reader périmé, même cause 2026-07-20).
+                        viewModel.registerLoadedImage(img, for: newId)
                     }
                     if let url = viewModel.loadedVideoURLs[oldId] {
                         viewModel.loadedVideoURLs[newId] = url

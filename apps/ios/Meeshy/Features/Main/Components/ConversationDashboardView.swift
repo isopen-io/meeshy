@@ -105,6 +105,13 @@ struct ConversationDashboardView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 4)
+                    // VoiceOver : la jauge d'arc + son libellé « Santé » forment un seul
+                    // score. Sans regroupement, VoiceOver lisait « 78 » nu (dans l'arc) puis
+                    // « Santé » séparément. Un élément unique « Santé : 78 » (clé déjà
+                    // localisée, valeur brute — 0 clé i18n neuve, cohérent avec StatRing).
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "dashboard.health", defaultValue: "Sante", bundle: .main))
+                    .accessibilityValue("\(health)")
 
                     if summary.engagementLevel != nil || summary.conflictLevel != nil {
                         HStack(spacing: 10) {
@@ -1180,6 +1187,13 @@ private struct StatRing: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
+        // VoiceOver : la bague est une donnée, pas deux libellés séparés. Sans ce
+        // regroupement, VoiceOver lit « 1,2k » (valeur abrégée) puis « MESSAGES »
+        // (capitales épelées) en deux arrêts. On expose un seul élément « Messages : 1234 »
+        // — la valeur brute non abrégée, le libellé déjà localisé (pas de capitales).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue("\(value)")
     }
 }
 

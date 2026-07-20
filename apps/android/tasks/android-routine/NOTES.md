@@ -2,6 +2,340 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lesson (2026-07-20, `status-unreacted-socket`) — cross-module nullable property blocks Kotlin smart-cast
+A reducer that reads a nullable property twice — `val current = entry.reactionSummary?.get(emoji) ?: return this` then
+`entry.reactionSummary.toMutableMap()` — fails to compile with **`Smart cast to 'Map<...>' is impossible, because
+'reactionSummary' is a public API property declared in different module`**. `StatusEntry.reactionSummary` lives in
+`:core:model`; a `:feature:feed` reducer cannot smart-cast a public property owned by another module (the compiler can't
+prove no other thread nulled it between reads). Fix: **bind it to a local `val` once** — `val summary =
+entry.reactionSummary ?: return this` — then read every subsequent access through the local. Same trap will hit any
+`:feature:*` code that null-checks-then-dereferences a `:core:model`/`:sdk-core` public `var`/`val`. Prefer a single
+local binding over repeated `?.`/`!!`. (The existing `reacted` reducer sidesteps it by dereferencing exactly once:
+`(entry.reactionSummary ?: emptyMap()).toMutableMap()`.)
+
+## Lesson (2026-07-20, `status-strings-i18n`) — `ThemeStoreTest` DataStore flake under parallel `check`; and TDD for a pure-resource i18n slice
+Two things worth remembering:
+1. **Flaky, not a regression.** A full-repo `assembleDebug testDebugUnitTest` occasionally fails **one** test:
+   `:sdk-core` `ThemeStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction` with
+   `kotlinx.coroutines.TimeoutCancellationException: Timed out waiting for 5000 ms` (it `first()`-collects a
+   DataStore-backed `StateFlow` whose async hydration can exceed 5 s when all modules run in parallel on a loaded box).
+   It **passes green in isolation**: `:sdk-core:testDebugUnitTest --tests "me.meeshy.sdk.theme.ThemeStoreTest"` →
+   BUILD SUCCESSFUL. Do **not** "fix" it inside an unrelated slice (it would touch `:sdk-core`, breaking the
+   `apps/android`-scoped diff rule). If it keeps recurring, its own slice should raise the `withTimeout`/`advanceUntilIdle`
+   handling. When a `check` failure lands in a module your diff never touched, re-run that test alone before assuming a break.
+2. **How to TDD a pure-resource (localisation) slice without a tautology.** Don't assert `getString == "literal"` (that
+   just restates the resource). Instead write a **locale-parity guard** that parses the module's own
+   `res/values*/strings.xml` and asserts (a) every base `<string>` key exists in every shipped locale and (b) format
+   specifiers match. It goes RED on exactly the missing keys, GREEN once translated, and durably guards every future key —
+   behavioural, mutation-proven, and non-tautological. Keep the guard **full-module** so it catches the next gap too.
+   Gotcha: kotlinc choked on a KDoc `/** … */` block containing `` `%1$s` `` + em-dashes/ellipses in this test file —
+   rewrote it as plain `//` ASCII comments and it compiled. Prefer `//` comments in resource-parsing test helpers.
+
+## Lesson (2026-07-19, `status-bar-l2-cache`) — relaxed mockk returns `emptyList()`, not `null`, for a nullable `List` return
+A `mockk(relaxed = true)` whose suspend fun returns `List<T>?` hands back an **empty list**, not `null`, by default —
+mockk builds a non-null default for known collection types. This bit a *pre-existing* test the moment a new cold-cache
+branch (`cachedBar(mode): List<StatusEntry>?` → seed if non-null) started consulting that mock: the empty-list default
+looked like a synced-empty disk and falsely seeded the bar (`hasLoaded = true`), suppressing the skeleton that the old
+test asserted. Fix: give the mock the production default explicitly in `setUp` — `coEvery { diskCache.cachedBar(any()) }
+returns null` — so "cold disk" means `null` exactly as the real repository returns. General rule: when a ViewModel
+gains a new nullable-collection dependency, set its cold/absent default explicitly rather than trusting `relaxed`, and
+re-run the *whole* module's tests (not just the new ones) — a relaxed default can change the behaviour of tests that
+never mention the new collaborator.
+
+## Lesson (2026-07-19, `status-bar-l2-cache`) — source-edit mutation testing must keep the code compiling
+Proving a test is behavioural by hand-mutating the production source only works if the mutation still **compiles** —
+otherwise gradle fails at `compileDebugKotlin` and you learn nothing. First attempt replaced a null-guard condition with
+`if (false)`, which killed the Kotlin smart-cast that made the guarded value non-null → argument-type-mismatch, build
+failed before any test ran. Prefer mutations that preserve types and control flow: flip a boolean guard's operator
+(`==` → `!=`), delete a whole statement (a write-through call), or swap a comparator — never neuter a condition in a way
+that drops a smart-cast. Restore from a `.bak` copy immediately after, and confirm with `grep` that the original lines
+are back before committing.
+
+## Lesson (2026-07-19, `status-bar-l1-cache`) — the `cache/` package is git-ignored; force-add new files there
+The root `.gitignore` line `*/**/cache` matches the `me/meeshy/sdk/cache/` **source** package, not just build
+caches. Already-tracked files there (`cacheFirstFlow.kt`, `CachePolicy.kt`, `CacheResult.kt`) stay tracked, but any
+**new** file dropped into that package is silently ignored — `git add -A` skips it even though it compiles and its
+tests run and pass. Symptom: `git diff --cached --stat` is missing the file, yet the build/tests reference it. Fix:
+`git add -f apps/android/sdk-core/src/.../cache/<NewFile>.kt`. Verify after staging with
+`git diff --cached --name-only | grep cache`. (A cleaner long-term fix — narrowing the ignore to `**/build/**cache`
+— would touch the root `.gitignore`, i.e. outside `apps/android`, so it needs its own explicit run.)
+- **Cache-first without reworking pagination:** to add an L1 cache to a VM that already owns cursor pagination +
+  optimistic mutations, DON'T convert it to `cacheFirstFlow` (that observes a Flow and self-revalidates — it fights a
+  manually-paginated VM). Instead add a tiny snapshot store (`StatusBarCache`, like `ProfileStatsCacheRepository`),
+  read it in a `loadFromCacheThenNetwork(mode)` switch (Fresh→serve no-fetch, Stale/Syncing→serve+revalidate,
+  Empty→skeleton+fetch), and write through after the first page + each mutation. Keep the fresh/stale decision in the
+  shared `classifyCache` SSOT so the snapshot cache and the streaming flow can't drift.
+- **Replace-not-merge on the first page:** when a background refresh re-fetches page 1 over a cache-seeded list, the
+  success path must REPLACE (`listState.value = StatusBarListState().appended(page)`), not merge
+  (`listState.update { it.appended(page) }`) — else a server-side-deleted status lingers. This is invisible for the
+  old cold callers (they reset to cold first, so append==replace) but essential once a seed is present. iOS does
+  `statuses = entries` (replace) on the first page for the same reason.
+
+## Lesson (2026-07-19, `status-popover-republish`) — the iOS "popover republish" lives in `StatusBubbleOverlay`, NOT the read-only `StatusBarView.statusPopover`
+The feature-parity tracker said "popover republish/react action". Two traps: (1) iOS `StatusBarView.statusPopover`
+is **read-only** — the republish button is in a *different* component, `StatusBubbleOverlay` (a conversation-list
+mood bubble), gated `if onRepublish != nil` which the list only wires for **other** users' statuses. So the Android
+parity is: show a "Republish" affordance on a Pill popover, hide it on the own MyStatus popover. Model it purely as
+`statusPopoverModel(entry, now, isOwn)` → `canRepublish = !isOwn`; the caller derives `isOwn = entry.id ==
+myStatus?.id` (null-safe: DISCOVER mode has no myStatus → every pill is republishable, correct). (2) iOS republish
+opens the composer **pre-seeded** (`initialEmoji/initialText/viaUsername/repostOfId/repostAudioUrl`). Port that as a
+`StatusComposerDraft.republish(source)` factory + a `StatusPublishRequest` value the sheet forwards — keeps the
+composer glue dumb and makes the repost attribution unit-testable. The "react" half of the tracker line is a
+separate, larger feature (a reaction picker) and iOS doesn't put it in this popover — deferred.
+- **Adding a trailing param to a mocked method breaks arity-matched MockK stubs.** `StatusRepository.create` grew a
+  6th param (`viaUsername`); every `coEvery/coVerify { repository.create(any() ×5) }` and the positional
+  `create("🔥", null, "PUBLIC", null, null)` verify had to gain the 6th arg. This is required maintenance (the call
+  changed), not test-weakening — the assertions still prove the same behaviour plus the new forwarding.
+
+## Lesson (2026-07-19, `status-bar-compose`) — decompose an iOS `body` HStack into a pure `List<Cell>` builder, keep the Composable glue
+The reviewer/TDD gate exempts `@Composable` glue but demands ≥90% branch coverage on logic. iOS `StatusBarView.body`
+packs the real decisions (add-vs-my leading cell, `error && statuses.isEmpty` retry chip, `statuses.filter { id !=
+myStatus.id }` dedup, trailing `isLoadingMore` spinner) inline in the view. Port them as a **pure
+`buildStatusBarCells(uiState): List<StatusBarCell>`** (a `sealed interface` of slots) + a `statusPopoverModel`
+projection — then the `LazyRow` is a trivial `when(cell)` render. 13 branch-swept tests cover the builder; the
+Composable carries zero untested logic. This is the same "push decisions out of the Composable" pattern as
+`FeedPostPresentation` — apply it to every screen whose iOS analogue has branchy `body` layout.
+- **Wiring a header above an existing `PullToRefreshBox`:** wrap the Scaffold content in a `Column { StatusBarView();
+  PullToRefreshBox(Modifier.weight(1f)) { … } }` and MOVE the `.padding(padding)` from the box to the Column. When
+  editing brace-heavy Compose, a mid-edit build can report `Expecting '}'` at EOF from the *transient* file state —
+  re-verify brace balance (`grep -c '{'` vs `'}'`) and recompile before diagnosing; the second edit fixed it.
+- **The bar owns its own `StatusesViewModel`** via `hiltViewModel()` inside `StatusBarView` — it is independent of
+  the feed's `FeedViewModel`, so the header is a drop-in with no plumbing through `FeedScreen`.
+
+## Lesson (2026-07-19, `statuses-viewmodel`) — a HiltViewModel that needs a runtime "mode" uses a settable StateFlow, not assisted injection
+iOS constructs a separate `StatusViewModel` per `Mode` (friends/discover). A `@HiltViewModel` can't take an
+enum ctor param (Hilt has no default to provide → construction fails), and assisted injection is heavy for a
+tab toggle. Pattern used: inject only repos, hold `private val mode = MutableStateFlow(FRIENDS)`, expose
+`setMode(newMode)` that is **inert on the active mode** (else reset the list + reload). `combine(...)` folds
+`mode` into the projection so `myStatus` can be gated to FRIENDS. One VM drives both bars — cleaner than two
+instances, Hilt-friendly, fully unit-testable. Reuse this for any tabbed feed VM (e.g. a future discover feed).
+Also: pick `myStatus` by `userId == currentUserId` (via the `orderedForBar` SSOT), never the fragile iOS
+`statuses.first` — it survives a server that doesn't return own-first.
+
+## Lesson (2026-07-19, `status-mood-core`) — status TTL is **1h**, NOT 21h (the parity tracker conflated the STORY rule)
+The feature-parity line "Story / status (mood) posts with 21h expiry" (audit part-15) **conflates two
+different rules**. The gateway is unambiguous (`services/gateway/src/services/PostService.ts`):
+`STORY_EXPIRY_HOURS = 21`, **`STATUS_EXPIRY_HOURS = 1`**. A mood status expires **one hour** after
+creation; a story lives 21h. Confirmed in `schema.prisma` (`STATUS // Éphémère 1h`) and the PostService
+tests. **Expiry is server-computed and delivered as `expiresAt`** — clients treat it as authoritative
+and only derive `createdAt + 1h` as a fallback if the server ever omits it (mirror of `StoryGrouping`'s
+`effectiveStoryExpiresAt`, but with the 1h constant). `MoodStatusExpiry` (`:core:model`) is the SSOT.
+When I touch §G/§E parity boxes, keep the two TTLs distinct.
+
+Other findings baked into this slice (from the iOS/gateway research):
+- `StatusEntry` + `StatusCreateRequest`/`ReactionRequest`/`StoryViewRequest` were **already ported**
+  (`core/model/.../Story.kt`); the missing pieces were the `toStatusEntry()` mapper + the expiry law.
+- The iOS `toStatusEntry` **drops** `visibility` + `reactionSummary` even though `APIPost` carries them;
+  the Android mapper carries both through (a genuine parity improvement, tested).
+- iOS `author.name` = `displayName ?? username ?? "Anonymous"` (no blank check). Android's `resolvedName`
+  treats a **blank** displayName/username as absent before falling to `"Anonymous"` (more robust).
+- Statuses ride the generic post API: `type == "STATUS"` post, react via `POST /posts/:id/like {emoji}`,
+  feeds at `GET /posts/feed/statuses` (friends) + `/statuses/discover`. The bar is a **flat server-order
+  list** (NOT grouped-by-user like stories); `myStatus` renders first. `orderedForBar` is that pure law.
+- **Bootstrap grain precedent:** a pure `:core:model`/`:sdk-core` SSOT (law + mapper) with full tests is
+  the accepted first slice for a brand-new area — same shape as `call-sound-policy` (§H) and
+  `StoryGrouping` (§E). The repository + bar VM + Compose come in the next §G slices, consuming this SSOT.
+
+## Lesson (2026-07-18, `feed-comment-mention-autocomplete`) — promote a per-feature SSOT to `:sdk-core` by relocating the package, not renaming every call site; give the second surface its own orchestration
+When a second surface needs the same pure behaviour a `:feature:*` already solved, **promote the pure
+state-machine to `:sdk-core`** rather than re-implementing it. Two mechanics that kept this cheap and safe:
+- **Relocation ≠ mass rewrite.** Moving `ChatMention`/`MentionAutocompleteState` from `me.meeshy.app.chat`
+  to `me.meeshy.sdk.mention` only changes *import lines* at each call site (Kotlin usages reference the
+  simple name), so the churn is tiny even when grep shows dozens of "references". I did rename the object
+  `ChatMention`→`MentionComposer` for a surface-agnostic name in the SDK — that turned the object's own
+  `Xxx.` usages, but those are mostly inside the moved file + the moved test. **`git` auto-detects the
+  move as a rename (R077)** when the new file is ≥50% similar, keeping history.
+- **sdk-core is `explicitApi()`** — every top-level/member decl in the promoted file needs `public`
+  (the primary-constructor `val`s of a `public data class` do NOT, matching the existing story files).
+- **The roster stays per-feature.** `MentionComposer` (filter/insert/merge) is content-agnostic → SDK;
+  but *who can be mentioned* is a product rule that knows `ApiPostComment` → the new `CommentMentionRoster`
+  lives in `:feature:feed`, exactly like chat's `MentionRoster` knows `ApiParticipant`. Same grain test as
+  the gallery lesson.
+- **Composer draft must be ViewModel-owned + folded into the projection flow** (not Compose-local
+  `remember`), because autocomplete needs the current text to recompute the panel, and a realtime
+  re-projection (a `comment:added` landing) would otherwise wipe a half-typed draft. Added a `ComposerDraft`
+  flow as a 4th chained `.combine(...)` input (past the 5-arg `combine` cap) and moved the roster derivation
+  into `project()` (cached in a field the synchronous `onDraftChange` reads). This changed `submit(text)` →
+  `submit()`; the existing tests kept their intent via a `compose(text) = { onDraftChange(text); submit() }`
+  test helper — no assertion weakened.
+- **Full-suite flake:** `:sdk-core InterfaceLanguageStoreTest > dataStore_hydrates…` can fail with a
+  `TimeoutCancellationException` under parallel test load; it **passes in isolation** (`--tests
+  '*InterfaceLanguageStoreTest'`) and is unrelated to any mention change. Not a regression — re-run alone
+  to confirm before chasing it.
+
+## Lesson (2026-07-18, `feed-media-fullscreen-gallery`) — before building a "viewer/lightbox/overlay", grep for an existing one and mirror its open-state SSOT
+When a slice needs a fullscreen media viewer, DON'T write one. `:sdk-ui` already ships
+`MeeshyImageViewer` (pager + pinch-zoom + ±2 prefetch + save-to-gallery), and `:feature:chat` already
+solved "flatten a container's images into pages + resolve the tapped start index" as the pure
+`ConversationMediaGallery.of(...) → ConversationGallery(pages, startIndex)` SSOT, opened via a nullable
+`imageViewer` field in the ViewModel's `UiState` (`openImageViewer`/`dismissImageViewer`). The feed
+gallery is a **1:1 mirror** of that shape (`FeedMediaGallery.of(post, imageIndex) → FeedGallery`), so the
+whole slice was ~2 pure files + 3 wiring edits, no new SDK. The reusable-across-surfaces test: the pure
+flattener stays **per-feature** (it knows `FeedPostPresentation`, a product type — so it can't sink to
+`:sdk-core`), but the *viewer* is the opaque SDK building block. Keep the open-state **ephemeral in the
+flow** (`imageViewer: FeedGallery? = null`) not in local `remember`, so a background re-emit never tears
+a live viewer down — same reason chat keeps it in `UiState`.
+Two more, carried forward: **(a)** `MeeshyImageViewer`'s save-toast strings live in each feature's own
+`res/` — the feed had to add its own `feed_media_saved`/`feed_media_save_failed`/`feed_open_media` across
+all 4 locales (values, -es, -fr, -pt); a per-module `R` doesn't see chat's strings. **(b)** The gradle
+**wrapper** 403s fetching its distribution through the agent proxy — use the **system `gradle` (8.14.3)**
+directly (`gradle :app:assembleDebug testDebugUnitTest`, `LANG=C.UTF-8`), not `./meeshy.sh check`.
+
+## Lesson (2026-07-18, `feed-adaptive-collage-layout`) — branch from `origin/main`, NOT local `main`; and model an adaptive collage as a pure count→rows solver
+Two takeaways.
+**(1) ALWAYS branch from `origin/main`.** This run's slice branch was first cut with
+`git checkout -b claude/apps/android/<slice> main`, but the container's local `main` (cd93248) was
+**behind** `origin/main` (3f5267e) by the already-merged feed slices — so the branch was missing
+`CommentProjection`, the comment mention/language-switcher work, etc. Symptom that caught it: after
+branching, `find feature/feed/src/test -name '*.kt'` showed only **2** files (should be ~a dozen). Fix:
+`git rebase --onto origin/main main claude/apps/android/<slice>` (moves just the slice commit onto the
+real tip; clean because the slice touched files the newer commits didn't). **Prevention:** start every
+run with `git fetch origin main` and branch with `git checkout -b <slice> origin/main` (or verify
+`git rev-parse main` == `git rev-parse origin/main` first). The prompt's designated branch
+`claude/fervent-darwin-sw6hb1` *did* equal `origin/main`; local `main` did not.
+**(2) An adaptive media collage is a pure `count → CollageLayout` function.** Push every layout decision
+out of the Composable into `:sdk-ui` `MediaCollage.solve(count)` returning rows (each `heightWeight`) of
+cells (each `index` + `widthWeight` + `overflowCount`). Then the Compose grid is a thin reader:
+`layout.rows.forEach { Row(Modifier.weight(row.heightWeight)) { row.cells.forEach { CollageTile(Modifier.weight(cell.widthWeight)) } } }`.
+This makes all 5 shapes + the `+N` overflow branch JVM-testable with zero Robolectric. The solver knows
+ONLY the count (no singletons, no "when to render") → it's an SDK building block, reusable by the
+chat-bubble media grid (`visualMediaGrid`, 1–4+ collage) next. Fixed `COLLAGE_HEIGHT` (260.dp) for the
+grid; single-image keeps its real aspect ratio (`isSingle` flag).
+
+## Lesson (2026-07-18, `feed-comment-language-switcher`) — reuse the ONE language-strip + flag-tap SSOT for any new translatable surface; a "computed but never rendered" flag is a parity gap hiding in plain sight; the strip only surfaces the viewer's CONFIGURED languages (so tests must use configured codes); and thread a 7th combine input past the 5-arg cap
+Bringing feed comments to the post's Prisme language-switcher parity. Four takeaways.
+**(1) The language strip + flag-tap have ONE SSOT — don't re-implement per surface.** `:sdk-ui`
+`PostLanguageStrip.build(originalLanguage, translations: Map<code,entry>, prefs, showingOriginal, activeCodeOverride)`
++ `LanguageFlagTapResolver.resolve(tappedCode, activeCode, originalLanguage, translations)` already drive the chat
+bubble AND the feed post. A comment carries the **same** `originalLanguage: String?` + `translations:
+Map<String, ApiPostTranslationEntry>?` shape, so a "add a language switcher here too" slice is **zero** new SDK
+code: build the strip via `PostLanguageStrip.build`, resolve the tap via `LanguageFlagTapResolver`, mirror
+`FeedPostBuilder.resolveActiveCode`/`resolveContent` for the per-surface active-code + content. The only per-surface
+work is the override *state* (where you keep the `activeLanguageCode`).
+**(2) A "computed but never rendered" field is a parity gap hiding in plain sight.** `CommentPresentation.isTranslated`
+had been computed by `CommentProjection` for weeks but **nothing in Compose read it** — so comments were
+Prisme-translated silently with no indicator and no way to see the original, while posts had the full strip. When
+scanning for the next slice, grep the Compose layer for a projection field that's set but never consumed — it's often
+a half-finished feature. (`grep isTranslated feature/feed/.../*.kt` showed it built in 2 presentations, rendered only
+in the post + repost, never the comment.)
+**(3) THE TEST TRAP — the strip only surfaces the viewer's CONFIGURED content languages (+ the original), NOT every
+language the content carries.** `MessageLanguageStrip.build` walks `LanguageResolver.preferredContentLanguages(prefs)`
+(system→regional→custom) — a translation into a language the viewer hasn't configured is **not** a chip. So a test that
+overrides to `es` for a `systemLanguage=en`-only viewer finds the content switches to "Hola" (the content resolver is
+content-based) but `languageStrip.single { isActive }` **throws NoSuchElementException** — es isn't in the strip.
+Fix the test to give the viewer that language (`systemLanguage=en, regionalLanguage=es`), the realistic scenario where
+the chip is actually reachable. (The `onCommentFlagTap` handler *does* accept any content-bearing language because
+`LanguageFlagTapResolver` is content-based, but the UI only offers configured-language chips — mirror of the post.)
+**(4) A 7th reactive input past the 5-arg `combine` cap: chain a `to` pair then `.combine`.** The VM already did
+`combine(5 flows){ ProjectionInputs(...) }.combine(composer){ ... }`. Adding `activeLanguages` as a 7th:
+`.combine(composer){ inputs, rt -> inputs to rt }.combine(activeLanguages){ (inputs, rt), langs -> project(inputs, rt,
+langs) }` — destructure the pair in the final lambda. Keeps `project` a pure 3-arg function, no `data class` churn.
+
+## Lesson (2026-07-18, `feed-comment-mention-rendering`) — reuse the ONE rich-text renderer for any new text surface; the display-name map is the only per-surface glue; and watch for pre-existing test-helper name clashes
+Bringing feed comment content to chat-bubble parity (mentions + bold/italic/URL). Three takeaways.
+**(1) Rich text has ONE SSOT on Android — don't reparse.** `:core:model` `MessageTextParser.parse(text, mentionDisplayNames)`
++ `:sdk-ui` `RichMessageText` already render `@mention`/`@Display Name`/bold/italic/strike/underline/`m+`/URL for chat. Any
+new text surface (comment body, and later post body / repost quote) should route through `RichMessageText`, NOT a bespoke
+`Text`. The only per-surface work is the `username → displayName` map: the parser turns `@Display Name` tokens into links only
+when given that map (a bare `@handle` resolves without it). So a "render mentions here too" slice is: build the map + swap
+`Text`→`RichMessageText`. Keeps every surface's mention/markdown behaviour identical by construction.
+**(2) The display-name map is product orchestration → `:feature:*`, not the SDK.** `CommentMentionDirectory` (which
+participants can resolve a mention in a comment thread) sits in `:feature:feed`, exactly like chat's `MentionRoster.displayNames`
+in `:feature:chat`. Filter parity with web `buildMentionDisplayMap` (mention-display.ts): drop a blank handle, an absent/blank
+display name, and a vanity `displayName == handle`. Source it from every comment + **loaded reply** author
+(`thread.comments + replyState.repliesByParent.values.flatten()`), not just the top level.
+**(3) Test-helper name clash.** `PostCommentsViewModelTest` already had a `private fun authored(id, parentId, name)`; my new
+`authored(id, username, displayName, parentId)` overload triggered "Overload resolution ambiguity" at the call sites (default
+args made them ambiguous). Grep the test file for an existing helper name before adding one — I renamed mine to `mentionComment`.
+**Follow-up:** the comment @-mention **autocomplete** is the natural next slice, but its pure SSOT (`ChatMention` /
+`MentionAutocompleteState`) lives in `:feature:chat`. To honour SSOT, promote it to a shared module (a `:feature:mentions` or
+`:core:model`) so chat + comments share ONE controller — the Android mirror of iOS's reusable `MentionComposerController`. Do
+that as its own slice (it edits chat imports — still apps/android, but a distinct concern from the feed wiring).
+
+## Lesson (2026-07-18, `feed-postdetail-commentcount-badge`) — the post-detail *thread* and its *header badge* are two DIFFERENT ViewModels; wiring the room into one leaves the other frozen; resync to the event's authoritative count, not local arithmetic; and don't `awaitItem()` across an `isRefreshing` overlay flip
+Porting iOS `PostDetailViewModel` `commentAdded`/`commentDeleted` `post.commentCount = data.commentCount`. Four takeaways.
+**(1) The header badge and the thread are owned by SEPARATE Android VMs.** iOS keeps both in one `PostDetailViewModel`, so its
+single `commentAdded`/`commentDeleted` sink updates the thread rows AND `post.commentCount` together. Android split them: the
+thread lives in `PostCommentsViewModel` (which got the realtime room over the last 3 slices), the post *projection* (header +
+counts) in `PostDetailViewModel`. So "the room is done" was only half true — the header badge never subscribed and froze on any
+comment added/deleted elsewhere. When porting a monolithic iOS VM, check whether the Android side split it and wire EACH shard.
+**(2) The added-event was missing a field the gateway ships.** `SocketCommentAddedData` had only `{postId, comment}` but the
+gateway `comment:added` payload carries `commentCount` too (`packages/shared/types/post.ts` `CommentAddedEventData.commentCount`;
+`SocketCommentDeletedData` already had it). Added `commentCount: Int = 0` — default 0 keeps every existing decode back-compatible.
+**(3) Resync to the event's ABSOLUTE count, never re-derive locally.** The payload count is server-authoritative, so overlaying it
+(`liveCommentCount: StateFlow<Int?>`, null → the fetched post's count, clamped ≥0) *heals* any drift from the thread VM's
+optimistic ±1 arithmetic — that's the whole point of iOS assigning rather than incrementing. Clear the overlay on a successful
+fetch so a manual refresh re-establishes fresh server truth over a stale live value. Discriminating mutations: dropping the
+`coerceAtLeast(0)` clamp + flipping the `postId ==` filter to `!=` killed exactly the 5 badge tests, decode test stayed green.
+**(4) Turbine + `UnconfinedTestDispatcher` gotcha — a refresh emits an intermediate `isRefreshing=true` state where a still-present
+live overlay reads the OLD count.** `refresh()` sets `isRefreshing` (emit #1, overlay still applied → old count), then the fetch
+success sets `rawPost` then clears the overlay (emit #2 → new count). A single `awaitItem()` after `refresh()` catches emit #1 and
+sees the *old* count. Fix: don't chase the intermediate — assert on the settled `vm.state.value` after `refresh()` returns (runTest
+with the unconfined dispatcher has drained all continuations by then), or loop `awaitItem()` until the terminal value. Same trap
+will bite any "live overlay + async refresh" VM.
+
+## Lesson (2026-07-18, `feed-comment-live-reactions`) — a live "own vs third-party" reaction splits into two disjoint state effects (liked flag vs count delta); mirror iOS's deliberate no-delta-on-own-echo to avoid double-count; the discriminating mutation is the delta *sign*
+Porting iOS `PostDetailViewModel.commentReactionAdded`/`commentReactionRemoved` (live heart on the open post). Four takeaways.
+**(1) The event is NOT `comment:liked` — the post-detail heart uses `comment:reaction-added`/`comment:reaction-removed`.**
+There is an *unrelated* `comment:liked` event (already wired as `SocialSocketManager.commentLiked` → `SocketCommentLikedData`,
+carrying an absolute `likeCount`) that no Android VM consumes; iOS post-detail ignores it and instead subscribes to the
+**reaction** events, whose payload is `{commentId, postId, userId, emoji, action, aggregation{emoji,count,userIds,hasCurrentUser}, timestamp}`
+(confirmed in gateway `CommentReactionHandler.ts` `updateEvent`). Don't reuse `commentLiked`; add the reaction event. **(2) A
+live reaction splits into TWO disjoint effects keyed on `event.userId == currentUser.id`:** the viewer's **own** reaction (echoed
+from this or another device) touches the **liked flag only** (`likedIds` ±id) and NOT the count; a **third party's** touches the
+**count only** (`deltas` ±1) and NOT the liked flag. This maps 1:1 onto the existing `CommentLikeState` (`likedIds`↔iOS
+`commentLikedIds`, `deltas`↔`commentLikeDelta`, `inFlightIds`↔`commentHeartInFlightIds`) — so `reactionApplied(id, isOwn, added)`
+extends the SSOT, no parallel state. **(3) The own case must NOT move the delta — mirror iOS's deliberate choice.** On the same
+device the optimistic `flip` already applied the delta (+1/−1); the own socket echo then only needs to confirm the liked flag
+(idempotent — `if (nextLiked == likedIds) return this`), because bumping the delta again would **double-count**. The cost is a
+rare multi-device staleness (an own reaction from device B lights the heart on device A but doesn't move A's count until refresh)
+— iOS accepts this to protect the common same-device path, and parity says mirror it (noted as a possible future "authoritative
+count from `aggregation.count`" improvement — the event *carries* the absolute count, so a later slice could override rather than
+accumulate). **(4) Filter on BOTH `postId` AND the heart emoji before touching state**, and resolve `isOwn` against
+`sessionRepository.currentUser.value?.id` (an unknown/blank user → third-party path, which is the safe count-only default). The
+discriminating mutation is the **delta sign** (`if (added) 1 else -1` → `-1 else 1`), which failed exactly the 4 count-direction
+tests (2 pure + 2 VM) while the liked-flag/own-idempotence tests stayed green — proof the count direction is genuinely observed.
+No new UI: the heart + count already flow through `CommentProjection` (`isLiked`/`displayCount`), so the slice is "real, not
+orphan" for free (same argument as the add/delete rooms).
+
+## Lesson (2026-07-18, `feed-comment-realtime-delete`) — the container locale is POSIX, which breaks `:sdk-core` tests whose backtick names contain non-ASCII (em-dash); run gradle under `LANG=C.UTF-8`; a live delete is the mirror image of a live add (a `removed` reducer + a second collector), and route a delete by *finding the id* (top-level vs reply) not by trusting the payload to say which
+Porting iOS `PostDetailViewModel.commentDeleted` (live `comment:deleted` for the open post). Four takeaways.
+**(1) THE BIG ONE — a fresh container's default locale is `LC_CTYPE=POSIX` (ASCII), and that makes the Kotlin
+compile daemon throw `java.nio.file.InvalidPathException: Malformed input or input contains unmappable characters`
+when it writes the `.class` file for a `@Test fun \`… — a probe never crashes its surface\`()` whose backtick name
+contains an em-dash (`—`).** `:sdk-core` has such tests (`ActiveCallRepositoryTest`), so **any** run that compiles
+`:sdk-core`'s test sources (not just this slice) dies at `compileDebugUnitTestKotlin` with a stack trace that looks
+like a compiler bug but is a **locale** bug. `gradle.properties` already sets `-Dfile.encoding=UTF-8`, but that does
+**not** cover `sun.jnu.encoding` (the *path/filename* charset), which is derived from `LANG`/`LC_CTYPE` at JVM start.
+**Fix: `export LANG=C.UTF-8 LC_ALL=C.UTF-8 LC_CTYPE=C.UTF-8` before invoking gradle** (`C.utf8` is available per
+`locale -a`), and **stop the already-running daemon first** (`/opt/gradle/bin/gradle --stop`) — a daemon booted under
+POSIX keeps its bad `sun.jnu.encoding`. Do NOT "fix" this by editing `gradle.properties` (shared config) or renaming
+the offending test (not our file / out of scope) — it's purely an invocation-env fix. Prior feed slices never hit it
+because they only compiled `:feature:feed` + `:core:model` (all-ASCII test names); the moment a slice touches
+`:sdk-core` and runs its tests, set the locale. **(2) A live delete is the mirror of the live add from the previous
+slice:** one new socket event (`SocketCommentDeletedData`, same `{postId, commentId, commentCount}` shape iOS uses) +
+a `commentDeleted` `SharedFlow` on `SocialSocketManager` (copy the `commentAdded` wiring exactly) + a pure `removed`
+reducer + a **second** `viewModelScope.launch` in the existing `observeRealtime()`. No new UI — the removal flows
+through the existing projection, same "real not orphan" argument as the add-room. **(3) Route a delete by *finding the
+id*, not by trusting the payload to classify it.** The `comment:deleted` payload is just `{commentId}` — it does NOT
+say "this was a reply under parent X". So `onCommentDeleted` checks `thread.value.comments.any { it.id == id }` first
+(top-level → `removed` + `removedThread`), else asks `CommentRepliesState.parentOfReply(id)` (reply → `removedReply`
++ `bumpReplyCount(parent, -1)`), else no-op. This is why `parentOfReply` is a needed query on the state (mirror of iOS
+iterating `repliesMap` to locate the reply). Keep `removed` distinct from `failed`: `failed(tempId)` requires the id be
+*pending* (optimistic rollback), `removed(id)` works for **any** present row (an authoritative server delete of a
+long-confirmed comment) — reusing `failed` would silently no-op on a real delete because the id isn't pending. **(4)
+The discriminating mutation for a "decrement the parent count" behaviour is flipping the *sign* of the delta**
+(`bumpReplyCount(parentId, -1)` → `+1`), which failed **exactly** the one count-decrement VM test — not dropping the
+call (which would also fail the "vanishes" half and muddy the proof). A pre-existing `InterfaceLanguageStoreTest`
+DataStore test flakes under parallel execution (fails in the full `:sdk-core` run, **passes in isolation**) — verify
+any unexpected red in isolation before blaming your diff.
+
+## Lesson (2026-07-18, `feed-postdetail-realtime-comments`) — a realtime "room" is just a filtered global flow + pure `received` reducers; gate a live child insert on *visibility*, not existence; no new UI when the projection already renders the state
+Porting iOS `PostDetailViewModel.subscribeToSocket` (live `comment:added` for the open post). Four takeaways. (1) **A per-screen "realtime room" needs no room-join plumbing here — it's `socialSocket.<flow>.collect { if (event.postId != postId) return@collect … }`.** `SocialSocketManager` already decodes `comment:added` into a global `commentAdded: SharedFlow`, and `StoryCommentsViewModel` already consumes it the same way — so the whole slice was a `viewModelScope.launch` that filters by the route `postId` plus two pure reducers. Don't reach for a new socket event or a "join room" emit; the gateway already scopes the broadcast (iOS filters the same global stream). Skip the subscription entirely for a blank route id (`observeRealtime()` early-returns) so a malformed route never listens. (2) **A live *child* (reply) insert must be gated on the parent thread being *visible* (expanded ∨ loaded), not on existence.** `receivedReply` returns the same instance unless `parentId in expandedIds || parentId in loadedIds` — inserting into an unopened thread would build a *phantom partial thread* (one live reply, none of the older ones) that the projection would then render as a misleading preview. The unopened case is covered by bumping the parent's `replyCount` only; the full set loads when the viewer expands. This mirrors iOS inserting into `repliesMap` only `when expandedThreads.contains(parentId)`. The top-level `received` has no such gate — a top-level comment is always visible. (3) **A live server row must dedup by id and must NOT be marked pending.** `received`/`receivedReply` prepend deduped by id (the viewer's own confirmed echo returns the same instance) and never touch `pendingIds`/`pendingReplyIds` — pending is only for *optimistic* local sends awaiting confirmation. A test that a live event `leaves an optimistic pending … untouched` pins that the two mechanisms don't collide. (4) **When the existing projection already renders the state you mutate, the slice ships with zero Compose change and is still "real, not orphan".** The live comment/reply/count flow straight through the existing top-level rows + expanded/preview threads + "View N replies" count — no new UI, no dead end. Discriminating mutation: flip `received` prepend→append (`listOf(comment)+comments` → `comments+listOf(comment)`) → fails **exactly** 3 ordering tests (2 pure + 1 VM). Reuse the `tryEmit(...)` + read `vm.state.value` test pattern from `StoryCommentsViewModelTest` (UnconfinedTestDispatcher makes the collector resume synchronously on emit — no Turbine needed for socket-driven assertions). Mock `SocialSocketManager` with `mockk(relaxed=true)` + `every { socialSocket.commentAdded } returns MutableSharedFlow(extraBufferCapacity=64)`.
+
+## Lesson (2026-07-18, `feed-reply-preview`) — widening a projection filter silently changes a sibling's UX; name the discriminating mutation on the *bound*, not the guard
+Porting iOS `preloadReplyPreviews` (auto-preview the first replies without a tap). Three takeaways. (1) **Reusing the same reply-thread state for "expanded" and "preview" means the projection filter is the UX contract — widening it changes other flows.** The thread projection went from `filter { isExpanded(it.id) }` to `filter { isExpanded(it.id) || isLoaded(it.id) }` so a *loaded-but-collapsed* thread renders as a capped preview. That single `|| isLoaded` **also** changed collapse: a manually-expanded thread that you then collapse is now *loaded*, so it falls back to a 2-reply preview instead of disappearing. This is **iOS-faithful** (iOS keeps `repliesMap` populated post-collapse — "Hide replies" drops to the taste, not to nothing), but it **breaks an existing green test** (`a second toggleReplies collapses the thread` asserted `doesNotContainKey`). Rewriting that test to assert the new collapse→preview behaviour is a *behaviour change, not a weakening* — the new assertion is stronger (isExpanded=false + isPreview=true + rows + hiddenReplyCount). Always scan existing tests of the sibling flow before widening a shared projection filter. (2) **A batch "mark all loading" primitive (`beginLoadAll(ids)`) keeps the preload orchestration testable and avoids an untested defensive branch.** The obvious `targets.fold(state){acc,id->acc.beginLoad(id)?:acc}` carries a `?: acc` arm that's dead when `previewTargets` already returned only fresh ids — an uncovered branch. A pure `beginLoadAll` that re-filters fresh ids and marks them in one `copy` is fully branch-testable (fresh / skip-loaded-loading / inert-empty / inert-all-known) and reads better. (3) **When behaviour is "first N, bounded", the discriminating mutation is dropping the `.take(limit)` cap, not the freshness filter.** Removing `.take(limit)` from `previewTargets` failed **exactly** 3 tests (first-N, bounds-before-drop, capped-to-first-five) — proof the iOS `prefix(5)` bound is genuinely observed. Bounding to `take(limit)` **before** `filterNot { loaded/loading }` (not after) is what makes "the window is the first 5 comments, of which the unloaded ones preload" — a test named `bounds to the first limit before dropping loaded ones` pins that order. Gotcha: a piped `gradle … | tail` reports the **pipe's** exit (tail=0) even when gradle BUILD FAILED — grep the output for `FAILED`/`BUILD` to read the real result, don't trust the task-notification exit code.
+
 ## Lesson (2026-07-17, `feed-comment-replies`) — model a lazy expandable sub-thread as a 4-set SSOT with a load-once guard; filter top-level in the projection; pick a discriminating mutation over the cache guard
 Four takeaways from porting iOS `PostDetailViewModel` thread management (`expandedThreads`/`repliesMap`/`loadingReplies`). (1) **A lazily-loaded, per-parent expandable sub-thread is cleanest as one immutable value object holding four things:** `expandedIds: Set<String>` (which threads are open), `loadingIds: Set<String>` (in-flight fetches), `loadedIds: Set<String>` (fetched at least once), and `repliesByParent: Map<String, List<Row>>` (the rows). Keeping `loadedIds` **separate from** `repliesByParent.containsKey` matters: `beginLoad(id)` returns `null` when `id in loadingIds || id in loadedIds`, so a collapse-then-re-expand serves the cached rows and never refetches — a small improvement over iOS's `toggleThread`, which re-enters `loadReplies` (itself guarded on `repliesMap[id] == nil`) every open. `failed(id)` clears loading **and** collapses (`expandedIds - id`) to mirror iOS removing the thread from `expandedThreads` on error. All transitions pure in `:feature:feed`; the VM owns *when* to fetch. (2) **When a parent list and its children can arrive on the same endpoint, filter the parents in the projection, not the accumulation.** `getComments` may (server-dependent) include replies; `CommentThreadState` stores them all, but `project()` filters `thread.comments.filter { it.parentId.isNullOrBlank() }` before building top-level rows (mirror of iOS `topLevelComments = comments.filter { $0.parentId == nil }`). A reply mixed into the page then renders under its parent thread only, never twice — one-line behavioural test (`a reply mixed into the top-level page is not rendered as a top-level comment`). (3) **kotlinx `combine` has a typed 5-arg overload** — going from 4 to 5 source flows (`thread, currentUser, status, likes, replies`) needed no vararg/list form; the lambda just took a 5th param. (4) **The discriminating mutation for a cache guard is dropping the *loaded* half of the OR, not the whole guard.** Dropping `|| id in loadedIds` from `beginLoad` (leaving `id in loadingIds`) failed **exactly** the 4 no-refetch tests (re-expand-no-refetch, collapse→re-expand-no-reload, beginLoad-null-when-loaded, empty-still-loaded) while the 39 others stayed green — proof the "load once" behaviour is genuinely observed, not decoration. Reuse the sibling row Composable (`CommentRow`) + `CommentProjection` + `CommentLikeState` for reply rows so likes/Prisme work on replies for free; render the "View N replies" toggle only when `replyCount > 0 || isExpanded` (no dead affordance).
 
@@ -2242,3 +2576,65 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
 - **Computed properties are serialization-invisible.** `val effects get() = …` inside a `@Serializable data
   class` (custom getter, not a constructor param) is ignored by kotlinx.serialization — same trick as the
   existing `displayContent`/`isTranslated`. Safe way to expose a resolved view over decoded wire fields.
+
+## status-repository (2026-07-19)
+- **CI polling must go through the GitHub MCP tools, not a Monitor `curl` loop.** The agent proxy
+  returns **403** on direct `https://api.github.com/...` (even with `$GITHUB_TOKEN` set — that token
+  is for git-over-http through the proxy, not the REST API). A `Monitor` bash script that curls the
+  Actions API therefore loops on error and never fires. Poll `mcp__github__actions_list`
+  (`list_workflow_runs`, filter by branch) / `mcp__github__pull_request_read` (`get_status`) instead.
+  Foreground `sleep` is blocked; pace re-checks with a `run_in_background` timer that exits, then
+  re-poll via MCP on the completion notification.
+- **`POST /posts/:id/like` accepts an optional `emoji` body** (gateway `interactions.ts`:
+  `LikeSchema.safeParse(body)`, default `❤️`). The Android `PostApi.like(id)` had no body, so a
+  status *react* needed a second same-path Retrofit method `likeWithEmoji(id, PostLikeRequest(emoji))`
+  — two methods on one path is legal (Retrofit keys on the function, not the URL). Kept the plain
+  `like` valid for the existing optimistic post-like path (no ripple into `PostRepository`).
+- **Repository grain = transport + a pure page fold; mapping-to-domain stays the SSOT mapper's job.**
+  `StatusRepository.list` folds via `foldStatusPage` (a verbatim mirror of `PostRepository.foldPostPage`)
+  and reuses `toStatusEntries` — it does NOT re-implement the ApiPost→StatusEntry rule. The bar
+  view-model (next slice) owns accumulation + `orderedForBar` + SWR, exactly like the bookmarks screen
+  owns accumulation over `getBookmarksPage`. Shipping the repo without a VM is consistent with how
+  `status-mood-core` shipped the mapper without wiring — no orphan code, the public surface is the
+  next slice's dependency.
+
+## status-feed-mode-toggle (2026-07-19)
+- **`git checkout <file>` destroys UNCOMMITTED edits — never use it to undo a mutation-proof `sed`.**
+  During the mutation check I `sed`-mutated a production file, ran the test, then `git checkout $f` to
+  restore — but the slice's real edits weren't committed yet, so checkout reverted them to HEAD and wiped
+  the whole slice's production code (the test file still referenced the now-missing symbol → next
+  mutation "failed to compile", a false signal). Correct pattern: `cp $f /tmp/x.bak` before the `sed`,
+  `cp /tmp/x.bak $f` after. Only `git checkout` a file whose slice edits are already committed.
+- **iOS gap = Android opportunity.** iOS's `StatusViewModel` takes `mode` at init and never switches
+  (RootView holds a single `.friends` instance; `.discover` exists in `StatusService` but no UI reaches
+  it). Android's one-VM `setMode` + this toggle is strictly better UX — worth doing even with "no iOS
+  parity to port", because the SDK/VM capability was already built and tested two slices earlier.
+- **Adding a row above a pinned bar:** wrapping `StatusBarView`'s `LazyRow` in a `Column` (toggle + rail)
+  needs no popover-offset change — the `Popup` anchor is emitted as a sibling AFTER the Column, so it
+  still resolves just below the bar (the bar is the Column's last child); `STATUS_BAR_HEIGHT` top-pad
+  stays correct.
+- **Known flake:** `:sdk-core` `MediaDownloadPreferencesStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction`
+  can hit its 15s `withTimeout` under a full parallel `assembleDebug testDebugUnitTest` run (real DataStore file I/O
+  starved by concurrent modules). Passes deterministically in isolation and on a warm re-run of the full gate. Not
+  caused by feed/status slices. If it reddens a gate, re-run — do NOT "fix" by lowering the timeout.
+
+## call-dark-frame-detection (2026-07-20)
+- **Split an untestable iOS stateful class into two pure `:core:model` cores.** iOS `DarkFrameDetector`
+  interleaves luma sampling (needs a `CVPixelBuffer`) with the streak state machine, so its unit tests
+  can only assert the callbacks are settable — the actual cover logic is unverified. Android split:
+  `FrameLuminance.averageOfYPlane` (pure sampling maths) + `DarkFramePolicy.reduce` (pure hysteresis
+  reducer). Both fully behaviourally tested with plain arrays/floats — no framework, no capture buffer.
+  General lesson: when porting an iOS `analyzeX` that mixes a framework read with a decision, extract the
+  decision as a reducer and the read as a pure function; the actuator that bridges them stays app-side.
+- **Counter clamp = a real SOTA win, not gold-plating.** iOS's `consecutiveDarkFrames: Int` increments
+  every dark frame with no ceiling; a lens left covered for hours at 30 fps counts into the millions (and
+  is an overflow smell). Clamping the streak at `consecutiveThreshold` (nothing left to count once
+  latched) makes the state genuinely O(1) and the clamp is itself the cleanest mutation target to prove
+  the test suite is behavioural.
+- **`rowStride` vs `width` is the I420 correctness trap.** A WebRTC I420 Y plane's `strideY` can exceed
+  the visible width (row padding); sampling `y*width + x` instead of `y*rowStride + x` reads padding bytes
+  into the average. `FrameLuminance` takes both and a `rowStride < width` guard returns `null`. The
+  padded-plane test pins this.
+- **`null` on degenerate geometry, never a fabricated `0.0`.** A too-small/empty/zero-dim plane returning
+  `0.0f` would read as "pitch black" and could trip the cover detector on a bad frame. Return `null` =
+  "skip this frame", mirroring iOS `guard … else { return }`.

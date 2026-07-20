@@ -45,6 +45,13 @@ import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.LiveLocationSessions
 import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.mention.MentionAutocompleteState
+import me.meeshy.sdk.mention.MentionComposer
+import me.meeshy.sdk.mention.MentionSearch
+import me.meeshy.sdk.mention.applyRemote
+import me.meeshy.sdk.mention.onTextChange
+import me.meeshy.sdk.mention.reset
+import me.meeshy.sdk.mention.select
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MessageEditability
@@ -683,7 +690,7 @@ class ChatViewModel @Inject constructor(
      */
     private fun maybeSearchRemoteMentions(query: String?) {
         mentionSearchJob?.cancel()
-        if (query == null || !ChatMention.shouldQueryRemote(query)) return
+        if (query == null || !MentionComposer.shouldQueryRemote(query)) return
         val currentUserId = sessionRepository.currentUser.value?.id
         mentionSearchJob = viewModelScope.launch {
             delay(MENTION_SEARCH_DEBOUNCE_MS)

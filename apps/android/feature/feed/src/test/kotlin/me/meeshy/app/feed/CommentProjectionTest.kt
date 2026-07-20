@@ -138,4 +138,59 @@ class CommentProjectionTest {
         assertThat(p.isLiked).isFalse()
         assertThat(p.likeCount).isEqualTo(4)
     }
+
+    private val enEs = mapOf(
+        "en" to ApiPostTranslationEntry(text = "Hello"),
+        "es" to ApiPostTranslationEntry(text = "Hola"),
+    )
+
+    @Test
+    fun build_emptyLanguageStripWhenNotTranslatedForViewer() {
+        // No translation targets the viewer's language → Prisme rule 1: original, nothing to explore.
+        val c = comment(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
+        assertThat(CommentProjection.build(c, Prefs(systemLanguage = "de"), null).languageStrip).isEmpty()
+        // A comment with no translations at all also has no strip.
+        assertThat(CommentProjection.build(comment(), Prefs(systemLanguage = "en"), null).languageStrip).isEmpty()
+    }
+
+    @Test
+    fun build_languageStripMarksActivePreferredWhenTranslated() {
+        val c = comment(translations = enEs)
+        val strip = CommentProjection.build(c, Prefs(systemLanguage = "en"), null).languageStrip
+        assertThat(strip.map { it.code }).contains("fr") // the original is always anchored
+        val active = strip.single { it.isActive }
+        assertThat(active.code).isEqualTo("en")
+        assertThat(strip.single { it.isOriginal }.code).isEqualTo("fr")
+    }
+
+    @Test
+    fun build_activeLanguageOverrideSwitchesDisplayedContentAndChip() {
+        val c = comment(translations = enEs)
+        // A viewer configured for en (primary) + es (regional) can explore either; the default is
+        // the primary (Hello), and overriding to es — a chip the strip surfaces — shows "Hola".
+        val prefs = Prefs(systemLanguage = "en", regionalLanguage = "es")
+        assertThat(CommentProjection.build(c, prefs, null).content).isEqualTo("Hello")
+        val p = CommentProjection.build(c, prefs, null, activeLanguageCode = "es")
+        assertThat(p.content).isEqualTo("Hola")
+        assertThat(p.languageStrip.single { it.isActive }.code).isEqualTo("es")
+    }
+
+    @Test
+    fun build_activeOriginalOverrideShowsOriginalContent() {
+        val c = comment(translations = enEs)
+        val p = CommentProjection.build(c, Prefs(systemLanguage = "en"), null, activeLanguageCode = "fr")
+        assertThat(p.content).isEqualTo("Bonjour")
+        assertThat(p.languageStrip.single { it.isActive }.code).isEqualTo("fr")
+        // isTranslated reflects the viewer's preference, not the manual override.
+        assertThat(p.isTranslated).isTrue()
+    }
+
+    @Test
+    fun build_unknownOrContentlessOverrideFallsBackToDefault() {
+        val c = comment(translations = enEs)
+        // "de" has no content on this comment → the override is ignored, default (en) stands.
+        val p = CommentProjection.build(c, Prefs(systemLanguage = "en"), null, activeLanguageCode = "de")
+        assertThat(p.content).isEqualTo("Hello")
+        assertThat(p.languageStrip.single { it.isActive }.code).isEqualTo("en")
+    }
 }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketPostBookmarkedData
@@ -609,5 +610,61 @@ class FeedViewModelTest {
         vm.toggleBookmark("p1")
 
         coVerify(exactly = 1) { repository.toggleBookmark("p1") }
+    }
+
+    // --- Fullscreen media gallery (openImageViewer / dismissImageViewer) ---
+
+    private fun imagePost(id: String, vararg urls: String) = ApiPost(
+        id = id,
+        content = "Post $id",
+        media = urls.mapIndexed { index, url ->
+            ApiPostMedia(id = "$id-m$index", mimeType = "image/jpeg", fileUrl = url, order = index)
+        },
+    )
+
+    @Test
+    fun `openImageViewer opens the gallery at the tapped image`() = runTest {
+        val vm = viewModel(
+            me,
+            flowOf(CacheResult.Fresh(listOf(imagePost("1", "https://cdn/a.jpg", "https://cdn/b.jpg", "https://cdn/c.jpg")), 0L)),
+        )
+        assertThat(vm.state.value.imageViewer).isNull()
+
+        vm.openImageViewer("1", imageIndex = 2)
+
+        val gallery = vm.state.value.imageViewer
+        assertThat(gallery).isNotNull()
+        assertThat(gallery!!.startIndex).isEqualTo(2)
+        assertThat(gallery.imageUrls)
+            .containsExactly("https://cdn/a.jpg", "https://cdn/b.jpg", "https://cdn/c.jpg").inOrder()
+    }
+
+    @Test
+    fun `openImageViewer on an unknown post is inert`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(imagePost("1", "https://cdn/a.jpg")), 0L)))
+
+        vm.openImageViewer("does-not-exist", imageIndex = 0)
+
+        assertThat(vm.state.value.imageViewer).isNull()
+    }
+
+    @Test
+    fun `openImageViewer on a post with no image is inert`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+
+        vm.openImageViewer("1", imageIndex = 0)
+
+        assertThat(vm.state.value.imageViewer).isNull()
+    }
+
+    @Test
+    fun `dismissImageViewer closes an open gallery`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(imagePost("1", "https://cdn/a.jpg")), 0L)))
+        vm.openImageViewer("1", imageIndex = 0)
+        assertThat(vm.state.value.imageViewer).isNotNull()
+
+        vm.dismissImageViewer()
+
+        assertThat(vm.state.value.imageViewer).isNull()
     }
 }
