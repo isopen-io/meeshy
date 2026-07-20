@@ -380,7 +380,7 @@ export const AuthSchemas = {
 
   verifyPhone: z.object({
     phoneNumber: z.string().min(8),
-    code: z.string().length(6),
+    code: z.string().length(6).regex(/^[0-9]{6}$/),
   }),
 
   // Password reset

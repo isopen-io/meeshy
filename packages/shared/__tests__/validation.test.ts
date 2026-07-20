@@ -240,6 +240,49 @@ describe('language-code normalization at the write boundary', () => {
   });
 });
 
+describe('AuthSchemas verification codes', () => {
+  it('verifyEmail.code accepts a 6-digit numeric code', () => {
+    const result = AuthSchemas.verifyEmail.safeParse({
+      email: 'alice@example.com',
+      code: '123456',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('verifyEmail.code rejects a 6-char non-numeric code', () => {
+    const result = AuthSchemas.verifyEmail.safeParse({
+      email: 'alice@example.com',
+      code: 'abcdef',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('verifyPhone.code accepts a 6-digit numeric code', () => {
+    const result = AuthSchemas.verifyPhone.safeParse({
+      phoneNumber: '+33612345678',
+      code: '123456',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('verifyPhone.code rejects a 6-char non-numeric code (parity with verifyEmail)', () => {
+    const result = AuthSchemas.verifyPhone.safeParse({
+      phoneNumber: '+33612345678',
+      code: 'abcdef',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('verifyPhone.code rejects codes of the wrong length', () => {
+    expect(
+      AuthSchemas.verifyPhone.safeParse({ phoneNumber: '+33612345678', code: '12345' }).success,
+    ).toBe(false);
+    expect(
+      AuthSchemas.verifyPhone.safeParse({ phoneNumber: '+33612345678', code: '1234567' }).success,
+    ).toBe(false);
+  });
+});
+
 describe('updateBannerSchema', () => {
   it('accepts http:// URLs', () => {
     expect(updateBannerSchema.safeParse({ banner: 'http://example.com/img.png' }).success).toBe(true);
