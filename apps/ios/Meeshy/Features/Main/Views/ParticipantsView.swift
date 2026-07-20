@@ -215,6 +215,7 @@ struct ParticipantsView: View {
             Image(systemName: "person.2.fill")
                 .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
 
             Text("\(participants.count) \(participants.count > 1 ? String(localized: "participants.members_plural", defaultValue: "membres", bundle: .main) : String(localized: "participants.members_singular", defaultValue: "membre", bundle: .main))")
                 .font(MeeshyFont.relative(14, weight: .semibold))
@@ -329,6 +330,8 @@ struct ParticipantsView: View {
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.sm + 2)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(participantAccessibilityLabel(participant, isCurrentUser: isCurrentUser, presence: presence))
     }
 
     // MARK: - Role Badge
@@ -487,6 +490,48 @@ struct ParticipantsView: View {
     }
 
     // MARK: - Display Helpers
+
+    private func participantAccessibilityLabel(
+        _ participant: PaginatedParticipant,
+        isCurrentUser: Bool,
+        presence: PresenceState
+    ) -> String {
+        var parts: [String] = []
+
+        parts.append(isCurrentUser
+            ? "\(participant.name) (\(String(localized: "participants.you", defaultValue: "vous", bundle: .main)))"
+            : participant.name)
+
+        if let role = participant.conversationRole,
+           let memberRole = MemberRole(rawValue: role.lowercased()),
+           memberRole != .member {
+            parts.append(roleDisplayLabel(role))
+        }
+
+        if let presenceLabel = presenceAccessibilityLabel(presence) {
+            parts.append(presenceLabel)
+        }
+
+        if let username = participant.username {
+            parts.append("@\(username)")
+        }
+
+        if let joinedAt = participant.joinedAt {
+            let since = String(localized: "participants.since", defaultValue: "Depuis", bundle: .main)
+            parts.append("\(since) \(shortDate(joinedAt))")
+        }
+
+        return parts.joined(separator: ", ")
+    }
+
+    // Présence annoncée seulement quand un dot est visible (online/recent/away).
+    // `offline` reste muet — parité avec le visuel (offline = pas de dot).
+    private func presenceAccessibilityLabel(_ presence: PresenceState) -> String? {
+        switch presence {
+        case .online, .recent, .away: return presence.localizedLabel
+        case .offline: return nil
+        }
+    }
 
     private func roleDisplayLabel(_ role: String) -> String {
         let memberRole = MemberRole(rawValue: role.lowercased()) ?? .member

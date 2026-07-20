@@ -36,6 +36,7 @@ struct BubbleExpandableText: View, Equatable {
     var onLongPress: (() -> Void)? = nil
 
     @SwiftUI.State private var isExpanded: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.content == rhs.content &&
@@ -77,7 +78,7 @@ struct BubbleExpandableText: View, Equatable {
                 // 3. `.textSelection(.disabled)` explicite sur le bouton pour
                 //    qu'un tap imprécis ne déclenche pas le mode sélection.
                 Text(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(textColor.opacity(0.6))
                     // Hauteur de layout compacte (24pt) : l'ancien minHeight 44
                     // creusait ~16pt de vide au-dessus ET en dessous du libellé
@@ -91,17 +92,17 @@ struct BubbleExpandableText: View, Equatable {
                     .contentShape(DownwardExtendedTapShape(extraBottom: 20))
                     .textSelection(.disabled)
                     .highPriorityGesture(
-                        TapGesture()
-                            .onEnded {
-                                HapticFeedback.light()
-                                withAnimation(.easeInOut(duration: 0.25)) {
-                                    isExpanded = true
-                                }
-                            }
+                        TapGesture().onEnded { expand() }
                     )
                     .accessibilityIdentifier("bubble.expand.more")
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel(String(localized: "bubble.expand.more", defaultValue: "Voir plus", bundle: .main))
+                    .accessibilityHint(Text(String(localized: "bubble.expand.more.hint", defaultValue: "Affiche le message complet", bundle: .main)))
+                    // Le libellé n'est pas un vrai `Button` (il porte un
+                    // `.highPriorityGesture` custom pour battre le long-press du
+                    // parent) : la double-tape VoiceOver n'atteint pas ce geste.
+                    // On câble donc l'action d'activation par défaut explicitement.
+                    .accessibilityAction { expand() }
             }
         } else {
             // Déplié (ou court) : on affiche le message COMPLET sans aucun
@@ -114,6 +115,19 @@ struct BubbleExpandableText: View, Equatable {
                 // Pas de `.textSelection(.enabled)` : voir note ci-dessus — le
                 // long-press passe par le menu contextuel custom Meeshy, pas par
                 // le menu d'édition natif iOS.
+        }
+    }
+
+    /// Dépliage à sens unique, partagé par le tap et l'action VoiceOver.
+    /// Respecte Reduce Motion : pas d'animation quand l'utilisateur l'a désactivée.
+    private func expand() {
+        HapticFeedback.light()
+        if reduceMotion {
+            isExpanded = true
+        } else {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isExpanded = true
+            }
         }
     }
 

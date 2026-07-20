@@ -17,7 +17,7 @@ struct MediaDownloadSettingsView: View {
 
     @ObservedObject private var store = MediaDownloadPreferencesStore.shared
 
-    private let accentColor = "E67E22"
+    private let accentColor = MeeshyColors.brandPrimaryHex
 
     var body: some View {
         ZStack {
@@ -79,11 +79,11 @@ struct MediaDownloadSettingsView: View {
                     binding: $store.preferences.audio
                 )
                 policyPicker(
-                    title: String(localized: "settings.media.download.audio_translation", defaultValue: "Traductions audio", bundle: .main), icon: "character.bubble.fill", color: "F39C12",
+                    title: String(localized: "settings.media.download.audio_translation", defaultValue: "Traductions audio", bundle: .main), icon: "character.bubble.fill", color: MeeshyColors.indigo400Hex,
                     binding: $store.preferences.audioTranslation
                 )
                 policyPicker(
-                    title: String(localized: "settings.media.download.video", defaultValue: "Video", bundle: .main), icon: "play.rectangle.fill", color: "E74C3C",
+                    title: String(localized: "settings.media.download.video", defaultValue: "Video", bundle: .main), icon: "play.rectangle.fill", color: MeeshyColors.indigo300Hex,
                     binding: $store.preferences.video
                 )
                 Spacer().frame(height: 40)
@@ -97,7 +97,7 @@ struct MediaDownloadSettingsView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.media.download.info_header", defaultValue: "Information", bundle: .main), icon: "info.circle.fill", color: "6B7280")
+            sectionHeader(title: String(localized: "settings.media.download.info_header", defaultValue: "Information", bundle: .main), icon: "info.circle.fill", color: MeeshyColors.neutral500Hex)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
@@ -118,7 +118,7 @@ struct MediaDownloadSettingsView: View {
                 .padding(.vertical, 10)
                 .accessibilityElement(children: .combine)
             }
-            .background(sectionBackground(tint: "6B7280"))
+            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
         }
     }
 
@@ -185,12 +185,16 @@ struct MediaDownloadSettingsView: View {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
+                .accessibilityHidden(true)
             Text(title.uppercased())
                 .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
         .padding(.leading, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionBackground(tint: String) -> some View {

@@ -798,11 +798,19 @@ extension StoryComposerView {
                 // sheet ». Seules ces 3 modifications réagissent au carding ; les
                 // bounds intrinsèques (`fit`) restent FIXES (jamais animées).
                 .scaleEffect(framing.scale)
-                .offset(framing.offset)
                 .clipShape(RoundedRectangle(cornerRadius: framing.cornerRadius, style: .continuous))
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
-                .offset(y: -canvasEditShift)
-                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: framing)
+                // `.offset` APRÈS le `.frame(.center)` : sinon le recentrage du
+                // frame absorbait le décalage vertical du framing et la carte
+                // restait CENTRÉE — quand le sheet montait, sa moitié basse
+                // passait sous le sheet (troncature dynamique, user 2026-07-20).
+                // Appliqué après, l'offset déplace réellement la carte centrée.
+                .offset(x: framing.offset.width, y: framing.offset.height - canvasEditShift)
+                // Le suivi du framing est INSTANTANÉ (pas de spring) : pendant un
+                // drag de resize du sheet, `framing` change à chaque frame ; une
+                // animation ressort ne convergeait pas et la carte restait en
+                // retard (tronquée). Le carding tap→ouverture reste fluide car
+                // le sheet lui-même s'anime.
                 .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
         }
         .ignoresSafeArea()
