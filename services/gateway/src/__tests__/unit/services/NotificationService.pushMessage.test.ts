@@ -747,7 +747,44 @@ describe('NotificationService — message push title/body', () => {
       expect((payload.data ?? {}).translatedContent).toBe('Hello everyone');
     });
 
-    it('test_messagePush_oversizedByEncryptedContent_dropsTranslationFirst', async () => {
+    function payloadBytes(p: unknown): number {
+      return Buffer.byteLength(JSON.stringify(p), 'utf8');
+    }
+
+    it('test_messagePush_oversized_dropsTranslationFirst_keepsEncryptedContent', async () => {
+      mockLiveMessage({
+        translations: {
+          en: { text: 'y'.repeat(300), translationModel: 'medium', createdAt: MSG_CREATED_AT },
+        },
+      });
+
+      // Probe: measure the fixed payload overhead with a known-size ciphertext,
+      // then pick E so that WITHOUT the translation the payload fits (50B slack)
+      // while WITH it the 3800B guard overflows — translation must be the first
+      // (and only) field sacrificed.
+      await sendMessageNotification({ encryptedContent: 'z'.repeat(10) });
+      const probe = lastPushPayload() as { data?: Record<string, string> };
+      expect(probe.data?.translatedContent).toBe('y'.repeat(200));
+      const { translatedContent: _tc, translatedLanguage: _tl, ...probeSansTranslation } = probe.data!;
+      const bytesSansTranslation = payloadBytes({ ...probe, data: probeSansTranslation });
+      const E = 3800 - 50 - (bytesSansTranslation - 10);
+
+      await sendMessageNotification({ encryptedContent: 'z'.repeat(E) });
+
+      const payload = lastPushPayload();
+      const data = (payload.data ?? {}) as Record<string, string>;
+      expect(data).not.toHaveProperty('translatedContent');
+      expect(data).not.toHaveProperty('translatedLanguage');
+      expect(data.encryptedContent).toBe('z'.repeat(E));
+      expect(data.createdAt).toBe('2026-07-20T09:30:00.000Z');
+      expect(payloadBytes(payload)).toBeLessThanOrEqual(3800);
+    });
+
+    it('test_messagePush_stillOversizedAfterTranslationDrop_dropsEncryptedContentToo', async () => {
+      // encryptedContent ALONE busts the budget: dropping the translation is
+      // not enough — the guard must re-check and degrade further (generic
+      // banner delivered) instead of shipping a payload APNs rejects
+      // PayloadTooLarge (no banner at all + a strike on a healthy token).
       mockLiveMessage({
         translations: {
           en: { text: 'y'.repeat(300), translationModel: 'medium', createdAt: MSG_CREATED_AT },
@@ -756,11 +793,13 @@ describe('NotificationService — message push title/body', () => {
 
       await sendMessageNotification({ encryptedContent: 'z'.repeat(3800) });
 
-      const data = (lastPushPayload().data ?? {}) as Record<string, string>;
+      const payload = lastPushPayload();
+      const data = (payload.data ?? {}) as Record<string, string>;
       expect(data).not.toHaveProperty('translatedContent');
       expect(data).not.toHaveProperty('translatedLanguage');
-      expect(data.encryptedContent).toBe('z'.repeat(3800));
+      expect(data).not.toHaveProperty('encryptedContent');
       expect(data.createdAt).toBe('2026-07-20T09:30:00.000Z');
+      expect(payloadBytes(payload)).toBeLessThanOrEqual(3800);
     });
   });
 
@@ -825,6 +864,124 @@ describe('NotificationService — message push title/body', () => {
       expect(payload.body).toBe('Nouvelle notification');
       expect(payload.subtitle).toBeUndefined();
       expect(payload.title).toBe('Alice Martin');
+    });
+
+    it('test_pushSent_flipRereadsDelivery_preservesConcurrentEmailState', async () => {
+      // Between creation and the flip, another writer (daily email digest) may
+      // have set emailSent:true. The flip must re-read `delivery` and merge —
+      // never rewrite the stale creation snapshot { emailSent: false }.
+      sendToUser.mockResolvedValue([{ success: true, tokenId: 't-live' }]);
+      (prisma.notification.findUnique as jest.Mock).mockResolvedValue({
+        delivery: { emailSent: true, emailSentAt: '2026-07-20T10:00:00.000Z', pushSent: false },
+      });
+
+      await createAndFlush();
+
+      expect(prisma.notification.update).toHaveBeenCalledWith({
+        where: { id: 'notif-msg-1' },
+        data: {
+          delivery: {
+            emailSent: true,
+            emailSentAt: '2026-07-20T10:00:00.000Z',
+            pushSent: true,
+          },
+        },
+      });
+    });
+
+    it('test_showPreviewFalse_dataOmitsContentBearingFields', async () => {
+      // showPreview:false replaces title/body, but the NSE unconditionally
+      // rewrites the body from data.encryptedContent and attaches the media
+      // from data.attachmentUrl — every content-bearing data field must be
+      // omitted or the private mode is defeated on the device.
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showPreview: false },
+      });
+      (prisma.message.findUnique as jest.Mock).mockResolvedValue({
+        deletedAt: null,
+        expiresAt: null,
+        isViewOnce: false,
+        viewOnceCount: 0,
+        createdAt: new Date('2026-07-20T09:30:00.000Z'),
+        messageType: 'text',
+        translations: { fr: { text: 'Salut à tous', translationModel: 'medium' } },
+      });
+
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Salut, comment ça va ?',
+        encryptedContent: 'CIPHERTEXTBASE64',
+        firstAttachmentUrl: 'https://cdn.meeshy.me/x.jpg',
+        firstAttachmentMimeType: 'image/jpeg',
+      });
+
+      const data = (lastPushPayload() as { data?: Record<string, string> }).data!;
+      expect(data).not.toHaveProperty('encryptedContent');
+      expect(data).not.toHaveProperty('translatedContent');
+      expect(data).not.toHaveProperty('translatedLanguage');
+      expect(data).not.toHaveProperty('attachmentUrl');
+      expect(data).not.toHaveProperty('attachmentMimeType');
+      expect(data).not.toHaveProperty('attachmentDurationMs');
+      // Navigation context must survive — only content is stripped.
+      expect(data.conversationId).toBe(CONVERSATION_ID);
+      expect(data.messageId).toBe(MESSAGE_ID);
+    });
+
+    it('test_showPreviewFalse_replyPush_bodyLocalizedToRecipientLang', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showPreview: false },
+      });
+      (prisma.user.findUnique as jest.Mock).mockImplementation(({ where }: any) => {
+        if (where.id === RECIPIENT_ID) {
+          return Promise.resolve({
+            systemLanguage: 'en',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          });
+        }
+        return Promise.resolve({ username: 'alice', displayName: 'Alice Martin', avatar: null });
+      });
+
+      await service.createReplyNotification({
+        recipientUserId: RECIPIENT_ID,
+        replierUserId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Une réponse',
+      });
+
+      expect((lastPushPayload() as { body: string }).body).toBe('New notification');
+    });
+
+    it('test_showPreviewFalse_reactionPush_bodyLocalizedToRecipientLang', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showPreview: false },
+      });
+      (prisma.user.findUnique as jest.Mock).mockImplementation(({ where }: any) => {
+        if (where.id === RECIPIENT_ID) {
+          return Promise.resolve({
+            systemLanguage: 'en',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          });
+        }
+        return Promise.resolve({ username: 'alice', displayName: 'Alice Martin', avatar: null });
+      });
+
+      await service.createReactionNotification({
+        messageAuthorId: RECIPIENT_ID,
+        reactorUserId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        reactionEmoji: '❤️',
+      });
+
+      expect((lastPushPayload() as { body: string }).body).toBe('New notification');
     });
 
     it('test_showSenderNameFalse_titleIsGeneric_bodyKeepsContent', async () => {

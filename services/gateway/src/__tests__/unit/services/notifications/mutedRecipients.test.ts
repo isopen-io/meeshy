@@ -156,6 +156,27 @@ describe('NotificationService — mute applied to reaction/reply fan-out', () =>
       expect(result).not.toBeNull();
       expect(prisma.notification.create).toHaveBeenCalledTimes(1);
     });
+
+    it('muted-conversation reactions do not consume the pair throttle budget', async () => {
+      // The mute is deterministic and durable — it must be checked BEFORE the
+      // mutating anti-spam throttle. Otherwise 5 suppressed reactions in a
+      // muted conversation fill the sender→recipient bucket and silently drop
+      // a legitimate reaction notification in another conversation.
+      prisma.userConversationPreferences.findMany.mockResolvedValue([{ userId: AUTHOR_ID }]);
+      for (let i = 0; i < 5; i += 1) {
+        expect(await service.createReactionNotification(params)).toBeNull();
+      }
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+
+      prisma.userConversationPreferences.findMany.mockResolvedValue([]);
+      const result = await service.createReactionNotification({
+        ...params,
+        conversationId: '507f1f77bcf86cd799439099',
+      });
+
+      expect(result).not.toBeNull();
+      expect(prisma.notification.create).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('createReplyNotification', () => {

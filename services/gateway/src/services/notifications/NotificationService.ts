@@ -734,13 +734,16 @@ export class NotificationService {
           : typeof meta.emoji === 'string' ? meta.emoji : null),
         parentCommentPreview: (typeof meta.parentCommentPreview === 'string' ? meta.parentCommentPreview : null),
       };
-      // On ne touche la base pour la langue du destinataire QUE si le type
-      // produit réellement un titre localisé ET que l'appelant ne l'a pas déjà
-      // fournie — évite une requête inutile pour les types non gérés (messages,
-      // appels, sécurité…), qui retombent sur le rendu client.
+      // On ne touche la base pour la langue du destinataire QUE si un rendu
+      // localisé en a réellement besoin (titre localisé du type, ou corps
+      // générique showPreview:false) ET que l'appelant ne l'a pas déjà
+      // fournie — résolution paresseuse mémoïsée, au plus UNE requête.
+      let memoizedLang: string | undefined = params.lang;
+      const recipientLang = async (): Promise<string> =>
+        memoizedLang ?? (memoizedLang = await this.resolveRecipientLang(params.userId));
       let display = buildNotificationDisplay(params.lang ?? 'fr', displayInput);
       if (display.title !== null && params.lang === undefined) {
-        display = buildNotificationDisplay(await this.resolveRecipientLang(params.userId), displayInput);
+        display = buildNotificationDisplay(await recipientLang(), displayInput);
       }
       // Sous-titre persisté : l'override explicite riche d'une méthode `create*`
       // (ex. « Votre publication : « aperçu » ») prime, sinon la base localisée
@@ -842,9 +845,12 @@ export class NotificationService {
           // titre (nom de l'acteur) par un titre neutre.
           const showPreview = notifPrefs?.showPreview ?? true;
           const showSenderName = notifPrefs?.showSenderName ?? true;
+          // Corps générique localisé dans la langue du DESTINATAIRE — résolue
+          // paresseusement quand l'appelant ne l'a pas fournie (réponses,
+          // réactions, mentions…), jamais un 'fr' codé en dur.
           const pushBody = showPreview
             ? params.content.substring(0, 200)
-            : notificationString(params.lang ?? 'fr', 'push.private');
+            : notificationString(await recipientLang(), 'push.private');
 
           // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
           // par le payload push : embarquer le même compte unread que
@@ -904,44 +910,57 @@ export class NotificationService {
                 senderDisplayName: params.actor?.displayName || '',
                 senderAvatar: params.actor?.avatar || '',
                 imageURL: params.actor?.avatar || '',
-                // Phase A — message media inline (audio waveform, image preview, video thumb).
-                // L'extension iOS lit ces champs pour télécharger le fichier et l'attacher
-                // comme UNNotificationAttachment avec le bon UTI typeHint.
-                attachmentUrl: params.context.firstAttachmentUrl || '',
-                attachmentMimeType: params.context.firstAttachmentMimeType || '',
-                attachmentDurationMs: params.context.firstAttachmentDurationMs != null
-                  ? String(params.context.firstAttachmentDurationMs)
-                  : '',
                 // Phase B — reactions. Emoji used so the iOS extension can format
                 // the body as "<sender> a réagi <emoji> à votre message" while the
                 // INSendMessageIntent path still renders the reactor's avatar.
                 reactionEmoji: (params.metadata && 'reactionEmoji' in params.metadata
                   ? String(params.metadata.reactionEmoji ?? '')
                   : ''),
-                encryptedContent: params.context.encryptedContent || '',
                 notificationLocKey: params.context.notificationLocKey || '',
                 // GW5 — persistance NSE : timestamp serveur + type du message,
                 // clés absentes (pas de '') quand la notification ne porte pas
                 // de message.
                 ...(params.context.messageCreatedAt ? { createdAt: params.context.messageCreatedAt } : {}),
                 ...(params.context.messageType ? { messageType: params.context.messageType } : {}),
-                ...(params.context.translatedContent ? {
-                  translatedContent: params.context.translatedContent,
-                  translatedLanguage: params.context.translatedLanguage || '',
+                // GW7 — showPreview:false : AUCUN champ porteur de contenu dans
+                // data. La NSE réécrit inconditionnellement le body depuis
+                // encryptedContent et attache le média d'attachmentUrl — les
+                // embarquer vaincrait le mode privé (et translatedContent
+                // voyagerait en clair dans le canal push malgré l'opt-out).
+                ...(showPreview ? {
+                  // Phase A — message media inline (audio waveform, image preview,
+                  // video thumb). L'extension iOS lit ces champs pour télécharger le
+                  // fichier et l'attacher comme UNNotificationAttachment (UTI typeHint).
+                  attachmentUrl: params.context.firstAttachmentUrl || '',
+                  attachmentMimeType: params.context.firstAttachmentMimeType || '',
+                  attachmentDurationMs: params.context.firstAttachmentDurationMs != null
+                    ? String(params.context.firstAttachmentDurationMs)
+                    : '',
+                  encryptedContent: params.context.encryptedContent || '',
+                  ...(params.context.translatedContent ? {
+                    translatedContent: params.context.translatedContent,
+                    translatedLanguage: params.context.translatedLanguage || '',
+                  } : {}),
                 } : {}),
               },
             };
 
           // GW5 — budget APNs 4KB (rejet silencieux PayloadTooLarge sinon, et
-          // handleFailedToken compterait un strike sur un token sain) : la
-          // traduction Prisme est le PREMIER champ sacrifié quand le payload
-          // (encryptedContent volumineux) dépasse la marge de sécurité.
+          // handleFailedToken compterait un strike sur un token sain).
+          // Dégradation par étages avec RE-VÉRIFICATION après chaque coupe :
+          // la traduction Prisme d'abord, puis encryptedContent — un banner
+          // générique délivré (la NSE retombe sur le body serveur) vaut mieux
+          // qu'un push rejeté qui ne s'affiche jamais.
           const APNS_SAFE_PAYLOAD_BYTES = 3800;
+          const payloadBytes = (p: unknown): number => Buffer.byteLength(JSON.stringify(p), 'utf8');
           const { translatedContent: _tc, translatedLanguage: _tl, ...dataWithoutTranslation } = pushPayload.data;
-          const fitsApnsBudget = Buffer.byteLength(JSON.stringify(pushPayload), 'utf8') <= APNS_SAFE_PAYLOAD_BYTES;
-          const boundedPayload = fitsApnsBudget || !('translatedContent' in pushPayload.data)
-            ? pushPayload
-            : { ...pushPayload, data: dataWithoutTranslation };
+          const { encryptedContent: _ec, ...dataWithoutContentFields } = dataWithoutTranslation;
+          const boundedPayload = [
+            pushPayload,
+            { ...pushPayload, data: dataWithoutTranslation },
+            { ...pushPayload, data: dataWithoutContentFields },
+          ].find(candidate => payloadBytes(candidate) <= APNS_SAFE_PAYLOAD_BYTES)
+            ?? { ...pushPayload, data: dataWithoutContentFields };
 
           this.pushService.sendToUser({
             userId: params.userId,
@@ -958,10 +977,17 @@ export class NotificationService {
             const delivered = Array.isArray(results) && results.some(r => r?.success);
             if (!delivered) return;
             try {
-              const createdDelivery = (notification as { delivery?: Record<string, unknown> }).delivery ?? { emailSent: false };
+              // RE-LIRE delivery juste avant d'écrire : un autre writer (digest
+              // email quotidien) a pu poser emailSent:true entre-temps — le
+              // snapshot de création { emailSent: false } est périmé.
+              const current = await this.prisma.notification.findUnique({
+                where: { id: notification.id },
+                select: { delivery: true },
+              });
+              const liveDelivery = ((current as { delivery?: unknown } | null)?.delivery ?? {}) as Record<string, unknown>;
               await this.prisma.notification.update({
                 where: { id: notification.id },
-                data: { delivery: { ...createdDelivery, pushSent: true } as any },
+                data: { delivery: { ...liveDelivery, pushSent: true } as any },
               });
             } catch (error) {
               notificationLogger.error('pushSent flip failed', { error, notificationId: notification.id });
@@ -1432,19 +1458,22 @@ export class NotificationService {
     conversationId: string;
     reactionEmoji: string;
   }): Promise<Notification | null> {
-    // Anti-spam: throttle reaction notifications per sender→recipient pair
-    if (!this.shouldCreateReactionNotification(params.reactorUserId, params.messageAuthorId)) {
-      return null;
-    }
-
     // GW3 — per-conversation mute suppresses reaction notifications
-    // (mentions pierce the mute; reactions do not).
+    // (mentions pierce the mute; reactions do not). Checked BEFORE the
+    // throttle : le mute est déterministe/durable alors que
+    // shouldCreateReactionNotification MUTE son bucket — une réaction
+    // supprimée par le mute ne doit pas consommer le budget de la paire.
     const nonMuted = await filterMutedRecipients(this.prisma, params.conversationId, [params.messageAuthorId]);
     if (nonMuted.length === 0) {
       notificationLogger.info('Reaction notification suppressed (conversation muted)', {
         userId: params.messageAuthorId,
         conversationId: params.conversationId,
       });
+      return null;
+    }
+
+    // Anti-spam: throttle reaction notifications per sender→recipient pair
+    if (!this.shouldCreateReactionNotification(params.reactorUserId, params.messageAuthorId)) {
       return null;
     }
 
@@ -1477,6 +1506,7 @@ export class NotificationService {
       type: 'message_reaction',
       priority: 'low',
       content: notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji }),
+      lang,
 
       actor: {
         id: params.reactorUserId,
