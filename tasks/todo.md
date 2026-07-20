@@ -22,8 +22,21 @@ Plan détaillé : `docs/superpowers/plans/2026-07-20-ios-full-remediation.md`
 - [ ] Doc/mémoire présence (CLAUDE.md, mémoire) APRÈS CI verte
 - [ ] Push main au jalon, surveiller CI (pas de push docs par-dessus)
 
-## Annexe B — audit transverse (workflow ios-full-audit)
+## Annexe B — audit transverse (163 défauts dédupliqués → 23 lanes ; backlog complet : tasks/audit-backlog-2026-07-20.md + tasks/audit-notes-2026-07-20.md)
 
-- [ ] Synthèse reçue → lanes B-* planifiées ici (fichiers disjoints, mêmes règles)
+Top risks : P0 magic link connecté = fuite inter-comptes (MeeshyApp:152) · P0 changement d'avatar 100% cassé (`url` vs `fileUrl`, AttachmentUploader:105) · P0 édition profil offline → 404 infini + queue settings bloquée (ProfileView:803) · P1 clés E2EE survivantes au logout → DMs indéchiffrables (E2ESessionManager:233) · P1 pullToRefresh détruit L1+L2 avant fetch (ConversationListViewModel:1352).
+
+### Vague 3 (après merges Vague 1 ; B2 après N-iOS ; parallèles, fichiers disjoints)
+- [ ] **B1 Auth & session** (8 items, P0 magic link, mapping 401→invalidCredentials, wipe E2EE avec userId capturé, splash borné, catches APIError morts ×9 sites)
+- [ ] **B2 Profil/avatar/queue** (6 items, 2 P0 : fileUrl, route /users/me ; clé avatar Zod ; effacement champs '' vs nil ; SettingsActionQueue maxAttempts) — attend merge N-iOS (OutboxDispatcher partagé)
+- [ ] **B3 Liste conversations — données** (6 items : pullToRefresh fetch-then-replace, Prisme preview, champs compagnons stales, .expired porteur de données)
+- [ ] **B4 Conversation ouverte — VM/envoi** (8 items : retry manuel, pagination offline, 'fr' codés en dur ×4, copie traduite)
+- [ ] **B5 Feed social** (8 items : Prisme FeedPostCard, compteurs manquants, durabilité offline)
+
+### Vague 4
+- [ ] **B6 Stories** (8) · **B7 Réels/vidéo** (8) · **B8 Images & viewers SDK** (6 — attend merge AV, CachedAsyncImage partagé) · **B9 Audio SDK** (7) · **B10 Pièces jointes** (6) · **B11 Surfaces secondaires offline** (8)
+
+### Vague 5
+- [ ] **B12 Réglages/préférences** (6) · **B13 Appels retry/privacy** (8) · **B14 Robustesse noyau** (4) · **B15 Profil sheet SDK** (4) · **B16 i18n/catalogues** (8) · **B17 Détail message/SSOT** (6) · **B18 Liste conversations — vues** (7, vérifier chevauchement P-iOS) · **B19 Bulles Equatable** (2) · **B20 Deep links/join** (2) · **B21 Perf divers** (2) · **B22 Tests couverture factice** (5) · **B23 Tests CI/hygiène** (4)
 
 ## Review (à compléter en fin de chantier)
