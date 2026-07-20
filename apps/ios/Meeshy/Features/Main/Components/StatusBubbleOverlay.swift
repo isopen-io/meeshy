@@ -67,14 +67,29 @@ struct StatusBubbleOverlay: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .contentShape(Rectangle())
                     .onTapGesture { replyTapped() }
+                    // Un seul élément VoiceOver pour la bulle : le tap-pour-répondre est un
+                    // `.onTapGesture` (invisible à VoiceOver) et le contenu imbrique des boutons
+                    // (lecture audio, republier) qui seraient soit avalés par un `.combine`, soit
+                    // inatteignables. `children: .ignore` + action par défaut = répondre, actions
+                    // nommées (rotor) = lire l'audio / republier. Idiome 183i (CommunityLinksView).
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(bubbleAccessibilityLabel)
+                    .accessibilityValue(bubbleAccessibilityValue)
                     .accessibilityHint(onReplyTapped != nil
                         ? String(localized: "status.bubble.reply_hint", defaultValue: "Toucher pour répondre à cette humeur", bundle: .main)
                         : "")
+                    .accessibilityAddTraits(onReplyTapped != nil ? .isButton : [])
+                    .accessibilityAction { replyTapped() }
+                    .accessibilityActions { bubbleAccessibilityActions }
                     .position(x: bubbleX, y: anchor.y + dir * 52)
                     .scaleEffect(appearAnimation ? 1 : 0.2, anchor: showAbove ? .bottomLeading : .topLeading)
                     .opacity(appearAnimation ? 1 : 0)
                     .animation(.spring(response: 0.28, dampingFraction: 0.72).delay(0.05), value: appearAnimation)
             }
+            // Geste d'échappement VoiceOver (scrub à deux doigts) : la bulle est un overlay ZStack,
+            // pas une sheet système — sans ceci, un utilisateur VoiceOver n'a aucun moyen standard
+            // de la fermer (le tap-to-dismiss extérieur est un `Color.clear` non focalisable).
+            .accessibilityAction(.escape) { dismiss() }
         }
         .onAppear {
             appearAnimation = true
@@ -186,11 +201,9 @@ struct StatusBubbleOverlay: View {
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(Color(hex: status.avatarColor)))
             }
-            .accessibilityLabel(
-                audioPlayer.isPlaying
-                    ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
-                    : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
-            )
+            // VoiceOver : cette rangée est agrégée par le conteneur `bubbleContent`
+            // (`children: .ignore`) ; l'étiquette lecture/arrêt vit dans l'action nommée
+            // du conteneur (`bubbleAccessibilityActions`). Pas de label ici (inerte).
 
             ProgressView(value: audioPlayer.progress)
                 .progressViewStyle(.linear)
@@ -200,6 +213,54 @@ struct StatusBubbleOverlay: View {
         }
         .onAppear {
             audioPlayer.play(urlString: urlString)
+        }
+    }
+
+    // MARK: - Accessibility
+
+    private var hasAudio: Bool {
+        guard let audioUrl = status.audioUrl else { return false }
+        return !audioUrl.isEmpty
+    }
+
+    /// Libellé combiné de la bulle : contenu (texte ou « Humeur audio ») + ancienneté
+    /// + « via @… » éventuel. Un seul élément VoiceOver (`children: .ignore`).
+    private var bubbleAccessibilityLabel: String {
+        var parts: [String] = []
+        if hasAudio {
+            parts.append(String(localized: "status.bubble.audio.a11yLabel", defaultValue: "Humeur audio", bundle: .main))
+        } else if let content = status.content, !content.isEmpty {
+            parts.append(content)
+        }
+        parts.append(status.timeAgo)
+        if let via = status.viaUsername {
+            parts.append(String(localized: "status.bubble.via", defaultValue: "via @\(via)", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Progression de lecture audio, formatée en pourcentage locale-aware (0 clé i18n).
+    /// Vide pour une humeur texte (pas de valeur d'état à annoncer).
+    private var bubbleAccessibilityValue: String {
+        guard hasAudio else { return "" }
+        return audioPlayer.progress.formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    /// Actions secondaires exposées via le rotor VoiceOver (l'action par défaut = répondre).
+    @ViewBuilder private var bubbleAccessibilityActions: some View {
+        if hasAudio {
+            Button(audioPlayer.isPlaying
+                ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
+                : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
+            ) {
+                audioPlayer.togglePlayPause()
+            }
+        }
+        if onRepublish != nil {
+            Button(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main)) {
+                dismiss()
+                onRepublish?(status)
+            }
         }
     }
 
