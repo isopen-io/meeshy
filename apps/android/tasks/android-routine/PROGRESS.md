@@ -1,5 +1,41 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **live in-call captions core** landed (slice `call-captions-mode`, feature-parity §H →
+> "Live in-call transcription overlay" — an unchecked §H box; the build-order Calls area's next high-value
+> pure slice, following the many pure decision cores already landed there). Parity source: iOS `CaptionsMode`
+> (`apps/ios/Meeshy/Features/Main/Models/CaptionsMode.swift`), a 3-state cycle derived from two existing flags
+> rather than a third source of truth. **(1)** `core:model` `CaptionsMode` (enum `Off/Translated/Original`):
+> `from(isTranscribing, showOriginalText)` — `isTranscribing` takes priority so a **stale `showOriginalText`
+> never surfaces `Original` while captions are off**; `next` cycles `Off→Translated→Original→Off` and **always
+> re-enters on `Translated`** (reactivating captions never lands straight on `Original` unasked); `isShowingCaptions`
+> gates the overlay. **(2)** pure `CallCaptionResolver.resolve(segment, mode) → CaptionLine?` + `resolveAll` —
+> the Prisme-faithful projection of a framework-agnostic `CallCaptionSegment` (speaker id/name/isLocal + text +
+> optional translatedText/translatedLanguage) onto the on-screen `CaptionLine`: `Translated` shows the
+> translation as native content **and falls back to the original words when none exists** (Prisme rule 1 — the
+> absence of a translation means the content is already in the viewer's language, so we show the original, never
+> a blank line; a **blank** translation is treated as absent), `Original` always shows the speaker's own words,
+> `Off` yields nothing, a blank-text segment renders no line, and `resolveAll` drops blanks preserving order.
+> **SOTA note:** iOS keeps `CaptionsMode` (the button) and the display-text resolution split across the view;
+> Android folds both the button SSOT and a total, testable display SSOT into `:core:model` so the future overlay
+> and the captions button read from one pure source. **+24 behavioural tests** — `CallCaptionsTest`
+> (from×3, next×4, isShowingCaptions, Off-yields-nothing, Original happy/blank, Translated happy/no-translation-
+> fallback/blank-translation-fallback/translation-wins-over-blank-original/untagged-translation/both-blank,
+> speaker-identity-carried, resolveAll empty/Off/drops-blanks-in-order). **Mutation check (RED proof):**
+> neutralising the blank-translation→absent fallback (`takeUnless { it.isBlank() }` → raw) fails **exactly**
+> `Translated treats a blank translation as absent and shows the original` (21 tests run, 1 failed, no
+> collateral) — behavioural, not tautological. **Gate (system Gradle 8.14.3 — the wrapper's 8.11.1 download
+> 403s through the proxy; `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (the new
+> suite 24/24) + full `:app:assembleDebug` → **BUILD SUCCESSFUL**. Reviewer **PASS** (diff `apps/android` only —
+> 1 production file + 1 test + tracking; **SDK purity** — an enum + a data class + a pure resolver object, all
+> stateless building blocks in `:core:model`, zero framework deps; the `SpeechRecognizer` STT actuator + socket
+> transport + overlay UI stay app-side, pending; **SSOT** — one mode enum, one resolver, mirrors the pure-core
+> pattern of the other §H cores; **Prisme** — the resolver enforces the "original-on-no-translation" rule, never
+> `first()`; no coverage floor lowered, no test weakened). **Next slice:** the §H captions actuator — an
+> app-side `EdgeTranscription` seam (Android `SpeechRecognizer`) + the socket transcript transport folding into a
+> `CallViewModel` captions state that drives `CaptionsMode`/`CallCaptionResolver`, plus the accent-coherent
+> overlay UI + captions button (closing the §H box to `[x]`); OR another §H pure core (in-call translation data
+> channel) or the tracked Kover 90% coverage-gate infra follow-up.
+
 > On 2026-07-20 the **camera-covered ("dark frame") detection core** landed (slice `call-dark-frame-detection`,
 > feature-parity §H → "Camera-covered detection during video calls" — an unchecked §H box; the build-order Calls
 > area's next high-value pure slice, following the many pure decision cores already landed there). Parity source:
