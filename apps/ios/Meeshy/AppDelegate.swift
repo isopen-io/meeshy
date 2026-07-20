@@ -276,6 +276,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: []
         )
 
+        let commentAction = UNTextInputNotificationAction(
+            identifier: MeeshyNotificationAction.comment.rawValue,
+            title: String(localized: "notifications.action.comment", defaultValue: "Comment"),
+            options: [],
+            textInputButtonTitle: String(localized: "notifications.action.send", defaultValue: "Send"),
+            textInputPlaceholder: String(localized: "notifications.action.commentPlaceholder", defaultValue: "Comment…")
+        )
+
         let viewAction = UNNotificationAction(
             identifier: MeeshyNotificationAction.view.rawValue,
             title: String(localized: "notifications.action.view", defaultValue: "View"),
@@ -340,13 +348,40 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: []
         )
 
-        // Call category: distinct action set for incoming (ringing) vs missed/ended.
-        // Incoming calls would normally use CallKit/PushKit VoIP; this category
-        // covers the regular-APNs path (missed_call, call_ended, call_declined,
-        // call_recording_ready) where quick callback is the natural action.
-        let callCategory = UNNotificationCategory(
+        // R3 — social pushes whose type is commentable AND that carry a postId
+        // (category set by the NSE, `NotificationPayloadHelpers.socialCategoryIdentifier`,
+        // or pushed directly by the gateway). Adds the inline text action.
+        let socialCommentableCategory = UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.socialCommentable.rawValue,
+            actions: [commentAction, viewAction, markReadAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        // G4d — call categories split by state so a terminated call never
+        // shows an « Answer » button. Ringing normally goes through
+        // CallKit/PushKit VoIP; MEESHY_CALL_INCOMING covers the regular-APNs
+        // ringing path (China devices, no-voip-token fallback).
+        let callIncomingCategory = UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.callIncoming.rawValue,
+            actions: [answerCallAction, declineCallAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
+        let callMissedCategory = UNNotificationCategory(
+            identifier: MeeshyNotificationCategory.callMissed.rawValue,
+            actions: [callbackAction, viewAction],
+            intentIdentifiers: [],
+            options: [.customDismissAction]
+        )
+
+        // Legacy MEESHY_CALL — kept registered for pushes categorized by a
+        // stale NSE / gateway during the rollout window. Terminal-state action
+        // set (no Answer): the historical bug was « Répondre » on missed calls.
+        let legacyCallCategory = UNNotificationCategory(
             identifier: MeeshyNotificationCategory.call.rawValue,
-            actions: [callbackAction, answerCallAction, declineCallAction, viewAction],
+            actions: [callbackAction, viewAction],
             intentIdentifiers: [],
             options: [.customDismissAction]
         )
@@ -356,7 +391,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             mentionCategory,
             friendRequestCategory,
             socialCategory,
-            callCategory
+            socialCommentableCategory,
+            callIncomingCategory,
+            callMissedCategory,
+            legacyCallCategory
         ])
     }
 
@@ -466,6 +504,11 @@ enum MeeshyNotificationCategory: String {
     case mention = "MEESHY_MENTION"
     case friendRequest = "MEESHY_FRIEND_REQUEST"
     case social = "MEESHY_SOCIAL"
+    case socialCommentable = "MEESHY_SOCIAL_COMMENTABLE"
+    case callIncoming = "MEESHY_CALL_INCOMING"
+    case callMissed = "MEESHY_CALL_MISSED"
+    /// Legacy single call category — superseded by the incoming/missed split,
+    /// kept for pushes categorized by a stale NSE during rollout.
     case call = "MEESHY_CALL"
 }
 
@@ -473,6 +516,7 @@ enum MeeshyNotificationAction: String {
     case reply = "MEESHY_ACTION_REPLY"
     case markRead = "MEESHY_ACTION_MARK_READ"
     case view = "MEESHY_ACTION_VIEW"
+    case comment = "MEESHY_ACTION_COMMENT"
     case accept = "MEESHY_ACTION_ACCEPT"
     case decline = "MEESHY_ACTION_DECLINE"
     case callback = "MEESHY_ACTION_CALLBACK"
@@ -552,6 +596,12 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
     }
 
     /// Called when the user interacts with a notification (tap, action button, etc.).
+    ///
+    /// R1 — the actual work lives in `NotificationActionHandler` (injectable,
+    /// unit-tested). The handler wraps itself in a `beginBackgroundTask` and
+    /// `completionHandler()` fires AFTER the awaited work — previously it was
+    /// called synchronously while the work ran in a detached Task, letting
+    /// iOS suspend the process mid-send on background cold-launch.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
@@ -563,81 +613,12 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         logger.info("Notification response: action=\(actionIdentifier)")
 
         Task { @MainActor in
-            let payload = NotificationPayload(userInfo: userInfo)
-
-            switch actionIdentifier {
-            case UNNotificationDefaultActionIdentifier:
-                PushNotificationManager.shared.handleNotification(userInfo: userInfo)
-            case UNNotificationDismissActionIdentifier:
-                // User swiped the banner away — nothing to navigate to.
-                break
-            case MeeshyNotificationAction.markRead.rawValue:
-                if let conversationId = payload.conversationId {
-                    NotificationCoordinator.shared.markConversationRead(conversationId)
-                    NotificationCenter.default.post(
-                        name: .conversationMarkedRead,
-                        object: conversationId
-                    )
-                    try? await ConversationService.shared.markRead(
-                        conversationId: conversationId
-                    )
-                    // Dismiss any banners still showing for this conversation in
-                    // Notification Center so the badge stays aligned with the
-                    // coordinator's count (otherwise the user sees the banner
-                    // linger after they already marked it read from the lock
-                    // screen action).
-                    removeDeliveredNotifications(for: conversationId)
-                }
-            case MeeshyNotificationAction.reply.rawValue:
-                if let replyText,
-                   let conversationId = payload.conversationId {
-                    let request = SendMessageRequest(
-                        content: replyText,
-                        replyToId: payload.messageId
-                    )
-                    _ = try? await MessageService.shared.send(
-                        conversationId: conversationId,
-                        request: request
-                    )
-                    NotificationCoordinator.shared.markConversationRead(conversationId)
-                }
-            case MeeshyNotificationAction.view.rawValue,
-                 MeeshyNotificationAction.accept.rawValue,
-                 MeeshyNotificationAction.decline.rawValue,
-                 MeeshyNotificationAction.callback.rawValue,
-                 MeeshyNotificationAction.answerCall.rawValue:
-                // All of these surface the app to the relevant screen — the
-                // deep-link router decides the destination based on payload.type
-                // (incoming_call opens the call UI, missed_call opens the thread).
-                PushNotificationManager.shared.handleNotification(userInfo: userInfo)
-            case MeeshyNotificationAction.declineCall.rawValue:
-                // Silent decline — no navigation. The VoIP layer handles the
-                // actual decline via CallKit; APNs declineCall is just
-                // bookkeeping so we don't reopen the call screen.
-                break
-            default:
-                PushNotificationManager.shared.handleNotification(userInfo: userInfo)
-            }
-        }
-
-        completionHandler()
-    }
-
-    // MARK: - Notification Hygiene
-
-    /// Remove any already-delivered banners that belong to the given
-    /// conversation. Without this, after a user taps "Mark as read" on the
-    /// lock-screen action the message-new banner still sits in Notification
-    /// Center, so the coordinator's badge count and the visible banner stack
-    /// drift (user sees 0 unread but a banner for that conversation).
-    fileprivate nonisolated func removeDeliveredNotifications(for conversationId: String) {
-        let center = UNUserNotificationCenter.current()
-        center.getDeliveredNotifications { notifications in
-            let matching = notifications
-                .filter { ($0.request.content.userInfo["conversationId"] as? String) == conversationId }
-                .map(\.request.identifier)
-            guard !matching.isEmpty else { return }
-            center.removeDeliveredNotifications(withIdentifiers: matching)
+            await NotificationActionHandler.shared.handle(
+                actionIdentifier: actionIdentifier,
+                userInfo: userInfo,
+                replyText: replyText
+            )
+            completionHandler()
         }
     }
 }

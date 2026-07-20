@@ -64,6 +64,10 @@ packages:
     path: ../../packages/MeeshySDK
 
 targets:
+  # G7 (2026-07-20) — FirebaseMessaging was removed from the Meeshy target's
+  # linked package products (pbxproj): push is pure APNs (the gateway routes to
+  # api.push.apple.com itself), no code ever imported FirebaseMessaging. Do NOT
+  # re-link it when migrating package dependencies into this file.
   Meeshy:
     type: application
     platform: iOS
@@ -99,8 +103,6 @@ targets:
         product: FirebaseAnalytics
       - package: Firebase
         product: FirebaseCrashlytics
-      - package: Firebase
-        product: FirebaseMessaging
       - package: Firebase
         product: FirebasePerformance
     # Target-level scheme so `xcodegen generate` emits a shared "Meeshy"
@@ -197,6 +199,14 @@ targets:
           # suite at construction ("No target application path specified" →
           # NSInternalInconsistencyException from -[XCUIApplication init]).
           - "UI/BubbleExpandableTextUITests.swift"
+      # NSE pure helpers compiled INTO the test bundle (they are unreachable
+      # through `@testable import Meeshy` — they live in the app-extension
+      # target). Foundation/CryptoKit-only files, no UNNotification runtime.
+      # This is what makes NotificationPayloadHelpersTests + NSEDecryptorTests
+      # buildable (the former was deleted 0c550facc for being unreachable —
+      # resurrected now that the sources are shared).
+      - path: MeeshyNotificationExtension/NotificationPayloadHelpers.swift
+      - path: MeeshyNotificationExtension/NSEDecryptor.swift
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.tests
       CODE_SIGN_STYLE: Automatic

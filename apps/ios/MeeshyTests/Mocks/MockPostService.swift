@@ -66,6 +66,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastAddCommentPostId: String?
     var lastAddCommentContent: String?
     var lastAddCommentParentId: String?
+    var lastAddCommentClientMutationId: String?
     var lastAddCommentAttachmentIds: [String]?
 
     var likeCommentCallCount = 0
@@ -207,6 +208,11 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastAddCommentParentId = parentId
         lastAddCommentAttachmentIds = attachmentIds
         return try addCommentResult.get()
+    }
+
+    func addComment(postId: String, content: String, parentId: String?, effectFlags: Int?, clientMutationId: String?) async throws -> APIPostComment {
+        lastAddCommentClientMutationId = clientMutationId
+        return try await addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags)
     }
 
     func likeComment(postId: String, commentId: String) async throws {
@@ -402,6 +408,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastAddCommentPostId = nil
         lastAddCommentContent = nil
         lastAddCommentParentId = nil
+        lastAddCommentClientMutationId = nil
         lastAddCommentAttachmentIds = nil
 
         likeCommentResult = .success(())
