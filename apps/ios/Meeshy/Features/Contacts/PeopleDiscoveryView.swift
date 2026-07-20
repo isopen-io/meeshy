@@ -85,7 +85,7 @@ struct PeopleDiscoveryView: View {
                     Image(systemName: tab.icon)
                         .font(.footnote.weight(.medium))
 
-                    Text(tab.rawValue)
+                    Text(tabTitle(tab))
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
 
@@ -107,8 +107,22 @@ struct PeopleDiscoveryView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
         }
-        .accessibilityLabel(tab.rawValue)
-        .accessibilityValue(badge > 0 ? "\(badge)" : "")
+        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tabTitle(tab))\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    /// Localized display name for a discovery sub-tab. The raw enum value stays the
+    /// stable key used for `.tag`/persistence/deep-links (`Route.peopleDiscovery`);
+    /// VoiceOver and the visible label read this localized string instead.
+    private func tabTitle(_ tab: DiscoveryTab) -> String {
+        switch tab {
+        case .discover:
+            return String(localized: "discovery.tab.discover", defaultValue: "Decouvrir", bundle: .main)
+        case .requests:
+            return String(localized: "discovery.tab.requests", defaultValue: "Demandes", bundle: .main)
+        case .blocked:
+            return String(localized: "discovery.tab.blocked", defaultValue: "Bloques", bundle: .main)
+        }
     }
 
     private func subBadge(for tab: DiscoveryTab) -> Int {
