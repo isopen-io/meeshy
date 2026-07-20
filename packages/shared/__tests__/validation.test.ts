@@ -87,6 +87,17 @@ describe('CommonSchemas', () => {
       expect(CommonSchemas.language.safeParse('en-US').success).toBe(true);
     });
 
+    it('accepts a three-letter code WITH a region subtag', () => {
+      // `bas-CM` (639-3 body + ISO 3166-1 region) is 6 chars — the max the regex
+      // `[a-z]{2,3}(-[A-Z]{2})?` allows. The former `.max(5)` cap contradicted the
+      // regex and rejected these supported Cameroonian codes on sendMessage/edit
+      // (the same class of bug the {2}->{2,3} relax targeted, left open for the
+      // regionalized form).
+      for (const code of ['bas-CM', 'ewo-CM', 'ksf-CM']) {
+        expect(CommonSchemas.language.safeParse(code).success).toBe(true);
+      }
+    });
+
     it('rejects malformed codes', () => {
       expect(CommonSchemas.language.safeParse('f').success).toBe(false);
       expect(CommonSchemas.language.safeParse('english').success).toBe(false);
