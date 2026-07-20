@@ -1,5 +1,34 @@
 # Lessons
 
+## Leçon 81 — le `defaultValue` inline de `String(localized:)` doit être en ANGLAIS, pas en français (2026-07-20, routine iOS UI/UX, iter 172)
+
+**Correction maintainer (jcnm)** : PR #2056 (172i, `LoadMoreRepliesCell`) fermée en doublon de #2069
+(176i, même fichier, même clé `comments.load-more-replies`). Motif retenu pour #2069 : **`defaultValue` en
+anglais** + indigo adaptatif dark/light. J'avais suivi la « doctrine FR inline » héritée des itérations
+précédentes (167i, 159i…) et posé `defaultValue: "Voir ^[\(remaining) réponse](inflect: true) de plus"`.
+
+**Pourquoi c'est un bug** : `apps/ios/Meeshy/Info.plist` → `CFBundleDevelopmentRegion` =
+`$(DEVELOPMENT_LANGUAGE)` = **`en`**. Quand une clé n'a PAS d'entrée pour la locale de l'appareil dans le
+`.xcstrings`, iOS retombe sur la valeur de la **development region**, c.-à-d. le `defaultValue` inline. Un
+`defaultValue` français s'affiche donc **en français sur tout appareil non-fr** (de, es, en…) faute d'entrée
+`en` dans le catalogue. Le `defaultValue` doit refléter la development region (en), et les traductions FR
+vivent dans le `.xcstrings`.
+
+**Règle réutilisable** : pour tout NOUVEAU `String(localized: "key", defaultValue: …, bundle: .main)` iOS,
+le `defaultValue` est en **anglais**. La pluralisation par accord grammatical (`^[\(n) reply](inflect: true)`)
+et le split label/value restent valides — seule la LANGUE du littéral change. Ne jamais présumer « FR inline »
+même si des itérations passées l'ont fait.
+
+**Tension connue (à ne PAS résoudre unilatéralement)** : ~97 fichiers sous `apps/ios/Meeshy` portent déjà des
+`defaultValue` FR — l'app est de facto FR-only via `defaultValue` (probablement sans catalogue `en` complet).
+C'est une incohérence i18n pré-existante à l'échelle de l'app, PAS un chantier à ouvrir en solo dans une
+itération UI/UX ciblée. Signaler/flag plutôt que sweeper 97 fichiers sans mandat explicite. Pour mes propres
+nouvelles chaînes : anglais, systématiquement.
+
+**Méta-leçon** : ne pas re-vérifier la « doctrine » d'un fichier via les itérations passées quand un fait
+projet (development region, config Info.plist) la contredit. Vérifier la source primaire (`Info.plist`,
+`project.yml`) avant d'adopter une convention héritée.
+
 ## Leçon 80 — l'épinglage/désépinglage de message ne passait PAS par la file hors-ligne (2026-07-09, routine messaging, iter 150)
 
 Suite directe de la Leçon 79 (qui appliquait la règle « énumérer TOUTES les mutations d'un agrégat message
