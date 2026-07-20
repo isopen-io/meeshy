@@ -35,6 +35,35 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   `AttachmentLoadingTile` (#2009), `MyStoriesView` (#2013), `InviteFriendsSheet` (#2022), etc. Sinon :
 >   traîne 2/1 `.system` (`ContextActionMenu`, `ConversationBackgroundComponents`, `StoryExpiredContent`,
 >   `BubbleStandardLayout` emoji…) ou **passe state-of-the-art** au tarissement.
+> **POINTEUR iOS AUTORITAIRE (mis à jour 178i, 2026-07-20)** — piste iOS (suffixe `i`).
+> - **Base** : branche assignée `claude/laughing-thompson-ado1ko` **reset dur sur `main` HEAD `d6a3a3a`**
+>   (le travail antérieur de la branche était déjà 100 % mergé — `git diff main HEAD` = vide → tree identique ;
+>   reset propre, aucun commit non-mergé perdu). Numéro **178i** choisi strictement > 177i (plus haut soldé).
+> - **178i (terminée, base `main` HEAD `d6a3a3a`)** : VoiceOver de **`CrashReportSheet`** (feuille présentée
+>   au foreground depuis `MeeshyApp.swift:146` quand `CrashDiagnosticsManager` a des rapports de crash en attente).
+>   Surface **déjà 100 % localisée** (titre, close, labels de badge via `kind.localizedLabel`) et **fonts déjà
+>   sémantiques** (`.caption2`/`.subheadline`/`.caption2.monospaced`, 0 `.system(size:)`) → **0 migration
+>   Dynamic Type, 0 correction i18n existante**. **2 lacunes VoiceOver réelles** : (1) carte tap-to-expand =
+>   `.contentShape(Rectangle()) + .onTapGesture` sur un `VStack` non-`Button` → **action de dépliage invisible
+>   VoiceOver** + badge/date/résumé éclatés en 3 arrêts sans lien (même gap que 173i `MiniAudioPlayerBar`) →
+>   split header (badge+résumé) en élément `.accessibilityElement(children:.combine)` + `.accessibilityAddTraits(.isButton)`
+>   + `.accessibilityHint` **state-aware** (`crash.reports.expand.hint`/`.collapse.hint`) + `.accessibilityAction`
+>   (la trace détaillée reste un élément séparé → `.textSelection` copie préservée) ; (2) **`ShareLink` icône-only**
+>   (`square.and.arrow.up`) sans `.accessibilityLabel` → VoiceOver lisait le nom du symbole SF → `.accessibilityLabel`
+>   (`crash.reports.share.a11yLabel`). **Dédup** : toggle `expandedId` extrait en `toggleExpansion(_:)` partagé
+>   par le tap tactile ET l'action VoiceOver (1:1). 1 fichier, 0 logique / 0 visuel / 0 test neuf ; 3 clés inline
+>   `defaultValue` FR, 0 xcstrings ; aucun test ne référence la vue (0 contention). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** `CrashReportSheet` (VoiceOver tap-to-expand + ShareLink soldés 178i ; i18n + Dynamic
+>   Type déjà complets avant 178i).
+> - **Base de départ 179i : `main` HEAD** (resync ; supprimer la branche mergée). **Différé 179i+** (surfaces
+>   fraîches, 1/itération, vérifier collision via `list_pull_requests`) : `LicensesView` (`accentColor = "6366F1"`
+>   figé = `MeeshyColors.brandPrimaryHex` + badges hex hors-palette lignes 159-166 → tokens `MeeshyColors.*Hex` ;
+>   **+ contenu légal périmé** : liste Kingfisher (retiré 2026-05) + Starscream (non-dép) et **omet GRDB** (dép
+>   transitive réelle `project.yml:52`) — défaut d'attribution) ; `FriendRequestListView` (boutons accept/decline
+>   `36×36` < cible HIG 44pt ligne 162/173 ; fallback FR brut `"Inconnu"` ligne 107 non localisé) ;
+>   `VideoFullscreenPlayer` (`VideoLegacySupport.swift:114` — `xmark` dismiss icône-only sans label, glyphe
+>   `.system(28)` figé = doctrine contrôle média 74i/86i, garder figé).
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 172i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **172i (en cours, branche `claude/laughing-thompson-ks1h8d`, base `main` HEAD `612872b`)** :
 >   Alignement marque Indigo + structure VoiceOver de `MagicLinkView` (connexion par lien magique).
