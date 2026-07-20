@@ -106,7 +106,7 @@ faster-whisper==1.2.1
 # Dépendances manuelles de chatterbox-tts (pour installation --no-deps):
 resampy==0.4.3
 s3tokenizer==0.3.0
-diffusers==0.29.0
+diffusers==0.39.0
 resemble-perth==1.0.1
 omegaconf==2.3.1
 conformer==0.3.2
