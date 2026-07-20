@@ -828,8 +828,11 @@ struct MessageViewsDetailView: View {
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
+                // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
+                // it with Dynamic Type so icon and caption grow in proportion.
                 .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                // Decorative — the caption below already states the empty state.
                 .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
@@ -837,13 +840,20 @@ struct MessageViewsDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
+        // Read the whole empty state as the single caption, not "image" + text.
+        .accessibilityElement(children: .combine)
     }
 
     private func retryableErrorView(accent: Color) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.slash")
+                // 28pt (< 40pt hero freeze) paired with a footnote caption → scale
+                // it with Dynamic Type so icon and caption grow in proportion.
                 .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                // Decorative — the error caption + Retry button carry the meaning.
+                // Not combined into one element: the button must stay independently
+                // focusable for VoiceOver.
                 .accessibilityHidden(true)
             Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
                 .font(.footnote.weight(.medium))
