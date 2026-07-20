@@ -320,7 +320,7 @@ describe('UsersService', () => {
     });
   });
 
-  describe('isUserOnline', () => {
+  describe('isUserOnline (délégué à la règle canonique 1/3/5)', () => {
     beforeEach(() => {
       jest.useFakeTimers();
       jest.setSystemTime(new Date('2024-01-15T12:00:00Z'));
@@ -330,7 +330,7 @@ describe('UsersService', () => {
       jest.useRealTimers();
     });
 
-    it('should return true for user active within 5 minutes', () => {
+    it('should return true when isOnline within the 5min stale guard', () => {
       const user = createMockUser({
         isOnline: true,
         lastActiveAt: new Date('2024-01-15T11:57:00Z'), // 3 minutes ago
@@ -339,7 +339,7 @@ describe('UsersService', () => {
       expect(usersService.isUserOnline(user)).toBe(true);
     });
 
-    it('should return false for user active more than 5 minutes ago', () => {
+    it('should return false when isOnline is stale (beyond 5 minutes)', () => {
       const user = createMockUser({
         isOnline: true,
         lastActiveAt: new Date('2024-01-15T11:50:00Z'), // 10 minutes ago
@@ -348,10 +348,19 @@ describe('UsersService', () => {
       expect(usersService.isUserOnline(user)).toBe(false);
     });
 
-    it('should return false when isOnline is false', () => {
+    it('should return true when disconnected but active within 60 seconds (decay)', () => {
       const user = createMockUser({
         isOnline: false,
-        lastActiveAt: new Date('2024-01-15T11:59:00Z'), // 1 minute ago
+        lastActiveAt: new Date('2024-01-15T11:59:30Z'), // 30 seconds ago
+      });
+
+      expect(usersService.isUserOnline(user)).toBe(true);
+    });
+
+    it('should return false when disconnected and last active over a minute ago', () => {
+      const user = createMockUser({
+        isOnline: false,
+        lastActiveAt: new Date('2024-01-15T11:58:00Z'), // 2 minutes ago
       });
 
       expect(usersService.isUserOnline(user)).toBe(false);
@@ -368,7 +377,7 @@ describe('UsersService', () => {
       jest.useRealTimers();
     });
 
-    it('should return "online" for activity < 5 minutes', () => {
+    it('should return "online" when isOnline within the 5min stale guard', () => {
       const user = createMockUser({
         isOnline: true,
         lastActiveAt: new Date('2024-01-15T11:57:00Z'),
@@ -377,31 +386,40 @@ describe('UsersService', () => {
       expect(usersService.getUserStatus(user)).toBe('online');
     });
 
-    it('should return "away" for activity between 5-30 minutes', () => {
+    it('should return "away" for activity between 1-3 minutes when disconnected', () => {
       const user = createMockUser({
-        isOnline: true,
-        lastActiveAt: new Date('2024-01-15T11:45:00Z'), // 15 minutes ago
+        isOnline: false,
+        lastActiveAt: new Date('2024-01-15T11:58:00Z'), // 2 minutes ago
       });
 
       expect(usersService.getUserStatus(user)).toBe('away');
     });
 
-    it('should return "offline" for activity > 30 minutes', () => {
+    it('should return "idle" for activity between 3-5 minutes when disconnected', () => {
+      const user = createMockUser({
+        isOnline: false,
+        lastActiveAt: new Date('2024-01-15T11:56:00Z'), // 4 minutes ago
+      });
+
+      expect(usersService.getUserStatus(user)).toBe('idle');
+    });
+
+    it('should return "offline" for activity > 5 minutes even when isOnline is stale', () => {
       const user = createMockUser({
         isOnline: true,
-        lastActiveAt: new Date('2024-01-15T11:00:00Z'), // 60 minutes ago
+        lastActiveAt: new Date('2024-01-15T11:50:00Z'), // 10 minutes ago
       });
 
       expect(usersService.getUserStatus(user)).toBe('offline');
     });
 
-    it('should return "offline" when isOnline is false', () => {
+    it('should decay by time when isOnline is false (règle canonique, plus de gate binaire)', () => {
       const user = createMockUser({
         isOnline: false,
-        lastActiveAt: new Date('2024-01-15T11:59:00Z'),
+        lastActiveAt: new Date('2024-01-15T11:59:30Z'), // 30 seconds ago
       });
 
-      expect(usersService.getUserStatus(user)).toBe('offline');
+      expect(usersService.getUserStatus(user)).toBe('online');
     });
   });
 

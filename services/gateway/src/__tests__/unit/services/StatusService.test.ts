@@ -707,4 +707,117 @@ describe('StatusService', () => {
       await flushPromises();
     });
   });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // noteHeartbeat — heartbeat socket refreshes lastActiveAt (throttle 60s)
+  // so a passive-connected user stays 'online' under the 5min presence guard
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('noteHeartbeat', () => {
+    it('refreshes lastActiveAt on the first beat for a registered user', async () => {
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(mockPrisma.user.update).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        data: { lastActiveAt: expect.any(Date) }
+      });
+    });
+
+    it('throttles subsequent beats within the 60s window (at most one write per minute)', async () => {
+      service.noteHeartbeat('user-1', false);
+      service.noteHeartbeat('user-1', false);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(mockPrisma.user.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('refreshes again once the 60s window has elapsed', async () => {
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      backDate((service as any).heartbeatCache, 'heartbeat_user-1', 61_000);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(mockPrisma.user.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('ignores beats from a disconnected user (race guard)', async () => {
+      service.markDisconnected('user-1', false);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('beats again after a reconnect (heartbeat throttle cleared on disconnect)', async () => {
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      service.markDisconnected('user-1', false);
+      service.markConnected('user-1', false);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(mockPrisma.user.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('refreshes participant lastActiveAt for an anonymous user', async () => {
+      service.noteHeartbeat('anon-1', true);
+      await flushPromises();
+      expect(mockPrisma.participant.update).toHaveBeenCalledWith({
+        where: { id: 'anon-1' },
+        data: { lastActiveAt: expect.any(Date) }
+      });
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('broadcasts the refresh through presenceCallback so already-connected viewers un-stale their 5min guard', async () => {
+      const callback = jest.fn();
+      service.setPresenceCallback(callback);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(callback).toHaveBeenCalledWith('user-1', true, false);
+    });
+
+    it('passes the anonymous flag through the presence broadcast', async () => {
+      const callback = jest.fn();
+      service.setPresenceCallback(callback);
+      service.noteHeartbeat('anon-1', true);
+      await flushPromises();
+      expect(callback).toHaveBeenCalledWith('anon-1', true, true);
+    });
+
+    it('does not broadcast a throttled beat (at most one broadcast per 60s window)', async () => {
+      const callback = jest.fn();
+      service.setPresenceCallback(callback);
+      service.noteHeartbeat('user-1', false);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(callback).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not broadcast when the DB refresh fails', async () => {
+      mockPrisma.user.update.mockRejectedValueOnce(new Error('db down'));
+      const callback = jest.fn();
+      service.setPresenceCallback(callback);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    it('keeps the metrics invariant successfulUpdates <= totalRequests (counts total + throttled)', async () => {
+      service.noteHeartbeat('user-1', false);
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      const metrics = service.getMetrics();
+      expect(metrics.totalRequests).toBe(2);
+      expect(metrics.throttledRequests).toBe(1);
+      expect(metrics.successfulUpdates).toBe(1);
+      expect(metrics.successfulUpdates).toBeLessThanOrEqual(metrics.totalRequests);
+    });
+
+    it('includes heartbeatCache entries in the cacheSize metric', async () => {
+      service.noteHeartbeat('user-1', false);
+      await flushPromises();
+      service.clearOldCacheEntries();
+      expect(service.getMetrics().cacheSize).toBe(2);
+    });
+  });
 });

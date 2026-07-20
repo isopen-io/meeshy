@@ -4,16 +4,16 @@
  * Android `UserPresence.state(nowEpochMillis)` (Presence.kt). Toute évolution
  * de la règle doit toucher les trois sites.
  *
- * Règle produit :
+ * Règle produit (1/3/5 — 2026-07-20) :
  *   isOnline === true  -> 'online'  (vert, pulse) — le backend maintient ce flag
- *                          pour toute session active (< 1 min d'activité) ; il est
- *                          autoritatif, gardé contre les données périmées via la
- *                          fenêtre away (un isOnline=true avec lastActiveAt > 30 min
- *                          est incohérent -> décroissance temporelle)
+ *                          pour toute session connectée ; il est autoritatif,
+ *                          gardé contre les données périmées via la fenêtre idle
+ *                          (un isOnline=true avec lastActiveAt > 5 min est
+ *                          incohérent -> décroissance temporelle)
  *   delta <= 60s       -> 'online'  (vert, pulse)
- *   delta <= 5min      -> 'recent'  (vert)
- *   delta <= 30min     -> 'away'    (orange)
- *   delta > 30min      -> 'offline' (gris là où la présence est affichée)
+ *   delta <= 3min      -> 'away'    (orange)
+ *   delta <= 5min      -> 'idle'    (gris AFFICHÉ)
+ *   delta > 5min       -> 'offline' (AUCUN dot — rien n'est rendu)
  *
  * Le gateway gèle lastActiveAt à la déconnexion, donc la décroissance
  * vert -> orange -> gris démarre au dernier instant d'activité réelle.
@@ -21,7 +21,7 @@
  * localement isOnline=true + lastActiveAt=now pour l'émetteur.
  */
 
-export type UserPresenceStatus = 'online' | 'recent' | 'away' | 'offline';
+export type UserPresenceStatus = 'online' | 'away' | 'idle' | 'offline';
 
 /** Ton sémantique unique dérivé du statut — vert / orange / gris. */
 export type PresenceTone = 'success' | 'warning' | 'muted';
@@ -32,8 +32,8 @@ export type UserPresenceSource = {
 };
 
 export const PRESENCE_ONLINE_WINDOW_MS = 60 * 1000; // 1 min
-export const PRESENCE_RECENT_WINDOW_MS = 5 * 60 * 1000; // 5 min
-export const PRESENCE_AWAY_WINDOW_MS = 30 * 60 * 1000; // 30 min
+export const PRESENCE_AWAY_WINDOW_MS = 3 * 60 * 1000; // 3 min
+export const PRESENCE_IDLE_WINDOW_MS = 5 * 60 * 1000; // 5 min
 
 /**
  * Couleurs de référence, identiques sur les trois plateformes :
@@ -48,8 +48,8 @@ export const PRESENCE_HEX = {
 
 const PRESENCE_TONE: Record<UserPresenceStatus, PresenceTone> = {
   online: 'success',
-  recent: 'success',
   away: 'warning',
+  idle: 'muted',
   offline: 'muted',
 };
 
@@ -70,13 +70,13 @@ export function getUserPresenceStatus(
   // Android (isoToEpochMillisOrNull retourne null sur parse-échec).
   const elapsed = parsedElapsed === null || Number.isNaN(parsedElapsed) ? null : parsedElapsed;
 
-  if (isOnline === true && (elapsed === null || elapsed <= PRESENCE_AWAY_WINDOW_MS)) {
+  if (isOnline === true && (elapsed === null || elapsed <= PRESENCE_IDLE_WINDOW_MS)) {
     return 'online';
   }
   if (elapsed === null) return 'offline';
   if (elapsed <= PRESENCE_ONLINE_WINDOW_MS) return 'online';
-  if (elapsed <= PRESENCE_RECENT_WINDOW_MS) return 'recent';
   if (elapsed <= PRESENCE_AWAY_WINDOW_MS) return 'away';
+  if (elapsed <= PRESENCE_IDLE_WINDOW_MS) return 'idle';
   return 'offline';
 }
 
@@ -84,9 +84,9 @@ export function presenceTone(status: UserPresenceStatus): PresenceTone {
   return PRESENCE_TONE[status];
 }
 
-/** États "actifs" affichés en vert : online + recent. away = orange. */
+/** États "actifs" (< 5 min, un dot est rendu) : online + away + idle. */
 export function isPresenceActive(status: UserPresenceStatus): boolean {
-  return status === 'online' || status === 'recent';
+  return status !== 'offline';
 }
 
 /** Seul 'online' (connecté ou actif <= 60s) pulse. */

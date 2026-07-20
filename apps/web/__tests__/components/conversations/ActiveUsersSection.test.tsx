@@ -77,7 +77,7 @@ describe('ActiveUsersSection presence', () => {
   });
 
   it('recomputes status decay on the store tick', () => {
-    const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     act(() => {
       useUserStore.getState().mergeParticipants([
         buildUser({ id: 'user-1', isOnline: undefined, lastActiveAt: new Date() }),
@@ -95,7 +95,7 @@ describe('ActiveUsersSection presence', () => {
       const state = useUserStore.getState();
       const user = state.usersMap.get('user-1');
       if (user) {
-        (user as { lastActiveAt?: Date }).lastActiveAt = sixMinutesAgo;
+        (user as { lastActiveAt?: Date }).lastActiveAt = twoMinutesAgo;
       }
       state.triggerStatusTick();
     });

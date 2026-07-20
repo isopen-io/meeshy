@@ -22,15 +22,15 @@ describe('formatPresenceLabel', () => {
     expect(formatPresenceLabel(opts(new Date(NOW + 5 * 60_000), true))).toBe('status.online');
   });
 
-  it('returns "online" when the backend flags the user online despite a stale heartbeat', () => {
-    // isOnline=true is authoritative within the away window: the label must
-    // agree with presenceColorClass (green) instead of reading "last seen 10 min".
-    expect(formatPresenceLabel(opts(new Date(NOW - 10 * 60_000), true))).toBe('status.online');
+  it('returns "online" when the backend flags the user online within the 5min guard', () => {
+    // isOnline=true is authoritative within the idle window (5min): the label
+    // must agree with presenceColorClass (green) instead of "last seen 4 min".
+    expect(formatPresenceLabel(opts(new Date(NOW - 4 * 60_000), true))).toBe('status.online');
   });
 
-  it('decays past the away window even when isOnline is stale-true', () => {
-    // Beyond 30 min, isOnline=true is treated as stale — label falls back to "last seen".
-    expect(formatPresenceLabel(opts(new Date(NOW - 45 * 60_000), true))).toBe('status.lastSeenMinutes|count');
+  it('decays past the idle window even when isOnline is stale-true', () => {
+    // Beyond 5 min, isOnline=true is treated as stale — label falls back to "last seen".
+    expect(formatPresenceLabel(opts(new Date(NOW - 10 * 60_000), true))).toBe('status.lastSeenMinutes|count');
   });
 
   it('returns relative minutes between 1 and 59', () => {
@@ -55,23 +55,24 @@ describe('formatPresenceLabel', () => {
 });
 
 describe('presenceColorClass', () => {
-  it('is green (active) within 5 minutes', () => {
-    expect(presenceColorClass(new Date(NOW - 2 * 60_000), true, NOW)).toContain('emerald');
+  it('is green (online) within 60 seconds', () => {
+    expect(presenceColorClass(new Date(NOW - 30_000), false, NOW)).toContain('emerald');
   });
 
-  it('is green (active) at exactly 5 minutes', () => {
-    expect(presenceColorClass(new Date(NOW - 5 * 60_000), false, NOW)).toContain('emerald');
+  it('is green when the backend flags the user online within the 5min guard', () => {
+    expect(presenceColorClass(new Date(NOW - 4 * 60_000), true, NOW)).toContain('emerald');
   });
 
-  it('is green when the backend flags the user online, regardless of decay', () => {
-    expect(presenceColorClass(new Date(NOW - 10 * 60_000), true, NOW)).toContain('emerald');
+  it('is orange (away) between 1 and 3 minutes', () => {
+    expect(presenceColorClass(new Date(NOW - 2 * 60_000), false, NOW)).toContain('amber');
   });
 
-  it('is orange (away) between 5 and 30 minutes', () => {
-    expect(presenceColorClass(new Date(NOW - 10 * 60_000), false, NOW)).toContain('amber');
+  it('is grey (idle) between 3 and 5 minutes', () => {
+    expect(presenceColorClass(new Date(NOW - 4 * 60_000), false, NOW)).toContain('gray');
   });
 
-  it('is grey (offline) beyond 30 minutes', () => {
+  it('is grey (offline) beyond 5 minutes, even with a stale isOnline flag', () => {
+    expect(presenceColorClass(new Date(NOW - 10 * 60_000), true, NOW)).toContain('gray');
     expect(presenceColorClass(new Date(NOW - 2 * 3_600_000), false, NOW)).toContain('gray');
   });
 });

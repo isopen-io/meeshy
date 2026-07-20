@@ -2,6 +2,7 @@ import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
 import { User } from '@/types';
 import { getDefaultPermissions } from '@/utils/user-adapter';
+import { getUserPresenceStatus, type UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 // Importer les types partagés pour cohérence
 import type { ApiResponse, UpdateUserRequest, UpdateUserResponse } from '@meeshy/shared/types';
 
@@ -195,52 +196,19 @@ export const usersService = {
   },
 
   /**
-   * Vérifie si un utilisateur est en ligne
-   * Basé sur lastActiveAt pour refléter l'activité détectable
-   * Un utilisateur est considéré en ligne s'il a été actif dans les 5 dernières minutes
+   * Vérifie si un utilisateur est en ligne — délègue à la règle canonique
+   * partagée (source de vérité `@meeshy/shared/utils/user-presence`).
    */
   isUserOnline(user: User): boolean {
-    // Si le flag isOnline est false, l'utilisateur est définitivement hors ligne
-    if (!user.isOnline) {
-      return false;
-    }
-
-    const lastActive = new Date(user.lastActiveAt);
-    const now = new Date();
-    const diffMs = now.getTime() - lastActive.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-    // Considérer en ligne si activité dans les 5 dernières minutes
-    return diffMinutes < 5;
+    return getUserPresenceStatus(user) === 'online';
   },
 
   /**
-   * Calcule le statut détaillé de l'utilisateur
-   * Basé sur lastActiveAt
-   * @returns 'online' | 'away' | 'offline'
+   * Statut détaillé de l'utilisateur — délègue à la règle canonique 1/3/5
+   * partagée (aucune réimplémentation locale des fenêtres).
    */
-  getUserStatus(user: User): 'online' | 'away' | 'offline' {
-    if (!user.isOnline) {
-      return 'offline';
-    }
-
-    const lastActive = new Date(user.lastActiveAt);
-    const now = new Date();
-    const diffMs = now.getTime() - lastActive.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-    // En ligne : activité < 5 minutes
-    if (diffMinutes < 5) {
-      return 'online';
-    }
-
-    // Absent/Inactif : 5 min < activité < 30 min
-    if (diffMinutes < 30) {
-      return 'away';
-    }
-
-    // Hors ligne : activité > 30 minutes
-    return 'offline';
+  getUserStatus(user: User): UserPresenceStatus {
+    return getUserPresenceStatus(user);
   },
 
   /**

@@ -444,16 +444,33 @@ export class AuthHandler {
       const user = this.connectedUsers.get(userIdOrToken);
       if (!user) return;
 
-      this.statusService.updateLastSeen(userIdOrToken, user.isAnonymous);
-
-      if (!user.isAnonymous) {
-        await this.prisma.user.update({
-          where: { id: userIdOrToken },
-          data: { lastActiveAt: new Date() }
-        });
-      }
+      // Throttled 60s inside StatusService — a passive-connected socket keeps
+      // lastActiveAt fresh (at most one DB write per minute) so it stays
+      // 'online' under the 5min anti-stale guard of the 1/3/5 presence rule.
+      // No per-beat unthrottled Prisma write here.
+      this.statusService.noteHeartbeat(userIdOrToken, user.isAnonymous);
     } catch (error) {
-      logger.debug('heartbeat DB update failed (best-effort)', { userId: userIdOrToken, error });
+      logger.debug('heartbeat presence refresh failed (best-effort)', { userId: userIdOrToken, error });
+    }
+  }
+
+  // Engine-level pong (Socket.IO ping/pong, every ~25s on EVERY client
+  // platform). The applicative CLIENT_EVENTS.HEARTBEAT above only exists on
+  // web (90s) and iOS (30s) — Android emits none, so without this path a
+  // passive-connected Android user would fall past the 5min anti-stale guard
+  // of the 1/3/5 presence rule and read offline while the socket is alive.
+  // Throttled 60s inside StatusService: at most one DB write + broadcast/min.
+  handleEnginePong(socket: Socket): void {
+    const userIdOrToken = this.socketToUser.get(socket.id);
+    if (!userIdOrToken) return;
+
+    const user = this.connectedUsers.get(userIdOrToken);
+    if (!user) return;
+
+    try {
+      this.statusService.noteHeartbeat(userIdOrToken, user.isAnonymous);
+    } catch (error) {
+      logger.debug('engine pong presence refresh failed (best-effort)', { userId: userIdOrToken, error });
     }
   }
 
