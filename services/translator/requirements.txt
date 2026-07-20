@@ -23,10 +23,13 @@ pydantic==2.13.4
 # protobuf>=6.31.1,<7.0.0 — the previous protobuf==5.29.3 pin is unsatisfiable
 # with any of these grpcio-reflection releases (1.76.0, 1.81.1 or 1.82.0 alike
 # require protobuf>=6.3x).
+# DO NOT bump protobuf to 7.x while grpcio-tools/grpcio-reflection are pinned to
+# 1.76.0 (they cap protobuf<7.0.0). Dependabot's semver-major bump to 7.35.1
+# (PR #2080) broke the Docker build — reject any future protobuf 7.x PR the same way.
 grpcio==1.82.1
 grpcio-tools==1.76.0
 grpcio-reflection==1.76.0
-protobuf==7.35.1
+protobuf==6.33.6
 pyzmq==27.1.0
 
 # Machine Learning et NLP
@@ -176,8 +179,13 @@ loguru==0.7.3
 prometheus-client==0.25.0
 
 # Tests
+# pytest-asyncio MUST stay on 0.25.x while pytest is pinned to 8.3.4: 0.25.x
+# requires pytest>=8.2,<9, whereas pytest-asyncio 1.x requires pytest>=8.4 (and
+# renames asyncio_mode semantics). Dependabot's bump to 1.4.0 (PR #2081) made the
+# set unsatisfiable — same recurrence as the pytest 9.1.1 revert in ded481979.
+# Reject future pytest-asyncio 1.x PRs unless pytest itself moves off 8.3.4.
 pytest==8.3.4
-pytest-asyncio==1.4.0
+pytest-asyncio==0.25.2
 pytest-cov==7.1.0
 # FIX: httpx 0.24.x pour compatibilité avec Prisma 0.15.0
 httpx==0.24.1

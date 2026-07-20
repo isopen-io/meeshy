@@ -2176,7 +2176,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (Android `SpeechRecognizer`), the socket transcript transport, and the accent-coherent
       overlay UI + captions button that consume this core.
 - [ ] In-call translation data channel (dual-stream clean audio)
-- [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
+- [~] In-call video filters (colour presets, low-light boost, background blur, skin smoothing) —
+      **pure config + preset + auto-degrade cores landed** (slice `call-video-filter-config`): the
+      `core:model` `VideoFilterConfig` (colorimetry temperature/tint/brightness/contrast/saturation/
+      exposure + the two advanced passes background-blur/skin-smoothing + `hasAdvancedFilters`) is the
+      SSOT the WebRTC capture-frame actuator consumes; `VideoFilterPreset` (Natural/Warm/Cool/Vivid/
+      Muted, each with a stable `id` + `fromId` round-trip) projects to an enabled config at exact iOS
+      parity. `VideoFilterDegradePolicy` is the pure two-tier count-based hysteresis reducer ported from
+      iOS `VideoFilterPipeline.updateAutoDegradation`/`isSmoothingDegraded`: skin smoothing (pricier) sheds
+      at half the over-budget threshold, the full advanced pass latches off at the threshold (10 slow
+      frames >25ms) and restores only after a sustained under-budget streak (30 fast frames <15ms) — the
+      confirm/restore asymmetry IS the hysteresis; `effectiveConfig(config, state)` is the SSOT projection
+      both actuator and any "filters throttled" UI hint read from. **SOTA upgrade:** iOS buries this in a
+      stateful `nonisolated` class with unbounded `Int` counters (untestable without a live GPU); Android
+      is a total reducer whose two counters are **clamped** so state is O(1) over a multi-minute call.
+      +30 behavioural tests. Mutation (RED proof): removing the over-budget clamp fails **exactly** the
+      unbounded-counter test (17 tests, 1 failed, no collateral). **Pending:** the WebRTC `VideoProcessor`/
+      `VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation blur + face-detect smoothing)
+      that applies `effectiveConfig` per captured frame, the low-light boost pass (folding `FrameLuminance`),
+      and the accent-coherent filter panel UI (preset chips + advanced toggles).
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [~] Camera-covered ("dark frame") detection during video calls — **pure detection
       core landed** (slice `call-dark-frame-detection`): the `core:model`
