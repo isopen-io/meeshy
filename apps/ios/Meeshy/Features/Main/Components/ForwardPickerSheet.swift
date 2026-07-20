@@ -21,7 +21,6 @@ struct ForwardPickerSheet: View {
     @State private var searchText = ""
     @State private var sendingToId: String? = nil
     @State private var sentToIds: Set<String> = []
-    @State private var errorMessage: String? = nil
 
     private var filteredConversations: [Conversation] {
         if searchText.isEmpty {
@@ -234,13 +233,16 @@ struct ForwardPickerSheet: View {
         case .stale(let data, _):
             conversations = data
             isLoading = false
-            await refreshConversations()
+            // Silent background revalidation over cached data (cache-first doctrine).
+            await refreshConversations(silent: true)
         case .expired, .empty:
-            await refreshConversations()
+            // Cold load — a failure here must surface, otherwise the empty state
+            // reads as "no conversations" when it is actually a network error.
+            await refreshConversations(silent: false)
         }
     }
 
-    private func refreshConversations() async {
+    private func refreshConversations(silent: Bool) async {
         do {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await APIClient.shared.offsetPaginatedRequest(
                 endpoint: "/conversations",
@@ -256,7 +258,11 @@ struct ForwardPickerSheet: View {
                 }.value
             }
         } catch {
-            errorMessage = error.localizedDescription
+            if !silent {
+                FeedbackToastManager.shared.showError(
+                    String(format: String(localized: "common.error.format", defaultValue: "Erreur: %@", bundle: .main), error.localizedDescription)
+                )
+            }
         }
         isLoading = false
     }
@@ -280,8 +286,12 @@ struct ForwardPickerSheet: View {
                 sentToIds.insert(targetConversation.id)
                 HapticFeedback.success()
             } catch {
-                errorMessage = String(format: String(localized: "common.error.format", defaultValue: "Erreur: %@", bundle: .main), error.localizedDescription)
-                HapticFeedback.error()
+                // Local user action failed — surface via the app-tier feedback toast
+                // (showError already fires the error haptic). Previously this error
+                // was written to dead state and silently swallowed.
+                FeedbackToastManager.shared.showError(
+                    String(format: String(localized: "common.error.format", defaultValue: "Erreur: %@", bundle: .main), error.localizedDescription)
+                )
             }
             sendingToId = nil
         }
