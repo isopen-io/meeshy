@@ -32,6 +32,7 @@ import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
+import { filterMutedRecipients } from './mutedRecipients';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
@@ -1310,6 +1311,17 @@ export class NotificationService {
       return null;
     }
 
+    // GW3 — per-conversation mute suppresses reaction notifications
+    // (mentions pierce the mute; reactions do not).
+    const nonMuted = await filterMutedRecipients(this.prisma, params.conversationId, [params.messageAuthorId]);
+    if (nonMuted.length === 0) {
+      notificationLogger.info('Reaction notification suppressed (conversation muted)', {
+        userId: params.messageAuthorId,
+        conversationId: params.conversationId,
+      });
+      return null;
+    }
+
     const [reactor, conversation, message] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: params.reactorUserId },
@@ -2398,6 +2410,17 @@ export class NotificationService {
     messagePreview: string;
     originalMessageId?: string;
   }): Promise<Notification | null> {
+    // GW3 — per-conversation mute suppresses reply notifications
+    // (a reply is not a mention: it does not pierce the mute).
+    const nonMuted = await filterMutedRecipients(this.prisma, params.conversationId, [params.recipientUserId]);
+    if (nonMuted.length === 0) {
+      notificationLogger.info('Reply notification suppressed (conversation muted)', {
+        userId: params.recipientUserId,
+        conversationId: params.conversationId,
+      });
+      return null;
+    }
+
     const [replier, conversation] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: params.replierUserId },
