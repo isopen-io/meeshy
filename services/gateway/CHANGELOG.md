@@ -1,5 +1,35 @@
 # @meeshy/gateway
 
+## 1.14.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - pure live in-call captions core (call-captions-mode) (#2128)
+  - VoiceOver validation feedback for DeleteAccountView confirmation phrase (150i) (#1986)
+  - localize FeedView+Attachments post-composer toasts + reuse attachment-label SSOT (157i) (#2006)
+  - canvas card follows the sheet live when raising/lowering (no dynamic truncation)
+  - VoiceOver row grouping + presence for ParticipantsView (174i) (#2062)
+  - VoiceOver traits + labels for ContactsListTab (175i) (#2066)
+  - Dynamic Type + VoiceOver for StatsTimelineChart (165i) (#2028)
+  - Dynamic Type + VoiceOver for BubbleExpandableText (156i) (#2001)
+  - VoiceOver pass for MessageTranscriptionDetailView (166i) (#2030)
+  - localize + VoiceOver for MessageEditsDetailView (167i) (#2039)
+  - VoiceOver structure for ShareLinkDetailView (167i) (#2040)
+  - VoiceOver structure for ActiveSessionsView session rows (168i) (#2041)
+  - VoiceOver loading states + native search for SharePickerView (169i) (#2043)
+  - VoiceOver labels + settingsToggleRow for ConversationPreferencesTab (169i) (#2045)
+  - Indigo brand alignment + VoiceOver for MagicLinkView (172i) (#2049)
+  - native ShareLink for CommunityLinkDetailView (171i) (#2051)
+  - VoiceOver structure for MiniAudioPlayerBar now-playing cluster (173i) (#2059)
+  - localize + Dynamic Type + Indigo + VoiceOver for LoadMoreRepliesCell (176i) (#2069)
+  - reserve the canvas from the band's REAL top edge (kills the truncation)
+  - VoiceOver identity + i18n for LinkPreviewCard (iteration-168i) (#2071)
+  - localize ContactsHubView tab bar + VoiceOver selected-state (iteration-176i) (#2072)
+  - localize load-error string in ConversationEncryptionDetailSheet (176i) (#2074)
+  - VoiceOver selection state for ReportMessageSheet (177i) (#2076)
+
 ## 1.13.0
 
 ### Minor Changes

@@ -95,6 +95,7 @@ struct MessageTranscriptionDetailView: View {
                 Image(systemName: "waveform.and.mic")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(langColor)
+                    .accessibilityHidden(true)
 
                 Text(Self.languageName(for: transcription.language))
                     .font(.footnote.weight(.semibold))
@@ -126,6 +127,8 @@ struct MessageTranscriptionDetailView: View {
                             .stroke(langColor.opacity(0.15), lineWidth: 0.5)
                     )
             )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(transcriptionBannerA11yLabel(transcription))
 
             // Full text
             Text(transcription.text)
@@ -160,17 +163,23 @@ struct MessageTranscriptionDetailView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
                 )
+                // Redondant avec le texte plein ci-dessus (mêmes mots) — la
+                // coloration locuteur est purement visuelle. Masqué à VoiceOver
+                // pour éviter une 2e lecture mot-à-mot du même contenu.
+                .accessibilityHidden(true)
 
                 if let speakerCount = transcription.speakerCount, speakerCount > 1 {
                     HStack(spacing: 6) {
                         Image(systemName: "person.2.fill")
                             .font(.caption2.weight(.medium))
                             .foregroundColor(accent.opacity(0.6))
+                            .accessibilityHidden(true)
                         Text(String(format: String(localized: "message-detail.transcription.speakers", defaultValue: "%d locuteurs detectes", bundle: .main), speakerCount))
                             .font(.caption.weight(.medium))
                             .foregroundColor(theme.textMuted)
                     }
                     .padding(.horizontal, 4)
+                    .accessibilityElement(children: .combine)
                 }
             }
         }
@@ -185,6 +194,7 @@ struct MessageTranscriptionDetailView: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(accent)
                         .frame(width: 20)
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
@@ -206,13 +216,17 @@ struct MessageTranscriptionDetailView: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                 )
+                .accessibilityElement(children: .combine)
             }
 
             // Empty state with transcribe button
             VStack(spacing: 12) {
+                // Doctrine 84i/86i : glyphe hero d'etat vide (28pt) figé — decoratif,
+                // masqué à VoiceOver (le libellé « Aucune transcription » porte le sens).
                 Image(systemName: "text.word.spacing")
                     .font(.system(size: 28, weight: .light))
                     .foregroundColor(theme.textMuted.opacity(0.4))
+                    .accessibilityHidden(true)
 
                 Text(String(localized: "message-detail.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
                     .font(.subheadline.weight(.medium))
@@ -241,6 +255,10 @@ struct MessageTranscriptionDetailView: View {
                         .overlay(Capsule().stroke(accent.opacity(0.3), lineWidth: 0.5))
                     }
                     .disabled(isRequestingTranscription)
+                    .accessibilityLabel(String(localized: "message-detail.transcription.transcribe", defaultValue: "Transcrire", bundle: .main))
+                    .accessibilityValue(isRequestingTranscription
+                        ? String(localized: "a11y.transcription.in-progress", defaultValue: "Transcription en cours", bundle: .main)
+                        : "")
                 }
             }
             .frame(maxWidth: .infinity)
@@ -258,11 +276,13 @@ struct MessageTranscriptionDetailView: View {
                 Image(systemName: "translate")
                     .font(.caption2.weight(.medium))
                     .foregroundColor(accent.opacity(0.6))
+                    .accessibilityHidden(true)
                 Text(String(localized: "message-detail.audio-translations", defaultValue: "Traductions audio", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted)
             }
             .padding(.horizontal, 4)
+            .accessibilityAddTraits(.isHeader)
 
             ForEach(mergedTranslatedAudios, id: \.id) { audio in
                 let langColor = Color(hex: LanguageDisplay.colorHex(for: audio.targetLanguage))
@@ -282,6 +302,7 @@ struct MessageTranscriptionDetailView: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "person.wave.2")
                                     .font(.caption2.weight(.medium))
+                                    .accessibilityHidden(true)
                                 Text(String(localized: "message-detail.audio.cloned", defaultValue: "Clone", bundle: .main))
                                     .font(.caption2.weight(.bold))
                                     .minimumScaleFactor(0.8)
@@ -313,6 +334,8 @@ struct MessageTranscriptionDetailView: View {
                                 .stroke(langColor.opacity(0.12), lineWidth: 0.5)
                         )
                 )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(audioTranslationA11yLabel(audio))
             }
         }
     }
@@ -338,6 +361,43 @@ struct MessageTranscriptionDetailView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Accessibility
+
+    /// Durée parlée locale-aware (« 12 secondes » / « 12 seconds » / « 12 Sekunden »)
+    /// — remplace le rendu ambigu « 0:12 » pour VoiceOver. Zéro chaîne à traduire.
+    private func spokenDuration(_ seconds: Int) -> String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = seconds >= 60 ? [.minute, .second] : [.second]
+        formatter.unitsStyle = .full
+        return formatter.string(from: TimeInterval(seconds)) ?? formatDuration(seconds)
+    }
+
+    private func transcriptionBannerA11yLabel(_ transcription: MessageTranscription) -> String {
+        var parts: [String] = [
+            String(format: String(localized: "a11y.transcription.in-language", defaultValue: "Transcription en %@", bundle: .main), Self.languageName(for: transcription.language))
+        ]
+        if let conf = transcription.confidence {
+            parts.append(String(format: String(localized: "a11y.transcription.confidence", defaultValue: "confiance %d %%", bundle: .main), Int((conf * 100).rounded())))
+        }
+        if let durationMs = transcription.durationMs {
+            parts.append(spokenDuration(durationMs / 1000))
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    private func audioTranslationA11yLabel(_ audio: MessageTranslatedAudio) -> String {
+        let display = LanguageDisplay.from(code: audio.targetLanguage)
+        var parts: [String] = [display?.name ?? audio.targetLanguage]
+        if audio.cloned {
+            parts.append(String(localized: "a11y.audio.cloned-voice", defaultValue: "voix clonée", bundle: .main))
+        }
+        parts.append(spokenDuration(audio.durationMs / 1000))
+        if !audio.transcription.isEmpty {
+            parts.append(audio.transcription)
+        }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Helpers
