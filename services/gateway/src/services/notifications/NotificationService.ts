@@ -26,6 +26,7 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
@@ -527,37 +528,54 @@ export class NotificationService {
    * Lit UserPreferences.notification (JSON) — source unique de vérité.
    * Les notifications système passent toujours.
    */
-  private async shouldCreateNotification(userId: string, type: NotificationType): Promise<boolean> {
-    // Les notifications système/sécurité passent toujours
-    if (type === 'system') return true;
-
+  /**
+   * GW7 — chargement unique des préférences (null = lecture en échec, fail
+   * open). Réutilisé par le gating ET par les substitutions
+   * showPreview/showSenderName du push — une seule requête par notification.
+   */
+  private async loadNotificationPrefs(userId: string): Promise<NotifPrefs | null> {
     try {
       const userPrefs = await this.prisma.userPreferences.findUnique({
         where: { userId },
         select: { notification: true },
       });
-
       const raw = (userPrefs?.notification ?? {}) as Record<string, unknown>;
-      const prefs: NotifPrefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
-
-      // 1) Vérifier le toggle par type
-      if (!this.isTypeEnabled(prefs, type)) {
-        notificationLogger.info('Notification bloquée par préférence de type', { userId, type });
-        return false;
-      }
-
-      // 2) Vérifier le mode Ne Pas Déranger
-      if (this.isDNDActive(prefs)) {
-        notificationLogger.info('Notification bloquée par DND', { userId, type });
-        return false;
-      }
-
-      return true;
+      return { ...NOTIFICATION_PREFERENCE_DEFAULTS, ...raw };
     } catch (error) {
-      // Fail open : en cas d'erreur de lecture des prefs, on crée la notification
-      notificationLogger.error('Erreur lecture préférences, notification autorisée par défaut', { error, userId, type });
-      return true;
+      notificationLogger.error('Erreur lecture préférences, notification autorisée par défaut', { error, userId });
+      return null;
     }
+  }
+
+  private async shouldCreateNotification(
+    userId: string,
+    type: NotificationType,
+    preloadedPrefs?: NotifPrefs | null
+  ): Promise<boolean> {
+    // Les notifications système/sécurité passent toujours
+    if (type === 'system') return true;
+
+    const prefs = preloadedPrefs !== undefined
+      ? preloadedPrefs
+      : await this.loadNotificationPrefs(userId);
+
+    // Fail open : en cas d'erreur de lecture des prefs, on crée la notification
+    if (prefs === null) return true;
+
+    // 1) Vérifier le toggle par type
+    if (!this.isTypeEnabled(prefs, type)) {
+      notificationLogger.info('Notification bloquée par préférence de type', { userId, type });
+      return false;
+    }
+
+    // 2) Vérifier le mode Ne Pas Déranger — helper PARTAGÉ tz-aware (GW7),
+    // même implémentation que PushNotificationService.isPushAllowed.
+    if (isWithinDnd(prefs)) {
+      notificationLogger.info('Notification bloquée par DND', { userId, type });
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -614,36 +632,12 @@ export class NotificationService {
 
   /**
    * Vérifie si le mode DND est actuellement actif.
-   * Utilise l'heure UTC du serveur.
+   * GW7 — délègue au helper PARTAGÉ tz-aware `isWithinDnd` (packages/shared)
+   * — même implémentation que PushNotificationService.isPushAllowed, la
+   * fenêtre est évaluée dans l'heure locale utilisateur (dndUtcOffsetMinutes).
    */
   private isDNDActive(prefs: NotifPrefs): boolean {
-    if (!prefs.dndEnabled) return false;
-
-    const now = new Date();
-    const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
-    const start = prefs.dndStartTime;
-    const end = prefs.dndEndTime;
-    const overnight = start > end;
-    const inWindow = overnight
-      ? currentTime >= start || currentTime < end // nocturne (ex: 22:00 - 08:00)
-      : currentTime >= start && currentTime < end; // diurne (ex: 14:00 - 16:00)
-
-    if (!inWindow) return false;
-
-    // Si dndDays est défini et non vide, vérifier le jour de DÉBUT de la fenêtre.
-    // Une fenêtre nocturne (start > end) déborde sur le lendemain : sa tranche du
-    // matin (00:00 → end) appartient à la nuit qui a COMMENCÉ la veille. Le filtre
-    // dndDays doit donc être testé contre le jour de début, pas le jour courant —
-    // sinon un matin est rattaché au mauvais jour (silence quand il faut notifier,
-    // et vice-versa). Cf. PushNotificationService.isPushAllowed (même logique).
-    if (prefs.dndDays && prefs.dndDays.length > 0) {
-      const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-      const inMorningTail = overnight && currentTime < end;
-      const windowStartDay = dayMap[inMorningTail ? (now.getUTCDay() + 6) % 7 : now.getUTCDay()];
-      if (!prefs.dndDays.includes(windowStartDay as any)) return false;
-    }
-
-    return true;
+    return isWithinDnd(prefs);
   }
 
   // ==============================================
@@ -705,8 +699,11 @@ export class NotificationService {
         return null;
       }
 
-      // Vérifier les préférences utilisateur avant création
-      const allowed = await this.shouldCreateNotification(params.userId, params.type);
+      // Vérifier les préférences utilisateur avant création — chargées UNE
+      // fois et réutilisées par les substitutions showPreview/showSenderName
+      // du push (GW7).
+      const notifPrefs = await this.loadNotificationPrefs(params.userId);
+      const allowed = await this.shouldCreateNotification(params.userId, params.type, notifPrefs);
       if (!allowed) {
         return null;
       }
@@ -839,7 +836,15 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}?messageId=${params.context.messageId}` :
               `/conversations/${params.context.conversationId}`) :
             undefined;
-          const pushBody = params.content.substring(0, 200);
+          // GW7 — préférences de confidentialité du banner : showPreview:false
+          // remplace le corps par un libellé générique localisé (et supprime le
+          // subtitle, porteur d'aperçus) ; showSenderName:false remplace le
+          // titre (nom de l'acteur) par un titre neutre.
+          const showPreview = notifPrefs?.showPreview ?? true;
+          const showSenderName = notifPrefs?.showSenderName ?? true;
+          const pushBody = showPreview
+            ? params.content.substring(0, 200)
+            : notificationString(params.lang ?? 'fr', 'push.private');
 
           // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
           // par le payload push : embarquer le même compte unread que
@@ -864,11 +869,12 @@ export class NotificationService {
           // action set (the NSE only fills these for legacy payloads).
           const pushCategory = pushCategoryForNotificationType(params.type);
           const pushPayload = {
-              title: pushTitle,
+              title: showSenderName ? pushTitle : 'Meeshy',
               // Subtitle carries the conversation name for group/global chats
               // — survives iOS Communication Notification rewriting that would
               // otherwise drop a "<sender> | <conv>" concatenated title.
-              ...(pushSubtitle ? { subtitle: pushSubtitle } : {}),
+              // Dropped with showPreview:false (rich subtitles carry previews).
+              ...(pushSubtitle && showPreview ? { subtitle: pushSubtitle } : {}),
               body: pushBody,
               link,
               collapseId: params.collapseId,
@@ -945,6 +951,21 @@ export class NotificationService {
             // pushes are dispatched separately from CallEventsHandler with types: ['voip'].
             types: ['apns', 'fcm'],
             payload: boundedPayload,
+          }).then(async (results) => {
+            // GW7 — delivery.pushSent tracking : flippé dès qu'au moins un
+            // device a reçu le push (le champ était initialisé false et
+            // jamais mis à jour — tracking multi-canal mort).
+            const delivered = Array.isArray(results) && results.some(r => r?.success);
+            if (!delivered) return;
+            try {
+              const createdDelivery = (notification as { delivery?: Record<string, unknown> }).delivery ?? { emailSent: false };
+              await this.prisma.notification.update({
+                where: { id: notification.id },
+                data: { delivery: { ...createdDelivery, pushSent: true } as any },
+              });
+            } catch (error) {
+              notificationLogger.error('pushSent flip failed', { error, notificationId: notification.id });
+            }
           }).catch(err => {
             notificationLogger.error('Push notification failed', { error: err, userId: params.userId });
           });

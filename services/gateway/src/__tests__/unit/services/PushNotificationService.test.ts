@@ -730,6 +730,71 @@ describe('PushNotificationService', () => {
         expect(mockApnsProviderSend).not.toHaveBeenCalled();
       });
 
+      // GW7 — DND parity with NotificationService via the SHARED isWithinDnd
+      // helper: the window is evaluated in the user's local wall-clock
+      // (dndUtcOffsetMinutes), no longer in server UTC.
+      it('GW7 — blocks a normal push at 23:00 Tokyo local (14:00 UTC) for a 22:00-08:00 window', async () => {
+        jest.setSystemTime(new Date('2026-01-01T14:00:00.000Z'));
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndUtcOffsetMinutes: 540 },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Test message' },
+        });
+
+        expect(result).toEqual([]);
+      });
+
+      it('GW7 — allows a normal push at 12:00 Tokyo local (03:00 UTC) for a 22:00-08:00 window', async () => {
+        jest.setSystemTime(new Date('2026-01-01T03:00:00.000Z'));
+        mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+        const { PushNotificationService } = await getServiceWithEnv({
+          ENABLE_PUSH_NOTIFICATIONS: 'true',
+          ENABLE_APNS_PUSH: 'true',
+          APNS_KEY_ID: 'test-key-id',
+          APNS_TEAM_ID: 'test-team-id',
+          APNS_KEY_PATH: '/path/to/key.p8',
+          APNS_BUNDLE_ID: 'me.meeshy.app',
+        });
+        const service = new PushNotificationService(mockPrisma as any);
+
+        (mockPrisma as any).userPreferences = {
+          findUnique: jest.fn().mockResolvedValue({
+            notification: { pushEnabled: true, dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00', dndUtcOffsetMinutes: 540 },
+          }),
+        };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+        ]);
+
+        const result = await service.sendToUser({
+          userId: 'user-123',
+          payload: { title: 'Test', body: 'Test message' },
+        });
+
+        expect(result).toHaveLength(1);
+        expect(result[0].success).toBe(true);
+      });
+
       it('callsEnabled:false does not affect normal notification pushes', async () => {
         mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
 

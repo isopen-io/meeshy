@@ -46,6 +46,10 @@ export const NotificationPreferenceSchema = z.object({
   dndDays: z
     .array(z.enum(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']))
     .default([]),
+  // GW7 — minutes à AJOUTER à l'UTC pour obtenir l'heure locale de
+  // l'utilisateur (Tokyo = 540, New York été = -240). 0 = fenêtre évaluée en
+  // UTC (comportement historique des documents existants).
+  dndUtcOffsetMinutes: z.number().int().min(-720).max(840).default(0),
 
   // Prévisualisation
   showPreview: z.boolean().default(true),
@@ -87,6 +91,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   dndStartTime: '22:00',
   dndEndTime: '08:00',
   dndDays: [],
+  dndUtcOffsetMinutes: 0,
   showPreview: true,
   showSenderName: true,
   groupNotifications: true,

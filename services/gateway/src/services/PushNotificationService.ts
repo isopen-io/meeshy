@@ -13,6 +13,7 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker } from '../utils/circuitBreaker';
 
@@ -312,32 +313,11 @@ export class PushNotificationService {
 
       if (!prefs.pushEnabled) return false;
 
-      // Vérifier DND
-      if (prefs.dndEnabled && !bypassDnd) {
-        const now = new Date();
-        const currentTime = `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
-        const start = prefs.dndStartTime;
-        const end = prefs.dndEndTime;
-        const overnight = start > end;
-        const inWindow = overnight
-          ? currentTime >= start || currentTime < end
-          : currentTime >= start && currentTime < end;
-
-        if (inWindow && prefs.dndDays && prefs.dndDays.length > 0) {
-          const dayMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
-          // Une fenêtre nocturne (start > end) déborde sur le lendemain : sa
-          // tranche du matin (00:00 → end) appartient à la nuit qui a COMMENCÉ
-          // la veille. Le filtre dndDays doit donc être testé contre le jour de
-          // DÉBUT de la fenêtre, pas contre le jour courant — sinon un matin est
-          // rattaché au mauvais jour (silence quand il faut notifier, et vice-versa).
-          const inMorningTail = overnight && currentTime < end;
-          const windowStartDay =
-            dayMap[inMorningTail ? (now.getUTCDay() + 6) % 7 : now.getUTCDay()];
-          if (!prefs.dndDays.includes(windowStartDay as any)) return true; // jour de début non sélectionné
-        }
-
-        if (inWindow) return false;
-      }
+      // Vérifier DND — GW7 : helper PARTAGÉ tz-aware `isWithinDnd`
+      // (packages/shared), même implémentation que
+      // NotificationService.isDNDActive. La fenêtre est évaluée dans l'heure
+      // locale utilisateur (dndUtcOffsetMinutes, 0 = UTC historique).
+      if (!bypassDnd && isWithinDnd(prefs)) return false;
 
       return true;
     } catch {

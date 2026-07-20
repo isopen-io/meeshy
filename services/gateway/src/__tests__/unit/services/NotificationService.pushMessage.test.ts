@@ -763,6 +763,133 @@ describe('NotificationService — message push title/body', () => {
       expect(data.createdAt).toBe('2026-07-20T09:30:00.000Z');
     });
   });
+
+  // GW7 — delivery.pushSent tracking, showPreview/showSenderName privacy
+  // substitutions, and timezone-aware DND via the shared isWithinDnd helper.
+  describe('GW7 — pushSent, showPreview/showSenderName, tz-aware DND', () => {
+    async function createAndFlush() {
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Salut, comment ça va ?',
+      });
+      await new Promise(r => setImmediate(r));
+    }
+
+    beforeEach(() => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        title: 'Équipe Dev', type: 'group',
+      });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        username: 'alice', displayName: 'Alice Martin', avatar: null,
+      });
+      (prisma.notification.update as jest.Mock).mockResolvedValue({});
+    });
+
+    it('test_pushSent_flippedTrueAfterAtLeastOneSuccessfulDelivery', async () => {
+      sendToUser.mockResolvedValue([
+        { success: false, tokenId: 't-dead' },
+        { success: true, tokenId: 't-live' },
+      ]);
+
+      await createAndFlush();
+
+      expect(prisma.notification.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'notif-msg-1' },
+          data: expect.objectContaining({
+            delivery: expect.objectContaining({ pushSent: true }),
+          }),
+        })
+      );
+    });
+
+    it('test_pushSent_notFlippedWhenEveryDeliveryFailed', async () => {
+      sendToUser.mockResolvedValue([{ success: false, tokenId: 't-dead' }]);
+
+      await createAndFlush();
+
+      expect(prisma.notification.update).not.toHaveBeenCalled();
+    });
+
+    it('test_showPreviewFalse_bodyIsLocalizedGeneric_subtitleDropped', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showPreview: false },
+      });
+
+      await createAndFlush();
+
+      const payload = lastPushPayload() as { title: string; subtitle?: string; body: string };
+      expect(payload.body).toBe('Nouvelle notification');
+      expect(payload.subtitle).toBeUndefined();
+      expect(payload.title).toBe('Alice Martin');
+    });
+
+    it('test_showSenderNameFalse_titleIsGeneric_bodyKeepsContent', async () => {
+      (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+        notification: { showSenderName: false },
+      });
+
+      await createAndFlush();
+
+      const payload = lastPushPayload() as { title: string; body: string };
+      expect(payload.title).toBe('Meeshy');
+      expect(payload.body).toBe('Salut, comment ça va ?');
+    });
+
+    describe('tz-aware DND (shared isWithinDnd)', () => {
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      function mockTokyoDnd() {
+        (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue({
+          notification: {
+            dndEnabled: true,
+            dndStartTime: '22:00',
+            dndEndTime: '08:00',
+            dndUtcOffsetMinutes: 540,
+          },
+        });
+      }
+
+      it('blocks the notification at 23:00 Tokyo local (14:00 UTC)', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-07-20T14:00:00.000Z'));
+        mockTokyoDnd();
+
+        const result = await service.createMessageNotification({
+          recipientUserId: RECIPIENT_ID,
+          senderId: SENDER_ID,
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          messagePreview: 'Salut !',
+        });
+
+        expect(result).toBeNull();
+        expect(prisma.notification.create).not.toHaveBeenCalled();
+      });
+
+      it('allows the notification at 12:00 Tokyo local (03:00 UTC)', async () => {
+        jest.useFakeTimers();
+        jest.setSystemTime(new Date('2026-07-20T03:00:00.000Z'));
+        mockTokyoDnd();
+
+        const result = await service.createMessageNotification({
+          recipientUserId: RECIPIENT_ID,
+          senderId: SENDER_ID,
+          messageId: MESSAGE_ID,
+          conversationId: CONVERSATION_ID,
+          messagePreview: 'Salut !',
+        });
+
+        expect(result).not.toBeNull();
+        expect(prisma.notification.create).toHaveBeenCalled();
+      });
+    });
+  });
 });
 
 // ─── GW4 — pure type → category mapping ──────────────────────────────────────
