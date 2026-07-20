@@ -413,6 +413,10 @@ struct ConversationInfoSheet: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                // Active tab is otherwise signalled by accent underline + fill +
+                // weight only — the `.isSelected` trait lets VoiceOver announce
+                // which tab is selected (mirror of GlobalSearchView.tabButton).
+                .accessibilityAddTraits(isSelected ? [.isSelected] : [])
             }
         }
         .padding(.horizontal, 20)

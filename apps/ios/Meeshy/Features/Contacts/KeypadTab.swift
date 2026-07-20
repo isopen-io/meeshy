@@ -157,13 +157,14 @@ struct KeypadTab: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(name)
+            .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvre le profil", bundle: .main))
 
             dialMenu(for: user, displayName: name)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(name)
     }
 
     private func dialMenu(for user: UserSearchResult, displayName: String) -> some View {

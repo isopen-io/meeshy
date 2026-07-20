@@ -1,60 +1,45 @@
-# Plan d'implémentation — Itération 182
+# Plan d'implémentation — Iteration 182
 
 ## Objectifs
-Consolider les deux copies dérivées de `generateConversationIdentifier` (gateway
-`link-helpers.ts` + `MessageTranslationService`) sur la source unique de vérité
-`@meeshy/shared/utils/conversation-helpers`, restaurant la translittération
-accents/allemand (`é→e`, `ü→ue`, `ö→oe`, `ß→ss`) et le timestamp UTC sur le flux
-de création par lien de partage, et supprimant la dette de réimplémentation.
+Éliminer la collision de préfixe dans `normalizeLanguageCode` (SSOT de
+canonisation de langue du Prisme Linguistique) : remplacer la troncature aveugle
+639-3→639-1 par une table de réduction explicite, sur les deux sites (TS + Swift).
 
 ## Modules affectés
-- `services/gateway/src/routes/links/utils/link-helpers.ts` (délégation)
-- `services/gateway/src/services/message-translation/MessageTranslationService.ts`
-  (suppression du privé + appel via import partagé)
-- `services/gateway/src/__tests__/unit/routes/links/link-helpers.test.ts` (RED)
-- `services/gateway/src/__tests__/unit/services/MessageTranslationService.branches.test.ts`
-  (retrait tests orphelins + mock enrichi)
-- `services/gateway/src/__tests__/unit/services/MessageTranslationService.audio.test.ts`
-  (mock enrichi pour le chemin de sauvegarde public)
+- `packages/shared/utils/language-normalize.ts` (source de vérité TS)
+- `packages/shared/__tests__/language-normalize.test.ts` (couverture)
+- `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift` (miroir Swift)
+- (transitif, aucun changement) `apps/ios/.../ConversationLanguagePreferences.swift`
+  délègue déjà à `MeeshyUser.normalizeLanguageCode`.
 
 ## Phases
-1. **RED** — +3 tests de translittération/UTC dans `link-helpers.test.ts`
-   (module partagé réel, non mocké). ✅
-2. **GREEN** — `link-helpers.generateConversationIdentifier` délègue à la SSOT. ✅
-3. **GREEN** — `MessageTranslationService` : suppression du privé
-   `_generateConversationIdentifier`, appel via `generateConversationIdentifier`
-   importé de la SSOT. ✅
-4. **Tests** — retrait des 3 tests orphelins du privé supprimé ; les mocks de
-   `conversation-helpers` (branches + audio) exposent
-   `generateConversationIdentifier`. ✅
-5. **Validation** — jest (7+5 suites) + tsc (baseline inchangé). ✅
+1. **RED** — ajout des tests de collision/réduction/rejet Filipino ; run → 4 échecs. ✅
+2. **GREEN** — `ISO_639_3_TO_1` + branche de réduction re-validée ; run → 19/19. ✅
+3. **Mirror** — `iso639ReductionMap` Swift + garde identique. ✅
+4. **Validation** — suite shared complète (1367/1367), `tsc --noEmit` (0), build dist. ✅
+5. **Docs** — analyse + plan itération 182. ✅
 
 ## Dépendances
-`generateConversationIdentifier` (`@meeshy/shared/utils/conversation-helpers`) —
-déjà en production, déjà consommé via `identifier-generator.ts`.
+Aucune (fichier pur, sans I/O). `getSupportedLanguageCodes()` déjà consommé.
 
 ## Risques estimés
-Très faibles — helper idempotent pour l'ASCII (parité stricte des tests existants) ;
-signature inchangée ; seul changement observable = amélioration (accents + UTC).
+Très faibles — voir « Risk assessment » de l'analyse. Changements de comportement
+tous correctifs, aucun test/consommateur dépendant des valeurs corrompues.
 
 ## Stratégie de rollback
-Revert du commit unique de l'itération.
+Revert du commit unique ; fonction pure, aucun état persistant, aucune migration.
+(Note : les `User.deviceLocale` déjà persistés à tort en `'fi'` pour des locales
+`fil` seront ré-écrits opportunément au prochain passage du middleware avec la
+valeur corrigée — pas de migration nécessaire.)
 
 ## Critères de validation
-- Suites gateway concernées : **478 tests verts** (3 nouveaux).
-- `tsc --noEmit` gateway : 334 → 334 (aucune nouvelle erreur).
+- `language-normalize.test.ts` 19/19 ; suite shared 1367/1367 ; `tsc` 0 erreur.
 
-## Statut
-**COMPLETE** — implémenté et validé.
+## Statut de complétion
+**Terminé** — implémenté, testé, buildé, documenté. Prêt à merge.
 
-## Suivi de progression
-- [x] RED (3 tests link-helpers)
-- [x] GREEN link-helpers délégation
-- [x] GREEN MessageTranslationService délégation
-- [x] Toilettage tests (mocks + retrait orphelins)
-- [x] Validation jest + tsc
-- [x] Analyse + plan
-- [ ] Commit + push
-
-## Améliorations futures
-- Voir backlog de l'analyse 182 (`validatePagination` limit=0, `looksLikePhoneNumber`).
+## Améliorations futures / suivi
+- Aligner les catalogues de langues TS (`languages.ts`) ↔ Swift
+  (`LanguageData.allLanguages`) : `ny`/`om`/`ti` présents côté TS seulement.
+- Étendre la table 639-3 si de nouvelles langues supportées sont ajoutées
+  (checklist : ajouter l'entrée `xxx: 'xx'` en lockstep sur les deux sites).
