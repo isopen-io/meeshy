@@ -55,4 +55,45 @@ final class ConversationDashboardViewAccessibilityTests: XCTestCase {
             "The health gauge must announce the score as its accessibility value."
         )
     }
+
+    func test_periodPicker_announcesSelectedStateAndLocalizedLabel() throws {
+        let source = try dashboardSource()
+        guard let range = source.range(of: "private var periodPicker") else {
+            XCTFail("ConversationDashboardView.swift must define the periodPicker"); return
+        }
+        let body = String(source[range.lowerBound...].prefix(1000))
+        XCTAssertTrue(
+            body.contains(".accessibilityAddTraits(isSelected ? [.isSelected] : [])"),
+            "Each period pill must announce its selected state to VoiceOver; " +
+            "otherwise the active period is signalled only by color/weight (WCAG 1.4.1)."
+        )
+        XCTAssertTrue(
+            body.contains(".accessibilityLabel(period.accessibilityLabel)"),
+            "Each period pill must expose a descriptive localized label; " +
+            "VoiceOver reading the compact \"7j\" pill glyph alone is cryptic."
+        )
+        XCTAssertFalse(
+            body.contains("Text(period.rawValue)"),
+            "The picker must render a localized label, never the raw enum token."
+        )
+    }
+
+    func test_chartPeriod_labelsAreLocalized_notHardcodedFrench() throws {
+        let source = try dashboardSource()
+        guard let range = source.range(of: "enum ChartPeriod") else {
+            XCTFail("ConversationDashboardView.swift must define ChartPeriod"); return
+        }
+        let body = String(source[range.lowerBound...].prefix(1400))
+        XCTAssertFalse(
+            body.contains("case all = \"Tout\""),
+            "ChartPeriod must not display a hardcoded French raw value; " +
+            "labels must resolve via String(localized:)."
+        )
+        for key in ["dashboard.period.week.short", "dashboard.period.all"] {
+            XCTAssertTrue(
+                body.contains(key),
+                "ChartPeriod must resolve its labels through the \(key) localization key."
+            )
+        }
+    }
 }
