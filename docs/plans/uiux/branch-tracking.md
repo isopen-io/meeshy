@@ -240,6 +240,28 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **⚠️ `ReplyCell` Dynamic Type + VoiceOver SOLDÉ** : ne plus reprendre. Suite sibling possible :
 >   `TopLevelCommentCell` (mêmes fonts figées **+** titre `"Reply"` en dur + boutons like/reply non-Dynamic
 >   Type → scope i18n + a11y-contrôles plus large, itération dédiée).
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 190i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **190i (branche `claude/laughing-thompson-1ekmgf`, PR #2163, base `main` HEAD `eba7cd3` après rebase —
+>   départ `45f36bf`, PR #2120/178i mergé → branche redémarrée depuis main ; rebasée sur `eba7cd3` pour
+>   fuir un échec CI flaky main-wide des tests d'inflexion `PostStatAccessibilityTests` — sans rapport avec
+>   cette PR, fix upstream en vol `fix/ios-a11y-poststat-plural`)** : VoiceOver + HIG de `CreateTrackingLinkView` (sheet de création
+>   d'un lien de tracking, 166 lignes, **0 modificateur d'accessibilité**). Localisation + fonts
+>   sémantiques déjà OK → passe VoiceOver-only. 4 déficits : (1) `formField` label/`TextField` non liés
+>   → `Text` masqué + `TextField` labellisé (`.accessibilityLabel`/`.accessibilityHint`, params optionnels
+>   `nil` → 5 appels existants inchangés), champ URL requis avec hint « Champ obligatoire » (au lieu du
+>   « étoile » lu) ; (2) bouton repli UTM → chevron masqué + `.accessibilityValue` développé/réduit
+>   (**réutilise** `accessibility.section_expanded/collapsed`) + hint ; (3) bouton créer → label explicite
+>   survivant au `ProgressView` + valeur « Création en cours » + hint désactivé ; (4) erreur →
+>   `UIAccessibility.post(notification: .announcement, argument:)` dans le `catch` (déterministe, iOS 16,
+>   pattern déjà 9× dans le codebase ; `AccessibilityNotification.Announcement` iOS 17+ rejeté par la CI
+>   d'abord, corrigé). 2 fichiers : `CreateTrackingLinkView.swift` (+26/−3), `Localizable.xcstrings` (+175,
+>   5 clés neuves × 5 locales, insérées sans reformater — 0 suppression). 0 logique/couleur/police. 0 test
+>   ne référence la vue. Contention vérifiée : distincte de `TrackingLinksView` (#2138) et
+>   `TrackingLinkDetailView` (#2122). Gate = CI « iOS Tests ». PR à venir.
+> - **⚠️ `CreateTrackingLinkView` VoiceOver structure SOLDÉ** : champs labellisés + hint requis, bouton
+>   UTM à état, bouton créer à label/valeur/hint, erreur annoncée. Ne plus reprendre.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **179i (branche `claude/laughing-thompson-duee1f`, base `main` HEAD `e9e38a9`)** :
 >   Labels VoiceOver des compteurs like/comment/repost du feed (`TextPostCell` + `MediaPostCell`,
