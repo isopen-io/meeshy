@@ -19,6 +19,34 @@ struct UploadProgressBar: View {
         progress.files.first(where: { $0.status == .uploading })?.fileName
     }
 
+    private var isUploading: Bool { percentage < 100 }
+
+    private var filesCountLabel: String {
+        String(
+            localized: "upload.progress.files-count",
+            defaultValue: "\(progress.completedFiles)/\(progress.totalFiles) fichiers",
+            bundle: .main
+        )
+    }
+
+    private var accessibilityLabelText: String {
+        String(
+            localized: "upload.progress.a11y-label",
+            defaultValue: "Envoi des fichiers",
+            bundle: .main
+        )
+    }
+
+    private var accessibilityValueText: String {
+        let progressPhrase = String(
+            localized: "upload.progress.a11y-value",
+            defaultValue: "\(percentage) %, \(progress.completedFiles) fichiers sur \(progress.totalFiles) envoyés",
+            bundle: .main
+        )
+        guard let name = currentFileName else { return progressPhrase }
+        return "\(progressPhrase), \(name)"
+    }
+
     var body: some View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
@@ -66,7 +94,7 @@ struct UploadProgressBar: View {
             .frame(height: 6)
 
             HStack {
-                Text("\(progress.completedFiles)/\(progress.totalFiles) fichiers")
+                Text(filesCountLabel)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                 Spacer()
@@ -85,6 +113,10 @@ struct UploadProgressBar: View {
                         .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityValue(accessibilityValueText)
+        .accessibilityAddTraits(isUploading ? .updatesFrequently : [])
     }
 
     private func formatBytes(_ bytes: Int64) -> String {

@@ -47,6 +47,7 @@ import me.meeshy.sdk.model.EmojiUsageRanker
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.mention.MentionAutocompleteState
 import me.meeshy.sdk.mention.MentionComposer
+import me.meeshy.sdk.mention.MentionSearch
 import me.meeshy.sdk.mention.applyRemote
 import me.meeshy.sdk.mention.onTextChange
 import me.meeshy.sdk.mention.reset

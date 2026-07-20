@@ -7,7 +7,7 @@ import XCTest
 /// to the (already-mutated) clip start, so after N frames the position had
 /// drifted N times the intended delta — exponential snowball.
 ///
-/// The fix in `QuickTimelineView.clipBar` and `ProTimelineView.clipBar`:
+/// The fix in `StoryTimelineView.clipBar` and `ProTimelineView.clipBar`:
 ///   1. Guard `beginClipDrag` behind `activeDrag?.clipId != id`
 ///   2. Compute rawTime from `drag.originalStartTime` (captured once), NOT
 ///      from the live `audio.startTime` / `text.startTime` (mutated each frame)
@@ -81,7 +81,7 @@ final class AudioTextDragDriftTests: XCTestCase {
         return sut
     }
 
-    /// Replays the production closure body from QuickTimelineView /
+    /// Replays the production closure body from StoryTimelineView /
     /// ProTimelineView `clipBar(for:)` for audio + text clips. Kept in one
     /// place so the test exercises the EXACT same pattern as production.
     private func simulateOnMoveDelta(
