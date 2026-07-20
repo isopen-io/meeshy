@@ -303,6 +303,7 @@ public struct StoryTimelineView: View {
                 .frame(height: isExpanded ? 220 : 360)
                 .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
             }
+            operationsBar
             transport
             scrubRegion
             footerTrigger
@@ -335,6 +336,25 @@ public struct StoryTimelineView: View {
     /// le point de bascule si le produit retranche à nouveau.
     public static let transportShowsTimeReadout = true
 
+    /// Bande d'opérations SOUS la bande des outils : historique, snap,
+    /// prolongation « +10 s » et enregistrement (retour user 2026-07-20) —
+    /// le transport en dessous ne garde que lecture / temps / zoom / son.
+    private var operationsBar: some View {
+        TimelineOperationsBar(
+            canUndo: viewModel.canUndo,
+            canRedo: viewModel.canRedo,
+            isSnapEnabled: viewModel.isSnapEnabled,
+            onUndo: { viewModel.undo() },
+            onRedo: { viewModel.redo() },
+            onSnapToggle: { viewModel.toggleSnap() },
+            onExtendDuration: {
+                viewModel.extendSlideDuration(
+                    by: TimelineOperationsBar.extendStepSeconds)
+            },
+            onSave: onExport
+        )
+    }
+
     private var transport: some View {
         TransportBar(
             isPlaying: viewModel.isPlaying,
@@ -343,20 +363,26 @@ public struct StoryTimelineView: View {
             zoomScale: viewModel.zoomScale,
             isMuted: viewModel.isMuted,
             showsTimeReadout: Self.transportShowsTimeReadout,
-            // Vue unifiée : undo/redo ET snap vivent dans le transport —
-            // il n'y a plus de TimelineToolbar dédiée.
-            canUndo: viewModel.canUndo,
-            canRedo: viewModel.canRedo,
-            isSnapEnabled: viewModel.isSnapEnabled,
+            // Historique, snap et enregistrement vivent dans la bande
+            // d'opérations au-dessus — nil masque leurs clusters ici.
+            canUndo: nil,
+            canRedo: nil,
+            isSnapEnabled: nil,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
-            onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
-            onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
+            // Bornes partagées avec le pinch (`TimelineScrubArea.zoomRange`,
+            // 5 % – 800 %) — plus de littéraux dupliqués.
+            onZoomIn: { viewModel.zoomScale = min(
+                TimelineScrubArea<AnyView>.zoomRange.upperBound,
+                viewModel.zoomScale * 1.25) },
+            onZoomOut: { viewModel.zoomScale = max(
+                TimelineScrubArea<AnyView>.zoomRange.lowerBound,
+                viewModel.zoomScale / 1.25) },
             onZoomReset: { viewModel.zoomScale = 1.0 },
-            onUndo: { viewModel.undo() },
-            onRedo: { viewModel.redo() },
-            onSnapToggle: { viewModel.toggleSnap() },
-            onSave: onExport
+            onUndo: {},
+            onRedo: {},
+            onSnapToggle: {},
+            onSave: nil
         )
     }
 
@@ -422,6 +448,7 @@ public struct StoryTimelineView: View {
                     laneWidth: laneWidth,
                     laneHeight: 52,
                     iconName: Self.iconName(for: track.kind),
+                    isBackgroundSection: track.kind.isBackgroundSection,
                     labelColumnWidth: TimelineScrubArea<AnyView>.laneLabelWidth,
                     durationLabel: TrackBarView<AnyView>.formatTrackDuration(clipDuration),
                     typeLabel: Self.typeLabel(kind: track.kind, index: index, customName: customName)
