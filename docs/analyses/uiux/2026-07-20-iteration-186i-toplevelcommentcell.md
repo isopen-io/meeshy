@@ -77,8 +77,24 @@ then be required) is a separate future iteration.
 
 - Static review only — build + VoiceOver exercised in CI `iOS Tests` (macOS).
   The Linux container here cannot run `xcodebuild`.
-- Pattern is a 1:1 mirror of merged 182i (`ReplyCell`), which passed the same
-  gate.
+- Pattern is a 1:1 mirror of merged 182i (`ReplyCell`).
+
+### CI compile fix (post-open)
+
+The first `ios-tests` run on this PR (SHA `24abc60`) failed to **compile** —
+`ReplyCell.swift:67: value of optional type 'String?' must be unwrapped`.
+Root cause: `CommentRecord.authorUsername` and `.authorDisplayName` are **both
+`String?`**, so `authorDisplayName ?? authorUsername` stays `String?`. The
+merged 182i `ReplyCell` (and this PR's mirror) passed that optional to the
+`accessibilityLabel(name: String, …)` helper → **`main` itself was red**, and
+this PR inherited the break plus reproduced it in `TopLevelCommentCell`.
+Fix: coalesce with `?? ""` at both call sites
+(`TopLevelCommentCell.configure`, `ReplyCell.configure`) — behavior-preserving
+(the pre-182i code assigned the same coalesced value to a `String?` label, i.e.
+`nil` → empty). `content: String` and `RelativeTimeFormatter.shortString →
+String` are already non-optional. The two post cells (`TextPostCell`,
+`MediaPostCell`) assign the coalesced name to a `String?` label and were never
+affected. This restores the iOS build for the whole swarm.
 
 ## Completion
 
