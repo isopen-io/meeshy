@@ -68,6 +68,7 @@ struct BlockedUsersView: View {
             Text(String(localized: "blocked.users.title", defaultValue: "Utilisateurs bloques", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -100,6 +101,8 @@ struct BlockedUsersView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 16)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "blocked.users.loading.a11y", defaultValue: "Chargement en cours", bundle: .main))
     }
 
     private var skeletonRow: some View {
@@ -177,6 +180,7 @@ struct BlockedUsersView: View {
                 accentColor: color,
                 avatarURL: user.avatar
             )
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.name)
@@ -189,6 +193,7 @@ struct BlockedUsersView: View {
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
