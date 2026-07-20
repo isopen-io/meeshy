@@ -44,13 +44,7 @@ extension StoryComposerView {
             // donc la COULEUR DU FOND du slide : le canvas paraît occuper tout
             // l'écran. Noir conservé en carded (contraste voulu de la carte)
             // et sur fond MÉDIA (letterbox cinéma).
-            Rectangle()
-                .fill(canvasIsCarded || viewModel.hasBackgroundImage
-                    ? AnyShapeStyle(Color.black)
-                    : storyBackgroundStyle(
-                        viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")))
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
+            canvasLetterbox
 
             // Canvas core (CALayer) + drawing overlay + viewport modifiers,
             // extracted into `canvasComposerLayer` so the SwiftUI type-checker
@@ -728,11 +722,12 @@ extension StoryComposerView {
                 sideInset: 14,
                 state: canvasIsCarded ? .carded : .free,
                 cardedCornerRadius: 22,
-                // Canvas PAYSAGE (16:9) : court, il laisse du mou vertical dans la
-                // région réduite → `.top` le colle sous le header (« l'horizontal
-                // bouge entièrement vers le haut »). PORTRAIT (9:16) : scale pour
-                // remplir la région → `.center` (le mou est nul, aucune différence).
-                verticalAlignment: canvasRatio > 1 ? .top : .center,
+                // Carte TOUJOURS centrée dans la région libre (user 2026-07-20 :
+                // « centrer la carte »). Un canvas PAYSAGE (16:9) court laissait,
+                // en `.top`, tout le mou vertical en bas → grand vide sous la carte
+                // perçu comme « canvas noir ». Centrée + letterbox flou (cf.
+                // `canvasLetterbox`), la carte paysage flotte au milieu, intégrée.
+                verticalAlignment: .center,
                 canvasRatio: canvasRatio))
             let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: canvasRatio)
             // Rayon compensé par `framing.scale` : la carte est rendue à sa taille
@@ -876,6 +871,39 @@ extension StoryComposerView {
     /// pour que le canvas cardé reste une carte pleinement visible.
     func cappedSheetMaxHeight(screenHeight: CGFloat) -> CGFloat {
         screenHeight * 0.70
+    }
+
+    /// Letterbox derrière la carte canvas. Historiquement NOIR (contraste carte
+    /// + « cinéma » pour un média) — mais un fond PAYSAGE réduit le canvas 16:9 à
+    /// une bande, laissant un grand vide noir perçu comme « canvas noir » (user
+    /// 2026-07-20, choix « garder la forme, tuer le noir »). On le remplit
+    /// désormais par un FLOU du média de fond — la carte nette flotte au-dessus de
+    /// sa propre version floutée (look intégré) — ou, à défaut d'image, par la
+    /// couleur de fond de la story.
+    @ViewBuilder
+    var canvasLetterbox: some View {
+        if let bg = composerLetterboxImage {
+            Color.clear
+                .overlay(Image(uiImage: bg).resizable().scaledToFill())
+                .clipped()
+                .blur(radius: 34, opaque: true)
+                .overlay(Color.black.opacity(0.20))
+                .ignoresSafeArea()
+        } else {
+            Rectangle()
+                .fill(storyBackgroundStyle(
+                    viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")))
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
+        }
+    }
+
+    /// Bitmap du média de fond courant, source du flou de `canvasLetterbox`.
+    /// `nil` quand le fond est une couleur/gradient (pas de média de fond chargé).
+    var composerLetterboxImage: UIImage? {
+        guard let bgId = viewModel.currentEffects.mediaObjects?
+            .first(where: { $0.isBackground })?.id else { return nil }
+        return viewModel.loadedImages[bgId]
     }
 
     /// Hauteur de la fenêtre active (et non `UIScreen.main.bounds`) — identique au
