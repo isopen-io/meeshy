@@ -313,17 +313,28 @@ struct ChangePasswordView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(hex: color).opacity(0.12))
                 )
+                // Glyphe décoratif : le sens du champ est porté par son
+                // accessibilityLabel ci-dessous → jamais relu par VoiceOver.
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
+                    // Libellé visuel doublon : masqué de VoiceOver, son rôle
+                    // est réassigné au SecureField via accessibilityLabel
+                    // (doctrine 186i « stop placeholder-as-name »).
+                    .accessibilityHidden(true)
 
                 SecureField(placeholder, text: text)
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                     .textContentType(.password)
                     .focused($focusedField, equals: field)
+                    // VoiceOver annonce le rôle du champ ("Nouveau mot de
+                    // passe, champ de texte sécurisé") au lieu du seul
+                    // placeholder qui disparaît dès la première frappe.
+                    .accessibilityLabel(title)
             }
 
             Spacer()
