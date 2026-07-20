@@ -146,6 +146,14 @@ extension TimelineViewModel {
         scheduleEngineReconfigure()
     }
 
+    /// Prolongation « +10 s » de la bande d'opérations (retour user
+    /// 2026-07-20 : « agrandir et prolonger la durée de la timeline ») — même
+    /// clamp que le pin direct (max 600 s). La réduction reste au
+    /// `DurationHandle` du ruler.
+    public func extendSlideDuration(by seconds: Float = 10) {
+        setSlideDuration(project.slideDuration + seconds)
+    }
+
     // MARK: - Snap disabled toggle (two-finger drag override)
 
     /// Programmatically disable or enable snap — used when a two-finger drag

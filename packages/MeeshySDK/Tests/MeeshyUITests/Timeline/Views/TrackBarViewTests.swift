@@ -33,15 +33,28 @@ final class TrackBarViewTests: XCTestCase {
         XCTAssertTrue(view.accessibilityComposedLabel.lowercased().contains("verrouill"))
     }
 
-    func test_labelColumnWidth_isNarrowTwoLineColumn() {
-        // Colonne deux-lignes (icône + durée / type) : bien plus étroite que
-        // l'ancienne colonne texte 72pt tout en tenant "IMAGE_1"/"3,2 s".
+    func test_labelColumnWidth_fitsFullDurationLabel() {
+        // Colonne élargie à 84 pt : « 12,0 s » doit rester lisible en entier —
+        // à 52 pt la durée tronquait en « 12,… » (capture user 2026-07-20).
         // Elle DOIT égaler `TimelineScrubArea.laneLabelWidth` (offset
         // ruler/playhead) sinon ticks et pistes se désalignent (round 2026-07-19).
-        XCTAssertEqual(TrackBarView<Color>.labelColumnWidth, 52, accuracy: 0.01)
+        XCTAssertEqual(TrackBarView<Color>.labelColumnWidth, 84, accuracy: 0.01)
         XCTAssertEqual(TrackBarView<Color>.labelColumnWidth,
                        TimelineScrubArea<Color>.laneLabelWidth, accuracy: 0.01,
                        "La colonne d'étiquette et l'offset ruler/playhead doivent rester en lockstep.")
+    }
+
+    func test_accessibilityLabel_backgroundSection_announcesSection() {
+        // La section FOND doit s'entendre aussi (VoiceOver), pas seulement se
+        // voir via la teinte de tuile et le préfixe BG_.
+        let view = TrackBarView(
+            title: "Image 1", isLocked: false, isSelected: false,
+            tintHex: "6366F1", isDark: false, laneWidth: 600, laneHeight: 44,
+            isBackgroundSection: true
+        ) { Color.clear }
+        let label = view.accessibilityComposedLabel.lowercased()
+        XCTAssertTrue(label.contains("fond") || label.contains("background"),
+                      "La section doit précéder le titre (locale fr « Fond » / en « Background ») — got: \(view.accessibilityComposedLabel)")
     }
 
     func test_accessibilityLabel_stillIncludesFullTitle_afterTextRemoval() {
