@@ -100,10 +100,10 @@ struct LinksHubView: View {
         .padding(MeeshySpacing.lg)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .fill(Color.white.opacity(0.05))
+                .fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                        .stroke(MeeshyColors.communityAccent.opacity(0.3), lineWidth: 1)
+                        .stroke(theme.border(tint: MeeshyColors.communityAccentHex), lineWidth: 1)
                 )
         )
     }
@@ -180,6 +180,7 @@ struct LinksHubView: View {
                         .font(.title3.weight(.semibold))
                         .foregroundColor(accent)
                 }
+                .accessibilityHidden(true)
 
                 // Texte
                 VStack(alignment: .leading, spacing: 3) {
@@ -212,15 +213,16 @@ struct LinksHubView: View {
                     Image(systemName: "chevron.right")
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
                 }
             }
             .padding(MeeshySpacing.md + 2)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(theme.surfaceGradient(tint: accentHex))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                            .stroke(accent.opacity(0.2), lineWidth: 1)
+                            .stroke(theme.border(tint: accentHex), lineWidth: 1)
                     )
             )
         }
