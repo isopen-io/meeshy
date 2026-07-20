@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 181i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **181i (en cours, branche `claude/laughing-thompson-giniq4`, base `main` HEAD `6faded3`)** :
+>   VoiceOver de `KeypadTab.resultRow` (People hub → onglet Clavier). La ligne de résultat
+>   emballait **deux** contrôles interactifs (Button profil + `dialMenu` « Appeler ») dans un seul
+>   `HStack` puis appliquait `.accessibilityElement(children: .combine)` + `.accessibilityLabel(name)`
+>   sur **tout le HStack** → VoiceOver fusionnait les deux en un seul élément « {name} », l'action
+>   d'appel perdant sa cible activable. Fix : combine/label **déplacés sur le Button profil** (cible
+>   unique, calque le pattern shippé `ContactsListTab` 175i) ; `dialMenu` (déjà labellisé « Appeler »)
+>   redevient un élément distinct ; `.accessibilityHint("Ouvre le profil")` ajouté pour désambiguïser
+>   les deux contrôles adjacents. 1 fichier, 0 logique, 0 test, 0 clé catalogue (hint en `defaultValue`
+>   inline). Seule réf test = commentaire `CallStarterTests.swift:37` → 0 contention. Gate = CI `iOS Tests`.
+> - **⚠️ `KeypadTab.resultRow` séparation contrôles VoiceOver SOLDÉ** : ne plus reprendre. Restes notés :
+>   delete-button long-press « tout effacer » inaccessible VoiceOver ; libellés lettres des touches non lus.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 165i, 2026-07-18)** — piste iOS indépendante (suffixe `i`).
 > - **165i (terminée, branche `claude/laughing-thompson-wnteas`, base `main` HEAD `b36ffd7`)** :
 >   Dynamic Type + VoiceOver de `StatsTimelineChart` (graphique d'activité Swift Charts, écran stats).
