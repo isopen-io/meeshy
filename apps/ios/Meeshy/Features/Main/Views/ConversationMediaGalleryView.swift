@@ -32,6 +32,41 @@ struct ConversationMediaGalleryView: View {
             : ""
     }
 
+    /// Position lisible du média courant pour VoiceOver — la capsule « n / N »
+    /// serait sinon lue « n barre oblique N » (position portée par le seul texte).
+    private var galleryPositionAccessibilityLabel: String {
+        String(
+            format: String(localized: "gallery.position", defaultValue: "Média %1$d sur %2$d", bundle: .main),
+            currentIndex + 1,
+            allAttachments.count
+        )
+    }
+
+    /// Libellé VoiceOver d'une image plein écran : la légende si le call site en
+    /// fournit une, sinon un libellé générique (l'image ne doit jamais être muette).
+    private func imageAccessibilityLabel(_ attachment: MessageAttachment) -> String {
+        if let caption = captionMap[attachment.id], !caption.isEmpty {
+            return caption
+        }
+        return String(localized: "gallery.image", defaultValue: "Image", bundle: .main)
+    }
+
+    /// Résumé VoiceOver de la rangée métadonnées (dimensions + poids), joint de
+    /// façon locale-aware. Chaîne vide si aucune métadonnée n'est disponible.
+    private func mediaMetadataAccessibilityLabel(_ att: MessageAttachment) -> String {
+        var parts: [String] = []
+        if let w = att.width, let h = att.height, w > 0, h > 0 {
+            parts.append(String(
+                format: String(localized: "gallery.dimensions", defaultValue: "%1$d par %2$d", bundle: .main),
+                w, h
+            ))
+        }
+        if att.fileSize > 0 {
+            parts.append(att.fileSizeFormatted)
+        }
+        return ListFormatter.localizedString(byJoining: parts)
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -247,6 +282,10 @@ struct ConversationMediaGalleryView: View {
                     offset = .zero
                 }
             }
+            // Sans label, l'image plein écran est un élément VoiceOver muet quand
+            // on balaie la galerie. Caption si fournie, sinon libellé générique.
+            .accessibilityLabel(imageAccessibilityLabel(attachment))
+            .accessibilityAddTraits(.isImage)
         } else {
             // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
             Image(systemName: "photo")
@@ -300,6 +339,7 @@ struct ConversationMediaGalleryView: View {
                         .adaptiveGlass(in: Capsule())
                         .contentTransition(.numericText())
                         .animation(.spring(response: 0.3), value: currentIndex)
+                        .accessibilityLabel(galleryPositionAccessibilityLabel)
                 }
 
                 Spacer()
@@ -414,6 +454,11 @@ struct ConversationMediaGalleryView: View {
                 }
                 Spacer()
             }
+            // Regroupe dimensions + poids en un seul arrêt VoiceOver et remplace
+            // le « × » (lu « multiplication ») par un « par » localisé.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(mediaMetadataAccessibilityLabel(att))
+            .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
