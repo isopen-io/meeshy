@@ -1,5 +1,35 @@
 # Progress — state & what to do next
 
+> On 2026-07-20 the **statuses-area FR/ES/PT localisation** landed (slice `status-strings-i18n`, feature-parity §G →
+> "Statuses area i18n" — the tracked i18n follow-up the `status-feed-mode-toggle` / `status-bar-l2-cache` slices
+> flagged: the whole `status_*` family shipped in `values/` only). Prisme parity: a user whose device is FR/ES/PT must
+> render native content, never fall through to an English default. **(1)** the 26-key `status_*` family
+> (`status_bar_*` / `status_feed_*` / `status_composer_*`) is now fully translated in `values-fr` / `values-es` /
+> `values-pt`, preserving each string's positional format specifiers exactly (`%1$s`, `%2$s`, `%1$d/%2$d`, …).
+> Translations reuse the module's/app's existing term choices (e.g. FR "Contacts"/"Communautés"/"Privé",
+> ES "Comunidades"/"Contactos", PT "Comunidades"/"Contatos"). **(2)** new **behavioural guard**
+> `FeedStringLocalizationParityTest` (+2 tests, plain JVM, parses the module's own `res/values*/strings.xml`):
+> `every base string key is translated in every shipped locale` (no silent English fallthrough) and
+> `translated values keep the same positional format specifiers as the base` (a drifted/dropped arg is a runtime
+> `FormatException` crash — parity here is correctness, not cosmetics). Deliberately **full-module**, not scoped to
+> `status_*`, so any future feed key added without its FR/ES/PT siblings turns red before it ships. **Mutation check
+> (RED proof):** pre-translation the parity test failed with **exactly** the 26 missing `status_*` keys per locale
+> (`{fr=[status_bar_me, …], es=[…], pt=[…]}`); the format-specifier test stayed green (it only inspects present keys),
+> so RED was scoped precisely to the gap. This is a pure resource/parity slice — **no product logic touched**.
+> **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:feature:feed:testDebugUnitTest` **509**
+> green (`FeedStringLocalizationParityTest` 2/2, was 507 + 2), full `:app:assembleDebug` → **BUILD SUCCESSFUL**.
+> Full-repo `assembleDebug testDebugUnitTest` = **4688 tests, 1 failed** — the sole failure is
+> `ThemeStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction` in `:sdk-core` (a DataStore/Robolectric
+> `TimeoutCancellationException` at 5000 ms under parallel all-module load), a module this diff does **not** touch; it
+> **passes green in isolation** on re-run (`:sdk-core:testDebugUnitTest --tests ThemeStoreTest` → BUILD SUCCESSFUL),
+> confirming pre-existing test-infra flakiness, not a regression (see NOTES.md). Reviewer **PASS** (diff `apps/android`
+> only — 3 locale XML + 1 test + tracking; **SDK purity** — pure resource localisation, no code moved; **SSOT** — the
+> parity guard is now the single enforcement point for feed locale completeness; **coherence** — no UI change, native
+> content in every shipped locale as the Prisme demands; no coverage floor lowered, no test weakened).
+> **Next slice:** §G — statuses **realtime socket wiring** (`status:new` / `status:reaction` push into the bar) for
+> live parity with iOS `StatusViewModel` socket handlers; then extend the locale-parity guard pattern to the other
+> feature modules that still have `values/`-only keys, if any surface.
+
 > On 2026-07-19 the **disk L2 status cache** landed (slice `status-bar-l2-cache`, feature-parity §G →
 > "Instant-app status bar — disk L2 cache" — the cold-launch follow-up the `status-bar-l1-cache` slice flagged in its
 > own KDoc). Parity source: iOS `StatusViewModel.loadStatuses` reads from `CacheCoordinator.statuses`, whose disk tier
