@@ -1,5 +1,5 @@
 // packages/shared/__tests__/mention-extract.test.ts
-import { extractMentions, mentionsToLinks, isValidMentionUsername, isValidMentionQuery } from '../types/mention';
+import { extractMentions, mentionsToLinks, isValidMentionUsername, isValidMentionQuery, detectMentionAtCursor } from '../types/mention';
 
 describe('extractMentions (types/mention)', () => {
   it('extrait un username classique', () => {
@@ -128,5 +128,65 @@ describe('isValidMentionQuery', () => {
 
   it('rejette au-delà de 30 caractères', () => {
     expect(isValidMentionQuery('a'.repeat(31))).toBe(false);
+  });
+});
+
+describe('detectMentionAtCursor', () => {
+  it('détecte une mention en cours de frappe au curseur', () => {
+    const content = 'hey @ali';
+    expect(detectMentionAtCursor(content, content.length)).toEqual({
+      start: 4,
+      end: content.length,
+      query: 'ali',
+      hasMention: true,
+    });
+  });
+
+  it('détecte une query vide juste après le `@`', () => {
+    const content = 'hey @';
+    expect(detectMentionAtCursor(content, content.length)).toEqual({
+      start: 4,
+      end: content.length,
+      query: '',
+      hasMention: true,
+    });
+  });
+
+  it('retourne null en l’absence de `@`', () => {
+    expect(detectMentionAtCursor('hello world', 11)).toBeNull();
+  });
+
+  it('retourne null si un espace sépare le `@` du curseur', () => {
+    expect(detectMentionAtCursor('hey @ali bob', 12)).toBeNull();
+  });
+
+  it('détecte un `@` en début de contenu', () => {
+    const content = '@ali';
+    expect(detectMentionAtCursor(content, content.length)?.query).toBe('ali');
+  });
+
+  // Frontière gauche NAME_BOUNDARY_LEFT (SSOT mention-parser) : un `@` collé après un
+  // caractère de nom appartient à une adresse e-mail, PAS à une mention. Sans cette
+  // frontière, le composer ouvrait l'autocomplete sur `bob@alice`, l'utilisateur
+  // sélectionnait quelqu'un, mais `parseMentions` refusait ensuite de linkifier
+  // `bob@selecteduser` (même frontière) — la mention ne se matérialisait jamais.
+  it('retourne null quand le `@` est collé après une lettre (fragment e-mail)', () => {
+    const content = 'contact bob@alice';
+    expect(detectMentionAtCursor(content, content.length)).toBeNull();
+  });
+
+  it('retourne null pour une adresse e-mail complète en cours de frappe', () => {
+    const content = 'jane.doe@meeshy';
+    expect(detectMentionAtCursor(content, content.length)).toBeNull();
+  });
+
+  it('détecte une mention après un `@` précédé d’un espace malgré un e-mail antérieur', () => {
+    const content = 'from a@b.com to @ali';
+    expect(detectMentionAtCursor(content, content.length)?.query).toBe('ali');
+  });
+
+  it('reste une mention quand le `@` suit une ponctuation non-nom (parenthèse)', () => {
+    const content = 'cc (@ali';
+    expect(detectMentionAtCursor(content, content.length)?.query).toBe('ali');
   });
 });

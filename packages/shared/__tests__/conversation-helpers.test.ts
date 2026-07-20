@@ -182,6 +182,19 @@ describe('generateConversationIdentifier', () => {
     const identifier = generateConversationIdentifier('Niño año');
     expect(identifier).toBe('mshy_nino-ano-20240315103045');
   });
+
+  it('transliterates German umlauts identically for NFD-decomposed input', () => {
+    // A title may reach the resolver already in NFD (decomposed) form — e.g.
+    // pasted from a macOS filename, where 'ö' is 'o' + U+0308 rather than the
+    // precomposed U+00F6. The German transliteration contract (ö→oe, ü→ue,
+    // ä→ae) MUST hold regardless of the input's Unicode normalization form,
+    // otherwise the same visible title produces two divergent identifiers.
+    const nfc = 'Größe über';
+    const nfd = nfc.normalize('NFD');
+    expect(nfd).not.toBe(nfc); // guard: the two strings are byte-distinct
+    expect(generateConversationIdentifier(nfd)).toBe('mshy_groesse-ueber-20240315103045');
+    expect(generateConversationIdentifier(nfd)).toBe(generateConversationIdentifier(nfc));
+  });
 });
 
 describe('isValidMongoId', () => {

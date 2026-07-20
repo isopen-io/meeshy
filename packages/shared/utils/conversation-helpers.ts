@@ -139,6 +139,12 @@ export function generateConversationIdentifier(title?: string): string {
     // 2. Normaliser les accents (NFD décompose é en e + accent, puis on supprime les accents)
     // 3. Enlever les caractères spéciaux, remplacer les espaces par des tirets
     const sanitizedTitle = title
+      // 0. Recomposer en NFC AVANT le mapping allemand : un titre reçu en NFD
+      //    (ex. collé depuis un nom de fichier macOS) porte 'ö' comme 'o' +
+      //    U+0308 combinant, que les remplacements précomposés ci-dessous ne
+      //    matcheraient pas — 'ö' tomberait alors sur 'o' au lieu de 'oe',
+      //    produisant un identifiant divergent pour un même titre visible.
+      .normalize('NFC')
       // Caractères allemands → équivalents romans
       .replace(/ö/g, 'oe')
       .replace(/Ö/g, 'Oe')

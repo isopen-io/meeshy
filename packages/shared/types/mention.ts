@@ -315,6 +315,15 @@ export function detectMentionAtCursor(
 
   if (lastAtIndex === -1) return null;
 
+  // Frontière gauche `NAME_BOUNDARY_LEFT` (SSOT `mention-parser`) : un `@` collé après un
+  // caractère de nom appartient à une adresse e-mail (`bob@alice`), PAS à une mention. Les
+  // chemins de rendu (`parseMentions`, `hasMentions`, `mentionsToLinks`) refusent déjà de
+  // linkifier ce `@` ; l'autocomplete ne doit donc pas s'ouvrir dessus, sous peine de
+  // proposer une mention qui ne se matérialisera jamais à l'envoi.
+  if (!new RegExp(`${NAME_BOUNDARY_LEFT}@$`, 'u').test(content.slice(0, lastAtIndex + 1))) {
+    return null;
+  }
+
   // Vérifier qu'il n'y a pas d'espace entre @ et le curseur
   const afterAt = beforeCursor.substring(lastAtIndex + 1);
   if (afterAt.includes(' ') || afterAt.includes('\n')) return null;
