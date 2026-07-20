@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct TrackingLinksView: View {
     private var theme: ThemeManager { ThemeManager.shared }
@@ -135,20 +136,21 @@ struct TrackingLinksView: View {
         }
     }
 
+    // Empty state deferred to the shared design-system `EmptyStateView`
+    // (canonical icon+title+subtitle, combined VoiceOver label + spring appear)
+    // instead of a hand-rolled VStack — same dedup applied to the sibling
+    // `ShareLinksView` (178i). `compact` keeps it sized for this in-scroll
+    // section; the brand accent (trackingAccentHex) is preserved. The native
+    // icon scales with Dynamic Type (removes the frozen `.system(size: 40)`).
     private var trackingEmptyState: some View {
-        VStack(spacing: 12) {
-            // Hero glyph ≥40pt: décoratif, le libellé adjacent porte le sens — figé + masqué VoiceOver (doctrine 74i/86i)
-            Image(systemName: "chart.bar.fill")
-                .font(.system(size: 40)).foregroundColor(accent.opacity(0.6))
-                .accessibilityHidden(true)
-            Text(String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main)).font(.subheadline.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
-            Text(String(localized: "tracking.links.empty.subtitle", defaultValue: "Créez un lien pour suivre vos clics et campagnes", bundle: .main))
-                .font(.footnote).foregroundColor(theme.textSecondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(40).frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
+        EmptyStateView(
+            icon: "chart.bar.fill",
+            title: String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main),
+            subtitle: String(localized: "tracking.links.empty.subtitle", defaultValue: "Créez un lien pour suivre vos clics et campagnes", bundle: .main),
+            accentColor: MeeshyColors.trackingAccentHex,
+            compact: true
+        )
+        .padding(.vertical, 24)
     }
 
     private func trackingLinkRow(_ link: TrackingLink) -> some View {

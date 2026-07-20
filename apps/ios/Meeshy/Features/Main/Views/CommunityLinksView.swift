@@ -131,6 +131,11 @@ struct CommunityLinksView: View {
         }
     }
 
+    private func copyJoinLink(_ link: CommunityLink) {
+        UIPasteboard.general.string = link.joinUrl
+        HapticFeedback.success()
+    }
+
     private func communityLinkRow(_ link: CommunityLink) -> some View {
         HStack(spacing: 12) {
             ZStack {
@@ -148,13 +153,16 @@ struct CommunityLinksView: View {
             }
             Spacer()
             Button {
-                UIPasteboard.general.string = link.joinUrl
-                HapticFeedback.success()
+                copyJoinLink(link)
             } label: {
                 Image(systemName: "doc.on.doc").font(MeeshyFont.relative(16))
                     .foregroundColor(accent)
             }.padding(.horizontal, 4)
-            .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
+            // Nested inside the row's NavigationLink, this Button is unreachable by
+            // VoiceOver — the link absorbs its whole label as one element. Hide the
+            // duplicate glyph here and re-expose the copy as an `.accessibilityAction`
+            // on the combined row below, so VoiceOver users can still copy the invite.
+            .accessibilityHidden(true)
             Image(systemName: "chevron.right").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
         }
@@ -165,6 +173,11 @@ struct CommunityLinksView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14)
                     .stroke(accent.opacity(0.15), lineWidth: 1))
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityHint(String(localized: "community.links.row.open.a11y", defaultValue: "Ouvre les détails de la communauté", bundle: .main))
+        .accessibilityAction(named: String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main)) {
+            copyJoinLink(link)
+        }
     }
 }
 
