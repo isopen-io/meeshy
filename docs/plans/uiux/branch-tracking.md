@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 176i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **176i (branche `claude/laughing-thompson-vj02xz`, base `main` HEAD `128680f`)** :
+>   Localisation + Dynamic Type + VoiceOver de `LoadMoreRepliesCell` (cellule UIKit « View N more
+>   replies » au bas d'un fil de réponses replié — `CommentListViewController`, tap → `onToggleThread`).
+>   4 déficits : (1) **string brute non localisée avec bug de pluriel** — `"View \(remaining) more
+>   replies"` affichait « View 1 more replies » au singulier, hors idiome `String(localized:)`, non
+>   traduisible ; (2) **font figée** `.systemFont(ofSize: 13)` — pas de Dynamic Type sur un tap target ;
+>   (3) **aucune sémantique bouton VoiceOver** — cellule = cible du tap mais lue comme texte statique
+>   sans trait `.button` ; (4) **touch target < 44 pt** (`heightAnchor >= 36`). Fix = `UIFontMetrics`
+>   `.subheadline` + `adjustsFontForContentSizeCategory` (poids/taille design préservés, `numberOfLines
+>   = 0`) ; deux clés i18n `comment.replies.load-more-one` / `-other` (défauts EN inline, langue de dev
+>   = `en`, 0 `.xcstrings`) ; `isAccessibilityElement` + `.button` + label (reset en `prepareForReuse`) ;
+>   min height `36` → `44`. 1 fichier, 0 logique, 0 test touché. Aucun test ne référence la cellule
+>   (grep = 0) ; unique call site inchangé. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `LoadMoreRepliesCell` SOLDÉ** (i18n + Dynamic Type + VoiceOver + touch target). Reste ouvert :
+>   migration Dynamic Type de la famille de cellules commentaires sœurs (`ReplyCell`,
+>   `TopLevelCommentCell`, `TextPostCell`, `MediaPostCell`, fonts figées 13/14/11 pt) ; `LinkPreviewCard`
+>   (Button pleine carte ouvrant Safari, sans `.accessibilityLabel`/`.accessibilityHint`).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
 >   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un
