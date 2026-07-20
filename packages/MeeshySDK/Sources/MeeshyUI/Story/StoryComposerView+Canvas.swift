@@ -280,6 +280,7 @@ extension StoryComposerView {
                     // EXACTEMENT au-dessus (0 quand la band est repliée / FABs seuls,
                     // état où le canvas reste plein écran).
                     onBandHeightChange: { measuredBottomBandHeight = $0 },
+                    onBandTopYChange: { measuredBandTopY = $0 },
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
                     onOpenStickerPicker: { showStickerPicker = true }
                 )
@@ -850,39 +851,41 @@ extension StoryComposerView {
     /// solver retombe en plein écran = bas de nouveau masqué). Hors carding → `0`.
     var presentedSheetHeight: CGFloat {
         guard canvasIsCarded else { return 0 }
-        let cap = cappedSheetMaxHeight(screenHeight: composerScreenHeight)
         var height: CGFloat = 0
         if viewModel.textEditingMode != .inactive {
             height = max(height, keyboardHeight + 132)
         }
         if bandStateMachine.state != .hidden {
-            height = max(height, max(composerBandHeight, measuredBottomBandHeight))
+            // Réserve = distance du HAUT RÉEL de la band (coord globales,
+            // `measuredBandTopY`) au bas de l'écran → le canvas se rétracte
+            // EXACTEMENT jusqu'au haut visuellement rendu de la band, jamais
+            // recouvert/tronqué (bug 2026-07-20 : la hauteur de layout
+            // sous-estimait quand le contenu débordait son `.frame` ou restait
+            // stale après resize). Fallback layout tant que `minY` pas encore
+            // mesuré (premier frame).
+            // `.greatestFiniteMagnitude` (sentinelle « band repliée ») EST fini,
+            // donc `isFinite` ne suffit pas : on teste `< composerScreenHeight`
+            // (un vrai haut de band est toujours dans l'écran).
+            let hasBandTop = measuredBandTopY.isFinite && measuredBandTopY < composerScreenHeight
+            let byTop = hasBandTop
+                ? max(0, composerScreenHeight - measuredBandTopY)
+                : max(composerBandHeight, measuredBottomBandHeight)
+            height = max(height, byTop)
         }
         if let fraction = presentedSystemSheetFraction {
             height = max(height, composerScreenHeight * fraction)
         }
-        // `presentedSheetHeight` = de combien le CANVAS se rétracte en bas. Le
-        // canvas réserve TOUTE la hauteur de la band : il ne se fait donc jamais
-        // recouvrir/couper par le sheet (regr. 2026-07-20 « remonter le handle
-        // coupe le canvas »). Quand la band grandit, la carte RÉTRÉCIT
-        // proprement (aspect-fit du solveur) en restant ENTIÈREMENT visible
-        // au-dessus, avec le petit gap `canvasSheetGap`.
-        return min(cap, height)
+        // Plafond de SÉCURITÉ (0.85 H) : jamais atteint par une band réaliste
+        // (max ~60 % avec `composerBandMaxHeight`), il ne fait qu'empêcher un
+        // `measuredBandTopY` transitoire aberrant (0 au montage) d'écraser le
+        // canvas à néant. Le cap 0.70 précédent, lui, TRONQUAIT une band > 70 %.
+        return min(composerScreenHeight * 0.85, height)
     }
 
     /// Petit espace (pt) laissé entre le BAS de la carte canvas et le haut du
     /// sheet d'édition — la carte ne doit pas être collée au sheet (user
     /// 2026-07-20). Ajouté au `bottomInset` du solveur de framing.
     static let canvasSheetGap: CGFloat = 14
-
-    /// Plafond de hauteur réservée : ~70 % de l'écran. Assez haut pour couvrir
-    /// l'empreinte RÉELLE du clavier (`keyboardHeight + 132` ≈ 0.55–0.58 H) et les
-    /// détents `.medium` (~0.5 H) SANS les tronquer — l'ancien plafond 0.42 H
-    /// laissait le bas du canvas sous le clavier / la sheet. Le reste (~30 %) suffit
-    /// pour que le canvas cardé reste une carte pleinement visible.
-    func cappedSheetMaxHeight(screenHeight: CGFloat) -> CGFloat {
-        screenHeight * 0.70
-    }
 
     /// Letterbox derrière la carte canvas. Historiquement NOIR (contraste carte
     /// + « cinéma » pour un média) — mais un fond PAYSAGE réduit le canvas 16:9 à
