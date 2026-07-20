@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 185i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Contexte** : essaim `laughing-thompson` très dense — PR ouvertes iOS jusqu'à **184i**
+>   (`StatusComposerView` #2135, `CommunityLinksView` #2134 183i, `ReplyCell` #2133 182i).
+>   Numéro **185i** choisi strictement > plus haut en vol (184i).
+> - **185i (en cours, branche `claude/laughing-thompson-hj8zjr`, base `main` HEAD `2a29209`)** :
+>   VoiceOver **statut en ligne / bloqué** de la ligne de résultat de recherche dans
+>   `NewConversationView` (écran « Nouvelle conversation »). La ligne est un `Button` unique dont
+>   le statut **en ligne** n'était porté que par un **point vert** (`Circle().fill(MeeshyColors.success)`,
+>   forme décorative jamais exposée) → VoiceOver n'entendait que « displayName, @username »
+>   (viol. WCAG 1.4.1 « Use of Color »). Fix idiome 175i `ContactsListTab`, **0 changement visuel** :
+>   helper pur `userRowAccessibilityLabel(for:isBlocked:)` compose « displayName, @username[, en ligne / Bloqué] »
+>   appliqué en `.accessibilityLabel` sur le `Button` (trait `.isSelected` conservé). **Pas de**
+>   `.accessibilityElement(children: .ignore)` sur le Button (préserve le trait bouton — écueil inverse
+>   de 181i/177i). Offline reste silencieux (calque le visuel : le point n'est dessiné que si online).
+>   Clés réutilisées `contacts.list.online.lower` + `new_conversation.user.blocked` (0 clé neuve).
+>   1 fichier, 0 logique, 0 test, 0 clé catalogue. `NewConversationViewModelTests` teste le ViewModel
+>   (intact) → 0 contention ; aucune PR iOS ouverte ne touche le fichier. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `NewConversationView` statut ligne VoiceOver SOLDÉ 185i** : ne plus reprendre. Reste (hors
+>   scope app-view) : le point de présence du SDK `MeeshyAvatar` (`packages/MeeshySDK/.../Primitives/MeeshyAvatar.swift`)
+>   labellise par `name` seul — même lacune, à traiter comme travail SDK séparé.
 > **POINTEUR AUTORITAIRE iOS (mis à jour 180i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **180i (en cours, branche `claude/laughing-thompson-jxv4l9`, base `main` HEAD `05491cc`)** :
 >   Migration vers **`ShareLink` natif** dans `TrackingLinkDetailView` (écran détail d'un lien de
