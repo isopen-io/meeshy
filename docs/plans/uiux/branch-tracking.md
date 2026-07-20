@@ -14,6 +14,22 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 179i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **179i (branche `claude/laughing-thompson-duee1f`, base `main` HEAD `e9e38a9`)** :
+>   Labels VoiceOver des compteurs like/comment/repost du feed (`TextPostCell` + `MediaPostCell`,
+>   cellules UIKit `UICollectionViewCell`). Le titre visible du bouton n'affiche que le nombre nu
+>   (`"  \(count)"`) → VoiceOver lisait « 5, bouton » sans dire de quoi (sens porté par le seul glyphe
+>   SF Symbol, sans texte accessible) → **WCAG 1.1.1 / 1.4.1**. Backlog explicite de fin 176i
+>   (`ConversationEncryptionDetailSheet`). Fix : helper pur partagé **`PostStatAccessibility`**
+>   (nouveau fichier, dédup des 2 cellules) → `accessibilityLabel` avec Automatic Grammar Agreement
+>   `^[…](inflect: true)` (« 1 like » / « 5 likes », langue de dev en, pas de `.stringsdict`).
+>   3 clés i18n neuves inline `feed.post.stat.{likes,comments,reposts}`. 0 logique, 0 visuel,
+>   0 changement de trait (restent des `UIButton`). Nouveaux tests purs `PostStatAccessibilityTests`
+>   (11 cas). Aucun test existant ne référence les cellules. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `TextPostCell` / `MediaPostCell` labels compteurs SOLDÉ 179i** : ne plus reprendre les labels.
+>   Reste (déféré) : boutons stat sans target-action (display-only rendus en `UIButton`) → soit câbler
+>   like/comment, soit dégrader en texte statique a11y ; `StatusComposerView` compteur `\(count)/122`
+>   non formaté locale (backlog 176i).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 172i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **172i (en cours, branche `claude/laughing-thompson-ks1h8d`, base `main` HEAD `612872b`)** :
 >   Alignement marque Indigo + structure VoiceOver de `MagicLinkView` (connexion par lien magique).
