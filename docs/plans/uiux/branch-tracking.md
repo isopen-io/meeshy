@@ -14,6 +14,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 168i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **168i (branche `claude/laughing-thompson-sfei6s`, base `main` HEAD `a00389a`)** :
+>   Consolidation design-system de `BookmarksView` (écran « Favoris »). L'empty-state était un
+>   **`VStack` bespoke** ré-implémentant à la main le composant SDK partagé `MeeshyUI.EmptyStateView`
+>   (déjà consommé par **10 sites** : `BlockedUsersView`, `MyStoriesView`, `ConversationListHelpers`,
+>   `SharePickerView`, `GlobalSearchView`, `ParticipantsView`, `WidgetPreviewView`, `CallsTab`,
+>   `ConversationListView`, `StoryViewerView+Content`). 4 déficits : (1) **duplication** d'un pattern
+>   partagé ; (2) **VoiceOver fragmenté** (titre + sous-titre = 2 focus, aucun `children: .combine`) ;
+>   (3) **`.font(.system(size: 48))` figé** local ; (4) divergence visuelle (glyphe gris muet vs. héros
+>   indigo animé du composant partagé). Fix = remplacer le `VStack` par `EmptyStateView(icon:title:subtitle:)`
+>   + `import MeeshyUI`, en réutilisant **les 2 clés i18n existantes** (`bookmarks.empty.title/subtitle`)
+>   et en conservant le layout top-ancré (`.padding(.top, 80)`). A11y `children: .combine` + label combiné,
+>   glyphe indigo, animation d'entrée hérités gratuitement du composant. Typographie titre/sous-titre déjà
+>   sémantique (Dynamic Type non cassé) — le déficit était reuse + structure VoiceOver, pas le scaling.
+>   1 fichier, 0 logique, 0 ViewModel, 0 clé i18n neuve, 0 `.xcstrings`, 0 test touché. `theme` conservé
+>   (`backgroundGradient`). Aucun test ne référence l'empty-state (grep : tests = `BookmarksViewModel` seul).
+>   Aucune PR iOS ouverte ne touche `BookmarksView` → 0 contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `BookmarksView` empty-state SOLDÉ** : délègue désormais au primitive partagé. Ne plus ré-hand-roll —
+>   tout futur ajustement d'empty-state passe par `MeeshyUI.EmptyStateView` (bénéficie aux 11 consommateurs).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 167i, 2026-07-19)** — piste iOS indépendante (suffixe `i`).
 > - **167i (en cours, branche `claude/laughing-thompson-2exu6n`, base `main` HEAD `efedb69e4`)** :
 >   Localisation + VoiceOver de `UploadProgressBar` (carte de progression d'upload TUS — composer
