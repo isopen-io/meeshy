@@ -15,7 +15,12 @@ import {
   createDeviceCountryMiddleware,
   _resetDeviceCountryCache,
   _seedDeviceCountryCache,
+  _deviceCountryCacheSize,
+  _DEVICE_COUNTRY_MAX_TRACKED_USERS,
 } from '../../../middleware/deviceCountry';
+
+/** Mirror of the production DEBOUNCE_MS (5 min) — kept local to the test. */
+const DEBOUNCE_WINDOW_MS = 5 * 60 * 1000;
 
 type MockUser = {
   id?: string;
@@ -240,6 +245,67 @@ describe('deviceCountryMiddleware', () => {
     await expect(
       deviceCountryMiddleware(req, makeReply(), undefined)
     ).resolves.toBeUndefined();
+  });
+
+  describe('bounded debounce cache (memory-leak guard)', () => {
+    it('evicts entries aged past the debounce window once the cap is crossed', async () => {
+      const { prisma } = makePrismaMock();
+
+      // Fill the cache to the cap with entries that are already expired
+      // (seeded well before the debounce window).
+      const longAgo = Date.now() - (DEBOUNCE_WINDOW_MS + 60_000);
+      for (let i = 0; i < _DEVICE_COUNTRY_MAX_TRACKED_USERS; i++) {
+        _seedDeviceCountryCache(`stale-${i}`, longAgo);
+      }
+      expect(_deviceCountryCacheSize()).toBe(_DEVICE_COUNTRY_MAX_TRACKED_USERS);
+
+      // A fresh write for a brand-new user crosses the cap and triggers the
+      // sweep: every stale entry is dropped, leaving only the new user.
+      await deviceCountryMiddleware(
+        makeRequest({ 'x-meeshy-country': 'FR' }, { userId: 'fresh', isAnonymous: false }),
+        makeReply(),
+        prisma
+      );
+
+      expect(_deviceCountryCacheSize()).toBe(1);
+    });
+
+    it('never grows past the hard cap even when every entry is still fresh', async () => {
+      const { prisma } = makePrismaMock();
+
+      // Fill the cache to the cap with entries written "just now" (fresh).
+      const now = Date.now();
+      for (let i = 0; i < _DEVICE_COUNTRY_MAX_TRACKED_USERS; i++) {
+        _seedDeviceCountryCache(`fresh-${i}`, now);
+      }
+
+      // A write for a new user crosses the cap; no entry is expired, so the
+      // hard-cap fallback drops the oldest-inserted entry to make room.
+      await deviceCountryMiddleware(
+        makeRequest({ 'x-meeshy-country': 'FR' }, { userId: 'newcomer', isAnonymous: false }),
+        makeReply(),
+        prisma
+      );
+
+      expect(_deviceCountryCacheSize()).toBeLessThanOrEqual(_DEVICE_COUNTRY_MAX_TRACKED_USERS);
+    });
+
+    it('does not prune while the cache stays under the cap', async () => {
+      const { prisma } = makePrismaMock();
+
+      const longAgo = Date.now() - (DEBOUNCE_WINDOW_MS + 60_000);
+      _seedDeviceCountryCache('old-but-under-cap', longAgo);
+
+      await deviceCountryMiddleware(
+        makeRequest({ 'x-meeshy-country': 'FR' }, { userId: 'another', isAnonymous: false }),
+        makeReply(),
+        prisma
+      );
+
+      // The stale entry is retained (no sweep below the cap) alongside the new
+      // one — pruning is amortised, not eager.
+      expect(_deviceCountryCacheSize()).toBe(2);
+    });
   });
 
   describe('createDeviceCountryMiddleware factory', () => {
