@@ -82,6 +82,7 @@ final class StoryViewerReactionRollbackTests: XCTestCase {
         return StoryViewerView(viewModel: StoryViewModel(), groups: [group], currentGroupIndex: 0, isPresented: binding)
     }
 
+    @MainActor
     private func makeEmptyResponse() -> APIResponse<AnyCodable> {
         JSONStub.decode("""
         { "success": true, "data": {}, "error": null }
