@@ -387,6 +387,14 @@ struct MeeshyApp: App {
                     let maxSplashDuration: Duration = .seconds(5)
 
                     if authManager.isAuthenticated {
+                        // P1 — prime SessionManager's `lastKnownUserId` cache
+                        // on EVERY cold start with an already-restored session,
+                        // not just on a fresh login transition. Without this,
+                        // a session restored at launch that is torn down via
+                        // `logout()` before any E2EE activity in this process
+                        // (no DM sent/received) would leave `clearSessions()`
+                        // with no userId to scope its Keychain wipe against.
+                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
                         // Précharge le cache liste — SQLite read instantané,
                         // retourne `.empty` au tout premier install.
                         let cacheResult = await CacheCoordinator.shared.conversations.load(for: "list")
