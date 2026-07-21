@@ -426,7 +426,7 @@ struct GlobalSearchView: View {
 
                     Spacer()
 
-                    Text(formatTimeAgo(result.createdAt))
+                    Text(Self.formatTimeAgo(result.createdAt))
                         .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
                 }
@@ -653,7 +653,7 @@ struct GlobalSearchView: View {
     private func messageResultAccessibilityLabel(_ result: GlobalSearchMessageResult) -> String {
         let messageFrom = String(localized: "accessibility.message_from", defaultValue: "Message de")
         let inConversation = String(localized: "accessibility.in_conversation", defaultValue: "dans")
-        return "\(messageFrom) \(result.senderName) \(inConversation) \(result.conversationName), \(result.content), \(formatTimeAgo(result.createdAt))"
+        return "\(messageFrom) \(result.senderName) \(inConversation) \(result.conversationName), \(result.content), \(Self.formatTimeAgo(result.createdAt))"
     }
 
     private func conversationResultAccessibilityLabel(_ result: GlobalSearchConversationResult) -> String {
@@ -725,12 +725,13 @@ struct GlobalSearchView: View {
 
     // MARK: - Helpers
 
-    private func formatTimeAgo(_ date: Date) -> String {
-        let seconds = Int(Date().timeIntervalSince(date))
-        if seconds < 60 { return "now" }
-        if seconds < 3600 { return "\(seconds / 60)m" }
-        if seconds < 86400 { return "\(seconds / 3600)h" }
-        return "\(seconds / 86400)d"
+    /// Delegates to the SSOT `RelativeTimeFormatter` (dense-list `.short` style)
+    /// instead of re-forging the ladder locally — that hand-rolled version was
+    /// hardcoded in English ("now" / "5m" / "2h" / "3d"), showing English
+    /// timestamps to non-English users regardless of their configured language.
+    /// `static` + injectable `now` so it's unit-testable without a live view.
+    static func formatTimeAgo(_ date: Date, now: Date = Date()) -> String {
+        RelativeTimeFormatter.shortString(for: date, now: now)
     }
 
     private func highlightedText(_ text: String, query: String) -> AttributedString {
