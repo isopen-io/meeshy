@@ -113,6 +113,10 @@ struct PostTranslationSheet: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+        // WCAG 1.4.1 — the original is the checked/active option (green
+        // `checkmark.circle.fill`), a state conveyed by icon + colour alone.
+        // Expose it to VoiceOver so the selection isn't visual-only (doctrine 85i/186i).
+        .accessibilityAddTraits(.isSelected)
     }
 
     // MARK: - Available Translations
