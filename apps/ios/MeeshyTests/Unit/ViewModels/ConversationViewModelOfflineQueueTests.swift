@@ -406,6 +406,91 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             "the phantom edit revision must be removed on rollback")
     }
 
+    // MARK: - retryMessage (manual retry after outbox exhaustion)
+
+    /// A `.failed` message that carries attachments must NOT be resent via
+    /// the naive `sendMessage(content:replyToId:)` path: the displayed
+    /// `Message.attachments` only ever hold the PRE-upload local placeholder
+    /// ids (never reconciled after the fact), so a captioned media message
+    /// would resend as text-only and an uncaptioned one would be rejected
+    /// outright by `sendMessage`'s empty-content guard, stranding the bubble
+    /// mid-clock. It must instead reset + redrive the durable outbox row,
+    /// which still holds the real uploaded attachment ids.
+    func test_retryMessage_failedMessageWithAttachments_resetsOutboxRowInsteadOfResendingTextOnly() async throws {
+        let fx = try await makeFixture()
+        try await seedFailedMediaMessage(localId: "m_retry_media", fixture: fx)
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_retry_media", in: fx.sut
+        ) { $0.deliveryStatus == .failed && !$0.attachments.isEmpty }
+        XCTAssertTrue(seeded, "precondition: the failed media message must be visible with its attachment")
+
+        await fx.sut.retryMessage(messageId: "m_retry_media")
+
+        let retried = await fx.offlineQueue.retriedClientMessageIds
+        XCTAssertEqual(retried, ["m_retry_media"],
+            "must reset the existing outbox row (preserves the real attachment ids) instead of re-sending")
+        XCTAssertEqual(fx.messageService.sendCallCount, 0,
+            "must NOT resend through the REST send path, which would drop the attachments")
+    }
+
+    /// A `.failed` text-only message (no attachments) keeps the existing
+    /// resend-in-place behaviour — `content` + `replyToId` are all
+    /// `sendMessage` needs to recreate it faithfully, so no outbox reset
+    /// is required (or desired: it would bypass the socket-first fast path).
+    func test_retryMessage_failedTextOnlyMessage_stillResendsInPlace() async throws {
+        // Online so the resend actually completes through REST instead of
+        // re-entering the offline branch (which would attempt a second
+        // optimistic insert on the same already-existing localId).
+        let fx = try await makeFixture(isOnline: true)
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "m_retry_text", conversationId: fx.conversationId,
+            senderId: fx.userId, content: "hello", state: .failed
+        )
+        try await fx.sut.messagePersistence.insertOptimistic(record)
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_retry_text", in: fx.sut
+        ) { $0.deliveryStatus == .failed }
+        XCTAssertTrue(seeded, "precondition: the failed text message must be visible")
+
+        await fx.sut.retryMessage(messageId: "m_retry_text")
+
+        let retried = await fx.offlineQueue.retriedClientMessageIds
+        XCTAssertTrue(retried.isEmpty, "a text-only retry must NOT touch the outbox-reset path")
+    }
+
+    private func seedFailedMediaMessage(localId: String, fixture fx: Fixture) async throws {
+        let attachmentsJson = try JSONEncoder().encode([MeeshyMessageAttachment.image()])
+        let record = MessageRecord(
+            localId: localId, serverId: nil,
+            conversationId: fx.conversationId, senderId: fx.userId,
+            content: nil, originalLanguage: "en",
+            messageType: "image", messageSource: "user", contentType: "image",
+            state: .failed, retryCount: 3, lastError: "synthetic exhausted",
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: attachmentsJson, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await fx.sut.messagePersistence.insertOptimistic(record)
+    }
+
     private func seedMessage(localId: String, content: String, fixture fx: Fixture) async throws {
         let record = MessageRecord(
             localId: localId, serverId: nil,

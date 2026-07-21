@@ -497,6 +497,13 @@ public protocol OfflineMessageQueueing: Sendable {
     /// Durable offline message DELETE (T11). Cancels a pending send / supersedes
     /// a pending edit for the same `clientMessageId` (see `enqueueDelete` impl).
     func enqueueDelete(_ payload: OfflineDeletePayload) async throws
+    /// Resets an exhausted/failed outbox row for `cmid` back to `.pending` so
+    /// the flusher replays it with its ORIGINAL payload (attachments, reply,
+    /// etc. all preserved) — used by the manual "retry" affordance on a
+    /// `.failed` bubble that carries attachments (see
+    /// `ConversationViewModel.retryMessage`, which cannot reconstruct real
+    /// uploaded attachment ids from the displayed `Message` alone).
+    func retryByClientMessageId(_ cmid: String) async throws
 }
 
 extension OfflineQueue: OfflineMessageQueueing {}

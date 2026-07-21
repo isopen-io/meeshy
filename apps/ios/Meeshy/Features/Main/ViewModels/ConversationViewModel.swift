@@ -2549,6 +2549,28 @@ class ConversationViewModel: ObservableObject {
         let failedMsg = messages[idx]
         guard failedMsg.deliveryStatus == .failed else { return }
 
+        // Media-carrying failed messages (image/video/audio/file) must
+        // replay through the durable outbox: it alone still holds the real,
+        // already-uploaded attachment ids (the displayed `Message.attachments`
+        // carry the pre-upload LOCAL placeholder ids, never reconciled after
+        // the fact). A direct `sendMessage(content:replyToId:)` below only
+        // knows content + replyToId, so a captioned media resend would land
+        // on the server as text-only, and an uncaptioned one would be
+        // rejected outright by `sendMessage`'s empty-content guard — leaving
+        // the bubble stuck mid-clock (state already flipped .failed →
+        // .queued with nothing left to advance it). Resetting the existing
+        // outbox row + an immediate drain mirrors the reaction retry pattern
+        // above (`OutboxFlusher` otherwise only runs at boot / foreground).
+        guard failedMsg.attachments.isEmpty else {
+            do {
+                try await offlineQueue.retryByClientMessageId(messageId)
+            } catch {
+                Logger.messages.error("retryMessage outbox reset failed: \(error.localizedDescription)")
+            }
+            await OutboxFlushTrigger.flushNow()
+            return
+        }
+
         // Resend IN PLACE — no delete + reinsert, so the bubble never flashes
         // "message supprimé". `.retry` transitions the EXISTING row .failed →
         // .queued (resets the retry budget) while preserving its content and
