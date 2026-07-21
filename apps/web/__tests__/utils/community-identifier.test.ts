@@ -71,9 +71,25 @@ describe('community-identifier', () => {
       expect(id1).not.toBe(id2);
     });
 
-    it('should handle Unicode characters by removing them', () => {
-      const identifier = generateCommunityIdentifier('Communaute');
-      expect(identifier).toMatch(/^communaute-[a-z0-9]{6}$/);
+    it('should fold Latin diacritics instead of deleting the letter', () => {
+      // Prisme Linguistique doctrine (iterations 185/186): accented Latin names
+      // are first-class. "Café" must fold to "cafe", NOT collapse to "caf".
+      expect(generateCommunityIdentifier('Café des Amis')).toMatch(
+        /^cafe-des-amis-[a-z0-9]{6}$/,
+      );
+      expect(generateCommunityIdentifier('François Truffaut')).toMatch(
+        /^francois-truffaut-[a-z0-9]{6}$/,
+      );
+      expect(generateCommunityIdentifier('Groupe Renée')).toMatch(
+        /^groupe-renee-[a-z0-9]{6}$/,
+      );
+    });
+
+    it('should fall back to the default prefix for non-Latin scripts', () => {
+      // Cyrillic/CJK have no ASCII decomposition, so the base is empty and the
+      // handle degrades to the neutral "community-" prefix (never a bare suffix).
+      expect(generateCommunityIdentifier('Восток')).toMatch(/^community-[a-z0-9]{6}$/);
+      expect(generateCommunityIdentifier('日本語')).toMatch(/^community-[a-z0-9]{6}$/);
     });
 
     it('should handle mixed content', () => {
@@ -167,6 +183,11 @@ describe('community-identifier', () => {
 
     it('should return empty string for all invalid characters', () => {
       expect(sanitizeCommunityIdentifier('!!!')).toBe('');
+    });
+
+    it('should fold Latin diacritics instead of deleting the letter', () => {
+      expect(sanitizeCommunityIdentifier('Café')).toBe('cafe');
+      expect(sanitizeCommunityIdentifier('@Groupe_Renée')).toBe('@groupe_renee');
     });
   });
 });
