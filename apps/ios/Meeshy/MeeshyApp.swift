@@ -278,10 +278,20 @@ struct MeeshyApp: App {
                                 body: action.payload
                             )
                             return true
-                        } catch APIError.serverError(let code, _) where code >= 400 && code < 500 {
-                            // Treat client-side validation errors as terminal —
-                            // replaying the same payload won't help. Drop the
-                            // action so the queue doesn't bounce forever.
+                        } catch MeeshyError.server(let code, _) where (400..<500).contains(code) {
+                            // P1 — `APIClient.request` only ever throws `MeeshyError`
+                            // (never the legacy `APIError`), so this catch NEVER
+                            // matched and every 4xx (validation error, etc.) fell
+                            // through to the generic `catch` below and was kept
+                            // queued — replayed forever against a payload that can
+                            // never succeed. Treat client-side validation errors as
+                            // terminal — replaying the same payload won't help. Drop
+                            // the action so the queue doesn't bounce forever.
+                            return true
+                        } catch MeeshyError.forbidden {
+                            // 403 is also a terminal client-side error (thrown as
+                            // its own `MeeshyError` case rather than `.server`) —
+                            // same "drop, don't replay" treatment as the other 4xx.
                             return true
                         } catch {
                             // Transient (5xx / connectivity): keep the action

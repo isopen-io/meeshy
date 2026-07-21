@@ -77,7 +77,12 @@ final class UserProfileViewModel: ObservableObject {
             await SearchIndex.shared.indexUsers([user])
             fullUser = user
             hydrateProfileUserIfNeeded(from: user)
-        } catch let APIError.serverError(code, _) where code == 403 {
+        } catch MeeshyError.forbidden {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`, and 403 arrives as its own `.forbidden`
+            // case, never `.server`); this catch was dead code, so
+            // `isBlockedByTarget` was never set and the profile UI never
+            // reflected being blocked by the viewed user.
             isBlockedByTarget = true
         } catch {
             UserProfileViewModel.logger.error("profile refresh failed: \(error.localizedDescription)")

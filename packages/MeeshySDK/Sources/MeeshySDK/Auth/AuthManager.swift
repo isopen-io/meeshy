@@ -251,7 +251,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -277,7 +282,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -299,7 +309,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -318,7 +333,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             _ = try await authService.requestMagicLink(email: email, deviceFingerprint: nil)
             isLoading = false
             return true
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -339,7 +359,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -358,7 +383,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             try await authService.requestPasswordReset(email: email)
             isLoading = false
             return true
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
