@@ -529,7 +529,7 @@ final class ConversationListViewModelTests: XCTestCase {
         // (only the downstream groupedConversations is), so poll-until-true is
         // the established fix here — mirrors `waitForGrouping` below — rather
         // than hoping 200ms cleared the 16ms debounce on a busy CI runner.
-        try? await waitForCondition(timeout: 2.0) { sut.filteredConversations.count == 1 }
+        try await waitForCondition(timeout: 2.0) { sut.filteredConversations.count == 1 }
 
         XCTAssertEqual(sut.filteredConversations.count, 1)
         XCTAssertEqual(sut.filteredConversations[0].id, "active1")
