@@ -370,7 +370,7 @@ extension UserProfileSheet {
         .background(theme.surfaceGradient(tint: resolvedAccent))
         .glassCard(cornerRadius: 12)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(value) \(label)")
+        .accessibilityLabel(String("\(value) \(label)"))
     }
 
     // MARK: - Stat card (member-since)

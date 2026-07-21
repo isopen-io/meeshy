@@ -315,6 +315,6 @@ extension UserProfileSheet {
             Divider().opacity(0.3)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(displayUser.resolvedDisplayName), @\(displayUser.username)"))
+        .accessibilityLabel(Text(verbatim: "\(displayUser.resolvedDisplayName), @\(displayUser.username)"))
     }
 }

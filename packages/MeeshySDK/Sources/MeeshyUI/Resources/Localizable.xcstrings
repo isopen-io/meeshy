@@ -39,16 +39,6 @@
         }
       }
     },
-    "%@ / %@" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ / %2$@"
-          }
-        }
-      }
-    },
     "%@ %@" : {
       "localizations" : {
         "fr" : {

@@ -45,7 +45,7 @@ struct VideoEditorCaptionsPanel: View {
                         languageCode = info.code
                         HapticFeedback.light()
                     } label: {
-                        Text("\(info.flag)  \(info.nativeName)")
+                        Text(verbatim: "\(info.flag)  \(info.nativeName)")
                     }
                 }
             } label: {
