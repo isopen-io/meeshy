@@ -14,6 +14,9 @@ import MeeshySDK
 //               (comments overlay vs. viewers/reactions sheet) so the user
 //               lands on the surface that maps to the notification trigger.
 //   .expired  → `StoryExpiredContent` empty-state with "Create a story" CTA.
+//   .offline  → `StoryNotificationOfflineContent` retry state — a confirmed
+//               404 is the only thing allowed to claim `.expired`; any other
+//               failure (no connectivity, timeout, 5xx) lands here instead.
 //
 // Dependencies:
 // - `StoryServiceProviding` is injected through the initialiser with a
@@ -57,6 +60,10 @@ public struct StoryNotificationTargetScreen: View {
                 )
             case .expired:
                 StoryExpiredContent(storyId: vm.storyId, context: vm.context)
+            case .offline:
+                StoryNotificationOfflineContent {
+                    Task { await vm.load() }
+                }
             }
         }
         .task { await vm.load() }

@@ -16,7 +16,12 @@ import MeeshySDK
 // State semantics:
 //   .loading  — initial value, no answer yet (first frame before cache lookup).
 //   .active   — story exists and has not expired yet.
-//   .expired  — story is gone or its expiresAt has passed.
+//   .expired  — the story is CONFIRMED gone (404) or its expiresAt has passed.
+//   .offline  — the network call failed for any OTHER reason (no connectivity,
+//               timeout, 5xx). The story may still exist — we just couldn't
+//               confirm it. Retryable via `load()`, never conflated with a
+//               genuine 404 (P2 — a tap while offline used to show the same
+//               "Story expired, create a new one" empty state as a real 404).
 
 @MainActor
 public final class StoryNotificationTargetViewModel: ObservableObject {
@@ -25,6 +30,7 @@ public final class StoryNotificationTargetViewModel: ObservableObject {
         case loading
         case active(APIPost)
         case expired
+        case offline
     }
 
     @Published public private(set) var state: LoadState = .loading
@@ -65,15 +71,24 @@ public final class StoryNotificationTargetViewModel: ObservableObject {
             let fresh = try await storyService.fetchPost(id: storyId)
             state = isExpired(fresh) ? .expired : .active(fresh)
         } catch {
-            // Only fall back to .expired if we never produced a usable answer
-            // from the cache. If the cache already gave us .active or .expired,
-            // we keep that result rather than overwriting with a network error.
-            if case .loading = state { state = .expired }
+            // Only replace .loading — if the cache already gave us .active or
+            // .expired, keep that result rather than overwriting with a
+            // network-error guess. Only a CONFIRMED 404 may claim .expired;
+            // anything else (offline, timeout, 5xx) is .offline — the story
+            // may well still exist, we just couldn't confirm it.
+            if case .loading = state {
+                state = Self.isNotFound(error) ? .expired : .offline
+            }
         }
     }
 
     private func isExpired(_ post: APIPost) -> Bool {
         guard let expiresAt = post.expiresAt else { return false }
         return expiresAt <= Date.now
+    }
+
+    private static func isNotFound(_ error: Error) -> Bool {
+        if case APIError.serverError(let statusCode, _) = error { return statusCode == 404 }
+        return false
     }
 }
