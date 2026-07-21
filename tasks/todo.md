@@ -67,9 +67,17 @@ Vérifié vert : shared 47/47 (1382 tests) · gateway 536/536 (14424 tests, 1 fl
 - [x] Worktrees + branches de lane nettoyés (B12-B17 + B13/B15/B16 + récupération) après vérification merged/clean.
 - [x] **Vérif finale : `meeshy.sh test` 3 phases toutes vertes (1558+2544+1 tests, 0 échec)**
 
-## Vague 5 — lot 2 (à lancer maintenant)
+## Vague 5 — lot 2a (B18, B19, B20) — ✅ MERGÉ sur main, vérifié vert
 
-- [ ] **B18 Liste conversations — vues** (7, vérifier chevauchement PresenceManager.swift avec la lane P-iOS déjà mergée) · **B19 Bulles Equatable** (2) · **B20 Deep links/join** (2) · **B21 Perf divers** (2) · **B22 Tests couverture factice** (5, seam KeychainStoring déjà safe — Auth mergée en Vague 3) · **B23 Tests CI/hygiène** (4, exclure l'item de renommage sur AuthManagerRefreshTests.swift — réclamé aussi par B22 ; coordination project.yml avec B16)
+- [x] **B18 Liste conversations — vues, rows & présence** — distinction .idle/recherche-vide dans la branche vide · pastilles présence rafraîchies via signal ciblé (presenceVersion débouncé), composé proprement avec le travail P-iOS déjà mergé sans le retoucher · onLoadPreview limité aux 20 premières rows visibles · NewConversationViewModel distingue échec réseau de 0 résultat · label VoiceOver + tick minute pour horodatage relatif.
+- [x] **B19 Bulles — Equatable & drapeaux** — gate Equatable de ThemedMessageBubble complété (mentionDisplayNames, allAudioItems) · slot deviceLocale ajouté à la bande de drapeaux (4e axe Prisme étendu).
+- [x] **B20 Deep links & join flow** — alias court `meeshy://c/<id>` géré (était silencieusement droppé) · messages d'erreur join flow/registration localisés (5 langues) au lieu du français codé en dur.
+- [x] 0 conflit de merge (fichiers disjoints confirmés), xcodegen regen (nouveaux fichiers de test) + CURRENT_PROJECT_VERSION restauré, worktrees/branches nettoyés.
+- [x] **Vérif finale : `meeshy.sh test` 3 phases toutes vertes (1558+2587+1 tests, 0 échec)**
+
+## Vague 5 — lot 2b (B21, B22, B23) — en cours
+
+- [ ] **B21 Perf divers** (2) · **B22 Tests couverture factice** (5, seam KeychainStoring déjà safe — Auth mergée en Vague 3) · **B23 Tests CI/hygiène** (4, exclure l'item de renommage sur AuthManagerRefreshTests.swift — réclamé aussi par B22 qui fait le fix substantiel)
 - [ ] Doc/mémoire présence (CLAUDE.md, mémoire) APRÈS CI verte
 - [ ] Push main au jalon, surveiller CI (pas de push docs par-dessus) — **ATTENTION** : vérifier avec l'utilisateur avant tout push étant donné l'incident de reset (origin/main a continué d'évoluer via des PRs externes pendant ce chantier)
 
