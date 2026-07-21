@@ -232,6 +232,21 @@ struct ThreadView: View {
 
     // MARK: - Actions
 
+    /// Cache seeding is a cold-start affordance (Cache-First pattern), not a
+    /// blanket replace. `loadReplies()` also runs as the post-send refresh in
+    /// `sendReply()`, AFTER an optimistic reply has already been appended to
+    /// `replies` — but `CacheCoordinator.shared.messages` is never written to
+    /// by the send path (this view is read-only against it, see the doc
+    /// comment on `loadReplies()` below), so `seeded` never contains that
+    /// optimistic row yet. Applying the seed unconditionally would overwrite
+    /// `replies` and silently drop a reply that was just sent successfully,
+    /// with no recovery if the subsequent network refetch then fails (its
+    /// `catch` intentionally keeps whatever `replies` already holds). Only
+    /// seed from cache when there is nothing to show yet.
+    nonisolated static func shouldApplyCacheSeed(currentReplies: [MeeshyMessage], seeded: [MeeshyMessage]) -> Bool {
+        currentReplies.isEmpty && !seeded.isEmpty
+    }
+
     /// Cache-first: seeds `replies` from the conversation's already-cached
     /// message list (`CacheCoordinator.shared.messages`, the same store
     /// `ConversationViewModel` maintains) BEFORE the network round-trip, so
@@ -246,7 +261,7 @@ struct ThreadView: View {
             .snapshot()?
             .filter { $0.replyToId == parentMessage.id }
             .sorted { $0.createdAt < $1.createdAt } ?? []
-        if !seeded.isEmpty {
+        if Self.shouldApplyCacheSeed(currentReplies: replies, seeded: seeded) {
             replies = seeded
         }
         isLoading = replies.isEmpty

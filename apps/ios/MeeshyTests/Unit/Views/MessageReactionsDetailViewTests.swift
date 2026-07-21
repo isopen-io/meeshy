@@ -8,6 +8,7 @@ import MeeshySDK
 /// `message.reactions` — already displayed as pills under the bubble the
 /// user opened this screen from — so offline (or on any network hiccup) it
 /// rendered "Aucune reaction" under a bubble visibly showing some.
+@MainActor
 final class MessageReactionsDetailViewTests: XCTestCase {
 
     private func makeReaction(

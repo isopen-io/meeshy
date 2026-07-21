@@ -150,7 +150,7 @@ final class SharePickerViewModelTests: XCTestCase {
 
     func test_send_offline_enqueueFailure_returnsFalse() async {
         let queue = FakeOfflineMessageQueue()
-        queue.shouldThrow = true
+        await queue.setShouldThrow(true)
         let (sut, _, _) = makeSUT(isOnline: false, offlineQueue: queue)
 
         let ok = await sut.send("hello", to: "conv-1", forwardedMessageId: nil)
@@ -163,5 +163,19 @@ final class SharePickerViewModelTests: XCTestCase {
         let (sut, _, _) = makeSUT()
         sut.markSent("conv-external")
         XCTAssertTrue(sut.sentToIds.contains("conv-external"))
+    }
+}
+
+// MARK: - Test helpers on FakeOfflineMessageQueue
+//
+// `shouldThrow` is an actor-isolated stored property (no `nonisolated`) —
+// external code cannot assign to it directly, with or without `await`
+// (Swift forbids cross-actor mutation of stored state). This file-private
+// setter is the same workaround `ConversationViewModelOfflineQueueTests`
+// already uses on the same mock.
+
+private extension FakeOfflineMessageQueue {
+    func setShouldThrow(_ value: Bool) {
+        shouldThrow = value
     }
 }
