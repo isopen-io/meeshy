@@ -188,29 +188,36 @@ struct OutboxDispatcher: OutboxDispatching {
         logger.info("respondFriendRequest dispatched for \(payload.friendRequestId, privacy: .public) status=\(status, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
-    /// PATCH /users/me — only sends fields that are non-nil. The gateway
-    /// schema accepts displayName, bio, avatarUrl among others ; we
-    /// forward exactly what the payload carries.
+    /// PATCH /users/me — only sends fields that are non-nil. The gateway's
+    /// `updateUserProfileSchema` (packages/shared/utils/validation.ts) is
+    /// `.strict()` and has no `avatar` (nor `avatarUrl`) property, so an
+    /// `avatar` key in this body 400s the WHOLE request every single time —
+    /// silently blocking displayName/bio right alongside it. Avatar changes
+    /// are dispatched separately through the dedicated `PATCH /users/me/avatar`
+    /// endpoint (`updateAvatarSchema`, `{ avatar: string }`), matching the
+    /// online path (`UserService.updateAvatar`).
     private func dispatchUpdateProfile(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UpdateProfilePayload.self)
-        struct UpdateProfileBody: Encodable {
-            let displayName: String?
-            let bio: String?
-            let avatar: String?
 
-            enum CodingKeys: String, CodingKey { case displayName, bio, avatar }
-
-            func encode(to encoder: Encoder) throws {
-                var container = encoder.container(keyedBy: CodingKeys.self)
-                if let displayName { try container.encode(displayName, forKey: .displayName) }
-                if let bio { try container.encode(bio, forKey: .bio) }
-                if let avatar { try container.encode(avatar, forKey: .avatar) }
-            }
+        if let avatarUrl = payload.avatarUrl {
+            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+                endpoint: "/users/me/avatar",
+                method: "PATCH",
+                body: try JSONEncoder().encode(UpdateProfileAvatarBody(avatar: avatarUrl)),
+                queryItems: nil,
+                headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+            )
+            logger.info("updateProfile avatar dispatched cmid=\(payload.clientMutationId, privacy: .public)")
         }
-        let body = UpdateProfileBody(
+
+        guard payload.displayName != nil || payload.bio != nil else {
+            logger.info("updateProfile dispatched (avatar-only) cmid=\(payload.clientMutationId, privacy: .public)")
+            return
+        }
+
+        let body = UpdateProfileFieldsBody(
             displayName: payload.displayName,
-            bio: payload.bio,
-            avatar: payload.avatarUrl
+            bio: payload.bio
         )
         // The /users/me response wraps the updated user under `data.user`,
         // which doesn't match `APIResponse<MeeshyUser>`. We don't need the
@@ -951,6 +958,34 @@ struct OutboxDispatcher: OutboxDispatching {
             // is the same as for a true success — gateway dedup means the
             // server-side outcome is already terminal regardless.
         }
+    }
+}
+
+// MARK: - updateProfile wire bodies
+
+/// Wire body for `PATCH /users/me/avatar` — mirrors the online path's
+/// `UserService.updateAvatar(url:)` body shape (`updateAvatarSchema` on the
+/// gateway: `{ avatar: string }`).
+struct UpdateProfileAvatarBody: Encodable {
+    let avatar: String
+}
+
+/// Wire body for `PATCH /users/me`. Deliberately has NO `avatar` property —
+/// the gateway's `updateUserProfileSchema` (packages/shared/utils/validation.ts)
+/// is `.strict()` and rejects any key it doesn't declare with a 400 that takes
+/// down the WHOLE request, so an `avatar` key here previously blocked
+/// displayName/bio from ever saving. `internal` (not `private`) so its
+/// encoding contract is directly testable from `MeeshyTests`.
+struct UpdateProfileFieldsBody: Encodable {
+    let displayName: String?
+    let bio: String?
+
+    enum CodingKeys: String, CodingKey { case displayName, bio }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if let displayName { try container.encode(displayName, forKey: .displayName) }
+        if let bio { try container.encode(bio, forKey: .bio) }
     }
 }
 
