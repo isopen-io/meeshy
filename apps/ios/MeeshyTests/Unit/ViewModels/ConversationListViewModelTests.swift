@@ -2406,6 +2406,7 @@ final class ConversationListViewModelTests: XCTestCase {
     // MARK: - pullToRefresh
 
     func test_pullToRefresh_resetsCursorAndRefetches() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
         let conversationService = MockConversationService()
         let syncEngine = MockConversationSyncEngine()
         // Seed an "advanced" cursor by running loadMore once
