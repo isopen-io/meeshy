@@ -15,6 +15,7 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
     private(set) var enqueuedEdits: [OfflineEditPayload] = []
     private(set) var enqueuedDeletes: [OfflineDeletePayload] = []
     private(set) var retriedClientMessageIds: [String] = []
+    private(set) var cancelledPendingSendClientMessageIds: [String] = []
 
     // MARK: - Stubbing
 
@@ -57,6 +58,11 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         if let delay { try? await Task.sleep(for: delay) }
         if shouldThrow { throw errorToThrow }
         retriedClientMessageIds.append(cmid)
+    }
+
+    func cancelPendingSend(clientMessageId cmid: String) async {
+        if let delay { try? await Task.sleep(for: delay) }
+        cancelledPendingSendClientMessageIds.append(cmid)
     }
 
     // MARK: - Read-only views (convenience for tests)

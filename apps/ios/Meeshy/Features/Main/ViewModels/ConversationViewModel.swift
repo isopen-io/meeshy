@@ -1933,11 +1933,18 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    /// Send-time fallback for `originalLanguage` when the composer supplies
-    /// none. Forced to French — the keyboard layout must never drive content
-    /// language (Prisme Linguistique). The composer itself starts in `fr` and
-    /// `TextAnalyzer` re-detects from the typed text.
-    private func defaultComposeLanguage() -> String { "fr" }
+    /// Send-time fallback for `originalLanguage` when the composer/caller
+    /// supplies none (e.g. a programmatic retry that doesn't know the
+    /// language). Consults the same resolution order as the rest of the
+    /// Prisme (`systemLanguage` → `regionalLanguage` →
+    /// `customDestinationLanguage` → `deviceLocale`, via `preferredLanguages`)
+    /// before falling back to the documented last resort `"fr"` — the
+    /// keyboard layout must never drive content language, but the user's OWN
+    /// configured preference is a strictly better guess than a bare hardcode.
+    /// The composer itself starts in `fr` and `TextAnalyzer` re-detects from
+    /// the typed text for the normal send path, so this helper is only
+    /// reached by callers that bypass the composer entirely.
+    private func defaultComposeLanguage() -> String { preferredLanguages.first ?? "fr" }
 
     /// Stable identity of a logical message, used to dedup an accidental
     /// double-tap. Two taps producing the same key within
@@ -2564,6 +2571,14 @@ class ConversationViewModel: ObservableObject {
         guard failedMsg.attachments.isEmpty else {
             do {
                 try await offlineQueue.retryByClientMessageId(messageId)
+                // Mirror the text-only path below: flip .failed → .queued so
+                // the retry band disappears immediately instead of lingering
+                // for the entire upload + dispatch duration (BubbleFailedRetryBar
+                // only clears once the message leaves the .failed state).
+                // Gated on the reset succeeding — if the outbox row couldn't be
+                // found/reset, nothing is actually going to be resent, so the
+                // message must stay visibly .failed.
+                _ = try? await messagePersistence.applyEvent(localId: messageId, event: .retry)
             } catch {
                 Logger.messages.error("retryMessage outbox reset failed: \(error.localizedDescription)")
             }
@@ -2586,8 +2601,14 @@ class ConversationViewModel: ObservableObject {
         // `messageId` straight through as `existingTempId` is correct.
         let content = failedMsg.content
         let replyToId = failedMsg.replyToId
+        // Preserve the message's ORIGINAL language identity across a retry —
+        // omitting it here would let it fall through `sendMessage`'s
+        // `originalLanguage ?? defaultComposeLanguage()` fallback and
+        // silently rewrite a non-French message's language on every retry
+        // (Prisme Linguistique violation).
+        let originalLanguage = failedMsg.originalLanguage
         _ = try? await messagePersistence.applyEvent(localId: messageId, event: .retry)
-        await sendMessage(content: content, replyToId: replyToId, existingTempId: messageId)
+        await sendMessage(content: content, replyToId: replyToId, originalLanguage: originalLanguage, existingTempId: messageId)
     }
 
     func removeFailedMessage(messageId: String) {
@@ -2983,6 +3004,15 @@ class ConversationViewModel: ObservableObject {
             // resurrect the very message the user just tried to remove.
             // Route straight to the local-only purge instead.
             if let idx = messageIndex(for: messageId), messages[idx].deliveryStatus == .failed {
+                // `retryMessage`'s media-retry path resets the message's
+                // outbox row back to `.pending` while it (re)uploads, so a
+                // `.failed` bubble can have a live pending send in flight at
+                // the moment the user taps delete. Cancel it FIRST — a purely
+                // local purge with no cancellation would let that pending row
+                // dispatch and reach the server/other participants after the
+                // sender believes the message is gone. No-op when there is no
+                // pending row (the common case).
+                await offlineQueue.cancelPendingSend(clientMessageId: messageId)
                 removeFailedMessage(messageId: messageId)
                 return
             }

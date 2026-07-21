@@ -50,7 +50,8 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         isOnline: Bool = false,
         offlineQueueDelay: Duration = .zero,
         offlineQueueThrows: Bool = false,
-        restSendFailure: Error? = nil
+        restSendFailure: Error? = nil,
+        userSystemLanguage: String? = nil
     ) async throws -> Fixture {
         let conversationId = "00000000000000000000ff01"
         let userId = "00000000000000000000ff99"
@@ -84,7 +85,10 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         // singleton is consulted but we keep it deterministic.
         MessageSocketManager.shared.isConnected = false
 
-        let user = MeeshyUser(id: userId, username: "fixture", displayName: "Fixture User")
+        let user = MeeshyUser(
+            id: userId, username: "fixture", displayName: "Fixture User",
+            systemLanguage: userSystemLanguage
+        )
         auth.simulateLoggedIn(user: user)
         let deps = ConversationDependencies(dbPool: pool, persistence: persistence)
         let sut = ConversationViewModel(
@@ -155,6 +159,25 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         let record = try await fx.fetchRecord(localId: cmid)
         XCTAssertEqual(record?.originalLanguage, "es",
             "the optimistic offline record must use the caller's originalLanguage, not a hardcoded 'fr'")
+    }
+
+    /// Prisme Linguistique — when the CALLER supplies no `originalLanguage`
+    /// at all (unlike every other test in this file, which always passes a
+    /// non-nil value and therefore can never exercise this fallback), the
+    /// send-time default must consult the user's own configured
+    /// `systemLanguage` (Prisme resolution order: systemLanguage → … →
+    /// "fr") — NOT skip straight to a bare hardcoded "fr" that ignores a
+    /// non-French user's own preference entirely.
+    func test_offline_send_withNoOriginalLanguage_fallsBackToUserSystemLanguage_notHardcodedFr() async throws {
+        let fx = try await makeFixture(userSystemLanguage: "es")
+
+        let ok = await fx.sut.sendMessage(content: "Hola", originalLanguage: nil)
+
+        XCTAssertTrue(ok)
+        let cmid = try XCTUnwrap(await fx.offlineQueue.enqueuedClientMessageIds.first)
+        let record = try await fx.fetchRecord(localId: cmid)
+        XCTAssertEqual(record?.originalLanguage, "es",
+            "with no caller-supplied language, the fallback must consult the user's configured systemLanguage, not hardcode 'fr'")
     }
 
     /// The core Bug 1 regression: two awaited offline sends back-to-back
@@ -390,6 +413,31 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             "the offline path must NOT call the REST delete directly")
     }
 
+    /// Deleting a `.failed` message must cancel any pending outbox resend
+    /// BEFORE the local-only purge. `retryMessage`'s media-retry path resets
+    /// the message's outbox row back to `.pending` while it (re)uploads — if
+    /// the user deletes during that window, a purely local purge with no
+    /// cancellation would let the reset row dispatch and reach the
+    /// server/other participants after the sender believes the message is
+    /// gone. Must also never touch REST (the `.failed` message has no real
+    /// serverId).
+    func test_deleteMessage_failedMessage_cancelsPendingOutboxSendBeforeLocalPurge() async throws {
+        let fx = try await makeFixture()
+        try await seedFailedMediaMessage(localId: "m_del_failed", fixture: fx)
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_del_failed", in: fx.sut
+        ) { $0.deliveryStatus == .failed }
+        XCTAssertTrue(seeded, "precondition: the failed message must be visible")
+
+        await fx.sut.deleteMessage(messageId: "m_del_failed", mode: .everyone)
+
+        let cancelled = await fx.offlineQueue.cancelledPendingSendClientMessageIds
+        XCTAssertEqual(cancelled, ["m_del_failed"],
+            "must cancel any pending outbox resend before purging locally, or a prior retry's reset row can still reach the server")
+        XCTAssertEqual(fx.messageService.deleteCallCount, 0,
+            "a .failed message never reached the server — must never hit REST delete")
+    }
+
     // MARK: - S3 — rollback exhausted offline edit/delete
 
     /// An offline delete that exhausts its retry budget never reached the
@@ -471,6 +519,30 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             "must NOT resend through the REST send path, which would drop the attachments")
     }
 
+    /// The media-retry path resets the OUTBOX row but must also flip the
+    /// local `MessageRecord` state, or the bubble stays stuck displaying
+    /// `.failed` (with its retry affordance still live, see
+    /// `BubbleFailedRetryBar`) for the entire upload + dispatch duration —
+    /// even though a resend is genuinely in flight. `.failed → .queued`
+    /// (via the same `.retry` event as the text-only path 2 lines below)
+    /// maps to `.slow` in `MessageRecord.toMessage`, not `.failed`.
+    func test_retryMessage_failedMessageWithAttachments_transitionsLocalStateOutOfFailed() async throws {
+        let fx = try await makeFixture()
+        try await seedFailedMediaMessage(localId: "m_retry_media_state", fixture: fx)
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_retry_media_state", in: fx.sut
+        ) { $0.deliveryStatus == .failed && !$0.attachments.isEmpty }
+        XCTAssertTrue(seeded, "precondition: the failed media message must be visible with its attachment")
+
+        await fx.sut.retryMessage(messageId: "m_retry_media_state")
+
+        let leftFailedState = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_retry_media_state", in: fx.sut
+        ) { $0.deliveryStatus != .failed }
+        XCTAssertTrue(leftFailedState,
+            "resetting the outbox row must also flip the local record out of .failed, or the retry band never clears")
+    }
+
     /// A `.failed` text-only message (no attachments) keeps the existing
     /// resend-in-place behaviour — `content` + `replyToId` are all
     /// `sendMessage` needs to recreate it faithfully, so no outbox reset
@@ -494,6 +566,63 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
 
         let retried = await fx.offlineQueue.retriedClientMessageIds
         XCTAssertTrue(retried.isEmpty, "a text-only retry must NOT touch the outbox-reset path")
+    }
+
+    /// Prisme Linguistique — resending a `.failed` message in place must
+    /// preserve its ALREADY-KNOWN `originalLanguage`. Omitting it would let
+    /// the retry fall through `sendMessage`'s `originalLanguage ??
+    /// defaultComposeLanguage()` fallback and silently rewrite a non-French
+    /// message's language identity on every manual retry.
+    func test_retryMessage_failedTextOnlyMessage_preservesOriginalLanguage_notHardcodedFr() async throws {
+        // Online so the resend actually completes through REST (captured by
+        // MockMessageService) instead of re-entering the offline branch.
+        let fx = try await makeFixture(isOnline: true)
+        try await seedFailedTextMessage(
+            localId: "m_retry_text_lang", content: "hola", originalLanguage: "es", fixture: fx
+        )
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_retry_text_lang", in: fx.sut
+        ) { $0.deliveryStatus == .failed }
+        XCTAssertTrue(seeded, "precondition: the failed text message must be visible")
+
+        await fx.sut.retryMessage(messageId: "m_retry_text_lang")
+
+        XCTAssertEqual(fx.messageService.lastSendRequest?.originalLanguage, "es",
+            "retrying must resend with the message's ORIGINAL language, not fall back to a hardcoded 'fr'")
+    }
+
+    private func seedFailedTextMessage(
+        localId: String, content: String, originalLanguage: String, fixture fx: Fixture
+    ) async throws {
+        let record = MessageRecord(
+            localId: localId, serverId: nil,
+            conversationId: fx.conversationId, senderId: fx.userId,
+            content: content, originalLanguage: originalLanguage,
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .failed, retryCount: 3, lastError: "synthetic exhausted",
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await fx.sut.messagePersistence.insertOptimistic(record)
     }
 
     private func seedFailedMediaMessage(localId: String, fixture fx: Fixture) async throws {
