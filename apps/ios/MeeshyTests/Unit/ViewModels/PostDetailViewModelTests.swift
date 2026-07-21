@@ -169,6 +169,37 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isLoadingComments)
     }
 
+    // MARK: - loadMoreComments
+
+    /// Regression guard: a `.fresh` comments-cache hit in `loadComments` never
+    /// touches the network, so `commentCursor` stays at its initial `nil`
+    /// while `hasMoreComments` stays at its initial `true` — the old
+    /// `commentCursor != nil` guard permanently stalled "load more comments"
+    /// for the rest of the session. `cursor: nil` in `fetchCommentsFromNetwork`
+    /// already means "fetch page 1", which is exactly what's needed to
+    /// recover a real cursor.
+    func test_loadMoreComments_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor() async {
+        let (sut, mock) = makeSUT()
+        let postId = "pFreshCommentsPagination"
+        await CacheCoordinator.shared.comments.invalidate(for: "post-\(postId)")
+        let seeded = (0..<3).map { FeedComment(id: "cached-\($0)", author: "Alice", content: "c\($0)") }
+        try? await CacheCoordinator.shared.comments.save(seeded, for: "post-\(postId)")
+
+        await sut.loadComments(postId) // .fresh cache hit — no network call
+        XCTAssertEqual(sut.comments.count, 3)
+        XCTAssertTrue(sut.hasMoreComments)
+        XCTAssertEqual(mock.getCommentsCallCount, 0)
+
+        mock.getCommentsResult = .success(Self.makePaginatedComments(comments: [Self.stubComment], hasMore: true, nextCursor: "next-page"))
+
+        await sut.loadMoreComments(postId)
+
+        XCTAssertEqual(mock.getCommentsCallCount, 1, "Should fetch page 1 with a nil cursor to recover a real cursor")
+        XCTAssertTrue(sut.comments.contains(where: { $0.id == "c1" }))
+
+        await CacheCoordinator.shared.comments.invalidate(for: "post-\(postId)")
+    }
+
     // MARK: - sendComment
 
     func test_sendComment_success_insertsOptimisticCommentAtTop() async {

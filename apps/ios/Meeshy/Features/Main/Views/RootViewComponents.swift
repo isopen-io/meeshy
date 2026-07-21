@@ -491,9 +491,6 @@ struct ThemedFeedOverlay: View {
             onBookmark: { postId in
                 togglePostBookmark(postId: postId)
             },
-            onSendComment: { postId, content, parentId in
-                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
-            },
             onTapPost: { post in
                 router.push(.postDetail(post.id, post))
             },

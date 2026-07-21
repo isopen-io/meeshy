@@ -180,7 +180,15 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func loadMoreComments(_ postId: String) async {
-        guard !isLoadingComments, hasMoreComments, commentCursor != nil else { return }
+        // NOTE: no `commentCursor != nil` guard on purpose — see
+        // `FeedViewModel.loadMoreIfNeeded`'s identical fix. `loadComments`'s
+        // `.fresh` cache branch never touches the network, so `commentCursor`
+        // stays `nil` while `hasMoreComments` stays at its initial `true`,
+        // permanently stalling pagination for the whole session. `hasMoreComments`
+        // alone is a safe gate — it's always set together with `commentCursor`
+        // by `fetchCommentsFromNetwork`, and `cursor: nil` there already means
+        // "fetch page 1", exactly what's needed to recover a real cursor.
+        guard !isLoadingComments, hasMoreComments else { return }
         await fetchCommentsFromNetwork(postId, cacheKey: "post-\(postId)")
     }
 
@@ -723,6 +731,17 @@ class PostDetailViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self else { return }
                 let parentId = data.comment.parentId
+                // Prisme + effects parity with the REST comment mapping
+                // (`loadComments`/`loadReplies`): a comment arriving in real
+                // time while the detail sheet is open used to render as a
+                // blank row for a media/effect comment (effectFlags dropped)
+                // and always in its original language (resolveCommentTranslation
+                // never consulted).
+                let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+                    translations: data.comment.translations,
+                    originalLanguage: data.comment.originalLanguage,
+                    preferredLanguages: self.preferredLanguages
+                )
                 let comment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
@@ -731,6 +750,9 @@ class PostDetailViewModel: ObservableObject {
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
                     parentId: parentId,
+                    effectFlags: data.comment.effectFlags ?? 0,
+                    originalLanguage: data.comment.originalLanguage,
+                    translatedContent: translatedContent,
                     currentUserReactions: data.comment.currentUserReactions,
                     media: (data.comment.media ?? []).map { $0.toFeedMedia() }
                 )

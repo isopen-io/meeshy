@@ -322,6 +322,36 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(api.requestCount, initialRequestCount, "Should not load more when hasMore is false")
     }
 
+    /// Regression guard: a session served entirely from a `.fresh` main-feed
+    /// cache hit never touches the network in `loadFeed`, so `nextCursor`
+    /// stays at its initial `nil` while `hasMore` stays at its initial
+    /// `true` — the old `nextCursor != nil` guard permanently stalled
+    /// infinite scroll for the rest of the session. `cursor: nil` is exactly
+    /// how `loadFeed` requests page 1, so dropping that guard clause lets
+    /// the first scroll-triggered call recover a real cursor.
+    func test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor() async {
+        let (sut, api, _, _) = makeSUT()
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let seeded = (0..<10).map { Self.makeFeedPost(id: "cached-\($0)", content: "Post \($0)") }
+        try? await CacheCoordinator.shared.feed.save(seeded, for: "main-feed")
+
+        await sut.loadFeed() // .fresh cache hit — no network call, nextCursor stays nil
+        XCTAssertEqual(sut.posts.count, 10)
+        XCTAssertTrue(sut.hasMore)
+        let requestCountAfterCacheLoad = api.requestCount
+
+        let morePosts = [Self.makeAPIPost(id: "post-10", content: "Post 10")]
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: morePosts, hasMore: true, nextCursor: "cursor-page2"))
+
+        let triggerPost = sut.posts[5] // index 5 of 10, threshold = 10-5 = 5
+        await sut.loadMoreIfNeeded(currentPost: triggerPost)
+
+        XCTAssertGreaterThan(api.requestCount, requestCountAfterCacheLoad, "Should fetch page 1 with a nil cursor to recover a real nextCursor")
+        XCTAssertTrue(sut.posts.contains(where: { $0.id == "post-10" }))
+
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+    }
+
     /// P3.1 — coalescing regression test.
     ///
     /// Multiple cells near the threshold fire `.onAppear` essentially at the
@@ -946,10 +976,45 @@ final class FeedViewModelTests: XCTestCase {
 
         sut.clearTranslationOverride(postId: "t1")
 
-        // Since userLanguage defaults to "en" (no logged in user) and no "en" translation exists,
-        // clearTranslationOverride should set translatedContent to nil
+        // Default preferredLanguages is [] (MockLanguageProvider default), so
+        // resolved(preferredLanguages: []) has no preferred language to match
+        // against — translatedContent falls back to nil (original content).
         XCTAssertNil(sut.posts[0].translatedContent)
         XCTAssertEqual(sut.posts[0].displayContent, "Hello")
+    }
+
+    func test_clearTranslationOverride_secondPreferredLanguageMatches_resolvesFullChain() {
+        // Prisme regression guard: the old implementation only ever consulted
+        // preferredLanguages.first ("de") via an exact dictionary-key lookup,
+        // losing the "fr" translation available further down the chain.
+        let (sut, _, _, _) = makeSUT(preferredLanguages: ["de", "fr"])
+        sut.posts = [Self.makeFeedPost(
+            id: "t1",
+            content: "Hello",
+            translations: ["fr": PostTranslation(text: "Bonjour")],
+            translatedContent: "stale override"
+        )]
+
+        sut.clearTranslationOverride(postId: "t1")
+
+        XCTAssertEqual(sut.posts[0].translatedContent, "Bonjour")
+    }
+
+    func test_clearTranslationOverride_caseMismatchedPreferredLanguage_stillMatchesTranslation() {
+        // Prisme regression guard: the old implementation did an exact-case
+        // dictionary subscript (`translations?["FR"]`), which missed a
+        // lowercase "fr" key entirely.
+        let (sut, _, _, _) = makeSUT(preferredLanguages: ["FR"])
+        sut.posts = [Self.makeFeedPost(
+            id: "t1",
+            content: "Hello",
+            translations: ["fr": PostTranslation(text: "Bonjour")],
+            translatedContent: "stale override"
+        )]
+
+        sut.clearTranslationOverride(postId: "t1")
+
+        XCTAssertEqual(sut.posts[0].translatedContent, "Bonjour")
     }
 
     // MARK: - Socket.IO: subscribeToSocketEvents()
@@ -1168,6 +1233,34 @@ final class FeedViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(sut.posts[0].commentCount, 4)
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketCommentAdded_mapsEffectFlagsTranslationAndReactions() async {
+        // Regression guard: the handler used to build `FeedComment` with only
+        // id/author/content/likes/replies/parentId — silently dropping
+        // effectFlags (a media/effect comment rendered blank in real time),
+        // the Prisme translation (always shown in its original language),
+        // and currentUserReactions (heart state lost for an already-reacted
+        // comment landing via socket).
+        let (sut, api, socket, _) = makeSUT(preferredLanguages: ["fr"])
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "commented-post", commentCount: 3)]))
+        await sut.loadFeed(forceRefresh: true)
+
+        sut.subscribeToSocketEvents()
+
+        let commentData: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"commented-post","comment":{"id":"c1","content":"Nice!","originalLanguage":"en","translations":{"fr":{"text":"Sympa !"}},"effectFlags":4,"currentUserReactions":["\u{2764}\u{FE0F}"],"createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"bob"}},"commentCount":4}
+        """)
+        socket.commentAdded.send(commentData)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        let comment = sut.posts[0].comments.first(where: { $0.id == "c1" })
+        XCTAssertEqual(comment?.effectFlags, 4)
+        XCTAssertEqual(comment?.translatedContent, "Sympa !")
+        XCTAssertEqual(comment?.currentUserReactions, ["\u{2764}\u{FE0F}"])
 
         sut.unsubscribeFromSocketEvents()
     }

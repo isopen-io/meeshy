@@ -103,10 +103,6 @@ class FeedViewModel: ObservableObject {
         languageProvider.preferredLanguages
     }
 
-    private var userLanguage: String {
-        preferredLanguages.first ?? "en"
-    }
-
     // MARK: - Initial Load
 
     /// Loads the feed cache-first. Pass `forceRefresh: true` (pull-to-refresh) to
@@ -236,10 +232,18 @@ class FeedViewModel: ObservableObject {
         guard let index = posts.firstIndex(where: { $0.id == currentPost.id }) else { return }
         let threshold = posts.count - 5
 
+        // NOTE: no `nextCursor != nil` guard here on purpose. A session that
+        // started from a `.fresh` cache hit (loadFeed) never touches the
+        // network, so `nextCursor` stays at its initial `nil` forever while
+        // `hasMore` stays at its initial `true` — requiring a non-nil cursor
+        // permanently stalled infinite scroll for the whole session. `hasMore`
+        // alone is a safe gate: it's always set together with `nextCursor`
+        // by every real network response below, so `hasMore == true` with a
+        // `nil` cursor can only mean "no real fetch has happened yet" — and
+        // `cursor: nil` is exactly how `loadFeed` already requests page 1.
         guard index >= threshold,
               hasMore,
-              !isLoadingMore,
-              nextCursor != nil else { return }
+              !isLoadingMore else { return }
 
         isLoadingMore = true
 
@@ -891,13 +895,18 @@ class FeedViewModel: ObservableObject {
         posts[index].translatedContent = translation.text
     }
 
+    /// Re-resolves the post's displayed language back to the Prisme default
+    /// (undoes a manual flag-tap override). Previously did an exact-key
+    /// dictionary lookup on `userLanguage` alone — case-sensitive AND only
+    /// ever consulting the FIRST preferred language, so a francophone with
+    /// `["de", "fr"]` preferred languages (or any uppercase-cased locale
+    /// string) lost their translation even though "fr" matched further down
+    /// the chain. `resolved(preferredLanguages:)` walks the FULL chain
+    /// case-insensitively, matching the same algorithm used everywhere else
+    /// in the Prisme (never `translations.first`).
     func clearTranslationOverride(postId: String) {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
-        if let translation = posts[index].translations?[userLanguage] {
-            posts[index].translatedContent = translation.text
-        } else {
-            posts[index].translatedContent = nil
-        }
+        posts[index] = posts[index].resolved(preferredLanguages: preferredLanguages)
     }
 
     func requestTranslation(postId: String, targetLanguage: String) async {
@@ -1053,13 +1062,29 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
+                // Prisme + effects parity with the REST comment mapping
+                // (`toFeedPost`/`loadComments`): a comment arriving in real
+                // time while the feed is open used to render as a blank row
+                // for a media/effect comment (effectFlags dropped) and
+                // always in its original language (no resolveCommentTranslation),
+                // and lost the "liked by me" heart on a comment that already
+                // carried reactions when it landed (currentUserReactions dropped).
+                let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+                    translations: data.comment.translations,
+                    originalLanguage: data.comment.originalLanguage,
+                    preferredLanguages: self.preferredLanguages
+                )
                 let feedComment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
                     authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                    parentId: data.comment.parentId
+                    parentId: data.comment.parentId,
+                    effectFlags: data.comment.effectFlags ?? 0,
+                    originalLanguage: data.comment.originalLanguage,
+                    translatedContent: translatedContent,
+                    currentUserReactions: data.comment.currentUserReactions
                 )
                 if !self.posts[index].comments.contains(where: { $0.id == feedComment.id }) {
                     self.posts[index].comments.insert(feedComment, at: 0)

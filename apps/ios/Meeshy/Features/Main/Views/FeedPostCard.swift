@@ -36,7 +36,6 @@ struct FeedPostCard: View {
     var onQuote: ((String) -> Void)? = nil
     var onShare: ((String) -> Void)? = nil
     var onBookmark: ((String) -> Void)? = nil
-    var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
     var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
     var onTapPost: ((FeedPost) -> Void)? = nil
     var onTapRepost: ((String) -> Void)? = nil
@@ -160,18 +159,28 @@ struct FeedPostCard: View {
 
     // MARK: - Prisme Linguistique
 
+    /// Language code the main text is currently showing. Defaults to the
+    /// deterministic Prisme resolution (`FeedPost.resolvedLanguageCode`,
+    /// same algorithm as `resolved()`/`displayContent`) — NEVER
+    /// `translations.keys.first` (non-deterministic dictionary order, the
+    /// root cause of a FR post rendering as EN for a francophone). A manual
+    /// flag tap (`activeDisplayLangCode`) always overrides the auto-resolution.
     private var currentDisplayLangCode: String {
-        activeDisplayLangCode ?? post.translations?.keys.first(where: { lang in
-            AuthManager.shared.currentUser?.preferredContentLanguages.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) ?? false
-        })?.lowercased() ?? post.originalLanguage?.lowercased() ?? "fr"
+        activeDisplayLangCode
+            ?? post.resolvedLanguageCode(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            ?? "fr"
     }
 
     private var effectiveContent: String {
-        let code = currentDisplayLangCode
-        if code == post.originalLanguage?.lowercased() { return post.content }
-        if let translation = post.translations?[code] ?? post.translations?.first(where: { $0.key.lowercased() == code })?.value {
-            return translation.text
+        if let active = activeDisplayLangCode {
+            if active == post.originalLanguage?.lowercased() { return post.content }
+            if let translation = post.translations?.first(where: { $0.key.lowercased() == active })?.value {
+                return translation.text
+            }
         }
+        // No manual override — `post.displayContent` already carries the
+        // correctly Prisme-resolved translation (set by `toFeedPost`/`resolved()`
+        // upstream in the ViewModel), so it's the correct default.
         return post.displayContent
     }
 
@@ -439,7 +448,7 @@ struct FeedPostCard: View {
         )
         .padding(.horizontal, 16)
         .sheet(isPresented: $showCommentsSheet) {
-            CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment)
+            CommentsSheetView(post: post, accentColor: accentColor)
         }
         .sheet(isPresented: $showTranslationSheet) {
             PostTranslationSheet(

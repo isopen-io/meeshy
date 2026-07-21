@@ -275,6 +275,62 @@ struct CommentsSheetView: View {
         likedIds.formUnion(seeded)
     }
 
+    /// Layers a freshly-fetched comment page over the current in-memory list
+    /// WITHOUT discarding local-only rows the fetch's server snapshot
+    /// couldn't have known about — an unconfirmed optimistic `tmp_` send, or
+    /// a comment reconciled from the `comment:added` socket echo that landed
+    /// while the GET was in flight. A plain `liveComments = fetched`
+    /// overwrite would silently drop those. `fetched` (server-ordered,
+    /// newest first) is the base; any `current` row whose id isn't present
+    /// in `fetched` is kept in front — it's newer than the snapshot, matching
+    /// where the composer/socket handler insert it (`at: 0`).
+    static func mergeFetchedComments(current: [FeedComment], fetched: [FeedComment]) -> [FeedComment] {
+        let fetchedIds = Set(fetched.map(\.id))
+        let localOnly = current.filter { !fetchedIds.contains($0.id) }
+        return localOnly + fetched
+    }
+
+    /// Removes the optimistic `tempId` row (and decrements its parent's reply
+    /// count / the sheet's total count) — shared by the synchronous
+    /// enqueue-refusal `catch` and the async `.exhausted` outbox observer,
+    /// both of which restore the identical pre-send snapshot.
+    private func rollbackOptimisticComment(tempId: String, parentId: String?) {
+        if let parentId {
+            var existing = repliesMap[parentId] ?? []
+            existing.removeAll { $0.id == tempId }
+            repliesMap[parentId] = existing
+            var current = liveComments ?? post.comments
+            if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
+                current[idx].replies -= 1
+                liveComments = current
+            }
+        } else {
+            var current = liveComments ?? post.comments
+            current.removeAll { $0.id == tempId }
+            liveComments = current
+        }
+        liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
+    }
+
+    /// Subscribes to `OfflineQueue.shared.outcomeStream(for: cmid)` and rolls
+    /// back the optimistic comment if the row is escalated to `.exhausted`
+    /// (retry budget spent — the server permanently rejected it). `.applied`
+    /// is a no-op — the `comment:added` socket echo already reconciled the
+    /// temp row in place.
+    private func observeCreateCommentOutcome(cmid: String, tempId: String, parentId: String?) {
+        Task { @MainActor in
+            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollbackOptimisticComment(tempId: tempId, parentId: parentId)
+                    FeedbackToastManager.shared.showError(
+                        String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main)
+                    )
+                }
+            }
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -535,6 +591,62 @@ struct CommentsSheetView: View {
                 }
                 await loadReplies(commentId: comment.id)
             }
+        }
+        .task {
+            await loadFullCommentsIfNeeded()
+        }
+    }
+
+    /// The feed only embeds the top 3 comments per post (gateway
+    /// `postIncludes.ts` `take: 3`) — this sheet used to permanently show
+    /// just those 3 even when the header announces the real total
+    /// (`post.commentCount`), with no fetch and no pagination past what the
+    /// feed page happened to carry. Loads the full first page cache-first
+    /// (mirrors `PostDetailViewModel.loadComments`) whenever the server-known
+    /// total exceeds what's embedded; a no-op for posts with ≤3 comments.
+    private func loadFullCommentsIfNeeded() async {
+        guard post.commentCount > post.comments.count else { return }
+        let cacheKey = "post-\(post.id)"
+        let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+        switch cached {
+        case .fresh(let full, _), .stale(let full, _):
+            // Merge (not overwrite): the `await` above may have given an
+            // optimistic send or a `comment:added` socket echo enough time
+            // to land in `liveComments` first.
+            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: full)
+            seedLikedIds(from: full)
+        case .expired, .empty:
+            break
+        }
+        do {
+            let response = try await PostService.shared.getComments(postId: post.id, cursor: nil, limit: 20)
+            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let fetched = response.data.map { c -> FeedComment in
+                let translated = PostDetailViewModel.resolveCommentTranslation(
+                    translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+                )
+                return FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions
+                )
+            }
+            // Merge, never overwrite: `liveComments` may already carry an
+            // optimistic send or a socket-reconciled comment that landed
+            // while this GET was in flight — the server snapshot the GET
+            // resolved from can't know about either yet.
+            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: fetched)
+            seedLikedIds(from: fetched)
+            try? await CacheCoordinator.shared.comments.save(fetched, for: cacheKey)
+        } catch {
+            // Network failed — keep whatever we already have (embedded top-3
+            // or the cached stale page loaded above). Matches this sheet's
+            // existing silent-fail pattern for supplementary loads (e.g. the
+            // replies prefetch above).
         }
     }
 
@@ -1214,23 +1326,39 @@ struct CommentsSheetView: View {
                 }
                 onCommentSent?(post.id)
             } catch {
-                // Roll back the optimistic row + counts.
-                if let parentId {
-                    var existing = repliesMap[parentId] ?? []
-                    existing.removeAll { $0.id == tempId }
-                    repliesMap[parentId] = existing
-                    var current = liveComments ?? post.comments
-                    if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
-                        current[idx].replies -= 1
-                        liveComments = current
-                    }
-                } else {
-                    var current = liveComments ?? post.comments
-                    current.removeAll { $0.id == tempId }
-                    liveComments = current
+                // REST failed — most commonly because the device is offline.
+                // Durably enqueue via the existing `.createComment` outbox
+                // kind (same one `FeedViewModel`/`PostDetailViewModel.sendComment`
+                // already use) instead of unconditionally losing the comment.
+                // The optimistic `tempId` row is reconciled by the already-wired
+                // `comment:added` socket handler once the outbox replay lands.
+                // NOTE: like those two call sites, `CreateCommentPayload` doesn't
+                // carry `effectFlags`/`attachmentIds` yet (SDK schema gap) — a
+                // blur/sticker effect or attached media on a comment sent while
+                // offline is dropped on replay; the comment text itself survives.
+                do {
+                    let cmid = ClientMutationId.generate()
+                    let payload = CreateCommentPayload(
+                        clientMutationId: cmid,
+                        postId: post.id,
+                        parentCommentId: parentId,
+                        content: trimmed
+                    )
+                    try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
+                    onCommentSent?(post.id)
+
+                    // Roll back the optimistic comment if the outbox exhausts
+                    // its retry budget (server permanently rejects). Without
+                    // this a permanently-failing comment stays in the sheet
+                    // forever: the `comment:added` echo it's waiting on will
+                    // never arrive for a mutation the outbox gave up on.
+                    observeCreateCommentOutcome(cmid: cmid, tempId: tempId, parentId: parentId)
+                } catch {
+                    // Roll back the optimistic row + counts — the outbox
+                    // itself refused the row.
+                    rollbackOptimisticComment(tempId: tempId, parentId: parentId)
+                    FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                 }
-                liveCommentCount = max((liveCommentCount ?? post.commentCount) - 1, 0)
-                FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
             }
         }
     }
