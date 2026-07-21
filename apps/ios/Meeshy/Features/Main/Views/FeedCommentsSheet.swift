@@ -421,6 +421,55 @@ struct CommentsSheetView: View {
                 await loadReplies(commentId: comment.id)
             }
         }
+        .task {
+            await loadFullCommentsIfNeeded()
+        }
+    }
+
+    /// The feed only embeds the top 3 comments per post (gateway
+    /// `postIncludes.ts` `take: 3`) — this sheet used to permanently show
+    /// just those 3 even when the header announces the real total
+    /// (`post.commentCount`), with no fetch and no pagination past what the
+    /// feed page happened to carry. Loads the full first page cache-first
+    /// (mirrors `PostDetailViewModel.loadComments`) whenever the server-known
+    /// total exceeds what's embedded; a no-op for posts with ≤3 comments.
+    private func loadFullCommentsIfNeeded() async {
+        guard post.commentCount > post.comments.count else { return }
+        let cacheKey = "post-\(post.id)"
+        let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+        switch cached {
+        case .fresh(let full, _), .stale(let full, _):
+            liveComments = full
+            seedLikedIds(from: full)
+        case .expired, .empty:
+            break
+        }
+        do {
+            let response = try await PostService.shared.getComments(postId: post.id, cursor: nil, limit: 20)
+            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let fetched = response.data.map { c -> FeedComment in
+                let translated = PostDetailViewModel.resolveCommentTranslation(
+                    translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+                )
+                return FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions
+                )
+            }
+            liveComments = fetched
+            seedLikedIds(from: fetched)
+            try? await CacheCoordinator.shared.comments.save(fetched, for: cacheKey)
+        } catch {
+            // Network failed — keep whatever we already have (embedded top-3
+            // or the cached stale page loaded above). Matches this sheet's
+            // existing silent-fail pattern for supplementary loads (e.g. the
+            // replies prefetch above).
+        }
     }
 
     // MARK: - Comment Like Toggle
