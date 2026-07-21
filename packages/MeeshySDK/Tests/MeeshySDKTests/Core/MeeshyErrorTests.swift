@@ -31,6 +31,11 @@ final class MeeshyErrorTests: XCTestCase {
         XCTAssertEqual(error.errorDescription, "Identifiants invalides")
     }
 
+    func test_authError_invalidCredentialsWithMessage_usesServerMessageVerbatim() {
+        let error = AuthError.invalidCredentialsWithMessage("Mot de passe incorrect")
+        XCTAssertEqual(error.errorDescription, "Mot de passe incorrect")
+    }
+
     func test_authError_sessionExpired_hasDescription() {
         let error = AuthError.sessionExpired
         XCTAssertNotNil(error.errorDescription)

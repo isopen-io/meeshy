@@ -236,6 +236,34 @@ extension APIClientProviding {
 public final class APIClient: APIClientProviding, @unchecked Sendable {
     public static let shared = APIClient()
 
+    // MARK: - 401 Mapping (pure)
+
+    /// How a 401 response on `endpoint` should be surfaced. Extracted as a
+    /// pure decision so the credential-vs-session distinction is unit
+    /// testable without driving a real `URLSession` — see
+    /// `APIClientAuthMappingTests`.
+    enum UnauthorizedMapping: Equatable {
+        /// Wrong password / 2FA code / stale magic link — NOT a session
+        /// problem, so callers must NOT tear down or refresh anything.
+        case invalidCredentials(message: String)
+        /// A real session-expiry: refresh-token rejected, or a regular
+        /// endpoint whose retried-refresh attempt also 401'd.
+        case sessionExpired
+    }
+
+    /// P1 — a 401 on `/auth/login`, `/auth/login/2fa`, `/auth/register`, or
+    /// `/auth/magic-link/*` means "these credentials are wrong", never
+    /// "your session expired" (there is no session yet on these endpoints).
+    /// `/auth/refresh` is deliberately EXCLUDED: a 401 there means the
+    /// refresh token itself is dead, which is genuinely `.sessionExpired`.
+    nonisolated static func mapUnauthorized(endpoint: String, serverMessage: String?) -> UnauthorizedMapping {
+        let isCredentialEndpoint = endpoint.hasPrefix("/auth/login")
+            || endpoint.hasPrefix("/auth/register")
+            || endpoint.hasPrefix("/auth/magic-link")
+        guard isCredentialEndpoint else { return .sessionExpired }
+        return .invalidCredentials(message: serverMessage ?? "Identifiants invalides")
+    }
+
     public var baseURL: String {
         MeeshyConfig.shared.apiBaseURL
     }
@@ -506,6 +534,15 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                     let errorMsg = errBody?.message ?? errBody?.error
 
                     if statusCode == 401 {
+                        if case .invalidCredentials(let message) = Self.mapUnauthorized(endpoint: endpoint, serverMessage: errorMsg) {
+                            // P1 — wrong password / 2FA code / stale magic
+                            // link. There is no active session here, so we
+                            // must NOT call `handleUnauthorized()` (which
+                            // would kick off a pointless background refresh
+                            // of a DIFFERENT, still-valid session if one
+                            // exists) and must NOT show "Session expirée".
+                            throw MeeshyError.auth(.invalidCredentialsWithMessage(message))
+                        }
                         if shouldAttemptRefresh && !hasRefreshedOn401 {
                             hasRefreshedOn401 = true
                             do {

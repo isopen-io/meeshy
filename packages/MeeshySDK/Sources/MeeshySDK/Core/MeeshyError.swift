@@ -20,6 +20,12 @@ public enum NetworkError: LocalizedError {
 
 public enum AuthError: LocalizedError {
     case invalidCredentials
+    /// P1 — a 401 on a credential-submission endpoint (login, 2FA, register,
+    /// magic-link) carries the gateway's own reason ("Mot de passe incorrect",
+    /// "Code invalide", ...). Surfacing it (instead of the generic hardcoded
+    /// string, or worse, `.sessionExpired`) is the whole point of the fix —
+    /// see `APIClient.mapUnauthorized`.
+    case invalidCredentialsWithMessage(String)
     case sessionExpired
     case accountLocked
     case registrationFailed(String)
@@ -27,6 +33,7 @@ public enum AuthError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .invalidCredentials: return "Identifiants invalides"
+        case .invalidCredentialsWithMessage(let message): return message
         case .sessionExpired: return "Session expiree, veuillez vous reconnecter"
         case .accountLocked: return "Compte verrouille"
         case .registrationFailed(let reason): return "Echec de l'inscription : \(reason)"
