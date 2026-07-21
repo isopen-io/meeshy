@@ -1882,10 +1882,11 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
             repostAuthorUsername: repostAuthorUsername,
             visibility: visibility, audioUrl: audioUrl, isViewed: isViewed,
+            viewedAt: viewedAt, updatedAt: updatedAt,
             translations: self.translations,
             backgroundAudio: backgroundAudio,
             reactionCount: reactionCount, commentCount: commentCount,
-            shareCount: shareCount, viewCount: viewCount, repostCount: repostCount,
+            shareCount: shareCount, viewCount: viewCount, impressionCount: impressionCount, repostCount: repostCount,
             currentUserReactions: currentUserReactions
         )
     }
