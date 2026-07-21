@@ -537,6 +537,85 @@ final class CallViewAccessibilityTests: XCTestCase {
             "degraded — visual parity: the glyph itself only appears when isDegraded."
         )
     }
+
+    // MARK: - Audio-layout duration readout accessibility (212i)
+
+    func test_audioDurationReadouts_useComposedLabel_notBareCombinedDigits() throws {
+        // Both audioCallLayout and compactAudioCallHeader rendered
+        // formattedDuration via `.accessibilityElement(children: .combine)`, so a
+        // HEALTHY call (signal glyph absent) announced only the bare ticking
+        // digits "02:34" with no "Durée d'appel" context — unlike the 211i pill
+        // and the video badge. Both must now use the composed audio label.
+        let source = try callViewSource()
+        let occurrences = source.components(separatedBy: ".accessibilityLabel(audioDurationBadgeAccessibilityLabel)").count - 1
+        XCTAssertEqual(
+            occurrences, 2,
+            "Both audio duration readouts (audioCallLayout + compactAudioCallHeader) must carry " +
+            ".accessibilityLabel(audioDurationBadgeAccessibilityLabel) — exactly two call sites."
+        )
+    }
+
+    func test_audioDurationReadouts_exposeDurationAsAccessibilityValue() throws {
+        // The two audio readouts plus the video badge each split the ticking
+        // timer into .accessibilityValue so VoiceOver reads the static label once
+        // and the changing value separately (with .updatesFrequently).
+        let source = try callViewSource()
+        let occurrences = source.components(separatedBy: ".accessibilityValue(callManager.formattedDuration)").count - 1
+        XCTAssertGreaterThanOrEqual(
+            occurrences, 3,
+            "Each duration readout (2 audio + 1 video) must expose the timer via " +
+            ".accessibilityValue(callManager.formattedDuration)."
+        )
+    }
+
+    func test_audioCallLayout_durationReadout_isOpaqueElement_notCombine() throws {
+        // Regression guard: the audio duration capsule must be an explicit opaque
+        // element (children: .ignore) with the composed label, NOT the old
+        // `.accessibilityElement(children: .combine)` that read bare digits.
+        let source = try callViewSource()
+        guard let layoutRange = source.range(of: "private var audioCallLayout: some View {") else {
+            XCTFail("CallView must define audioCallLayout")
+            return
+        }
+        let end = source.index(layoutRange.upperBound, offsetBy: 1400, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[layoutRange.upperBound ..< end])
+        XCTAssertTrue(
+            body.contains(".accessibilityElement(children: .ignore)") &&
+            body.contains(".accessibilityLabel(audioDurationBadgeAccessibilityLabel)"),
+            "audioCallLayout's duration capsule must be children: .ignore with the composed " +
+            "audioDurationBadgeAccessibilityLabel, not children: .combine over bare digits."
+        )
+    }
+
+    func test_audioDurationBadgeAccessibilityLabel_foldsSignalButNotStatusRowState() throws {
+        // The audio layout HAS a dedicated status-pill row (muted / speaker /
+        // unstable / peer-network / reconnecting), so those states are already
+        // surfaced there. The composed label must fold ONLY the transient signal
+        // glyph (which has no status-row equivalent) and must NOT duplicate
+        // peer-network / reconnecting — unlike the video badge, which has no
+        // status row and therefore folds everything.
+        let source = try callViewSource()
+        guard let range = source.range(of: "private var audioDurationBadgeAccessibilityLabel: String {") else {
+            XCTFail("CallView must define audioDurationBadgeAccessibilityLabel")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 440, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("call.duration.a11y.label"),
+            "audioDurationBadgeAccessibilityLabel must start from the shared 'Durée d'appel' key."
+        )
+        XCTAssertTrue(
+            body.contains("signalStrength.isDegraded") && body.contains("signalStrength.accessibilityLabel"),
+            "It must fold in the signal glyph's own label when degraded (visual parity: the glyph " +
+            "only appears when isDegraded), matching the video badge's gate."
+        )
+        XCTAssertFalse(
+            body.contains("isRemoteQualityDegraded") || body.contains("call.reconnecting"),
+            "It must NOT fold peer-network / reconnecting state — those are already announced by " +
+            "the audio layout's dedicated statusPill row; folding them would double-announce."
+        )
+    }
 }
 
 // MARK: - Island banner emergence transition (2026-07-03 UX feedback)

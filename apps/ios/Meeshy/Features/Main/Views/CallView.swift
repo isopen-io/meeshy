@@ -852,7 +852,12 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
-            .accessibilityElement(children: .combine)
+            // Mirror the video badge (`children: .ignore` + label/value split)
+            // so VoiceOver announces "Durée d'appel, 02:34" instead of the naked
+            // ticking digits `.combine` produced on a healthy call.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(audioDurationBadgeAccessibilityLabel)
+            .accessibilityValue(callManager.formattedDuration)
             .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
@@ -912,7 +917,11 @@ struct CallView: View {
                         .font(.caption.weight(.medium).monospacedDigit())
                         .foregroundColor(durationColor)
                 }
-                .accessibilityElement(children: .combine)
+                // Same label/value split as `audioCallLayout` and the video badge
+                // — a named "Durée d'appel" readout, not bare digits.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(audioDurationBadgeAccessibilityLabel)
+                .accessibilityValue(callManager.formattedDuration)
                 .accessibilityAddTraits(.updatesFrequently)
             }
 
@@ -968,6 +977,21 @@ struct CallView: View {
         }
         if case .reconnecting = callManager.callState {
             parts.append(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    /// Audio-layout mirror of `videoDurationBadgeAccessibilityLabel`. Unlike the
+    /// video chrome, the audio layouts DO carry a dedicated status-pill row
+    /// (muted / speaker / unstable / peer-network / reconnecting), so those
+    /// states are already surfaced there and must NOT be folded in again to
+    /// avoid double-announcing. Only the transient signal-strength glyph — which
+    /// has no status-row equivalent — is composed alongside "Durée d'appel",
+    /// matching the video badge's `signalStrength.isDegraded` gate exactly.
+    private var audioDurationBadgeAccessibilityLabel: String {
+        var parts = [String(localized: "call.duration.a11y.label")]
+        if signalStrength.isDegraded {
+            parts.append(signalStrength.accessibilityLabel)
         }
         return parts.joined(separator: ", ")
     }
