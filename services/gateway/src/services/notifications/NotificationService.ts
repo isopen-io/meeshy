@@ -904,6 +904,10 @@ export class NotificationService {
                   || (params.metadata && 'commentId' in params.metadata ? String(params.metadata.commentId ?? '') : ''),
                 parentCommentId: params.context.parentCommentId
                   || (params.metadata && 'parentCommentId' in params.metadata ? String(params.metadata.parentCommentId ?? '') : ''),
+                // Navigation sociale iOS — requête d'ami (friend_request). Le
+                // handler iOS lit cette clé défensivement : absente →
+                // résolution via receivedRequests par senderId.
+                friendRequestId: params.context.friendRequestId || '',
                 postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
                 senderId: params.actor?.id || '',
                 senderUsername: params.actor?.username || '',
