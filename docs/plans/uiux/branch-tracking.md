@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 208i, 2026-07-21)** — piste iOS (suffixe `i`).
+> - **208i (terminée, branche `claude/laughing-thompson-c3ngz4`, base `main` HEAD `22465a5` Merge PR #2214)** :
+>   Consolidation design-system de **`PrivacyPolicyView`** (visionneuse légale). Le twin quasi-identique
+>   `TermsOfServiceView` avait migré son `accentColor` vers le token de marque `MeeshyColors.brandPrimaryHex`
+>   en **194i**, qui a **explicitement nommé** `PrivacyPolicyView` comme le sibling restant utilisant encore
+>   le **littéral magique** `"6366F1"`. Fix (idiome 180i/186i/194i) : `private let accentColor = "6366F1"`
+>   → `MeeshyColors.brandPrimaryHex` (byte-identique `"6366F1"` = indigo500, `MeeshyUI` déjà importé).
+>   **0 visuel / 0 logique / 0 i18n / 0 test neuf**. 1 fichier. Les 2 écrans légaux partagent désormais la
+>   même déclaration `accentColor`. Aucune PR iOS ne touche `PrivacyPolicyView` (dernier commit = base `64f943d`).
+>   Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** le token accent de `PrivacyPolicyView` (soldé 208i). Sibling legacy restant de
+>   la chaîne 180i : `AboutView` (`accentColor = "45B7D1"` cyan) — itération dédiée future.
+> - **Base de départ 209i : `main` HEAD** (après merge, supprimer la branche).
+>
 > **POINTEUR iOS AUTORITAIRE (mis à jour 207i, 2026-07-21)** — piste iOS (suffixe `i`).
 > - **Essaim iOS saturé** : PR ouvertes jusqu'à **206i** (#2224 `reaction filter capsules`). Numéro **207i** choisi strictement > 206i (plus haut en vol). `CallsTab.swift` **absent de toute PR ouverte** (seules des références « sibling » dans les corps de PR) → 0 collision.
 > - **207i (terminée, branche `claude/laughing-thompson-hvvudd`, base `main` HEAD `8792cb9`)** : label VoiceOver de **`CallJournalRow`** (rangée du journal d'appels, onglet Contacts → Appels). La rangée applique `.accessibilityElement(children: .combine)` **puis** un `.accessibilityLabel` explicite qui, par sémantique SwiftUI, **remplace** le texte combiné des enfants → VoiceOver n'annonçait que **nom + direction**, perdant le **type audio/vidéo** (badge `video.fill` = icône seule, WCAG 1.3.1), l'**ancienneté** (`relativeTimeString`) et la **durée** (`durationLabel`) que l'utilisateur voyant lit. Fix : helper pur `rowAccessibilityLabel(name:)` recomposant `[nom, direction, type, ancienneté, (durée)]`. Type réutilise les clés **existantes** `calls.type.audio`/`calls.type.video` (déjà shippées par `CallDetailSheet` → parité cross-écran) ; durée réutilise `calls.detail.duration`. **0 clé i18n neuve / 0 visuel / 0 logique / 0 réseau.** Le scope `.combine` est **conservé** (audit 2026-07-06/08 : le combiner sur toute la rangée avalait le menu redial `CallRowDialButton`). Test source-level ajouté à `CallsTabAccessibilityTests` (`test_callJournalRow_accessibilityLabelIncludesTypeTimeAndDuration`, miroir du pattern du fichier). Gate = CI `iOS Tests`.
