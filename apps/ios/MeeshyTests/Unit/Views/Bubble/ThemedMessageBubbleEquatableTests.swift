@@ -165,6 +165,86 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
         XCTAssertEqual(a, b)
     }
 
+    /// Text/system messages own ZERO audio attachments — the common case.
+    /// `audioEnrichmentSignature` must bail out via `ownedIds.isEmpty` before
+    /// ever touching the (conversation-wide, unbounded) `allAudioItems` array;
+    /// this locks in the behavior the early-return guarantees regardless of
+    /// how large or divergent `allAudioItems` is.
+    func test_allAudioItemsChange_whenMessageOwnsNoAudioAttachments_doesNotInvalidate() {
+        let message = makeMessage(updatedAt: .init(timeIntervalSince1970: 0), effects: .none, reactions: [], attachments: [])
+        let unrelatedAttachment = makeAttachment(id: "unrelated-att")
+        let manyItems = (0..<50).map { index in
+            ConversationViewModel.AudioItem(
+                id: "unrelated-att-\(index)",
+                attachment: unrelatedAttachment,
+                message: message,
+                transcription: MessageTranscription(attachmentId: "unrelated-att-\(index)", text: "track \(index)", language: "fr"),
+                translatedAudios: []
+            )
+        }
+        let a = makeBubble(message: message, allAudioItems: [])
+        let b = makeBubble(message: message, allAudioItems: manyItems)
+        XCTAssertEqual(a, b)
+    }
+
+    /// Same track count AND same transcription text, but the segments changed
+    /// (e.g. GRDB re-hydration overwrote word-level timing while the flattened
+    /// `.text` stayed identical) — this is the karaoke-frozen-at-timestamps=0
+    /// bug class. A count/text-only signature would miss this; comparing the
+    /// full `Equatable` `MessageTranscription` must not.
+    func test_transcriptionSegmentsChange_sameTextAndCount_invalidates() {
+        let attachment = makeAttachment(id: "att1")
+        let message = makeMessage(updatedAt: .init(timeIntervalSince1970: 0), effects: .none, reactions: [], attachments: [attachment])
+        let before = ConversationViewModel.AudioItem(
+            id: "att1",
+            attachment: attachment,
+            message: message,
+            transcription: MessageTranscription(attachmentId: "att1", text: "Bonjour", language: "fr", segments: []),
+            translatedAudios: []
+        )
+        let after = ConversationViewModel.AudioItem(
+            id: "att1",
+            attachment: attachment,
+            message: message,
+            transcription: MessageTranscription(
+                attachmentId: "att1",
+                text: "Bonjour",
+                language: "fr",
+                segments: [MessageTranscriptionSegment(text: "Bonjour", startTime: 0, endTime: 1.2)]
+            ),
+            translatedAudios: []
+        )
+        let a = makeBubble(message: message, allAudioItems: [before])
+        let b = makeBubble(message: message, allAudioItems: [after])
+        XCTAssertNotEqual(a, b)
+    }
+
+    /// Same translated-audio COUNT, but an existing entry was replaced in
+    /// place (new url/quality/cloned) for an already-present target language —
+    /// exactly what `ConversationSocketHandler` does when re-enriching an
+    /// attachment. A count-only signature would miss this.
+    func test_translatedAudiosChange_sameCountDifferentContent_invalidates() {
+        let attachment = makeAttachment(id: "att1")
+        let message = makeMessage(updatedAt: .init(timeIntervalSince1970: 0), effects: .none, reactions: [], attachments: [attachment])
+        let before = ConversationViewModel.AudioItem(
+            id: "att1",
+            attachment: attachment,
+            message: message,
+            transcription: nil,
+            translatedAudios: [makeTranslatedAudio(id: "ta1", url: "https://x/v1.m4a", quality: 0.5, cloned: false)]
+        )
+        let after = ConversationViewModel.AudioItem(
+            id: "att1",
+            attachment: attachment,
+            message: message,
+            transcription: nil,
+            translatedAudios: [makeTranslatedAudio(id: "ta1", url: "https://x/v2.m4a", quality: 0.9, cloned: true)]
+        )
+        let a = makeBubble(message: message, allAudioItems: [before])
+        let b = makeBubble(message: message, allAudioItems: [after])
+        XCTAssertNotEqual(a, b)
+    }
+
     // MARK: - Sanity: existing fields still gate
 
     func test_messageUpdatedAtBump_invalidates() {
@@ -329,5 +409,20 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
 
     private func makeAttachment(id: String) -> MessageAttachment {
         MeeshyMessageAttachment(id: id, mimeType: "audio/m4a")
+    }
+
+    private func makeTranslatedAudio(id: String, url: String, quality: Double, cloned: Bool) -> MessageTranslatedAudio {
+        MessageTranslatedAudio(
+            id: id,
+            attachmentId: "att1",
+            targetLanguage: "en",
+            url: url,
+            transcription: "hello",
+            durationMs: 1000,
+            format: "m4a",
+            cloned: cloned,
+            quality: quality,
+            ttsModel: "chatterbox"
+        )
     }
 }
