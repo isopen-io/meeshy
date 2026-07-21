@@ -1,5 +1,232 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **magic-link countdown state-machine + strict email gate core** landed (slice
+> `auth-magic-link-countdown`, feature-parity §A → advances "Passwordless magic-link login (email +
+> countdown + resend) via deep link" `[ ]` → `[~]`). This is the pure waiting-step logic behind the
+> passwordless flow. Parity source: iOS `MagicLinkView`
+> (`apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`) — the `isValidEmail` regex, the
+> `startCountdown` per-second `Task` loop that flips `linkExpired` at zero, `formattedCountdown`
+> (`"m:ss"`), and the resend `.disabled(countdownRemaining > 0 || isLoading)` gate. Two pure
+> `:core:model/auth/` cores. **`MagicLinkCountdown`** is an immutable value (`remaining`, `expired`)
+> with pure transitions: `start(expiresInSeconds)` seeds a fresh, clamped-≥0, non-expired countdown
+> (this **is** the resend transition — re-starting clears a stale expired warning, iOS
+> `linkExpired = false`); `tick()` drops a second and expires **exactly** on reaching zero (idempotent
+> once at zero); `formatted` / `showCountdown` (`!expired && remaining > 0`) / `showExpiredWarning`
+> (`expired`) / `canResend(isLoading)` (`remaining == 0 && !isLoading`) are the display + gate
+> derivations. `expired` is stored, not derived from `remaining == 0`, because a resend re-starts while
+> the just-drained state still reads zero — a genuine state distinction, not a redundant boolean.
+> **`MagicLinkEmail.isValid`** matches the whole RFC-lite shape (`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
+> — deliberately **stricter** than the signup wizard's loose `@`+`.` gate (`SignupFieldValidation`), kept
+> a distinct SSOT because the address is the sole login identifier with no username/password fallback;
+> mirrors iOS `wholeMatch` so edge whitespace is rejected. **SOTA note:** iOS drives a stateful `Task`
+> mutating View `@State`; Android lifts the whole transition into a pure immutable value so every branch
+> is JVM-testable and a Compose screen re-derives the display each second off a plain 1 s `Flow` clock.
+> **+26 behavioural tests** (`MagicLinkCountdownTest` — 12 email: rich local/subdomain, uppercase,
+> hyphenated domain, missing-`@`, missing-dot, 1-char-TLD, empty-local, multi-`@`, interior space,
+> leading/trailing whitespace, empty; 14 countdown: start seed / zero-not-yet-expired / negative-clamp,
+> tick decrement / expire-at-one / idempotent-at-zero / folded-to-zero-expires, resend-clears-expired,
+> `formatted` five values incl. `1:05`/`0:05`/`0:00`, `showCountdown` three arms, `showExpiredWarning`
+> two arms, `canResend` counting/exhausted-idle/exhausted-loading). Expectations are hand-written
+> literals independent of the production derivation (not tautological). **Mutation check (RED proof):**
+> flipping the expiry transition (`expired = next == 0` → `expired = false`) fails **exactly**
+> `tick_atOneReachesExpiry` + `tick_foldedToZeroReachesExpiry` (26 run, 2 failed, no collateral) —
+> behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:core:model:testDebugUnitTest` green (new suite 26/26) + full `testDebugUnitTest :app:assembleDebug`
+> → **BUILD SUCCESSFUL** (7m06s, 728 tasks; `app-debug.apk` produced). Reviewer **PASS** (diff
+> `apps/android` only — 1 new production file + 1 test + tracking; **SDK purity** — a data class with
+> pure transitions + a pure predicate object in `:core:model`, zero framework/`Regex`-state deps; the
+> `AuthService.requestMagicLink` actuator + the 1 s `Flow` tick + the waiting-step composable + the
+> `meeshy://` deep-link handler stay app-side/pending; **SSOT** — one countdown value drives every
+> display+gate derivation, the strict email gate is its own SSOT distinct from the signup gate; **UX** —
+> `canResend`/`showCountdown`/`showExpiredWarning` are the single truths the waiting step renders; no
+> coverage floor lowered, no test weakened). **Next slice:** the app-side `MagicLinkView` composable
+> wiring these cores (email field → `AuthService.requestMagicLink` → waiting step off a 1 s `Flow`
+> ticking `MagicLinkCountdown`) + the `meeshy://` deep-link handler, closing §A L280 toward `[x]`; OR
+> another §A pure core (6-digit OTP field sanitizer + resend-confirm window, username-suggestion
+> selection); OR the tracked Kover 90% coverage-gate infra.
+
+> On 2026-07-21 the **signup local-validation gate + availability-debounce policy core** landed (slice
+> `auth-signup-availability-local-gate`, feature-parity §A → advances "8-step gamified registration wizard
+> (username/email/phone live availability + suggestions)" `[ ]` → `[~]`). This is the pure decision layer the
+> wizard's Steps 1/2 (pseudo/email) + phone step use to gate the debounced live-availability calls and the
+> Continue button. Parity source: iOS `RegistrationViewModel` — `isUsernameValidLocally` / `isEmailValidLocally`
+> / the phone `digits.count >= 8` guard, the three `.debounce(1s).removeDuplicates().sink { guard localValid }`
+> chains, and the `.pseudo`/`.phone`/`.email` arms of `canProceed`
+> (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`). One pure `:core:model` file with two
+> objects + a sealed intent, fully TDD-covered. **`SignupFieldValidation`** holds the local gates — username
+> (trimmed length 2..16, every char a letter/digit or `_`/`-`), email (contains `@` **and** `.` — iOS's
+> deliberately-loose gate), phone (≥ 8 digits) — plus the normalizers the availability calls apply
+> (`normalizedUsername` = trim, `normalizedEmail` = trim + lowercase, `phoneDigits` = digit filter).
+> **`SignupAvailabilityPolicy`** folds a debounced `(current, previous)` pair into an **`AvailabilityIntent`**:
+> `Unchanged` (dedup — raw value equals the last emission; checked **first**, mirroring `removeDuplicates`
+> preceding the local-validity guard, so a still-valid duplicate never re-probes the network), `Clear` (locally
+> invalid → wipe availability state, no network call), or `Check(query)` (locally valid → probe the **normalized**
+> query). Its `{username,email,phone}StepCanProceed(...)` answer the wizard's advance gate (local gate **AND** the
+> server's `available == true`; phone honours `skipPhone`). **SOTA note:** iOS buries all of this as `private
+> func`s + Combine plumbing inside the stateful view model; Android lifts the whole decision into a pure,
+> framework-free SSOT (`current`/`previous`/`available` all **injected**) so every branch is unit-testable and the
+> same gate is reusable by any onboarding surface — the 1 s debounce + `removeDuplicates` stay app-side (a
+> `Flow.debounce().distinctUntilChanged()` feeds `…Intent`). **+43 behavioural tests** (`SignupAvailabilityTest`
+> — username min/max/over boundaries, trim-before-length, whitespace-only/empty, `_`/`-` allowed, interior-space
+> / `.` / `@` rejected, digits-only; email `@`+`.` / missing-either / empty; `phoneDigits` strips formatting &
+> letters, 7 vs 8-digit threshold; dedup-`Unchanged` incl. **dedup-wins-when-valid**, first-emission-`null`-not-
+> `Unchanged`, `Check(normalized)` + `Clear` per field; each step gate incl. null/false availability, locally-
+> invalid-despite-stale-availableTrue, and `skipPhone` escaping garbage input). Expectations are hand-written
+> literals independent of the production derivation (not tautological). **Mutation check (RED proof):** flipping
+> the username step gate `usernameAvailable == true` → `usernameAvailable != false` fails **exactly**
+> `usernameStep_blockedWhenAvailabilityNull` (43 run, 1 failed, no collateral) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green
+> (new suite 43/43) + full `:app:assembleDebug` → **BUILD SUCCESSFUL** (4m13s). Reviewer **PASS** (diff
+> `apps/android` only — 1 new production file + 1 test + tracking; **SDK purity** — a pure predicate object + a
+> pure stateless policy + a sealed intent in `:core:model`, zero framework deps; the `AuthService.checkAvailability`
+> actuator + the `Flow` debounce + the wizard step composables stay app-side/pending; **SSOT** — one gate reused by
+> the debounce intent AND the proceed gate, one normalizer per field; **UX** — the proceed gate is the Continue
+> button's single truth; no coverage floor lowered, no test weakened). **Next slice:** the app-side registration
+> wizard step scaffold wiring these cores (username/email fields → `Flow.debounce(1s).distinctUntilChanged()` →
+> `…Intent` → `AuthService.checkAvailability` → availability badge + Continue gate), closing §A L281 toward
+> `[x]`; OR another §A pure core (username-suggestion selection / magic-link countdown / 6-digit OTP field); OR
+> the tracked Kover 90% coverage-gate infra.
+
+> On 2026-07-21 the **signup device-locale → language/country inference core** landed (slice
+> `auth-region-language-inference`, feature-parity §A → advances "Country auto-detection + region→language
+> inference at signup" `[ ]` → `[~]`). This is the pure defaults engine the 8-step registration wizard uses
+> to pre-select the language step + country picker from the device locale. Parity source: iOS
+> `RegistrationViewModel.detectLanguages()` + `detectCountry()`
+> (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`). One pure, immutable `:core:model`
+> core (`SignupRegionInference` + a `SignupLanguages` data class), fully TDD-covered. It carries the
+> **verbatim** 50-entry `regionLanguageMap` (ISO 3166-1 alpha-2 → default regional language) and exposes two
+> pure resolvers: **(1)** `inferLanguages(deviceLanguage, deviceRegion, supportedLanguageCodes)` returns the
+> `system`/`regional` pair — `system` is the lowercased device language when it is a supported code else the
+> `fr` default; `regional` is the mapped region language **only** when it is supported AND distinct from the
+> system language, otherwise the `en` secondary fallback, but demoted to `fr` when that would duplicate an
+> English system — so the two slots are **always distinct** (the wizard never pre-selects the same language
+> twice); **(2)** `inferCountryIso(deviceRegion, knownCountryCodes)` returns the uppercased region ISO when it
+> is a known country (the app passes `CountryCatalog.dialCodes.keys`, reusing the already-landed catalogue as
+> the SSOT country set — no second table). **SOTA note:** iOS buries both tables + the branching inside the
+> stateful `RegistrationViewModel` reading `Locale.current` directly; Android lifts the whole decision into a
+> pure `Locale`-free object (device language/region/supported-set all **injected**), so every branch is
+> unit-testable and the same inference is reusable by any onboarding surface, not just the wizard init.
+> **+22 behavioural tests** (`SignupRegionInferenceTest` — system supported/lowercased/unsupported/null/blank;
+> regional distinct-from-system / uppercased-region / equal-to-system-dropped / unsupported-region-dropped /
+> unknown-region / null-region; en-system duplicate-avoidance both directions; non-english-system distinct
+> keep; the 50-entry map size + 6 branch keys; `inferCountryIso` known/lowercased/unknown/null + the real
+> `CountryCatalog` set). Expectations are hardcoded language/ISO literals, independent of the production
+> derivation (not tautological). **Mutation check (RED proof):** dropping the `it != system` guard from the
+> regional gate (`it in supportedLanguageCodes && it != system` → `it in supportedLanguageCodes`) fails
+> **exactly** `dropsRegionalLanguageEqualToSystem` + `regionMappingEqualToEnglishSystemFallsBackToFrench` +
+> `regionMappingEqualToNonEnglishSystemFallsBackToEnglish` (22 run, 3 failed, no collateral) — behavioural,
+> not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:core:model:testDebugUnitTest` green (full module **1824/1824**, new suite 22/22) + full
+> `:app:assembleDebug` → **BUILD SUCCESSFUL** (`app-debug.apk` produced, 75 MB). Reviewer **PASS** (diff
+> `apps/android` only — 1 new production file + 1 test + tracking; **SDK purity** — a data class + a pure
+> stateless inference object in `:core:model`, zero framework/`Locale` deps, the device-locale *sourcing* +
+> wizard wiring stay app-side/pending; **SSOT** — one region table, the country set reused from
+> `CountryCatalog`, the resolved languages feed the same wizard `systemLanguage`/`regionalLanguage`; **Prisme**
+> — system = priority-1 content language, regional = priority-2, both distinct; **UX** — N/A pure data; no
+> coverage floor lowered, no test weakened). **Next slice:** wire the inference into the app-side
+> registration-wizard scaffold (source `Locale.getDefault()` at wizard start → pre-select the language step +
+> country picker, `X-Device-Locale` already handled by the Prisme slice) closing §A L329 toward `[x]`; OR
+> another §A pure core (username/email/phone live-availability debounce + local-validation gate,
+> `isUsernameValidLocally`/`isEmailValidLocally` + the 1s debounce policy); OR the tracked Kover 90%
+> coverage-gate infra.
+
+> On 2026-07-20 the **country / dial-code catalogue core** landed (slice `auth-country-catalog`,
+> feature-parity §A → advances "Phone entry with searchable country-code picker" `[ ]` → `[~]`).
+> This is the highest-value pure core in the Auth build-order area (first in the parity sequence,
+> 19 unchecked boxes, previously login-only). Parity source: iOS `CountryPicker`
+> (`packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/CountryPicker.swift`). One pure, immutable
+> `:core:model` object (`CountryCatalog` + a `Country` data class), fully TDD-covered. It carries the
+> **verbatim** E.164 `dialCodes` table (241 ISO 3166-1 alpha-2 → dial-code entries) and the `priority`
+> head ordering, and exposes the pure resolvers the picker + any flag-display site need: **(1)**
+> `flag(iso)` derives the emoji flag from a 2-letter ISO code via Unicode regional indicators, returning
+> the `🌐` globe for anything that is not exactly two ASCII letters (wrong length, digits, accented
+> letters); **(2)** `flagForCountryCode(iso?)` gates that on catalogue membership (null / unknown → globe);
+> **(3)** `dialCode(iso?)` looks up the dial code case-insensitively; **(4)** `isoForPhoneNumber(number?)`
+> deduces the country from an international number by the **longest** matching dial code, preferring the
+> priority country on a shared prefix (`+44`→`GB` over GG/JE/IM, `+1`→`US` over CA, `+7`→`RU` over KZ) then
+> a **deterministic** ISO-alphabetical tie-break — an SOTA improvement over iOS, which falls back to a
+> `Locale`-dependent name sort for the obscure non-priority collisions (`+590`→BL); it normalises a
+> `00`-international prefix to `+`, and returns `null` for a null/empty number, a number with no leading `+`,
+> or one matching no dial code; **(5)** `flagForPhoneNumber` chains 4→1; **(6)** `build(displayName)` returns
+> the full list sorted priority-first (in `priority` order) then by localized name, with the name resolver
+> **injected** so the core stays `Locale`-free and JVM-testable (the app supplies
+> `java.util.Locale("", iso).getDisplayCountry(...)`); **(7)** `country(forPhoneNumber, displayName)` returns
+> the full `Country`; **(8)** `search(query, countries)` filters case-insensitively over name / dial code /
+> ISO with an empty query passing through unchanged; **(9)** `accessibilityLabel` = `"name, +dial"`.
+> **SOTA note:** iOS keeps the tables + logic inside a SwiftUI `View`; Android lifts the whole thing into a
+> pure stateless SSOT object so every resolver is unit-testable and reusable by any flag-display site (a
+> stored `MeeshyUser.phoneNumber` / `registrationCountry`), not just the picker sheet. **+29 behavioural
+> tests** (`CountryCatalogTest` — flag valid/lowercase/wrong-length/non-letter/globe; flagForCountryCode
+> known/null/unknown; dialCode known/lowercase/null/unknown; isoForPhoneNumber plain-E164 / `00`-normalise /
+> priority-tie US+RU+GB / longest-match AG / non-priority alpha-tie BL / null-empty-non-international /
+> no-match-and-bare-`+`; flagForPhoneNumber resolved/globe; build size+key-set / priority-prefix /
+> name-sorted-tail / attached-fields; country full-entry / null; search empty-passthrough / by-name /
+> by-dial / by-iso / no-match; accessibilityLabel format). Flag expectations are hardcoded emoji literals,
+> independent of the production construction (not tautological). **Mutation check (RED proof):** dropping the
+> priority rank from the tie-break (`minWith(compareBy({ rank[it] }, { it }))` → `minOrNull()`, i.e. plain
+> ISO-alpha min) fails **exactly** `isoForPhoneNumber_prefersPriorityCountryOnSharedDialCode` (29 run, 1
+> failed, no collateral) — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (new suite 29/29) + full `:app:assembleDebug`
+> → **BUILD SUCCESSFUL** (4m48s). Reviewer **PASS** (diff `apps/android` only — 1 new production file + 1
+> test + tracking; **SDK purity** — a data class + a pure stateless catalogue object in `:core:model`, zero
+> framework/`Locale` deps, the searchable-picker sheet + phone field stay app-side, pending; **SSOT** — one
+> catalogue, one flag/phone resolver reused by every flag-display site; **Prisme/UX** — N/A pure data; no
+> coverage floor lowered, no test weakened). **Next slice:** the app-side searchable country-picker sheet +
+> phone-entry composable (once the registration-wizard scaffold exists) with `java.util.Locale`-backed
+> display names, closing §A L283 toward `[x]`; OR another §A pure core (username/email/phone live-availability
+> debounce+suggestions, region→language inference at signup); OR the tracked Kover 90% coverage-gate infra.
+
+> On 2026-07-20 the **Prisme device-locale 4th-priority + BCP-47 normalisation core** landed (slice
+> `prisme-device-locale-priority`, feature-parity §D → advances "Automatic per-user translation display
+> (resolution: system → regional → custom → original)" `[ ]` → `[~]`). This is the single most product-central
+> pure core: the content-language resolution the whole app displays through. The `:core:model` `LanguageResolver`
+> already fed every bubble/feed/story/compose site, but it encoded the **old** Prisme rule ("device locale must
+> NEVER influence content language") and matched in-app codes only case-insensitively — so a BCP-47 preference
+> (`"pt-BR"`) or an OS locale never resolved, diverging from the shared TS SSOT (`resolveUserLanguage` in
+> `packages/shared/utils/conversation-helpers.ts`, updated 2026-05-26) and the iOS mirror
+> (`MeeshyUser.preferredContentLanguages`). Two changes bring Android to full parity. **(1)** New pure
+> `:core:model` `LanguageCodeNormalizer` — a faithful port of `normalizeLanguageCode` / `iso639ReductionMap`
+> (TS + Swift). It reduces a raw locale identifier to the canonical translation-key code: a **supported** 2-/3-letter
+> code is preserved **verbatim** (`"bas"`→`"bas"`, never truncated to Bashkir `"ba"` — that would silently
+> mistranslate), BCP-47 region/script is stripped (`"fr-FR"`→`"fr"`, `"zh-Hant-HK"`→`"zh"`), an ISO 639-2/639-3
+> code with no direct entry is reduced via an **explicit** table (`"eng"`→`"en"`, `"swe"`→`"sv"` — **not** the
+> Swahili prefix-collision `"sw"`; 639-2/B variants `ger`/`fre`/`chi` covered) with the reduced target
+> **re-validated** against the catalogue (`"orm"`→`"om"` dropped since `om` isn't shipped), `"fil"`/`"tgl"` rejected
+> (never `"fi"`), and any invalid input → `null`. `supportedCodeSet` is derived from `LanguageData.allLanguages`
+> (mirror of iOS `LanguageData.supportedCodeSet`, no hand-copied drift). **(2)**
+> `LanguageResolver.ContentLanguagePreferences` gains `deviceLocale: String? get() = null` (a default getter, so all
+> existing implementers — `MeeshyUser`, every `EmptyContentPreferences`, test fixtures — compile untouched);
+> `resolveUserLanguage` + `preferredContentLanguages` fold the **normalised** deviceLocale in at **4th priority** —
+> strictly after `systemLanguage`/`regionalLanguage`/`customDestinationLanguage`, before the `"fr"` fallback, deduped
+> case-insensitively. This mirrors iOS exactly: it normalises **only** the device locale and keeps in-app codes
+> verbatim (an in-app pref never gets rewritten, only matched case-insensitively downstream). `MeeshyUser` gains a
+> decoded `deviceLocale` field (the gateway persists `User.deviceLocale`), so the arm is live off the `/auth/me`
+> contract; `preferredTranslation` inherits the 4th-priority arm for free (it iterates `preferredContentLanguages`).
+> **SOTA note:** the in-app codes stay verbatim per iOS, but a latent iOS gap — a `"pt-BR"` *in-app* value never
+> matching `pt` translations — is out of scope here because Android's settings picker (like iOS) writes clean
+> 2-letter codes; the only BCP-47 shape that actually reaches resolution is the OS locale, which is exactly what we
+> normalise. **+25 behavioural tests** — `LanguageCodeNormalizerTest` (14: verbatim 2-/3-letter, casing, BCP-47
+> strip, whitespace, 639-2/T + /B reduction, reduction-target re-validation drop, `fil`/`tgl`/`xyz` reject, unknown-
+> 2-letter preserve, null/blank/too-short, non-alphabetic, separator-only) + `LanguageResolverTest` (+11:
+> deviceLocale as 4th priority, normalised, beaten by each in-app tier, beats the `fr` fallback, unusable → `fr`;
+> appended-last, case-insensitive dedup vs in-app, omit-unusable in the ordered list; `preferredTranslation` matches
+> through it; a real `MeeshyUser.deviceLocale` drives it). Every pre-existing resolver test stays green unchanged
+> (in-app casing still preserved). **Mutation check (RED proof):** dropping the reduction-target re-validation
+> (`… && reduced in supportedCodeSet` → `… reduced`) fails **exactly** `normalize_rejectsReductionWhoseTargetIsNotSupported`
+> (14 run, 1 failed, no collateral) — behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`,
+> `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (new suites 14/14 + 23/23) + `:sdk-ui` + all
+> feature-module `testDebugUnitTest` green + full `:app:assembleDebug` → **BUILD SUCCESSFUL** (the lone full-tree
+> red was the documented `:sdk-core` `ThemeStoreTest` DataStore `TimeoutCancellationException` flake — a module this
+> diff never touches — green in isolation in 29s). Reviewer **PASS** (diff `apps/android` only — 1 new production
+> file + 3 edited `:core:model` files + 2 tests + tracking; **SDK purity** — pure normaliser + resolver in
+> `:core:model`, zero framework deps, the device-locale *sourcing* actuator stays app-side/pending; **SSOT** — one
+> normaliser, `supportedCodeSet` derived from the single catalogue, resolution stays the one `LanguageResolver` every
+> consumer already uses; **Prisme** — device locale strictly 4th, never supplanting an in-app pref, no
+> first-translation fallback; no coverage floor lowered, no existing test weakened). **Next slice:** the app-side
+> device-locale sourcing (inject `Locale.getDefault()` into the resolution context + `X-Device-Locale` request
+> header so the gateway persists it, iOS parity) to close §D L1132 to `[x]`; OR another §D pure core (offline
+> persisted-translations Prisme, ad-hoc blocking text translation); OR the tracked Kover 90% coverage-gate infra.
+
 > On 2026-07-20 the **rolling live-transcript accumulator core** landed (slice `call-transcript-buffer`,
 > feature-parity §H → advances "Live in-call transcription overlay" `[~]` by delivering the SSOT rolling
 > transcript the overlay renders — the missing accumulation layer between the already-landed caption transport
@@ -5305,7 +5532,23 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-15): `chat-appearance-transforms`** — the shake/zoom/explode/waoo one-shot appearance
+**Build-order focus is §A Auth** (parity sequencing `Auth → Conversations → Chat → …`). Just shipped
+(2026-07-21): `auth-password-requirements` — the itemised requirements checklist (`PasswordRequirements`)
++ confirm-password gate (`PasswordEntry`) pure `:core:model` cores for registration Step 5. With the
+strength meter (`PasswordStrength`), the country catalogue (`CountryCatalog`) and the Prisme device-locale
+resolver already landed, the remaining §A pure cores worth taking next:
+- **Live availability debounce + suggestions** — the username/email/phone "is this taken?" check
+  (`RegistrationViewModel.validateUsername/Email/Phone`, 250 ms debounce + suggestion generator). A pure
+  debounce/suggestion core (`:core:model`) + the app-side actuator later. Highest §A value (feeds the
+  8-step wizard's live badges).
+- **Region → language inference at signup** (`Country auto-detection + region→language inference`,
+  feature-parity §A) — a pure ISO-region → default-language map (iOS onboarding language pre-selection).
+- **Server environment selector** (dev/staging/prod/custom host) — a pure environment model + validator.
+- The tracked **Kover 90 % coverage-gate infra** (touches only `apps/android` gradle files).
+
+---
+
+**Earlier (2026-07-15): `chat-appearance-transforms`** — the shake/zoom/explode/waoo one-shot appearance
 transforms (the sibling half of the confetti/fireworks particles). Pure `:core:model`
 `AppearanceTransforms.forEffect(effect, progress): AppearanceTransformSpec?` (shake sinusoid / zoom grow /
 explode two-stage pop+fade / waoo two-stage bounce+glow) + `resolve(effects, progress)` fold + `transformEffects`
@@ -6233,6 +6476,44 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-21 — slice `auth-password-requirements` ✅ impl + local gate green + reviewer PASS → PR (CI pending)
+- **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start (only iOS `laughing-*`
+  PRs open). Synced local `main` to `origin/main` (force-updated to `0e9f8b9`), branched
+  `claude/apps/android/auth-password-requirements`.
+- **Slice:** two pure `:core:model` cores completing iOS registration Step 5 (`StepPasswordView` +
+  `RegistrationViewModel.canProceed`). Build-order area §A Auth (first in the parity sequence).
+  - `PasswordRequirements.evaluate(password) → PasswordRequirementsState` — the four itemised
+    `requirementsCard` rows (length ≥ 8 / uppercase / lowercase / digit), each an independent boolean;
+    `met` in card-render order, `allMet` summary. Distinct from `PasswordStrength` (the 0..5 score meter
+    with the extra 12-char + special-char bands) — this is the discrete rule checklist.
+  - `PasswordEntry.evaluate(password, confirm) → PasswordEntryState` — the confirm interaction:
+    `showConfirmField` = `password.length ≥ 8` (verbatim iOS reveal gate), `match` (`UNDETERMINED` until a
+    non-empty confirm on a visible field → `MATCHED`/`MISMATCHED`), `canProceed` =
+    `password.length ≥ 8 && password == confirm` (verbatim `RegistrationViewModel` gate). `isMatched`
+    convenience mirrors the verdict.
+- **Tests:** +19 behavioural (10 `PasswordRequirementsTest`: empty / 7-char misses-length / 8-char
+  boundary / each row present-vs-absent / all-four → allMet+set / eight-but-no-upper → not-all / symbol
+  is not a row / `isMet` mirrors `met` / rows in card order; 9 `PasswordEntryTest`: both-empty /
+  short-hides-confirm / 8-char reveal boundary / long+empty-confirm undetermined / matches → proceed /
+  differs → mismatch+no-proceed / matching-but-too-short → no-proceed / confirm-text-but-password-short
+  hidden / `isMatched` convenience). No tautologies (verdicts asserted against hardcoded expectations,
+  not the production expression).
+- **Edge cases:** empty password/confirm, 7↔8 length boundary (both cores), symbol-only (no row),
+  identical-but-below-gate (no proceed), confirm typed while password still short (field hidden, no card).
+- **Mutation (RED proof):** dropping the length gate from `canProceed`
+  (`showConfirmField && password == confirm` → `password == confirm`) fails **exactly**
+  `evaluate_bothEmpty_hidesConfirmAndCannotProceed` + `evaluate_matchingButTooShort_cannotProceed`
+  (9 run, 2 failed, no collateral) — behavioural, not tautological. Source restored from `.bak`.
+- **Verify (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk` — the `./gradlew` wrapper is
+  proxy-blocked, see NOTES 2026-07-21):** new suites `:core:model:testDebugUnitTest` green (10/10 + 9/9);
+  full-tree `assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL in 5m 19s**, zero failures across all
+  modules (the documented `:sdk-core` `ThemeStoreTest` DataStore flake did not recur this run).
+- **Reviewer:** PASS — diff `apps/android` only (2 new production files + 2 tests + tracking); behavioural
+  tests, no tautology; **SDK purity** — two stateless value cores in `:core:model`, zero framework deps,
+  the `StepPasswordView` composable + wizard scaffold stay app-side/pending; **SSOT** — one requirements
+  evaluator + one confirm-gate, `MIN_LENGTH` shared between the checklist and the field-reveal; no
+  coverage floor lowered, no existing test weakened.
 
 ### 2026-07-20 — slice `call-reliability-policy` ✅ impl + local gate green + reviewer PASS → PR #2166 (CI pending)
 - **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start; the prior slice

@@ -1,6 +1,7 @@
 package me.meeshy.sdk.lang
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.MeeshyUser
 import org.junit.Test
 
 class LanguageResolverTest {
@@ -9,6 +10,7 @@ class LanguageResolverTest {
         override val systemLanguage: String? = null,
         override val regionalLanguage: String? = null,
         override val customDestinationLanguage: String? = null,
+        override val deviceLocale: String? = null,
     ) : LanguageResolver.ContentLanguagePreferences
 
     private data class Translation(
@@ -90,5 +92,85 @@ class LanguageResolverTest {
             .containsExactly("en", "fr").inOrder()
         assertThat(LanguageResolver.resolveUserTranslationLanguages(null, null))
             .containsExactly("fr")
+    }
+
+    // --- deviceLocale: 4th-priority Prisme extension (2026-05-26) ---
+
+    @Test
+    fun resolveUserLanguage_usesDeviceLocaleAsFourthPriority() {
+        assertThat(LanguageResolver.resolveUserLanguage(Prefs(deviceLocale = "en_US")))
+            .isEqualTo("en")
+    }
+
+    @Test
+    fun resolveUserLanguage_normalizesDeviceLocale() {
+        // A BCP-47 OS locale must collapse to the canonical translation-key code.
+        assertThat(LanguageResolver.resolveUserLanguage(Prefs(deviceLocale = "pt-BR")))
+            .isEqualTo("pt")
+    }
+
+    @Test
+    fun resolveUserLanguage_inAppPreferencesBeatDeviceLocale() {
+        val prefs = Prefs(systemLanguage = "es", deviceLocale = "en")
+        assertThat(LanguageResolver.resolveUserLanguage(prefs)).isEqualTo("es")
+    }
+
+    @Test
+    fun resolveUserLanguage_customDestinationStillBeatsDeviceLocale() {
+        val prefs = Prefs(customDestinationLanguage = "it", deviceLocale = "en")
+        assertThat(LanguageResolver.resolveUserLanguage(prefs)).isEqualTo("it")
+    }
+
+    @Test
+    fun resolveUserLanguage_deviceLocaleBeatsFrenchFallback() {
+        assertThat(LanguageResolver.resolveUserLanguage(Prefs(deviceLocale = "de")))
+            .isEqualTo("de")
+    }
+
+    @Test
+    fun resolveUserLanguage_fallsBackToFrenchWhenDeviceLocaleUnusable() {
+        assertThat(LanguageResolver.resolveUserLanguage(Prefs(deviceLocale = "@@@")))
+            .isEqualTo("fr")
+    }
+
+    @Test
+    fun preferredContentLanguages_appendsDeviceLocaleLast() {
+        val prefs = Prefs(systemLanguage = "en", deviceLocale = "es_ES")
+        assertThat(LanguageResolver.preferredContentLanguages(prefs))
+            .containsExactly("en", "es").inOrder()
+    }
+
+    @Test
+    fun preferredContentLanguages_dedupesDeviceLocaleAgainstInAppCaseInsensitively() {
+        val prefs = Prefs(systemLanguage = "EN", deviceLocale = "en_US")
+        assertThat(LanguageResolver.preferredContentLanguages(prefs))
+            .containsExactly("EN")
+    }
+
+    @Test
+    fun preferredContentLanguages_omitsUnusableDeviceLocale() {
+        val prefs = Prefs(systemLanguage = "en", deviceLocale = "   ")
+        assertThat(LanguageResolver.preferredContentLanguages(prefs))
+            .containsExactly("en")
+    }
+
+    @Test
+    fun preferredContentLanguages_deviceLocaleAloneReplacesFrenchDefault() {
+        assertThat(LanguageResolver.preferredContentLanguages(Prefs(deviceLocale = "de-DE")))
+            .containsExactly("de")
+    }
+
+    @Test
+    fun preferredTranslation_matchesThroughDeviceLocale() {
+        val prefs = Prefs(deviceLocale = "es")
+        val translations = listOf(Translation("de", "Hallo"), Translation("es", "Hola"))
+        assertThat(LanguageResolver.preferredTranslation(translations, prefs)?.translatedContent)
+            .isEqualTo("Hola")
+    }
+
+    @Test
+    fun resolveUserLanguage_readsDeviceLocaleFromMeeshyUser() {
+        val user = MeeshyUser(id = "u1", username = "jean", deviceLocale = "en-GB")
+        assertThat(LanguageResolver.resolveUserLanguage(user)).isEqualTo("en")
     }
 }
