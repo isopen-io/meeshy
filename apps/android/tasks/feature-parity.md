@@ -278,7 +278,32 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Username/password login with saved-account picker (multi-account, one-tap switch)
 - [ ] Server environment selector (dev/staging/prod/custom host)
 - [ ] Passwordless magic-link login (email + countdown + resend) via deep link
-- [ ] 8-step gamified registration wizard (username/email/phone live availability + suggestions)
+- [~] 8-step gamified registration wizard (username/email/phone live availability + suggestions) —
+      **local-validation gate + availability-debounce policy core shipped** (slice
+      `auth-signup-availability-local-gate`, 2026-07-21). Pure `:core:model` `SignupFieldValidation` +
+      `SignupAvailabilityPolicy` + `AvailabilityIntent` (faithful port of iOS `RegistrationViewModel`:
+      `isUsernameValidLocally` / `isEmailValidLocally` / the phone `digits.count >= 8` guard, the three
+      `.debounce(1s).removeDuplicates().sink { guard localValid }` chains, and the `.pseudo`/`.phone`/
+      `.email` arms of `canProceed`,
+      `packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`). `SignupFieldValidation`
+      exposes the local gates (username trimmed 2..16 chars ⊆ alnum ∪ `_-`; email contains `@` **and** `.`;
+      phone ≥ 8 digits) + normalizers (`normalizedUsername` trim, `normalizedEmail` trim+lowercase,
+      `phoneDigits`). `SignupAvailabilityPolicy.{username,email,phone}Intent(current, previous)` folds a
+      debounced value into an `AvailabilityIntent` — `Unchanged` (dedup: raw value == last emission,
+      checked **first** so a still-valid duplicate never re-probes), `Clear` (locally invalid → wipe
+      availability, no network), or `Check(query)` (locally valid → probe the normalized query). The
+      `{username,email,phone}StepCanProceed(...)` gates answer the wizard's advance decision (local gate
+      **AND** server `available == true`; phone honours `skipPhone`). **SOTA note:** iOS keeps these as
+      `private func`s inside the stateful view model; Android lifts them into a pure framework-free SSOT so
+      every branch is JVM-testable and reusable by any onboarding surface. +43 behavioural tests
+      (`SignupAvailabilityTest` — every username length/charset boundary, email `@`/`.` cases, phone
+      digit-strip + threshold, dedup-wins-when-valid, first-emission-no-previous, Clear/Check per field,
+      and each step gate incl. null/false availability + skipPhone). Mutation (RED proof): the username
+      step gate `== true` → `!= false` fails **exactly** `usernameStep_blockedWhenAvailabilityNull`
+      (43 run, 1 failed, no collateral). `:core:model:testDebugUnitTest` green + full `:app:assembleDebug`
+      → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up:** the app-side `AuthService.checkAvailability`
+      call + the wizard step composables (username/email/phone fields) driving these cores off the 1 s debounce,
+      and the username-suggestion strip.
 - [ ] Interactive step progress bar with jump-back to completed steps
 - [~] Phone entry with searchable country-code picker (skippable) — **catalogue core shipped**
       (slice `auth-country-catalog`, 2026-07-20): pure `:core:model` `CountryCatalog` + `Country`
