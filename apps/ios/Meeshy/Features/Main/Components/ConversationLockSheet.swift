@@ -118,6 +118,24 @@ struct ConversationLockSheet: View {
         }
         .offset(x: shakeOffset)
         .padding(.vertical, 4)
+        // La rangée de points ne véhicule la progression que visuellement : sans
+        // ceci, VoiceOver ne perçoit aucun feedback de saisie (règle Prisme a11y :
+        // ne jamais reposer sur le seul visuel). Élément unique « x sur n » calqué
+        // sur l'annonce native d'un page control / champ passcode iOS.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(String(localized: "conversation.lock.a11y.pinProgress",
+                                         defaultValue: "Progression du code",
+                                         bundle: .main)))
+        .accessibilityValue(Text(pinProgressA11yValue))
+    }
+
+    private var pinProgressA11yValue: String {
+        String(
+            format: String(localized: "conversation.lock.a11y.pinProgressValue",
+                           defaultValue: "%1$d sur %2$d",
+                           bundle: .main),
+            currentPin.count, pinLength
+        )
     }
 
     // MARK: - Numpad
@@ -266,10 +284,10 @@ struct ConversationLockSheet: View {
         errorMessage = nil
         if step == 2 {
             confirmPin += "\(digit)"
-            if confirmPin.count == pinLength { handleComplete() }
+            if confirmPin.count == pinLength { handleComplete() } else { announcePinProgress() }
         } else {
             pin += "\(digit)"
-            if pin.count == pinLength { handleComplete() }
+            if pin.count == pinLength { handleComplete() } else { announcePinProgress() }
         }
     }
 
@@ -279,6 +297,15 @@ struct ConversationLockSheet: View {
         } else {
             if !pin.isEmpty { pin.removeLast() }
         }
+        announcePinProgress()
+    }
+
+    // Annonce vocale de la progression au fil de la saisie : sans focus VoiceOver
+    // sur la rangée de points, une touche du pavé ne lit que son chiffre — l'utilisateur
+    // aveugle n'entend jamais « x sur n ». Reproduit le comportement du champ passcode natif.
+    private func announcePinProgress() {
+        guard UIAccessibility.isVoiceOverRunning else { return }
+        UIAccessibility.post(notification: .announcement, argument: pinProgressA11yValue)
     }
 
     private func handleComplete() {
@@ -362,6 +389,11 @@ struct ConversationLockSheet: View {
     private func shakeAndReset(_ message: String) {
         errorMessage = message
         HapticFeedback.error()
+        // Le shake + le texte rouge sont muets pour VoiceOver ; annonce l'échec pour
+        // qu'un utilisateur aveugle sache pourquoi la saisie s'est réinitialisée.
+        if UIAccessibility.isVoiceOverRunning {
+            UIAccessibility.post(notification: .announcement, argument: message)
+        }
         withAnimation(.default.repeatCount(4, autoreverses: true).speed(8)) {
             shakeOffset = 8
         }
