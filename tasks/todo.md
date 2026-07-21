@@ -29,25 +29,21 @@ Vérifié vert : shared 47/47 (1382 tests) · gateway 536/536 (14424 tests, 1 fl
 - [x] Merges Vague 1 + GWF + AV + B1-B5 sur main
 - [x] Build device (`./apps/ios/meeshy.sh device`) : 5 erreurs de compilation trouvées et corrigées post-merge (commits d06e98ea3, 16b5ed874, 16f4e1268) — pbxproj périmé (xcodegen), 2× isolation Swift 6 (OutboxDispatcher, même classe que NSEDecryptor), 1× argument obsolète (ProfileUserPostsList→FeedPostCard, code mort pré-existant), 1× import manquant (AttachmentUploaderTests), 1× régression test (pollution cache singleton CacheCoordinator entre tests, démasquée par le fix B3 fetch-then-replace)
 - [x] Vérif finale : `meeshy.sh test` 3 phases **toutes vertes** (1536+2456+1 tests, 0 échec)
-- [ ] Vagues 4-5 (B6-B23) restantes
+
+## Vague 4 (B6-B11) — ✅ MERGÉ sur main
+
+- [x] **B6 Stories**, **B7 Réels/vidéo**, **B8 Images & viewers SDK**, **B9 Audio SDK**, **B10 Pièces jointes**, **B11 Surfaces secondaires offline** — tous mergés (commits 81fa7a3c9, 9e5e7aaac, 6be904e01, bfebd25e4, 7677fc565, a236b3269), tous fast-forward/clean (0 conflit — les 6 lanes avaient forké exactement de la pointe de main). Reviews adversariales : 2 P0 compile-breakers trouvés et corrigés en B11 (mutation actor-isolée hors acteur, appel MainActor synchrone depuis test non-@MainActor) ; plusieurs P1 réels corrigés (dédup self-echo commentaire story, watch-tracking vidéo mort sur MeeshyVideoPlayer+Renderers, ownsEngine jamais reset, CachedBannerImage pixelSize ignorait la largeur, langue audio auto-seedée pilotait la lecture à l'insu du Prisme, download bloqué en cas de perte de course, mime HEIC menteur sur échec, reply ThreadView perdue par un reseed de cache mal placé).
+- Gaps documentés et assumés (hors scope lane, à reprendre en Vague 5+ si besoin) : durabilité OfflineQueue complète des réactions/commentaires story (nécessite OutboxKind, fichier d'une autre lane) ; 2/3 pipelines de publication morts non supprimés (nécessitent vérif compile) ; violation SDK purity pré-existante non-régressée dans MediaDownloadPolicy/CachedAsyncImage et ConnectionActionView (dette déjà là avant cette session, correction complète = refactor plus large hors périmètre) ; UserProfileSheet.swift envoie encore une demande d'ami en REST direct (hors fichiers de la lane B11).
+- [x] Vérif finale post-Vague 4 : `meeshy.sh test` (en cours de vérification)
+
+## Vague 5 restante
+
+- [ ] **B12 Réglages/préférences** (6) · **B13 Appels retry/privacy** (8) · **B14 Robustesse noyau** (4) · **B15 Profil sheet SDK** (4) · **B16 i18n/catalogues** (8) · **B17 Détail message/SSOT** (6) · **B18 Liste conversations — vues** (7, vérifier chevauchement P-iOS) · **B19 Bulles Equatable** (2) · **B20 Deep links/join** (2) · **B21 Perf divers** (2) · **B22 Tests couverture factice** (5) · **B23 Tests CI/hygiène** (4)
 - [ ] Doc/mémoire présence (CLAUDE.md, mémoire) APRÈS CI verte
 - [ ] Push main au jalon, surveiller CI (pas de push docs par-dessus)
 
 ## Annexe B — audit transverse (163 défauts dédupliqués → 23 lanes ; backlog complet : tasks/audit-backlog-2026-07-20.md + tasks/audit-notes-2026-07-20.md)
 
-Top risks : P0 magic link connecté = fuite inter-comptes (MeeshyApp:152) · P0 changement d'avatar 100% cassé (`url` vs `fileUrl`, AttachmentUploader:105) · P0 édition profil offline → 404 infini + queue settings bloquée (ProfileView:803) · P1 clés E2EE survivantes au logout → DMs indéchiffrables (E2ESessionManager:233) · P1 pullToRefresh détruit L1+L2 avant fetch (ConversationListViewModel:1352).
-
-### Vague 3 (après merges Vague 1 ; B2 après N-iOS ; parallèles, fichiers disjoints) — 🔄 en cours (relancé sous Sonnet 5)
-- [ ] **B1 Auth & session** (8 items, P0 magic link, mapping 401→invalidCredentials, wipe E2EE avec userId capturé, splash borné, catches APIError morts ×9 sites)
-- [ ] **B2 Profil/avatar/queue** (6 items, 2 P0 : fileUrl, route /users/me ; clé avatar Zod ; effacement champs '' vs nil ; SettingsActionQueue maxAttempts) — attend merge N-iOS (OutboxDispatcher partagé)
-- [ ] **B3 Liste conversations — données** (6 items : pullToRefresh fetch-then-replace, Prisme preview, champs compagnons stales, .expired porteur de données)
-- [ ] **B4 Conversation ouverte — VM/envoi** (8 items : retry manuel, pagination offline, 'fr' codés en dur ×4, copie traduite)
-- [ ] **B5 Feed social** (8 items : Prisme FeedPostCard, compteurs manquants, durabilité offline)
-
-### Vague 4
-- [ ] **B6 Stories** (8) · **B7 Réels/vidéo** (8) · **B8 Images & viewers SDK** (6 — attend merge AV, CachedAsyncImage partagé) · **B9 Audio SDK** (7) · **B10 Pièces jointes** (6) · **B11 Surfaces secondaires offline** (8)
-
-### Vague 5
-- [ ] **B12 Réglages/préférences** (6) · **B13 Appels retry/privacy** (8) · **B14 Robustesse noyau** (4) · **B15 Profil sheet SDK** (4) · **B16 i18n/catalogues** (8) · **B17 Détail message/SSOT** (6) · **B18 Liste conversations — vues** (7, vérifier chevauchement P-iOS) · **B19 Bulles Equatable** (2) · **B20 Deep links/join** (2) · **B21 Perf divers** (2) · **B22 Tests couverture factice** (5) · **B23 Tests CI/hygiène** (4)
+Top risks Vague 1 (résolus) : P0 magic link connecté = fuite inter-comptes · P0 changement d'avatar 100% cassé · P0 édition profil offline → 404 infini · P1 clés E2EE survivantes au logout · P1 pullToRefresh détruit L1+L2 avant fetch.
 
 ## Review (à compléter en fin de chantier)
