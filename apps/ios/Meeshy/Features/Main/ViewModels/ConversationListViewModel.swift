@@ -261,10 +261,20 @@ class ConversationListViewModel: ObservableObject {
 
     /// Bump a conversation to position 0 with a refreshed lastMessageAt.
     /// Used by the socket relay when CONVERSATION_UPDATED carries a newer
-    /// lastMessageAt — the row's other fields stay intact, only the
-    /// timestamp + position move. No-op when the id isn't currently
-    /// loaded so the engine's full-row prepend in handleNewMessage
-    /// stays the source of truth for unknown conversations.
+    /// lastMessageAt, and by the push-notification path (neither carries
+    /// the new message's content). No-op when the id isn't currently
+    /// loaded so the engine's full-row prepend in handleNewMessage stays
+    /// the source of truth for unknown conversations.
+    ///
+    /// The row's last-message COMPANION fields (sender name, attachments,
+    /// ephemeral flags) are reset to neutral defaults rather than left as
+    /// whatever the PREVIOUS message carried: neither caller has the new
+    /// message's actual sender/attachments/flags, so leaving the old ones
+    /// in place renders a wrong author, a phantom attachment icon, or a
+    /// brand-new text message summarized as "View once" because the
+    /// stale `lastMessageIsViewOnce` flag survived the bump. A blank
+    /// companion state is corrected on the next real sync (delta sync,
+    /// per-row prefetch, or opening the conversation); a WRONG one isn't.
     func bumpToTop(conversationId: String, newLastMessageAt: Date) {
         guard let idx = convIndex(for: conversationId) else {
             Logger.messages.warning("[bumpToTop] conversation introuvable id=\(conversationId, privacy: .public)")
@@ -272,6 +282,12 @@ class ConversationListViewModel: ObservableObject {
         }
         var updated = conversations[idx]
         updated.lastMessageAt = newLastMessageAt
+        updated.lastMessageSenderName = nil
+        updated.lastMessageAttachments = []
+        updated.lastMessageAttachmentCount = 0
+        updated.lastMessageIsBlurred = false
+        updated.lastMessageIsViewOnce = false
+        updated.lastMessageExpiresAt = nil
         conversations.remove(at: idx)
         conversations.insert(updated, at: 0)
         schedulePersist()
@@ -470,7 +486,10 @@ class ConversationListViewModel: ObservableObject {
             case .favoris: filterMatch = c.userState.reaction != nil && c.isActive && userArchiveOk
             case .archived: filterMatch = c.userState.isArchived
             }
-            let searchMatch = searchText.isEmpty || c.name.localizedCaseInsensitiveContains(searchText)
+            // `displayName` (not `name`): a conversation renamed locally via
+            // `userState.customName` must remain findable by the name the
+            // row actually shows, not just the server-side title/identifier.
+            let searchMatch = searchText.isEmpty || c.displayName.localizedCaseInsensitiveContains(searchText)
             return filterMatch && searchMatch
         }
     }

@@ -419,6 +419,29 @@ final class ConversationListViewModelTests: XCTestCase {
         }
     }
 
+    /// P2 — a conversation renamed locally (`userState.customName`) must
+    /// remain findable by the name the row actually shows. Matching on
+    /// `c.name` (server title/identifier) instead of `c.displayName`
+    /// (customName ?? title ?? identifier) made a renamed conversation
+    /// invisible to search under its own displayed name.
+    func test_filterConversations_matchesLocalCustomName_notJustServerTitle() {
+        var renamed = makeConversation(id: "conv1", name: "Team Alpha")
+        renamed.userState.customName = "Mon Groupe Préféré"
+        let untouched = makeConversation(id: "conv2", name: "Team Beta")
+
+        let byCustomName = ConversationListViewModel.filterConversations(
+            [renamed, untouched], searchText: "Préféré", filter: .all
+        )
+        XCTAssertEqual(byCustomName.map(\.id), ["conv1"],
+                       "search must match the locally-renamed displayName, not just the server title")
+
+        let byOldServerTitle = ConversationListViewModel.filterConversations(
+            [renamed, untouched], searchText: "Alpha", filter: .all
+        )
+        XCTAssertTrue(byOldServerTitle.isEmpty,
+                      "once renamed locally, the row is found by its displayed name — not the superseded server title")
+    }
+
     // MARK: - Filter Pipeline
 
     func test_filterPipeline_allFilterShowsActiveConversations() async throws {
@@ -1439,6 +1462,36 @@ final class ConversationListViewModelTests: XCTestCase {
                        "bumpToTop on unknown id must leave the list untouched")
     }
 
+    /// P1 — a lightweight bump (socket relay or push notification) never
+    /// carries the new message's sender/attachments/flags. Leaving the
+    /// PREVIOUS message's companion fields in place renders a wrong
+    /// author, a phantom attachment icon, or summarizes a brand-new text
+    /// message as "1 message vue unique" because the stale
+    /// `lastMessageIsViewOnce` flag survives the bump.
+    func test_bumpToTop_resetsStaleCompanionFields() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        var conv = makeConversation(id: "conv1", lastMessageAt: Date(timeIntervalSince1970: 1_000))
+        conv.lastMessageSenderName = "Alice"
+        conv.lastMessageAttachments = [
+            MeeshyMessageAttachment(id: "att1", mimeType: "image/jpeg", fileUrl: "https://x/a.jpg", uploadedBy: "alice")
+        ]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageIsBlurred = true
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageExpiresAt = Date(timeIntervalSince1970: 2_000)
+        sut.setConversations([conv])
+
+        sut.bumpToTop(conversationId: "conv1", newLastMessageAt: Date(timeIntervalSince1970: 9_000))
+
+        let bumped = sut.conversations[0]
+        XCTAssertNil(bumped.lastMessageSenderName, "stale author must not survive the bump")
+        XCTAssertTrue(bumped.lastMessageAttachments.isEmpty, "phantom attachment must not survive the bump")
+        XCTAssertEqual(bumped.lastMessageAttachmentCount, 0)
+        XCTAssertFalse(bumped.lastMessageIsBlurred)
+        XCTAssertFalse(bumped.lastMessageIsViewOnce, "a new message must not inherit the old one's 'View once' flag")
+        XCTAssertNil(bumped.lastMessageExpiresAt)
+    }
+
     // MARK: - conversation:updated socket event with lastMessageAt
 
     func test_conversationUpdatedEvent_withLastMessageAt_triggersBumpToTop() async throws {
@@ -1458,6 +1511,32 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.conversations.first?.id, "c",
                        "Event with lastMessageAt must promote the conversation to the top")
+    }
+
+    /// P1 — end-to-end through the real socket sink (not calling
+    /// `bumpToTop` directly): CONVERSATION_UPDATED never carries the new
+    /// message's sender/attachments/flags, so the row must not keep
+    /// rendering the PREVIOUS message's companion state after the bump.
+    func test_conversationUpdatedEvent_withLastMessageAt_resetsStaleCompanionFields() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "c", lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        conv.lastMessageSenderName = "Alice"
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageAttachmentCount = 1
+        sut.setConversations([conv])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(conversationId: "c", lastMessageAt: newer)
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let bumped = try XCTUnwrap(sut.conversations.first(where: { $0.id == "c" }))
+        XCTAssertNil(bumped.lastMessageSenderName)
+        XCTAssertFalse(bumped.lastMessageIsViewOnce,
+                       "the row must not summarize a brand-new message as 'View once' from the stale flag")
+        XCTAssertEqual(bumped.lastMessageAttachmentCount, 0)
     }
 
     /// Pins the production payload shape: handlers/MessageHandler.ts emits
