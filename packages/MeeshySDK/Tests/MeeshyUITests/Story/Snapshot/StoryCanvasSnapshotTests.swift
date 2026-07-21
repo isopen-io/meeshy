@@ -2,6 +2,7 @@ import XCTest
 import UIKit
 import CoreMedia
 import SnapshotTesting
+@testable import MeeshySDK
 @testable import MeeshyUI
 
 // MARK: - Snapshot record workflow
