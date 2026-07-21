@@ -181,6 +181,8 @@ final class AuthServiceTests: XCTestCase {
                 XCTFail("Expected sessionExpired, got \(error)")
                 return
             }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(error)")
         }
 
         XCTAssertFalse(AuthManager.shared.isAuthenticated)
@@ -197,6 +199,8 @@ final class AuthServiceTests: XCTestCase {
                 XCTFail("Expected sessionExpired, got \(error)")
                 return
             }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(error)")
         }
 
         XCTAssertEqual(stubAuthService.refreshTokenCallCount, 0)
