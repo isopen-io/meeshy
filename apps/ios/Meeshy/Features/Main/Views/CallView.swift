@@ -860,7 +860,14 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
-            .accessibilityElement(children: .combine)
+            // Naked-readout fix (doctrine 206i/210i/211i): the combined element
+            // previously announced a bare "0:34" with no context. Signal state is
+            // already surfaced by the separate statusPill row here (unlike the video
+            // badge), so this label carries only call-duration context — no double
+            // announcement. Reuses the existing `call.duration.a11y.label` key.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+            .accessibilityValue(callManager.formattedDuration)
             .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
@@ -925,7 +932,11 @@ struct CallView: View {
                         .accessibilityLabel(String(localized: "call.duration.a11y.label"))
                         .accessibilityValue(callManager.formattedDuration)
                 }
-                .accessibilityElement(children: .combine)
+                // Same naked-readout fix as audioCallLayout — captions-active
+                // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                .accessibilityValue(callManager.formattedDuration)
                 .accessibilityAddTraits(.updatesFrequently)
             }
 
@@ -1475,6 +1486,10 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
                     .foregroundColor(.white.opacity(0.45))
+                    // Final call-total duration: same naked-readout fix, static
+                    // (no .updatesFrequently). Bare "0:34" → "Durée de l'appel, 0:34".
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
             }
 
             if callManager.canRetryCall {
