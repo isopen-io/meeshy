@@ -1,5 +1,52 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **profile presence-window reconcile** repair landed (slice
+> `profile-presence-window-reconcile`). This is the flagged "leave main green" repair from the
+> previous run: `:feature:profile` `ProfileHeaderBuilderTest` carried **two deterministic reds on
+> `origin/main`** whose expectations contradicted the canonical **1/3/5 presence rule** (SSOT
+> `packages/shared/utils/user-presence.ts`, mirrored verbatim in `:core:model` `Presence.kt`
+> `UserPresence.state` + iOS `UserPresence.state` + locked by `PresenceTest` "windows are 60s-3min-5min").
+> The offending tests (`presence is away when disconnected and idle past the window` +
+> `last seen carries the parsed instant for an away user`) fed a **10-min-old** frozen `lastActiveAt`
+> and asserted **AWAY**, justified in a comment by a fabricated *"30-min anti-stale guard"* that exists
+> nowhere in the code — the real anti-stale guard is 5 min and the offline boundary is 5 min, so 10 min
+> resolves to **OFFLINE**. **Production code was already correct**: `ProfileHeaderBuilder.build`
+> delegates presence to `UserPresence.state` (the SSOT resolver) — so the fix is a **test-correctness
+> reconcile**, NOT a weakening, and `Presence.kt` was deliberately left untouched (changing it would
+> diverge Android from the web/iOS mirrors). **Diff: 1 test file only** (`ProfileHeaderBuilderTest.kt`,
+> +36/-10; no production code). The two wrong tests were rewritten to the SSOT and coverage was
+> **strengthened** — the presence projection now exercises all three non-online decay arms through the
+> public `ProfileHeaderBuilder.build` API: **AWAY** (disconnected, 2-min-old → orange),
+> **IDLE** (disconnected, 4-min-old → grey-displayed, a state the builder path never covered before),
+> **OFFLINE** (disconnected, 10-min-old → no dot); plus a new **IDLE last-seen-carry** test. Net
+> **+3 tests** (ProfileHeaderBuilderTest 27 → **30**, all green). **RED→GREEN proof:** with
+> `origin/main`'s test file restored, `:feature:profile:testDebugUnitTest` → **137 tests, exactly 2
+> failed** (the two named above, no collateral); with the reconciled file → **30/30** in the suite,
+> module green. **Gate (system Gradle 8.14.3, `$HOME/android-sdk`, `LANG=C.UTF-8`; wrapper's
+> gradle-distribution download is 403-blocked in this container, so the system Gradle is the gate):**
+> `assembleDebug` **BUILD SUCCESSFUL** (every module compiled); full-repo `testDebugUnitTest` tripped
+> **only** the pre-existing **non-deterministic** `:sdk-core` `ThemeStoreTest`
+> `dataStore_hydratesAlreadyPersistedChoiceOnConstruction` DataStore-parallel-load `TimeoutCancellationException`
+> flake (documented in NOTES) — a module this diff never touches, and it passed **3/3 in isolation**
+> (`--rerun-tasks`), so not a regression. **This slice therefore moves main from "1 deterministic red
+> + 1 flake" → "0 deterministic reds + 1 known flake".** Reviewer **PASS** (diff `apps/android` only —
+> 1 test file, zero production logic; **SSOT** — the reconcile makes the profile test agree with the one
+> presence resolver instead of a phantom 30-min rule; **coverage** — strengthened, no floor lowered, no
+> assertion weakened; the AWAY expectation was *corrected to the spec*, not deleted, and two new decay
+> arms were added). **The previous run's ⚠ `profile-presence-window-reconcile` flag is now RESOLVED.**
+>
+> **Next slice:** back to §A feature work — the app-side `LoginView` saved-account picker composable +
+> DataStore-backed store (observe `SavedAccounts.sorted`; `upsert` on login / `remove` on delete /
+> `find` on one-tap select → password focus; `showPicker` toggle), OR the `LoginView`
+> environment-selector composable + DataStore env store driving `ServerEnvironmentResolver.apiBaseUrl`
+> into the SDK config at launch, OR another §A pure core (password-recovery masked-info challenge,
+> token-refresh timing policy), OR the tracked Kover 90% coverage-gate infra. **Known standing debt
+> (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest` /
+> `InterfaceLanguageStoreTest` / `PrivacyPreferencesStoreTest`) surfaces intermittently in the full
+> `testDebugUnitTest` run but passes in isolation — a real "harden the DataStore test harness against
+> parallel-load timeout" follow-up (raise the 5 s Turbine/`withTimeout`, or serialise those stores'
+> tests), tracked and still unclaimed.
+
 > On 2026-07-21 the **saved-account list core** landed (slice `auth-saved-account-picker-core`,
 > feature-parity §A → advances "Username/password login with saved-account picker (multi-account,
 > one-tap switch)" `[ ]` → `[~]`). This is the pure multi-account model behind the login screen's
@@ -42,6 +89,11 @@
 > `SavedAccount` + one `SavedAccounts` own every sort/upsert/remove/find/showPicker derivation the picker
 > renders; **UX** — `sorted`/`shortName`/`showPicker` are the single truths the picker renders; no
 > coverage floor lowered, no test weakened).
+>
+> **✅ RESOLVED 2026-07-21 by slice `profile-presence-window-reconcile` (see top entry).** The
+> reconcile fixed the two `ProfileHeaderBuilderTest` tests to the 1/3/5 SSOT (production `Presence.kt`
+> was already correct; the tests carried a phantom 30-min expectation). Original ⚠ note kept below for
+> the audit trail.
 >
 > **⚠ Discovered this run — top-priority next slice (`profile-presence-window-reconcile`):** main's
 > Android local gate is red on `:feature:profile` `ProfileHeaderBuilderTest` (2 tests, deterministic,
