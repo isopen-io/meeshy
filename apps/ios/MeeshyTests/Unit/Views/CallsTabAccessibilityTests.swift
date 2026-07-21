@@ -17,12 +17,39 @@ final class CallsTabAccessibilityTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// Loud by construction (`XCTFail`, never a silent skip) AND bounded: an
+    /// unbounded `source[range.lowerBound...]` window (the previous shape of
+    /// this helper) can silently match content belonging to a LATER,
+    /// unrelated declaration and let an assertion pass for the wrong reason.
+    /// `endMarker` is therefore mandatory except where the start marker is
+    /// provably the last declaration in the file (`endMarker: nil`), which is
+    /// the sole legitimate case for an open-ended window.
+    private func vicinity(
+        in source: String,
+        from startMarker: String,
+        to endMarker: String?,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> String? {
+        guard let start = source.range(of: startMarker) else {
+            XCTFail("CallsTab.swift: start marker not found — \"\(startMarker)\"", file: file, line: line)
+            return nil
+        }
+        guard let endMarker else {
+            return String(source[start.lowerBound...])
+        }
+        guard let end = source.range(of: endMarker, range: start.upperBound..<source.endIndex) else {
+            XCTFail("CallsTab.swift: end marker not found — \"\(endMarker)\"", file: file, line: line)
+            return nil
+        }
+        return String(source[start.lowerBound..<end.lowerBound])
+    }
+
     func test_callRowDialButton_hasAccessibilityHint() throws {
         let source = try callsTabSource()
-        guard let range = source.range(of: "private struct CallRowDialButton") else {
-            XCTFail("CallsTab.swift must define CallRowDialButton"); return
-        }
-        let vicinity = String(source[range.lowerBound...])
+        // `CallRowDialButton` is the last declaration in the file — no next
+        // sibling to bound against, so an open-ended window is legitimate here.
+        guard let vicinity = vicinity(in: source, from: "private struct CallRowDialButton", to: nil) else { return }
         XCTAssertTrue(
             vicinity.contains("calls.redial") && vicinity.contains(".accessibilityLabel("),
             "CallRowDialButton must carry an accessibility label."
@@ -37,10 +64,7 @@ final class CallsTabAccessibilityTests: XCTestCase {
 
     func test_filterChip_exposesSelectedStateToVoiceOver() throws {
         let source = try callsTabSource()
-        guard let range = source.range(of: "private func chip(") else {
-            XCTFail("CallsTab.swift must define the filter chip() builder"); return
-        }
-        let vicinity = String(source[range.lowerBound...])
+        guard let vicinity = vicinity(in: source, from: "private func chip(", to: "// MARK: - Content") else { return }
         XCTAssertTrue(
             vicinity.contains(".accessibilityAddTraits(") && vicinity.contains("isSelected"),
             "The Tous/Manques filter chips only convey selection via color — VoiceOver " +
@@ -56,10 +80,9 @@ final class CallsTabAccessibilityTests: XCTestCase {
     /// long it lasted.
     func test_callJournalRow_accessibilityLabelIncludesTypeTimeAndDuration() throws {
         let source = try callsTabSource()
-        guard let range = source.range(of: "private struct CallJournalRow") else {
-            XCTFail("CallsTab.swift must define CallJournalRow"); return
-        }
-        let vicinity = String(source[range.lowerBound...])
+        guard let vicinity = vicinity(
+            in: source, from: "private struct CallJournalRow", to: "// MARK: - Dial Button (audio / video menu)"
+        ) else { return }
         XCTAssertTrue(
             vicinity.contains("rowAccessibilityLabel(name:"),
             "CallJournalRow must compose its VoiceOver label via rowAccessibilityLabel(name:)."

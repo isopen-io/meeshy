@@ -29,23 +29,33 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 
-    private func body(from startMarker: String, to endMarker: String) throws -> String {
-        XCTAssertFalse(Self.source.isEmpty, "Could not read P2PWebRTCClient.swift")
-        guard let start = Self.source.range(of: startMarker) else {
-            throw XCTSkip("\(startMarker) not found — file structure changed")
+    /// Loud by construction: a missing start OR end marker fails the test via
+    /// `XCTFail` (never a silent `XCTSkip`, which reads as green in CI) and the
+    /// end marker is mandatory — no falling back to `source.endIndex` on a miss,
+    /// which would silently widen the search window into unrelated code and let
+    /// an assertion pass for the wrong reason. Mirrors the loud pattern already
+    /// used in `CallManagerTests`.
+    private func body(from startMarker: String, to endMarker: String, file: StaticString = #filePath, line: UInt = #line) -> String? {
+        guard !Self.source.isEmpty else {
+            XCTFail("Could not read P2PWebRTCClient.swift", file: file, line: line)
+            return nil
         }
-        let end = Self.source.range(
-            of: endMarker,
-            range: start.upperBound..<Self.source.endIndex
-        )?.lowerBound ?? Self.source.endIndex
-        return String(Self.source[start.lowerBound..<end])
+        guard let start = Self.source.range(of: startMarker) else {
+            XCTFail("Start marker not found — file structure changed: \"\(startMarker)\"", file: file, line: line)
+            return nil
+        }
+        guard let end = Self.source.range(of: endMarker, range: start.upperBound..<Self.source.endIndex) else {
+            XCTFail("End marker not found — file structure changed: \"\(endMarker)\"", file: file, line: line)
+            return nil
+        }
+        return String(Self.source[start.lowerBound..<end.lowerBound])
     }
 
-    func test_buildLocalVideoTrackAndStartCapture_reHopsGenerationCheckToMainActor() throws {
-        let fn = try body(
+    func test_buildLocalVideoTrackAndStartCapture_reHopsGenerationCheckToMainActor() {
+        guard let fn = body(
             from: "private func buildLocalVideoTrackAndStartCapture()",
             to: "private func applyAudioCodecPreferences"
-        )
+        ) else { return }
         XCTAssertTrue(
             fn.contains("try await capturer.startCapture(with: camera, format: format, fps: fps)"),
             "startCapture call site moved — update the marker"
@@ -58,27 +68,27 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
         )
     }
 
-    func test_restartCapturerIfStopped_reHopsGenerationCheckToMainActor() throws {
-        let fn = try body(
+    func test_restartCapturerIfStopped_reHopsGenerationCheckToMainActor() {
+        guard let fn = body(
             from: "private func restartCapturerIfStopped()",
             to: "func switchCamera()"
-        )
+        ) else { return }
         XCTAssertTrue(
             fn.contains("await MainActor.run { generation != sessionGeneration }"),
             "restartCapturerIfStopped must compare sessionGeneration on MainActor after the await."
         )
     }
 
-    func test_switchCamera_reHopsGenerationCheckToMainActor() throws {
-        let fn = try body(from: "func switchCamera() async throws {", to: "func availableCameras()")
+    func test_switchCamera_reHopsGenerationCheckToMainActor() {
+        guard let fn = body(from: "func switchCamera() async throws {", to: "func availableCameras()") else { return }
         XCTAssertTrue(
             fn.contains("await MainActor.run { generation != sessionGeneration }"),
             "switchCamera must compare sessionGeneration on MainActor after the await."
         )
     }
 
-    func test_switchToCamera_reHopsGenerationCheckToMainActor() throws {
-        let fn = try body(from: "func switchToCamera(uniqueID: String)", to: "func getStats()")
+    func test_switchToCamera_reHopsGenerationCheckToMainActor() {
+        guard let fn = body(from: "func switchToCamera(uniqueID: String)", to: "func getStats()") else { return }
         XCTAssertTrue(
             fn.contains("await MainActor.run { generation != sessionGeneration }"),
             "switchToCamera must compare sessionGeneration on MainActor after the await."
@@ -90,24 +100,24 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
     // not necessarily serialized with disconnect()'s synchronous property mutations.
     // These three unstructured tasks must pin themselves to MainActor explicitly.
 
-    func test_toggleVideo_pinsUnstructuredTaskToMainActor() throws {
-        let fn = try body(from: "func toggleVideo(_ enabled: Bool)", to: "var hasLocalVideoTrack")
+    func test_toggleVideo_pinsUnstructuredTaskToMainActor() {
+        guard let fn = body(from: "func toggleVideo(_ enabled: Bool)", to: "var hasLocalVideoTrack") else { return }
         XCTAssertTrue(
             fn.contains("toggleVideoTask = Task { @MainActor [weak self] in"),
             "toggleVideo's capturer-restart task must run on @MainActor, serialized with disconnect()."
         )
     }
 
-    func test_startDataChannelPing_pinsUnstructuredTaskToMainActor() throws {
-        let fn = try body(from: "private func startDataChannelPing()", to: "private func stopDataChannelPing()")
+    func test_startDataChannelPing_pinsUnstructuredTaskToMainActor() {
+        guard let fn = body(from: "private func startDataChannelPing()", to: "private func stopDataChannelPing()") else { return }
         XCTAssertTrue(
             fn.contains("dataChannelPingTask = Task { @MainActor [weak self] in"),
             "startDataChannelPing's task must run on @MainActor, serialized with disconnect()."
         )
     }
 
-    func test_disconnectAfterFlushingPendingSend_pinsUnstructuredTaskToMainActor() throws {
-        let fn = try body(from: "func disconnectAfterFlushingPendingSend()", to: "deinit {")
+    func test_disconnectAfterFlushingPendingSend_pinsUnstructuredTaskToMainActor() {
+        guard let fn = body(from: "func disconnectAfterFlushingPendingSend()", to: "deinit {") else { return }
         XCTAssertTrue(
             fn.contains("Task { @MainActor [weak self] in"),
             "disconnectAfterFlushingPendingSend's flush-and-disconnect task must run on @MainActor, " +

@@ -105,7 +105,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Private
 
-    private let keychain: any KeychainStoring
+    /// Var (not `let`) so `@testable` test targets can substitute an
+    /// in-memory `KeychainStoring` on `AuthManager.shared` — the real
+    /// `KeychainManager` is not entitled inside the SPM xctest host, which
+    /// otherwise silently no-ops every save/load and makes any test that
+    /// drives a full `applySession` → `refreshSession` round trip
+    /// unrunnable. Mirrors the existing `authService` injection seam below.
+    internal var keychain: any KeychainStoring
     private let userDefaults: UserDefaults
     private let groupDefaults: UserDefaults?
 
