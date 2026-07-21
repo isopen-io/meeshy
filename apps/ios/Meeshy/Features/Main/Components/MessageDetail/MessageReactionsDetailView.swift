@@ -98,6 +98,13 @@ struct MessageReactionsDetailView: View {
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
+        // The capsule otherwise reads to VoiceOver as "<label> <number>", where
+        // the bare count carries no meaning. Collapse it into one element whose
+        // value names the count ("5 réaction(s)") so the filter is announced as
+        // "<label>, 5 réaction(s), sélectionné" instead of a context-less digit.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(String(localized: "message-detail.reactions.count-a11y", defaultValue: "\(count) réaction(s)", bundle: .main))
         // Selected filter is otherwise signalled by color alone — expose it to
         // VoiceOver via the trait so the active emoji filter is not lost to
         // non-sighted users (HIG: never rely on color to convey state).
