@@ -30,9 +30,11 @@ public struct SettingsAction: Codable, Identifiable, Sendable {
 /// preferences, language switches, ...) that survive offline moments and
 /// app restarts.
 ///
-/// Last-write-wins per `(endpoint, httpMethod)`: a fresh action replaces an
-/// earlier pending one for the same endpoint so that rapid edits don't pile
-/// up — the most recent submission carries the canonical state.
+/// Last-write-wins per `(endpoint, httpMethod)`, merged field-by-field: a
+/// fresh action for the same endpoint is combined with the pending one so
+/// rapid edits don't pile up, the newest value wins per JSON key, and a key
+/// the fresh action omits (untouched field) still survives from the pending
+/// action instead of being silently dropped.
 ///
 /// Pairs with the optimistic UI in `ProfileView.saveProfile` and friends:
 /// the local model already reflects the edit; the queue just makes sure
@@ -86,17 +88,53 @@ public actor SettingsActionQueue {
     // MARK: - Enqueue
 
     public func enqueue(_ action: SettingsAction) {
-        let replaced = items.filter { $0.endpoint == action.endpoint && $0.httpMethod == action.httpMethod }
+        let replaced = items.first { $0.endpoint == action.endpoint && $0.httpMethod == action.httpMethod }
         items.removeAll { $0.endpoint == action.endpoint && $0.httpMethod == action.httpMethod }
-        for stale in replaced { failureCounts[stale.id] = nil }
+        if let replaced { failureCounts[replaced.id] = nil }
+
+        // Field-level merge, not wholesale replace: callers (e.g.
+        // `ProfileView.saveProfile`) diff each request against the pre-edit
+        // snapshot and OMIT untouched fields from the JSON body. If a still-
+        // pending action for this same endpoint already carries a field the
+        // fresh action never re-touches (a bio cleared by save #1, then only
+        // displayName edited in save #2 while still offline), a wholesale
+        // replace would silently discard save #1's field — the server never
+        // learns about it. Merging at the JSON-key level lets the newest
+        // submission win per-field while every other still-pending key
+        // survives, honouring the "most recent submission carries the
+        // canonical state" contract this type documents above.
+        let mergedAction: SettingsAction
+        if let replaced {
+            let payload = Self.mergeJSONPayloads(previous: replaced.payload, incoming: action.payload)
+            mergedAction = SettingsAction(endpoint: action.endpoint, httpMethod: action.httpMethod, payload: payload)
+        } else {
+            mergedAction = action
+        }
+
         if items.count >= Self.maxQueueSize {
             let evicted = items.removeFirst()
             failureCounts[evicted.id] = nil
         }
-        items.append(action)
+        items.append(mergedAction)
         saveToDisk()
         pendingCountChanged.send(items.count)
-        logger.info("Enqueued settings action \(action.endpoint), queue size \(self.items.count)")
+        logger.info("Enqueued settings action \(mergedAction.endpoint), queue size \(self.items.count)")
+    }
+
+    /// Shallow-merges two JSON object payloads key-by-key, `incoming` winning
+    /// on conflicts and every key `incoming` doesn't mention falling back to
+    /// `previous`. Falls back to `incoming` verbatim if either side fails to
+    /// parse as a JSON object — every real settings payload is an object body
+    /// (`UpdateProfileRequest` and siblings), so this only guards against a
+    /// malformed/empty edge case rather than a real shape mismatch.
+    private static func mergeJSONPayloads(previous: Data, incoming: Data) -> Data {
+        guard let previousObject = try? JSONSerialization.jsonObject(with: previous) as? [String: Any],
+              let incomingObject = try? JSONSerialization.jsonObject(with: incoming) as? [String: Any] else {
+            return incoming
+        }
+        let merged = previousObject.merging(incomingObject) { _, new in new }
+        guard let data = try? JSONSerialization.data(withJSONObject: merged) else { return incoming }
+        return data
     }
 
     public var count: Int { items.count }

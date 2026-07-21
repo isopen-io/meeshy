@@ -17,8 +17,8 @@ final class SettingsActionQueueTests: XCTestCase {
         await queue.setFlushHandler { _ in true }
     }
 
-    private func makeAction(endpoint: String = "/users/me") -> SettingsAction {
-        SettingsAction(endpoint: endpoint, httpMethod: "PATCH", payload: Data("{}".utf8))
+    private func makeAction(endpoint: String = "/users/me", payload: String = "{}") -> SettingsAction {
+        SettingsAction(endpoint: endpoint, httpMethod: "PATCH", payload: Data(payload.utf8))
     }
 
     // MARK: - Happy path
@@ -113,5 +113,45 @@ final class SettingsActionQueueTests: XCTestCase {
 
         XCTAssertEqual(queue.count, 1,
             "The replacement item must not inherit the old item's failure count")
+    }
+
+    // MARK: - enqueue() field-level merge (P1 fix)
+    //
+    // Callers (e.g. `ProfileView.saveProfile`) diff each request against the
+    // pre-edit snapshot and OMIT untouched fields from the JSON body. If a
+    // wholesale replace were used instead of a field-level merge, a second
+    // still-offline save for the same endpoint that never re-touches a field
+    // set by an earlier, still-pending save would silently discard it —
+    // it would never reach the server, with no error surfaced anywhere.
+
+    func test_enqueue_replacingSameEndpoint_preservesFieldsOmittedByTheNewerAction() async {
+        await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"bio":""}"#))
+
+        // A second, still-offline save only touches displayName — the
+        // payload never mentions `bio` at all (the omit-unchanged-fields
+        // optimization).
+        await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"displayName":"Bob"}"#))
+
+        XCTAssertEqual(queue.count, 1, "The two saves for the same endpoint still collapse into one pending action")
+
+        guard let merged = queue.pendingItems.first,
+              let dict = try? JSONSerialization.jsonObject(with: merged.payload) as? [String: Any] else {
+            return XCTFail("Expected the merged payload to decode as a JSON object")
+        }
+        XCTAssertEqual(dict["bio"] as? String, "",
+            "The bio clear from the first save must survive a second save that never re-touches bio")
+        XCTAssertEqual(dict["displayName"] as? String, "Bob")
+    }
+
+    func test_enqueue_replacingSameEndpoint_newerActionWinsOnConflictingField() async {
+        await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"displayName":"Alice"}"#))
+        await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"displayName":"Bob"}"#))
+
+        guard let merged = queue.pendingItems.first,
+              let dict = try? JSONSerialization.jsonObject(with: merged.payload) as? [String: Any] else {
+            return XCTFail("Expected the merged payload to decode as a JSON object")
+        }
+        XCTAssertEqual(dict["displayName"] as? String, "Bob",
+            "The most recent submission must win when both actions touch the same field")
     }
 }

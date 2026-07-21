@@ -120,12 +120,13 @@ final class EditProfileViewModel: ObservableObject {
         // "intentionally cleared" (empty string — sent verbatim). The gateway's
         // `bio` schema accepts an empty string; collapsing a genuine clear to
         // nil via `isEmpty ? nil : trimmedBio` silently dropped it from the
-        // request AND from the optimistic apply below.
-        let originalBio = authManager.currentUser?.bio ?? ""
+        // request AND from the optimistic apply below. Shares its comparison
+        // rule with `ProfileView.saveProfile` via `ProfileView.changedOrNil`
+        // rather than reimplementing the same semantics twice.
         let payload = UpdateProfilePayload(
             clientMutationId: cmid,
             displayName: trimmedName.isEmpty ? nil : trimmedName,
-            bio: trimmedBio == originalBio ? nil : trimmedBio,
+            bio: ProfileView.changedOrNil(trimmedBio, original: authManager.currentUser?.bio),
             avatarUrl: uploadedAvatarUrl
         )
 
