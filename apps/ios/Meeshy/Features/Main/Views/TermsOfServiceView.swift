@@ -9,9 +9,27 @@ struct TermsOfServiceView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
 
-    @State private var selectedLanguage = "fr"
+    @State private var selectedLanguage: String
 
     private let accentColor = MeeshyColors.brandPrimaryHex
+
+    private static let supportedLanguages: Set<String> = ["fr", "en"]
+
+    @MainActor
+    init() {
+        let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let deviceLocale = Locale.current.language.languageCode?.identifier
+        _selectedLanguage = State(initialValue: Self.resolveInitialLanguage(preferred: preferred, deviceLocale: deviceLocale))
+    }
+
+    static func resolveInitialLanguage(preferred: [String], deviceLocale: String?) -> String {
+        let candidates = preferred + [deviceLocale].compactMap { $0 }
+        for candidate in candidates {
+            let code = String(candidate.prefix(2)).lowercased()
+            if supportedLanguages.contains(code) { return code }
+        }
+        return "fr"
+    }
 
     private let sections: [String: [(title: String, content: String)]] = [
         "fr": [
