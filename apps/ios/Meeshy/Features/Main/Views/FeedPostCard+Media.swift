@@ -349,7 +349,7 @@ extension FeedPostCard {
 
             // Document info
             VStack(alignment: .leading, spacing: 4) {
-                Text(media.fileName ?? "Document")
+                Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
                     .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
@@ -364,7 +364,7 @@ extension FeedPostCard {
                     if let pages = media.pageCount {
                         Text("\u{2022}")
                             .foregroundColor(theme.textMuted)
-                        Text("\(pages) pages")
+                        Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))")
                             .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
@@ -408,7 +408,7 @@ extension FeedPostCard {
 
             // Location info
             VStack(alignment: .leading, spacing: 4) {
-                Text(media.locationName ?? "Location")
+                Text(media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main))
                     .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(2)
