@@ -394,9 +394,28 @@ final class AttachmentDownloader: ObservableObject {
                     await store.store(data, for: resolvedKey)
                     return data
                 }
-                await MainActor.run { [weak self] in self?.activeByteTask = byteTask }
-                await store.registerInFlightDownload(byteTask, for: resolvedKey)
-                let data = try await byteTask.value
+                // registerInFlightDownload returns false when another call
+                // (a second bubble / language resolving to the SAME key)
+                // registered its own download for this exact key between the
+                // piggyback check above and this attempt — a race the initial
+                // `inFlightDownload(for:)` read can't close by itself. Honor
+                // the Bool: only claim ownership (and the cancel-button
+                // wiring via activeByteTask) when we actually won the race;
+                // otherwise cancel our now-redundant task and piggyback on
+                // the winner instead of running two full downloads at once.
+                let registered = await store.registerInFlightDownload(byteTask, for: resolvedKey)
+                let data: Data
+                if registered {
+                    await MainActor.run { [weak self] in self?.activeByteTask = byteTask }
+                    data = try await byteTask.value
+                } else {
+                    byteTask.cancel()
+                    if let existing = await store.inFlightDownload(for: resolvedKey) {
+                        data = try await existing.value
+                    } else {
+                        data = try await byteTask.value
+                    }
+                }
 
                 if case .image = cacheStore, let image = UIImage(data: data) {
                     DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)

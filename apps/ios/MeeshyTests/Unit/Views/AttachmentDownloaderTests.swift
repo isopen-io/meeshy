@@ -118,6 +118,45 @@ final class AttachmentDownloaderTests: XCTestCase {
         XCTAssertEqual(AttachmentDownloader.fmt(870_400), formatMediaFileSize(870_400))
         XCTAssertEqual(AttachmentDownloader.fmt(1_048_576), formatMediaFileSize(1_048_576))
     }
+
+    // MARK: - registerInFlightDownload race (source guard)
+
+    /// `startDownloadFlow` used to discard `registerInFlightDownload`'s Bool
+    /// return and unconditionally await its OWN byte task — so when a second
+    /// bubble (or a second language of the same audio) resolved to the exact
+    /// same cache key between the initial piggyback check and this
+    /// registration attempt, BOTH calls streamed the full file concurrently.
+    /// `startDownloadFlow` runs inside a `Task.detached` closure doing real
+    /// `URLSession` I/O, which this repo's own test suite for this class
+    /// deliberately never exercises (no wall-clock/network flakiness) — a
+    /// source guard is the established pattern here for wiring that can't be
+    /// driven through the public API without spinning up real networking
+    /// (cf. `CameraModelSwitchDuringRecordingTests`).
+    private func conversationMediaViewsSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // apps/ios/
+            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationMediaViews.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_startDownloadFlow_honorsRegisterInFlightDownloadReturnValue() throws {
+        let source = try conversationMediaViewsSource()
+        XCTAssertFalse(
+            source.contains("await store.registerInFlightDownload(byteTask, for: resolvedKey)\n                let data = try await byteTask.value"),
+            "startDownloadFlow must not discard registerInFlightDownload's Bool and unconditionally await its own task"
+        )
+        XCTAssertTrue(
+            source.contains("let registered = await store.registerInFlightDownload(byteTask, for: resolvedKey)"),
+            "startDownloadFlow must capture registerInFlightDownload's return value"
+        )
+        XCTAssertTrue(
+            source.contains("byteTask.cancel()"),
+            "Losing the registration race must cancel the now-redundant task instead of letting it run to completion"
+        )
+    }
 }
 
 /// Feed/Posts auto-download decision — `autoDownload: true` (Feed/Posts surfaces)
