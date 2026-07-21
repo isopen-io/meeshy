@@ -647,6 +647,19 @@ public struct AudioPlayerView: View {
     /// can observe the seeding decision from MeeshyUITests without exposing
     /// it publicly — same pattern as `usesExternalPlayer` above.
     @State internal var selectedAudioLanguage: String
+    /// B9 fix — `selectedAudioLanguage` now doubles as the Prisme-seeded
+    /// transcription-STRIP default AND the user's explicit playback-language
+    /// pick, but only the latter may steer which audio track plays. Starts
+    /// `false` unconditionally (even when `initialTranscriptionLanguage` seeds
+    /// a non-"orig" value) and flips to `true` exclusively inside
+    /// `switchToLanguage` — the single choke point reached by an explicit
+    /// language-pill tap or an `externalLanguage` binding change, never by the
+    /// automatic Prisme seed. Consulted by `resolvePlaybackUrl` so
+    /// `currentAudioUrl` keeps resolving to the original track until the user
+    /// actually explores another language, per `initialTranscriptionLanguage`'s
+    /// own contract above. Internal for the same testability reason as
+    /// `selectedAudioLanguage`.
+    @State internal var hasUserSelectedAudioLanguage = false
     @State private var isRetranscribing = false
     /// `true` between the moment the user taps "Transcrire" / "Re-transcrire"
     /// and the moment the server-pushed transcription lands in `transcription`.
@@ -902,6 +915,12 @@ public struct AudioPlayerView: View {
         // which goes through handlePlayTap() — gated by availability.
         player.stop()
 
+        // B9 fix — this is the only place `selectedAudioLanguage` changes in
+        // response to genuine user intent (pill tap / externalLanguage
+        // binding), as opposed to the automatic Prisme seed applied once in
+        // `init`. Recording that here is what lets `resolvePlaybackUrl` tell
+        // the two apart.
+        hasUserSelectedAudioLanguage = true
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             selectedAudioLanguage = code
         }
@@ -1249,11 +1268,40 @@ public struct AudioPlayerView: View {
     }
 
     private var currentAudioUrl: String {
-        if selectedAudioLanguage != "orig",
-           let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedAudioLanguage.lowercased() }) {
-            return translated.url
-        }
-        return attachment.fileUrl
+        AudioPlayerView.resolvePlaybackUrl(
+            selectedLanguage: selectedAudioLanguage,
+            isUserSelected: hasUserSelectedAudioLanguage,
+            translatedAudios: translatedAudios,
+            originalUrl: attachment.fileUrl
+        )
+    }
+
+    /// Pure resolution of the actual URL `handlePlayTap` hands the playback
+    /// engine. B9 fix — `selectedLanguage` alone is NOT sufficient: it is
+    /// also the Prisme-auto-seeded transcription-strip default (see
+    /// `initialTranscriptionLanguage`), which must never affect which audio
+    /// track plays. Only `isUserSelected == true` (set exclusively by
+    /// `switchToLanguage`, i.e. an explicit pill tap or `externalLanguage`
+    /// change) may steer playback to a translated track; otherwise this
+    /// always resolves to `originalUrl`, matching
+    /// `initialTranscriptionLanguage`'s documented contract and the Prisme
+    /// rule that playback defaults to the original. Extracted as a
+    /// `nonisolated static` helper — same pattern as
+    /// `resolveInitialTranscriptionLanguage` / `shouldDelegateToParent`
+    /// elsewhere in this file — so it is unit-testable without a SwiftUI
+    /// render lifecycle.
+    nonisolated internal static func resolvePlaybackUrl(
+        selectedLanguage: String,
+        isUserSelected: Bool,
+        translatedAudios: [MessageTranslatedAudio],
+        originalUrl: String
+    ) -> String {
+        guard isUserSelected, selectedLanguage != "orig",
+              let translated = translatedAudios.first(where: {
+                  $0.targetLanguage.lowercased() == selectedLanguage.lowercased()
+              })
+        else { return originalUrl }
+        return translated.url
     }
 
     // MARK: - Play Button

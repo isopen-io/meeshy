@@ -413,7 +413,23 @@ final class AttachmentDownloader: ObservableObject {
                     if let existing = await store.inFlightDownload(for: resolvedKey) {
                         data = try await existing.value
                     } else {
-                        data = try await byteTask.value
+                        // The registry entry can self-clear (the winner
+                        // persists its payload, then its wrapper Task nils
+                        // the slot) between our failed `register` above and
+                        // this very read — both are actor hops with a real
+                        // suspension point in between. Falling back to OUR
+                        // own just-cancelled `byteTask` here would throw
+                        // `CancellationError` (its byte loop's
+                        // `Task.checkCancellation()`), which the outer
+                        // catch's cancellation guard below — written for the
+                        // explicit user-tap-cancel path, where `cancel()`
+                        // already resets state first — silently swallows,
+                        // stranding `isDownloading == true` forever with no
+                        // retry path. Read through the store's own
+                        // idempotent fetch instead: a cache hit if the
+                        // winner already persisted (the common case), or a
+                        // fresh coalesced fetch otherwise.
+                        data = try await store.data(for: resolvedKey)
                     }
                 }
 
