@@ -886,6 +886,33 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.error)
     }
 
+    /// A `.failed` message never reached the server — a REST delete would
+    /// target the bogus optimistic local id, get rejected, and the existing
+    /// rollback (`markUndeleted`) would resurrect the very message the user
+    /// just tried to remove. `.everyone` must route straight to the
+    /// local-only failed-message purge instead of ever calling the network.
+    func test_deleteMessage_failedMessageNeverReachedServer_purgesLocallyWithoutRestCall() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-failed-del", conversationId: testConversationId,
+            senderId: testUserId, content: "never sent", state: .failed
+        )
+        try await persistence.insertOptimistic(record)
+        _ = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == "msg-failed-del" }
+
+        await sut.deleteMessage(messageId: "msg-failed-del", mode: .everyone)
+
+        XCTAssertEqual(mockMessageService.deleteCallCount, 0,
+            "a failed message never reached the server — deleting it must never call REST")
+        let deleted = await MessageStoreObservationHelper.awaitRecord(
+            localId: "msg-failed-del", from: pool
+        ) { $0.deletedAt != nil }
+        XCTAssertNotNil(deleted?.deletedAt, "the failed message must still be purged locally")
+    }
+
     /// S11 — a "Delete for me" hide keyed on a temp id must follow the
     /// temp->server reconciliation, so the hidden message stays hidden instead
     /// of reappearing once its display id flips to the server id.

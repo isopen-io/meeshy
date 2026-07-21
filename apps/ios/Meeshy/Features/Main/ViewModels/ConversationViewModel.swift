@@ -2976,6 +2976,16 @@ class ConversationViewModel: ObservableObject {
             // recomputes without the hidden row.
             _messagesByDate = nil
         case .everyone:
+            // A `.failed` message never reached the server — it has no real
+            // serverId (`serverId(for:)` falls back to the local optimistic
+            // id). A REST delete below would target that bogus id, get
+            // rejected, and the catch's `markUndeleted` rollback would
+            // resurrect the very message the user just tried to remove.
+            // Route straight to the local-only purge instead.
+            if let idx = messageIndex(for: messageId), messages[idx].deliveryStatus == .failed {
+                removeFailedMessage(messageId: messageId)
+                return
+            }
             // Optimistic: mark as deleted locally + blank content
             try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
             // Offline: route the delete through the durable outbox (flushed on
