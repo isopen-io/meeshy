@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **JWT-expiry / refresh-decision core** landed (slice `auth-jwt-expiry-core`,
+> feature-parity §A → advances "Persistent session restore with proactive token refresh" `[ ]` → `[~]`
+> and seeds "Transparent token refresh on 401 with one retry"). This is the pure primitive Android was
+> missing entirely — `AuthInterceptor` currently attaches the JWT blindly, with no notion of expiry.
+> Parity source: iOS `AuthManager.isTokenExpired(_:now:)` + the guard inside `refreshSession(force:)`
+> (`packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift`). Two pure `:core:model/auth/` objects.
+> **`JwtExpiry`** — `expiresAtEpochSeconds(token)` splits the JWT, base64url-decodes the payload segment
+> (`java.util.Base64` URL decoder), parses it with kotlinx-serialization and reads `exp` **as a JSON
+> number only** (`isString` rejected, exactly as iOS's `as? TimeInterval` cast rejects a stringified
+> claim); **every** malformed input (null/blank, segment-count ≠ 3, un-decodable base64, non-JSON,
+> JSON-but-not-an-object, absent `exp`, stringified `exp`) yields `null` → treated as expired, the safe
+> default that forces a refresh (iOS logs each branch and returns `true`). `isExpired(token, now, margin
+> = 30)` applies iOS's strict `exp - margin < now` boundary (the threshold instant is still valid) and
+> surfaces the margin as a **parameter** (iOS hard-codes 30s inline). **`TokenRefreshPolicy.shouldRefresh
+> (force, token, now)`** carries `refreshSession(force:)`'s guard — `force || isExpired` — the single
+> decision behind skipping vs performing the network round-trip. **+24 behavioural tests**
+> (`JwtExpiryTest`): tokens are **really** base64url-encoded from a known payload so the decoder is
+> exercised for real, not mocked; expectations are hand-written literals. **Mutation check (RED proof):**
+> dropping the `isString` guard fails **exactly** `expiresAt_isNullWhenExpClaimIsAJsonStringNotANumber`;
+> flipping the boundary `<`→`<=` fails **exactly** `isExpired_isFalseExactlyAtTheMarginThreshold` +
+> `isExpired_withZeroMargin_isFalseRightUpToRawExpiry` (3 failures, no collateral) — behavioural, not
+> tautological; RED was also proven first by the suite failing to compile against the absent production
+> types. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's
+> gradle-distribution download is 403-blocked in this container, so system Gradle is the gate):**
+> `:core:model:testDebugUnitTest` green (whole module, new suite 24/24) + `:app:assembleDebug` →
+> BUILD SUCCESSFUL (every module compiled). Reviewer **PASS** (diff `apps/android` only — 1 new source
+> file + 1 test + tracking docs, zero production logic in web/ios/gateway/shared; **SDK purity** — two
+> pure objects in `:core:model`, zero framework/singleton coupling, the interceptor/DataStore wiring
+> stays app-side/pending; **SSOT** — a brand-new primitive, nothing re-implemented; **UX** — n/a, pure
+> logic; no coverage floor lowered, no test weakened).
+>
+> **Next slice:** the app-side wiring of this core — an OkHttp path that consults `TokenRefreshPolicy`
+> before firing a request and rehydrates the session on app-start (persistent restore), plus the
+> transparent-401 `Authenticator` retry (both §A `[~]`/`[ ]`); OR the app-side `ForgotPasswordView`
+> composable + `RecoveryMode{EMAIL,PHONE}` segmented picker wiring the two now-complete recovery cores;
+> OR the app-side `LoginView` saved-account-picker / environment-selector composables (cores shipped);
+> OR the tracked Kover 90% coverage-gate infra. **Known standing debt (not this slice):** the
+> `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest` / `InterfaceLanguageStoreTest` /
+> `PrivacyPreferencesStoreTest`) surfaces intermittently in the full `testDebugUnitTest` run but passes
+> in isolation — a "harden the DataStore test harness against parallel-load timeout" follow-up, tracked
+> and still unclaimed.
+
 > On 2026-07-21 the **email-link recovery flow core** landed (slice `auth-email-recovery-core`,
 > feature-parity §A → advances "Password recovery via email link" `[ ]` → `[~]`). This is the pure
 > two-state machine + input gate behind the "recover by email" flow, the sibling of the phone-recovery
