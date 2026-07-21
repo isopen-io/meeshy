@@ -393,7 +393,7 @@ struct InviteFriendsSheet: View {
             optionSection(title: String(localized: "invite.section.limits", defaultValue: "LIMITES"), icon: "gauge.with.dots.needle.bottom.50percent") {
                 VStack(spacing: 0) {
                     optionRow(icon: "clock.badge.xmark", iconColor: MeeshyColors.error) {
-                        Picker("Expiration", selection: $expirationOption) {
+                        Picker(String(localized: "invite.expiration.title", defaultValue: "Expiration", bundle: .main), selection: $expirationOption) {
                             ForEach(ExpirationOption.allCases, id: \.self) { opt in
                                 Text(opt.label).tag(opt)
                             }
@@ -722,14 +722,14 @@ private enum ExpirationOption: String, CaseIterable {
 private extension MeeshyConversation.ConversationType {
     var displayName: String {
         switch self {
-        case .direct: "Direct"
-        case .group: "Groupe"
-        case .public: "Public"
-        case .global: "Globale"
-        case .community: "Communaute"
-        case .channel: "Canal"
-        case .bot: "Bot"
-        case .broadcast: "Communication"
+        case .direct: String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
+        case .group: String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
+        case .public: String(localized: "conversation.type.public", defaultValue: "Publique", bundle: .main)
+        case .global: String(localized: "conversation.type.global", defaultValue: "Globale", bundle: .main)
+        case .community: String(localized: "conversation.type.community", defaultValue: "Communaut\u{00e9}", bundle: .main)
+        case .channel: String(localized: "conversation.type.channel", defaultValue: "Canal", bundle: .main)
+        case .bot: String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
+        case .broadcast: String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
         }
     }
 }
