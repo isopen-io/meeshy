@@ -674,6 +674,41 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(mock.requestCount, 1)
     }
 
+    // MARK: - logoutThrowing(token:) — D5.hygiene
+
+    /// The explicitly-passed token must be sent as the Authorization header,
+    /// decoupled from `mock.authToken` (which stays `nil` here, standing in
+    /// for `AuthManager.logout()` having already wiped `APIClient.shared.authToken`
+    /// by the time the retry loop actually sends its request).
+    func testLogoutThrowingWithToken_sendsExplicitAuthorizationHeader_notAmbientAPIClientToken() async throws {
+        let response = APIResponse(success: true, data: ["loggedOut": true], error: nil)
+        mock.stub("/auth/logout", result: response)
+        mock.authToken = nil
+
+        try await service.logoutThrowing(token: "captured-token-abc")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/logout")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(mock.lastRequest?.headers?["Authorization"], "Bearer captured-token-abc")
+    }
+
+    func testLogoutThrowingWithToken_propagatesServerError() async {
+        mock.errorToThrow = MeeshyError.network(.noConnection)
+
+        do {
+            try await service.logoutThrowing(token: "tok")
+            XCTFail("Expected error to be thrown")
+        } catch let error as MeeshyError {
+            if case .network(.noConnection) = error {
+                // expected
+            } else {
+                XCTFail("Expected MeeshyError.network(.noConnection), got \(error)")
+            }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(error)")
+        }
+    }
+
     // MARK: - completeLoginWith2FA
 
     func testCompleteLoginWith2FASuccess() async throws {
