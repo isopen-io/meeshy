@@ -275,7 +275,45 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 > only when the feature is implemented **and** verified.
 
 ## A. Auth & Onboarding
-- [ ] Username/password login with saved-account picker (multi-account, one-tap switch)
+- [~] Username/password login with saved-account picker (multi-account, one-tap switch) —
+      **saved-account list core shipped** (slice `auth-saved-account-picker-core`, 2026-07-21).
+      Pure `:core:model` `SavedAccount` + `SavedAccounts` (faithful port of iOS `AuthManager`'s
+      saved-account logic, `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift`, +
+      `SavedAccount`, `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift`, + `LoginView`'s
+      picker, `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`). `SavedAccount` (id/username/
+      displayName?/avatarUrl?/lastActiveAtMillis) exposes `shortName` (iOS `displayName ?? username`,
+      **hardened** so a blank display name also falls back to the username — a row never renders empty).
+      `SavedAccounts` is a pure SSOT of immutable list→list transforms iOS scatters as mutating methods
+      on the stateful singleton: `sorted` (the D4 sort — `lastActiveAt` desc, `id` asc tie-break, pinned
+      by iOS `SavedAccountsSortStabilityTests` so identical-timestamp accounts keep a deterministic order
+      across cold starts); `upsert` (replace in place by id else prepend at front, iOS `upsertSavedAccount`);
+      `remove` (drop by id, idempotent for unknown id, iOS `removeFromSavedAccounts`); `find` (one-tap
+      select → username prefill); `showPicker(accounts, showNormalLogin)` (iOS `LoginView.showPicker`,
+      `!isEmpty && !showNormalLogin`). **SOTA note:** iOS mutates `@Published savedAccounts` on the
+      `AuthManager` singleton; Android lifts every transform into a framework-free pure SSOT so each branch
+      is JVM-testable and the app-side store owns only persistence (DataStore/Keystore) + the observable
+      `StateFlow`. +25 behavioural tests (`SavedAccountsTest` — 3 shortName incl. blank fallback; 6 sorted
+      incl. empty/single/idempotent/tie-break; 5 upsert incl. into-empty/in-place/prepend/no-mutate;
+      4 remove incl. unknown-id no-op/empty/no-mutate; 3 find; 4 showPicker truth table). Expectations are
+      hand-written literals (not tautological). Mutation (RED proof): dropping the `.thenBy { it.id }`
+      tie-break fails **exactly** `sorted_identicalTimestamps_secondaryKeyOnIdAscending` +
+      `sorted_mixedTimestamps_secondaryKeyOnlyForTies` + `sorted_idempotent_inputOrderIrrelevant`
+      (25 run, 3 failed, no collateral). `:core:model:testDebugUnitTest` green (whole module) +
+      `assembleDebug` compiled every module. (Full-repo `testDebugUnitTest` tripped two pre-existing
+      unrelated reds this diff never touches: the documented `:sdk-core` DataStore parallel-load flake —
+      green in isolation — and a **newly-noted deterministic** `:feature:profile` `ProfileHeaderBuilderTest`
+      failure that reproduces on clean `origin/main`; see the ⚠ follow-up below.) Diff = `apps/android`
+      only. **Follow-up:** the app-side `LoginView` picker composable + a DataStore-backed saved-account
+      store (observing `SavedAccounts.sorted`, wiring `upsert` on login / `remove` on delete / `find` on
+      one-tap select → password focus), and the "other account" toggle driving `showPicker`.
+- ⚠ **Pre-existing red on main (needs a dedicated repair slice):** `:feature:profile`
+      `ProfileHeaderBuilderTest` fails deterministically on clean `origin/main` — `presence is away when
+      disconnected and idle past the window` + `last seen carries the parsed instant for an away user`
+      both expect `AWAY` for a disconnected user idle 10 min, but `:core:model` `Presence.getPresenceStatus`
+      classifies `elapsed > AWAY_WINDOW_MS` (180_000 ms = 3 min) as `OFFLINE`. The test's window
+      expectation and the resolver's `AWAY_WINDOW_MS` diverged. Reconcile against the CLAUDE.md presence
+      spec (online/recent → green, away → orange, offline > 30 min → no dot) in its own slice
+      (`profile-presence-window-reconcile`). Out of scope for the pure saved-account core.
 - [~] Server environment selector (dev/staging/prod/custom host) — **enum + URL-derivation
       core shipped** (slice `auth-server-environment-selector`, 2026-07-21). Pure `:core:model`
       `ServerEnvironment` (enum: `PRODUCTION`/`STAGING`/`LOCALHOST`/`CUSTOM` with `id`/`label`/`origin`
