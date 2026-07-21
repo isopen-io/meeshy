@@ -192,8 +192,26 @@ struct ContactsListTab: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(name), \(isOnline ? String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main) : String(localized: "contacts.list.offline.lower", defaultValue: "hors ligne", bundle: .main))")
+        .accessibilityLabel(contactRowAccessibilityLabel(name: name, username: user.username, isOnline: isOnline, lastActive: user.lastActiveAt))
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.filteredFriends.count)
+    }
+
+    /// The row's `.accessibilityElement(children: .combine)` is overridden by this
+    /// explicit label, which (per SwiftUI semantics) REPLACES the combined children.
+    /// It must therefore restate everything the row shows visually — handle and the
+    /// online / last-seen line — otherwise VoiceOver users only hear the name and a
+    /// bare "hors ligne" while sighted users also see the @username disambiguator and
+    /// when the contact was last active. Mirrors `CallsTab.rowAccessibilityLabel` (207i).
+    private func contactRowAccessibilityLabel(name: String, username: String, isOnline: Bool, lastActive: Date?) -> String {
+        var parts = [name, "@\(username)"]
+        if isOnline {
+            parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
+        } else if let lastActive {
+            parts.append(String(format: String(localized: "contacts.list.last-seen", defaultValue: "Vu %@", bundle: .main), lastActive.relativeTimeString.lowercased()))
+        } else {
+            parts.append(String(localized: "contacts.list.offline.lower", defaultValue: "hors ligne", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Empty State
