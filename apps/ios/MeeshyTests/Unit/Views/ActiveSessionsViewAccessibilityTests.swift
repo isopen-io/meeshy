@@ -61,4 +61,17 @@ final class ActiveSessionsViewAccessibilityTests: XCTestCase {
             "The per-session revoke button must remain a separately-labelled, actionable element."
         )
     }
+
+    func test_emptyState_usesNativeContentUnavailableView() throws {
+        // 196i: the empty state was a bare icon-less `Text`. It now delegates to the
+        // shared `AdaptiveContentUnavailableView` (native `ContentUnavailableView`
+        // on iOS 17+, faithful iOS 16 fallback) — giving it a Dynamic-Type-scaling
+        // SF Symbol, a guiding subtitle, and native title+description VoiceOver
+        // grouping. Guards against regressing to a bespoke bare `Text`.
+        let source = try activeSessionsViewSource()
+        XCTAssertTrue(
+            source.contains("AdaptiveContentUnavailableView("),
+            "The empty state must delegate to the shared native ContentUnavailableView wrapper."
+        )
+    }
 }
