@@ -14,6 +14,37 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 208i, 2026-07-21)** — piste iOS indépendante (suffixe `i`).
+> - **Contexte essaim** : PR iOS ouvertes jusqu'à **206i** (#2224 `MessageReactionsDetailView`) ;
+>   analyses/plans docs jusqu'à **207i** (`CallsTab.CallJournalRow`). Numéro **208i** choisi
+>   strictement > plus haut en vol. Base resync `main` HEAD `22465a5`.
+> - **208i (branche `claude/laughing-thompson-n4b0kv`, base `main` HEAD `22465a5`)** :
+>   Consolidation token `info` pour `ConversationPreferencesTab.organizationSection` (onglet
+>   « Préférences » de `ConversationInfoSheet`). La carte Organisation (Pin / Catégorie / Tags)
+>   est bâtie presque entièrement sur `MeeshyColors.info` (`#60A5FA`) — tint du toggle Pin, badges
+>   Catégorie/Tags, accents des pickers — MAIS **2 des 7 refs couleur** codaient le hex brut
+>   **`3B82F6`** (Tailwind blue-500) : (1) en-tête via `settingsSection(color:)` (glyphe + label +
+>   `surfaceGradient(tint:)` + `border(tint:)`) ; (2) badge icône du toggle Pin via
+>   `settingsToggleRow(iconColor:)`. **Double défaut** : (a) hex brut vs token ; (b) incohérence
+>   interne — deux bleus différents dans la MÊME carte (en-tête `#3B82F6` ≠ contenu `#60A5FA`).
+>   Défaut explicitement listé « reste » par le pointeur 199i. Fix = 2 swaps type-identiques
+>   `String → String` (`"3B82F6"` → `MeeshyColors.infoHex` = `"60A5FA"`, forme hex canonique du
+>   token `info`, déjà l'argument de cette famille de builders `settingsSection(color:)` dans
+>   `SettingsView`/`NotificationSettingsView`/`PrivacySettingsView`/`AboutView`…). Après fix,
+>   **toute** la carte résout sur `info`. `import MeeshyUI` déjà présent (l.3), `.info` déjà
+>   référencé dans la section. **Changement visuel assumé** (en-tête + icône Pin `#3B82F6` →
+>   `#60A5FA`, alignement à l'accent propre de la carte = consolidation de marque, doctrine 175i/182i).
+>   1 fichier, 2 lignes, 0 logique / 0 réseau / 0 clé i18n / 0 SDK / 0 test (grep
+>   `ConversationPreferencesTab` dans `*Tests*` = 0). Fichier absent (comme fichier modifié) de
+>   toute PR ouverte. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `ConversationPreferencesTab.organizationSection` SOLDÉ 208i** : ne plus reprendre.
+>   **Reste (1/itération, jugement distinct)** : `notificationsSection` `FF6B6B` (coral legacy —
+>   ses toggles utilisent déjà `MeeshyColors.error`) ; `actionsSection` en-tête `6B7280` (neutre ;
+>   icônes `F59E0B`/`F97316`/`F87171` sémantiques). Hors ce fichier (defect kind #4) : `UserStatsView`
+>   (`3498DB`/`F8B500`/`E91E63`), `FeedView`+`FeedView+Attachments` (`F8B500`/`9B59B6`),
+>   `AboutView` (l.103 `1C1917`).
+> - **Base de départ 209i : `main` HEAD** (après merge, supprimer la branche).
+>
 > **POINTEUR iOS AUTORITAIRE (mis à jour 207i, 2026-07-21)** — piste iOS (suffixe `i`).
 > - **Essaim iOS saturé** : PR ouvertes jusqu'à **206i** (#2224 `reaction filter capsules`). Numéro **207i** choisi strictement > 206i (plus haut en vol). `CallsTab.swift` **absent de toute PR ouverte** (seules des références « sibling » dans les corps de PR) → 0 collision.
 > - **207i (terminée, branche `claude/laughing-thompson-hvvudd`, base `main` HEAD `8792cb9`)** : label VoiceOver de **`CallJournalRow`** (rangée du journal d'appels, onglet Contacts → Appels). La rangée applique `.accessibilityElement(children: .combine)` **puis** un `.accessibilityLabel` explicite qui, par sémantique SwiftUI, **remplace** le texte combiné des enfants → VoiceOver n'annonçait que **nom + direction**, perdant le **type audio/vidéo** (badge `video.fill` = icône seule, WCAG 1.3.1), l'**ancienneté** (`relativeTimeString`) et la **durée** (`durationLabel`) que l'utilisateur voyant lit. Fix : helper pur `rowAccessibilityLabel(name:)` recomposant `[nom, direction, type, ancienneté, (durée)]`. Type réutilise les clés **existantes** `calls.type.audio`/`calls.type.video` (déjà shippées par `CallDetailSheet` → parité cross-écran) ; durée réutilise `calls.detail.duration`. **0 clé i18n neuve / 0 visuel / 0 logique / 0 réseau.** Le scope `.combine` est **conservé** (audit 2026-07-06/08 : le combiner sur toute la rangée avalait le menu redial `CallRowDialButton`). Test source-level ajouté à `CallsTabAccessibilityTests` (`test_callJournalRow_accessibilityLabelIncludesTypeTimeAndDuration`, miroir du pattern du fichier). Gate = CI `iOS Tests`.
