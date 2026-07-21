@@ -40,6 +40,19 @@ struct ReelRepostEmbedCell: View {
         return media
     }
 
+    /// VoiceOver label for the reposted-reel card. The card is a single tap
+    /// target (`.accessibilityElement(children: .ignore)`), so the reel caption
+    /// and like count — both read by a sighted user but otherwise swallowed by
+    /// `.ignore` — are folded into the label here (WCAG 1.3.1, doctrine 207i).
+    /// Reuses the two existing keys (`feed.reel.repost.by`, `feed.reel.repost.likes`)
+    /// so no new i18n strings are introduced. Pure; unit-tested.
+    static func reelCardAccessibilityLabel(for repost: RepostContent) -> String {
+        var parts = [String(localized: "feed.reel.repost.by", defaultValue: "Réel de \(repost.author)", bundle: .main)]
+        if !repost.content.isEmpty { parts.append(repost.content) }
+        parts.append(String(localized: "feed.reel.repost.likes", defaultValue: "\(repost.likes) j'aime", bundle: .main))
+        return parts.joined(separator: ". ")
+    }
+
     private func reelKind(_ repost: RepostContent) -> ReelMediaKind {
         switch repost.primaryReelMedia?.type {
         case .video: return .video
@@ -75,7 +88,7 @@ struct ReelRepostEmbedCell: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(String(localized: "feed.reel.repost.by", defaultValue: "Réel de \(repost.author)", bundle: .main))
+                .accessibilityLabel(Self.reelCardAccessibilityLabel(for: repost))
                 .accessibilityHint(String(localized: "feed.reel.repost.hint", defaultValue: "Appuyez deux fois pour ouvrir le réel", bundle: .main))
                 .accessibilityAddTraits(.isButton)
             }
