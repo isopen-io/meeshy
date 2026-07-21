@@ -1,4 +1,5 @@
 import XCTest
+import ImageIO
 @testable import Meeshy
 
 @MainActor
@@ -154,6 +155,26 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertFalse(result.data.isEmpty)
     }
 
+    // MARK: - compressImageData — HEIC transcoded to web-safe JPEG
+
+    /// A photo shot on iPhone with "High Efficiency" enabled arrives here as
+    /// real HEIC bytes. The web client cannot render HEIC inline — the
+    /// output MUST be actual JPEG (mime AND bytes), not HEIC data wearing a
+    /// `.jpg` extension.
+    func test_compressImageData_heicMagicBytes_transcodesToRealJPEG() async {
+        let sut = makeSUT()
+        let heicData = makeHEICData()
+
+        let result = await sut.compressImageData(heicData, maxDimension: 2048)
+
+        XCTAssertEqual(result.mimeType, "image/jpeg")
+        XCTAssertEqual(result.fileExtension, "jpg")
+        XCTAssertFalse(result.data.isEmpty)
+        let magic = [UInt8](result.data.prefix(3))
+        XCTAssertEqual(magic, [0xFF, 0xD8, 0xFF], "output bytes must be a real JPEG stream, not renamed HEIC")
+        XCTAssertNotNil(UIImage(data: result.data))
+    }
+
     // MARK: - compressImageData — PNG format preservation
 
     func test_compressImageData_pngFormat_preservesMimeType() async {
@@ -254,6 +275,19 @@ final class MediaCompressorTests: XCTestCase {
         data[2] = 0x46  // F
         data[3] = 0x38  // 8
         return data
+    }
+
+    /// Encodes a real HEIC container via ImageIO — the same encoder
+    /// `MediaCompressor` itself uses — so `detectMimeType`'s `ftyp` sniff and
+    /// the ImageIO decode path both see genuine bytes, not a magic-byte stub.
+    private func makeHEICData(width: CGFloat = 200, height: CGFloat = 200) -> Data {
+        let image = makeTestImage(width: width, height: height)
+        guard let cgImage = image.cgImage else { return Data() }
+        let data = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(data, "public.heic" as CFString, 1, nil) else { return Data() }
+        CGImageDestinationAddImage(dest, cgImage, nil)
+        XCTAssertTrue(CGImageDestinationFinalize(dest), "test host must support HEIC encoding")
+        return data as Data
     }
 
     private func makeWebPMagicBytes() -> Data {
