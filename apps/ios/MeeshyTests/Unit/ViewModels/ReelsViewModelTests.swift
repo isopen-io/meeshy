@@ -169,6 +169,29 @@ final class ReelsViewModelTests: XCTestCase {
 
         XCTAssertNil(shortUrl)
     }
+
+    // MARK: - Pagination resilience (transient network failure must NOT kill it forever)
+
+    func test_loadMore_transientNetworkFailure_keepsPaginationAliveForRetry() async {
+        let (sut, service, _) = makeSUT()
+        sut.seed(posts: [Self.makeReel(id: "r1"), Self.makeReel(id: "r2")], startId: "r2")
+
+        // First attempt fails transiently (e.g. offline blip).
+        service.getReelsResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
+        await sut.loadMoreIfNeeded(currentReel: Self.makeReel(id: "r2"))
+        XCTAssertEqual(service.getReelsCallCount, 1)
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2"], "a failed fetch must not corrupt the existing list")
+
+        // A later retry (e.g. the user scrolls near the end again after reconnecting)
+        // MUST still reach the network — before the fix, the failure permanently
+        // pinned `hasMore = false` and every subsequent `loadMoreIfNeeded` silently
+        // no-op'd without ever calling the service again.
+        service.getReelsResult = .success(Self.makePaginated(reelIds: ["r3"]))
+        await sut.loadMoreIfNeeded(currentReel: Self.makeReel(id: "r2"))
+
+        XCTAssertEqual(service.getReelsCallCount, 2, "pagination must retry after a transient failure, not stay stuck")
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2", "r3"])
+    }
 }
 
 // MARK: - Reel Media Layout (pure classification of a reel's media surfaces)

@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -244,7 +245,13 @@ final class ReelsViewModel: ObservableObject {
                 currentId = reels.first?.id
             }
         } catch {
-            hasMore = false
+            // Transient network failures (offline blip, timeout) must NOT
+            // permanently kill pagination: `hasMore` is left untouched (still
+            // `true`) and `nextCursor` is preserved, so the next
+            // `loadMoreIfNeeded` retries the SAME page instead of silently
+            // no-op'ing forever (the guard at the top of this function requires
+            // `hasMore` for a non-reset fetch to even reach the network).
+            Logger.media.error("ReelsViewModel.fetch(reset: \(reset)) failed, keeping cursor for retry: \(error.localizedDescription, privacy: .public)")
         }
     }
 
