@@ -2,6 +2,29 @@ import Foundation
 import Combine
 import MeeshySDK
 
+// MARK: - Presence Refresh Signal
+
+/// Debounced, coarse-grained re-render signal for observers that need to
+/// react to presence changes WITHOUT subscribing to `PresenceManager`
+/// itself. Every `@Published` property on ONE `ObservableObject` shares the
+/// SAME `objectWillChange` publisher, so observing `PresenceManager`
+/// directly would re-fire on every single `presenceMap` mutation (one per
+/// `user:status` socket event) — exactly the "re-render the whole list on
+/// every presence event" cost `ConversationListView` already deliberately
+/// avoids by reading `presenceManager` as a plain (unobserved) computed
+/// property. `presenceVersion`'s VALUE is irrelevant — only the CHANGE is
+/// the signal; consumers observe THIS object (`@ObservedObject`) instead of
+/// `PresenceManager`, keeping "Zero Unnecessary Re-render" intact (audit
+/// 2026-07-20, "pastilles de présence jamais rafraîchies sur user:status").
+@MainActor
+final class PresenceRefreshSignal: ObservableObject {
+    @Published private(set) var presenceVersion: Int = 0
+
+    fileprivate func bump() {
+        presenceVersion &+= 1
+    }
+}
+
 // MARK: - Presence Manager
 
 @MainActor
@@ -9,8 +32,19 @@ final class PresenceManager: ObservableObject {
     static let shared = PresenceManager()
 
     @Published var presenceMap: [String: UserPresence] = [:] {
-        didSet { schedulePersist() }
+        didSet {
+            schedulePersist()
+            scheduleVersionBump()
+        }
     }
+
+    /// Debounced companion signal — see `PresenceRefreshSignal`. Bumped
+    /// `Self.versionBumpDebounce` seconds after the LAST `presenceMap`
+    /// mutation settles, coalescing a burst of `user:status` events (e.g.
+    /// right after reconnect) into a single downstream re-render.
+    let refreshSignal = PresenceRefreshSignal()
+    nonisolated(unsafe) private var versionBumpTask: Task<Void, Never>?
+    nonisolated static let versionBumpDebounce: TimeInterval = 0.4
 
     private var cancellables = Set<AnyCancellable>()
     nonisolated(unsafe) private var recalcTimer: Timer?
@@ -86,6 +120,12 @@ final class PresenceManager: ObservableObject {
                 let hasTransition = self.presenceMap.values.contains { Self.isNearStateFlip($0) }
                 if hasTransition {
                     self.objectWillChange.send()
+                    // Reaches actual observers (`refreshSignal`) — previously
+                    // this recalc fired into the void: nothing subscribed to
+                    // `PresenceManager` directly, so a 1/3/5 boundary crossing
+                    // (e.g. online → away at 60s, no new `user:status` event)
+                    // never repainted a single avatar dot.
+                    self.refreshSignal.bump()
                 }
             }
         }
@@ -171,6 +211,7 @@ final class PresenceManager: ObservableObject {
         recalcTimer?.invalidate()
         recalcTimer = nil
         persistTask?.cancel()
+        versionBumpTask?.cancel()
     }
 
     // MARK: - Disk Persistence
@@ -192,6 +233,22 @@ final class PresenceManager: ObservableObject {
         let snapshot = presenceMap
         Task.detached(priority: .utility) {
             Self.writeToDisk(snapshot)
+        }
+    }
+
+    // MARK: - Debounced Refresh Signal
+
+    /// Schedules a `refreshSignal.bump()` `Self.versionBumpDebounce` seconds
+    /// out, cancelling any still-pending bump — a burst of `presenceMap`
+    /// mutations (several `user:status` events arriving close together)
+    /// coalesces into exactly ONE bump instead of one per event. See
+    /// `PresenceRefreshSignal`.
+    private nonisolated func scheduleVersionBump() {
+        versionBumpTask?.cancel()
+        versionBumpTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.versionBumpDebounce * 1_000_000_000))
+            guard !Task.isCancelled, let self else { return }
+            self.refreshSignal.bump()
         }
     }
 

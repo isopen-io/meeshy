@@ -224,6 +224,57 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertEqual(PresenceManager.recalcInterval, 30)
     }
 
+    // MARK: - refreshSignal.presenceVersion (debounced re-render signal, audit 2026-07-20)
+    //
+    // `ConversationListView` observes `refreshSignal` INSTEAD of `PresenceManager`
+    // itself (see PresenceManager.swift header comment on `PresenceRefreshSignal`) —
+    // these tests exercise the REAL debounced wiring end-to-end, not just an
+    // isolated `bump()` call, since that's the whole point of the fix.
+
+    func test_presenceMapMutation_eventuallyBumpsRefreshSignal() async throws {
+        let before = sut.refreshSignal.presenceVersion
+
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+
+        XCTAssertGreaterThan(
+            sut.refreshSignal.presenceVersion, before,
+            "A presenceMap mutation must eventually bump the debounced refresh signal"
+        )
+    }
+
+    func test_rapidPresenceMapMutations_coalesceIntoOneVersionBump() async throws {
+        let before = sut.refreshSignal.presenceVersion
+
+        // Three mutations fired back-to-back (no `await` between them) — the
+        // debounce must cancel+reschedule each time, netting out to exactly
+        // ONE bump instead of three (burst behavior during e.g. reconnect).
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        sut.presenceMap["user-2"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        sut.presenceMap["user-3"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+
+        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+
+        XCTAssertEqual(
+            sut.refreshSignal.presenceVersion, before + 1,
+            "3 mutations within the debounce window must coalesce into exactly ONE bump"
+        )
+    }
+
+    func test_noteActivity_alsoEventuallyBumpsRefreshSignal() async throws {
+        // `noteActivity` (typing:start) mutates `presenceMap` via the SAME
+        // didSet as every other writer — confirms the signal isn't wired to
+        // only one specific mutator.
+        let before = sut.refreshSignal.presenceVersion
+
+        sut.noteActivity(userId: "typer-1")
+
+        try await Task.sleep(nanoseconds: UInt64((PresenceManager.versionBumpDebounce + 0.3) * 1_000_000_000))
+
+        XCTAssertGreaterThan(sut.refreshSignal.presenceVersion, before)
+    }
+
     // MARK: - seed(from:currentUserId:)
 
     func test_seed_populatesPresenceMapFromConversations() {

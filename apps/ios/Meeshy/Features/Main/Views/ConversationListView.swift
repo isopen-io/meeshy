@@ -89,9 +89,20 @@ struct ConversationListView: View {
     // rows static, so observing them is free on the hot scroll path.
     private var lockManager: ConversationLockManager { ConversationLockManager.shared }
     private var blockService: BlockService { BlockService.shared }
-    // Lecture directe sans @ObservedObject — évite que chaque event presence force
-    // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
+    // Lecture directe sans @ObservedObject sur PresenceManager lui-même —
+    // observer l'objet entier re-déclencherait ce body à CHAQUE mutation de
+    // `presenceMap` (un event `user:status` par contact), pas seulement
+    // quand une pastille visible change réellement.
     private var presenceManager: PresenceManager { PresenceManager.shared }
+    /// Signal ciblé et débouncé (`PresenceRefreshSignal`, PresenceManager.swift)
+    /// — SEUL élément observé pour la présence. Sa valeur n'est jamais lue :
+    /// le simple fait qu'elle change re-diffe la liste, et le gate
+    /// `.equatable()` de chaque row (qui compare déjà `presenceState`)
+    /// décide seul si CETTE row doit se reconstruire. Avant ce signal,
+    /// personne n'observait `PresenceManager` : les pastilles ne se
+    /// rafraîchissaient que par coïncidence, au gré d'un autre re-render
+    /// (audit 2026-07-20, "pastilles jamais rafraîchies sur user:status").
+    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
