@@ -41,9 +41,29 @@ Vérifié vert : shared 47/47 (1382 tests) · gateway 536/536 (14424 tests, 1 fl
   - 1× test source-guard à fenêtre fixe cassé par un ajout légitime de B7 (fenêtre élargie, pas de régression réelle)
 - [x] Vérif finale post-Vague 4 : `meeshy.sh test` 3 phases **toutes vertes** (1541+2510+1 tests, 0 échec)
 
-## Vague 5 restante
+## Vague 5 — lot 1 (B12, B14, B17) — ✅ MERGÉ sur main
 
-- [ ] **B12 Réglages/préférences** (6) · **B13 Appels retry/privacy** (8) · **B14 Robustesse noyau** (4) · **B15 Profil sheet SDK** (4) · **B16 i18n/catalogues** (8) · **B17 Détail message/SSOT** (6) · **B18 Liste conversations — vues** (7, vérifier chevauchement P-iOS) · **B19 Bulles Equatable** (2) · **B20 Deep links/join** (2) · **B21 Perf divers** (2) · **B22 Tests couverture factice** (5) · **B23 Tests CI/hygiène** (4)
+- [x] **B12 Réglages & préférences** — mergé (e0a0e732f) : 5 toggles privacy placebo grisés "Bientôt disponible" (+ 2 supplémentaires trouvés en review : allowContactRequests/allowGroupInvites, fixés en 66f83d35b) · picker "Langue de l'interface" mort retiré (real fix bloqué par MeeshyApp.swift, hors lane) · applyRemote respecte pendingCategories (fin de la race server-wins) · moteur auto-download mort supprimé · DnD hours via DatePicker · sync thème réconciliée après fetch.
+- [x] **B14 Robustesse noyau** — mergé (a3ccd99de) : EmbeddableVideoResolver rejette tout videoId non-ASCII via `allSatisfy` (review a trouvé et corrigé un bug réel : l'implémentation initiale utilisait `prefix` qui ne fait que tronquer, acceptant un id partiellement invalide — fix en b210cde32) + encode `/` dans le segment de chemin (traversal via videoId) · fallback in-memory AppDatabase logue l'échec de migration · TextAnalyzer annoté `@MainActor` explicite (`@unchecked Sendable` retiré). NOTE : réponse notification lock-screen (try? silencieux) déjà traitée par la lane N-iOS (Vague 1) — non retouchée.
+- [x] **B17 Détail message & SSOT helpers** — mergé (d0e297dae) : MessageDetailSheet a11y complète (22 boutons) + LanguageDisplay SDK (fin table 18-langues dupliquée 3x) · GlobalSearchView/ParticipantsView délèguent à RelativeTimeFormatter · ClipInspector délègue à TransportBar.formatTime · ConversationOptionsViewModel utilise MeeshySDK.LoadState. 0 finding en review (2 lentilles).
+- [x] xcodegen regen post-merge (nouveaux fichiers de test) — CURRENT_PROJECT_VERSION restauré 1254 (da6df4593)
+- [x] Post-merge, 3 tours de compile/test réels ont mis au jour 5 bugs supplémentaires, tous corrigés :
+  - `MeeshySDK.LoadState` ambigu (le module `MeeshySDK` contient aussi un enum top-level `MeeshySDK` namespace — la qualification complète résolvait vers `MeeshySDK.MeeshySDK.LoadState`, inexistant) — 2 sites (ConversationOptionsViewModel.swift + son test), corrigé en `3acabe4e5`
+  - `comingSoonPrivacyKeyPaths: Set<AnyKeyPath>` marqué `nonisolated` alors que `AnyKeyPath` n'est pas `Sendable` — `nonisolated(unsafe)` (constante littérale immuable), même commit
+  - `settings.interface_language` devenu orphelin après le retrait du picker par B12 — supprimé du catalogue xcstrings (édition chirurgicale 35 lignes, JSON validé), corrigé en `2d9016e4b`
+  - 2 tests B17 (`GlobalSearchViewTimeAgoTests`, `ParticipantsViewRelativeTimeTests`) assertaient des chaînes françaises codées en dur ("maintenant", "il y a 5 min") — invalide dans ce test target qui tourne avec le vrai bundle app sous la locale simulateur (anglaise ici), contrairement au test target SDK où l'absence de bundle fait retomber déterministiquement sur le `defaultValue` français. Réécrits en assertions de délégation/structure locale-indépendantes, même commit.
+  - Piège méthodologique noté : un premier run tué par un double-backgrounding accidentel (`&` + `run_in_background`) a produit des diagnostics de compile fantômes/contradictoires (fichier lu correct mais erreurs incohérentes) — un `meeshy.sh clean` a tranché en confirmant que seules 2 erreurs étaient réelles, le reste était un artefact de build interrompu.
+- [x] Vérif finale : `meeshy.sh test` 3 phases **toutes vertes** (1555+2544+1 tests, 0 échec)
+
+## Vague 5 — lot 1, lanes en échec (limite de session, à relancer après 15h10 Europe/Paris 2026-07-21)
+
+- [ ] **B13 Appels retry/privacy** (8) — jamais démarrée (worktree intact, supprimé après vérif clean)
+- [ ] **B15 Profil sheet SDK** (4) — jamais démarrée
+- [ ] **B16 i18n/catalogues** (8) — jamais démarrée
+
+## Vague 5 — lot 2 (à lancer après lot 1 relancé/mergé)
+
+- [ ] **B18 Liste conversations — vues** (7, vérifier chevauchement PresenceManager.swift avec la lane P-iOS déjà mergée) · **B19 Bulles Equatable** (2) · **B20 Deep links/join** (2) · **B21 Perf divers** (2) · **B22 Tests couverture factice** (5, seam KeychainStoring déjà safe — Auth mergée en Vague 3) · **B23 Tests CI/hygiène** (4, exclure l'item de renommage sur AuthManagerRefreshTests.swift — réclamé aussi par B22 ; coordination project.yml avec B16)
 - [ ] Doc/mémoire présence (CLAUDE.md, mémoire) APRÈS CI verte
 - [ ] Push main au jalon, surveiller CI (pas de push docs par-dessus)
 
