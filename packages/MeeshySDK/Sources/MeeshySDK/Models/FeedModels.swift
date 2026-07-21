@@ -531,7 +531,10 @@ public struct FeedPost: Identifiable, Sendable {
 extension FeedPost: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, type, content, timestamp, likes, isLiked
-        case comments, commentCount, repost, repostAuthor, isQuote, media
+        case isBookmarkedByMe, isRepostedByMe
+        case comments, commentCount, repostCount, bookmarkCount, shareCount
+        case viewCount, postOpenCount, impressionCount, qualifiedViewCount, playCount
+        case repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
     }
 
@@ -547,8 +550,23 @@ extension FeedPost: Codable {
         timestamp = try c.decode(Date.self, forKey: .timestamp)
         likes = try c.decode(Int.self, forKey: .likes)
         isLiked = try c.decode(Bool.self, forKey: .isLiked)
+        // Engagement counters + "by me" flags are server-augmented (set via
+        // `APIPost.toFeedPost`, never through the memberwise init) — a cached
+        // page persisted before these fields existed simply lacks the keys.
+        // `decodeIfPresent` + a falsy default keeps that page loadable instead
+        // of throwing `keyNotFound` and dropping the whole cached feed.
+        isBookmarkedByMe = try c.decodeIfPresent(Bool.self, forKey: .isBookmarkedByMe) ?? false
+        isRepostedByMe = try c.decodeIfPresent(Bool.self, forKey: .isRepostedByMe) ?? false
         comments = try c.decode([FeedComment].self, forKey: .comments)
         commentCount = try c.decode(Int.self, forKey: .commentCount)
+        repostCount = try c.decodeIfPresent(Int.self, forKey: .repostCount) ?? 0
+        bookmarkCount = try c.decodeIfPresent(Int.self, forKey: .bookmarkCount) ?? 0
+        shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount) ?? 0
+        viewCount = try c.decodeIfPresent(Int.self, forKey: .viewCount) ?? 0
+        postOpenCount = try c.decodeIfPresent(Int.self, forKey: .postOpenCount) ?? 0
+        impressionCount = try c.decodeIfPresent(Int.self, forKey: .impressionCount) ?? 0
+        qualifiedViewCount = try c.decodeIfPresent(Int.self, forKey: .qualifiedViewCount) ?? 0
+        playCount = try c.decodeIfPresent(Int.self, forKey: .playCount) ?? 0
         repost = try c.decodeIfPresent(RepostContent.self, forKey: .repost)
         repostAuthor = try c.decodeIfPresent(String.self, forKey: .repostAuthor)
         isQuote = try c.decode(Bool.self, forKey: .isQuote)
@@ -572,8 +590,18 @@ extension FeedPost: Codable {
         try c.encode(timestamp, forKey: .timestamp)
         try c.encode(likes, forKey: .likes)
         try c.encode(isLiked, forKey: .isLiked)
+        try c.encode(isBookmarkedByMe, forKey: .isBookmarkedByMe)
+        try c.encode(isRepostedByMe, forKey: .isRepostedByMe)
         try c.encode(comments, forKey: .comments)
         try c.encode(commentCount, forKey: .commentCount)
+        try c.encode(repostCount, forKey: .repostCount)
+        try c.encode(bookmarkCount, forKey: .bookmarkCount)
+        try c.encode(shareCount, forKey: .shareCount)
+        try c.encode(viewCount, forKey: .viewCount)
+        try c.encode(postOpenCount, forKey: .postOpenCount)
+        try c.encode(impressionCount, forKey: .impressionCount)
+        try c.encode(qualifiedViewCount, forKey: .qualifiedViewCount)
+        try c.encode(playCount, forKey: .playCount)
         try c.encodeIfPresent(repost, forKey: .repost)
         try c.encodeIfPresent(repostAuthor, forKey: .repostAuthor)
         try c.encode(isQuote, forKey: .isQuote)
