@@ -108,7 +108,7 @@ enum NSEDecryptor {
     /// `me.meeshy.app`. Mirror of `NSEDataSync.sharedKeychainAccessGroup`
     /// (kept self-contained: `NSEDataSync` is not compiled into the test
     /// target, and its helper is private).
-    nonisolated(unsafe) private static let sharedKeychainAccessGroup: String? = {
+    private static let sharedKeychainAccessGroup: String? = {
         let discoveryQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: "_meeshy_nse_seed_discovery",
