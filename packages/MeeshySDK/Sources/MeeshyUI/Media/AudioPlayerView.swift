@@ -810,11 +810,11 @@ public struct AudioPlayerView: View {
             player.stop()
             player.unregisterFromCoordinator()
         }
-        .onChange(of: player.isPlaying) { playing in
+        .adaptiveOnChange(of: player.isPlaying) { _, playing in
             onPlayingChange?(playing)
             if playing { loadWaveformSamples() }
         }
-        .onChange(of: externalLanguage?.wrappedValue) { newLang in
+        .adaptiveOnChange(of: externalLanguage?.wrappedValue) { _, newLang in
             let code = newLang ?? "orig"
             guard code != selectedAudioLanguage else { return }
             switchToLanguage(code)
