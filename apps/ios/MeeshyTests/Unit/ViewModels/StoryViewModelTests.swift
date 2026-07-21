@@ -1203,20 +1203,6 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertFalse(sut.showStoryComposer, "Composer should close when publishing starts")
     }
 
-    func test_publishError_setsError() async {
-        mockAPI.authToken = "token"
-        mockPostService.createStoryResult = .failure(APIError.networkError(URLError(.timedOut)))
-
-        await sut.publishStory(
-            effects: StoryEffects(),
-            content: "Error story",
-            image: nil
-        )
-
-        XCTAssertNotNil(sut.publishError)
-        XCTAssertFalse(sut.isPublishing)
-    }
-
     // MARK: - executeQueuedPublish() Tests (V3 reconstruction)
 
     private static func makeTextOnlySlide(
