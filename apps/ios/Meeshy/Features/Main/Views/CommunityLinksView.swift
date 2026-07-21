@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct CommunityLinksView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -110,18 +111,19 @@ struct CommunityLinksView: View {
                 // only on `.expired`/`.empty` with no cached links.
                 SkeletonLinkList()
             } else if viewModel.links.isEmpty {
-                VStack(spacing: 12) {
-                    // Hero glyph ≥40pt: décoratif, le libellé adjacent porte le sens — figé + masqué VoiceOver (doctrine 74i/86i)
-                    Image(systemName: "person.3.fill").font(.system(size: 40))
-                        .foregroundColor(accent.opacity(0.6))
-                        .accessibilityHidden(true)
-                    Text(String(localized: "community.links.empty.title", defaultValue: "Aucune communauté administrée", bundle: .main))
-                        .font(MeeshyFont.relative(15, weight: .semibold)).foregroundColor(theme.textPrimary)
-                    Text(String(localized: "community.links.empty.subtitle", defaultValue: "Les communautés que vous gérez apparaîtront ici avec leur lien de partage", bundle: .main))
-                        .font(MeeshyFont.relative(13)).foregroundColor(theme.textSecondary)
-                        .multilineTextAlignment(.center)
-                }.padding(40).frame(maxWidth: .infinity)
-                .accessibilityElement(children: .combine)
+                // Dedup vers le primitive partagé `EmptyStateView` (icône + titre +
+                // sous-titre, label VoiceOver combiné + apparition spring), comme les
+                // sections-sœurs in-scroll `ShareLinksView`/`BookmarksView`. `compact`
+                // garde le dimensionnement de section ; l'accent de marque communauté
+                // (accentHex) est préservé. Clés i18n existantes réutilisées.
+                EmptyStateView(
+                    icon: "person.3.fill",
+                    title: String(localized: "community.links.empty.title", defaultValue: "Aucune communauté administrée", bundle: .main),
+                    subtitle: String(localized: "community.links.empty.subtitle", defaultValue: "Les communautés que vous gérez apparaîtront ici avec leur lien de partage", bundle: .main),
+                    accentColor: accentHex,
+                    compact: true
+                )
+                .padding(.vertical, 24)
             } else {
                 VStack(spacing: 8) {
                     ForEach(viewModel.links) { link in
