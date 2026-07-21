@@ -760,13 +760,29 @@ extension StoryViewerView {
         }
     }
 
-    func sendReaction(emoji: String) {
+    /// `priorReactions`/`priorCount` is the snapshot `triggerStoryReaction` took
+    /// BEFORE its optimistic emoji append / counter bump — the sole rollback
+    /// target. `StoryInteractionService.react` now throws (most notably the
+    /// gateway's 409 REACTION_LIMIT_REACHED conflict), so a rejected reaction
+    /// restores the exact prior state instead of leaving a phantom emoji and
+    /// an inflated counter forever.
+    func sendReaction(emoji: String, priorReactions: [String], priorCount: Int) {
         guard let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.reacted, surface: .storyViewer)
 
-        // Fire & forget like
         Task {
-            await StoryInteractionService().react(storyId: story.id, emoji: emoji)
+            do {
+                try await StoryInteractionService().react(storyId: story.id, emoji: emoji)
+            } catch {
+                // Only roll back if we're still looking at the same story —
+                // the user may have swiped to another slide by the time the
+                // network call resolves, in which case these `@State` fields
+                // already belong to a different story and must not be touched.
+                guard currentStory?.id == story.id else { return }
+                storyCurrentUserReactions = priorReactions
+                storyReactionCount = priorCount
+                HapticFeedback.error()
+            }
         }
     }
 

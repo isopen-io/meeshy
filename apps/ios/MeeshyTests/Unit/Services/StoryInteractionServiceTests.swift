@@ -110,13 +110,22 @@ final class StoryInteractionServiceTests: XCTestCase {
         XCTAssertEqual(api.requestEndpoints.last, endpoint)
     }
 
-    func test_react_apiFailure_doesNotThrow() async {
+    /// `react` MUST throw (not swallow) so the caller — `sendReaction` in
+    /// `StoryViewerView+Content.swift` — can roll back its optimistic emoji
+    /// append / counter bump. The 409 `REACTION_LIMIT_REACHED` conflict is
+    /// the concrete reproducible case (see `StoryReactionRollbackTests`),
+    /// but ANY failure must propagate: the service still logs via
+    /// `os.Logger` before rethrowing, it just no longer eats the error.
+    func test_react_apiFailure_throwsAndLogs() async {
         let (sut, api) = makeSUT()
-        api.errorToThrow = NSError(domain: "TestNetwork", code: 429)
+        api.errorToThrow = MeeshyError.server(statusCode: 409, message: "REACTION_LIMIT_REACHED")
 
-        await sut.react(storyId: Self.storyId, emoji: "🔥")
-
-        XCTAssertEqual(api.postCount, 1)
+        do {
+            try await sut.react(storyId: Self.storyId, emoji: "🔥")
+            XCTFail("Expected react to rethrow the 409 conflict")
+        } catch {
+            XCTAssertEqual(api.postCount, 1)
+        }
     }
 
     // MARK: - Failure-then-success: proves the catch handler is recoverable.
@@ -131,11 +140,15 @@ final class StoryInteractionServiceTests: XCTestCase {
         api.stub(endpoint, result: makeEmptyResponse())
 
         api.errorToThrow = NSError(domain: "TestNetwork", code: 500)
-        await sut.react(storyId: Self.storyId, emoji: "🔥")
-        XCTAssertEqual(api.postCount, 1)
+        do {
+            try await sut.react(storyId: Self.storyId, emoji: "🔥")
+            XCTFail("Expected first call to throw")
+        } catch {
+            XCTAssertEqual(api.postCount, 1)
+        }
 
         api.errorToThrow = nil
-        await sut.react(storyId: Self.storyId, emoji: "❤️")
+        try? await sut.react(storyId: Self.storyId, emoji: "❤️")
         XCTAssertEqual(api.postCount, 2)
     }
 

@@ -112,9 +112,16 @@ final class StoryInteractionService {
         }
     }
 
-    /// Toggles the user's reaction (emoji) on a story. Fire-and-forget:
-    /// the optimistic UI in the viewer already flipped the like badge.
-    func react(storyId: String, emoji: String) async {
+    /// Toggles the user's reaction (emoji) on a story. Unlike the other
+    /// fire-and-forget methods above, this one THROWS on failure — the
+    /// optimistic UI in the viewer already flipped the like badge and
+    /// bumped the counter (`StoryViewerView.triggerStoryReaction`), and
+    /// the caller (`sendReaction` in `StoryViewerView+Content.swift`)
+    /// needs to know when to roll that back. The concrete reproducible
+    /// case is the gateway's 409 `REACTION_LIMIT_REACHED` conflict (the
+    /// user changes emoji faster than the optimistic guard catches it),
+    /// but any failure must roll back — not just that one code.
+    func react(storyId: String, emoji: String) async throws {
         let body = ReactionRequest(emoji: emoji)
         do {
             let _: APIResponse<AnyCodable> = try await api.post(
@@ -123,6 +130,7 @@ final class StoryInteractionService {
             )
         } catch {
             Self.logger.error("Failed to react on story \(storyId, privacy: .public) with emoji: \(error.localizedDescription)")
+            throw error
         }
     }
 

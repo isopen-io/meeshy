@@ -1293,6 +1293,15 @@ struct StoryViewerView: View {
             }
         }
 
+        // Snapshot captured BEFORE the optimistic mutation below — the sole
+        // rollback target if the network call fails (most notably the
+        // gateway's 409 REACTION_LIMIT_REACHED conflict when the user's
+        // emoji actually differs from an existing server-side reaction).
+        // Without this the optimistic emoji/counter bump was never undone:
+        // the UI kept the refused emoji and an inflated count forever.
+        let priorReactions = storyCurrentUserReactions
+        let priorCount = storyReactionCount
+
         // N'incrémenter le compteur QUE pour une réaction réellement nouvelle :
         // re-taper le même emoji ne crée pas une nouvelle réaction côté serveur
         // (l'array `storyCurrentUserReactions` est dédupliqué), donc l'ancien
@@ -1303,7 +1312,7 @@ struct StoryViewerView: View {
             storyReactionCount += 1
         }
         heartBouncePulse += 1
-        sendReaction(emoji: emoji)
+        sendReaction(emoji: emoji, priorReactions: priorReactions, priorCount: priorCount)
     }
 
     // MARK: - Computed Bottom Padding
