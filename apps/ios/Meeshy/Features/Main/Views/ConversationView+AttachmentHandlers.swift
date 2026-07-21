@@ -523,6 +523,7 @@ extension ConversationView {
     func handleFileImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
+            var importedAny = false
             for url in urls {
                 guard url.startAccessingSecurityScopedResource() else { continue }
                 defer { url.stopAccessingSecurityScopedResource() }
@@ -531,9 +532,21 @@ extension ConversationView {
                 let fileSize = getFileSize(url)
                 let mimeType = mimeTypeForURL(url)
 
-                // Copy to temp directory (security-scoped resource expires)
+                // Copy to temp directory (security-scoped resource expires).
+                // A silent `try?` here previously let a failed copy through:
+                // the attachment was added to the composer pointing at a
+                // tempURL that never existed, only failing at the very end
+                // of the send pipeline with no diagnosable cause. Skip this
+                // file and surface the failure instead of adding a phantom
+                // attachment.
                 let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("file_\(UUID().uuidString)_\(fileName)")
-                try? FileManager.default.copyItem(at: url, to: tempURL)
+                do {
+                    try FileManager.default.copyItem(at: url, to: tempURL)
+                } catch {
+                    Logger.messages.error("File import copy failed for \(fileName, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    FeedbackToastManager.shared.showError("Échec de l'import de \(fileName)")
+                    continue
+                }
 
                 let attachmentId = UUID().uuidString
                 let attachment = MessageAttachment(
@@ -547,8 +560,9 @@ extension ConversationView {
                 )
                 composerState.pendingMediaFiles[attachmentId] = tempURL
                 composerState.pendingAttachments.append(attachment)
+                importedAny = true
             }
-            HapticFeedback.light()
+            if importedAny { HapticFeedback.light() }
         case .failure:
             composerState.actionAlert = "Erreur lors de l'import"
         }
