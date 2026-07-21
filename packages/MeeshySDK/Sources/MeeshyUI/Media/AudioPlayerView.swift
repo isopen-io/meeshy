@@ -566,6 +566,15 @@ public struct AudioPlayerView: View {
     public var accentColor: String = MeeshyColors.brandPrimaryHex
     public var transcription: MessageTranscription? = nil
     public var translatedAudios: [MessageTranslatedAudio] = []
+    /// Prisme Linguistique: the language code the transcription STRIP should
+    /// default to, resolved by the caller (app) the same way
+    /// `preferredTranslation` resolves text — `nil` (default, unchanged for
+    /// every existing call site) means "show the original". The SDK stays
+    /// agnostic of the resolution rule itself (systemLanguage > regional >
+    /// custom > deviceLocale); it only renders whichever code it is handed.
+    /// This ONLY seeds the transcription display — it never changes which
+    /// audio track plays, that stays the original by default.
+    public var initialTranscriptionLanguage: String? = nil
 
     public var onFullscreen: (() -> Void)? = nil
     public var onRequestTranscription: (() -> Void)? = nil
@@ -632,7 +641,12 @@ public struct AudioPlayerView: View {
     // it (see `ThemeManager.syncWithSystem`).
     @Environment(\.colorScheme) private var colorScheme
     @State private var isTranscriptionExpanded = false
-    @State private var selectedAudioLanguage: String = "orig"
+    /// Seeded from `initialTranscriptionLanguage` in `init` (Prisme default),
+    /// then owned by user interaction (language pill taps, `externalLanguage`)
+    /// exactly like before. Internal (not `private`) so `@testable import`
+    /// can observe the seeding decision from MeeshyUITests without exposing
+    /// it publicly — same pattern as `usesExternalPlayer` above.
+    @State internal var selectedAudioLanguage: String
     @State private var isRetranscribing = false
     /// `true` between the moment the user taps "Transcrire" / "Re-transcrire"
     /// and the moment the server-pushed transcription lands in `transcription`.
@@ -659,6 +673,17 @@ public struct AudioPlayerView: View {
             transcription: transcription,
             translatedAudios: translatedAudios
         )
+    }
+
+    /// Pure resolution of the transcription strip's STARTING language: the
+    /// caller-resolved Prisme preference (`initialTranscriptionLanguage`)
+    /// wins when provided, else `"orig"` — the unchanged default for every
+    /// existing call site. Extracted as a `nonisolated static` helper (same
+    /// pattern as `shouldDelegateToParent` / `shouldStopOwnedEngineOnDisappear`
+    /// elsewhere in this file) so the seeding decision is unit-testable
+    /// without a SwiftUI render lifecycle.
+    nonisolated public static func resolveInitialTranscriptionLanguage(_ initialTranscriptionLanguage: String?) -> String {
+        initialTranscriptionLanguage ?? "orig"
     }
 
     /// Pure resolution of the transcription strip segments. Falls back to a
@@ -712,6 +737,7 @@ public struct AudioPlayerView: View {
         attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
         accentColor: String = MeeshyColors.brandPrimaryHex, transcription: MessageTranscription? = nil,
         translatedAudios: [MessageTranslatedAudio] = [],
+        initialTranscriptionLanguage: String? = nil,
         onFullscreen: (() -> Void)? = nil,
         onRequestTranscription: (() -> Void)? = nil,
         onRetranscribe: (() -> Void)? = nil,
@@ -727,6 +753,10 @@ public struct AudioPlayerView: View {
     ) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
+        self.initialTranscriptionLanguage = initialTranscriptionLanguage
+        self._selectedAudioLanguage = State(
+            initialValue: AudioPlayerView.resolveInitialTranscriptionLanguage(initialTranscriptionLanguage)
+        )
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
         self.onRetranscribe = onRetranscribe
         self.onDelete = onDelete; self.onEdit = onEdit

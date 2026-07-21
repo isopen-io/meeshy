@@ -624,6 +624,33 @@ struct AudioMediaView: View, Equatable {
         return .audioTranslation
     }
 
+    /// Prisme Linguistique — resolves the STARTING transcription-display
+    /// language the same way `ConversationViewModel.preferredTranslation`
+    /// resolves text: walk the ordered preference chain (systemLanguage >
+    /// regionalLanguage > customDestinationLanguage > deviceLocale) and stop
+    /// at the first candidate that either matches the original language
+    /// (→ show original, `nil`) or has a matching translated-audio transcript
+    /// (→ that language code). `nil` when nothing matches — the strip then
+    /// defaults to the original, per the Prisme rule (never falls back to
+    /// `.first`). This ONLY seeds which transcription TEXT is shown; it never
+    /// changes which audio track plays — playback stays the original by
+    /// default (`AudioPlayerView`'s own play/pause selection is untouched).
+    /// Internal (not `private`) so `@testable import` can observe the
+    /// resolution from MeeshyTests without exposing it publicly.
+    internal var resolvedPreferredTranscriptionLanguage: String? {
+        guard !translatedAudios.isEmpty else { return nil }
+        let prefs = ConversationLanguagePreferences(user: AuthManager.shared.currentUser)
+        let originalLanguage = message.originalLanguage.lowercased()
+        for lang in prefs.resolved {
+            let langLower = lang.lowercased()
+            if originalLanguage == langLower { return nil }
+            if translatedAudios.contains(where: { $0.targetLanguage.lowercased() == langLower }) {
+                return langLower
+            }
+        }
+        return nil
+    }
+
     /// Résout `resolvedAvailability` depuis l'URL courante (langue active).
     /// Ré-exécuté par `.task(id: currentAudioUrl)` quand l'URL bascule
     /// (file:// -> https:// à la réconciliation, ou changement de langue
@@ -827,6 +854,7 @@ struct AudioMediaView: View, Equatable {
                 accentColorHex: contactColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
                 onFullscreen: { showAudioFullscreen = true },
                 onRequestTranscription: {
                     Task {
@@ -859,6 +887,7 @@ struct AudioMediaView: View, Equatable {
                 accentColorHex: contactColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
                 onFullscreen: { showAudioFullscreen = true },
                 onRequestTranscription: {
                     Task {
@@ -890,6 +919,7 @@ struct AudioMediaView: View, Equatable {
                 accentColorHex: contactColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: resolvedPreferredTranscriptionLanguage,
                 onFullscreen: { showAudioFullscreen = true },
                 onRequestTranscription: {
                     Task {

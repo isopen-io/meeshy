@@ -53,12 +53,86 @@ final class AudioMediaViewRenderTests: XCTestCase {
         XCTAssertTrue(a == b,
             "AudioMediaView Equatable doit rester égal pour la même reply (zero-rerender)")
     }
+
+    // MARK: - Prisme: resolvedPreferredTranscriptionLanguage
+
+    private func withCurrentUser<T>(_ user: MeeshyUser?, _ body: () -> T) -> T {
+        let previous = AuthManager.shared.currentUser
+        AuthManager.shared.currentUser = user
+        defer { AuthManager.shared.currentUser = previous }
+        return body()
+    }
+
+    private func makeTranslatedAudio(lang: String) -> MessageTranslatedAudio {
+        MessageTranslatedAudio(
+            id: "ta-\(lang)", attachmentId: "att-test-1", targetLanguage: lang,
+            url: "https://example.com/\(lang).mp3", transcription: "hola",
+            durationMs: 1200, format: "mp3", cloned: false, quality: 0.9,
+            ttsModel: "chatterbox", segments: []
+        )
+    }
+
+    /// `deviceLocale` is pinned to a nonsense code on every fixture below so
+    /// the 4th-priority `Locale.current` fallback in
+    /// `ConversationLanguagePreferences` never coincidentally matches a test
+    /// translated-audio language on whatever locale the CI/dev machine runs.
+    func test_resolvedPreferredTranscriptionLanguage_noTranslatedAudios_isNil() {
+        let user = MeeshyUser(id: "u1", username: "u1", displayName: "U1", systemLanguage: "es", deviceLocale: "xx")
+        withCurrentUser(user) {
+            let sut = AudioMediaView.makeForTest(originalLanguage: "fr", translatedAudios: [])
+            XCTAssertNil(sut.resolvedPreferredTranscriptionLanguage,
+                         "No translated audio exists — there is nothing to resolve to")
+        }
+    }
+
+    /// Prisme rule §1: a match on the preferred language resolves to that
+    /// language's translated-audio transcript.
+    func test_resolvedPreferredTranscriptionLanguage_matchesSystemLanguage() {
+        let user = MeeshyUser(id: "u1", username: "u1", displayName: "U1", systemLanguage: "es", deviceLocale: "xx")
+        withCurrentUser(user) {
+            let sut = AudioMediaView.makeForTest(
+                originalLanguage: "fr",
+                translatedAudios: [makeTranslatedAudio(lang: "es"), makeTranslatedAudio(lang: "de")]
+            )
+            XCTAssertEqual(sut.resolvedPreferredTranscriptionLanguage, "es")
+        }
+    }
+
+    /// Prisme rule §1 (CLAUDE.md): if the preferred language IS the original,
+    /// show the original — never a translation. Must return nil, not "fr".
+    func test_resolvedPreferredTranscriptionLanguage_preferredMatchesOriginal_returnsNilNotTranslation() {
+        let user = MeeshyUser(id: "u1", username: "u1", displayName: "U1", systemLanguage: "fr", deviceLocale: "xx")
+        withCurrentUser(user) {
+            let sut = AudioMediaView.makeForTest(
+                originalLanguage: "fr",
+                translatedAudios: [makeTranslatedAudio(lang: "es")]
+            )
+            XCTAssertNil(sut.resolvedPreferredTranscriptionLanguage,
+                         "Original already matches the preferred language — must show original, not auto-switch")
+        }
+    }
+
+    /// Prisme rule §1: no match anywhere in the preference chain must return
+    /// nil (show original) — NEVER fall back to translatedAudios.first.
+    func test_resolvedPreferredTranscriptionLanguage_noMatch_returnsNilNotFirst() {
+        let user = MeeshyUser(id: "u1", username: "u1", displayName: "U1", systemLanguage: "de", deviceLocale: "xx")
+        withCurrentUser(user) {
+            let sut = AudioMediaView.makeForTest(
+                originalLanguage: "fr",
+                translatedAudios: [makeTranslatedAudio(lang: "es"), makeTranslatedAudio(lang: "it")]
+            )
+            XCTAssertNil(sut.resolvedPreferredTranscriptionLanguage,
+                         "No candidate in the preference chain matches — must show original, never translatedAudios.first")
+        }
+    }
 }
 
 extension AudioMediaView {
     static func makeForTest(
         replyReference: ReplyReference? = nil,
-        replyIsStory: Bool = false
+        replyIsStory: Bool = false,
+        originalLanguage: String = "fr",
+        translatedAudios: [MessageTranslatedAudio] = []
     ) -> AudioMediaView {
         let attachment = MeeshyMessageAttachment(
             id: "att-test-1",
@@ -79,6 +153,7 @@ extension AudioMediaView {
             conversationId: "conv-test-1",
             senderId: "user-test-1",
             content: "",
+            originalLanguage: originalLanguage,
             createdAt: Date(timeIntervalSince1970: 0),
             updatedAt: Date(timeIntervalSince1970: 0)
         )
@@ -89,6 +164,7 @@ extension AudioMediaView {
             visualAttachments: [],
             isDark: false,
             accentColor: "#6366F1",
+            translatedAudios: translatedAudios,
             replyReference: replyReference,
             replyIsStory: replyIsStory
         )
