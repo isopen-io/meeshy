@@ -57,6 +57,24 @@ struct SectionDropDelegate: DropDelegate {
     }
 }
 
+// MARK: - Conversation List Empty Branch
+
+/// Distinguishes `ConversationListView`'s possible "nothing to render"
+/// branches so the CORRECT placeholder is picked — only relevant once
+/// `groupedConversations` is already known empty. Pure/`nonisolated` (no
+/// SwiftUI/MainActor dependency) so it's directly unit-testable (audit
+/// 2026-07-20: the "créez-en une" CTA flashed during cold-start `.idle` —
+/// skeleton was gated strictly on `.loading` — and reused verbatim for an
+/// ACTIVE search with zero matches, misleadingly implying zero
+/// conversations). Top-level (not nested) — matches this codebase's
+/// established `nonisolated enum` placement convention.
+nonisolated enum ConversationListEmptyBranch: Equatable {
+    case skeleton
+    case searchNoResults
+    case syncError
+    case createFirstConversation
+}
+
 // MARK: - Conversation List View
 struct ConversationListView: View {
     @Binding var isScrollingDown: Bool
@@ -89,9 +107,20 @@ struct ConversationListView: View {
     // rows static, so observing them is free on the hot scroll path.
     private var lockManager: ConversationLockManager { ConversationLockManager.shared }
     private var blockService: BlockService { BlockService.shared }
-    // Lecture directe sans @ObservedObject — évite que chaque event presence force
-    // un re-render complet de la liste. La présence est rafraîchie lors des refreshs naturels.
+    // Lecture directe sans @ObservedObject sur PresenceManager lui-même —
+    // observer l'objet entier re-déclencherait ce body à CHAQUE mutation de
+    // `presenceMap` (un event `user:status` par contact), pas seulement
+    // quand une pastille visible change réellement.
     private var presenceManager: PresenceManager { PresenceManager.shared }
+    /// Signal ciblé et débouncé (`PresenceRefreshSignal`, PresenceManager.swift)
+    /// — SEUL élément observé pour la présence. Sa valeur n'est jamais lue :
+    /// le simple fait qu'elle change re-diffe la liste, et le gate
+    /// `.equatable()` de chaque row (qui compare déjà `presenceState`)
+    /// décide seul si CETTE row doit se reconstruire. Avant ce signal,
+    /// personne n'observait `PresenceManager` : les pastilles ne se
+    /// rafraîchissaient que par coïncidence, au gré d'un autre re-render
+    /// (audit 2026-07-20, "pastilles jamais rafraîchies sur user:status").
+    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
@@ -259,8 +288,41 @@ struct ConversationListView: View {
         self.selectedConversationId = selectedConversationId
     }
 
-    // The filtered and grouped conversations are now calculated on a background queue 
+    // The filtered and grouped conversations are now calculated on a background queue
     // inside `ConversationListViewModel` to prevent main thread freezes and overheating.
+
+    // MARK: - Empty Branch Resolution
+
+    nonisolated static func emptyBranch(
+        loadState: LoadState,
+        loadFailed: Bool,
+        searchTextIsEmpty: Bool
+    ) -> ConversationListEmptyBranch {
+        guard searchTextIsEmpty else { return .searchNoResults }
+        switch loadState {
+        case .idle, .loading:
+            return .skeleton
+        default:
+            return loadFailed ? .syncError : .createFirstConversation
+        }
+    }
+
+    // MARK: - Preview Auto-Load Eligibility
+    //
+    // Pure/testable (no SwiftUI/MainActor dependency) — mirrors the SAME
+    // shape as `triggerLoadMoreIfNeeded`'s existing `firstIndex(where:)` scan
+    // below, so it carries no new complexity class. Gates
+    // `ConversationRowItem.enableAutoPreviewLoad` to the first `limit` rows
+    // (audit 2026-07-20: every row firing its preview-prefetch `.task` on
+    // appear meant 1 REST call per newly-visible row on a cold cache).
+    nonisolated static func shouldAutoLoadPreview(
+        conversationId: String,
+        orderedConversationIds: [String],
+        limit: Int
+    ) -> Bool {
+        guard limit > 0, let idx = orderedConversationIds.firstIndex(of: conversationId) else { return false }
+        return idx < limit
+    }
 
     @ViewBuilder
     private var sectionsContent: some View {
@@ -413,6 +475,11 @@ struct ConversationListView: View {
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             },
+            enableAutoPreviewLoad: Self.shouldAutoLoadPreview(
+                conversationId: conversation.id,
+                orderedConversationIds: conversationViewModel.conversations.map(\.id),
+                limit: ConversationRowMetrics.autoPreviewLoadRowLimit
+            ),
             onLongPress: { sourceFrame in
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
                 // Montage au REPOS invisible (scale 1, offset 0, opacité 0) :
@@ -873,49 +940,66 @@ struct ConversationListView: View {
                     // Skeleton ONLY when cold-start with no cached groups —
                     // cache-first principle: any cached/stale data must
                     // render immediately, no skeleton on top of it.
-                    // Drive the gate from `loadState == .loading` (not the
-                    // legacy `isLoading` flag) so cachedStale/cachedFresh
-                    // paths bypass the placeholder even on first paint.
-                    if conversationViewModel.loadState == .loading
-                        && conversationViewModel.groupedConversations.isEmpty {
-                        LazyVStack(spacing: 8) {
-                            ForEach(0..<6, id: \.self) { index in
-                                SkeletonConversationRow()
-                                    .staggeredAppear(index: index, baseDelay: 0.04)
+                    // `Self.emptyBranch` distinguishes cold-start `.idle` (show
+                    // skeleton, not the "créez-en une" CTA — it used to flash
+                    // for a frame before `loadConversations()`'s first `await`
+                    // even flips `loadState` to `.loading`) from an ACTIVE
+                    // search with zero matches (dedicated "no results" state,
+                    // never the misleading "you have no conversations" CTA).
+                    if conversationViewModel.groupedConversations.isEmpty {
+                        switch Self.emptyBranch(
+                            loadState: conversationViewModel.loadState,
+                            loadFailed: conversationViewModel.loadFailed,
+                            searchTextIsEmpty: conversationViewModel.searchText.isEmpty
+                        ) {
+                        case .skeleton:
+                            LazyVStack(spacing: 8) {
+                                ForEach(0..<6, id: \.self) { index in
+                                    SkeletonConversationRow()
+                                        .staggeredAppear(index: index, baseDelay: 0.04)
+                                }
                             }
+                            .padding(.horizontal, 16)
+                            .transition(.opacity)
+                        case .searchNoResults:
+                            EmptyStateView(
+                                icon: "magnifyingglass",
+                                title: String(localized: "search.no_results"),
+                                subtitle: String(localized: "search.try_other_terms")
+                            )
+                            .padding(.top, 60)
+                            .transition(.opacity)
+                        case .syncError:
+                            // Cold-start sync failed AND cache is empty: offer a
+                            // retry instead of the misleading "no conversations"
+                            // placeholder. This is the path users hit after a
+                            // cold start with stale/expired token or network
+                            // issues — previously they were trapped on an empty
+                            // list with no feedback.
+                            EmptyStateView(
+                                icon: "exclamationmark.arrow.triangle.2.circlepath",
+                                title: String(localized: "conversations.error.title"),
+                                subtitle: String(localized: "conversations.error.subtitle"),
+                                actionLabel: String(localized: "conversations.error.retry"),
+                                onAction: {
+                                    Task { await conversationViewModel.forceRefresh() }
+                                }
+                            )
+                            .padding(.top, 60)
+                            .transition(.opacity)
+                        case .createFirstConversation:
+                            EmptyStateView(
+                                icon: "bubble.left.and.bubble.right",
+                                title: String(localized: "conversations.empty.title"),
+                                subtitle: String(localized: "conversations.empty.subtitle"),
+                                actionLabel: String(localized: "conversations.empty.action"),
+                                onAction: {
+                                    onNewConversation?()
+                                }
+                            )
+                            .padding(.top, 60)
+                            .transition(.opacity)
                         }
-                        .padding(.horizontal, 16)
-                        .transition(.opacity)
-                    } else if conversationViewModel.groupedConversations.isEmpty && conversationViewModel.loadFailed {
-                        // Cold-start sync failed AND cache is empty: offer a
-                        // retry instead of the misleading "no conversations"
-                        // placeholder. This is the path users hit after a
-                        // cold start with stale/expired token or network
-                        // issues — previously they were trapped on an empty
-                        // list with no feedback.
-                        EmptyStateView(
-                            icon: "exclamationmark.arrow.triangle.2.circlepath",
-                            title: String(localized: "conversations.error.title"),
-                            subtitle: String(localized: "conversations.error.subtitle"),
-                            actionLabel: String(localized: "conversations.error.retry"),
-                            onAction: {
-                                Task { await conversationViewModel.forceRefresh() }
-                            }
-                        )
-                        .padding(.top, 60)
-                        .transition(.opacity)
-                    } else if conversationViewModel.groupedConversations.isEmpty {
-                        EmptyStateView(
-                            icon: "bubble.left.and.bubble.right",
-                            title: String(localized: "conversations.empty.title"),
-                            subtitle: String(localized: "conversations.empty.subtitle"),
-                            actionLabel: String(localized: "conversations.empty.action"),
-                            onAction: {
-                                onNewConversation?()
-                            }
-                        )
-                        .padding(.top, 60)
-                        .transition(.opacity)
                     } else {
                         sectionsContent
                             .transition(.opacity)
