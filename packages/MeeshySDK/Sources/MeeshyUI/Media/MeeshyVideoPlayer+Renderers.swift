@@ -581,14 +581,15 @@ internal struct _FullscreenRenderer: View {
         } label: {
             HStack(spacing: 6) {
                 if let avatarUrl = author.avatarUrl, !avatarUrl.isEmpty {
-                    // CachedAsyncImage : l'avatar auteur est déjà dans le
-                    // DiskCacheStore (MeeshyAvatar l'y a mis) — zéro re-download.
-                    CachedAsyncImage(url: avatarUrl) {
-                        Circle().fill(Color.white.opacity(0.3))
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 24, height: 24)
-                    .clipShape(Circle())
+                    // CachedAvatarImage : échec silencieux (initiales + accent
+                    // du player), zéro bouton retry sur un chip 24pt — l'avatar
+                    // auteur est déjà dans le DiskCacheStore (MeeshyAvatar l'y a mis).
+                    CachedAvatarImage(
+                        urlString: avatarUrl,
+                        name: author.displayName,
+                        size: 24,
+                        accentColor: player.accentColor
+                    )
                 }
                 Text(author.displayName)
                     .font(.system(size: 12, weight: .semibold))

@@ -130,7 +130,9 @@ public struct NotificationRowView: View {
     /// visuel de CE qui a été commenté / réagi, sans ouvrir l'app. 44×44,
     /// coins arrondis, alignée sur l'avatar en tête de ligne.
     private func postThumbnail(_ urlString: String) -> some View {
-        CachedAsyncImage(url: urlString, targetSize: CGSize(width: 44, height: 44)) {
+        // showsStatusOverlays: false — echec silencieux vers le fond teinte
+        // deja fourni ; pas de bouton retry sur une vignette 44pt.
+        CachedAsyncImage(url: urlString, targetSize: CGSize(width: 44, height: 44), showsStatusOverlays: false) {
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(accentColor.opacity(0.12))
         }
