@@ -119,11 +119,24 @@ public final class AppDatabase: @unchecked Sendable {
         }
     }
 
-    private static func inMemoryWriter() -> (any DatabaseWriter, Bool) {
+    /// `migrate` is injectable so tests can force the failure branch without
+    /// depending on a real GRDB migration actually breaking.
+    static func inMemoryWriter(
+        migrate: (any DatabaseWriter) throws -> Void = AppDatabase.runMigrations
+    ) -> (any DatabaseWriter, Bool) {
         // swiftlint:disable:next force_try
         let queue = try! DatabaseQueue()
         // The ephemeral DB still needs the schema so reads/writes don't throw.
-        try? runMigrations(on: queue)
+        // A migration failure here must not crash the host app — that's the
+        // whole point of the in-memory fallback — but swallowing it silently
+        // left zero diagnostic when the L2 cache degraded to a schemaless
+        // store for the rest of the session.
+        do {
+            try migrate(queue)
+        } catch {
+            let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+            logger.error("In-memory fallback DB migration failed, cache will be degraded for this session: \(error.localizedDescription, privacy: .public)")
+        }
         return (queue, true)
     }
 
