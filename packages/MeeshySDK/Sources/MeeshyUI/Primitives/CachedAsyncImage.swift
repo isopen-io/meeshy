@@ -360,8 +360,21 @@ public struct CachedBannerImage: View {
         }
     }
 
+    /// Banners are laid out with a fixed `height` via `.frame(height:).clipped()`
+    /// but NO width constraint — every known call site (`ProfileView`,
+    /// `CommunityListView`, `CommunityDetailView`,
+    /// `ConversationListHelpers.ThemedCommunityCard`) stretches the view to
+    /// fill its container's width, which is at minimum comparable to, and
+    /// often much larger than, `height`. `kCGImageSourceThumbnailMaxPixelSize`
+    /// (used by `DiskCacheStore.downsampledImage`) bounds the LARGER of the
+    /// two rendered dimensions, so deriving the cap from `height` alone
+    /// starves the image on its actually-dominant width axis, producing a
+    /// visibly blurrier upscale than the pipeline's prior flat 1200px cap.
+    /// Anchoring on the device's screen width (this file has no visibility
+    /// into any per-call-site container width) restores parity with that
+    /// baseline for full-bleed banners.
     @MainActor private static func pixelSize(for height: CGFloat) -> CGFloat {
-        height * UIScreen.main.scale
+        max(UIScreen.main.bounds.width, height) * UIScreen.main.scale
     }
 
     private func loadBanner(for currentUrlString: String?) async {
