@@ -1,5 +1,48 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **signup device-locale → language/country inference core** landed (slice
+> `auth-region-language-inference`, feature-parity §A → advances "Country auto-detection + region→language
+> inference at signup" `[ ]` → `[~]`). This is the pure defaults engine the 8-step registration wizard uses
+> to pre-select the language step + country picker from the device locale. Parity source: iOS
+> `RegistrationViewModel.detectLanguages()` + `detectCountry()`
+> (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`). One pure, immutable `:core:model`
+> core (`SignupRegionInference` + a `SignupLanguages` data class), fully TDD-covered. It carries the
+> **verbatim** 50-entry `regionLanguageMap` (ISO 3166-1 alpha-2 → default regional language) and exposes two
+> pure resolvers: **(1)** `inferLanguages(deviceLanguage, deviceRegion, supportedLanguageCodes)` returns the
+> `system`/`regional` pair — `system` is the lowercased device language when it is a supported code else the
+> `fr` default; `regional` is the mapped region language **only** when it is supported AND distinct from the
+> system language, otherwise the `en` secondary fallback, but demoted to `fr` when that would duplicate an
+> English system — so the two slots are **always distinct** (the wizard never pre-selects the same language
+> twice); **(2)** `inferCountryIso(deviceRegion, knownCountryCodes)` returns the uppercased region ISO when it
+> is a known country (the app passes `CountryCatalog.dialCodes.keys`, reusing the already-landed catalogue as
+> the SSOT country set — no second table). **SOTA note:** iOS buries both tables + the branching inside the
+> stateful `RegistrationViewModel` reading `Locale.current` directly; Android lifts the whole decision into a
+> pure `Locale`-free object (device language/region/supported-set all **injected**), so every branch is
+> unit-testable and the same inference is reusable by any onboarding surface, not just the wizard init.
+> **+22 behavioural tests** (`SignupRegionInferenceTest` — system supported/lowercased/unsupported/null/blank;
+> regional distinct-from-system / uppercased-region / equal-to-system-dropped / unsupported-region-dropped /
+> unknown-region / null-region; en-system duplicate-avoidance both directions; non-english-system distinct
+> keep; the 50-entry map size + 6 branch keys; `inferCountryIso` known/lowercased/unknown/null + the real
+> `CountryCatalog` set). Expectations are hardcoded language/ISO literals, independent of the production
+> derivation (not tautological). **Mutation check (RED proof):** dropping the `it != system` guard from the
+> regional gate (`it in supportedLanguageCodes && it != system` → `it in supportedLanguageCodes`) fails
+> **exactly** `dropsRegionalLanguageEqualToSystem` + `regionMappingEqualToEnglishSystemFallsBackToFrench` +
+> `regionMappingEqualToNonEnglishSystemFallsBackToEnglish` (22 run, 3 failed, no collateral) — behavioural,
+> not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:core:model:testDebugUnitTest` green (full module **1824/1824**, new suite 22/22) + full
+> `:app:assembleDebug` → **BUILD SUCCESSFUL** (`app-debug.apk` produced, 75 MB). Reviewer **PASS** (diff
+> `apps/android` only — 1 new production file + 1 test + tracking; **SDK purity** — a data class + a pure
+> stateless inference object in `:core:model`, zero framework/`Locale` deps, the device-locale *sourcing* +
+> wizard wiring stay app-side/pending; **SSOT** — one region table, the country set reused from
+> `CountryCatalog`, the resolved languages feed the same wizard `systemLanguage`/`regionalLanguage`; **Prisme**
+> — system = priority-1 content language, regional = priority-2, both distinct; **UX** — N/A pure data; no
+> coverage floor lowered, no test weakened). **Next slice:** wire the inference into the app-side
+> registration-wizard scaffold (source `Locale.getDefault()` at wizard start → pre-select the language step +
+> country picker, `X-Device-Locale` already handled by the Prisme slice) closing §A L329 toward `[x]`; OR
+> another §A pure core (username/email/phone live-availability debounce + local-validation gate,
+> `isUsernameValidLocally`/`isEmailValidLocally` + the 1s debounce policy); OR the tracked Kover 90%
+> coverage-gate infra.
+
 > On 2026-07-20 the **country / dial-code catalogue core** landed (slice `auth-country-catalog`,
 > feature-parity §A → advances "Phone entry with searchable country-code picker" `[ ]` → `[~]`).
 > This is the highest-value pure core in the Auth build-order area (first in the parity sequence,
