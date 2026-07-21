@@ -64,7 +64,8 @@ public struct DetectedLanguage: Identifiable, Sendable {
 
 // MARK: - Text Analyzer
 
-public class TextAnalyzer: ObservableObject, @unchecked Sendable {
+@MainActor
+public class TextAnalyzer: ObservableObject {
     @Published public var sentiment: SentimentLevel = .neutral
     @Published public var language: DetectedLanguage? = nil
     @Published public var languageConfidence: Double = 0

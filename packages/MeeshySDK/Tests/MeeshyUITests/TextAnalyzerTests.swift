@@ -142,6 +142,27 @@ final class TextAnalyzerTests: XCTestCase {
         XCTAssertEqual(sut.displayLanguage?.code, "fr")
     }
 
+    // MARK: - MainActor isolation (P3 hardening)
+
+    /// `analyze` schedules a debounced `Timer` whose callback bridges back onto
+    /// the main actor via `MainActor.assumeIsolated` — a call that traps if it
+    /// ever fires off-main. `TextAnalyzer` is now `@MainActor`-isolated (no
+    /// longer `@unchecked Sendable`), so the compiler guarantees every caller
+    /// — and therefore every Timer this method schedules — is already on the
+    /// main thread. This test exercises the call from the (guaranteed-main)
+    /// test context and asserts it returns immediately without trapping.
+    func test_analyze_calledFromMainActor_returnsImmediatelyWithoutTrapping() {
+        let sut = makeSUT()
+
+        sut.analyze(text: "Bonjour le monde, comment allez-vous ?")
+
+        // The Timer-driven update is debounced — synchronously after the call
+        // the previous state must still hold, proving `analyze` itself never
+        // blocks on (or crashes inside) the MainActor bridge.
+        XCTAssertEqual(sut.sentiment, .neutral)
+        XCTAssertNil(sut.language)
+    }
+
     // MARK: - DetectedLanguage.find
 
     func test_findLanguage_byCode() {
