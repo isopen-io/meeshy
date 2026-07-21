@@ -108,7 +108,7 @@ describe('link-name-generator', () => {
           durationDays: undefined,
         });
 
-        expect(result).toContain('');
+        expect(result).toContain('∞');
       });
 
       it('should default to English for unknown language', () => {
@@ -231,7 +231,7 @@ describe('link-name-generator', () => {
         });
 
         // 0 days is falsy, so should show infinity
-        expect(result).toContain('');
+        expect(result).toContain('∞');
       });
 
       it('should handle very long duration', () => {

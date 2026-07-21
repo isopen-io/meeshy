@@ -2662,3 +2662,23 @@ iOS `RelativeTimeFormatter` bundles classification, calendar-day framing AND loc
 - **`null` on degenerate geometry, never a fabricated `0.0`.** A too-small/empty/zero-dim plane returning
   `0.0f` would read as "pitch black" and could trip the cover detector on a bad frame. Return `null` =
   "skip this frame", mirroring iOS `guard … else { return }`.
+
+## auth-phone-recovery-challenge (2026-07-21)
+- **Port an all-UI iOS flow as a guarded state machine.** iOS `MeeshyForgotPasswordView` scatters the
+  phone-recovery flow across `@State` (`phoneStep`, `maskedInfo`, `tokenId`, `resetToken`, …) and advances
+  `phoneStep` *unconditionally* inside each async network handler. Android lifts it into an immutable
+  `PhoneRecoveryState` whose four transitions are guarded on the current step: an off-step event returns
+  the receiver unchanged. This is a real correctness win — a late/duplicated `verify-code` response can no
+  longer graft a `resetToken` onto an earlier step, and a stale `lookup` response can't rewind an advanced
+  flow. The guard is also the cleanest mutation target: dropping the `onCodeVerified` step check fails
+  exactly one behavioural test.
+- **Per-step input gates: reuse the auth SSOTs, never re-derive.** iOS disables its action buttons on
+  `isLoading` only. Adding a local-validity gate per step (the same SOTA hardening as change-password) is
+  correct — but each gate must *delegate* to the SSOT already shipped, not re-implement it:
+  `SignupFieldValidation.isPhoneValidLocally` / `isEmailValidLocally`, `OtpCodeField.isComplete`,
+  `PasswordEntry.evaluate`. Zero new validation rules → nothing can drift between recovery, signup, and
+  change-password.
+- **`showMismatch` is intentionally NOT `canReset`'s inverse.** iOS renders the inline "passwords don't
+  match" red text on `newPassword != confirm && !confirm.isEmpty` — ungated on length — while the reset
+  *gate* additionally requires ≥8. Two distinct predicates, both pinned, because folding them would either
+  hide the mismatch hint for short passwords or wrongly enable the button.
