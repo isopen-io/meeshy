@@ -211,6 +211,7 @@ struct EditPostSheet: View {
                 HStack(spacing: 10) {
                     Image(systemName: "globe")
                         .foregroundColor(theme.textSecondary)
+                        .accessibilityHidden(true)
                     Text(String(localized: "feed.post.edit.language", defaultValue: "Langue du contenu", bundle: .main))
                         .font(MeeshyFont.relative(15))
                         .foregroundColor(theme.textPrimary)
@@ -227,6 +228,7 @@ struct EditPostSheet: View {
                     Image(systemName: "chevron.right")
                         .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
                 }
                 .padding(.vertical, 10)
                 .padding(.horizontal, 14)
