@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **magic-link countdown state-machine + strict email gate core** landed (slice
+> `auth-magic-link-countdown`, feature-parity §A → advances "Passwordless magic-link login (email +
+> countdown + resend) via deep link" `[ ]` → `[~]`). This is the pure waiting-step logic behind the
+> passwordless flow. Parity source: iOS `MagicLinkView`
+> (`apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`) — the `isValidEmail` regex, the
+> `startCountdown` per-second `Task` loop that flips `linkExpired` at zero, `formattedCountdown`
+> (`"m:ss"`), and the resend `.disabled(countdownRemaining > 0 || isLoading)` gate. Two pure
+> `:core:model/auth/` cores. **`MagicLinkCountdown`** is an immutable value (`remaining`, `expired`)
+> with pure transitions: `start(expiresInSeconds)` seeds a fresh, clamped-≥0, non-expired countdown
+> (this **is** the resend transition — re-starting clears a stale expired warning, iOS
+> `linkExpired = false`); `tick()` drops a second and expires **exactly** on reaching zero (idempotent
+> once at zero); `formatted` / `showCountdown` (`!expired && remaining > 0`) / `showExpiredWarning`
+> (`expired`) / `canResend(isLoading)` (`remaining == 0 && !isLoading`) are the display + gate
+> derivations. `expired` is stored, not derived from `remaining == 0`, because a resend re-starts while
+> the just-drained state still reads zero — a genuine state distinction, not a redundant boolean.
+> **`MagicLinkEmail.isValid`** matches the whole RFC-lite shape (`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
+> — deliberately **stricter** than the signup wizard's loose `@`+`.` gate (`SignupFieldValidation`), kept
+> a distinct SSOT because the address is the sole login identifier with no username/password fallback;
+> mirrors iOS `wholeMatch` so edge whitespace is rejected. **SOTA note:** iOS drives a stateful `Task`
+> mutating View `@State`; Android lifts the whole transition into a pure immutable value so every branch
+> is JVM-testable and a Compose screen re-derives the display each second off a plain 1 s `Flow` clock.
+> **+26 behavioural tests** (`MagicLinkCountdownTest` — 12 email: rich local/subdomain, uppercase,
+> hyphenated domain, missing-`@`, missing-dot, 1-char-TLD, empty-local, multi-`@`, interior space,
+> leading/trailing whitespace, empty; 14 countdown: start seed / zero-not-yet-expired / negative-clamp,
+> tick decrement / expire-at-one / idempotent-at-zero / folded-to-zero-expires, resend-clears-expired,
+> `formatted` five values incl. `1:05`/`0:05`/`0:00`, `showCountdown` three arms, `showExpiredWarning`
+> two arms, `canResend` counting/exhausted-idle/exhausted-loading). Expectations are hand-written
+> literals independent of the production derivation (not tautological). **Mutation check (RED proof):**
+> flipping the expiry transition (`expired = next == 0` → `expired = false`) fails **exactly**
+> `tick_atOneReachesExpiry` + `tick_foldedToZeroReachesExpiry` (26 run, 2 failed, no collateral) —
+> behavioural, not tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:core:model:testDebugUnitTest` green (new suite 26/26) + full `testDebugUnitTest :app:assembleDebug`
+> → **BUILD SUCCESSFUL** (7m06s, 728 tasks; `app-debug.apk` produced). Reviewer **PASS** (diff
+> `apps/android` only — 1 new production file + 1 test + tracking; **SDK purity** — a data class with
+> pure transitions + a pure predicate object in `:core:model`, zero framework/`Regex`-state deps; the
+> `AuthService.requestMagicLink` actuator + the 1 s `Flow` tick + the waiting-step composable + the
+> `meeshy://` deep-link handler stay app-side/pending; **SSOT** — one countdown value drives every
+> display+gate derivation, the strict email gate is its own SSOT distinct from the signup gate; **UX** —
+> `canResend`/`showCountdown`/`showExpiredWarning` are the single truths the waiting step renders; no
+> coverage floor lowered, no test weakened). **Next slice:** the app-side `MagicLinkView` composable
+> wiring these cores (email field → `AuthService.requestMagicLink` → waiting step off a 1 s `Flow`
+> ticking `MagicLinkCountdown`) + the `meeshy://` deep-link handler, closing §A L280 toward `[x]`; OR
+> another §A pure core (6-digit OTP field sanitizer + resend-confirm window, username-suggestion
+> selection); OR the tracked Kover 90% coverage-gate infra.
+
 > On 2026-07-21 the **signup local-validation gate + availability-debounce policy core** landed (slice
 > `auth-signup-availability-local-gate`, feature-parity §A → advances "8-step gamified registration wizard
 > (username/email/phone live availability + suggestions)" `[ ]` → `[~]`). This is the pure decision layer the

@@ -277,7 +277,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## A. Auth & Onboarding
 - [ ] Username/password login with saved-account picker (multi-account, one-tap switch)
 - [ ] Server environment selector (dev/staging/prod/custom host)
-- [ ] Passwordless magic-link login (email + countdown + resend) via deep link
+- [~] Passwordless magic-link login (email + countdown + resend) via deep link —
+      **countdown state-machine + strict email gate core shipped** (slice
+      `auth-magic-link-countdown`, 2026-07-21). Pure `:core:model` `MagicLinkCountdown`
+      (immutable value + pure `start`/`tick` transitions) + `MagicLinkEmail` (faithful
+      port of iOS `MagicLinkView`, `apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift`:
+      the `isValidEmail` regex, the `startCountdown` per-second loop that flips `linkExpired`
+      at zero, `formattedCountdown` `"m:ss"`, and the resend `.disabled(countdownRemaining > 0
+      || isLoading)` gate). `MagicLinkCountdown.start(expiresInSeconds)` seeds a fresh
+      (non-expired, clamped ≥0) countdown — also the resend transition, which clears a stale
+      expired warning; `tick()` decrements a second and expires exactly on reaching zero
+      (idempotent at zero); `formatted`/`showCountdown`/`showExpiredWarning`/`canResend(isLoading)`
+      are the display+gate derivations. `MagicLinkEmail.isValid` matches the whole RFC-lite shape
+      (local part, domain, ≥2-char TLD) — deliberately **stricter** than the signup wizard's loose
+      `@`+`.` gate and kept a distinct SSOT (the address is the sole login identifier). **SOTA
+      note:** iOS drives a stateful `Task` mutating `@State` in the View; Android lifts the whole
+      transition into a pure immutable value so every branch is JVM-testable and a Compose screen
+      re-derives the display each second off a plain 1 s clock. +26 behavioural tests
+      (`MagicLinkCountdownTest` — 12 email cases: rich local/subdomain, uppercase, hyphen-domain,
+      missing `@`/dot, 1-char TLD, empty-local, multi-`@`, interior/edge whitespace, empty; 14
+      countdown cases: start seed/zero/negative-clamp, tick decrement/expire-at-one/idempotent-at-zero/
+      folded-to-zero, resend-clears-expired, `formatted` five values, `showCountdown`/`showExpiredWarning`
+      flags, `canResend` counting/exhausted/loading). Expectations are hand-written literals
+      (not tautological). Mutation (RED proof): flipping the expiry transition (`expired = next == 0`
+      → `false`) fails **exactly** `tick_atOneReachesExpiry` + `tick_foldedToZeroReachesExpiry`
+      (26 run, 2 failed, no collateral). `:core:model:testDebugUnitTest` green + full
+      `:app:assembleDebug` → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up:** the
+      app-side `MagicLinkView` composable (email field → `AuthService.requestMagicLink` → waiting
+      step driving `MagicLinkCountdown` off a 1 s `Flow`) + the `meeshy://` deep-link handler.
 - [~] 8-step gamified registration wizard (username/email/phone live availability + suggestions) —
       **local-validation gate + availability-debounce policy core shipped** (slice
       `auth-signup-availability-local-gate`, 2026-07-21). Pure `:core:model` `SignupFieldValidation` +
