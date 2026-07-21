@@ -128,7 +128,6 @@ struct ThreadedCommentSection: View {
 struct CommentsSheetView: View {
     let post: FeedPost
     let accentColor: String
-    var onSendComment: ((String, String, String?) -> Void)? = nil
     /// Fired with the post id AFTER a comment was successfully sent — lets a host
     /// (e.g. the reels viewer) bump its own comment counter. Optional; nil = no-op.
     var onCommentSent: ((_ postId: String) -> Void)? = nil
@@ -167,12 +166,10 @@ struct CommentsSheetView: View {
     init(
         post: FeedPost,
         accentColor: String,
-        onSendComment: ((String, String, String?) -> Void)? = nil,
         onCommentSent: ((_ postId: String) -> Void)? = nil
     ) {
         self.post = post
         self.accentColor = accentColor
-        self.onSendComment = onSendComment
         self.onCommentSent = onCommentSent
         _mentionController = StateObject(wrappedValue: MentionComposerController(
             context: .post(id: post.id)
@@ -738,23 +735,49 @@ struct CommentsSheetView: View {
                         }
                         onCommentSent?(post.id)
                     } catch {
-                        // Roll back the optimistic row + counts.
-                        if let parentId {
-                            var existing = repliesMap[parentId] ?? []
-                            existing.removeAll { $0.id == tempId }
-                            repliesMap[parentId] = existing
-                            var current = liveComments ?? post.comments
-                            if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
-                                current[idx].replies -= 1
+                        // REST failed — most commonly because the device is
+                        // offline. Durably enqueue via the existing
+                        // `.createComment` outbox kind (same one
+                        // `FeedViewModel`/`PostDetailViewModel.sendComment`
+                        // already use) instead of unconditionally losing the
+                        // comment. The optimistic `tempId` row is reconciled
+                        // by the already-wired `comment:added` socket handler
+                        // below (`isTwin` match on author+content+parentId),
+                        // which fires once the outbox replay lands — no
+                        // separate REST-response reconciliation needed here.
+                        // NOTE: like those two call sites, `CreateCommentPayload`
+                        // doesn't carry `effectFlags` yet (SDK schema gap) — a
+                        // blur/sticker effect on a comment sent while offline
+                        // is dropped on replay; the comment text itself survives.
+                        do {
+                            let payload = CreateCommentPayload(
+                                clientMutationId: ClientMutationId.generate(),
+                                postId: post.id,
+                                parentCommentId: parentId,
+                                content: text
+                            )
+                            try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
+                            onCommentSent?(post.id)
+                        } catch {
+                            // Roll back the optimistic row + counts — the
+                            // outbox itself refused the row.
+                            if let parentId {
+                                var existing = repliesMap[parentId] ?? []
+                                existing.removeAll { $0.id == tempId }
+                                repliesMap[parentId] = existing
+                                var current = liveComments ?? post.comments
+                                if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
+                                    current[idx].replies -= 1
+                                    liveComments = current
+                                }
+                            } else {
+                                var current = liveComments ?? post.comments
+                                current.removeAll { $0.id == tempId }
                                 liveComments = current
                             }
-                        } else {
-                            var current = liveComments ?? post.comments
-                            current.removeAll { $0.id == tempId }
-                            liveComments = current
+                            liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
+                            FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                         }
-                        liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
-                        FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                     }
                 }
             },

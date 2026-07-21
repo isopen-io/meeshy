@@ -218,17 +218,35 @@ struct FeedView: View {
                 // REST fallback when the socket fails (noSocket, timeout,
                 // gateway hiccup). Mirrors the SocialSocketManager call but
                 // hits the persisted `POST/DELETE /posts/:id/like` route.
-                // Only roll the optimistic update back if the REST call
-                // also fails — that keeps the heart visible whenever the
-                // server actually recorded the toggle.
                 let restOK = await postReactionViaREST(postId: postId, like: !wasLiked)
                 if !restOK {
-                    if wasLiked {
-                        postLikedIds.insert(postId)
-                        postLikeDelta[postId, default: 0] += 1
-                    } else {
-                        postLikedIds.remove(postId)
-                        postLikeDelta[postId, default: 0] -= 1
+                    // Both the live socket call and the REST fallback failed —
+                    // most commonly because the device is offline. Durably
+                    // enqueue the toggle (existing `.toggleLikePost` outbox
+                    // kind, same one `FeedViewModel.likePost` already uses)
+                    // instead of silently rolling back and losing the like —
+                    // the OutboxDispatcher replays it on reconnect and the
+                    // canonical `post:liked`/`post:unliked` broadcast handled
+                    // above reconciles `postLikedIds`/`postLikeDelta` once it
+                    // lands.
+                    do {
+                        let payload = ToggleLikePostPayload(
+                            clientMutationId: ClientMutationId.generate(),
+                            postId: postId,
+                            liked: !wasLiked
+                        )
+                        try await OfflineQueue.shared.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
+                    } catch {
+                        // The outbox itself refused the row (pool not
+                        // configured, encoding failure) — only now is rolling
+                        // back the optimistic UI honest.
+                        if wasLiked {
+                            postLikedIds.insert(postId)
+                            postLikeDelta[postId, default: 0] += 1
+                        } else {
+                            postLikedIds.remove(postId)
+                            postLikeDelta[postId, default: 0] -= 1
+                        }
                     }
                 }
             }
@@ -749,9 +767,6 @@ struct FeedView: View {
             },
             onBookmark: { postId in
                 togglePostBookmark(postId: postId)
-            },
-            onSendComment: { postId, content, parentId in
-                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
             },
             onSelectLanguage: { postId, language in
                 viewModel.setTranslationOverride(postId: postId, language: language)
