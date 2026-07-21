@@ -108,10 +108,15 @@ struct ConversationEncryptionDetailSheet: View {
         }
 
         Section {
-            // Disabled toggle — backend enforces immutability
+            // Disabled toggle — backend enforces immutability. The switch is a
+            // read-only status indicator, redundant with the adjacent label, so
+            // the whole row is exposed to VoiceOver as one element (the empty,
+            // `.labelsHidden()` toggle would otherwise read as an unlabeled
+            // "dimmed switch" with no context).
             HStack {
                 Image(systemName: "lock.fill")
                     .foregroundColor(.secondary)
+                    .accessibilityHidden(true)
                 Text(String(localized: "conversation.encryption.detail.toggleEnabled",
                             defaultValue: "Encryption enabled",
                             bundle: .main))
@@ -120,6 +125,7 @@ struct ConversationEncryptionDetailSheet: View {
                     .disabled(true)
                     .labelsHidden()
             }
+            .accessibilityElement(children: .combine)
         } footer: {
             Text(String(localized: "conversation.encryption.detail.immutabilityFooter",
                         defaultValue: "Once enabled, encryption cannot be disabled for this conversation. This protects against security regressions.",
