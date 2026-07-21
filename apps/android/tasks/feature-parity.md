@@ -276,7 +276,37 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## A. Auth & Onboarding
 - [ ] Username/password login with saved-account picker (multi-account, one-tap switch)
-- [ ] Server environment selector (dev/staging/prod/custom host)
+- [~] Server environment selector (dev/staging/prod/custom host) — **enum + URL-derivation
+      core shipped** (slice `auth-server-environment-selector`, 2026-07-21). Pure `:core:model`
+      `ServerEnvironment` (enum: `PRODUCTION`/`STAGING`/`LOCALHOST`/`CUSTOM` with `id`/`label`/`origin`
+      + `fromId` production-fallback) + `ServerEnvironmentResolver` (faithful port of iOS `MeeshyConfig`,
+      `packages/MeeshySDK/Sources/MeeshySDK/Configuration/MeeshyConfig.swift`: the `ServerEnvironment`
+      cases, `selectedEnvironment`'s `?? .production` fallback, and the `apiBaseURL` / `serverOrigin` /
+      `webOrigin` / `applyEnvironment` derivations, plus `LoginView`'s custom-host apply gate).
+      `normalizeCustomHost` prepends `https://` unless the host already carries a scheme (iOS
+      `host.hasPrefix("http") ? host : "https://\(host)"`, whitespace-trimmed like `applyCustomHost`);
+      `canApplyCustomHost` mirrors the apply button's `.disabled(trimmed.isEmpty)`; `apiBaseUrl` appends
+      `/api/v1`; `serverOrigin` parses scheme+host(+port) out of the base URL and returns it verbatim on
+      a parse miss; `webOrigin` strips the leading `gate.` API subdomain (`gate.meeshy.me` → `meeshy.me`,
+      `gate.staging.meeshy.me` → `staging.meeshy.me`) and remaps the localhost dev port (`:3000` →
+      `:3100`). **SOTA note:** iOS keeps these as computed props on a stateful `UserDefaults`-backed
+      singleton; Android lifts the pure string derivations into a framework-free object so every branch
+      is JVM-testable and the app-side config store only owns persistence + the mutable selection. +35
+      behavioural tests (`ServerEnvironmentTest` — every `id`/`label`/`origin` case, entry order,
+      `fromId` known/unknown/null/empty, `normalizeCustomHost` bare/https/http/trim, `canApplyCustomHost`
+      non-empty/empty/whitespace, `apiBaseUrl` all five origins, `serverOrigin` https/port/malformed/
+      no-scheme, `webOrigin` gate-strip/staging/localhost/loopback/non-gate/malformed, and two full
+      derivation-chain compositions). Expectations are hand-written literals (not tautological). Mutation
+      (RED proof): dropping the `gate.` strip from `webOrigin` (`if startsWith("gate.") removePrefix else
+      host` → `host`) fails **exactly** `webOrigin_productionGateHost_stripsGatePrefix` +
+      `webOrigin_stagingGateHost_stripsOnlyLeadingGate` + `composition_productionChain_apiToServerToWebOrigin`
+      (35 run, 3 failed, no collateral). `:core:model:testDebugUnitTest` green (35/35); `assembleDebug`
+      compiled every module (full-repo `testDebugUnitTest` only tripped the pre-existing unrelated
+      `:sdk-core` `InterfaceLanguageStoreTest` DataStore parallel-load flake, green in isolation). Diff =
+      `apps/android` only. **Follow-up:** the
+      app-side `LoginView` environment-selector composable + a persistence store (DataStore) owning the
+      selected env + custom host, driving `ServerEnvironmentResolver.apiBaseUrl` into the SDK config at
+      app launch (iOS `restoreEnvironment`).
 - [~] Passwordless magic-link login (email + countdown + resend) via deep link —
       **countdown state-machine + strict email gate core shipped** (slice
       `auth-magic-link-countdown`, 2026-07-21). Pure `:core:model` `MagicLinkCountdown`
