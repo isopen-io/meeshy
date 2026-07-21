@@ -141,6 +141,22 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         XCTAssertEqual(record?.content, "Hello world")
     }
 
+    /// Prisme Linguistique — the offline optimistic `MessageRecord` must
+    /// carry the CALLER's detected `originalLanguage`, not a hardcoded "fr".
+    /// A non-French offline send that later replays through the outbox would
+    /// otherwise be translated for every recipient as if it were French.
+    func test_offline_send_persistsCallerOriginalLanguage_notHardcodedFr() async throws {
+        let fx = try await makeFixture()
+
+        let ok = await fx.sut.sendMessage(content: "Hello world", originalLanguage: "es")
+
+        XCTAssertTrue(ok)
+        let cmid = try XCTUnwrap(await fx.offlineQueue.enqueuedClientMessageIds.first)
+        let record = try await fx.fetchRecord(localId: cmid)
+        XCTAssertEqual(record?.originalLanguage, "es",
+            "the optimistic offline record must use the caller's originalLanguage, not a hardcoded 'fr'")
+    }
+
     /// The core Bug 1 regression: two awaited offline sends back-to-back
     /// MUST both reach the queue. The legacy fire-and-forget path lost the
     /// second message because the optimistic insert raced its outbox write.
@@ -315,6 +331,28 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         XCTAssertEqual(enqueueCount, 1, "Retry path must AWAIT the enqueue, not fire-and-forget")
         let contents = await fx.offlineQueue.enqueuedContents
         XCTAssertEqual(contents, ["online-then-retry"])
+    }
+
+    /// Prisme Linguistique — the auto-retry outbox item built in the
+    /// online-failure catch block must carry the CALLER's `originalLanguage`,
+    /// not a hardcoded "fr". Otherwise a non-French message that fails once
+    /// online gets replayed (and displayed to every recipient) as French.
+    func test_onlineSendFailure_retryEnqueue_preservesCallerOriginalLanguage_notHardcodedFr() async throws {
+        let fx = try await makeFixture(
+            isOnline: true,
+            restSendFailure: NSError(
+                domain: "ConversationViewModelOfflineQueueTests",
+                code: 500,
+                userInfo: [NSLocalizedDescriptionKey: "synthetic REST failure"]
+            )
+        )
+
+        let ok = await fx.sut.sendMessage(content: "hola", originalLanguage: "es")
+
+        XCTAssertFalse(ok)
+        let item = try XCTUnwrap(await fx.offlineQueue.enqueuedItems.first)
+        XCTAssertEqual(item.originalLanguage, "es",
+            "the retry outbox item must use the caller's originalLanguage, not a hardcoded 'fr'")
     }
 
     // MARK: - T11 — offline edit / delete route through the outbox

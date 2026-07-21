@@ -2140,7 +2140,7 @@ class ConversationViewModel: ObservableObject {
                 localId: offlineTempId, serverId: nil,
                 conversationId: conversationId, senderId: currentUserId,
                 content: text.isEmpty ? nil : text,
-                originalLanguage: "fr",
+                originalLanguage: originalLanguage ?? defaultComposeLanguage(),
                 messageType: "text", messageSource: "user", contentType: "text",
                 state: .sending, retryCount: 0, lastError: nil,
                 isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
@@ -2281,7 +2281,7 @@ class ConversationViewModel: ObservableObject {
                 localId: tempId, serverId: nil,
                 conversationId: conversationId, senderId: currentUserId,
                 content: text.isEmpty ? nil : text,
-                originalLanguage: originalLanguage ?? "fr",
+                originalLanguage: originalLanguage ?? defaultComposeLanguage(),
                 messageType: optimisticMessageType.rawValue,
                 messageSource: "user", contentType: "text",
                 state: .sending, retryCount: 0, lastError: nil,
@@ -2479,7 +2479,7 @@ class ConversationViewModel: ObservableObject {
                     attachmentIds: attachmentIds ?? [],
                     replyToId: replyToId,
                     storyReplyToId: storyReplyToId,
-                    originalLanguage: originalLanguage ?? "fr",
+                    originalLanguage: originalLanguage ?? defaultComposeLanguage(),
                     isEncrypted: isEncrypted,
                     clientMessageId: tempId
                 )
@@ -2514,7 +2514,7 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId,
                 content: text,
                 clientMessageId: tempId,
-                originalLanguage: originalLanguage ?? "fr",
+                originalLanguage: originalLanguage ?? defaultComposeLanguage(),
                 replyToId: replyToId,
                 attachmentIds: attachmentIds,
                 attachmentKinds: retryKinds
