@@ -47,10 +47,22 @@ public actor SettingsActionQueue {
     private static let maxQueueSize = 50
     private static let queueFileName = "settings_action_queue.json"
 
+    /// Mirrors `OutboxFlusher`'s exhaustion budget (5 attempts) so a
+    /// permanently-failing action can't block the FIFO forever.
+    private static let maxAttempts = 5
+
     private var items: [SettingsAction] = []
     private var isFlushing = false
     private var cancellables = Set<AnyCancellable>()
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "settingsactionqueue")
+
+    /// In-memory failure counter per `SettingsAction.id`. Deliberately not
+    /// persisted alongside `items` (unlike `OutboxRecord.attempts`): a fresh
+    /// `enqueue()` for the same `(endpoint, httpMethod)` already replaces the
+    /// item with a new id, which naturally resets its count, and this avoids
+    /// a JSON schema migration for what is otherwise best-effort bookkeeping
+    /// scoped to the current process lifetime.
+    private var failureCounts: [String: Int] = [:]
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -74,9 +86,12 @@ public actor SettingsActionQueue {
     // MARK: - Enqueue
 
     public func enqueue(_ action: SettingsAction) {
+        let replaced = items.filter { $0.endpoint == action.endpoint && $0.httpMethod == action.httpMethod }
         items.removeAll { $0.endpoint == action.endpoint && $0.httpMethod == action.httpMethod }
+        for stale in replaced { failureCounts[stale.id] = nil }
         if items.count >= Self.maxQueueSize {
-            items.removeFirst()
+            let evicted = items.removeFirst()
+            failureCounts[evicted.id] = nil
         }
         items.append(action)
         saveToDisk()
@@ -95,16 +110,35 @@ public actor SettingsActionQueue {
         isFlushing = true
         defer { isFlushing = false }
 
-        var successIds: [String] = []
+        var doneIds: [String] = []
         for item in items {
             if await handler(item) {
-                successIds.append(item.id)
-            } else {
-                break // FIFO: stop on first failure so order is preserved.
+                doneIds.append(item.id)
+                failureCounts[item.id] = nil
+                continue
             }
+
+            let attempts = (failureCounts[item.id] ?? 0) + 1
+            failureCounts[item.id] = attempts
+            if attempts >= Self.maxAttempts {
+                // Structural backstop: `onFlush` has no way to signal
+                // "permanent vs transient" failure to this actor, so a
+                // handler that keeps failing (e.g. a 4xx it can't tell apart
+                // from a 5xx) used to `break` here forever and wedge every
+                // action queued behind it. After `maxAttempts` consecutive
+                // failures on this item we drop it and keep processing the
+                // rest of the queue, mirroring `OutboxFlusher`'s
+                // maxAttempts + exhausted-drop pattern.
+                logger.error("Dropping settings action \(item.endpoint) after \(attempts) failed attempts")
+                doneIds.append(item.id)
+                failureCounts[item.id] = nil
+                continue
+            }
+            break // FIFO: stop on a not-yet-exhausted failure so order is preserved.
         }
 
-        for id in successIds {
+        guard !doneIds.isEmpty else { return }
+        for id in doneIds {
             items.removeAll { $0.id == id }
         }
         saveToDisk()
@@ -113,6 +147,7 @@ public actor SettingsActionQueue {
 
     public func clearAll() {
         items.removeAll()
+        failureCounts.removeAll()
         saveToDisk()
         pendingCountChanged.send(0)
     }
