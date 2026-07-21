@@ -99,4 +99,47 @@ final class GRDBCacheStoreFreshnessTests: XCTestCase {
             XCTFail("A local-mutation flush must not resurrect freshness; load() returned .fresh for expired data")
         }
     }
+
+    // MARK: - loadIgnoringExpiry (P2 — offline > 24h recovery)
+
+    func test_loadIgnoringExpiry_whenL2EntryIsExpired_returnsThePersistedPayload() async throws {
+        let db = try makeDB()
+        let store = makeStore(ttl: 1, staleTTL: 0.5, db: db)
+        try await store.save([FreshnessTestItem(id: "1", name: "Alice")], for: "k")
+        try await backdateLastFetchedAt(Date(timeIntervalSince1970: 1_600_000_000), key: "k", db: db)
+        await store.evictL1()
+
+        // Baseline: `load()` refuses to hand back the data once it's expired.
+        let expired = await store.load(for: "k")
+        guard case .expired = expired else {
+            return XCTFail("Expected .expired once L1 is evicted and the disk entry is past the expiry threshold")
+        }
+
+        // The recovery path must still surface the same payload.
+        let recovered = await store.loadIgnoringExpiry(for: "k")
+        XCTAssertEqual(recovered?.items, [FreshnessTestItem(id: "1", name: "Alice")],
+                       "loadIgnoringExpiry must return the on-disk payload even when load() reports .expired")
+    }
+
+    func test_loadIgnoringExpiry_whenNothingWasEverSaved_returnsNil() async throws {
+        let db = try makeDB()
+        let store = makeStore(db: db)
+
+        let recovered = await store.loadIgnoringExpiry(for: "never-saved")
+
+        XCTAssertNil(recovered, "loadIgnoringExpiry must return nil when there is truly no persisted payload")
+    }
+
+    func test_loadIgnoringExpiry_whenL1IsStillPopulated_returnsItDirectlyWithoutRequiringEviction() async throws {
+        let db = try makeDB()
+        let store = makeStore(db: db)
+        try await store.save([FreshnessTestItem(id: "1", name: "Alice")], for: "k")
+
+        // No `evictL1()` round-trip here — `loadIgnoringExpiry` must serve
+        // straight from the in-memory entry when one is present, the same
+        // way `load()` does for its `.fresh`/`.stale` cases.
+        let recovered = await store.loadIgnoringExpiry(for: "k")
+
+        XCTAssertEqual(recovered?.items, [FreshnessTestItem(id: "1", name: "Alice")])
+    }
 }

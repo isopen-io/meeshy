@@ -115,6 +115,27 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    /// Best-effort recovery for the `.expired` branch of `load(for:)`.
+    ///
+    /// `load()` intentionally returns a data-less `.expired` once an entry
+    /// crosses the policy's expiry threshold — it signals "don't trust
+    /// this, go resync" to every consumer across the app, and changing
+    /// that contract would ripple through dozens of unrelated call sites
+    /// that pattern-match on the bare `.expired` case. But a resync that
+    /// FAILS (offline) must not leave a caller with nothing when the disk
+    /// genuinely still has the last-known-good payload. Callers that want
+    /// "paint what's on disk, then try to resync" semantics read this
+    /// alongside `load()`'s `.expired` case instead of accepting an empty
+    /// screen. Returns `nil` only when there is truly no persisted
+    /// payload (mirrors `.empty`).
+    public func loadIgnoringExpiry(for key: Key) async -> (items: [Value], age: TimeInterval)? {
+        if let l1 = memoryCache[key] {
+            return (l1.items, Date().timeIntervalSince(l1.loadedAt))
+        }
+        guard let l2 = readFromL2(for: namespacedKey(key.description)) else { return nil }
+        return (l2.items, Date().timeIntervalSince(l2.lastFetchedAt))
+    }
+
     public func update(for key: Key, mutate: @Sendable ([Value]) -> [Value]) async {
         if var l1 = memoryCache[key] {
             l1.items = mutate(l1.items)
