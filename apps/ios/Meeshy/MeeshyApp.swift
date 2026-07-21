@@ -328,8 +328,20 @@ struct MeeshyApp: App {
                         // cycle triggers BackgroundTransitionCoordinator which also
                         // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
                         // NOT fire on the initial `.active` state, so the coordinator
-                        // path is skipped on cold start.
-                        _ = try? await OfflineQueue.shared.bootRecovery()
+                        // path is skipped on cold start. P2 — do/catch + log
+                        // instead of a silent `try?`: BackgroundTransitionCoordinator's
+                        // own `resumeFromBackground()` call to `bootRecovery()`
+                        // (on the next foreground) is an independent retry
+                        // path, so a failure here is not fatal, but it MUST
+                        // be visible — a silent failure here previously left
+                        // crash-orphaned `.inflight` rows invisible to
+                        // flush() for the rest of THIS cold start with zero
+                        // trace in the logs.
+                        do {
+                            _ = try await OfflineQueue.shared.bootRecovery()
+                        } catch {
+                            Logger.messages.error("Boot recovery (outbox flusher path) failed: \(error.localizedDescription, privacy: .public) — retried on next foreground")
+                        }
                         let flusher = OutboxFlusher(
                             pool: bootPool,
                             dispatcher: OutboxDispatcher(),
