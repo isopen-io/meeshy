@@ -1090,6 +1090,24 @@ final class VideoFiltersPanelAccessibilityTests: XCTestCase {
             "of what it controls."
         )
     }
+
+    func test_presetChip_conveysSelectedState_viaAccessibilityTrait() throws {
+        let source = try filtersPanelSource()
+        guard let chipRange = source.range(of: "private func presetChip(_ preset: VideoFilterPreset)") else {
+            XCTFail("presetChip(_:) builder not found"); return
+        }
+        // Bound the search to the whole presetChip body (up to the next declaration)
+        // — the `.accessibilityAddTraits` modifier sits on the last line of the builder.
+        let nextDecl = source.range(of: "private func presetLabel", range: chipRange.upperBound..<source.endIndex)
+        let endIdx = nextDecl?.lowerBound ?? source.endIndex
+        let vicinity = String(source[chipRange.lowerBound..<endIdx])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityAddTraits(") && vicinity.contains(".isSelected"),
+            "The filter-preset chip signals its active state with tint/fill only. Without " +
+            ".accessibilityAddTraits(isActive ? [.isSelected] : []) a VoiceOver user cannot tell " +
+            "which preset is currently applied (WCAG 1.4.1 — state by color only)."
+        )
+    }
 }
 
 // MARK: - CallEffectsOverlay Accessibility + Dynamic Type Source Guards

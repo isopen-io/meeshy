@@ -254,6 +254,7 @@ struct BubbleFooter: View, Equatable {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(display?.name ?? flag.code)
+        .accessibilityAddTraits(flag.isActive ? [.isSelected] : [])
     }
 
     @ViewBuilder

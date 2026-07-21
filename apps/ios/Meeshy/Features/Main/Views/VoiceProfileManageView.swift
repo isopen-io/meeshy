@@ -90,53 +90,14 @@ struct VoiceProfileManageView: View {
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            // Héros décoratif ≥40pt : taille fixe assumée (doctrine 84i), masqué à VoiceOver (146i).
-            Image(systemName: "person.wave.2.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .accessibilityHidden(true)
-
-            Text(String(localized: "voice.profile.empty.title", defaultValue: "Aucun profil vocal", bundle: .main))
-                .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
-
-            Text(String(localized: "voice.profile.empty.description", defaultValue: "Creez un profil vocal pour que vos messages traduits conservent votre voix naturelle.", bundle: .main))
-                .font(MeeshyFont.relative(15))
-                .multilineTextAlignment(.center)
-                .foregroundColor(theme.textSecondary)
-                .padding(.horizontal, 32)
-
-            Button {
-                HapticFeedback.medium()
-                showWizard = true
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(MeeshyFont.relative(16))
-                    Text(String(localized: "voice.profile.create", defaultValue: "Creer un profil vocal", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .semibold))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(hex: accentColor))
-                )
-            }
-            .padding(.horizontal, 20)
-
-            Spacer()
-        }
+        EmptyStateView(
+            icon: "person.wave.2.fill",
+            title: String(localized: "voice.profile.empty.title", defaultValue: "Aucun profil vocal", bundle: .main),
+            subtitle: String(localized: "voice.profile.empty.description", defaultValue: "Creez un profil vocal pour que vos messages traduits conservent votre voix naturelle.", bundle: .main),
+            actionLabel: String(localized: "voice.profile.create", defaultValue: "Creer un profil vocal", bundle: .main),
+            accentColor: accentColor,
+            onAction: { showWizard = true }
+        )
     }
 
     // MARK: - Profile Content

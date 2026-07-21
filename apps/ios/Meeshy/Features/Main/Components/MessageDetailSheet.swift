@@ -920,6 +920,7 @@ struct MessageDetailSheet: View {
             HStack(spacing: 4) {
                 Image(systemName: filter.icon)
                     .font(.caption2.weight(.medium))
+                    .accessibilityHidden(true)
                 Text(filter.label)
                     .font(.caption.weight(.medium))
                 if let count {
@@ -946,6 +947,9 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        // État actif signalé visuellement par fill/couleur seuls (HIG « jamais
+        // la couleur seule ») → trait VoiceOver « sélectionné ».
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
@@ -1606,6 +1610,8 @@ struct MessageDetailSheet: View {
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
+        // Filtre actif signalé par la seule couleur → trait VoiceOver.
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
@@ -1791,6 +1797,7 @@ struct MessageDetailSheet: View {
                     .font(.callout)
                     .foregroundColor(isSelected ? accent : theme.textSecondary)
                     .frame(width: 24)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(type.label)
@@ -1809,6 +1816,7 @@ struct MessageDetailSheet: View {
                         .font(.title3)
                         .foregroundColor(accent)
                         .transition(.scale.combined(with: .opacity))
+                        .accessibilityHidden(true)
                 }
             }
             .padding(.horizontal, 14)
@@ -1822,6 +1830,10 @@ struct MessageDetailSheet: View {
                     )
             )
         }
+        // Motif actif signalé par couleur + checkmark décoratif (masqué) →
+        // le sens passe par le trait VoiceOver « sélectionné » (miroir 178i
+        // MessageReportDetailView).
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Forward Tab Content

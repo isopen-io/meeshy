@@ -105,7 +105,10 @@ struct CommunityLinksView: View {
                 .accessibilityAddTraits(.isHeader)
 
             if viewModel.isLoading {
-                ProgressView().frame(maxWidth: .infinity).padding(40)
+                // Instant App: cold-start (empty cache) shows structural
+                // skeleton rows, never a spinner. `isLoading` is set true
+                // only on `.expired`/`.empty` with no cached links.
+                SkeletonLinkList()
             } else if viewModel.links.isEmpty {
                 VStack(spacing: 12) {
                     // Hero glyph ≥40pt: décoratif, le libellé adjacent porte le sens — figé + masqué VoiceOver (doctrine 74i/86i)

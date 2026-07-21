@@ -22,24 +22,29 @@ struct StatusBarView: View {
                     addStatusPill
                 }
 
-                // Error indicator
+                // Error indicator — retry affordance. A native Button (not a
+                // bare .onTapGesture) so VoiceOver exposes the .isButton trait
+                // and a double-tap actually retries; the hint promises the retry.
                 if viewModel.error != nil, viewModel.statuses.isEmpty {
-                    HStack(spacing: 6) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(MeeshyColors.warning)
-                            .accessibilityHidden(true)
-                        Text(String(localized: "status.bar.load_error", defaultValue: "Erreur de chargement", bundle: .main))
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .glassCard(cornerRadius: 20)
-                    .accessibilityElement(children: .combine)
-                    .onTapGesture {
+                    Button {
+                        HapticFeedback.light()
                         Task { await viewModel.loadStatuses() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(MeeshyColors.warning)
+                                .accessibilityHidden(true)
+                            Text(String(localized: "status.bar.load_error", defaultValue: "Erreur de chargement", bundle: .main))
+                                .font(.caption2.weight(.medium))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .glassCard(cornerRadius: 20)
                     }
+                    .accessibilityLabel(String(localized: "status.bar.load_error", defaultValue: "Erreur de chargement", bundle: .main))
+                    .accessibilityHint(String(localized: "status.bar.load_error.retry_hint", defaultValue: "Touchez pour réessayer", bundle: .main))
                 }
 
                 // Other statuses

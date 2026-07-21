@@ -178,6 +178,13 @@ struct MessageViewsDetailView: View {
             )
             .foregroundColor(isSelected ? accent : theme.textMuted)
         }
+        // The count is shown visually and the active filter is otherwise
+        // signalled by color alone — surface both to VoiceOver (explicit label
+        // carries the count, .isSelected carries the active state) so no
+        // information is lost to non-sighted users (HIG: never rely on color to
+        // convey state). Mirrors MessageReactionsDetailView.reactionFilterCapsule.
+        .accessibilityLabel(count.map { "\(filter.label), \($0)" } ?? filter.label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author

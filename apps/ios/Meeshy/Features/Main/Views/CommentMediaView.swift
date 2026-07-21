@@ -19,16 +19,13 @@ struct CommentAttachmentsTray: View {
                         Image(systemName: icon(for: attachment.type))
                             .font(.caption)
                             .foregroundColor(Color(hex: attachment.thumbnailColor))
+                            .accessibilityHidden(true)
                         Text(attachment.name)
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
                             .frame(maxWidth: 120)
                         Button {
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                onRemove(attachment.id)
-                            }
-                            if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
+                            remove(attachment)
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.caption2.weight(.bold))
@@ -36,7 +33,7 @@ struct CommentAttachmentsTray: View {
                                 .frame(width: 18, height: 18)
                                 .background(Circle().fill(theme.textMuted.opacity(0.15)))
                         }
-                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+                        .accessibilityHidden(true)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -46,6 +43,10 @@ struct CommentAttachmentsTray: View {
                             .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
                     )
                     .foregroundColor(theme.textPrimary)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))) {
+                        remove(attachment)
+                    }
                 }
             }
             .padding(.horizontal, 14)
@@ -61,6 +62,14 @@ struct CommentAttachmentsTray: View {
         case .file: return "doc.fill"
         case .video: return "video.fill"
         }
+    }
+
+    private func remove(_ attachment: ComposerAttachment) {
+        HapticFeedback.light()
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+            onRemove(attachment.id)
+        }
+        if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
     }
 }
 

@@ -991,6 +991,8 @@ private struct PreviewVideoPlayer: View {
                 in: 0...1
             )
             .tint(accent)
+            .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
+            .accessibilityValue("\(player.percentInt) %")
 
             HStack(spacing: 8) {
                 Button { player.toggle(url: attachment.fileUrl) } label: {
