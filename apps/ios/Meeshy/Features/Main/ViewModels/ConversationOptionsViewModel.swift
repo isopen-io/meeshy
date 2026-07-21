@@ -8,7 +8,7 @@ final class ConversationOptionsViewModel: ObservableObject {
     @Published var prefs: APIConversationPreferences = .empty
     @Published var categories: [ConversationCategory] = []
     @Published var allTags: [String] = []
-    @Published var loadState: LoadState = .idle
+    @Published var loadState: MeeshySDK.LoadState = .idle
     @Published var errorMessage: String?
     @Published var didDelete: Bool = false
     @Published var didLeave: Bool = false
@@ -32,10 +32,6 @@ final class ConversationOptionsViewModel: ObservableObject {
         self.preferenceService = preferenceService
         self.prefs = Self.prefs(from: conversation.userState)
         setupDebounce()
-    }
-
-    enum LoadState: Equatable {
-        case idle, loading, loaded, error(String)
     }
 
     func load() async {
