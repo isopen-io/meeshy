@@ -631,6 +631,11 @@ struct ConversationView: View {
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
+                    // ForwardPickerSheet reads `@EnvironmentObject StatusViewModel`
+                    // internally — .sheet does not reliably inherit the parent's
+                    // environment across this boundary (documented crash pattern,
+                    // see docs/lessons on @EnvironmentObject-across-sheet).
+                    .environmentObject(statusViewModel)
             }
             .overlay { overlayMenuContent }
             .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
@@ -1615,7 +1620,13 @@ struct ConversationView: View {
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,
-                onCopy: { UIPasteboard.general.string = msg.content; HapticFeedback.success() },
+                onCopy: {
+                    // Prisme: copy what's actually DISPLAYED (the preferred
+                    // translation when one is showing), never blindly the
+                    // original — matches the quick-reaction bar's Copier.
+                    UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
+                    HapticFeedback.success()
+                },
                 onEdit: {
                     composerState.editingMessageId = msg.id
                     composerState.editingOriginalContent = msg.content

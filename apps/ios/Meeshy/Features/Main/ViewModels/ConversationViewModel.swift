@@ -1829,6 +1829,14 @@ class ConversationViewModel: ObservableObject {
             // Transient failure — keep hasOlderMessages so the next scroll
             // retries. Debounce prevents tight retry loops.
             Logger.messages.error("loadOlderMessages failed: \(error.localizedDescription)")
+
+            // Offline graceful degradation (reads must keep working without
+            // network): surface any older page already cached in GRDB from a
+            // prior online session. Without this, scrolling up while offline
+            // looked like there was nothing more to load even when the rows
+            // were sitting right there on disk.
+            let cacheDidLoad = await messageStore.loadOlder(before: oldestCreatedAt)
+            if cacheDidLoad { prefetchRecentMedia() }
         }
 
         isLoadingOlder = false
@@ -2325,7 +2333,7 @@ class ConversationViewModel: ObservableObject {
                 localId: offlineTempId, serverId: nil,
                 conversationId: conversationId, senderId: currentUserId,
                 content: text.isEmpty ? nil : text,
-                originalLanguage: "fr",
+                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                 messageType: "text", messageSource: "user", contentType: "text",
                 state: .sending, retryCount: 0, lastError: nil,
                 isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
@@ -2466,7 +2474,7 @@ class ConversationViewModel: ObservableObject {
                 localId: tempId, serverId: nil,
                 conversationId: conversationId, senderId: currentUserId,
                 content: text.isEmpty ? nil : text,
-                originalLanguage: originalLanguage ?? "fr",
+                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                 messageType: optimisticMessageType.rawValue,
                 messageSource: "user", contentType: "text",
                 state: .sending, retryCount: 0, lastError: nil,
@@ -2685,7 +2693,7 @@ class ConversationViewModel: ObservableObject {
                     attachmentIds: attachmentIds ?? [],
                     replyToId: replyToId,
                     storyReplyToId: storyReplyToId,
-                    originalLanguage: originalLanguage ?? "fr",
+                    originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                     isEncrypted: isEncrypted,
                     clientMessageId: tempId
                 )
@@ -2727,7 +2735,7 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId,
                 content: text,
                 clientMessageId: tempId,
-                originalLanguage: originalLanguage ?? "fr",
+                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
                 replyToId: replyToId,
                 attachmentIds: attachmentIds,
                 attachmentKinds: retryKinds
@@ -2783,6 +2791,36 @@ class ConversationViewModel: ObservableObject {
         let failedMsg = messages[idx]
         guard failedMsg.deliveryStatus == .failed else { return }
 
+        // Media-carrying failed messages (image/video/audio/file) must
+        // replay through the durable outbox: it alone still holds the real,
+        // already-uploaded attachment ids (the displayed `Message.attachments`
+        // carry the pre-upload LOCAL placeholder ids, never reconciled after
+        // the fact). A direct `sendMessage(content:replyToId:)` below only
+        // knows content + replyToId, so a captioned media resend would land
+        // on the server as text-only, and an uncaptioned one would be
+        // rejected outright by `sendMessage`'s empty-content guard — leaving
+        // the bubble stuck mid-clock (state already flipped .failed →
+        // .queued with nothing left to advance it). Resetting the existing
+        // outbox row + an immediate drain mirrors the reaction retry pattern
+        // above (`OutboxFlusher` otherwise only runs at boot / foreground).
+        guard failedMsg.attachments.isEmpty else {
+            do {
+                try await offlineQueue.retryByClientMessageId(messageId)
+                // Mirror the text-only path below: flip .failed → .queued so
+                // the retry band disappears immediately instead of lingering
+                // for the entire upload + dispatch duration (BubbleFailedRetryBar
+                // only clears once the message leaves the .failed state).
+                // Gated on the reset succeeding — if the outbox row couldn't be
+                // found/reset, nothing is actually going to be resent, so the
+                // message must stay visibly .failed.
+                _ = try? await messagePersistence.applyEvent(localId: messageId, event: .retry)
+            } catch {
+                Logger.messages.error("retryMessage outbox reset failed: \(error.localizedDescription)")
+            }
+            await OutboxFlushTrigger.flushNow()
+            return
+        }
+
         // Resend IN PLACE — no delete + reinsert, so the bubble never flashes
         // "message supprimé". `.retry` transitions the EXISTING row .failed →
         // .queued (resets the retry budget) while preserving its content and
@@ -2798,8 +2836,14 @@ class ConversationViewModel: ObservableObject {
         // `messageId` straight through as `existingTempId` is correct.
         let content = failedMsg.content
         let replyToId = failedMsg.replyToId
+        // Preserve the message's ORIGINAL language identity across a retry —
+        // omitting it here would let it fall through `sendMessage`'s
+        // `originalLanguage ?? Self.composeLanguage(for:preferred:)` fallback
+        // (re-detected from the resent content) and silently rewrite a
+        // non-French message's language on every retry (Prisme violation).
+        let originalLanguage = failedMsg.originalLanguage
         _ = try? await messagePersistence.applyEvent(localId: messageId, event: .retry)
-        await sendMessage(content: content, replyToId: replyToId, existingTempId: messageId)
+        await sendMessage(content: content, replyToId: replyToId, originalLanguage: originalLanguage, existingTempId: messageId)
     }
 
     func removeFailedMessage(messageId: String) {
@@ -3236,6 +3280,25 @@ class ConversationViewModel: ObservableObject {
             // recomputes without the hidden row.
             _messagesByDate = nil
         case .everyone:
+            // A `.failed` message never reached the server — it has no real
+            // serverId (`serverId(for:)` falls back to the local optimistic
+            // id). A REST delete below would target that bogus id, get
+            // rejected, and the catch's `markUndeleted` rollback would
+            // resurrect the very message the user just tried to remove.
+            // Route straight to the local-only purge instead.
+            if let idx = messageIndex(for: messageId), messages[idx].deliveryStatus == .failed {
+                // `retryMessage`'s media-retry path resets the message's
+                // outbox row back to `.pending` while it (re)uploads, so a
+                // `.failed` bubble can have a live pending send in flight at
+                // the moment the user taps delete. Cancel it FIRST — a purely
+                // local purge with no cancellation would let that pending row
+                // dispatch and reach the server/other participants after the
+                // sender believes the message is gone. No-op when there is no
+                // pending row (the common case).
+                await offlineQueue.cancelPendingSend(clientMessageId: messageId)
+                removeFailedMessage(messageId: messageId)
+                return
+            }
             // Optimistic: mark as deleted locally + blank content
             try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
             // Drop the starred snapshot so the Starred Messages list doesn't keep
