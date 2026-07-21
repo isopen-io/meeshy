@@ -496,7 +496,36 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `apps/android` only. **Follow-up:** wire it into the app-side registration-wizard scaffold
       (source `Locale.getDefault()` at wizard start to pre-select the language step + country picker).
 - [ ] Password recovery via email link
-- [ ] Password recovery via phone (lookup → masked-info challenge → SMS code → reset)
+- [~] Password recovery via phone (lookup → masked-info challenge → SMS code → reset) —
+      **pure flow core shipped** (slice `auth-phone-recovery-challenge`, 2026-07-21). Faithful port of
+      the flow iOS scatters as `@State` across `MeeshyForgotPasswordView`
+      (`packages/MeeshySDK/Sources/MeeshyUI/Auth/MeeshyForgotPasswordView.swift`): `PhoneStep`
+      (`lookup`/`verifyIdentity`/`verifyCode`) + the reset sheet + success screen, driven by
+      `phoneLookup` (POST `/auth/forgot-password/phone/lookup` → `tokenId` + `maskedUserInfo`),
+      `phoneVerifyIdentity` (POST `.../verify-identity` → `codeSent`), `phoneVerifyCode` (POST
+      `.../verify-code` → `resetToken`), `doResetPassword` (POST `/auth/reset-password`). Two pure
+      `:core:model/auth/` types. **`PhoneRecoveryState`** (`step`/`maskedInfo`/`resetToken`, +
+      `MaskedUserInfo` + `PhoneRecoveryStep{LOOKUP,VERIFY_IDENTITY,VERIFY_CODE,RESET,SUCCESS}`) —
+      an immutable step machine whose four transitions (`onLookupSuccess`/`onIdentityVerified`/
+      `onCodeVerified`/`onResetSuccess`) are **guarded on the current step**: a stale/out-of-order
+      response can neither skip nor rewind a step (iOS advances `phoneStep` unconditionally inside each
+      async handler), and an off-step verify-code never leaks a `resetToken` onto an earlier step.
+      **`PhoneRecoveryInput`** — per-step local-validity gates iOS lacks (it disables buttons on
+      `isLoading` only), each delegating to an existing SSOT: `canLookup` → `SignupFieldValidation.
+      isPhoneValidLocally` (≥8 digits), `canVerifyIdentity` → non-blank username + `isEmailValidLocally`
+      (`@`+`.`), `canSubmitCode` → `OtpCodeField.isComplete` (6 digits), `canReset` → `PasswordEntry.
+      evaluate(...).canProceed` (≥8 + match), `showMismatch` (verbatim iOS inline red-text rule,
+      ungated on length). **SOTA note:** every gate reuses the auth SSOTs already shipped so no rule is
+      re-implemented or drifts. **+33 behavioural tests** (`PhoneRecoveryTest`). **Mutation check
+      (RED proof):** dropping the `onCodeVerified` step guard fails **exactly**
+      `onCodeVerified_fromVerifyIdentity_isIgnored_andDoesNotLeakToken` (29 run, 1 failed, no
+      collateral) — behavioural, not tautological; RED was also proven first by the suite failing to
+      compile against the absent types. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+      `:core:model:testDebugUnitTest` green (whole module) + `assembleDebug` → BUILD SUCCESSFUL. Diff =
+      `apps/android` only (2 new files). **Follow-up:** the app-side `ForgotPasswordView` composable +
+      `PhoneRecoveryViewModel` wiring the network calls (`AuthService.forgotPasswordPhone{Lookup,
+      VerifyIdentity,VerifyCode}` + `resetPassword`) to the state machine, the `CountryPicker` dial-code
+      prefix on the phone field, and the email-link recovery mode (the sibling `[ ]` above).
 - [ ] First-run onboarding carousel with live feature demo + animated step backgrounds
 - [ ] Persistent session restore with proactive token refresh
 - [ ] Transparent token refresh on 401 with one retry

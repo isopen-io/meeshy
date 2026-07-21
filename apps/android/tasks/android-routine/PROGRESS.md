@@ -1,5 +1,51 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **phone-recovery flow core** landed (slice `auth-phone-recovery-challenge`,
+> feature-parity §A → advances "Password recovery via phone (lookup → masked-info challenge → SMS code
+> → reset)" `[ ]` → `[~]`). This is the pure state machine + input gates behind the "recover by phone"
+> flow. Parity source: iOS `MeeshyForgotPasswordView`
+> (`packages/MeeshySDK/Sources/MeeshyUI/Auth/MeeshyForgotPasswordView.swift`) — the `PhoneStep`
+> enum (`lookup`/`verifyIdentity`/`verifyCode`) + reset sheet + success screen, driven by `phoneLookup`
+> (POST `/auth/forgot-password/phone/lookup` → `tokenId` + `maskedUserInfo{displayName,username,email}`),
+> `phoneVerifyIdentity` (POST `.../verify-identity` {tokenId, fullUsername, fullEmail} → `codeSent`),
+> `phoneVerifyCode` (POST `.../verify-code` {tokenId, code} → `resetToken`) then `doResetPassword`
+> (POST `/auth/reset-password`). Two pure `:core:model/auth/` types. **`PhoneRecoveryState`**
+> (`step`/`maskedInfo`/`resetToken`, + `MaskedUserInfo` + `PhoneRecoveryStep{LOOKUP,VERIFY_IDENTITY,
+> VERIFY_CODE,RESET,SUCCESS}`) — an immutable step machine whose four transitions are **guarded on the
+> current step**, so a stale/out-of-order network response can neither skip nor rewind a step (iOS
+> advances `phoneStep` unconditionally inside each async handler) and an off-step verify-code never
+> leaks a `resetToken` onto an earlier step. **`PhoneRecoveryInput`** — per-step local-validity gates
+> iOS lacks (it disables action buttons on `isLoading` only), each **delegating to an existing auth
+> SSOT** so no validation rule is re-implemented: `canLookup` → `SignupFieldValidation.
+> isPhoneValidLocally` (≥8 digits); `canVerifyIdentity` → non-blank username + `isEmailValidLocally`
+> (`@`+`.`); `canSubmitCode` → `OtpCodeField.isComplete` (6 digits); `canReset` → `PasswordEntry.
+> evaluate(...).canProceed` (≥8 + match, stricter than iOS whose reset guards equality only);
+> `showMismatch` (verbatim iOS inline red-text rule, ungated on length). **+33 behavioural tests**
+> (`PhoneRecoveryTest`); expectations are hand-written literals independent of the production derivation.
+> **Mutation check (RED proof):** dropping the `onCodeVerified` step guard fails **exactly**
+> `onCodeVerified_fromVerifyIdentity_isIgnored_andDoesNotLeakToken` (29 run, 1 failed, no collateral) —
+> behavioural, not tautological; RED was also proven first by the suite failing to compile against the
+> absent production types. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; wrapper's
+> gradle-distribution download is 403-blocked in this container, so system Gradle is the gate):**
+> `:core:model:testDebugUnitTest` green (whole module, new suite 33/33) + `assembleDebug` →
+> BUILD SUCCESSFUL (every module compiled). Reviewer **PASS** (diff `apps/android` only — 2 new files,
+> zero production logic in web/ios/gateway/shared; **SDK purity** — a pure data class + pure object in
+> `:core:model`, zero framework deps, the network calls + `ForgotPasswordView` composable stay
+> app-side/pending; **SSOT** — the four gates reuse the already-shipped `SignupFieldValidation`/
+> `OtpCodeField`/`PasswordEntry` rather than re-deriving them; **UX** — one guarded step machine is the
+> single truth of where the flow is; no coverage floor lowered, no test weakened).
+>
+> **Next slice:** the app-side `ForgotPasswordView` composable + `PhoneRecoveryViewModel` wiring the
+> network calls to the `PhoneRecoveryState` machine (with the `CountryPicker` dial-code prefix), OR the
+> sibling email-link recovery mode (`Password recovery via email link`, still `[ ]`), OR another §A
+> pure core (persistent session restore / proactive token-refresh timing, still `[ ]`), OR the app-side
+> `LoginView` saved-account-picker / environment-selector composables (both cores already shipped), OR
+> the tracked Kover 90% coverage-gate infra. **Known standing debt (not this slice):** the `:sdk-core`
+> DataStore-parallel-load timeout flake (`ThemeStoreTest` / `InterfaceLanguageStoreTest` /
+> `PrivacyPreferencesStoreTest`) surfaces intermittently in the full `testDebugUnitTest` run but passes
+> in isolation — a "harden the DataStore test harness against parallel-load timeout" follow-up, tracked
+> and still unclaimed.
+
 > On 2026-07-21 the **profile presence-window reconcile** repair landed (slice
 > `profile-presence-window-reconcile`). This is the flagged "leave main green" repair from the
 > previous run: `:feature:profile` `ProfileHeaderBuilderTest` carried **two deterministic reds on
