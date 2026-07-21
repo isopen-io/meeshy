@@ -223,6 +223,7 @@ struct ThreadView: View {
                     }
                 }
                 .disabled(isSending || replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel(String(localized: "thread.reply.send-a11y", defaultValue: "Envoyer la reponse", bundle: .main))
             }
             .padding(.horizontal, 16)
         }
