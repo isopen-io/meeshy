@@ -76,6 +76,15 @@ describe('getLanguageInfo', () => {
     expect(info.code).toBe('fr');
   });
 
+  it('should treat the "unknown" sentinel case-insensitively', () => {
+    expect(getLanguageInfo('Unknown').code).toBe('fr');
+    expect(getLanguageInfo('UNKNOWN').code).toBe('fr');
+  });
+
+  it('should treat the "unknown" sentinel with surrounding whitespace', () => {
+    expect(getLanguageInfo('  unknown  ').code).toBe('fr');
+  });
+
   it('should handle case insensitivity', () => {
     const info = getLanguageInfo('FR');
     expect(info.code).toBe('fr');
