@@ -495,7 +495,23 @@ struct ProfileView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(statsAccessibilityLabel)
+            .accessibilityHint(String(localized: "profile.stats.a11y.hint", defaultValue: "Ouvre les statistiques détaillées", bundle: .main))
         }
+    }
+
+    // Recompose le bouton de stats en UN seul élément VoiceOver cohérent : sans
+    // regroupement, la rangée était lue comme des fragments épars (valeurs et labels
+    // entremêlés) et rien n'indiquait que le tap ouvre l'écran de stats détaillées.
+    // Le label associe chaque valeur à son intitulé (mêmes clés que les cartes visibles),
+    // précédé du titre de section « Statistiques » — 0 clé i18n neuve pour le label.
+    private var statsAccessibilityLabel: String {
+        let title = String(localized: "profile.section.stats", bundle: .main)
+        let messages = "\(stats?.totalMessages ?? 0) \(String(localized: "profile.stats.messages", bundle: .main))"
+        let conversations = "\(stats?.totalConversations ?? 0) \(String(localized: "profile.stats.conversations", bundle: .main))"
+        let friends = "\(stats?.friendRequestsReceived ?? 0) \(String(localized: "profile.stats.friends", bundle: .main))"
+        return "\(title): \(messages), \(conversations), \(friends)"
     }
 
     // MARK: - Friend Requests Section
