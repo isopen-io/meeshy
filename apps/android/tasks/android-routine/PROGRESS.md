@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **email-link recovery flow core** landed (slice `auth-email-recovery-core`,
+> feature-parity §A → advances "Password recovery via email link" `[ ]` → `[~]`). This is the pure
+> two-state machine + input gate behind the "recover by email" flow, the sibling of the phone-recovery
+> core shipped earlier the same day. Parity source: iOS `MeeshyForgotPasswordView.emailFlow`
+> (`packages/MeeshySDK/Sources/MeeshyUI/Auth/MeeshyForgotPasswordView.swift`) — the `@State email` /
+> `@State emailSent` pair driven by `authManager.requestPasswordReset(email:)` (`false` → the address
+> field, `true` → the "Si un compte existe avec {email}, un lien de réinitialisation a été envoyé."
+> confirmation). One pure `:core:model/auth/EmailRecovery.kt`. **`EmailRecoveryStep{INPUT,SENT}`** +
+> **`EmailRecoveryState`** (`step`/`submittedEmail`) — a two-state machine whose single transition
+> `onSent(email)` is **guarded** on the current step, so a late or duplicate success can neither reopen
+> nor overwrite an already-confirmed flow (iOS flips `emailSent=true` unconditionally on every success),
+> and which **snapshots the submitted address verbatim** into `submittedEmail` so the confirmation quotes
+> a stable value even if the field is later edited/cleared (iOS interpolates the *live* `email` field).
+> **`EmailRecoveryInput.canSend`** — a local email-validity gate iOS lacks (it gates Send on `isLoading`
+> only), delegating to the already-shipped `SignupFieldValidation.isEmailValidLocally` SSOT (loose `@`+`.`)
+> so no rule is re-implemented. **+9 behavioural tests** (`EmailRecoveryTest`); expectations are
+> hand-written literals independent of the production derivation. **Mutation check (RED proof):** dropping
+> the `onSent` step guard fails **exactly** `onSent_fromSent_isInert_andDoesNotOverwriteTheCapturedEmail`
+> + `onSent_fromSent_returnsAnEquivalentStateUnchanged` (9 run, 2 failed, no collateral) — behavioural,
+> not tautological; RED was also proven first by the suite failing to compile against the absent
+> production types. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; wrapper's
+> gradle-distribution download is 403-blocked in this container, so system Gradle is the gate):**
+> `:core:model:testDebugUnitTest` green (whole module, new suite 9/9) + `:app:assembleDebug` →
+> BUILD SUCCESSFUL (every module compiled). Reviewer **PASS** (diff `apps/android` only — 1 new source
+> file + 1 test, zero production logic in web/ios/gateway/shared; **SDK purity** — a pure data class +
+> pure object in `:core:model`, zero framework deps, the network call + `ForgotPasswordView` composable
+> stay app-side/pending; **SSOT** — the send gate reuses the shipped `SignupFieldValidation` rather than
+> re-deriving the email shape; **UX** — one guarded two-state machine is the single truth of the email
+> flow; no coverage floor lowered, no test weakened).
+>
+> **Next slice:** the app-side `ForgotPasswordView` composable + `RecoveryMode{EMAIL,PHONE}` segmented
+> picker + `EmailRecoveryViewModel`/`PhoneRecoveryViewModel` wiring the network calls
+> (`requestPasswordReset` + the phone lookup/verify/reset chain) to the two now-complete recovery machines
+> — unifying both cores behind one screen; OR another §A pure core (persistent session restore /
+> proactive token-refresh timing, or transparent-401-refresh retry policy, all still `[ ]`); OR the
+> app-side `LoginView` saved-account-picker / environment-selector composables (both cores already
+> shipped); OR the tracked Kover 90% coverage-gate infra. **Known standing debt (not this slice):** the
+> `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest` / `InterfaceLanguageStoreTest` /
+> `PrivacyPreferencesStoreTest`) surfaces intermittently in the full `testDebugUnitTest` run but passes
+> in isolation — a "harden the DataStore test harness against parallel-load timeout" follow-up, tracked
+> and still unclaimed.
+
 > On 2026-07-21 the **phone-recovery flow core** landed (slice `auth-phone-recovery-challenge`,
 > feature-parity §A → advances "Password recovery via phone (lookup → masked-info challenge → SMS code
 > → reset)" `[ ]` → `[~]`). This is the pure state machine + input gates behind the "recover by phone"
