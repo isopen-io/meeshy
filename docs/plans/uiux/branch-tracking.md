@@ -24,6 +24,21 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **195i (terminée, branche `claude/laughing-thompson-dj6dd5`, base `main` HEAD `7fe702b`)** : **Instant App** — `CommunityLinksView.communityLinksSection` affichait un `ProgressView()` nu pendant `viewModel.isLoading`. Le ViewModel est déjà cache-first (`isLoading = links.isEmpty` posé **uniquement** sur `.expired`/`.empty`) → le spinner ne surgit qu'au **cold-start (cache vide)**, exactement le cas où la doctrine impose un **SkeletonPlaceholder, pas un spinner**. Lacune a11y secondaire : le spinner n'avait aucun label → VoiceOver muet pendant le chargement. Fix : nouveau leaf réutilisable `SkeletonLinkRow` + `SkeletonLinkList` (`Features/Main/Views/Skeletons/SkeletonLinkRow.swift`) calqué sur `communityLinkRow` (avatar 40pt + ligne titre + ligne sous-titre + glyphe action trailing) suivant l'idiome `SkeletonFeedPost` (`import MeeshyUI`, `SkeletonShape` + `skeletonShimmer()`, couleurs neutres pilotées `colorScheme`, Reduce Motion géré gratis par `ShimmerModifier`) ; chaque rangée `.accessibilityElement(children: .ignore)` + `.accessibilityLabel("Chargement d'un lien")` → VoiceOver annonce désormais l'état de chargement. `ProgressView(...)` → `SkeletonLinkList()` dans `CommunityLinksView`. **1 fichier neuf** (auto-inclus XcodeGen globbing, 0 edit pbxproj) + **1 fichier édité**, 0 logique / 0 réseau / 0 ViewModel, **1 clé i18n inline** `skeleton.link_row.loading` (0 xcstrings, miroir `skeleton.feed.post.loading`), 0 import neuf dans `CommunityLinksView` (`SkeletonLinkList` même module). 0 contention (aucune PR ouverte ne touche `CommunityLinksView` ni `Skeletons/`). Gate = CI `iOS Tests` (env Linux sans Xcode).
 > - **⚠️ NE PLUS re-flagger** le `ProgressView` cold-start de `CommunityLinksView` (soldé 195i). `SkeletonLinkList` désormais **réutilisable** pour les frères.
 > - **Base de départ 196i : `main` HEAD** (après merge, supprimer la branche). **Piste 196i+** (1 surface/itération, vérifier collision via `search_pull_requests` d'abord) : `ShareLinksView` + `TrackingLinksView` (même défaut `ProgressView` cold-start → adopter `SkeletonLinkList`) ; `FeedCommentsSheet` (1717 l, `.system(size:)` → Dynamic Type, itération dédiée).
+> **POINTEUR AUTORITAIRE iOS (mis à jour 195i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Essaim iOS** : PR ouvertes #2146→#2182 (jusqu'à ~194i). Main HEAD `8a74c44`. Numéro **195i** choisi strictement > tout en vol.
+> - **195i (terminée, branche `claude/laughing-thompson-kgxs7c`, base `main` HEAD `8a74c44`)** :
+>   parité VoiceOver du **`Slider` de position vidéo** dans `MessageOverlayMenu` (transport inline
+>   de `PreviewVideoPlayer.videoControls`, overlay long-press). Le scrubber **audio** jumeau (l.884)
+>   portait déjà `.accessibilityLabel(media.playbackPosition)` + `.accessibilityValue("\(percentInt) %")` ;
+>   le scrubber **vidéo** (l.986, même `OverlayAudioPlayer`) n'avait que `.tint(accent)` → un `Slider`
+>   natif adjustable annonçait sa position brute sans nom ni valeur, et le `Text` de % voisin est
+>   `.accessibilityHidden(true)` → **aucun retour de position VoiceOver**. Fix (idiome 189i) : 2
+>   modifiers additifs copiant le jumeau audio → **0 clé i18n neuve** (réutilise `media.playbackPosition`
+>   déjà inline), **0 logique / 0 visuel / 0 test neuf**. 1 fichier. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** la valeur/label VoiceOver des `Slider` de `MessageOverlayMenu` (audio + vidéo, soldé 195i).
+> - **Base de départ 196i : `main` HEAD** (après merge, supprimer la branche). **Différé 196i+** (surfaces fraîches, vérifier collision d'abord) :
+>   `MeeshyAppIntents.swift` `NotificationCheckView` (`.foregroundColor(.blue)` → Indigo + `Text("… Unread")`/`Text("Try asking Siri:")` non localisés — snippet Siri sous-testé) ;
+>   `EditPostSheet.swift` `Picker` segmenté Post/Réel (l.241) sans `.accessibilityValue`.
 >
 > **POINTEUR AUTORITAIRE iOS (mis à jour 183i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **183i (branche `claude/laughing-thompson-8vaq6w`, base `main` HEAD `64f943d`)** :
