@@ -545,7 +545,12 @@ final class FeedViewModelTests: XCTestCase {
         }
         try? await waitForContinuation(in: queue, for: payload.clientMutationId)
         queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        // Deterministic wait on the fire-and-forget outcome observer instead of
+        // a fixed sleep (#1869): reacts the instant `posts` is actually
+        // reassigned rather than hoping 50ms was enough on a busy CI runner.
+        await waitForPublishedValue(sut.$posts, timeout: 2.0) { posts in
+            posts.first(where: { $0.id == "p1" })?.isLiked == false
+        }
 
         XCTAssertFalse(sut.posts[0].isLiked, "exhausted outbox row must roll back the optimistic like")
         XCTAssertEqual(sut.posts[0].likes, 5, "like count must revert on exhausted")
@@ -584,7 +589,12 @@ final class FeedViewModelTests: XCTestCase {
         }
         try? await waitForContinuation(in: queue, for: payload.clientMutationId)
         queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        // Deterministic wait on the fire-and-forget outcome observer instead of
+        // a fixed sleep (#1869): reacts the instant `posts` is actually
+        // reassigned rather than hoping 50ms was enough on a busy CI runner.
+        await waitForPublishedValue(sut.$posts, timeout: 2.0) { posts in
+            posts.first(where: { $0.id == "p1" })?.commentCount == 3
+        }
 
         XCTAssertEqual(sut.posts[0].commentCount, 3, "comment count must revert on exhausted")
         XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on exhausted")

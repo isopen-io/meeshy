@@ -80,6 +80,15 @@ jobs:
           fi
           SIM_ID=$(xcrun simctl create "iPhone16Pro-iOS182-CI" "iPhone 16 Pro" "com.apple.CoreSimulator.SimRuntime.iOS-18-2")
           echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
+          # Boot the simulator and pre-grant the photos-add TCC permission so
+          # CameraCaptureSaveRuntimeTests (the "film + validate" SIGTRAP guard,
+          # see apps/ios/MeeshyTests/Unit/Components/CameraCaptureSaveRuntimeTests.swift)
+          # actually exercises PhotoLibraryManager.saveVideo/saveImage instead of
+          # always hitting its skipIfUnauthorized() XCTSkip. A freshly `simctl
+          # create`d device has no grants, so without this the guard silently
+          # never runs in CI.
+          xcrun simctl boot "$SIM_ID"
+          xcrun simctl privacy "$SIM_ID" grant photos-add me.meeshy.app
 
       # Pre-resolve the SPM graph with retries. Firebase/grpc ship binary-target
       # zips fetched from dl.google.com, which intermittently fail mid-download
@@ -105,11 +114,23 @@ jobs:
       - name: Run iOS tests
         run: |
           rm -rf TestResults.xcresult
+          # The 3 XCTMetric benchmark suites (MessageListPerformanceTests,
+          # BubbleSimpleMessagePerfTests, SearchPerformanceTests) are
+          # intentionally gated OUT of the regular run — see their file
+          # headers and scripts/ios-perf-benchmark.sh, which is the only
+          # invocation meant to exercise them (via -only-testing). Gating
+          # is invocational, not env-var based (RUN_PERF_BENCHMARKS never
+          # reaches the in-simulator test process under `xcodebuild test`),
+          # so -skip-testing is the only thing that actually excludes them.
+          # meeshy.sh mirrors the same exclusion locally (NON_PHASE_SUITES).
           xcodebuild test \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -only-testing:MeeshyTests \
+            -skip-testing:MeeshyTests/MessageListPerformanceTests \
+            -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
+            -skip-testing:MeeshyTests/SearchPerformanceTests \
             -resultBundlePath TestResults.xcresult \
             -test-timeouts-enabled YES \
             -maximum-test-execution-time-allowance 180 \

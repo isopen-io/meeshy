@@ -21,14 +21,16 @@ final class LocalizationConsistencyTests: XCTestCase {
 
     // Targets whose `String(localized:)` calls resolve against the app's main
     // bundle (default / `bundle: .main`), plus the SDK — its code references
-    // both the app catalog (`.main`) and its own catalog (`.module`).
+    // both the app catalog (`.main`) and its own catalog (`.module`). The old
+    // `apps/ios/MeeshyIntents` root was recabled into `apps/ios/Meeshy/Features/Intents/`
+    // on 2026-06-24 (cf. apps/ios/CLAUDE.md § App Extensions) — already
+    // covered by the `apps/ios/Meeshy` root below, so it was dropped here.
     private static let sourceRoots = [
         "apps/ios/Meeshy",
         "apps/ios/MeeshyNotificationExtension",
         "apps/ios/MeeshyWidgets",
         "apps/ios/MeeshyShareExtension",
         "apps/ios/MeeshyContextMenu",
-        "apps/ios/MeeshyIntents",
         "packages/MeeshySDK/Sources",
     ]
 
