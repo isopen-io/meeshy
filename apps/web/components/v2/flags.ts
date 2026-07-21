@@ -24,6 +24,7 @@ export const FLAG_MAP: Record<string, string> = {
   id: '\u{1F1EE}\u{1F1E9}',
   sv: '\u{1F1F8}\u{1F1EA}',
   uk: '\u{1F1FA}\u{1F1E6}',
+  no: '\u{1F1F3}\u{1F1F4}',
 };
 
 export const LANGUAGE_NAMES: Record<string, string> = {
@@ -47,6 +48,7 @@ export const LANGUAGE_NAMES: Record<string, string> = {
   id: 'Bahasa',
   sv: 'Svenska',
   uk: 'Ukrainska',
+  no: 'Norsk',
 };
 
 export function getFlag(code: string | undefined | null): string {
