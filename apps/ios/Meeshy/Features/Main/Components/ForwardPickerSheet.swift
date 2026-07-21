@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - ForwardPickerSheet
 
@@ -21,7 +22,8 @@ struct ForwardPickerSheet: View {
     @State private var searchText = ""
     @State private var sendingToId: String? = nil
     @State private var sentToIds: Set<String> = []
-    @State private var errorMessage: String? = nil
+    @State private var failedToIds: Set<String> = []
+    @State private var loadFailed = false
 
     private var filteredConversations: [Conversation] {
         if searchText.isEmpty {
@@ -48,20 +50,28 @@ struct ForwardPickerSheet: View {
                     ProgressView()
                         .tint(Color(hex: accentColor))
                     Spacer()
+                } else if conversations.isEmpty && loadFailed {
+                    // Cold-start load failure — distinct from a genuinely empty
+                    // list so the user gets a recoverable Retry rather than a
+                    // misleading "no conversations". Reuses the conversation-list
+                    // error copy (identical operation), already localized.
+                    EmptyStateView(
+                        icon: "wifi.slash",
+                        title: String(localized: "conversations.error.title", defaultValue: "Une erreur est survenue", bundle: .main),
+                        subtitle: String(localized: "conversations.error.subtitle", defaultValue: "Impossible de charger vos conversations.", bundle: .main),
+                        actionLabel: String(localized: "conversations.error.retry", defaultValue: "Réessayer", bundle: .main),
+                        accentColor: accentColor,
+                        compact: true,
+                        onAction: { Task { await retryLoad() } }
+                    )
                 } else if filteredConversations.isEmpty {
-                    Spacer()
-                    VStack(spacing: 8) {
-                        // Empty-state hero glyph (≥40pt, decorative) — kept fixed per doctrine 74i/86i.
-                        Image(systemName: "bubble.left.and.bubble.right")
-                            .font(.system(size: 40))
-                            .foregroundColor(theme.textMuted)
-                            .accessibilityHidden(true)
-                        Text(String(localized: "forward.empty", defaultValue: "Aucune conversation", bundle: .main))
-                            .font(MeeshyFont.relative(15, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .accessibilityElement(children: .combine)
-                    Spacer()
+                    EmptyStateView(
+                        icon: "bubble.left.and.bubble.right",
+                        title: String(localized: "forward.empty", defaultValue: "Aucune conversation", bundle: .main),
+                        subtitle: String(localized: "forward.empty.subtitle", defaultValue: "Rejoignez ou démarrez une conversation pour y transférer des messages.", bundle: .main),
+                        accentColor: accentColor,
+                        compact: true
+                    )
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -207,6 +217,19 @@ struct ForwardPickerSheet: View {
                 .scaleEffect(0.8)
                 .frame(width: 24, height: 24)
                 .accessibilityLabel(String(localized: "forward.sending", defaultValue: "Envoi en cours", bundle: .main))
+        } else if failedToIds.contains(conv.id) {
+            // Send failed — surface it in-sheet (a root toast renders behind the
+            // sheet) as a tappable, recoverable retry. Error is signalled by the
+            // glyph shape, not colour alone.
+            Button {
+                forwardTo(conv)
+            } label: {
+                Image(systemName: "exclamationmark.arrow.circlepath")
+                    .font(MeeshyFont.relative(24))
+                    .foregroundColor(MeeshyColors.error)
+            }
+            .accessibilityLabel(String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)))
+            .disabled(sendingToId != nil)
         } else {
             Button {
                 forwardTo(conv)
@@ -254,15 +277,25 @@ struct ForwardPickerSheet: View {
                 conversations = await Task.detached(priority: .userInitiated) {
                     payload.map { $0.toConversation(currentUserId: userId) }
                 }.value
+                loadFailed = false
+            } else {
+                loadFailed = true
             }
         } catch {
-            errorMessage = error.localizedDescription
+            loadFailed = true
         }
         isLoading = false
     }
 
+    private func retryLoad() async {
+        loadFailed = false
+        isLoading = true
+        await refreshConversations()
+    }
+
     private func forwardTo(_ targetConversation: Conversation) {
         sendingToId = targetConversation.id
+        failedToIds.remove(targetConversation.id)
         Task {
             do {
                 let body = SendMessageRequest(
@@ -280,7 +313,7 @@ struct ForwardPickerSheet: View {
                 sentToIds.insert(targetConversation.id)
                 HapticFeedback.success()
             } catch {
-                errorMessage = String(format: String(localized: "common.error.format", defaultValue: "Erreur: %@", bundle: .main), error.localizedDescription)
+                failedToIds.insert(targetConversation.id)
                 HapticFeedback.error()
             }
             sendingToId = nil

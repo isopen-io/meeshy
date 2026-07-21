@@ -136,6 +136,41 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **195i (terminée, branche `claude/laughing-thompson-xnsbok`, base `main` HEAD `be4a52c`)** : i18n × VoiceOver de **`BrandSignature`** (footer version + crédit « Fait avec ❤️ par Services CEO », partagé splash + login). Le `.accessibilityLabel` du groupe (`.combine`) était un **littéral anglais dur** `Text("Meeshy version …, build …. Made with love by Services CEO.")` → VoiceOver lisait le crédit **en anglais sur toute locale non-EN** alors que le crédit visible `splash.madeWithLove` est localisé 5 langues (inverse de la discipline i18n). Xcode avait de plus auto-extrait ce littéral en **clé fantôme** `"Meeshy version %@, build %@…"` (1 entrée `fr` `state:new` = l'anglais). Fix (idiome `story.mine.row.a11y`) : `String(localized: "brand.signature.accessibilityLabel", defaultValue: "Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO.", bundle: .main)` (`bundle: .main` calqué sur l'appel `splash.madeWithLove` 2 lignes plus haut ; libellé épelle « version »/« build »/« love » sans « · » ni ❤️ = phrase VoiceOver propre, gain a11y préservé). Catalogue : clé neuve **de/en/es/fr/pt-BR** (`extractionState: manual`, parité couverture `splash.madeWithLove`, « love » idiomatique par locale) via **édition texte chirurgicale** (.xcstrings mixed-format préservé, JSON validé) + **clé fantôme supprimée**. Test guard source-level neuf `BrandSignatureLocalizationTests` (miroir `MessageMoreSheetAccessibilityTests`, non-`@MainActor`, auto-inclus `xcodegen generate`) : (1) source ref la clé stable + plus de littéral `Text("Meeshy version` ; (2) catalogue couvre toutes les langues de `splash.madeWithLove` + clé fantôme absente. 1 fichier prod (+6/−1), 1 édit catalogue, 1 test neuf. **0 logique / 0 visuel / 0 layout / 0 couleur / 0 string visible neuve**. Gate = CI `iOS Tests`.
 > - **⚠️ NE PLUS re-flagger** le libellé VoiceOver de `BrandSignature` (localisation soldée 195i).
 > - **Base de départ 196i : `main` HEAD** (resync ; supprimer la branche mergée). **Différé 196i+** (surfaces fraîches, 1/itération, vérifier collision via `list_pull_requests`) : `MessageViewsDetailView.sendAttemptsCard` (littéraux FR `"Historique d'envoi"`/`"1ère tentative"`/`"Tentative \(n)"` — i18n) ; `MessageDetailSheet` views-filter chip (l.~898) + reaction-filter capsule (l.~1587) couleur-seule sans `.isSelected` (gros fichier).
+> **POINTEUR iOS AUTORITAIRE (mis à jour 197i, 2026-07-20)** — piste iOS (suffixe `i`).
+> - **Contexte essaim** : PR iOS `laughing-thompson` ouvertes jusqu'à **196i**
+>   (#2205 `ActiveSessionsView`, #2204 `EditPostSheet`, #2202 `DownloadBadgeView`,
+>   #2201 Siri snippets, #2199/2198/2194 `MessageViewsDetailView`/`MessageOverlayMenu`,
+>   #2193 `ThreadView`, #2192 `StatusBarView`, #2191 `CommunityLinksView`,
+>   #2175–2188 `MessageDetailSheet`/`TermsOfServiceView`/`DataStorageView`…).
+>   Numéro **197i** choisi strictement > 196i (plus haut en vol). `list_pull_requests`
+>   vérifié : **aucune** PR ne touche `ForwardPickerSheet` ; 0 analyse antérieure ;
+>   0 test existant (grep = 0).
+> - **197i (terminée, branche `claude/laughing-thompson-on24d7`, base `main` HEAD `9dd48f6`)** :
+>   feedback d'échec + i18n de **`ForwardPickerSheet`** (feuille de transfert de message,
+>   `.sheet` detents medium/large depuis `ConversationView`). **4 défauts réels** : (1)
+>   **échec d'envoi silencieux** — `@State errorMessage` assigné (catch `forwardTo` + `refreshConversations`)
+>   mais **jamais rendu** (dead state) → un transfert échoué ne donnait qu'un `HapticFeedback.error()`,
+>   rien de visible ni d'annoncé VoiceOver ; (2) `FeedbackToastManager` **inutilisable ici** (son
+>   `FeedbackToastView` est monté à la racine via `.overlay` → rendu **derrière** la `.sheet`, caché au
+>   detent `.large`) → feedback in-sheet obligatoire ; (3) **échec de chargement à froid** avalé →
+>   fallback trompeur « Aucune conversation » (cul-de-sac non-récupérable) ; (4) état vide **bespoke**
+>   `VStack` titre-seul réimplémentant `EmptyStateView` (pattern défaut 183i) ; **(5) écran 100 %
+>   non-localisé** — **aucune** des 11 clés `forward.*` n'existait dans `Localizable.xcstrings`
+>   (français affiché dans toutes les langues). **Fixes** : (1) échec d'envoi → **retry par rangée
+>   in-sheet** (4e état `failedToIds` : `exclamationmark.arrow.circlepath` `MeeshyColors.error`,
+>   re-`forwardTo` au tap, VoiceOver `forward.retry-send-a11y`, **erreur signalée par la forme du
+>   glyphe pas la couleur seule** — WCAG 1.4.1) + suppression `errorMessage` ; (2) échec de chargement
+>   → `EmptyStateView` `wifi.slash` + Retry (flag `loadFailed`, `retryLoad()`), **réutilise**
+>   `conversations.error.title/.subtitle/.retry` (déjà traduites, op. identique) ; (3) état vide →
+>   `EmptyStateView` (sous-titre de guidage + spring + a11y combiné gratuits) ; (4) **i18n complète** —
+>   11 clés `forward.*` × 5 langues (de/en/es/fr/pt-BR) ajoutées au catalogue (JSON re-validé, 1276 clés).
+>   `import MeeshyUI` ajouté (convention `ProfileUserPostsList`). 2 fichiers (Swift +49/−16, xcstrings +385),
+>   0 SDK / 0 test neuf / stale cache toujours rendu instantanément. Build local impossible (hôte Linux,
+>   pas de toolchain Swift). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** `ForwardPickerSheet` : feedback d'échec envoi/chargement, dédup état vide,
+>   et localisation `forward.*` soldés 197i. Recherche-sans-résultat retombe dans l'état vide générique
+>   (différé, marginal). Succès de transfert = checkmark vert in-row (conservé).
+> - **Base de départ 198i : `main` HEAD** (resync ; supprimer la branche mergée).
 >
 > **POINTEUR AUTORITAIRE iOS (mis à jour 183i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **183i (branche `claude/laughing-thompson-8vaq6w`, base `main` HEAD `64f943d`)** :
