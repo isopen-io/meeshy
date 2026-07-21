@@ -26,8 +26,19 @@ public struct EmbeddedVideo: Sendable, Codable, Equatable, Identifiable {
     /// non-ASCII) même si `EmbeddableVideoResolver.make` filtre déjà à l'ASCII en amont —
     /// on repercent-encode systématiquement avant toute interpolation dans une URL pour
     /// ne jamais dépendre d'un force-unwrap sur une valeur dérivée d'un texte distant.
+    /// Un unique segment de chemin : `.urlPathAllowed` seul laisse passer `/` tel quel
+    /// (il autorise les séparateurs, légitime pour encoder un chemin complet), ce qui
+    /// permettrait à un `videoId` construit directement via l'initialiseur public
+    /// d'injecter des segments de chemin supplémentaires (`../`) dans les URLs
+    /// hardcodées ci-dessous. On retire `/` pour garantir un segment opaque.
+    private static let videoIdPathAllowedCharacters: CharacterSet = {
+        var set = CharacterSet.urlPathAllowed
+        set.remove(charactersIn: "/")
+        return set
+    }()
+
     private var pathEncodedVideoId: String {
-        videoId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+        videoId.addingPercentEncoding(withAllowedCharacters: EmbeddedVideo.videoIdPathAllowedCharacters) ?? ""
     }
 
     private static let fallbackURL = URL(string: "https://www.youtube.com/")!
@@ -102,9 +113,9 @@ public enum EmbeddableVideoResolver {
     }
 
     private static func make(_ rawId: String, _ start: Int?) -> EmbeddedVideo? {
-        let id = rawId.prefix { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }
-        guard id.count >= 6, id.count <= 20 else { return nil }
-        return EmbeddedVideo(provider: .youtube, videoId: String(id), startSeconds: start)
+        guard rawId.count >= 6, rawId.count <= 20 else { return nil }
+        guard rawId.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }) else { return nil }
+        return EmbeddedVideo(provider: .youtube, videoId: rawId, startSeconds: start)
     }
 
     private static func parseStart(comps: URLComponents?, fragment: String?) -> Int? {

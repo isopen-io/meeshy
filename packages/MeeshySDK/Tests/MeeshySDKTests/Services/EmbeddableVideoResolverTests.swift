@@ -115,4 +115,23 @@ struct EmbeddableVideoResolverTests {
         #expect(embed.scheme == "https")
         #expect(watch.scheme == "https")
     }
+
+    @Test("videoId contenant '/' construit directement ne peut pas injecter de segment de chemin")
+    func directVideoIdWithSlashCannotInjectPathSegment() {
+        let v = EmbeddedVideo(provider: .youtube, videoId: "abc/../../evil", startSeconds: nil)
+        let thumb = v.thumbnailURL()
+        #expect(thumb.host == "img.youtube.com")
+        #expect(thumb.absoluteString == "https://img.youtube.com/vi/abc%2F..%2F..%2Fevil/hqdefault.jpg")
+        #expect(thumb.pathComponents == ["/", "vi", "abc/../../evil", "hqdefault.jpg"])
+        let embed = v.embedURL
+        #expect(embed.host == "www.youtube.com")
+        #expect(embed.absoluteString == "https://www.youtube.com/embed/abc%2F..%2F..%2Fevil")
+        #expect(embed.pathComponents == ["/", "embed", "abc/../../evil"])
+    }
+
+    @Test("make() rejette un id ASCII valide suivi de garbage plutôt que de le tronquer")
+    func longValidAsciiPrefixFollowedByGarbageIsRejectedNotTruncated() {
+        let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/abc123défault")
+        #expect(v == nil)
+    }
 }
