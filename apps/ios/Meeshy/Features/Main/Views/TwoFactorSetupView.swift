@@ -189,6 +189,7 @@ struct TwoFactorSetupView: View {
                 .font(MeeshyFont.relative(28, weight: .bold, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
                 .foregroundColor(theme.textPrimary)
                 .padding(.vertical, MeeshySpacing.md + 2)
                 .background(
@@ -433,6 +434,7 @@ struct TwoFactorDisableView: View {
                         .padding(.horizontal, MeeshySpacing.xl)
 
                     SecureField(String(localized: "2fa_password_placeholder", defaultValue: "Mot de passe"), text: $disablePassword)
+                        .textContentType(.password)
                         .font(MeeshyFont.relative(16, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .padding(.vertical, MeeshySpacing.md + 2)
@@ -451,6 +453,7 @@ struct TwoFactorDisableView: View {
                         .font(MeeshyFont.relative(28, weight: .bold, design: .monospaced))
                         .multilineTextAlignment(.center)
                         .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
                         .foregroundColor(theme.textPrimary)
                         .padding(.vertical, MeeshySpacing.md + 2)
                         .background(
@@ -681,6 +684,7 @@ struct TwoFactorBackupCodesView: View {
                 .font(MeeshyFont.relative(28, weight: .bold, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
                 .foregroundColor(theme.textPrimary)
                 .padding(.vertical, MeeshySpacing.md + 2)
                 .background(
