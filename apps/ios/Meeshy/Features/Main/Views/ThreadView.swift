@@ -232,8 +232,24 @@ struct ThreadView: View {
 
     // MARK: - Actions
 
+    /// Cache-first: seeds `replies` from the conversation's already-cached
+    /// message list (`CacheCoordinator.shared.messages`, the same store
+    /// `ConversationViewModel` maintains) BEFORE the network round-trip, so
+    /// a cold/offline open shows the replies that were already delivered
+    /// instead of a flat-empty thread under a bubble whose reply count is
+    /// visibly non-zero. Read-only: this view only ever filters a subset
+    /// out of that cache, never writes back to it (writing a partial
+    /// reply-only subset would corrupt the full per-conversation list other
+    /// consumers rely on).
     private func loadReplies() async {
-        isLoading = true
+        let seeded = await CacheCoordinator.shared.messages.load(for: conversationId)
+            .snapshot()?
+            .filter { $0.replyToId == parentMessage.id }
+            .sorted { $0.createdAt < $1.createdAt } ?? []
+        if !seeded.isEmpty {
+            replies = seeded
+        }
+        isLoading = replies.isEmpty
         let user = AuthManager.shared.currentUser
         do {
             replies = try await ThreadRepliesLoader().loadReplies(
@@ -243,14 +259,21 @@ struct ThreadView: View {
                 currentUsername: user?.username
             )
         } catch {
-            // Match prior behaviour: silently swallow on error so the
-            // empty-state UI is shown. ThreadView has no dedicated error
-            // surface (no `loadError` state) — that's an existing
-            // limitation, not something this refactor changes.
+            // Network failure — keep the cache seed instead of clearing it
+            // (was unconditionally silent with no fallback; ThreadView has
+            // no dedicated error surface — that limitation is unchanged).
         }
         isLoading = false
     }
 
+    /// Was a direct REST POST with no optimistic row and no offline fallback
+    /// — a reply typed offline threw straight into the `catch` branch, the
+    /// composer text came back, and the reply was gone for good (no queue,
+    /// no retry). Now: an optimistic bubble appears immediately (capture →
+    /// apply local → send → rollback on failure), and offline the reply is
+    /// durably enqueued via the SAME `ofq_*` outbox row
+    /// `OutboxDispatcher.dispatchSendMessage` already replays for
+    /// `ConversationViewModel`, instead of being attempted (and lost).
     private func sendReply() {
         let text = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
@@ -260,9 +283,45 @@ struct ThreadView: View {
         isSending = true
         sendError = nil
 
+        let clientMessageId = ClientMessageId.generate()
+        let user = AuthManager.shared.currentUser
+        let optimisticReply = MeeshyMessage(
+            id: clientMessageId,
+            clientMessageId: clientMessageId,
+            conversationId: conversationId,
+            senderId: user?.id ?? "",
+            content: text,
+            replyToId: parentMessage.id,
+            createdAt: Date(),
+            senderName: user?.displayName ?? user?.username,
+            senderUsername: user?.username,
+            senderAvatarURL: user?.avatar,
+            deliveryStatus: .sending,
+            isMe: true
+        )
+        replies.append(optimisticReply)
+
         Task {
+            guard NetworkMonitor.shared.isOnline else {
+                let queueItem = OfflineQueueItem(
+                    conversationId: conversationId,
+                    content: text,
+                    clientMessageId: clientMessageId,
+                    replyToId: parentMessage.id
+                )
+                do {
+                    try await OfflineQueue.shared.enqueue(queueItem)
+                    isSending = false
+                } catch {
+                    replies.removeAll { $0.id == clientMessageId }
+                    replyText = savedText
+                    sendError = error.localizedDescription
+                    isSending = false
+                }
+                return
+            }
             do {
-                let request = SendMessageRequest(content: text, replyToId: parentMessage.id)
+                let request = SendMessageRequest(content: text, replyToId: parentMessage.id, clientMessageId: clientMessageId)
                 _ = try await MessageService.shared.send(
                     conversationId: conversationId,
                     request: request
@@ -270,6 +329,7 @@ struct ThreadView: View {
                 isSending = false
                 await loadReplies()
             } catch {
+                replies.removeAll { $0.id == clientMessageId }
                 replyText = savedText
                 sendError = error.localizedDescription
                 isSending = false
