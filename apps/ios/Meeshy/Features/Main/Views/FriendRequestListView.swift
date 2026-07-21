@@ -1,10 +1,19 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
 struct FriendRequestListView: View {
-    @StateObject private var viewModel = FriendRequestListViewModel()
+    // Wired onto the conformant, cache-first + outbox `RequestsViewModel`
+    // (already used by `RequestsTab`) instead of the ad-hoc, network-only
+    // `FriendRequestListViewModel` this screen used to own. That local
+    // ViewModel spinner-looped on every open and called `FriendService`
+    // directly on respond — no cache seed, no optimistic update, no
+    // OfflineQueue routing. `@StateObject` here creates the instance (this
+    // is the route destination), mirroring `FriendRequestListViewModel`'s
+    // former ownership.
+    @StateObject private var viewModel = RequestsViewModel()
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -17,7 +26,24 @@ struct FriendRequestListView: View {
             content
         }
         .background(theme.backgroundPrimary.ignoresSafeArea())
-        .task { await viewModel.loadRequests() }
+        .task {
+            await viewModel.loadReceived()
+            // Screen consulted → friend-request notifications should no
+            // longer read as unread. Fire-and-forget, logged rather than
+            // silently swallowed: a failure here only means a stale badge
+            // count, never a data-loss risk, but it's still worth a trace.
+            Task {
+                do {
+                    try await NotificationService.shared.markRead(types: [
+                        "friend_request", "contact_request",
+                        "friend_accepted", "contact_accepted"
+                    ])
+                } catch {
+                    Logger(subsystem: "me.meeshy.app", category: "friend-requests")
+                        .error("markRead(friend_request types) failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
         .withStatusBubble()
     }
 
@@ -53,19 +79,23 @@ struct FriendRequestListView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.isLoading {
+        // Cache-first: `RequestsViewModel.loadState` only reaches `.loading`
+        // on a genuinely empty cache (cold start) — `.cachedFresh`/`.cachedStale`
+        // already carry data into `receivedRequests` by the time they're set.
+        // No spinner when cached data exists, per the architecture bible.
+        if viewModel.loadState == .loading {
             VStack {
                 Spacer()
                 ProgressView()
                     .tint(MeeshyColors.brandPrimary)
                 Spacer()
             }
-        } else if viewModel.requests.isEmpty {
+        } else if viewModel.receivedRequests.isEmpty {
             emptyState
         } else {
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(spacing: 0) {
-                    ForEach(viewModel.requests) { request in
+                    ForEach(viewModel.receivedRequests) { request in
                         friendRequestRow(request)
                     }
                 }
@@ -146,7 +176,7 @@ struct FriendRequestListView: View {
 
             HStack(spacing: 8) {
                 Button {
-                    Task { await viewModel.respond(to: request.id, accepted: false) }
+                    Task { await viewModel.reject(requestId: request.id) }
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
@@ -157,7 +187,7 @@ struct FriendRequestListView: View {
                 .accessibilityLabel(String(localized: "friends.requests.decline", defaultValue: "Refuser la demande", bundle: .main))
 
                 Button {
-                    Task { await viewModel.respond(to: request.id, accepted: true) }
+                    Task { await viewModel.accept(requestId: request.id) }
                 } label: {
                     Image(systemName: "checkmark")
                         .font(.caption.weight(.bold))
@@ -185,47 +215,5 @@ struct FriendRequestListView: View {
 
     private func relativeTime(from date: Date) -> String {
         RelativeTimeFormatter.longString(for: date)
-    }
-}
-
-// MARK: - ViewModel
-
-@MainActor
-final class FriendRequestListViewModel: ObservableObject {
-    @Published var requests: [FriendRequest] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
-
-    private let friendService = FriendService.shared
-
-    func loadRequests() async {
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            let response = try await friendService.receivedRequests()
-            requests = response.data
-            // Écran consulté → les notifications de demandes d'ajout / nouveaux
-            // ajouts ne doivent plus apparaître comme non lues. Fire-and-forget :
-            // le gateway marque ces types lus et ré-émet `notification:counts`.
-            Task {
-                try? await NotificationService.shared.markRead(types: [
-                    "friend_request", "contact_request",
-                    "friend_accepted", "contact_accepted"
-                ])
-            }
-        } catch {
-            errorMessage = String(localized: "friends.requests.load_error", defaultValue: "Erreur lors du chargement", bundle: .main)
-        }
-    }
-
-    func respond(to requestId: String, accepted: Bool) async {
-        do {
-            let _ = try await friendService.respond(requestId: requestId, accepted: accepted)
-            requests.removeAll { $0.id == requestId }
-            HapticFeedback.success()
-        } catch {
-            HapticFeedback.error()
-        }
     }
 }
