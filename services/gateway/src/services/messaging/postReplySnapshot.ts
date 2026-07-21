@@ -17,6 +17,8 @@
  * Helpers PURS et testables.
  */
 
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
+
 export type PostReplySnapshotablePost = {
   id: string;
   type: string;
@@ -53,7 +55,7 @@ export function buildPostReplyTo(post: PostReplySnapshotablePost): PostReplyTo {
     id: post.id,
     type: post.type,
     moodEmoji: post.moodEmoji ?? null,
-    previewText: (post.content ?? '').trim().slice(0, PREVIEW_MAX),
+    previewText: sliceCodePoints((post.content ?? '').trim(), PREVIEW_MAX),
     thumbnailUrl: post.media[0]?.thumbnailUrl ?? null,
     reactionCount: post.reactionCount ?? 0,
     commentCount: post.commentCount ?? 0,

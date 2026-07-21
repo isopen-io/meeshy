@@ -11,6 +11,7 @@ export * from './attachment-validators.js';
 export * from './language-normalize.js';
 export * from './notification-strings.js';
 export * from './duration-format.js';
+export * from './text-truncate.js';
 export * from './relative-time.js';
 export * from './time-remaining.js';
 export * from './calendar-date.js';

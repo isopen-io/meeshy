@@ -17,6 +17,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { CommentReactionService } from '../../services/CommentReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -344,7 +345,7 @@ export class CommentReactionHandler {
         commentId,
         postId,
         reactionEmoji: emoji,
-        commentPreview: comment.content?.slice(0, 80) ?? '',
+        commentPreview: comment.content ? sliceCodePoints(comment.content, 80) : '',
         postAuthorName,
         // Forward the real post type (mirror PostReactionHandler) so a reaction on a
         // comment under a REEL/STATUS keeps its entity typing instead of collapsing to POST.

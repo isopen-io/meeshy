@@ -30,6 +30,7 @@ import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
@@ -749,7 +750,7 @@ export class NotificationService {
       // (ex. « Votre publication : « aperçu » ») prime, sinon la base localisée
       // du builder. SANS date — le client append la date locale.
       const persistedSubtitle = (params.subtitle && params.subtitle.trim() !== '')
-        ? params.subtitle.trim().slice(0, 160)
+        ? sliceCodePoints(params.subtitle.trim(), 160)
         : (display.subtitle ?? null);
 
       const notification = await this.prisma.notification.create({
@@ -803,7 +804,7 @@ export class NotificationService {
       // type-based derivation. Trim to keep the iOS banner readable —
       // anything past ~120 chars on a 3-line banner gets cut anyway.
       const pushSubtitle = (params.subtitle && params.subtitle.trim() !== '')
-        ? params.subtitle.trim().slice(0, 120)
+        ? sliceCodePoints(params.subtitle.trim(), 120)
         : derivedSubtitle;
 
       // Socket.IO payload carries `title`/`subtitle` so the iOS in-app toast
@@ -849,7 +850,7 @@ export class NotificationService {
           // paresseusement quand l'appelant ne l'a pas fournie (réponses,
           // réactions, mentions…), jamais un 'fr' codé en dur.
           const pushBody = showPreview
-            ? params.content.substring(0, 200)
+            ? sliceCodePoints(params.content, 200)
             : notificationString(await recipientLang(), 'push.private');
 
           // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
@@ -1040,7 +1041,7 @@ export class NotificationService {
                     name: user.username || 'User',
                     language: user.systemLanguage || 'fr',
                     alertType: params.type,
-                    details: params.content.substring(0, 500),
+                    details: sliceCodePoints(params.content, 500),
                   }).catch(err => {
                     notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
                   });
@@ -1052,7 +1053,7 @@ export class NotificationService {
                     name: user.username || 'User',
                     language: user.systemLanguage || 'fr',
                     notificationType: params.type,
-                    details: params.content.substring(0, 500),
+                    details: sliceCodePoints(params.content, 500),
                   }).catch(err => {
                     notificationLogger.error('Immediate notification email failed', { error: err, userId: params.userId });
                   });
@@ -1319,7 +1320,7 @@ export class NotificationService {
         messageCreatedAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt.toISOString() : undefined,
         messageType: liveMessage.messageType ?? undefined,
         ...(matchedTranslation ? {
-          translatedContent: (matchedTranslation[1].text as string).substring(0, 200),
+          translatedContent: sliceCodePoints(matchedTranslation[1].text as string, 200),
           translatedLanguage: matchedTranslation[0],
         } : {}),
       },
@@ -1501,7 +1502,7 @@ export class NotificationService {
     const lang = await this.resolveRecipientLang(params.messageAuthorId);
     const messagePreview = message?.content
       ? message.content.length > 100
-        ? message.content.substring(0, 100) + '…'
+        ? sliceCodePoints(message.content, 100) + '…'
         : message.content
       : null;
 

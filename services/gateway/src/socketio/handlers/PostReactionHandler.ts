@@ -19,6 +19,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { PostReactionService } from '../../services/PostReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -480,7 +481,7 @@ export class PostReactionHandler {
         postAuthorId: post.authorId,
         emoji,
         postType: post.type,
-        postPreview: post.content?.slice(0, 80) ?? undefined,
+        postPreview: post.content ? sliceCodePoints(post.content, 80) : undefined,
         postCreatedAt: post.createdAt ?? undefined,
         postExpiresAt: post.expiresAt ?? undefined,
       })
