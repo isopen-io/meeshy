@@ -144,11 +144,19 @@ actor MediaCompressor {
         // default branch already transcodes to a real JPEG stream with a
         // matching mimeType/extension — reusing it fixes both the mismatched
         // `.jpg` extension AND actual cross-platform rendering in one move.
+        //
+        // On transcode failure (corrupt/exotic source), both fallbacks below
+        // return the UNTOUCHED original bytes tagged with the ORIGINALLY
+        // detected `mime` — never hardcode "image/jpeg" here, or real HEIC
+        // bytes end up mislabeled on the failure path (the mismatch this
+        // branch exists to eliminate on the success path).
         default:
             guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: "image/jpeg")
+                return CompressedImageResult(data: data, mimeType: mime)
             }
-            let jpeg = downsampled.jpegData(compressionQuality: quality) ?? data
+            guard let jpeg = downsampled.jpegData(compressionQuality: quality) else {
+                return CompressedImageResult(data: data, mimeType: mime)
+            }
             return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
         }
     }

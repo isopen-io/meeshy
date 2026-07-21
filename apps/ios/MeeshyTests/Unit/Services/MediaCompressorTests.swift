@@ -175,6 +175,24 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertNotNil(UIImage(data: result.data))
     }
 
+    // MARK: - compressImageData — HEIC downsample failure must not mislabel bytes
+
+    /// If ImageIO fails to decode/downsample a genuinely HEIC-tagged buffer
+    /// (corrupt transfer, exotic container), the fallback MUST return the
+    /// untouched original bytes tagged with the ORIGINAL detected mime
+    /// ("image/heic") — never hardcode "image/jpeg" over real HEIC bytes,
+    /// which would reintroduce the exact "lying extension" bug this branch
+    /// was merged to eliminate, just on the failure path instead of success.
+    func test_compressImageData_corruptHEICBytes_downsampleFails_preservesBytesAndOriginalMime() async {
+        let sut = makeSUT()
+        let corruptHEICData = makeCorruptHEICMagicBytes()
+
+        let result = await sut.compressImageData(corruptHEICData, maxDimension: 2048)
+
+        XCTAssertEqual(result.data, corruptHEICData, "must not alter bytes when transcode fails")
+        XCTAssertEqual(result.mimeType, "image/heic", "must not mislabel undecoded HEIC bytes as image/jpeg")
+    }
+
     // MARK: - compressImageData — PNG format preservation
 
     func test_compressImageData_pngFormat_preservesMimeType() async {
@@ -288,6 +306,19 @@ final class MediaCompressorTests: XCTestCase {
         CGImageDestinationAddImage(dest, cgImage, nil)
         XCTAssertTrue(CGImageDestinationFinalize(dest), "test host must support HEIC encoding")
         return data as Data
+    }
+
+    /// Carries a valid `ftyp` box signature (what `detectMimeType` sniffs to
+    /// classify as HEIC) but no actual decodable HEIC container after it —
+    /// ImageIO's `CGImageSourceCreateThumbnailAtIndex` fails on this input,
+    /// exercising `MediaCompressor`'s downsample-failure fallback path.
+    private func makeCorruptHEICMagicBytes() -> Data {
+        var data = Data(count: 32)
+        data[4] = 0x66  // f
+        data[5] = 0x74  // t
+        data[6] = 0x79  // y
+        data[7] = 0x70  // p
+        return data
     }
 
     private func makeWebPMagicBytes() -> Data {
