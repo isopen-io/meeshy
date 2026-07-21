@@ -580,6 +580,6 @@ public func formatMediaDurationMs(_ ms: Int) -> String {
 /// upload progress each hand-rolled a decimal (1000-based)
 /// `.formatted(.byteCount(style: .file))` — two divergent algorithms behind
 /// a comment claiming parity. `.file` matches Finder's decimal convention.
-public func formatMediaFileSize(_ bytes: Int64) -> String {
+nonisolated public func formatMediaFileSize(_ bytes: Int64) -> String {
     bytes.formatted(.byteCount(style: .file))
 }

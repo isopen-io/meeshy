@@ -106,12 +106,12 @@ final class StoryInteractionServiceTests: XCTestCase {
 
     // MARK: - react
 
-    func test_react_hitsCorrectEndpoint() async {
+    func test_react_hitsCorrectEndpoint() async throws {
         let (sut, api) = makeSUT()
         let endpoint = "/posts/\(Self.storyId)/like"
         api.stub(endpoint, result: makeEmptyResponse())
 
-        await sut.react(storyId: Self.storyId, emoji: "🔥")
+        try await sut.react(storyId: Self.storyId, emoji: "🔥")
 
         XCTAssertEqual(api.postCount, 1)
         XCTAssertEqual(api.requestEndpoints.last, endpoint)
