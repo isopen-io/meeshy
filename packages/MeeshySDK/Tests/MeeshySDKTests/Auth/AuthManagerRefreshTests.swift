@@ -6,28 +6,35 @@ import Combine
 final class AuthManagerRefreshTests: XCTestCase {
     private var originalAuthService: AuthServiceProviding!
     private var mockAuthService: MockAuthServiceForManager!
+    private var originalKeychain: (any KeychainStoring)!
+    private var mockKeychain: InMemoryKeychainStore!
 
     override func setUp() async throws {
         try await super.setUp()
         originalAuthService = AuthManager.shared.authService
         mockAuthService = MockAuthServiceForManager()
         AuthManager.shared.authService = mockAuthService
+
+        // `KeychainManager` (the production default) is not entitled inside
+        // the SPM xctest host: every save/load silently no-ops, so
+        // `applySession` can never persist a token and `refreshSession`
+        // short-circuits with `sessionExpired` before it ever reaches the
+        // mock auth service. Swapping in an in-memory store makes the real
+        // `AuthManager.shared` round trip through `applySession` →
+        // `refreshSession` actually exercisable.
+        originalKeychain = AuthManager.shared.keychain
+        mockKeychain = InMemoryKeychainStore()
+        AuthManager.shared.keychain = mockKeychain
     }
 
     override func tearDown() async throws {
         await AuthManager.shared.logout()
         AuthManager.shared.authService = originalAuthService
+        AuthManager.shared.keychain = originalKeychain
         try await super.tearDown()
     }
 
     func testConcurrentRefreshSerializesCalls() async throws {
-        // Skipped: drives the real `AuthManager.shared` singleton + real
-        // `KeychainManager`. In the SPM xctest process the keychain access
-        // is not entitled, so `applySession` cannot persist the token and
-        // `refreshSession` short-circuits with `sessionExpired` before
-        // hitting the mock. Needs a `KeychainStoring` injection seam on
-        // `AuthManager` (tracked in tasks/todo.md) before this can run.
-        try XCTSkipIf(true, "Requires keychain isolation harness on AuthManager")
         // 1. Setup a valid session first
         let user = MeeshyUser(
             id: "user-123", username: "testuser", email: "test@test.com",
@@ -64,8 +71,6 @@ final class AuthManagerRefreshTests: XCTestCase {
     }
 
     func testConcurrentRefreshPropagatesErrors() async throws {
-        // See `testConcurrentRefreshSerializesCalls` for the rationale.
-        try XCTSkipIf(true, "Requires keychain isolation harness on AuthManager")
         // 1. Setup a valid session first
         let user = MeeshyUser(
             id: "user-123", username: "testuser", email: "test@test.com",
@@ -173,4 +178,39 @@ private final class MockAuthServiceForManager: AuthServiceProviding, @unchecked 
         throw MeeshyError.network(.noConnection)
     }
     func logout() async {}
+}
+
+// MARK: - In-memory KeychainStoring for AuthManager isolation
+//
+// The real `KeychainManager` requires a keychain-access entitlement the SPM
+// xctest host doesn't have, so every save/load silently no-ops there.
+// Swapping this in on `AuthManager.shared.keychain` (an injectable `var` —
+// mirrors the `authService` seam above) lets `applySession` / `refreshSession`
+// actually persist state for the duration of this suite. All access happens
+// on the MainActor (the whole `AuthManager` type is `@MainActor`-isolated,
+// so even the 5 concurrent `Task`s in the tests below serialize through this
+// store one at a time) — no extra locking needed, matching the existing
+// `MockKeychainStore` pattern in `PushNotificationManagerTests`.
+private final class InMemoryKeychainStore: KeychainStoring, @unchecked Sendable {
+    private var store: [String: String] = [:]
+
+    func save(_ value: String, forKey key: String, account: String?) throws {
+        store[key] = value
+    }
+
+    func load(forKey key: String, account: String?) -> String? {
+        store[key]
+    }
+
+    func delete(forKey key: String, account: String?) {
+        store.removeValue(forKey: key)
+    }
+
+    func saveAsync(_ value: String, forKey key: String, account: String?) async throws {
+        try save(value, forKey: key, account: account)
+    }
+
+    func loadAsync(forKey key: String, account: String?) async -> String? {
+        load(forKey: key, account: account)
+    }
 }
