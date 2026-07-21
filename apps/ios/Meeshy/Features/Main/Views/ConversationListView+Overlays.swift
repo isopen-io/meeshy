@@ -1026,6 +1026,9 @@ struct ConversationListHeaderOverlay: View {
                             }
                         }
                         .accessibilityLabel(String(localized: "conversation.list.notifications", defaultValue: "Notifications", bundle: .main))
+                        .accessibilityValue(iPadNotificationCount > 0
+                            ? String(format: String(localized: "a11y.notifications.unread_count", defaultValue: "%d notifications non lues", bundle: .main), iPadNotificationCount)
+                            : "")
                     }
 
                     if let onSettingsTap {
