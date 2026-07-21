@@ -164,8 +164,12 @@ private struct CallJournalRow: View, Equatable {
             // the redial Menu entirely: VoiceOver could never reach "Rappeler"
             // (found in accessibility audit 2026-07-06/08). CallRowDialButton
             // keeps its own accessibilityLabel/Hint as a separate, reachable element.
+            // Le `.accessibilityLabel` explicite REMPLACE le texte combiné des enfants
+            // (sémantique SwiftUI) — il doit donc recomposer TOUT ce que la rangée montre
+            // visuellement : type audio/vidéo, ancienneté et durée, sinon VoiceOver ne
+            // les annonce jamais (207i : le label ne portait que nom + direction).
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(name), \(accessibilityDirection)")
+            .accessibilityLabel(rowAccessibilityLabel(name: name))
 
             if let peer = record.peer {
                 CallRowDialButton(
@@ -193,6 +197,22 @@ private struct CallJournalRow: View, Equatable {
         case .incoming: return String(localized: "calls.direction.incoming", defaultValue: "appel recu", bundle: .main)
         case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manque", bundle: .main)
         }
+    }
+
+    // Recompose le label VoiceOver de la rangée pour refléter EXACTEMENT le contenu
+    // visible : nom, direction, type (vocal/vidéo — réutilise les clés de CallDetailSheet),
+    // ancienneté, puis durée si présente (mêmes segments que la pastille visuelle). Zéro clé
+    // i18n neuve. Miroir de la détail-sheet, cohérent cross-écran.
+    private func rowAccessibilityLabel(name: String) -> String {
+        let type = record.isVideo
+            ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
+            : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
+        var parts = [name, accessibilityDirection, type, record.startedAt.relativeTimeString]
+        if !record.durationLabel.isEmpty {
+            let durationWord = String(localized: "calls.detail.duration", defaultValue: "Duree", bundle: .main)
+            parts.append("\(durationWord) \(record.durationLabel)")
+        }
+        return parts.joined(separator: ", ")
     }
 }
 

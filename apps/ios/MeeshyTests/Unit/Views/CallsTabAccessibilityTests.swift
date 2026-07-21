@@ -47,4 +47,32 @@ final class CallsTabAccessibilityTests: XCTestCase {
             "users can't tell which filter is active without an .isSelected trait."
         )
     }
+
+    /// The row's `.accessibilityElement(children: .combine)` is overridden by an explicit
+    /// `.accessibilityLabel`, which (per SwiftUI semantics) REPLACES the combined children.
+    /// The composed label must therefore restate everything the row shows visually — call
+    /// type (audio/video), age, and duration — otherwise VoiceOver users only hear the name
+    /// and direction while sighted users also see whether it was a video call, when, and how
+    /// long it lasted.
+    func test_callJournalRow_accessibilityLabelIncludesTypeTimeAndDuration() throws {
+        let source = try callsTabSource()
+        guard let range = source.range(of: "private struct CallJournalRow") else {
+            XCTFail("CallsTab.swift must define CallJournalRow"); return
+        }
+        let vicinity = String(source[range.lowerBound...])
+        XCTAssertTrue(
+            vicinity.contains("rowAccessibilityLabel(name:"),
+            "CallJournalRow must compose its VoiceOver label via rowAccessibilityLabel(name:)."
+        )
+        XCTAssertTrue(
+            vicinity.contains("calls.type.video") && vicinity.contains("calls.type.audio"),
+            "The composed label must announce whether the call was audio or video — the " +
+            "video badge is otherwise conveyed by icon alone (WCAG 1.3.1)."
+        )
+        XCTAssertTrue(
+            vicinity.contains("relativeTimeString") && vicinity.contains("durationLabel"),
+            "The composed label must restate the call age and duration that the row shows " +
+            "visually — an explicit .accessibilityLabel drops the combined children."
+        )
+    }
 }
