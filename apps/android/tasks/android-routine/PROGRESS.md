@@ -1,5 +1,52 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **server-environment selector enum + URL-derivation core** landed (slice
+> `auth-server-environment-selector`, feature-parity §A → advances "Server environment selector
+> (dev/staging/prod/custom host)" `[ ]` → `[~]`). This is the pure model behind the login screen's
+> developer/QA environment picker. Parity source: iOS `MeeshyConfig`
+> (`packages/MeeshySDK/Sources/MeeshySDK/Configuration/MeeshyConfig.swift`) + `LoginView`'s
+> `environmentSelector` — the `ServerEnvironment` enum (`rawValue`/`label`/`origin`),
+> `selectedEnvironment`'s `?? .production` fallback, the `apiBaseURL`/`serverOrigin`/`webOrigin`/
+> `applyEnvironment` derivations, and the custom-host apply gate
+> (`.disabled(customHost.trimmingCharacters(in:.whitespaces).isEmpty)`). Two pure `:core:model/auth/`
+> types. **`ServerEnvironment`** (enum, cases `PRODUCTION`=`gate.meeshy.me` / `STAGING`=
+> `gate.staging.meeshy.me` / `LOCALHOST`=`localhost:3000` / `CUSTOM`=`custom`): `label` (Production/
+> Staging/Localhost/Custom), `origin` (`https://gate.meeshy.me` / `https://gate.staging.meeshy.me` /
+> `http://localhost:3000` / `""` for custom — matching iOS's empty custom origin), and `fromId(raw)`
+> resolving a persisted id back to an env, **defaulting to PRODUCTION** for unknown/null/empty (iOS
+> `?? .production`). **`ServerEnvironmentResolver`** (object): `normalizeCustomHost` prepends `https://`
+> unless a scheme is present (whitespace-trimmed like iOS `applyCustomHost`); `canApplyCustomHost` =
+> trimmed-non-empty (the apply-button gate); `apiBaseUrl(env, customHost)` = origin + `/api/v1`;
+> `serverOrigin(apiBaseUrl)` parses scheme+host(+port) via `java.net.URI`, returning the input verbatim
+> on a parse miss (iOS `guard let … else { return apiBaseURL }`); `webOrigin(serverOrigin)` strips the
+> leading `gate.` subdomain and remaps localhost `:3000`→`:3100`. **SOTA note:** iOS keeps these as
+> computed props on a stateful `UserDefaults` singleton; Android lifts the pure string derivations into
+> a framework-free object so every branch is JVM-testable and the app-side store owns only persistence
+> + the mutable selection. **+35 behavioural tests** (`ServerEnvironmentTest` — 4 id + 4 label + 4
+> origin + entry-order; 4 `fromId` known/unknown/null/empty; 4 `normalizeCustomHost`; 3
+> `canApplyCustomHost`; 5 `apiBaseUrl`; 4 `serverOrigin`; 6 `webOrigin`; 2 composition chains).
+> Expectations are hand-written literals independent of the production derivation (not tautological).
+> **Mutation check (RED proof):** dropping the `gate.` strip from `webOrigin` (`if startsWith("gate.")
+> removePrefix else host` → `host`) fails **exactly** `webOrigin_productionGateHost_stripsGatePrefix`
+> + `webOrigin_stagingGateHost_stripsOnlyLeadingGate` + `composition_productionChain_apiToServerToWebOrigin`
+> (35 run, 3 failed, no collateral) — behavioural, not tautological. **Gate (system Gradle 8.14.3,
+> `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (new suite 35/35);
+> `assembleDebug` compiled every module. The full-repo `testDebugUnitTest` tripped the **pre-existing
+> unrelated `:sdk-core` DataStore flake** (`InterfaceLanguageStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction`,
+> `TimeoutCancellationException` under parallel load — same pattern as the documented `ThemeStoreTest`
+> flake in NOTES.md, in a module this diff never touches); it passes **green in isolation**
+> (`:sdk-core:testDebugUnitTest --tests "*InterfaceLanguageStoreTest*"` → BUILD SUCCESSFUL in 45s), so it
+> is not a regression from this slice. Reviewer **PASS** (diff `apps/android` only —
+> 1 new production file + 1 test + tracking; **SDK purity** — a pure enum + a pure object in `:core:model`,
+> zero framework deps beyond `java.net.URI`; the `MeeshyConfig` apply/persist actuator + the DataStore
+> env store + the `LoginView` selector composable stay app-side/pending; **SSOT** — one enum + one
+> resolver own every env label/origin/URL derivation the login screen renders; **UX** — the four env
+> cases + custom-host gate are the single truths the selector renders; no coverage floor lowered, no test
+> weakened). **Next slice:** the app-side `LoginView` environment-selector composable + a DataStore store
+> owning the selected env + custom host, driving `ServerEnvironmentResolver.apiBaseUrl` into the SDK
+> config at launch (iOS `restoreEnvironment`); OR another §A pure core (saved-account picker model,
+> username-suggestion selection); OR the tracked Kover 90% coverage-gate infra.
+
 > On 2026-07-21 the **6-digit OTP field sanitiser + verify/resend/edit gate core** landed (slice
 > `auth-otp-verification-core`, feature-parity §A → advances "Email verification by 6-digit code (OTP
 > autofill, resend, success animation)" `[ ]` → `[~]`). This is the pure input+gate layer behind the
