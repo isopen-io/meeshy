@@ -832,6 +832,19 @@ struct MeeshyApp: App {
     /// (`handleGuestDeepLink`) so both report success/failure identically.
     private func validateMagicLinkToken(_ token: String) {
         Task {
+            // P0 — a magic link tapped while ALREADY authenticated (possibly
+            // as a DIFFERENT account) must never `applySession(B)` on top of
+            // account A without a full teardown first: A's caches, sockets
+            // (still carrying A's JWT), and E2EE session keys would all leak
+            // into B's session. `applySession`'s `isTokenRotation` only
+            // special-cases the SAME user re-authenticating — a magic link
+            // for a different account is a genuine account switch, so we log
+            // out completely before validating. The cold-launch path
+            // (`handleGuestDeepLink`) already only reaches here while
+            // unauthenticated, so this is a no-op there.
+            if authManager.isAuthenticated {
+                await authManager.logout()
+            }
             await authManager.validateMagicLink(token: token)
 
             if authManager.isAuthenticated {
