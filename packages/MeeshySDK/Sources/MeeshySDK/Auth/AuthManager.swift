@@ -251,7 +251,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -277,7 +282,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -299,7 +309,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -318,7 +333,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             _ = try await authService.requestMagicLink(email: email, deviceFingerprint: nil)
             isLoading = false
             return true
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -339,7 +359,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -358,7 +383,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             try await authService.requestPasswordReset(email: email)
             isLoading = false
             return true
-        } catch let error as APIError {
+        } catch let error as MeeshyError {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`); the previous `catch let error as APIError`
+            // here was dead code that silently fell through to the generic
+            // `catch` below. Behaviourally identical (both paths read
+            // `errorDescription`), but explicit about the real error type.
             errorMessage = error.errorDescription
         } catch {
             errorMessage = error.localizedDescription
@@ -391,10 +421,22 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // pas les credentials de la session morte.
         SessionSnapshotStore.wipe()
 
+        // D5.hygiene — capture the token BEFORE any wipe. The retry Task
+        // below is scheduled concurrently with the wipe steps further down
+        // (`APIClient.shared.authToken = nil`); reading the ambient token
+        // lazily at send-time was a race that frequently lost, sending every
+        // retry attempt with no Authorization header at all — the gateway
+        // could never tell which session to kill server-side.
+        let outgoingToken = APIClient.shared.authToken
+
         // D5 — server logout in background (best-effort, bounded retries).
         // Le quiesce local ne dépend pas du serveur : si le réseau échoue,
         // le gateway tuera la session paresseusement au prochain request.
-        Task { await self.performServerLogoutWithRetries() }
+        if let outgoingToken {
+            Task { await self.performServerLogoutWithRetries(token: outgoingToken) }
+        } else {
+            Logger.auth.warning("logout(): no authToken snapshot available — skipping server-side logout call")
+        }
 
         // P1 quiesce — stop accepting new mutations BEFORE purging stores.
         // Sans ça, un `message:new` arrivant pendant le purge pourrait
@@ -459,7 +501,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// failures are tolerated — the worst case is the gateway sees the
     /// next request, fails token verification, and lazily kills the
     /// session.
-    private func performServerLogoutWithRetries() async {
+    private func performServerLogoutWithRetries(token: String) async {
         let delays: [TimeInterval] = [0, 1, 5] // total ≈ 6s wall-clock
         for delay in delays {
             if delay > 0 {
@@ -470,7 +512,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 }
             }
             do {
-                try await authService.logoutThrowing()
+                try await authService.logoutThrowing(token: token)
                 return
             } catch {
                 Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
@@ -540,17 +582,24 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // semantics this also extends the session another 365 days, so an
         // active user is renewed indefinitely.
         //
-        // Skip while offline: this is `await`ed and gates the splash (the only
-        // network call on the cold-start critical path). Offline it cannot
-        // succeed and would hang the splash for the full URLSession timeout
-        // (30-60s) behind a launch the cache could already serve. No API call
-        // can race in offline anyway, so deferring the refresh to the next
-        // reconnect / 401 is safe. Online behaviour is unchanged.
+        // P1 — detached (fire-and-forget), NOT awaited on the cold-start
+        // critical path. `NetworkMonitor.isOnline` only rules out FULLY
+        // offline; a degraded-but-"online" network (weak signal, captive
+        // portal) can still hang behind the full URLSession timeout (60s)
+        // with the cached session/list already ready to show — a cold start
+        // was observed holding the splash for tens of seconds this way.
+        // Detaching means a slow refresh can never hold the splash hostage:
+        // `applySession` still lands whenever the network eventually
+        // answers, and any API call racing in behind an unrefreshed-but-
+        // still-valid token succeeds normally (APIClient's own reactive
+        // 401-refresh covers the case where it doesn't).
         if isCurrentTokenExpired, sessionToken != nil, NetworkMonitor.shared.isOnline {
-            do {
-                _ = try await refreshSession(force: false)
-            } catch {
-                Logger.auth.warning("Proactive session refresh failed: \(error.localizedDescription, privacy: .public)")
+            Task { [weak self] in
+                do {
+                    _ = try await self?.refreshSession(force: false)
+                } catch {
+                    Logger.auth.warning("Proactive session refresh failed: \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
 
@@ -559,13 +608,18 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // can sign in again — the saved account is preserved, just the
         // password (or biometric) is needed.
         Task { [weak self] in
+            guard let self else { return }
             do {
-                let user = try await AuthService.shared.me()
-                self?.updateUserAfterRevalidation(user, userId: userId)
+                // P2 hygiene — go through the injected `authService` seam
+                // (not the bare `AuthService.shared` singleton) so tests that
+                // substitute a mock on `AuthManager.shared.authService` can
+                // actually observe/stub this background revalidation call.
+                let user = try await self.authService.me()
+                self.updateUserAfterRevalidation(user, userId: userId)
             } catch let error as MeeshyError {
                 switch error {
                 case .auth:
-                    self?.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId)
                 case .network, .server, .message, .media, .forbidden, .unknown:
                     // Transient — keep session, retry on next 401 / launch.
                     break

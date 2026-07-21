@@ -954,7 +954,7 @@ struct SecurityView: View {
                     isEditingEmail = false
                 }
                 startResendCooldown()
-            } catch let error as APIError {
+            } catch let error as MeeshyError {
                 HapticFeedback.error()
                 emailError = error.errorDescription
             } catch {
@@ -1003,7 +1003,7 @@ struct SecurityView: View {
                 _ = try await UserService.shared.changePhone(ChangePhoneRequest(newPhoneNumber: newPhone))
                 HapticFeedback.success()
                 withAnimation { phoneSent = true }
-            } catch let error as APIError {
+            } catch let error as MeeshyError {
                 HapticFeedback.error()
                 phoneError = error.errorDescription
             } catch {
@@ -1029,10 +1029,15 @@ struct SecurityView: View {
                     phoneCode = ""
                     newPhone = ""
                 }
-            } catch let error as APIError {
+            } catch let error as MeeshyError {
+                // P1 — `APIClient` only ever throws `MeeshyError` (never the
+                // legacy `APIError`); this catch used to be dead code, so the
+                // 400/"code incorrect" branch never fired and every phone
+                // verification error (including a genuinely wrong code)
+                // showed the generic "Une erreur est survenue".
                 HapticFeedback.error()
                 switch error {
-                case .serverError(400, _):
+                case .server(400, _):
                     phoneError = String(localized: "settings.security.phone.code_invalid", defaultValue: "Code incorrect ou expire", bundle: .main)
                 default:
                     phoneError = error.errorDescription

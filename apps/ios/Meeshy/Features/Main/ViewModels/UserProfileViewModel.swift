@@ -40,7 +40,7 @@ final class UserProfileViewModel: ObservableObject {
         self.authManager = authManager
         self.blockService = blockService
         self.profileUser = user
-        self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager)
+        self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager, blockService: blockService)
     }
 
     private var resolvedIdentifier: String? {
@@ -77,7 +77,12 @@ final class UserProfileViewModel: ObservableObject {
             await SearchIndex.shared.indexUsers([user])
             fullUser = user
             hydrateProfileUserIfNeeded(from: user)
-        } catch let APIError.serverError(code, _) where code == 403 {
+        } catch MeeshyError.forbidden {
+            // P1 — `APIClient` only ever throws `MeeshyError` (never the
+            // legacy `APIError`, and 403 arrives as its own `.forbidden`
+            // case, never `.server`); this catch was dead code, so
+            // `isBlockedByTarget` was never set and the profile UI never
+            // reflected being blocked by the viewed user.
             isBlockedByTarget = true
         } catch {
             UserProfileViewModel.logger.error("profile refresh failed: \(error.localizedDescription)")
@@ -212,9 +217,22 @@ final class UserProfileViewModel: ObservableObject {
         }
     }
 
-    private static func checkIsBlocked(userId: String?, authManager: AuthManaging) -> Bool {
-        guard let userId = userId,
-              let blockedIds = authManager.currentUser?.blockedUserIds else { return false }
-        return blockedIds.contains(userId)
+    /// P1 — `blockService` (the canonical, live-updated blocklist source,
+    /// injected but previously unused here) is now consulted FIRST. The
+    /// login-time snapshot (`currentUser.blockedUserIds`) is kept only as a
+    /// fallback for the brief window right after login before
+    /// `AuthManager.warmSessionScopedCaches` → `BlockService.refreshCache()`
+    /// has finished hydrating. Without this, a block/unblock performed
+    /// elsewhere during the session (or in a PRIOR session on this device)
+    /// showed as "not blocked" the next time this profile sheet opened for
+    /// the same user, because the snapshot never changes after init.
+    private static func checkIsBlocked(
+        userId: String?,
+        authManager: AuthManaging,
+        blockService: BlockServiceProviding
+    ) -> Bool {
+        guard let userId else { return false }
+        if blockService.isBlocked(userId: userId) { return true }
+        return authManager.currentUser?.blockedUserIds?.contains(userId) ?? false
     }
 }

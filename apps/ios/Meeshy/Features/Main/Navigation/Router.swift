@@ -335,6 +335,17 @@ final class Router: ObservableObject {
     // MARK: - Magic Link Validation
 
     private func handleMagicLinkToken(_ token: String) async {
+        // P0 — this path only runs while `RootView`/`iPadRootView` are
+        // mounted, i.e. while ALREADY authenticated (as a possibly DIFFERENT
+        // account — e.g. a magic-link URL rendered as an in-app tappable
+        // `Link` and routed here via the `openURL` environment override).
+        // Applying a new session on top of the current one without a full
+        // teardown would leak account A's caches, sockets, and E2EE session
+        // keys into account B's session. See `MeeshyApp.validateMagicLinkToken`
+        // for the mirrored fix on the cold/warm system-URL path.
+        if AuthManager.shared.isAuthenticated {
+            await AuthManager.shared.logout()
+        }
         await AuthManager.shared.validateMagicLink(token: token)
 
         if AuthManager.shared.isAuthenticated {

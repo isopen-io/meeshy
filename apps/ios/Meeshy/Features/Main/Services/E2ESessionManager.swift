@@ -28,10 +28,36 @@ public actor SessionManager {
     /// Returns the current user ID from AuthManager (MainActor hop required since
     /// SessionManager is an actor and AuthManager is @MainActor).
     private func currentUserId() async -> String? {
-        await MainActor.run { AuthManager.shared.currentUser?.id }
+        let userId = await MainActor.run { AuthManager.shared.currentUser?.id }
+        if let userId {
+            lastKnownUserId = userId
+        }
+        return userId
+    }
+
+    /// Pure resolution: which userId should scope the Keychain wipe in
+    /// `clearSessions()`. `current` is whatever `currentUserId()` reads at
+    /// call time (already `nil` once the auth teardown has run); `cached`
+    /// is the last non-nil id this actor observed while a session was still
+    /// live. Falls back to `cached` so the wipe targets the OUTGOING
+    /// account's Keychain namespace instead of `nil` (which silently no-ops
+    /// against `persistSession`'s namespaced saves).
+    nonisolated static func resolveWipeUserId(current: String?, cached: String?) -> String? {
+        current ?? cached
     }
 
     private var activeSessions: [String: SymmetricKey] = [:]
+
+    /// P1 — last non-nil userId observed by `currentUserId()` while a
+    /// session was still active. `clearSessions()` is invoked from
+    /// `MeeshyApp`'s `adaptiveOnChange(of: authManager.isAuthenticated)`
+    /// `else` branch, which only fires AFTER `AuthManager.logout()` has
+    /// already set `currentUser = nil` — so reading `currentUserId()` fresh
+    /// at that point always returns `nil`, and the Keychain `delete(forKey:account:)`
+    /// silently targets the WRONG (un-namespaced) entry, leaving the
+    /// outgoing user's E2EE session keys on the Keychain. This cache lets
+    /// `clearSessions()` fall back to the last known real userId instead.
+    private var lastKnownUserId: String?
 
     /// Negative cache: peers whose session establishment recently failed.
     /// Prevents re-hitting the (possibly permanently unavailable) Signal
@@ -231,13 +257,14 @@ public actor SessionManager {
     }
 
     public func clearSessions() async {
-        let userId = await currentUserId()
+        let userId = Self.resolveWipeUserId(current: await currentUserId(), cached: lastKnownUserId)
         let allPeers = UserDefaults.standard.stringArray(forKey: peerListKey) ?? []
         for peerId in allPeers {
             KeychainManager.shared.delete(forKey: keychainPrefix + peerId, account: userId)
         }
         UserDefaults.standard.removeObject(forKey: peerListKey)
         activeSessions.removeAll()
+        lastKnownUserId = nil
         E2EEService.shared.clearAllKeys()
     }
 }

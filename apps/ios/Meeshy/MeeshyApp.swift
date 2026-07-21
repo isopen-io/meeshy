@@ -278,10 +278,30 @@ struct MeeshyApp: App {
                                 body: action.payload
                             )
                             return true
-                        } catch APIError.serverError(let code, _) where code >= 400 && code < 500 {
-                            // Treat client-side validation errors as terminal —
-                            // replaying the same payload won't help. Drop the
-                            // action so the queue doesn't bounce forever.
+                        } catch MeeshyError.server(let code, _) where [400, 404, 413, 422].contains(code) {
+                            // P1 — `APIClient.request` only ever throws `MeeshyError`
+                            // (never the legacy `APIError`), so this catch NEVER
+                            // matched and every 4xx (validation error, etc.) fell
+                            // through to the generic `catch` below and was kept
+                            // queued — replayed forever against a payload that can
+                            // never succeed. Treat client-side validation errors as
+                            // terminal — replaying the same payload won't help. Drop
+                            // the action so the queue doesn't bounce forever.
+                            //
+                            // 429 is deliberately EXCLUDED from this set — mirrors
+                            // `OutboxFlusher.permanentRejectionStatusCodes`
+                            // (packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxFlusher.swift),
+                            // which documents 408/429/503 as retryable (APIClient's
+                            // own `retryableStatusCodes` already treats 429 as
+                            // transient). An unfiltered `(400..<500)` range here
+                            // would silently sweep 429 into "terminal", permanently
+                            // dropping a queued settings mutation that only failed
+                            // because of rate limiting.
+                            return true
+                        } catch MeeshyError.forbidden {
+                            // 403 is also a terminal client-side error (thrown as
+                            // its own `MeeshyError` case rather than `.server`) —
+                            // same "drop, don't replay" treatment as the other 4xx.
                             return true
                         } catch {
                             // Transient (5xx / connectivity): keep the action
@@ -318,8 +338,20 @@ struct MeeshyApp: App {
                         // cycle triggers BackgroundTransitionCoordinator which also
                         // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
                         // NOT fire on the initial `.active` state, so the coordinator
-                        // path is skipped on cold start.
-                        _ = try? await OfflineQueue.shared.bootRecovery()
+                        // path is skipped on cold start. P2 — do/catch + log
+                        // instead of a silent `try?`: BackgroundTransitionCoordinator's
+                        // own `resumeFromBackground()` call to `bootRecovery()`
+                        // (on the next foreground) is an independent retry
+                        // path, so a failure here is not fatal, but it MUST
+                        // be visible — a silent failure here previously left
+                        // crash-orphaned `.inflight` rows invisible to
+                        // flush() for the rest of THIS cold start with zero
+                        // trace in the logs.
+                        do {
+                            _ = try await OfflineQueue.shared.bootRecovery()
+                        } catch {
+                            Logger.messages.error("Boot recovery (outbox flusher path) failed: \(error.localizedDescription, privacy: .public) — retried on next foreground")
+                        }
                         let flusher = OutboxFlusher(
                             pool: bootPool,
                             dispatcher: OutboxDispatcher(),
@@ -387,6 +419,14 @@ struct MeeshyApp: App {
                     let maxSplashDuration: Duration = .seconds(5)
 
                     if authManager.isAuthenticated {
+                        // P1 — prime SessionManager's `lastKnownUserId` cache
+                        // on EVERY cold start with an already-restored session,
+                        // not just on a fresh login transition. Without this,
+                        // a session restored at launch that is torn down via
+                        // `logout()` before any E2EE activity in this process
+                        // (no DM sent/received) would leave `clearSessions()`
+                        // with no userId to scope its Keychain wipe against.
+                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
                         // Précharge le cache liste — SQLite read instantané,
                         // retourne `.empty` au tout premier install.
                         let cacheResult = await CacheCoordinator.shared.conversations.load(for: "list")
@@ -832,6 +872,19 @@ struct MeeshyApp: App {
     /// (`handleGuestDeepLink`) so both report success/failure identically.
     private func validateMagicLinkToken(_ token: String) {
         Task {
+            // P0 — a magic link tapped while ALREADY authenticated (possibly
+            // as a DIFFERENT account) must never `applySession(B)` on top of
+            // account A without a full teardown first: A's caches, sockets
+            // (still carrying A's JWT), and E2EE session keys would all leak
+            // into B's session. `applySession`'s `isTokenRotation` only
+            // special-cases the SAME user re-authenticating — a magic link
+            // for a different account is a genuine account switch, so we log
+            // out completely before validating. The cold-launch path
+            // (`handleGuestDeepLink`) already only reaches here while
+            // unauthenticated, so this is a no-op there.
+            if authManager.isAuthenticated {
+                await authManager.logout()
+            }
             await authManager.validateMagicLink(token: token)
 
             if authManager.isAuthenticated {
