@@ -735,21 +735,35 @@ extension StoryViewerView {
         // puis transmis via `attachmentIds` ; la ligne serveur réconcilie via le socket
         // `comment:added` (qui porte désormais le média). Le commentaire optimiste
         // affiche déjà le média local.
+        //
+        // Both the media upload and the comment POST now THROW instead of being
+        // silently swallowed by `try?` — a media upload failure used to publish
+        // the comment WITHOUT its media (silent data loss); a POST failure left
+        // the optimistic `temp_` comment/reply on screen forever even offline
+        // (no rollback). Either failure now rolls back the exact optimistic
+        // insert via the pure `rollingBackOptimisticComment` — same snapshot/
+        // rollback discipline as `sendReaction`.
         let language = composerLanguage
+        let tempCommentId = optimisticComment.id
         Task {
-            var attachmentIds: [String]? = nil
-            if let pendingMedia, let uploadedId = try? await CommentMediaUploader.upload(pendingMedia) {
-                attachmentIds = [uploadedId]
+            do {
+                var attachmentIds: [String]? = nil
+                if let pendingMedia {
+                    attachmentIds = [try await CommentMediaUploader.upload(pendingMedia)]
+                }
+                try await StoryInteractionService().postComment(
+                    storyId: story.id,
+                    content: text,
+                    originalLanguage: language,
+                    effectFlags: effectFlags,
+                    parentId: parentId,
+                    attachmentIds: attachmentIds,
+                    mobileTranscription: pendingMedia?.mobileTranscription
+                )
+            } catch {
+                rollbackOptimisticComment(id: tempCommentId, parentId: parentId)
+                HapticFeedback.error()
             }
-            await StoryInteractionService().postComment(
-                storyId: story.id,
-                content: text,
-                originalLanguage: language,
-                effectFlags: effectFlags,
-                parentId: parentId,
-                attachmentIds: attachmentIds,
-                mobileTranscription: pendingMedia?.mobileTranscription
-            )
         }
 
         // Dismiss composer and give feedback
@@ -758,6 +772,45 @@ extension StoryViewerView {
             self.dismissComposer()
             self.storyDrafts.removeValue(forKey: story.id)
         }
+    }
+
+    /// Pure core of the rollback — no `@State` access, so it's unit-testable
+    /// without a live view (mirrors the "extract the pure decision" pattern
+    /// used elsewhere in the codebase). Removes the failed `temp_` comment
+    /// (top-level) or reply (routes back out of the parent's reply count +
+    /// the replies map) and decrements the shared counter exactly once,
+    /// symmetrically with how `sendComment` incremented it.
+    static func rollingBackOptimisticComment(
+        id: String,
+        parentId: String?,
+        comments: [FeedComment],
+        repliesMap: [String: [FeedComment]],
+        commentCount: Int
+    ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]], commentCount: Int) {
+        var comments = comments
+        var repliesMap = repliesMap
+        if let parentId {
+            if var replies = repliesMap[parentId] {
+                replies.removeAll { $0.id == id }
+                repliesMap[parentId] = replies
+            }
+            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+                comments[idx].replies = max(0, comments[idx].replies - 1)
+            }
+        } else {
+            comments.removeAll { $0.id == id }
+        }
+        return (comments, repliesMap, max(0, commentCount - 1))
+    }
+
+    private func rollbackOptimisticComment(id: String, parentId: String?) {
+        let result = Self.rollingBackOptimisticComment(
+            id: id, parentId: parentId,
+            comments: storyComments, repliesMap: storyCommentRepliesMap, commentCount: storyCommentCount
+        )
+        storyComments = result.comments
+        storyCommentRepliesMap = result.repliesMap
+        storyCommentCount = result.commentCount
     }
 
     /// `priorReactions`/`priorCount` is the snapshot `triggerStoryReaction` took

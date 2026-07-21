@@ -51,8 +51,10 @@ final class StoryInteractionService {
 
     /// Posts a comment (or a reply if `parentId` is set). Optimistic UI
     /// already inserted the comment locally before this call — see
-    /// `StoryViewerView+Content.sendComment` — so a failure here is
-    /// recoverable on next refresh.
+    /// `StoryViewerView+Content.sendComment`. Throws on failure so the
+    /// caller can roll that optimistic insert back instead of leaving a
+    /// phantom `temp_` comment that silently never made it to the server
+    /// (most visible offline, where the whole call fails).
     func postComment(
         storyId: String,
         content: String,
@@ -61,7 +63,7 @@ final class StoryInteractionService {
         parentId: String? = nil,
         attachmentIds: [String]? = nil,
         mobileTranscription: MobileTranscriptionPayload? = nil
-    ) async {
+    ) async throws {
         let body = StoryCommentBody(
             content: content,
             originalLanguage: originalLanguage,
@@ -77,6 +79,7 @@ final class StoryInteractionService {
             )
         } catch {
             Self.logger.error("Failed to post comment on story \(storyId, privacy: .public): \(error.localizedDescription)")
+            throw error
         }
     }
 

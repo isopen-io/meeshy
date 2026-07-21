@@ -52,12 +52,12 @@ final class StoryInteractionServiceTests: XCTestCase {
 
     // MARK: - postComment
 
-    func test_postComment_minimalArgs_hitsEndpoint() async {
+    func test_postComment_minimalArgs_hitsEndpoint() async throws {
         let (sut, api) = makeSUT()
         let endpoint = "/posts/\(Self.storyId)/comments"
         api.stub(endpoint, result: makeEmptyResponse())
 
-        await sut.postComment(
+        try await sut.postComment(
             storyId: Self.storyId,
             content: "great story",
             originalLanguage: "fr"
@@ -67,12 +67,12 @@ final class StoryInteractionServiceTests: XCTestCase {
         XCTAssertEqual(api.requestEndpoints.last, endpoint)
     }
 
-    func test_postComment_replyWithEffectFlags_hitsEndpoint() async {
+    func test_postComment_replyWithEffectFlags_hitsEndpoint() async throws {
         let (sut, api) = makeSUT()
         let endpoint = "/posts/\(Self.storyId)/comments"
         api.stub(endpoint, result: makeEmptyResponse())
 
-        await sut.postComment(
+        try await sut.postComment(
             storyId: Self.storyId,
             content: "👏",
             originalLanguage: "fr",
@@ -84,17 +84,24 @@ final class StoryInteractionServiceTests: XCTestCase {
         XCTAssertEqual(api.requestEndpoints.last, endpoint)
     }
 
-    func test_postComment_apiFailure_doesNotThrow() async {
+    /// `postComment` MUST throw (not swallow) so the caller — `sendComment`
+    /// in `StoryViewerView+Content.swift` — can roll back the optimistic
+    /// `temp_` comment/reply it already inserted instead of leaving a
+    /// phantom row that silently never reached the server.
+    func test_postComment_apiFailure_throwsAndLogs() async {
         let (sut, api) = makeSUT()
         api.errorToThrow = NSError(domain: "TestNetwork", code: 401)
 
-        await sut.postComment(
-            storyId: Self.storyId,
-            content: "swallowed",
-            originalLanguage: "fr"
-        )
-
-        XCTAssertEqual(api.postCount, 1)
+        do {
+            try await sut.postComment(
+                storyId: Self.storyId,
+                content: "not swallowed anymore",
+                originalLanguage: "fr"
+            )
+            XCTFail("Expected postComment to rethrow")
+        } catch {
+            XCTAssertEqual(api.postCount, 1)
+        }
     }
 
     // MARK: - react
