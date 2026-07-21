@@ -103,6 +103,43 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isSearching)
     }
 
+    // Audit 2026-07-20: a failed search used to look IDENTICAL to a genuine
+    // "zero results" search (both cleared `searchResults` silently, no
+    // distinct state, no log) — `searchFailed` closes that gap.
+    func test_performSearch_apiFailure_setsSearchFailedTrue() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = NSError(domain: "TestNetwork", code: 503)
+
+        await sut.performSearch(query: "first")
+
+        XCTAssertTrue(sut.searchFailed)
+    }
+
+    func test_performSearch_success_afterPriorFailure_clearsSearchFailedFlag() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = NSError(domain: "TestNetwork", code: 503)
+        await sut.performSearch(query: "first")
+        XCTAssertTrue(sut.searchFailed)
+
+        api.errorToThrow = nil
+        api.stub("/users/search", result: Self.makeSearchResponse(users: [("u-1", "alice")]))
+        await sut.performSearch(query: "second")
+
+        XCTAssertFalse(sut.searchFailed, "A successful retry must clear the stale failure flag")
+    }
+
+    func test_performSearch_zeroResultsWithoutError_leavesSearchFailedFalse() async {
+        // 0 résultat ≠ échec: an empty (but successful) response must NOT
+        // set the failure flag.
+        let (sut, api) = makeSUT()
+        api.stub("/users/search", result: Self.makeSearchResponse(users: []))
+
+        await sut.performSearch(query: "nobody-matches-this")
+
+        XCTAssertFalse(sut.searchFailed)
+        XCTAssertTrue(sut.searchResults.isEmpty)
+    }
+
     func test_search_shortQuery_clearsResultsWithoutNetwork() async {
         let (sut, api) = makeSUT()
 

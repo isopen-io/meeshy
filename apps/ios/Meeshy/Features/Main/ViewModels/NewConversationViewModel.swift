@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import os
 
 /// Gateway block-rejection detection. A 403 carrying the `USER_BLOCKED` code
 /// (a block in either direction) is forwarded by `MeeshySDK`'s `APIClient` as
@@ -36,6 +37,13 @@ final class NewConversationViewModel: ObservableObject {
 
     @Published private(set) var searchResults: [SearchedUser] = []
     @Published private(set) var isSearching = false
+    /// `true` when the LAST `performSearch` call failed on a network/server
+    /// error — distinguishes "zero results" from "the search itself broke"
+    /// (audit 2026-07-20: `performSearch`'s catch cleared `searchResults`
+    /// with no log and no distinct state, so a failed search looked
+    /// identical to a genuine empty result set). Cleared at the start of
+    /// every new search attempt.
+    @Published private(set) var searchFailed = false
     @Published private(set) var isCreating = false
     @Published private(set) var errorMessage: String?
     /// Set after a successful `createConversation` so the view can dismiss
@@ -69,9 +77,11 @@ final class NewConversationViewModel: ObservableObject {
         guard trimmed.count >= 2 else {
             searchResults = []
             isSearching = false
+            searchFailed = false
             return
         }
         isSearching = true
+        searchFailed = false
         searchTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: Self.searchDebounce)
             guard !Task.isCancelled, let self else { return }
@@ -98,9 +108,12 @@ final class NewConversationViewModel: ObservableObject {
             let currentUserId = currentUserIdProvider()
             searchResults = response.data.filter { $0.id != currentUserId }
             isSearching = false
+            searchFailed = false
         } catch {
             searchResults = []
             isSearching = false
+            searchFailed = true
+            Logger.network.warning("[NewConversationViewModel] user search failed for query=\(query, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -111,6 +124,17 @@ final class NewConversationViewModel: ObservableObject {
     /// dismiss + navigate via NotificationCenter. On failure, surfaces a
     /// user-readable error message (no `try?` masking the underlying
     /// network failure, per the audit's gestion-d-erreur findings).
+    ///
+    /// Deliberately NOT routed through the `.createConversation` outbox kind
+    /// (`OutboxDispatcher.dispatchCreateConversation`) despite that kind
+    /// existing and never being enqueued anywhere (audit 2026-07-20,
+    /// "OutboxKinds morts"): the outbox is fire-and-forget/eventually
+    /// consistent — its dispatcher discards the POST response body — while
+    /// this call site needs the created `MeeshyConversation` SYNCHRONOUSLY
+    /// to navigate the user into it. Reconciling/removing the dead kind
+    /// belongs to whichever lane owns `OutboxDispatcher.swift` /
+    /// `OutboxRecord.swift` (settings-profile / offline-instant in the
+    /// audit backlog) — out of scope here to avoid touching those files.
     func createConversation(
         selectedUsers: [SearchedUser],
         groupTitle: String
@@ -173,6 +197,7 @@ final class NewConversationViewModel: ObservableObject {
         searchTask = nil
         searchResults = []
         isSearching = false
+        searchFailed = false
     }
 
     // MARK: - Body
