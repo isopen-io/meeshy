@@ -503,6 +503,7 @@ struct ContactRow: View {
                         .foregroundColor(.white)
                 }
             }
+            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(contact.name)
@@ -520,10 +521,14 @@ struct ContactRow: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundColor(.blue)
                     .font(.title3)
+                    .accessibilityHidden(true)
             }
         }
         .padding()
         .background(isSelected ? Color.blue.opacity(0.1) : Color.clear)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 }
 
