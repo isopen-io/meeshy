@@ -5,6 +5,8 @@
  * Limite automatiquement à 32 caractères maximum
  */
 
+import { sliceCodePoints } from './truncate';
+
 export interface LinkNameOptions {
   conversationTitle: string;
   language?: string;
@@ -43,11 +45,14 @@ export function generateLinkName(options: LinkNameOptions): string {
   // Déterminer la durée courte
   const shortDuration = getShortDuration(durationDays, language);
 
-  // Tronquer le titre de la conversation si trop long
+  // Tronquer le titre de la conversation si trop long. Découpe par point de code
+  // (jamais par unité UTF-16) pour ne pas couper une paire de substitution — un
+  // emoji tombant sur la limite deviendrait sinon une demi-paire isolée rendue
+  // « � ». Même doctrine que sliceCodePoints (truncate.ts, itér. 187).
   const maxTitleLength = 20;
   let truncatedTitle = conversationTitle;
   if (conversationTitle.length > maxTitleLength) {
-    truncatedTitle = conversationTitle.substring(0, maxTitleLength - 3) + '...';
+    truncatedTitle = sliceCodePoints(conversationTitle, maxTitleLength - 3) + '...';
   }
 
   // Construire le nom avec le titre de la conversation entre parenthèses
@@ -56,7 +61,7 @@ export function generateLinkName(options: LinkNameOptions): string {
   // S'assurer que le résultat ne dépasse pas 60 caractères (augmenté pour inclure le titre)
   const MAX_TOTAL_LENGTH = 60;
   if (linkName.length > MAX_TOTAL_LENGTH) {
-    return linkName.substring(0, MAX_TOTAL_LENGTH - 3) + '...';
+    return sliceCodePoints(linkName, MAX_TOTAL_LENGTH - 3) + '...';
   }
 
   return linkName;
