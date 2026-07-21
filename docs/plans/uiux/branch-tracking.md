@@ -75,6 +75,27 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   (`VoiceProfileManageView` `.system(size:64)`, `AffiliateView` `.system(size:36)`) ; littéraux FR de
 >   `MessageViewsDetailView.sendAttemptsCard` (vérifier collision #2199/#2194/#2186) — auditer via
 >   `list_pull_requests` avant de choisir.
+> **POINTEUR AUTORITAIRE iOS (mis à jour 197i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Essaim iOS saturé** : PR ouvertes de 175i à **196i** (#2175–#2205). Numéro **197i** choisi strictement > 196i (plus haut en vol).
+> - **197i (terminée, branche `claude/laughing-thompson-u1cnuc`, base `origin/main` HEAD `7f85463`)** :
+>   structure VoiceOver de **`CommentAttachmentsTray`** (bande de chips de pièces jointes *stagées* du
+>   composer de commentaire, partagée par `FeedCommentsSheet` / `PostDetailView` / `StoryViewerView+Canvas`
+>   via `UniversalComposerBar.customAttachmentsPreview`). 3 défauts : (1) **N boutons « Retirer » identiques**
+>   (label générique `composer.a11y.removeAttachment` sur chaque chip → indistinguables en VoiceOver dès >1
+>   pièce jointe, viol. WCAG 1.3.1/4.1.2) ; (2) **glyphe de type décoratif exposé** (bruit « image ») ;
+>   (3) chip = 3 stops VoiceOver disjoints (icône/nom/bouton). Fix (idiome 183i/194i) : glyphe + bouton
+>   internes `.accessibilityHidden(true)` + chip `.accessibilityElement(children: .combine)` (→ 1 élément
+>   labellisé par le **nom** de la pièce jointe) + `.accessibilityAction(named:)` « Retirer la pièce jointe »
+>   (réutilise la clé inline existante, **0 clé neuve**) scopée au chip. Effets de suppression extraits en
+>   `remove(_ attachment:)` (haptic + `withAnimation` `onRemove` + nettoyage fichier temp) → tap tactile et
+>   action rotor partagent un seul chemin. **0 visuel / 0 logique / 0 clé i18n / 0 SDK / 0 test neuf.** 1 fichier,
+>   +6 nets. `CommentMediaView.imageView` déjà labellisé, video/audio délèguent à `MeeshyVideoPlayer`/
+>   `AudioPlayerView` (a11y propre) → hors périmètre. 0 test ne réf. les composants (grep = 0) ; 3 callers
+>   inchangés. `search_pull_requests … CommentMediaView` → 0 contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** l'atteignabilité VoiceOver de `CommentAttachmentsTray` (remove distinguable /
+>   glyphe masqué / chip combiné — soldé 197i). Sibling restant même idiome : `UniversalComposerBar+Attachments.swift`
+>   (l.62, même label générique — fichier distinct, vérifier contention).
+> - **Base de départ 198i : `main` HEAD** (après merge, supprimer la branche).
 >
 > **POINTEUR AUTORITAIRE iOS (mis à jour 183i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **183i (branche `claude/laughing-thompson-8vaq6w`, base `main` HEAD `64f943d`)** :
