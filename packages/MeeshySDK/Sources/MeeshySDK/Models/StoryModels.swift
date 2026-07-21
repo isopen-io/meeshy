@@ -1947,24 +1947,35 @@ public struct StatusEntry: Identifiable, Codable, CacheIdentifiable {
     public var reactionSummary: [String: Int]?
     public let viaUsername: String?
 
+    /// Reuses the story countdown's own catalog keys (`story.viewer.expires*`
+    /// in `story.viewer.expiresNow`/`expiresInHours`/`expiresInMinutes`) rather
+    /// than minting duplicate ones — a status is the same "ephemeral post"
+    /// concept as a story, just without a dedicated seconds-level key, so
+    /// anything under a minute collapses into the same "expiring soon" label
+    /// (mirrors `StoryViewerView+Content.storyTimeRemaining`, which has no
+    /// seconds granularity either). Previously hardcoded the bare English
+    /// word "expired" regardless of the user's language — Prisme violation.
     public var timeRemaining: String {
         guard let expires = expiresAt else { return "" }
         let seconds = Int(expires.timeIntervalSinceNow)
-        if seconds <= 0 { return "expired" }
-        if seconds < 60 { return "\(seconds)s" }
-        return "\(seconds / 60)min"
+        if seconds < 60 {
+            return String(localized: "story.viewer.expiresNow", defaultValue: "Expire bientôt", bundle: .main)
+        }
+        let hours = seconds / 3600
+        if hours > 0 {
+            return String(localized: "story.viewer.expiresInHours", defaultValue: "Expire dans \(hours)h", bundle: .main)
+        }
+        let minutes = seconds / 60
+        return String(localized: "story.viewer.expiresInMinutes", defaultValue: "Expire dans \(minutes)min", bundle: .main)
     }
 
+    /// Was a hand-rolled French-only relative-time string built from scratch —
+    /// re-forging exactly what `RelativeTimeFormatter` (this same module,
+    /// already used by `StoryItem`) exists to centralize. Delegates instead so
+    /// a StatusEntry gets the same 5-language coverage, day-boundary "hier",
+    /// and absolute-date fallback as every other relative timestamp in the app.
     public var timeAgo: String {
-        let seconds = Int(-createdAt.timeIntervalSinceNow)
-        if seconds < 5 { return "il y a quelques secondes" }
-        if seconds < 60 { return "il y a \(seconds)s" }
-        let minutes = seconds / 60
-        if minutes < 60 { return "il y a \(minutes)min" }
-        let hours = minutes / 60
-        let remainingMin = minutes % 60
-        if remainingMin == 0 { return "il y a \(hours)h" }
-        return "il y a \(hours)h \(remainingMin)min"
+        RelativeTimeFormatter.longString(for: createdAt)
     }
 
     public init(id: String, userId: String, username: String, avatarColor: String, moodEmoji: String,
