@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { SecuritySanitizer } from '../utils/sanitize';
+import { generateNickname } from '../utils/anonymous-nickname';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import {
   errorResponseSchema,
@@ -38,14 +39,6 @@ function generateSessionToken(deviceFingerprint?: string): string {
   const randomPart = crypto.randomBytes(16).toString('hex');
   const devicePart = deviceFingerprint ? crypto.createHash('md5').update(deviceFingerprint).digest('hex').slice(0, 8) : '';
   return `anon_${timestamp}_${randomPart}_${devicePart}`;
-}
-
-// Helper pour generer un username automatique
-function generateNickname(firstName: string, lastName: string): string {
-  const cleanFirstName = firstName.toLowerCase().replace(/[^a-z]/g, '');
-  const lastNameInitials = lastName.toLowerCase().replace(/[^a-z]/g, '').slice(0, 2);
-  const randomSuffix = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `${cleanFirstName}_${lastNameInitials}${randomSuffix}`;
 }
 
 // Helper pour verifier l'IP et extraire le pays (simulation)
