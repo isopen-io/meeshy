@@ -1084,32 +1084,33 @@ class ConversationListViewModel: ObservableObject {
                     self?.loadState = .loaded
                 }
             }
-        case .expired, .empty:
+        case .expired:
+            // `load()` intentionally returns a data-less `.expired` once an
+            // entry crosses the policy's expiry threshold — it signals
+            // "don't trust this, go resync" — but the payload still EXISTS
+            // on disk. Recover it and paint it immediately: a resync that
+            // then fails offline must never leave the screen emptier than
+            // what's actually on disk (Offline Graceful Degradation).
+            // `syncAndReconcileList` below overwrites it with fresh data on
+            // success, same as any other cold path.
+            let recovered = await CacheCoordinator.shared.conversations.loadIgnoringExpiry(for: "list")
+            let hadRecoveredData = !(recovered?.items.isEmpty ?? true)
+            if hadRecoveredData, let recovered {
+                setConversations(recovered.items)
+                isLoading = false
+                loadFailed = false
+                loadState = .offline
+            } else {
+                isLoading = true
+                loadFailed = false
+                loadState = .loading
+            }
+            await syncAndReconcileList(hadRecoveredData: hadRecoveredData)
+        case .empty:
             isLoading = true
             loadFailed = false
             loadState = .loading
-            let succeeded = await syncEngine.fullSync()
-            // Post-sync snapshot: the sync engine just wrote the canonical
-            // list to cache, so a freshness-aware switch would add no signal.
-            // `snapshot()` is the explicit-intent read for this pattern.
-            let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
-            if let data = reloaded.snapshot() {
-                setConversations(data)
-                // Full sync just completed: snapshot is authoritative, so reconcile
-                // overrides anything the coordinator tracked from earlier socket events.
-                NotificationCoordinator.shared.reconcileConversationUnreads(data)
-                loadFailed = false
-                loadState = .loaded
-            } else if !succeeded {
-                // Cache is still empty AND the sync failed. Surface the
-                // failure so the view can offer a retry instead of the
-                // confusing "no conversations" empty state that historically
-                // appeared after a cold start with network issues.
-                loadFailed = true
-                loadState = .error("Sync failed")
-            }
-            lastFetchedAt = Date()
-            isLoading = false
+            await syncAndReconcileList(hadRecoveredData: false)
         }
 
         // Précharger en arrière-plan
@@ -1119,25 +1120,68 @@ class ConversationListViewModel: ObservableObject {
         await categoriesTask
     }
 
+    /// Shared `fullSync()` + reconcile tail for the `.expired`/`.empty`
+    /// cold-cache branches of `performLoadConversations`. `hadRecoveredData`
+    /// tells us whether the `.expired` branch already painted a disk
+    /// snapshot before this ran — if the sync then fails, we keep showing
+    /// that snapshot (`.offline`) instead of regressing to the empty-screen
+    /// `.error` state. `fullSync()`'s own `succeeded` flag (not "is the
+    /// cache non-nil afterwards") is the authoritative success signal —
+    /// the cache can be non-empty even on failure once `.expired` recovery
+    /// is in play.
+    private func syncAndReconcileList(hadRecoveredData: Bool) async {
+        let succeeded = await syncEngine.fullSync()
+        if succeeded {
+            // The sync engine just wrote the canonical list to cache on
+            // success; `snapshot()` is the explicit-intent read for that.
+            let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
+            if let data = reloaded.snapshot() {
+                setConversations(data)
+                // Full sync just completed: snapshot is authoritative, so
+                // reconcile overrides anything the coordinator tracked from
+                // earlier socket events.
+                NotificationCoordinator.shared.reconcileConversationUnreads(data)
+            }
+            loadFailed = false
+            loadState = .loaded
+        } else {
+            // Sync failed (offline/network error). If `.expired` already
+            // painted a disk snapshot above, keep showing it instead of the
+            // confusing "no conversations" empty state.
+            loadFailed = !hadRecoveredData
+            loadState = hadRecoveredData ? .offline : .error("Sync failed")
+        }
+        lastFetchedAt = Date()
+        isLoading = false
+    }
+
     // MARK: - Force Refresh (pull-to-refresh)
     // Recharge les conversations depuis l'API puis continue en arrière-plan
 
     func forceRefresh() async {
-        invalidateCache()
         isLoading = true
         loadFailed = false
         loadState = .loading
         let succeeded = await syncEngine.fullSync()
-        // Pull-to-refresh: the sync engine just wrote the canonical list to
-        // cache; `snapshot()` is the explicit-intent read for that.
-        let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
-        if let data = reloaded.snapshot() {
-            setConversations(data)
-            // User-triggered full sync: snapshot is authoritative, reconcile counts.
-            NotificationCoordinator.shared.reconcileConversationUnreads(data)
+        // Fetch-then-replace: `fullSync()` only overwrites the "list" cache
+        // key on a SUCCESSFUL fetch (see ConversationSyncEngine.saveSorted).
+        // This used to call `invalidateCache()` BEFORE the fetch, wiping
+        // L1+L2 unconditionally — an offline/failed refresh then left the
+        // cache empty with nothing to replace it (a pull-to-refresh that
+        // failed emptied the whole app, violating Offline Graceful
+        // Degradation). `succeeded` — not "is the cache non-nil afterwards"
+        // — is the authoritative signal: existing cached data must survive
+        // untouched when the fetch never reached the network.
+        if succeeded {
+            let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
+            if let data = reloaded.snapshot() {
+                setConversations(data)
+                // User-triggered full sync: snapshot is authoritative, reconcile counts.
+                NotificationCoordinator.shared.reconcileConversationUnreads(data)
+            }
             loadFailed = false
             loadState = .loaded
-        } else if !succeeded {
+        } else {
             loadFailed = true
             loadState = .error("Refresh failed")
         }
@@ -1287,34 +1331,39 @@ class ConversationListViewModel: ObservableObject {
     /// Pull-to-refresh invalide AUSSI les caches transverses utilisés
     /// par la home : préférences utilisateur/conversation, catégories
     /// et tags personnalisés, profils (mood, last seen) et assets
-    /// visuels (avatars + bannières). La logique reset+fullSync ensuite
-    /// repeuple uniquement la listing — les autres stores se
+    /// visuels (avatars + bannières) — mais SEULEMENT une fois le fetch
+    /// réussi. Fetch-then-replace : une tentative de pull offline/échouée
+    /// ne doit jamais vider un cache qu'elle ne peut pas repeupler
+    /// (Offline Graceful Degradation). Sur succès, la listing est
+    /// repeuplée par `forceRefresh()` lui-même ; les autres stores se
     /// rehydratent paresseusement à la prochaine lecture, cache-first.
     func pullToRefresh() async {
-        // Cancel any in-flight persist BEFORE we reset the cursor or
-        // invalidate the cache. Otherwise a `loadMore` save scheduled
-        // moments before the pull could re-write the old blob on disk
-        // *after* `invalidateAll()` wiped L2, leaving the next cold
-        // start with the very rows the user just refreshed away.
+        // Cancel any in-flight persist BEFORE we reset the cursor.
+        // Otherwise an orphaned `loadMore` save scheduled moments before
+        // the pull could re-write the old blob on disk after the fetch
+        // below replaces it.
         persistTask?.cancel()
         nextCursor = nil
         hasMore = true
         paginationState = .idle
-        await invalidatePullRefreshScope()
-        // forceRefresh() rappelle invalidateCache() (conversations) sur
-        // sa propre piste — l'idempotence d'invalidateAll garantit que
-        // ce double appel est gratuit (L1 vide → no-op, L2 already
-        // dropped → no-op).
+        // Fetch FIRST: `forceRefresh()` only overwrites the conversations
+        // cache key on success (fetch-then-replace, see its own doc
+        // comment). Only once we KNOW the refresh actually reached the
+        // network do we invalidate the cross-surface caches below — an
+        // offline/failed pull must leave every cache exactly as it found
+        // it, never emptier.
         await forceRefresh()
+        guard !loadFailed else { return }
+        await invalidatePullRefreshScope()
     }
 
     /// Périmètre d'invalidation déclenché par le pull-to-refresh sur la
-    /// home. Sépare l'orchestration de cache du fetch reseau qui suit
-    /// (forceRefresh), pour que les tests unitaires puissent vérifier
-    /// la liste exacte des stores touchés.
+    /// home, UNE FOIS `forceRefresh()` revenu avec succès (voir
+    /// `pullToRefresh()`). Sépare l'orchestration de cache du fetch reseau
+    /// qui précède, pour que les tests unitaires puissent vérifier la
+    /// liste exacte des stores touchés.
     ///
-    /// Couvre 11 caches pertinents pour la home :
-    /// - Listing + pagination (re-fetché immédiatement par forceRefresh)
+    /// Couvre 10 caches transverses pour la home :
     /// - Stories (re-fetché actif par StoryViewModel.loadStories forceNetwork)
     /// - Messages cached par conversation (l'ouverture d'une conv après
     ///   refresh re-fetchera depuis le serveur)
@@ -1325,14 +1374,17 @@ class ConversationListViewModel: ObservableObject {
     ///   garantie après refresh (utile si modèle NLLB côté serveur a
     ///   été mis à jour ou si l'utilisateur a changé sa langue préférée)
     ///
+    /// La listing elle-même (`conversations`) N'EST PLUS invalidée ici —
+    /// `forceRefresh()` vient de la repeupler avec la réponse fraîche
+    /// (fetch-then-replace) ; la ré-invalider juste après aurait détruit
+    /// ce que le fetch réussi vient d'écrire.
+    ///
     /// Stores intentionnellement laissés intacts (autres écrans ou
     /// coût bande passante prohibitif) : feed, comments, stats,
     /// notifications, friends, friendRequests, blockedUsers, userSearch,
     /// timeline, audio, video, affiliateTokens, shareLinks,
     /// trackingLinks, communityLinks.
     private func invalidatePullRefreshScope() async {
-        // Listing + pagination (re-fetché immédiatement par forceRefresh)
-        await CacheCoordinator.shared.conversations.invalidateAll()
         // Messages cached par conversation. Les previews dans la listing
         // viennent de l'API (forceRefresh), mais l'historique cached est
         // re-fetché à l'ouverture de la conv pour avoir le dernier état.
@@ -1627,9 +1679,14 @@ class ConversationListViewModel: ObservableObject {
         prefetchRecentStories()
     }
 
-    /// Called when app returns to foreground — refresh stories if stale
+    /// Called when app returns to foreground — refresh stories if stale.
+    /// `isCacheValid` means "we fetched within the last `cacheTTL`
+    /// (30s)" — i.e. the useful case is precisely when it's FALSE (a long
+    /// background stint just ended). The guard used to read `isCacheValid`
+    /// (proceed only when still fresh), which short-circuited the one
+    /// scenario this method exists for.
     func handleForegroundReturn() {
-        guard isCacheValid else { return }
+        guard !isCacheValid else { return }
         Task {
             let cached = await CacheCoordinator.shared.stories.load(for: StoryViewModel.storiesCacheKey)
             switch cached {

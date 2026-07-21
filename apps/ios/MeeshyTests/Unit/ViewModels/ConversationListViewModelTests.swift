@@ -2301,6 +2301,114 @@ final class ConversationListViewModelTests: XCTestCase {
                        "After pullToRefresh the cursor must reset so the next loadMore starts from the top")
     }
 
+    /// P1 — TOP RISK: a pull-to-refresh that fails offline must never
+    /// destroy the conversations cache it can't repopulate. `forceRefresh`
+    /// used to call `invalidateCache()` (wiping L1+L2) BEFORE the fetch —
+    /// an offline pull emptied the app. Fetch-then-replace: existing data
+    /// must survive an unreachable sync untouched.
+    func test_forceRefresh_whenSyncFails_preservesExistingCache() async throws {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = false
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        await sut.loadConversations()
+        XCTAssertEqual(sut.conversations.count, 1, "precondition: cache seeded")
+
+        await sut.forceRefresh()
+
+        XCTAssertEqual(sut.conversations.count, 1,
+                       "a failed refresh must not empty the in-memory list")
+        XCTAssertTrue(sut.loadFailed)
+        let stillCached = await CacheCoordinator.shared.conversations.load(for: "list")
+        XCTAssertEqual(stillCached.snapshot()?.count, 1,
+                       "a failed refresh must not wipe the on-disk cache either")
+    }
+
+    /// Same guarantee, driven through the user-facing `.refreshable` entry
+    /// point. A failed offline pull must leave every cache untouched — not
+    /// just skip re-invalidating the ones `pullToRefresh` also wipes.
+    func test_pullToRefresh_whenSyncFails_preservesExistingCacheAndSkipsAncillaryInvalidation() async throws {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = false
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        await sut.loadConversations()
+
+        await sut.pullToRefresh()
+
+        XCTAssertEqual(sut.conversations.count, 1,
+                       "a failed pull-to-refresh must not empty the in-memory list")
+        XCTAssertTrue(sut.loadFailed)
+        let stillCached = await CacheCoordinator.shared.conversations.load(for: "list")
+        XCTAssertEqual(stillCached.snapshot()?.count, 1,
+                       "a failed pull-to-refresh must not wipe the conversations cache")
+    }
+
+    /// Regression guard: the ancillary cross-surface invalidation that runs
+    /// AFTER a successful `forceRefresh()` must not clobber the
+    /// conversations store `forceRefresh()` just fetch-then-replaced —
+    /// only the OTHER caches (messages, stories, preferences, ...) get
+    /// wiped for lazy rehydration.
+    func test_pullToRefresh_whenSyncSucceeds_leavesConversationsCacheIntact() async throws {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        await sut.loadConversations()
+
+        await sut.pullToRefresh()
+
+        XCTAssertFalse(sut.loadFailed, "a successful pull-to-refresh must not report a failure")
+        let stillCached = await CacheCoordinator.shared.conversations.load(for: "list")
+        XCTAssertEqual(stillCached.snapshot()?.count, 1,
+                       "the post-success ancillary invalidation must not wipe the conversations store it just fetch-then-replaced")
+    }
+
+    // MARK: - handleForegroundReturn (P2 — inverted guard)
+
+    /// `isCacheValid` means "we last fetched within the last 30s" — the
+    /// USEFUL case for a foreground-return stories refresh is precisely
+    /// when it's FALSE (a long background stint just ended). The guard
+    /// used to read `isCacheValid` (proceed only while still fresh),
+    /// short-circuiting the one scenario this method exists for.
+    func test_handleForegroundReturn_afterLongBackground_refreshesStaleStories() async throws {
+        await CacheCoordinator.shared.stories.invalidateAll()
+        let storyService = MockStoryService()
+        let (sut, _, _, _, _, _, _) = makeSUT(storyService: storyService)
+        // No `loadConversations()`/`forceRefresh()` call: `lastFetchedAt`
+        // stays nil, i.e. `isCacheValid == false` — simulates returning
+        // from a long background stint.
+
+        sut.handleForegroundReturn()
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertGreaterThan(storyService.listCallCount, 0,
+                             "after a long background stint the stale stories cache must be refreshed")
+    }
+
+    func test_handleForegroundReturn_withinCacheValidWindow_skipsStoriesRefresh() async throws {
+        let storyService = MockStoryService()
+        let (sut, _, _, _, _, _, _) = makeSUT(storyService: storyService)
+        await sut.loadConversations() // stamps `lastFetchedAt = Date()` — cache still valid
+        try await Task.sleep(nanoseconds: 150_000_000) // let loadConversations' own prefetch settle
+
+        // Empty the stories cache again so, if the OUTER `isCacheValid`
+        // guard didn't short-circuit, the INNER freshness check inside
+        // the Task would have no reason to skip either — isolates what
+        // this test actually exercises.
+        await CacheCoordinator.shared.stories.invalidateAll()
+        storyService.reset()
+
+        sut.handleForegroundReturn()
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertEqual(storyService.listCallCount, 0,
+                       "within the 30s cache-valid window, a foreground return must not force a stories refresh even with an empty stories cache")
+    }
+
     func test_initialState_paginationStateIsIdleAndHasMoreIsTrue() {
         let (sut, _, _, _, _, _, _) = makeSUT()
 
