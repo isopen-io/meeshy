@@ -377,7 +377,34 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       + match card driven by these cores.
 - [ ] System + regional language selection with live translation preview
 - [ ] Profile photo / banner / bio optional step; registration recap + terms acceptance
-- [ ] Email verification by 6-digit code (OTP autofill, resend, success animation)
+- [~] Email verification by 6-digit code (OTP autofill, resend, success animation) —
+      **field sanitiser + completeness gate + verify/resend/edit gates core shipped** (slice
+      `auth-otp-verification-core`, 2026-07-21). Pure `:core:model` `OtpCodeField` +
+      `OtpVerificationGate` (faithful port of iOS `EmailVerificationView`,
+      `apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift`, over
+      `EmailVerificationViewModel`). `OtpCodeField.sanitize(raw)` is the whole `codeField`
+      `onChange` transform — keep ASCII `0-9` only (deliberately **not** `Char.isDigit`, which
+      is Unicode-decimal-aware: a pasted fullwidth/Arabic-Indic digit is stripped, not silently
+      accepted) then `prefix(6)` — and `isComplete(code)` is the `code.count == 6` gate hardened
+      with an all-digit guard. `OtpVerificationGate` folds the four view-model flags (`isVerifying`,
+      `isResending`, `resendConfirmed` = iOS `resendSuccess`, `verified` = iOS `verificationSuccess`)
+      into the button/field derivations that iOS buries as inline `.disabled(...)`:
+      `canVerify(code)` (inverse of `!isCodeComplete || isVerifying || verificationSuccess`),
+      `isCodeEditable` (inverse of `isVerifying || verificationSuccess`), `canResend` (inverse of
+      `isResending || resendSuccess`), and `showResendConfirmation`. **SOTA note:** iOS scatters the
+      sanitiser + three disabled gates across the View body; Android lifts them into one SSOT so a
+      Compose `onValueChange` filters through one function and every combined gate is JVM-testable.
+      +26 behavioural tests (`OtpVerificationTest` — 9 sanitize: clean/strip letters+symbols/strip
+      spaces/truncate/truncate-after-strip/edge-whitespace/empty/all-non-digit/drop-non-ASCII-digit;
+      5 isComplete: 6-digit / 5 / 7 / empty / 6-non-digit-guard; 4 canVerify; 3 isCodeEditable;
+      3 canResend; 2 showResendConfirmation). Expectations are hand-written literals (not tautological).
+      Mutation (RED proof): dropping the `take(LENGTH)` truncation fails **exactly**
+      `sanitize_truncatesToSixDigits` + `sanitize_truncatesAfterStrippingNonDigits` (26 run, 2 failed,
+      no collateral). `:core:model:testDebugUnitTest` green (26/26) + full `assembleDebug` +
+      all-module `testDebugUnitTest` → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up:**
+      the app-side `EmailVerificationView` composable (code field driving `OtpCodeField.sanitize` →
+      `AuthService.verifyEmailWithCode`, resend → `resendVerificationEmail` with the 3 s confirmation
+      window off a `Flow`, success overlay) + `oneTimeCode` autofill.
 - [~] Country auto-detection + region→language inference at signup — **inference core shipped**
       (slice `auth-region-language-inference`, 2026-07-21). Pure `:core:model`
       `SignupRegionInference` + `SignupLanguages` (faithful port of iOS
