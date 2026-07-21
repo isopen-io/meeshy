@@ -425,6 +425,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | 186i | claude/laughing-thompson-is8ph7 (iOS a11y `AudioFullscreenView` sélecteurs : `speedRow` + `languagePill` signalaient la sélection par couleur seule → `.accessibilityAddTraits(.isSelected)` (+ `.accessibilityLabel(speed.label)` sur la vitesse), miroir `CallsTab.chip:60` ; a11y icône-seule déjà soldée 104i ; 1 fichier, 0 logique/0 visuel/0 clé i18n neuve/0 test neuf, aucune suite ne cible le fichier → 0 régression ; gate = CI iOS Tests) | ⏳ | ⏳ |
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 193i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **193i (terminée, branche `claude/laughing-thompson-fv3e04`, base `main` HEAD `1b28372`)** :
+>   VoiceOver — état sélectionné des **trois** sélecteurs de `MessageDetailSheet.swift`
+>   (`viewsFilterCapsule` filtre « Vu par », `reactionFilterCapsule` filtre « Réactions »,
+>   `reportTypeRow` motif de signalement). Chacun signalait son segment/ligne actif **uniquement
+>   par le remplissage accent** (la coche de `reportTypeRow` est sans label → non exposée) → VoiceOver
+>   annonçait chaque option à l'identique. Exécution directe de la « Restant » de 186i qui listait
+>   `MessageDetailSheet`. Fix miroir doctrine 186i : `.accessibilityAddTraits(isSelected ? [.isSelected] : [])`
+>   sur chaque `Button` (`isSelected` déjà en portée aux 3 sites). **1 fichier, +10 l, 0 logique / 0 réseau /
+>   0 clé i18n neuve / 0 test neuf / 0 changement visuel.** `git show origin/main:…MessageDetailSheet.swift |
+>   grep accessibilityAddTraits` → 0 (base fraîche) ; aucun titre PR ouverte (25) ne référence le fichier
+>   (187i→192i ciblent d'autres surfaces) → 0 contention. Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ NE PLUS re-flagger** l'état sélectionné VoiceOver de `viewsFilterCapsule` / `reactionFilterCapsule` /
+>   `reportTypeRow` (soldé 193i).
+> - **Base de départ 194i : `main` HEAD** (resync). Piste 194i+ (sélecteurs segmentés restants, 1/itération,
+>   vérifier collision via `list_pull_requests`) : `NewConversationView`, `EffectsPickerView`, `MyStoriesView`,
+>   `LanguagePickerSheet`.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 180i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **180i (en cours, branche `claude/laughing-thompson-k9l43k`, base `main` HEAD post-#2125/#2130)** :
 >   Consolidation palette de marque de la **paire Parrainage** `AffiliateView` + `AffiliateCreateView`
