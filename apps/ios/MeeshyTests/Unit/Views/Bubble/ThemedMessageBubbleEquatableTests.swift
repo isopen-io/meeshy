@@ -110,6 +110,61 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
         XCTAssertNotEqual(a, b)
     }
 
+    // MARK: - mentionDisplayNames (cache enrichment resolves @mentions without bumping updatedAt)
+    //
+    // `mentionDisplayNames` populates lazily as the mentioned user's profile
+    // lands in cache — the raw `@username` token must re-render into the
+    // resolved display name WITHOUT any change to `message.updatedAt`.
+
+    func test_mentionDisplayNamesChange_invalidates() {
+        let a = makeBubble(mentionDisplayNames: ["u2": "@u2"])
+        let b = makeBubble(mentionDisplayNames: ["u2": "Alice"])
+        XCTAssertNotEqual(a, b)
+    }
+
+    // MARK: - allAudioItems (multi-track per-attachment enrichment)
+    //
+    // For a multi-track audio message, `BubbleStandardLayout` keys per-page
+    // transcription/translatedAudios off `allAudioItems` (the single
+    // per-message `transcription`/`translatedAudios` slots only ever hold the
+    // LAST track). Async enrichment of one track must invalidate the gate.
+
+    func test_allAudioItemsTranscriptionEnrichment_forOwnAttachment_invalidates() {
+        let attachment = makeAttachment(id: "att1")
+        let message = makeMessage(updatedAt: .init(timeIntervalSince1970: 0), effects: .none, reactions: [], attachments: [attachment])
+        let before = ConversationViewModel.AudioItem(id: "att1", attachment: attachment, message: message, transcription: nil, translatedAudios: [])
+        let after = ConversationViewModel.AudioItem(
+            id: "att1",
+            attachment: attachment,
+            message: message,
+            transcription: MessageTranscription(attachmentId: "att1", text: "Bonjour", language: "fr"),
+            translatedAudios: []
+        )
+        let a = makeBubble(message: message, allAudioItems: [before])
+        let b = makeBubble(message: message, allAudioItems: [after])
+        XCTAssertNotEqual(a, b)
+    }
+
+    /// Enrichment of an audio item belonging to a DIFFERENT message's
+    /// attachment must NOT invalidate this bubble — the gate only cares
+    /// about attachments owned by ITS OWN message.
+    func test_allAudioItemsChange_forOtherAttachment_doesNotInvalidate() {
+        let ownAttachment = makeAttachment(id: "att1")
+        let message = makeMessage(updatedAt: .init(timeIntervalSince1970: 0), effects: .none, reactions: [], attachments: [ownAttachment])
+        let otherAttachment = makeAttachment(id: "other-att")
+        let before = ConversationViewModel.AudioItem(id: "other-att", attachment: otherAttachment, message: message, transcription: nil, translatedAudios: [])
+        let after = ConversationViewModel.AudioItem(
+            id: "other-att",
+            attachment: otherAttachment,
+            message: message,
+            transcription: MessageTranscription(attachmentId: "other-att", text: "Salut", language: "fr"),
+            translatedAudios: []
+        )
+        let a = makeBubble(message: message, allAudioItems: [before])
+        let b = makeBubble(message: message, allAudioItems: [after])
+        XCTAssertEqual(a, b)
+    }
+
     // MARK: - Sanity: existing fields still gate
 
     func test_messageUpdatedAtBump_invalidates() {
@@ -183,11 +238,14 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
         userLanguages: (regional: String?, custom: String?) = (nil, nil),
         activeAudioLanguage: String? = nil,
         effects: MessageEffects = .none,
-        reactions: [MeeshyReaction] = []
+        reactions: [MeeshyReaction] = [],
+        message: MeeshyMessage? = nil,
+        allAudioItems: [ConversationViewModel.AudioItem] = [],
+        mentionDisplayNames: [String: String] = [:]
     ) -> ThemedMessageBubble {
-        let message = makeMessage(updatedAt: updatedAt, effects: effects, reactions: reactions)
+        let resolvedMessage = message ?? makeMessage(updatedAt: updatedAt, effects: effects, reactions: reactions)
         return ThemedMessageBubble(
-            message: message,
+            message: resolvedMessage,
             contactColor: "FF0000",
             isDirect: isDirect,
             isDark: false,
@@ -195,10 +253,11 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
             presenceState: presenceState,
             senderMoodEmoji: senderMoodEmoji,
             senderStoryRingState: senderStoryRingState,
+            allAudioItems: allAudioItems,
             activeAudioLanguage: activeAudioLanguage,
             isLastInGroup: isLastInGroup,
             isLastReceivedMessage: false,
-            mentionDisplayNames: [:],
+            mentionDisplayNames: mentionDisplayNames,
             highlightSearchTerm: nil,
             isEditSaving: false,
             hasEditHistory: false,
@@ -210,7 +269,8 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
     private func makeMessage(
         updatedAt: Date,
         effects: MessageEffects,
-        reactions: [MeeshyReaction]
+        reactions: [MeeshyReaction],
+        attachments: [MessageAttachment] = []
     ) -> MeeshyMessage {
         MeeshyMessage(
             id: "m1",
@@ -237,7 +297,7 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
             encryptionMode: nil,
             createdAt: Date(timeIntervalSince1970: 0),
             updatedAt: updatedAt,
-            attachments: [],
+            attachments: attachments,
             reactions: reactions,
             replyTo: nil,
             forwardedFrom: nil,
@@ -265,5 +325,9 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
             createdAt: Date(timeIntervalSince1970: 0),
             updatedAt: Date(timeIntervalSince1970: 0)
         )
+    }
+
+    private func makeAttachment(id: String) -> MessageAttachment {
+        MeeshyMessageAttachment(id: id, mimeType: "audio/m4a")
     }
 }
