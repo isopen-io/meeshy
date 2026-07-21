@@ -166,7 +166,15 @@ class PostDetailViewModel: ObservableObject {
     }
 
     func loadMoreComments(_ postId: String) async {
-        guard !isLoadingComments, hasMoreComments, commentCursor != nil else { return }
+        // NOTE: no `commentCursor != nil` guard on purpose — see
+        // `FeedViewModel.loadMoreIfNeeded`'s identical fix. `loadComments`'s
+        // `.fresh` cache branch never touches the network, so `commentCursor`
+        // stays `nil` while `hasMoreComments` stays at its initial `true`,
+        // permanently stalling pagination for the whole session. `hasMoreComments`
+        // alone is a safe gate — it's always set together with `commentCursor`
+        // by `fetchCommentsFromNetwork`, and `cursor: nil` there already means
+        // "fetch page 1", exactly what's needed to recover a real cursor.
+        guard !isLoadingComments, hasMoreComments else { return }
         await fetchCommentsFromNetwork(postId, cacheKey: "post-\(postId)")
     }
 

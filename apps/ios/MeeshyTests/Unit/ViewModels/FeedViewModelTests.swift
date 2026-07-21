@@ -318,6 +318,36 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(api.requestCount, initialRequestCount, "Should not load more when hasMore is false")
     }
 
+    /// Regression guard: a session served entirely from a `.fresh` main-feed
+    /// cache hit never touches the network in `loadFeed`, so `nextCursor`
+    /// stays at its initial `nil` while `hasMore` stays at its initial
+    /// `true` — the old `nextCursor != nil` guard permanently stalled
+    /// infinite scroll for the rest of the session. `cursor: nil` is exactly
+    /// how `loadFeed` requests page 1, so dropping that guard clause lets
+    /// the first scroll-triggered call recover a real cursor.
+    func test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor() async {
+        let (sut, api, _, _) = makeSUT()
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+        let seeded = (0..<10).map { Self.makeFeedPost(id: "cached-\($0)", content: "Post \($0)") }
+        try? await CacheCoordinator.shared.feed.save(seeded, for: "main-feed")
+
+        await sut.loadFeed() // .fresh cache hit — no network call, nextCursor stays nil
+        XCTAssertEqual(sut.posts.count, 10)
+        XCTAssertTrue(sut.hasMore)
+        let requestCountAfterCacheLoad = api.requestCount
+
+        let morePosts = [Self.makeAPIPost(id: "post-10", content: "Post 10")]
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: morePosts, hasMore: true, nextCursor: "cursor-page2"))
+
+        let triggerPost = sut.posts[5] // index 5 of 10, threshold = 10-5 = 5
+        await sut.loadMoreIfNeeded(currentPost: triggerPost)
+
+        XCTAssertGreaterThan(api.requestCount, requestCountAfterCacheLoad, "Should fetch page 1 with a nil cursor to recover a real nextCursor")
+        XCTAssertTrue(sut.posts.contains(where: { $0.id == "post-10" }))
+
+        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
+    }
+
     /// P3.1 — coalescing regression test.
     ///
     /// Multiple cells near the threshold fire `.onAppear` essentially at the

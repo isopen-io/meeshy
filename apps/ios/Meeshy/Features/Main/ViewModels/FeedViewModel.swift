@@ -232,10 +232,18 @@ class FeedViewModel: ObservableObject {
         guard let index = posts.firstIndex(where: { $0.id == currentPost.id }) else { return }
         let threshold = posts.count - 5
 
+        // NOTE: no `nextCursor != nil` guard here on purpose. A session that
+        // started from a `.fresh` cache hit (loadFeed) never touches the
+        // network, so `nextCursor` stays at its initial `nil` forever while
+        // `hasMore` stays at its initial `true` — requiring a non-nil cursor
+        // permanently stalled infinite scroll for the whole session. `hasMore`
+        // alone is a safe gate: it's always set together with `nextCursor`
+        // by every real network response below, so `hasMore == true` with a
+        // `nil` cursor can only mean "no real fetch has happened yet" — and
+        // `cursor: nil` is exactly how `loadFeed` already requests page 1.
         guard index >= threshold,
               hasMore,
-              !isLoadingMore,
-              nextCursor != nil else { return }
+              !isLoadingMore else { return }
 
         isLoadingMore = true
 
