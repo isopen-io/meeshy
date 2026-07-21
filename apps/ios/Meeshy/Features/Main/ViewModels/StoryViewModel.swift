@@ -1389,6 +1389,16 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         mediaObjects[i].postMediaId = result.id
                         mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
+                    } else {
+                        // Symmetric with the audio branch below: a declared
+                        // foreground media object with no matching loaded asset
+                        // used to be silently skipped — no log, no guard — and
+                        // the layer would render as an invisible gap for every
+                        // viewer. `postMediaId` stays empty so this object is
+                        // simply left out of `mediaIds`/the effects it feeds.
+                        os.Logger.storyAudio.error(
+                            "publish foreground media asset missing kind=\(obj.mediaType, privacy: .public) id=\(obj.id, privacy: .public) slide=\(slide.id, privacy: .public) — layer will be invisible to viewers (postMediaId stays empty)"
+                        )
                     }
                     mediaIdx += 1
                     let mediaProgress = Double(mediaIdx) / Double(max(1, mediaCount))
