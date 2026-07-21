@@ -295,11 +295,11 @@ public final class RegistrationViewModel: ObservableObject {
 
                 usernameAvailable = result.available
                 usernameSuggestions = result.suggestions ?? []
-                usernameError = result.available ? nil : "Ce pseudo est deja pris!"
+                usernameError = result.available ? nil : String(localized: "auth.registration.usernameTaken", defaultValue: "Ce pseudo est deja pris!", bundle: .module)
             } catch {
                 guard !Task.isCancelled else { return }
                 usernameAvailable = true
-                usernameError = "Verification non effectuee"
+                usernameError = String(localized: "auth.registration.verificationFailed", defaultValue: "Verification non effectuee", bundle: .module)
             }
         }
     }
@@ -317,11 +317,11 @@ public final class RegistrationViewModel: ObservableObject {
                 guard !Task.isCancelled else { return }
 
                 emailAvailable = result.available
-                emailError = result.available ? nil : "Cet email est deja utilise!"
+                emailError = result.available ? nil : String(localized: "auth.registration.emailTaken", defaultValue: "Cet email est deja utilise!", bundle: .module)
             } catch {
                 guard !Task.isCancelled else { return }
                 emailAvailable = true
-                emailError = "Verification non effectuee"
+                emailError = String(localized: "auth.registration.verificationFailed", defaultValue: "Verification non effectuee", bundle: .module)
             }
         }
     }
@@ -344,10 +344,10 @@ public final class RegistrationViewModel: ObservableObject {
                 phoneNumberValid = result.phoneNumberValid
                 phoneAvailable = result.available
                 if result.phoneNumberValid == false {
-                    phoneError = "Ce numero semble invalide"
+                    phoneError = String(localized: "auth.registration.phoneInvalid", defaultValue: "Ce numero semble invalide", bundle: .module)
                     phoneOwnership = nil
                 } else if !result.available {
-                    phoneError = "Ce numero est deja utilise!"
+                    phoneError = String(localized: "auth.registration.phoneTaken", defaultValue: "Ce numero est deja utilise!", bundle: .module)
                     // Numéro pris : sonde le compte propriétaire pour proposer une
                     // récupération si c'est un compte dormant à l'identité proche.
                     await probePhoneOwnership(fullPhone: fullPhone, country: country, firstName: first, lastName: last)
@@ -359,7 +359,7 @@ public final class RegistrationViewModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 phoneAvailable = true
                 phoneNumberValid = nil
-                phoneError = "Verification non effectuee"
+                phoneError = String(localized: "auth.registration.verificationFailed", defaultValue: "Verification non effectuee", bundle: .module)
                 phoneOwnership = nil
             }
         }
@@ -493,7 +493,7 @@ public final class RegistrationViewModel: ObservableObject {
         isLoading = false
 
         if !AuthManager.shared.isAuthenticated {
-            errorMessage = AuthManager.shared.errorMessage ?? "Erreur lors de l'inscription"
+            errorMessage = AuthManager.shared.errorMessage ?? String(localized: "auth.registration.registrationFailed", defaultValue: "Erreur lors de l'inscription", bundle: .module)
         }
     }
 
