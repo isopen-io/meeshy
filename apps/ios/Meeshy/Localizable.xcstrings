@@ -22946,12 +22946,37 @@
         }
       }
     },
-    "Meeshy version %@, build %@. Made with love by Services CEO.": {
-      "localizations": {
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Meeshy version %1$@, build %2$@. Made with love by Services CEO."
+    "brand.signature.accessibilityLabel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy Version %1$@, Build %2$@. Mit Liebe gemacht von Services CEO."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy version %1$@, build %2$@. Made with love by Services CEO."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy versión %1$@, compilación %2$@. Hecho con amor por Services CEO."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy version %1$@, build %2$@. Fait avec amour par Services CEO."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meeshy versão %1$@, compilação %2$@. Feito com amor por Services CEO."
           }
         }
       }

@@ -40,6 +40,12 @@ struct BrandSignature: View {
                 .accessibilityHidden(true)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO."))
+        .accessibilityLabel(
+            String(
+                localized: "brand.signature.accessibilityLabel",
+                defaultValue: "Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO.",
+                bundle: .main
+            )
+        )
     }
 }
