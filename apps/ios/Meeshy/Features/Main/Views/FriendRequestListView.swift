@@ -96,7 +96,7 @@ struct FriendRequestListView: View {
 
     private func friendRequestRow(_ request: FriendRequest) -> some View {
         let sender = request.sender
-        let name = sender?.name ?? "Inconnu"
+        let name = sender?.name ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main)
         let color = DynamicColorGenerator.colorForName(name)
 
         return HStack(spacing: 14) {
