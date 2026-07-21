@@ -326,7 +326,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] System + regional language selection with live translation preview
 - [ ] Profile photo / banner / bio optional step; registration recap + terms acceptance
 - [ ] Email verification by 6-digit code (OTP autofill, resend, success animation)
-- [ ] Country auto-detection + region→language inference at signup
+- [~] Country auto-detection + region→language inference at signup — **inference core shipped**
+      (slice `auth-region-language-inference`, 2026-07-21). Pure `:core:model`
+      `SignupRegionInference` + `SignupLanguages` (faithful port of iOS
+      `RegistrationViewModel.detectLanguages()` + `detectCountry()`,
+      `packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`). Holds the verbatim
+      50-entry `regionLanguageMap` (ISO 3166-1 alpha-2 → default regional language) and the pure
+      resolvers: `inferLanguages(deviceLanguage, deviceRegion, supportedLanguageCodes)` → the
+      `system`/`regional` pair (system = supported device language else `fr`; regional = the mapped
+      region language when supported AND distinct from system, else `en`, but `fr` when that `en`
+      fallback would duplicate an English system — both slots always distinct); and
+      `inferCountryIso(deviceRegion, knownCountryCodes)` → the region ISO uppercased when it is a known
+      country (app passes `CountryCatalog.dialCodes.keys`). `Locale`-free / JVM-testable — the app
+      injects `Locale.getDefault().language` / `.country` + the `LanguageData` code set. +22 behavioural
+      tests (`SignupRegionInferenceTest`: every system/regional branch, casing, null/blank inputs,
+      equal-to-system + unsupported-region + unknown-region fallbacks, en-system duplicate avoidance,
+      the 50-entry map, and the country resolver incl. the real catalogue set). Mutation (RED proof):
+      dropping the `it != system` guard from the regional gate fails **exactly**
+      `dropsRegionalLanguageEqualToSystem` + `regionMappingEqualToEnglishSystemFallsBackToFrench` +
+      `regionMappingEqualToNonEnglishSystemFallsBackToEnglish` (22 run, 3 failed, no collateral).
+      `:core:model:testDebugUnitTest` green + full `:app:assembleDebug` → BUILD SUCCESSFUL. Diff =
+      `apps/android` only. **Follow-up:** wire it into the app-side registration-wizard scaffold
+      (source `Locale.getDefault()` at wizard start to pre-select the language step + country picker).
 - [ ] Password recovery via email link
 - [ ] Password recovery via phone (lookup → masked-info challenge → SMS code → reset)
 - [ ] First-run onboarding carousel with live feature demo + animated step backgrounds
