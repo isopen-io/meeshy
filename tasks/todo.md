@@ -15,16 +15,21 @@ Corrections trouvées en vérifiant réellement (pas l'exit code) après merge :
 
 Vérifié vert : shared 47/47 (1382 tests) · gateway 536/536 (14424 tests, 1 flake ponctuel non reproduit au 2e run) · web présence 16/16 (294 tests) · iOS `meeshy.sh test` phase1 1510/1510 + phase2 2403/2403 + phase3 1/1.
 
-## Vague 2 — Lane AV (avatars/bannières) — 🔄 en cours (relancé sous Sonnet 5)
+## Vague 2 — Lane AV (avatars/bannières) — ✅ MERGÉ sur main (partiel)
 
-- [ ] **Lane AV** — avatars/bannières : AV1 showsRetryButton découplé · AV2 retry silencieux + cache négatif · AV3 câblage 12 sites (7/12 câblés commit 2aa0be901 ; correction : 5 sites — pas 4 — restent bloqués par des lanes concurrentes : `ConversationListHelpers.swift:276`, `CallView.swift:355,1730,1777`, `StoryViewerView+Content.swift:1904`)
+- [x] **Lane AV** — 7/12 sites câblés (commit d1ea9c69c) ; 5 restants bloqués par des lanes B pas encore lancées : `ConversationListHelpers.swift:276`, `CallView.swift:355,1730,1777`, `StoryViewerView+Content.swift:1904` — à câbler quand les lanes B propriétaires (B8 Images/viewers, B10 Pièces jointes, B13 Appels, B18 Liste conv-vues, B6 Stories) auront tourné
 
-## Intégration
+## Vague 3 (B1-B5) — ✅ MERGÉ sur main
 
-- [x] Reviews adversariales Vague 1 + fixes confirmés
-- [x] Merges Vague 1 + GWF sur main
-- [x] Vérifs intégration Vague 1 : prisma generate + shared build ; gateway bun test ; meeshy.sh test (3 phases)
-- [ ] Reviews + merge Vague 2 (AV) + B1-B5
+- [x] **B1 Auth & session**, **B2 Profil/avatar/queue**, **B3 Liste conversations — données**, **B4 Conversation ouverte — VM/envoi**, **B5 Feed social** — tous mergés (commits e2507c6cd, f0716f23d, ad6ba7592, bf880ddff, a3a47fbb2). Conflits non triviaux résolus manuellement (vérification ligne par ligne, jamais de choix mécanique) : B2 (préservation `''` customDestinationLanguage + test helper), B3 (2 fonctions SDK complémentaires + doc recalée + 6 tests fusionnés), B4 (helper de langue dupliqué unifié sur le meilleur + `onReply` retiré — référençait une propriété inexistante, aurait cassé la compile), B5 (fragment de code orphelin écarté + vrai fix de durabilité réappliqué au bon endroit).
+
+## Intégration — ✅ terminée pour Vague 1+2+3
+
+- [x] Reviews adversariales Vague 1 + Vague 3 + fixes confirmés
+- [x] Merges Vague 1 + GWF + AV + B1-B5 sur main
+- [x] Build device (`./apps/ios/meeshy.sh device`) : 5 erreurs de compilation trouvées et corrigées post-merge (commits d06e98ea3, 16b5ed874, 16f4e1268) — pbxproj périmé (xcodegen), 2× isolation Swift 6 (OutboxDispatcher, même classe que NSEDecryptor), 1× argument obsolète (ProfileUserPostsList→FeedPostCard, code mort pré-existant), 1× import manquant (AttachmentUploaderTests), 1× régression test (pollution cache singleton CacheCoordinator entre tests, démasquée par le fix B3 fetch-then-replace)
+- [x] Vérif finale : `meeshy.sh test` 3 phases **toutes vertes** (1536+2456+1 tests, 0 échec)
+- [ ] Vagues 4-5 (B6-B23) restantes
 - [ ] Doc/mémoire présence (CLAUDE.md, mémoire) APRÈS CI verte
 - [ ] Push main au jalon, surveiller CI (pas de push docs par-dessus)
 
