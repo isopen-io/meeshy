@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import os
 import MeeshySDK
+import MeeshyUI
 
 struct AffiliateView: View {
     @Environment(\.dismiss) private var dismiss
@@ -180,24 +181,20 @@ struct AffiliateView: View {
     }
 
     private var emptyTokensState: some View {
-        VStack(spacing: 12) {
-            // Héros décoratif ≥36pt : gardé figé (doctrine 74i/86i/89i) ; le libellé adjacent
-            // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
-            // déséquilibrer l'état vide.
-            Image(systemName: "link")
-                .font(.system(size: 36))
-                .foregroundColor(Color(hex: accentColor).opacity(0.4))
-                .accessibilityHidden(true)
-
-            Text(String(localized: "affiliate.empty.title", defaultValue: "Aucun lien de parrainage", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-
-            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Creez un lien pour inviter vos amis", bundle: .main))
-                .font(MeeshyFont.relative(12))
-                .foregroundColor(theme.textMuted)
-        }
-        .frame(maxWidth: .infinity)
+        // Design-system dedup (205i): the hand-rolled icon + title + subtitle
+        // VStack reimplemented the shared `EmptyStateView` primitive (same
+        // precedent as `ShareLinksView` 178i / `TrackingLinksView` 184i). The
+        // compact variant reuses the exact accent-opacity hero, scales the glyph
+        // with Dynamic Type, and folds title+subtitle into one VoiceOver element.
+        // The section card chrome is preserved so the empty and populated states
+        // stay visually identical.
+        EmptyStateView(
+            icon: "link",
+            title: String(localized: "affiliate.empty.title", defaultValue: "Aucun lien de parrainage", bundle: .main),
+            subtitle: String(localized: "affiliate.empty.subtitle", defaultValue: "Creez un lien pour inviter vos amis", bundle: .main),
+            accentColor: accentColor,
+            compact: true
+        )
         .padding(.vertical, 30)
         .background(
             RoundedRectangle(cornerRadius: 16)
