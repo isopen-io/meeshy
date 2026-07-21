@@ -412,23 +412,23 @@ struct MessageViewsDetailView: View {
         switch level {
         case 3:
             icon = "eye.fill"
-            label = "Lu"
+            label = String(localized: "bubble.delivery.read", defaultValue: "Lu", bundle: .main)
             color = .green
         case 2:
             icon = "checkmark.circle.fill"
-            label = "Distribue"
+            label = String(localized: "bubble.delivery.delivered", defaultValue: "Distribué", bundle: .main)
             color = accent
         case 1:
             icon = "checkmark"
-            label = "Envoye"
+            label = String(localized: "bubble.delivery.sent", defaultValue: "Envoyé", bundle: .main)
             color = accent.opacity(0.7)
         case 0:
             icon = "arrow.up.circle"
-            label = "Envoi..."
+            label = String(localized: "bubble.delivery.sending", defaultValue: "Envoi en cours", bundle: .main)
             color = theme.textMuted
         default:
             icon = "exclamationmark.circle"
-            label = "Echec"
+            label = String(localized: "bubble.delivery.failed", defaultValue: "Échec de l'envoi", bundle: .main)
             color = .red
         }
 
@@ -445,6 +445,7 @@ struct MessageViewsDetailView: View {
             Capsule()
                 .fill(color.opacity(0.12))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private func metaInfoRow(icon: String, label: String, value: String, accent: Color, valueColor: Color? = nil) -> some View {
