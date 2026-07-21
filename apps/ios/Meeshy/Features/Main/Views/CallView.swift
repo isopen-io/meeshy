@@ -845,6 +845,14 @@ struct CallView: View {
                 Text(callManager.formattedDuration)
                     .font(.body.weight(.medium).monospacedDigit())
                     .foregroundColor(durationColor)
+                    // Without an explicit label the combined capsule announces a
+                    // context-free "1:23" (the signal glyph is invisible on a
+                    // healthy link) — VoiceOver users can't tell it is the call
+                    // timer. Static label + dynamic value mirror the video badge
+                    // (and FloatingCallPillView 211i): the label reads once, the
+                    // timer updates via .accessibilityValue under .updatesFrequently.
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.formattedDuration)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -911,6 +919,11 @@ struct CallView: View {
                     Text(callManager.formattedDuration)
                         .font(.caption.weight(.medium).monospacedDigit())
                         .foregroundColor(durationColor)
+                        // Same context-free-timer fix as audioCallLayout: this
+                        // caption-mode header has no status-pill row, so the
+                        // labelled value is the only place the timer gains meaning.
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(callManager.formattedDuration)
                 }
                 .accessibilityElement(children: .combine)
                 .accessibilityAddTraits(.updatesFrequently)
