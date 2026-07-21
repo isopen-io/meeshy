@@ -1,5 +1,43 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **6-digit OTP field sanitiser + verify/resend/edit gate core** landed (slice
+> `auth-otp-verification-core`, feature-parity §A → advances "Email verification by 6-digit code (OTP
+> autofill, resend, success animation)" `[ ]` → `[~]`). This is the pure input+gate layer behind the
+> email-verification step. Parity source: iOS `EmailVerificationView`
+> (`apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift`) over `EmailVerificationViewModel`
+> — the `codeField` `onChange` sanitiser (`newValue.filter(\.isNumber)` then `String(filtered.prefix(6))`),
+> the `isCodeComplete` (`code.count == 6`) gate, and the three inline `.disabled(...)` conditions on the
+> verify button (`!isCodeComplete || isVerifying || verificationSuccess`), the field
+> (`isVerifying || verificationSuccess`), and the resend button (`isResending || resendSuccess`). One pure
+> `:core:model/auth/` file. **`OtpCodeField`** (object): `sanitize(raw)` keeps ASCII `'0'..'9'` only —
+> deliberately **not** `Char.isDigit`, which is Unicode-decimal-digit aware, so a pasted fullwidth or
+> Arabic-Indic digit is stripped rather than silently accepted for an ASCII code — then `take(6)`;
+> `isComplete(code)` = length 6 AND all-digit (the digit guard hardens the gate against any un-sanitised
+> value). **`OtpVerificationGate`** (data class of the four view-model flags `isVerifying`/`isResending`/
+> `resendConfirmed`=iOS `resendSuccess`/`verified`=iOS `verificationSuccess`) exposes the combined
+> derivations iOS scatters across the View body: `canVerify(code)`, `isCodeEditable`, `canResend`,
+> `showResendConfirmation`. **SOTA note:** iOS buries the sanitiser + three `.disabled` gates inline;
+> Android lifts them into one SSOT so a Compose `onValueChange` filters through one function and every
+> combined gate is JVM-testable. **+26 behavioural tests** (`OtpVerificationTest` — 9 sanitize incl. the
+> non-ASCII-digit drop and truncate-after-strip; 5 isComplete incl. the 6-non-digit-guard; 4 canVerify;
+> 3 isCodeEditable; 3 canResend; 2 showResendConfirmation). Expectations are hand-written literals
+> independent of the production derivation (not tautological). **Mutation check (RED proof):** dropping
+> the `take(LENGTH)` truncation fails **exactly** `sanitize_truncatesToSixDigits` +
+> `sanitize_truncatesAfterStrippingNonDigits` (26 run, 2 failed, no collateral) — behavioural, not
+> tautological. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):**
+> `:core:model:testDebugUnitTest` green (new suite 26/26) + full `assembleDebug testDebugUnitTest`
+> → **BUILD SUCCESSFUL** (5m44s). Reviewer **PASS** (diff `apps/android` only — 1 new production file +
+> 1 test + tracking; **SDK purity** — a pure object + a pure data class in `:core:model`, zero framework
+> deps; the `AuthService.verifyEmailWithCode`/`resendVerificationEmail` actuators + the 3 s confirmation
+> `Flow` + the `EmailVerificationView` composable + `oneTimeCode` autofill stay app-side/pending; **SSOT** —
+> one sanitiser + one gate value drive every field/button derivation; **UX** — `canVerify`/`isCodeEditable`/
+> `canResend`/`showResendConfirmation` are the single truths the step renders; no coverage floor lowered,
+> no test weakened). **Next slice:** the app-side `EmailVerificationView` composable wiring this core (code
+> field → `OtpCodeField.sanitize` → `AuthService.verifyEmailWithCode`, resend → `resendVerificationEmail`
+> with the 3 s confirmation window off a `Flow`, success overlay) + `oneTimeCode` autofill, closing §A
+> toward `[x]`; OR another §A pure core (username-suggestion selection, saved-account picker model, server
+> environment selector); OR the tracked Kover 90% coverage-gate infra.
+
 > On 2026-07-21 the **magic-link countdown state-machine + strict email gate core** landed (slice
 > `auth-magic-link-countdown`, feature-parity §A → advances "Passwordless magic-link login (email +
 > countdown + resend) via deep link" `[ ]` → `[~]`). This is the pure waiting-step logic behind the
