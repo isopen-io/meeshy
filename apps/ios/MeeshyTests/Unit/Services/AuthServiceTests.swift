@@ -39,6 +39,14 @@ final class AuthServiceTests: XCTestCase {
         AuthManager.shared.keychain = stubKeychain
 
         // Clean slate: any prior test's session/flags must not leak in.
+        // `handleUnauthorized()`'s fire-and-forget background refresh Task
+        // (triggered by unrelated 401s — E2EE upload, story prefetch — against
+        // a PREVIOUS test's stub) can leave `tokenRefreshTask` non-nil; left
+        // alone, refreshSession(force:)'s serialization guard makes THIS
+        // test transparently await that unrelated leftover instead of its
+        // own scenario (flaky, order-dependent — cf. AuthManager's doc
+        // comment on the seam below).
+        AuthManager.shared.cancelPendingTokenRefreshForTesting()
         await AuthManager.shared.logout()
         AuthManager.shared.requires2FA = false
         AuthManager.shared.twoFactorToken = nil
@@ -46,6 +54,7 @@ final class AuthServiceTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        AuthManager.shared.cancelPendingTokenRefreshForTesting()
         await AuthManager.shared.logout()
         AuthManager.shared.authService = originalAuthService
         AuthManager.shared.keychain = originalKeychain

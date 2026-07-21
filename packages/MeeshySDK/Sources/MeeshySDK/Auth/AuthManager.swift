@@ -1064,4 +1064,23 @@ public final class AuthManager: ObservableObject, AuthManaging {
             false
         )
     }
+
+    #if DEBUG
+    /// Test-only seam: cancels and clears any in-flight `tokenRefreshTask`.
+    /// `handleUnauthorized()` fires a detached, fire-and-forget `Task` on
+    /// every 401 (e.g. from unrelated background activity — E2EE bundle
+    /// upload, story prefetch — hitting the stubbed `authService` while a
+    /// test runs) that sets `tokenRefreshTask` and isn't awaited by that
+    /// test. `refreshSession(force:)`'s `if let task = tokenRefreshTask {
+    /// return try await task.value }` serialization guard then makes the
+    /// NEXT test's own `refreshSession` call transparently await that
+    /// unrelated leftover task instead of evaluating its own state —
+    /// surfacing as a flaky, order-dependent failure in whichever test
+    /// happens to run right after one that triggered a 401. Call from
+    /// `setUp()` for hermetic test isolation.
+    func cancelPendingTokenRefreshForTesting() {
+        tokenRefreshTask?.cancel()
+        tokenRefreshTask = nil
+    }
+    #endif
 }
