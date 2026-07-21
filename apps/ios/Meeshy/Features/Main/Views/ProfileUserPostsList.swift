@@ -156,9 +156,6 @@ struct ProfileUserPostsList: View {
             onQuote: { _ in openPost(post) },
             onShare: { id in Task { await share(id) } },
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
-            onSendComment: { postId, content, parentId in
-                Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
-            },
             onSelectLanguage: { postId, language in
                 // Tap on a flag whose translation isn't loaded yet → request it.
                 // The result arrives via the social socket and patches the card.

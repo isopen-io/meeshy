@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import MeeshySDK
 @testable import Meeshy
 
 /// Intercepts every request on sessions built from a configuration that

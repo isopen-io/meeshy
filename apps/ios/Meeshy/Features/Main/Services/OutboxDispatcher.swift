@@ -966,7 +966,7 @@ struct OutboxDispatcher: OutboxDispatching {
 /// Wire body for `PATCH /users/me/avatar` — mirrors the online path's
 /// `UserService.updateAvatar(url:)` body shape (`updateAvatarSchema` on the
 /// gateway: `{ avatar: string }`).
-struct UpdateProfileAvatarBody: Encodable {
+nonisolated struct UpdateProfileAvatarBody: Encodable {
     let avatar: String
 }
 
@@ -976,7 +976,7 @@ struct UpdateProfileAvatarBody: Encodable {
 /// down the WHOLE request, so an `avatar` key here previously blocked
 /// displayName/bio from ever saving. `internal` (not `private`) so its
 /// encoding contract is directly testable from `MeeshyTests`.
-struct UpdateProfileFieldsBody: Encodable {
+nonisolated struct UpdateProfileFieldsBody: Encodable {
     let displayName: String?
     let bio: String?
 

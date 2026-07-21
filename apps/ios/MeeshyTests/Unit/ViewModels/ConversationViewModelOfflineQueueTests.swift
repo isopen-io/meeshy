@@ -155,7 +155,8 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         let ok = await fx.sut.sendMessage(content: "Hello world", originalLanguage: "es")
 
         XCTAssertTrue(ok)
-        let cmid = try XCTUnwrap(await fx.offlineQueue.enqueuedClientMessageIds.first)
+        let enqueuedIds = await fx.offlineQueue.enqueuedClientMessageIds
+        let cmid = try XCTUnwrap(enqueuedIds.first)
         let record = try await fx.fetchRecord(localId: cmid)
         XCTAssertEqual(record?.originalLanguage, "es",
             "the optimistic offline record must use the caller's originalLanguage, not a hardcoded 'fr'")
@@ -174,7 +175,8 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         let ok = await fx.sut.sendMessage(content: "Hola", originalLanguage: nil)
 
         XCTAssertTrue(ok)
-        let cmid = try XCTUnwrap(await fx.offlineQueue.enqueuedClientMessageIds.first)
+        let enqueuedIds = await fx.offlineQueue.enqueuedClientMessageIds
+        let cmid = try XCTUnwrap(enqueuedIds.first)
         let record = try await fx.fetchRecord(localId: cmid)
         XCTAssertEqual(record?.originalLanguage, "es",
             "with no caller-supplied language, the fallback must consult the user's configured systemLanguage, not hardcode 'fr'")
@@ -373,7 +375,8 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         let ok = await fx.sut.sendMessage(content: "hola", originalLanguage: "es")
 
         XCTAssertFalse(ok)
-        let item = try XCTUnwrap(await fx.offlineQueue.enqueuedItems.first)
+        let enqueuedItems = await fx.offlineQueue.enqueuedItems
+        let item = try XCTUnwrap(enqueuedItems.first)
         XCTAssertEqual(item.originalLanguage, "es",
             "the retry outbox item must use the caller's originalLanguage, not a hardcoded 'fr'")
     }
