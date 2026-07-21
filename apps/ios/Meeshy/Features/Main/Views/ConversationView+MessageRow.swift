@@ -290,10 +290,13 @@ extension ConversationView {
                 // Same behaviour as the previous inline "+" button: close the
                 // quick bar, then promote to the full detail sheet on the
                 // react tab. The slight delay lets the transition complete
-                // before the sheet animates in.
-                let resolved = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? viewModel.messages.first
+                // before the sheet animates in. If the message is no longer
+                // resolvable (scrolled out of the loaded window, deleted),
+                // there is no safe fallback — NEVER default to
+                // `messages.first` (the oldest loaded message): that would
+                // silently open the sheet to react on the wrong message.
                 closeReactionBar()
-                guard let msg = resolved else { return }
+                guard let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                     overlayState.detailSheetMessage = msg
                     overlayState.detailSheetInitialTab = .react
@@ -313,7 +316,10 @@ extension ConversationView {
             }
             messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: MeeshyColors.trackingAccentHex) {
                 if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                    UIPasteboard.general.string = msg.content
+                    // Prisme: copy what's actually DISPLAYED (the preferred
+                    // translation when one is showing), never blindly the
+                    // original — matches the long-press menu's Copier below.
+                    UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                 }
                 closeReactionBar()
             }
