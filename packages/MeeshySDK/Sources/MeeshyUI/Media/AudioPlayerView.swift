@@ -612,7 +612,13 @@ public struct AudioPlayerView: View {
     @MainActor
     private static let sharedNoopExternal = AudioPlaybackManager(registerWithCoordinator: false)
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf view rendered once per audio bubble — observing the ThemeManager
+    // singleton via @ObservedObject here would invalidate EVERY audio bubble
+    // on screen on every theme publish (Zero Unnecessary Re-render,
+    // CLAUDE.md). `colorScheme` is the blessed leaf-view alternative for a
+    // simple dark/light read; ThemeManager.mode itself is kept in sync with
+    // it (see `ThemeManager.syncWithSystem`).
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isTranscriptionExpanded = false
     @State private var selectedAudioLanguage: String = "orig"
     @State private var isRetranscribing = false
@@ -632,7 +638,7 @@ public struct AudioPlayerView: View {
     /// reply/forward de la bulle indéfiniment.
     @GestureState private var isUserScrubbing = false
 
-    private var isDark: Bool { theme.mode.isDark || context.isImmersive }
+    private var isDark: Bool { colorScheme == .dark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
 
     private var displaySegments: [TranscriptionDisplaySegment] {
