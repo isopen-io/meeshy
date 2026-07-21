@@ -17,7 +17,7 @@ Vérifié vert : shared 47/47 (1382 tests) · gateway 536/536 (14424 tests, 1 fl
 
 ## Vague 2 — Lane AV (avatars/bannières) — 🔄 en cours (relancé sous Sonnet 5)
 
-- [ ] **Lane AV** — avatars/bannières : AV1 showsRetryButton découplé · AV2 retry silencieux + cache négatif · AV3 câblage 12 sites
+- [ ] **Lane AV** — avatars/bannières : AV1 showsRetryButton découplé · AV2 retry silencieux + cache négatif · AV3 câblage 12 sites (7/12 câblés commit 2aa0be901 ; correction : 5 sites — pas 4 — restent bloqués par des lanes concurrentes : `ConversationListHelpers.swift:276`, `CallView.swift:355,1730,1777`, `StoryViewerView+Content.swift:1904`)
 
 ## Intégration
 
