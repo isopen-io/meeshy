@@ -3,6 +3,20 @@ import AVFoundation
 import MeeshySDK
 import MeeshyUI
 
+/// Pure decision: should this card relinquish the shared engine right now?
+/// Extracted so the exact guard used by BOTH `onDisappear` and the inactive
+/// branch of `drive()` is a single, unit-testable source of truth — the two
+/// call sites previously duplicated this condition inline and drifted apart
+/// (`onDisappear` never reset `ownsEngine` back to `false`, unlike `drive()`'s
+/// branch), which could leave a stale `ownsEngine == true` on a card's
+/// persisted `@State` after an abrupt teardown and reintroduce the repost/
+/// active-card pause bug this flag exists to prevent.
+enum ReelEngineOwnershipPolicy {
+    static func shouldRelease(ownsEngine: Bool, isShowingThis: Bool) -> Bool {
+        ownsEngine && isShowingThis
+    }
+}
+
 /// Joue un réel vidéo MUET en fond de carte tant qu'il est actif (le plus
 /// centré dans le viewport du feed), via l'unique `SharedAVPlayerManager`.
 ///
@@ -82,9 +96,17 @@ struct ReelFeedVideoSurface: View {
             // vidéo que l'original actuellement actif — sans ce garde, la carte
             // repost inactive qui disparaît (recyclage de liste) mettait en pause
             // la carte active, figeant sa lecture.
-            if ownsEngine, isShowingThis {
+            //
+            // Reset `ownsEngine = false` ici aussi (comme la branche guard de
+            // `drive()` ci-dessous) : sans ça, une disparition abrupte (fling
+            // rapide, avant que `isActive` ne retombe via `.adaptiveOnChange`)
+            // laissait `ownsEngine == true` figé sur le `@State` persisté de la
+            // carte — un remount ultérieur inactif redéclenchait alors ce même
+            // garde par erreur dès qu'une AUTRE carte active partage l'URL.
+            if ReelEngineOwnershipPolicy.shouldRelease(ownsEngine: ownsEngine, isShowingThis: isShowingThis) {
                 manager.pause()
                 releaseForceMute()
+                ownsEngine = false
             }
         }
     }
@@ -99,7 +121,7 @@ struct ReelFeedVideoSurface: View {
             // prendre le moteur — viewer, galerie — doit repartir de la préférence
             // utilisateur réelle, pas hériter du silence forcé du feed). Gated on
             // `ownsEngine` pour la même raison que `onDisappear` ci-dessus.
-            if ownsEngine, isShowingThis {
+            if ReelEngineOwnershipPolicy.shouldRelease(ownsEngine: ownsEngine, isShowingThis: isShowingThis) {
                 manager.pause()
                 releaseForceMute()
                 ownsEngine = false
