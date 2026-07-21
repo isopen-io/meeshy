@@ -2406,6 +2406,14 @@ final class ConversationListViewModelTests: XCTestCase {
     // MARK: - pullToRefresh
 
     func test_pullToRefresh_resetsCursorAndRefetches() async {
+        // `forceRefresh()` reads the REAL `CacheCoordinator.shared.conversations`
+        // singleton on a successful sync (fetch-then-replace, see its own doc
+        // comment) — a leftover "list" entry from another test in this same
+        // process would otherwise leak into `conversations` here and skew the
+        // fallback cursor `loadMore()` derives from `conversations.min(by:
+        // lastMessageAt)`. Same defensive reset other tests in this file use
+        // for the sibling `stories` store.
+        await CacheCoordinator.shared.conversations.invalidateAll()
         let conversationService = MockConversationService()
         let syncEngine = MockConversationSyncEngine()
         // Seed an "advanced" cursor by running loadMore once
