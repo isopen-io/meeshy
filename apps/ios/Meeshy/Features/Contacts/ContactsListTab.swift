@@ -197,10 +197,20 @@ struct ContactsListTab: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        // Règle 1/3/5 : VoiceOver annonce l'état de présence quand un dot est
-        // affiché (online/away/idle) — offline (pas de dot) reste muet.
-        .accessibilityLabel(presence.showsIndicator ? "\(name), \(presence.localizedLabel)" : name)
+        .accessibilityLabel(contactRowAccessibilityLabel(user, isOnline: isOnline))
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.filteredFriends.count)
+    }
+
+    private func contactRowAccessibilityLabel(_ user: FriendRequestUser, isOnline: Bool) -> String {
+        var parts = [user.name, "@\(user.username)"]
+        if isOnline {
+            parts.append(String(localized: "contacts.list.online.lower", defaultValue: "en ligne", bundle: .main))
+        } else if let lastActive = user.lastActiveAt {
+            parts.append(String(format: String(localized: "contacts.list.last-seen", defaultValue: "Vu %@", bundle: .main), lastActive.relativeTimeString.lowercased()))
+        } else {
+            parts.append(String(localized: "contacts.list.offline.lower", defaultValue: "hors ligne", bundle: .main))
+        }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Empty State

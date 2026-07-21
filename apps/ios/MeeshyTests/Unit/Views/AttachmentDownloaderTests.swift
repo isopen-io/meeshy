@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Sprint 3 RC3.2 — the download badge / `AttachmentDownloader` must resolve
@@ -105,6 +106,89 @@ final class AttachmentDownloaderTests: XCTestCase {
         )
         XCTAssertFalse(badge.hidesForLocalOrOptimisticMedia,
                        "The download badge must remain available for confirmed remote media")
+    }
+
+    // MARK: - Byte-size formatting
+
+    /// `AttachmentDownloader.fmt` must delegate to the single SDK-wide
+    /// `formatMediaFileSize` helper — locks the fix for the divergent
+    /// binary-vs-decimal formatters bug (AudioPlayerView.formatBytes used to
+    /// disagree with this one despite a comment claiming parity).
+    func test_fmt_delegatesToSharedSDKFileSizeFormatter() {
+        XCTAssertEqual(AttachmentDownloader.fmt(870_400), formatMediaFileSize(870_400))
+        XCTAssertEqual(AttachmentDownloader.fmt(1_048_576), formatMediaFileSize(1_048_576))
+    }
+
+    // MARK: - registerInFlightDownload race (source guard)
+
+    /// `startDownloadFlow` used to discard `registerInFlightDownload`'s Bool
+    /// return and unconditionally await its OWN byte task — so when a second
+    /// bubble (or a second language of the same audio) resolved to the exact
+    /// same cache key between the initial piggyback check and this
+    /// registration attempt, BOTH calls streamed the full file concurrently.
+    /// `startDownloadFlow` runs inside a `Task.detached` closure doing real
+    /// `URLSession` I/O, which this repo's own test suite for this class
+    /// deliberately never exercises (no wall-clock/network flakiness) — a
+    /// source guard is the established pattern here for wiring that can't be
+    /// driven through the public API without spinning up real networking
+    /// (cf. `CameraModelSwitchDuringRecordingTests`).
+    private func conversationMediaViewsSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // apps/ios/
+            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationMediaViews.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_startDownloadFlow_honorsRegisterInFlightDownloadReturnValue() throws {
+        let source = try conversationMediaViewsSource()
+        XCTAssertFalse(
+            source.contains("await store.registerInFlightDownload(byteTask, for: resolvedKey)\n                let data = try await byteTask.value"),
+            "startDownloadFlow must not discard registerInFlightDownload's Bool and unconditionally await its own task"
+        )
+        XCTAssertTrue(
+            source.contains("let registered = await store.registerInFlightDownload(byteTask, for: resolvedKey)"),
+            "startDownloadFlow must capture registerInFlightDownload's return value"
+        )
+        XCTAssertTrue(
+            source.contains("byteTask.cancel()"),
+            "Losing the registration race must cancel the now-redundant task instead of letting it run to completion"
+        )
+    }
+
+    /// B9 fix — `registerInFlightDownload`'s entry can self-clear (the winner
+    /// persists its payload, then its wrapper Task nils the registry) between
+    /// our failed registration and the very next `inFlightDownload(for:)`
+    /// read, since both are actor hops with a real suspension point in
+    /// between. The previous fallback (`else { data = try await
+    /// byteTask.value }`) awaited its OWN just-cancelled task in that case:
+    /// `Task.checkCancellation()` inside the byte loop throws
+    /// `CancellationError`, which the outer `catch`'s cancellation guard
+    /// (`guard !Task.isCancelled, !(error is CancellationError) else {
+    /// return }` — written for the explicit user-tap-cancel path, where
+    /// `cancel()` already resets state before this catch ever runs) silently
+    /// swallows, stranding `isDownloading == true` forever with the badge
+    /// spinner stuck and `startDownloadFlow`'s own entry guard blocking any
+    /// retry. `byteTask.value` must therefore appear exactly once in the
+    /// function (the `registered == true` winner path) — never as a fallback
+    /// once the entry has vanished.
+    func test_startDownloadFlow_losingRaceWithClearedEntry_neverAwaitsOwnCancelledTask() throws {
+        let source = try conversationMediaViewsSource()
+        let occurrences = source.components(separatedBy: "byteTask.value").count - 1
+        XCTAssertEqual(
+            occurrences, 1,
+            "byteTask.value must be awaited only on the registration-winner path — a second occurrence means the "
+            + "loser falls back to awaiting its OWN cancelled task, whose CancellationError is swallowed by the "
+            + "outer catch's cancellation guard and strands isDownloading == true forever"
+        )
+        XCTAssertTrue(
+            source.contains("data = try await store.data(for: resolvedKey)"),
+            "When the in-flight entry vanished after losing the race, the fallback must read through the store's "
+            + "own idempotent fetch (cache-hit if the winner already persisted, safe re-fetch otherwise) instead "
+            + "of the loser's own cancelled task"
+        )
     }
 }
 

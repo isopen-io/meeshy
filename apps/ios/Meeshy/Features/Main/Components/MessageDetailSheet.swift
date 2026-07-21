@@ -383,6 +383,7 @@ struct MessageDetailSheet: View {
                     Image(systemName: item.icon)
                         .font(.callout.weight(.semibold))
                         .foregroundColor(accent)
+                        .accessibilityHidden(true)
                 }
 
                 Text(item.label)
@@ -399,6 +400,12 @@ struct MessageDetailSheet: View {
             )
         }
         .buttonStyle(DetailActionButtonStyle())
+        .accessibilityLabel(item.label)
+        // Tab buttons toggle a detail panel open/closed — mirrors the
+        // isSelected pattern used by viewsFilterCapsule/reactionFilterCapsule/
+        // reportTypeRow in this same file (state conveyed by color alone
+        // otherwise, per HIG "never color alone").
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
     // MARK: - Tab Content
@@ -438,27 +445,6 @@ struct MessageDetailSheet: View {
         .animation(.easeInOut(duration: 0.2), value: selectedTab)
     }
 
-    private static let supportedLanguages: [(code: String, flag: String, name: String)] = [
-        ("fr", "\u{1F1EB}\u{1F1F7}", "Fran\u{00e7}ais"),
-        ("en", "\u{1F1EC}\u{1F1E7}", "English"),
-        ("es", "\u{1F1EA}\u{1F1F8}", "Espa\u{00f1}ol"),
-        ("de", "\u{1F1E9}\u{1F1EA}", "Deutsch"),
-        ("ar", "\u{1F1F8}\u{1F1E6}", "\u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064A}\u{0629}"),
-        ("zh", "\u{1F1E8}\u{1F1F3}", "\u{4E2D}\u{6587}"),
-        ("pt", "\u{1F1F5}\u{1F1F9}", "Portugu\u{00EA}s"),
-        ("it", "\u{1F1EE}\u{1F1F9}", "Italiano"),
-        ("ja", "\u{1F1EF}\u{1F1F5}", "\u{65E5}\u{672C}\u{8A9E}"),
-        ("ko", "\u{1F1F0}\u{1F1F7}", "\u{D55C}\u{AD6D}\u{C5B4}"),
-        ("ru", "\u{1F1F7}\u{1F1FA}", "\u{0420}\u{0443}\u{0441}\u{0441}\u{043A}\u{0438}\u{0439}"),
-        ("hi", "\u{1F1EE}\u{1F1F3}", "\u{0939}\u{093F}\u{0928}\u{094D}\u{0926}\u{0940}"),
-        ("tr", "\u{1F1F9}\u{1F1F7}", "T\u{00FC}rk\u{00e7}e"),
-        ("nl", "\u{1F1F3}\u{1F1F1}", "Nederlands"),
-        ("pl", "\u{1F1F5}\u{1F1F1}", "Polski"),
-        ("vi", "\u{1F1FB}\u{1F1F3}", "Ti\u{1EBF}ng Vi\u{1EC7}t"),
-        ("th", "\u{1F1F9}\u{1F1ED}", "\u{0E44}\u{0E17}\u{0E22}"),
-        ("sv", "\u{1F1F8}\u{1F1EA}", "Svenska")
-    ]
-
     // MARK: - Language Tab Content
 
     private var languageTabContent: some View {
@@ -474,6 +460,7 @@ struct MessageDetailSheet: View {
                 Image(systemName: "text.bubble.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(originalColor)
+                    .accessibilityHidden(true)
                 Text(String(format: String(localized: "message-detail.original", defaultValue: "Original \u{2022} %@", bundle: .main), Self.languageName(for: originalLang)))
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
@@ -494,6 +481,7 @@ struct MessageDetailSheet: View {
                             .stroke(originalColor.opacity(0.15), lineWidth: 0.5)
                     )
             )
+            .accessibilityElement(children: .combine)
 
             // Original content preview (text or transcription for audio messages)
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -507,6 +495,7 @@ struct MessageDetailSheet: View {
                     Image(systemName: "waveform")
                         .font(.caption2.weight(.medium))
                         .foregroundColor(originalColor.opacity(0.7))
+                        .accessibilityHidden(true)
                     Text(transcription.text)
                         .font(.footnote)
                         .foregroundColor(theme.textSecondary)
@@ -535,6 +524,7 @@ struct MessageDetailSheet: View {
                                 .font(.subheadline)
                                 .foregroundColor(theme.textMuted)
                         }
+                        .accessibilityLabel(String(localized: "message-detail.a11y.language.close", defaultValue: "Fermer la traduction", bundle: .main))
                     }
 
                     Text(translated)
@@ -560,7 +550,7 @@ struct MessageDetailSheet: View {
                 .frame(height: 0.5)
 
             // Language list
-            ForEach(Self.supportedLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
+            ForEach(LanguageDisplay.translationPickerLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
                 languageRow(lang, originalLang: originalLang)
             }
 
@@ -578,9 +568,35 @@ struct MessageDetailSheet: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: translations.count)
     }
 
-    private func languageRow(_ lang: (code: String, flag: String, name: String), originalLang: String) -> some View {
+    /// Pure composed VoiceOver label for `languageRow` — folds the flag/name
+    /// Texts, the translating spinner, and the trailing chevron/checkmark
+    /// (hidden as decorative) into one coherent announcement per state.
+    /// Extracted `static` so it's unit-testable without a live view.
+    static func languageRowAccessibilityLabel(
+        languageName: String,
+        isSelected: Bool,
+        isTranslating: Bool,
+        hasTranslation: Bool
+    ) -> String {
+        if isTranslating {
+            return String(
+                format: String(localized: "message-detail.a11y.language.translating", defaultValue: "%@, traduction en cours", bundle: .main),
+                languageName
+            )
+        }
+        if hasTranslation {
+            let stateKey = isSelected
+                ? String(localized: "message-detail.a11y.language.shown", defaultValue: "traduction affichée", bundle: .main)
+                : String(localized: "message-detail.a11y.language.available", defaultValue: "traduction disponible", bundle: .main)
+            return "\(languageName), \(stateKey)"
+        }
+        return "\(languageName), \(String(localized: "message-detail.a11y.language.translate", defaultValue: "traduire", bundle: .main))"
+    }
+
+    private func languageRow(_ lang: LanguageDisplay, originalLang: String) -> some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for:lang.code))
         let hasTranslation = translations[lang.code] != nil
+        let hasAudioTranslation = mergedTranslatedAudios.contains { $0.targetLanguage.lowercased() == lang.code.lowercased() }
         let isTranslating = translatingLanguages.contains(lang.code) || translatingAudioLanguages.contains(lang.code)
         let isSelected = selectedLanguageCode == lang.code
 
@@ -663,16 +679,19 @@ struct MessageDetailSheet: View {
                             .font(.caption2.weight(.medium))
                             .foregroundColor(langColor.opacity(0.6))
                     }
+                    .accessibilityLabel(String(localized: "message-detail.a11y.language.retranslate", defaultValue: "Retraduire", bundle: .main))
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                        .accessibilityHidden(true)
                 } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
                     HStack(spacing: 3) {
                         Image(systemName: "waveform")
                             .font(.caption2.weight(.medium))
                             .minimumScaleFactor(0.8)
                             .foregroundColor(langColor.opacity(0.6))
+                            .accessibilityHidden(true)
                         Text(String(audioForLang.transcription.prefix(50)) + (audioForLang.transcription.count > 50 ? "..." : ""))
                             .font(.caption2)
                             .foregroundColor(theme.textMuted)
@@ -683,6 +702,7 @@ struct MessageDetailSheet: View {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
+                        .accessibilityHidden(true)
                 } else {
                     Text(String(localized: "message-detail.translate", defaultValue: "Traduire", bundle: .main))
                         .font(.caption2.weight(.medium))
@@ -702,6 +722,18 @@ struct MessageDetailSheet: View {
             )
         }
         .disabled(isTranslating)
+        // Composed label folds flag/name/state into one announcement — the
+        // nested "Retraduire" Button above remains a known VoiceOver reach
+        // limitation (SwiftUI collapses a Button's label subtree to a single
+        // opaque element, hiding nested controls from the rotor); restructuring
+        // that is a separate interaction-design change, out of scope here.
+        .accessibilityLabel(Self.languageRowAccessibilityLabel(
+            languageName: lang.name,
+            isSelected: isSelected,
+            isTranslating: isTranslating,
+            hasTranslation: hasTranslation || hasAudioTranslation
+        ))
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func translateTo(_ targetLang: String, from sourceLang: String) async {
@@ -847,8 +879,8 @@ struct MessageDetailSheet: View {
         }
     }
 
-    private static func languageName(for code: String) -> String {
-        supportedLanguages.first { $0.code == code }?.name ?? code.uppercased()
+    static func languageName(for code: String) -> String {
+        LanguageDisplay.from(code: code)?.name ?? code.uppercased()
     }
 
     // MARK: - Views Tab Content (Premium Redesign)
@@ -950,6 +982,7 @@ struct MessageDetailSheet: View {
         // État actif signalé visuellement par fill/couleur seuls (HIG « jamais
         // la couleur seule ») → trait VoiceOver « sélectionné ».
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityLabel(count.map { "\(filter.label), \($0)" } ?? filter.label)
     }
 
     // MARK: - Envoyé (Sent) — Message Info + Author
@@ -1082,6 +1115,7 @@ struct MessageDetailSheet: View {
         return HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.caption2.weight(.semibold))
+                .accessibilityHidden(true)
             Text(label)
                 .font(.caption2.weight(.semibold))
         }
@@ -1100,6 +1134,7 @@ struct MessageDetailSheet: View {
                 .font(.caption2.weight(.medium))
                 .foregroundColor(accent.opacity(0.6))
                 .frame(width: 16)
+                .accessibilityHidden(true)
 
             Text(label)
                 .font(.caption.weight(.medium))
@@ -1115,6 +1150,7 @@ struct MessageDetailSheet: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
+        .accessibilityElement(children: .combine)
     }
 
     private var metaDivider: some View {
@@ -1288,6 +1324,7 @@ struct MessageDetailSheet: View {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(text)
@@ -1321,6 +1358,7 @@ struct MessageDetailSheet: View {
                         .stroke(accent.opacity(0.12), lineWidth: 0.5)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     private func userStatusRow(username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
@@ -1347,9 +1385,13 @@ struct MessageDetailSheet: View {
                     .font(.caption2)
                     .foregroundColor(theme.textMuted)
             } else {
+                // No adjacent Text in this branch — the icon alone carries
+                // the "pending" meaning, so it needs its own label rather
+                // than being hidden like the purely decorative icons above.
                 Image(systemName: "clock")
                     .font(.caption2)
                     .foregroundColor(theme.textMuted)
+                    .accessibilityLabel(String(localized: "message-detail.a11y.pending", defaultValue: "En attente", bundle: .main))
             }
         }
         .padding(.vertical, 8)
@@ -1371,6 +1413,7 @@ struct MessageDetailSheet: View {
                     Image(systemName: icon)
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(accent)
+                        .accessibilityHidden(true)
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -1448,6 +1491,7 @@ struct MessageDetailSheet: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.caption2)
+                                    .accessibilityHidden(true)
                                 Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
                                     .font(.caption2.weight(.semibold))
                             }
@@ -1523,6 +1567,7 @@ struct MessageDetailSheet: View {
                     .padding(.vertical, 6)
                     .background(Capsule().fill(accent))
             }
+            .accessibilityLabel(String(localized: "common.retry", defaultValue: "Reessayer", bundle: .main))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)
@@ -1612,6 +1657,7 @@ struct MessageDetailSheet: View {
         }
         // Filtre actif signalé par la seule couleur → trait VoiceOver.
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityLabel("\(label), \(count)")
     }
 
     private func reactionUserRow(_ item: ReactionUserItem) -> some View {
@@ -1700,6 +1746,7 @@ struct MessageDetailSheet: View {
                                 .fill(MeeshyColors.error)
                         )
                 }
+                .accessibilityLabel(String(localized: "message-detail.a11y.delete.confirm", defaultValue: "Supprimer le message", bundle: .main))
 
                 Button {
                     performDismiss()
@@ -1713,6 +1760,7 @@ struct MessageDetailSheet: View {
                                 .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
                         )
                 }
+                .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
             }
             .padding(.top, 8)
 
@@ -1779,6 +1827,12 @@ struct MessageDetailSheet: View {
                 )
                 .disabled(isSubmittingReport)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
+                // The label falls back to a bare ProgressView (no Text) while
+                // submitting — without an explicit label VoiceOver announces
+                // nothing at all during that window.
+                .accessibilityLabel(isSubmittingReport
+                    ? String(localized: "message-detail.a11y.report.sending", defaultValue: "Envoi en cours", bundle: .main)
+                    : String(localized: "message-detail.report.send", defaultValue: "Envoyer le signalement", bundle: .main))
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedReportType)
@@ -1834,6 +1888,7 @@ struct MessageDetailSheet: View {
         // le sens passe par le trait VoiceOver « sélectionné » (miroir 178i
         // MessageReportDetailView).
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityLabel("\(type.label), \(type.description)")
     }
 
     // MARK: - Forward Tab Content
@@ -1844,6 +1899,7 @@ struct MessageDetailSheet: View {
                 Image(systemName: "magnifyingglass")
                     .font(.subheadline)
                     .foregroundColor(theme.textMuted)
+                    .accessibilityHidden(true)
 
                 TextField(String(localized: "forward.search-placeholder", defaultValue: "Rechercher une conversation", bundle: .main), text: $forwardSearchText)
                     .font(.subheadline)
@@ -1857,6 +1913,7 @@ struct MessageDetailSheet: View {
                             .font(.subheadline)
                             .foregroundColor(theme.textMuted)
                     }
+                    .accessibilityLabel(String(localized: "message-detail.a11y.forward.clearSearch", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
             .padding(.horizontal, 10)
@@ -1927,13 +1984,17 @@ struct MessageDetailSheet: View {
     @ViewBuilder
     private func forwardSendButton(for conv: Conversation) -> some View {
         if sentToIds.contains(conv.id) {
+            // Standalone status glyph, no sibling Text in this branch — needs
+            // its own label rather than being hidden.
             Image(systemName: "checkmark.circle.fill")
                 .font(.title2)
                 .foregroundColor(MeeshyColors.success)
+                .accessibilityLabel(String(localized: "message-detail.a11y.forward.sent", defaultValue: "Transféré", bundle: .main))
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
                 .frame(width: 24, height: 24)
+                .accessibilityLabel(String(localized: "message-detail.a11y.forward.sending", defaultValue: "Transfert en cours", bundle: .main))
         } else {
             Button {
                 forwardTo(conv)
@@ -1943,6 +2004,10 @@ struct MessageDetailSheet: View {
                     .foregroundColor(Color(hex: contactColor))
             }
             .disabled(sendingToId != nil)
+            .accessibilityLabel(String(
+                format: String(localized: "message-detail.a11y.forward.send", defaultValue: "Transférer à %@", bundle: .main),
+                conv.name
+            ))
         }
     }
 
@@ -2058,6 +2123,7 @@ struct MessageDetailSheet: View {
                 Image(systemName: "waveform.and.mic")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(langColor)
+                    .accessibilityHidden(true)
 
                 Text(Self.languageName(for: transcription.language))
                     .font(.footnote.weight(.semibold))
@@ -2129,6 +2195,7 @@ struct MessageDetailSheet: View {
                         Image(systemName: "person.2.fill")
                             .font(.caption2.weight(.medium))
                             .foregroundColor(accent.opacity(0.6))
+                            .accessibilityHidden(true)
                         Text(String(format: String(localized: "message-detail.transcription.speakers", defaultValue: "%d locuteurs detectes", bundle: .main), speakerCount))
                             .font(.caption.weight(.medium))
                             .foregroundColor(theme.textMuted)
@@ -2148,6 +2215,7 @@ struct MessageDetailSheet: View {
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(accent)
                         .frame(width: 20)
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
@@ -2194,6 +2262,7 @@ struct MessageDetailSheet: View {
                             } else {
                                 Image(systemName: "waveform.and.mic")
                                     .font(.footnote.weight(.semibold))
+                                    .accessibilityHidden(true)
                             }
                             Text(String(localized: "message-detail.transcription.transcribe", defaultValue: "Transcrire", bundle: .main))
                                 .font(.footnote.weight(.bold))
@@ -2205,6 +2274,9 @@ struct MessageDetailSheet: View {
                         .overlay(Capsule().stroke(accent.opacity(0.3), lineWidth: 0.5))
                     }
                     .disabled(isRequestingTranscription)
+                    .accessibilityLabel(isRequestingTranscription
+                        ? String(localized: "message-detail.a11y.transcription.requesting", defaultValue: "Transcription en cours", bundle: .main)
+                        : String(localized: "message-detail.transcription.transcribe", defaultValue: "Transcrire", bundle: .main))
                 }
             }
             .frame(maxWidth: .infinity)
@@ -2222,6 +2294,7 @@ struct MessageDetailSheet: View {
                 Image(systemName: "translate")
                     .font(.caption2.weight(.medium))
                     .foregroundColor(accent.opacity(0.6))
+                    .accessibilityHidden(true)
                 Text(String(localized: "message-detail.audio-translations", defaultValue: "Traductions audio", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted)
@@ -2246,6 +2319,7 @@ struct MessageDetailSheet: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "person.wave.2")
                                     .font(.caption2.weight(.medium))
+                                    .accessibilityHidden(true)
                                 Text(String(localized: "message-detail.audio.cloned", defaultValue: "Clone", bundle: .main))
                                     .font(.caption2.weight(.bold))
                                     .minimumScaleFactor(0.8)

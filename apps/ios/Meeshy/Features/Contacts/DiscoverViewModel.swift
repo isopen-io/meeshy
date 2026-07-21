@@ -25,6 +25,10 @@ final class DiscoverViewModel: ObservableObject {
     private let contactSync: ContactSyncProviding
     private let cache = FriendshipCache.shared
     private let resolver: UserRelationshipResolver
+    /// Injected so tests can drive the send-request outbox path (enqueue
+    /// success/failure + terminal `.exhausted` outcome) deterministically,
+    /// mirroring `RequestsViewModel`'s accept/reject pattern.
+    private let offlineQueue: OfflineQueueing
     private var cancellables: Set<AnyCancellable> = []
 
     private var suggestionsRevalidationTask: Task<Void, Never>?
@@ -34,12 +38,14 @@ final class DiscoverViewModel: ObservableObject {
         friendService: FriendServiceProviding = FriendService.shared,
         userService: UserServiceProviding = UserService.shared,
         contactSync: ContactSyncProviding = ContactSyncService.shared,
-        resolver: UserRelationshipResolver = .shared
+        resolver: UserRelationshipResolver = .shared,
+        offlineQueue: OfflineQueueing = OfflineQueue.shared
     ) {
         self.friendService = friendService
         self.userService = userService
         self.contactSync = contactSync
         self.resolver = resolver
+        self.offlineQueue = offlineQueue
         // Bridge external state changes into our own objectWillChange so the
         // Discover row badges flip when a request is accepted/blocked from
         // any other screen (Requests tab, profile sheet, push notification).
@@ -121,16 +127,67 @@ final class DiscoverViewModel: ObservableObject {
 
     // MARK: - Send Friend Request
 
+    /// Routed through the `.sendFriendRequest` outbox (dispatcher already
+    /// implemented — `OutboxDispatcher.dispatchSendFriendRequest` — but
+    /// nothing enqueued it: this call site posted `FriendService` directly,
+    /// so an offline tap failed with a toast and lost the request). The
+    /// cache flips to `.pendingSent` — and the success haptic fires —
+    /// BEFORE the network attempt, matching the optimistic-update principle
+    /// (capture → apply local → send → rollback on failure) instead of the
+    /// old ordering where the haptic fired with no accompanying state
+    /// change at all, well before the request even reached the network.
+    ///
+    /// `requestId` for the optimistic cache entry is the `clientMutationId`
+    /// — the real gateway-assigned friend-request id isn't known until the
+    /// outbox flushes, and the outcome stream only carries the terminal
+    /// cmid, not a result payload. This is sufficient for the common paths
+    /// (row shows "En attente", `RequestsTab`/notifications reconcile the
+    /// real id on next load) — cancelling a request that is STILL queued
+    /// offline (not yet flushed) is a known narrow gap, unchanged from
+    /// before this fix.
     func sendRequest(to userId: String) async {
+        let cmid = ClientMutationId.generate()
+        cache.didSendRequest(to: userId, requestId: cmid)
+        objectWillChange.send()
         HapticFeedback.success()
+        observeSendRequestOutcome(
+            cmid: cmid,
+            rollback: { [weak self] in
+                self?.cache.didCancelRequest(to: userId)
+                self?.objectWillChange.send()
+            }
+        )
+        let payload = SendFriendRequestPayload(clientMutationId: cmid, targetUserId: userId)
         do {
-            let request = try await friendService.sendFriendRequest(receiverId: userId, message: nil)
-            cache.didSendRequest(to: userId, requestId: request.id)
-            objectWillChange.send()
+            try await offlineQueue.enqueue(.sendFriendRequest, payload: payload, conversationId: nil)
             FeedbackToastManager.shared.showSuccess("Demande envoyee")
         } catch {
+            cache.didCancelRequest(to: userId)
+            objectWillChange.send()
             HapticFeedback.error()
             FeedbackToastManager.shared.showError("Impossible d'envoyer")
+        }
+    }
+
+    /// Mirrors `RequestsViewModel.observeOutcome`: subscribes to the
+    /// outbox's terminal-event stream for `cmid` and rolls back the
+    /// optimistic cache entry if the OutboxFlusher exhausts its retry
+    /// budget. `.applied` is a no-op — the optimistic state is already the
+    /// final state.
+    private func observeSendRequestOutcome(
+        cmid: String,
+        rollback: @escaping @MainActor () -> Void
+    ) {
+        let offlineQueue = self.offlineQueue
+        Task { @MainActor in
+            let stream = await offlineQueue.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollback()
+                    FeedbackToastManager.shared.showError("Impossible d'envoyer")
+                    HapticFeedback.error()
+                }
+            }
         }
     }
 

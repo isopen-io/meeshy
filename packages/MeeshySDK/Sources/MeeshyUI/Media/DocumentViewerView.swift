@@ -14,10 +14,13 @@ public struct DocumentViewerView: View {
     /// l'app quand fourni ; nil = save Documents direct legacy.
     public var onSaveRequested: (() -> Void)? = nil
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf view rendered per-bubble — do not @ObservedObject the ThemeManager
+    // singleton (cf. ChatBubble.swift precedent). Dark/light comes reactively
+    // from the environment instead.
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showFullViewer = false
 
-    private var isDark: Bool { theme.mode.isDark || context.isImmersive }
+    private var isDark: Bool { colorScheme == .dark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
     private var docType: DocumentMediaType { DocumentMediaType.detect(from: attachment) }
 
@@ -76,6 +79,7 @@ public struct DocumentViewerView: View {
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
                     .offset(x: 6, y: -6)
+                    .accessibilityLabel(String(localized: "media.document.deleteAttachment", defaultValue: "Supprimer la pi\u{00E8}ce jointe", bundle: .module))
                 }
             }
 
@@ -149,6 +153,7 @@ public struct DocumentViewerView: View {
                         .font(.system(size: 15))
                         .foregroundColor(MeeshyColors.error)
                 }
+                .accessibilityLabel(String(localized: "media.document.deleteAttachment", defaultValue: "Supprimer la pi\u{00E8}ce jointe", bundle: .module))
             }
         }
         .padding(.horizontal, context.isCompact ? 10 : 14)
@@ -175,10 +180,14 @@ public struct DocumentFullSheet: View {
     public var onSaveRequested: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    // Do not @ObservedObject the ThemeManager singleton (cf. ChatBubble.swift
+    // precedent); colorScheme drives the two derived colors below directly.
+    @Environment(\.colorScheme) private var colorScheme
     @State private var saveState: SaveState = .idle
 
     private enum SaveState { case idle, saving, saved, failed }
+
+    private var isDark: Bool { colorScheme == .dark }
 
     public init(attachment: MeeshyMessageAttachment, docType: DocumentMediaType, accentColor: String,
                 onSaveRequested: (() -> Void)? = nil) {
@@ -204,6 +213,7 @@ public struct DocumentFullSheet: View {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(Color(hex: accentColor))
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -226,6 +236,7 @@ public struct DocumentFullSheet: View {
                             .foregroundColor(Color(hex: accentColor))
                         }
                         .disabled(saveState == .saving || saveState == .saved)
+                        .accessibilityLabel(String(localized: "media.document.download", defaultValue: "T\u{00E9}l\u{00E9}charger le document", bundle: .module))
                     }
                 }
 
@@ -304,16 +315,16 @@ public struct DocumentFullSheet: View {
 
             Text(attachment.originalName.isEmpty ? String(localized: "media.document.defaultName", defaultValue: "Document", bundle: .module) : attachment.originalName)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.document.previewUnavailable", defaultValue: "Aper\u{00E7}u non disponible", bundle: .module))
                 .font(.system(size: 14))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
 
             if attachment.fileSize > 0 {
                 Text(attachment.fileSizeFormatted)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
             }
         }
     }

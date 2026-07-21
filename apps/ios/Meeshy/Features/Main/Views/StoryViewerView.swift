@@ -616,6 +616,21 @@ struct StoryViewerView: View {
             storyReactionCount = newCount ?? 0
             storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
         }
+        // Mirror of the reaction sink above (asymmetry fix): `StoryViewModel`
+        // applies `comment:added`/`comment:deleted` to `storyGroups` the same
+        // way it applies `story:reacted`, but nothing re-derived the sidebar's
+        // @State counter from it — a comment posted by another viewer never
+        // moved the visible count until the user swiped away and back.
+        .adaptiveOnChange(of: currentStory?.commentCount) { _, newCount in
+            storyCommentCount = newCount ?? 0
+        }
+        // The counter mirror above keeps the number honest, but the comments
+        // OVERLAY itself (when open) never received the new comment's content —
+        // only a full close/reopen picked it up. Mirrors
+        // `PostDetailViewModel.subscribeToSocket`'s `commentAdded` sink.
+        .onReceive(SocialSocketManager.shared.commentAdded.receive(on: DispatchQueue.main)) { data in
+            applyStoryCommentAdded(data)
+        }
     }
 
     var body: some View {
@@ -1293,6 +1308,15 @@ struct StoryViewerView: View {
             }
         }
 
+        // Snapshot captured BEFORE the optimistic mutation below — the sole
+        // rollback target if the network call fails (most notably the
+        // gateway's 409 REACTION_LIMIT_REACHED conflict when the user's
+        // emoji actually differs from an existing server-side reaction).
+        // Without this the optimistic emoji/counter bump was never undone:
+        // the UI kept the refused emoji and an inflated count forever.
+        let priorReactions = storyCurrentUserReactions
+        let priorCount = storyReactionCount
+
         // N'incrémenter le compteur QUE pour une réaction réellement nouvelle :
         // re-taper le même emoji ne crée pas une nouvelle réaction côté serveur
         // (l'array `storyCurrentUserReactions` est dédupliqué), donc l'ancien
@@ -1303,7 +1327,7 @@ struct StoryViewerView: View {
             storyReactionCount += 1
         }
         heartBouncePulse += 1
-        sendReaction(emoji: emoji)
+        sendReaction(emoji: emoji, priorReactions: priorReactions, priorCount: priorCount)
     }
 
     // MARK: - Computed Bottom Padding
@@ -1354,7 +1378,12 @@ struct StoryViewerView: View {
     /// celle-ci est PRÉPENDUE à la chaine (priorité la plus haute) sans supprimer les
     /// préférences de base — cf. Prisme « Exploration ». L'override est éphémère : il se
     /// réinitialise au changement de slide (cf. `.onChange(of: currentStory?.id)`).
-    private var resolvedViewerLanguageChain: [String] {
+    ///
+    /// Internal (not private): `StoryViewerView+Content.swift` needs it for
+    /// Prisme-correct resolution of realtime socket comments
+    /// (`applyStoryCommentAdded`) — the cross-file-private-access trap
+    /// documented in apps/ios/CLAUDE.md.
+    var resolvedViewerLanguageChain: [String] {
         Self.viewerLanguageChain(
             base: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
             override: sessionLanguageOverride

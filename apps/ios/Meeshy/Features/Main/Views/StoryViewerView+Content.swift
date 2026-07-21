@@ -735,21 +735,35 @@ extension StoryViewerView {
         // puis transmis via `attachmentIds` ; la ligne serveur réconcilie via le socket
         // `comment:added` (qui porte désormais le média). Le commentaire optimiste
         // affiche déjà le média local.
+        //
+        // Both the media upload and the comment POST now THROW instead of being
+        // silently swallowed by `try?` — a media upload failure used to publish
+        // the comment WITHOUT its media (silent data loss); a POST failure left
+        // the optimistic `temp_` comment/reply on screen forever even offline
+        // (no rollback). Either failure now rolls back the exact optimistic
+        // insert via the pure `rollingBackOptimisticComment` — same snapshot/
+        // rollback discipline as `sendReaction`.
         let language = composerLanguage
+        let tempCommentId = optimisticComment.id
         Task {
-            var attachmentIds: [String]? = nil
-            if let pendingMedia, let uploadedId = try? await CommentMediaUploader.upload(pendingMedia) {
-                attachmentIds = [uploadedId]
+            do {
+                var attachmentIds: [String]? = nil
+                if let pendingMedia {
+                    attachmentIds = [try await CommentMediaUploader.upload(pendingMedia)]
+                }
+                try await StoryInteractionService().postComment(
+                    storyId: story.id,
+                    content: text,
+                    originalLanguage: language,
+                    effectFlags: effectFlags,
+                    parentId: parentId,
+                    attachmentIds: attachmentIds,
+                    mobileTranscription: pendingMedia?.mobileTranscription
+                )
+            } catch {
+                rollbackOptimisticComment(id: tempCommentId, parentId: parentId)
+                HapticFeedback.error()
             }
-            await StoryInteractionService().postComment(
-                storyId: story.id,
-                content: text,
-                originalLanguage: language,
-                effectFlags: effectFlags,
-                parentId: parentId,
-                attachmentIds: attachmentIds,
-                mobileTranscription: pendingMedia?.mobileTranscription
-            )
         }
 
         // Dismiss composer and give feedback
@@ -760,14 +774,98 @@ extension StoryViewerView {
         }
     }
 
-    func sendReaction(emoji: String) {
+    /// Pure core of the rollback — no `@State` access, so it's unit-testable
+    /// without a live view (mirrors the "extract the pure decision" pattern
+    /// used elsewhere in the codebase). Removes the failed `temp_` comment
+    /// (top-level) or reply (routes back out of the parent's reply count +
+    /// the replies map) and decrements the shared counter exactly once,
+    /// symmetrically with how `sendComment` incremented it.
+    static func rollingBackOptimisticComment(
+        id: String,
+        parentId: String?,
+        comments: [FeedComment],
+        repliesMap: [String: [FeedComment]],
+        commentCount: Int
+    ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]], commentCount: Int) {
+        var comments = comments
+        var repliesMap = repliesMap
+        if let parentId {
+            if var replies = repliesMap[parentId] {
+                replies.removeAll { $0.id == id }
+                repliesMap[parentId] = replies
+            }
+            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+                comments[idx].replies = max(0, comments[idx].replies - 1)
+            }
+        } else {
+            comments.removeAll { $0.id == id }
+        }
+        return (comments, repliesMap, max(0, commentCount - 1))
+    }
+
+    private func rollbackOptimisticComment(id: String, parentId: String?) {
+        let result = Self.rollingBackOptimisticComment(
+            id: id, parentId: parentId,
+            comments: storyComments, repliesMap: storyCommentRepliesMap, commentCount: storyCommentCount
+        )
+        storyComments = result.comments
+        storyCommentRepliesMap = result.repliesMap
+        storyCommentCount = result.commentCount
+    }
+
+    /// `priorReactions`/`priorCount` is the snapshot `triggerStoryReaction` took
+    /// BEFORE its optimistic emoji append / counter bump — the sole rollback
+    /// target. `StoryInteractionService.react` now throws (most notably the
+    /// gateway's 409 REACTION_LIMIT_REACHED conflict), so a rejected reaction
+    /// restores the exact prior state instead of leaving a phantom emoji and
+    /// an inflated counter forever.
+    ///
+    /// `interactionService` is injectable (defaults to the real service) so
+    /// `StoryViewerReactionRollbackTests` can exercise this exact method —
+    /// including the swipe-away guard below — against a `MockAPIClientForApp`
+    /// instead of re-implementing the snapshot/rollback logic as local
+    /// variables in a test that never calls production code.
+    func sendReaction(
+        emoji: String,
+        priorReactions: [String],
+        priorCount: Int,
+        interactionService: StoryInteractionService = StoryInteractionService()
+    ) {
         guard let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.reacted, surface: .storyViewer)
 
-        // Fire & forget like
         Task {
-            await StoryInteractionService().react(storyId: story.id, emoji: emoji)
+            do {
+                try await interactionService.react(storyId: story.id, emoji: emoji)
+            } catch {
+                if let target = Self.reactionRollbackTarget(
+                    currentStoryId: currentStory?.id,
+                    originatingStoryId: story.id,
+                    priorReactions: priorReactions,
+                    priorCount: priorCount
+                ) {
+                    storyCurrentUserReactions = target.reactions
+                    storyReactionCount = target.count
+                    HapticFeedback.error()
+                }
+            }
         }
+    }
+
+    /// Pure rollback decision for a rejected reaction — extracted so the
+    /// swipe-away guard is directly unit-testable
+    /// (`StoryViewerReactionRollbackTests`) without constructing a live view.
+    /// Returns `nil` when the viewer has moved to a different story since the
+    /// reaction was sent — those `@State` fields already belong to that other
+    /// story now and must not be touched.
+    nonisolated static func reactionRollbackTarget(
+        currentStoryId: String?,
+        originatingStoryId: String,
+        priorReactions: [String],
+        priorCount: Int
+    ) -> (reactions: [String], count: Int)? {
+        guard currentStoryId == originatingStoryId else { return nil }
+        return (priorReactions, priorCount)
     }
 
     func shareStory() {
@@ -1576,6 +1674,101 @@ extension StoryViewerView {
     /// réinitialise le delta à 0, et on synchronise `storyCommentLikedIds`
     /// depuis `hasCurrentUser`. Le résultat affiché — `comment.likes + delta`
     /// — converge vers la vérité serveur sans flicker.
+    /// Realtime asymmetry fix (mirrors `PostDetailViewModel.subscribeToSocket`'s
+    /// `commentAdded` sink): a `comment:added` broadcast for the currently
+    /// viewed story used to only move the sidebar's denormalized count (via
+    /// `StoryViewModel`'s `storyGroups` mutation → the `.adaptiveOnChange(of:
+    /// currentStory?.commentCount)` mirror) — the comments overlay's own
+    /// `storyComments`/`storyCommentRepliesMap` never received the new row, so
+    /// a viewer with the overlay open needed to close and reopen it to see a
+    /// comment someone else just posted.
+    func applyStoryCommentAdded(_ data: SocketCommentAddedData) {
+        guard data.postId == currentStory?.id else { return }
+
+        let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+            translations: data.comment.translations,
+            originalLanguage: data.comment.originalLanguage,
+            preferredLanguages: resolvedViewerLanguageChain
+        )
+        let comment = FeedComment(
+            id: data.comment.id,
+            author: data.comment.author.name,
+            authorId: data.comment.author.id,
+            authorUsername: data.comment.author.username,
+            authorAvatarURL: data.comment.author.avatar,
+            content: data.comment.content,
+            timestamp: data.comment.createdAt,
+            likes: data.comment.likeCount ?? 0,
+            replies: data.comment.replyCount ?? 0,
+            parentId: data.comment.parentId,
+            effectFlags: data.comment.effectFlags ?? 0,
+            originalLanguage: data.comment.originalLanguage,
+            translatedContent: translatedContent,
+            currentUserReactions: data.comment.currentUserReactions,
+            media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+        )
+
+        let result = Self.applyingStoryCommentAdded(
+            comment: comment,
+            expandedThreads: storyCommentExpandedThreads,
+            comments: storyComments,
+            repliesMap: storyCommentRepliesMap
+        )
+        storyComments = result.comments
+        storyCommentRepliesMap = result.repliesMap
+        storyCommentCount = data.commentCount
+    }
+
+    /// Pure routing/dedup decision for a `comment:added` broadcast — extracted
+    /// so it's directly unit-testable (`StoryViewerCommentRealtimeTests`)
+    /// without constructing a live view (mirrors `rollingBackOptimisticComment`
+    /// just above). The echoed broadcast for OUR OWN just-sent comment/reply:
+    /// `sendComment` already inserted an optimistic `temp_` placeholder and
+    /// bumped the counters synchronously — it never reconciles that
+    /// placeholder on POST success. Without the `isTwin` check the server's
+    /// real row lands ALONGSIDE the temp_ one (visible duplicate) and, for a
+    /// reply, the parent's `replies` count gets incremented a second time.
+    /// Mirrors `FeedCommentsSheet`'s `isTwin` reconciliation for the
+    /// equivalent case.
+    nonisolated static func applyingStoryCommentAdded(
+        comment: FeedComment,
+        expandedThreads: Set<String>,
+        comments: [FeedComment],
+        repliesMap: [String: [FeedComment]]
+    ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]]) {
+        var comments = comments
+        var repliesMap = repliesMap
+
+        func isTwin(_ c: FeedComment) -> Bool {
+            c.id.hasPrefix("temp_")
+                && c.authorId == comment.authorId
+                && c.content == comment.content
+                && c.parentId == comment.parentId
+        }
+
+        if let parentId = comment.parentId {
+            var existing = repliesMap[parentId] ?? []
+            if let idx = existing.firstIndex(where: isTwin) {
+                existing[idx] = comment
+                repliesMap[parentId] = existing
+            } else {
+                if expandedThreads.contains(parentId), !existing.contains(where: { $0.id == comment.id }) {
+                    existing.append(comment)
+                    repliesMap[parentId] = existing
+                }
+                if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+                    comments[idx].replies += 1
+                }
+            }
+        } else if let idx = comments.firstIndex(where: isTwin) {
+            comments[idx] = comment
+        } else if !comments.contains(where: { $0.id == comment.id }) {
+            comments.append(comment)
+        }
+
+        return (comments, repliesMap)
+    }
+
     func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
         // 2026-05-29 : on ne gate plus sur `showCommentsOverlay` — l'état doit
         // rester aligné sur le serveur même quand l'overlay est fermé.

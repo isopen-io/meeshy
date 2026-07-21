@@ -341,8 +341,12 @@ internal struct _InlineRenderer: View {
 
     private func startPlayback() {
         HapticFeedback.light()
-        manager.attachmentId = player.attachment.id
-        manager.load(urlString: player.attachment.fileUrl)
+        // `attachmentId` MUST be the `load()` argument, not set beforehand —
+        // `load()` calls `cleanup()` internally, which wipes `attachmentId` to
+        // `nil` before the new value could apply. Passing it as a parameter
+        // (applied AFTER `cleanup()`) is what keeps `reportWatchProgress`
+        // firing. See `SharedAVPlayerManagerAttachmentTrackingTests`.
+        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
         manager.play()
         scheduleControlsHide()
     }
@@ -516,8 +520,11 @@ internal struct _FullscreenRenderer: View {
                         // replay of the just-watched video.
                         guard !didInitialLoad else { return }
                         didInitialLoad = true
-                        manager.attachmentId = player.attachment.id
-                        manager.load(urlString: player.attachment.fileUrl)
+                        // See `startPlayback()` above — `attachmentId` must be
+                        // passed as the `load()` argument, applied AFTER the
+                        // internal `cleanup()`, or it is silently wiped and
+                        // watch-progress tracking never fires.
+                        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
                         manager.play()
                     }
             }

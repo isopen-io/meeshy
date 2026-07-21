@@ -252,6 +252,33 @@ describe('link-name-generator', () => {
 
         expect(result.length).toBeLessThanOrEqual(63); // 60 + '...'
       });
+
+      it('should not split a surrogate pair when truncating an emoji title', () => {
+        // '🎉' is a UTF-16 surrogate pair. With a 16-char ASCII prefix, the
+        // legacy substring(0, 17) cut fell between the two code units, emitting
+        // a lone high surrogate (\uD83C) rendered as a broken glyph '�'.
+        const result = generateLinkName({
+          conversationTitle: `${'A'.repeat(16)}🎉CCCCC`,
+          durationDays: 7,
+        });
+
+        // No lone high surrogate (a high surrogate NOT followed by a low one).
+        expect(result).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+        // No lone low surrogate either.
+        expect(result).not.toMatch(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+      });
+
+      it('should keep an emoji whole when it fits within the title budget', () => {
+        // '🎉' straddling positions 15-16 fits inside the 17-unit slice, so it
+        // must survive intact rather than be dropped or halved.
+        const result = generateLinkName({
+          conversationTitle: `${'A'.repeat(15)}🎉CCCCCCCCCC`,
+          durationDays: 7,
+        });
+
+        expect(result).toContain('🎉');
+        expect(result).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+      });
     });
 
     describe('Chinese and Japanese formatting', () => {

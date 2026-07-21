@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
-import os
 
 struct BlockedUsersView: View {
     @Environment(\.dismiss) private var dismiss
@@ -10,12 +9,15 @@ struct BlockedUsersView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    @State private var blockedUsers: [BlockedUser] = []
-    @State private var isLoading = false
+    // Wired onto the conformant, cache-first + outbox `BlockedViewModel`
+    // instead of the ad-hoc `@State`-based network-only loading this screen
+    // used to own: that path ignored the `blockedUsers` store entirely and
+    // routed a failed fetch straight into `Self.logger.error(...)` with no
+    // error state, so an offline open silently rendered "Aucun utilisateur
+    // bloque" (a lie — the request never even reached the network).
+    @StateObject private var viewModel = BlockedViewModel()
     @State private var userToUnblock: BlockedUser?
-    @State private var isUnblocking = false
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "blocked-users")
     private let accentColor = MeeshyColors.errorHex
 
     var body: some View {
@@ -36,14 +38,15 @@ struct BlockedUsersView: View {
             }
             Button(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main), role: .destructive) {
                 guard let user = userToUnblock else { return }
-                unblock(user)
+                Task { await viewModel.unblock(userId: user.id) }
+                userToUnblock = nil
             }
         } message: {
             if let user = userToUnblock {
                 Text(String(localized: "blocked.users.unblock.confirm", defaultValue: "Voulez-vous debloquer \(user.name) ?", bundle: .main))
             }
         }
-        .task { await loadBlockedUsers() }
+        .task { await viewModel.loadBlocked() }
     }
 
     // MARK: - Header
@@ -82,9 +85,16 @@ struct BlockedUsersView: View {
 
     @ViewBuilder
     private var content: some View {
-        if isLoading && blockedUsers.isEmpty {
+        // Cache-first: `.loading` only fires on a genuinely empty cache
+        // (cold start) — `.loaded` covers both `.cachedFresh`/`.cachedStale`
+        // (data already applied) and a completed network round-trip, so no
+        // spinner masks cached data. `.offline`/`.error` fall through to the
+        // same empty-state branch as a true empty list — distinguishing them
+        // further isn't needed here since `RequestsTab`'s sibling screens
+        // follow the same reduced-surface convention.
+        if viewModel.loadState == .loading {
             loadingState
-        } else if blockedUsers.isEmpty {
+        } else if viewModel.blockedUsers.isEmpty {
             emptyState
         } else {
             usersList
@@ -149,7 +159,7 @@ struct BlockedUsersView: View {
 
     private var usersList: some View {
         List {
-            ForEach(blockedUsers) { user in
+            ForEach(viewModel.blockedUsers) { user in
                 blockedUserRow(user)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
@@ -167,7 +177,7 @@ struct BlockedUsersView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .refreshable { await loadBlockedUsers() }
+        .refreshable { await viewModel.loadBlocked() }
     }
 
     private func blockedUserRow(_ user: BlockedUser) -> some View {
@@ -225,37 +235,4 @@ struct BlockedUsersView: View {
         )
     }
 
-    // MARK: - Actions
-
-    private func loadBlockedUsers() async {
-        isLoading = true
-        defer { isLoading = false }
-
-        do {
-            blockedUsers = try await BlockService.shared.listBlockedUsers()
-        } catch {
-            Self.logger.error("Failed to load blocked users: \(error.localizedDescription)")
-        }
-    }
-
-    private func unblock(_ user: BlockedUser) {
-        isUnblocking = true
-        Task { [weak blockService = BlockService.shared] in
-            do {
-                try await blockService?.unblockUser(userId: user.id)
-                HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "blocked.users.unblock.success", defaultValue: "Utilisateur debloque", bundle: .main))
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    blockedUsers.removeAll { $0.id == user.id }
-                }
-                Self.logger.info("Unblocked user \(user.id)")
-            } catch {
-                HapticFeedback.error()
-                FeedbackToastManager.shared.showError(String(localized: "blocked.users.unblock.error", defaultValue: "Erreur lors du deblocage", bundle: .main))
-                Self.logger.error("Failed to unblock user: \(error.localizedDescription)")
-            }
-            isUnblocking = false
-            userToUnblock = nil
-        }
-    }
 }

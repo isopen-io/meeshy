@@ -1,5 +1,162 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **profile presence-window reconcile** repair landed (slice
+> `profile-presence-window-reconcile`). This is the flagged "leave main green" repair from the
+> previous run: `:feature:profile` `ProfileHeaderBuilderTest` carried **two deterministic reds on
+> `origin/main`** whose expectations contradicted the canonical **1/3/5 presence rule** (SSOT
+> `packages/shared/utils/user-presence.ts`, mirrored verbatim in `:core:model` `Presence.kt`
+> `UserPresence.state` + iOS `UserPresence.state` + locked by `PresenceTest` "windows are 60s-3min-5min").
+> The offending tests (`presence is away when disconnected and idle past the window` +
+> `last seen carries the parsed instant for an away user`) fed a **10-min-old** frozen `lastActiveAt`
+> and asserted **AWAY**, justified in a comment by a fabricated *"30-min anti-stale guard"* that exists
+> nowhere in the code — the real anti-stale guard is 5 min and the offline boundary is 5 min, so 10 min
+> resolves to **OFFLINE**. **Production code was already correct**: `ProfileHeaderBuilder.build`
+> delegates presence to `UserPresence.state` (the SSOT resolver) — so the fix is a **test-correctness
+> reconcile**, NOT a weakening, and `Presence.kt` was deliberately left untouched (changing it would
+> diverge Android from the web/iOS mirrors). **Diff: 1 test file only** (`ProfileHeaderBuilderTest.kt`,
+> +36/-10; no production code). The two wrong tests were rewritten to the SSOT and coverage was
+> **strengthened** — the presence projection now exercises all three non-online decay arms through the
+> public `ProfileHeaderBuilder.build` API: **AWAY** (disconnected, 2-min-old → orange),
+> **IDLE** (disconnected, 4-min-old → grey-displayed, a state the builder path never covered before),
+> **OFFLINE** (disconnected, 10-min-old → no dot); plus a new **IDLE last-seen-carry** test. Net
+> **+3 tests** (ProfileHeaderBuilderTest 27 → **30**, all green). **RED→GREEN proof:** with
+> `origin/main`'s test file restored, `:feature:profile:testDebugUnitTest` → **137 tests, exactly 2
+> failed** (the two named above, no collateral); with the reconciled file → **30/30** in the suite,
+> module green. **Gate (system Gradle 8.14.3, `$HOME/android-sdk`, `LANG=C.UTF-8`; wrapper's
+> gradle-distribution download is 403-blocked in this container, so the system Gradle is the gate):**
+> `assembleDebug` **BUILD SUCCESSFUL** (every module compiled); full-repo `testDebugUnitTest` tripped
+> **only** the pre-existing **non-deterministic** `:sdk-core` `ThemeStoreTest`
+> `dataStore_hydratesAlreadyPersistedChoiceOnConstruction` DataStore-parallel-load `TimeoutCancellationException`
+> flake (documented in NOTES) — a module this diff never touches, and it passed **3/3 in isolation**
+> (`--rerun-tasks`), so not a regression. **This slice therefore moves main from "1 deterministic red
+> + 1 flake" → "0 deterministic reds + 1 known flake".** Reviewer **PASS** (diff `apps/android` only —
+> 1 test file, zero production logic; **SSOT** — the reconcile makes the profile test agree with the one
+> presence resolver instead of a phantom 30-min rule; **coverage** — strengthened, no floor lowered, no
+> assertion weakened; the AWAY expectation was *corrected to the spec*, not deleted, and two new decay
+> arms were added). **The previous run's ⚠ `profile-presence-window-reconcile` flag is now RESOLVED.**
+>
+> **Next slice:** back to §A feature work — the app-side `LoginView` saved-account picker composable +
+> DataStore-backed store (observe `SavedAccounts.sorted`; `upsert` on login / `remove` on delete /
+> `find` on one-tap select → password focus; `showPicker` toggle), OR the `LoginView`
+> environment-selector composable + DataStore env store driving `ServerEnvironmentResolver.apiBaseUrl`
+> into the SDK config at launch, OR another §A pure core (password-recovery masked-info challenge,
+> token-refresh timing policy), OR the tracked Kover 90% coverage-gate infra. **Known standing debt
+> (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest` /
+> `InterfaceLanguageStoreTest` / `PrivacyPreferencesStoreTest`) surfaces intermittently in the full
+> `testDebugUnitTest` run but passes in isolation — a real "harden the DataStore test harness against
+> parallel-load timeout" follow-up (raise the 5 s Turbine/`withTimeout`, or serialise those stores'
+> tests), tracked and still unclaimed.
+
+> On 2026-07-21 the **saved-account list core** landed (slice `auth-saved-account-picker-core`,
+> feature-parity §A → advances "Username/password login with saved-account picker (multi-account,
+> one-tap switch)" `[ ]` → `[~]`). This is the pure multi-account model behind the login screen's
+> saved-account picker. Parity source: iOS `AuthManager`
+> (`packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift`) — `loadSavedAccounts`' D4 sort
+> (`lastActiveAt` desc, `id` asc tie-break, pinned by `SavedAccountsSortStabilityTests`),
+> `upsertSavedAccount` (replace in place by id, else insert at front), `removeFromSavedAccounts`
+> (`removeAll { $0.id == userId }`) — plus `SavedAccount` (`shortName == displayName ?? username`,
+> `AuthModels.swift`) and `LoginView.showPicker` (`!savedAccounts.isEmpty && !showNormalLogin`,
+> `apps/ios/Meeshy/Features/Main/Views/LoginView.swift`). Two pure `:core:model/auth/` types.
+> **`SavedAccount`** (data class: `id`/`username`/`displayName?`/`avatarUrl?`/`lastActiveAtMillis`) with
+> `shortName` = display name else username — **hardened** over iOS's null-only fallback so a blank/
+> whitespace-only display name also falls back to the username (a row never renders empty).
+> **`SavedAccounts`** (object) is the pure SSOT of immutable list→list transforms iOS scatters as
+> mutating methods on the stateful singleton: `sorted` (D4 stable order), `upsert` (in-place-by-id else
+> prepend; input never mutated), `remove` (drop-by-id, idempotent for unknown id; input never mutated),
+> `find` (one-tap select → username prefill), `showPicker(accounts, showNormalLogin)`. **SOTA note:**
+> iOS mutates `@Published savedAccounts` on the `AuthManager` singleton; Android lifts every transform
+> into a framework-free pure object so each branch is JVM-testable and the app-side store owns only
+> persistence + the observable `StateFlow`. **+25 behavioural tests** (`SavedAccountsTest` — 3 shortName
+> incl. blank fallback; 6 sorted incl. empty/single/idempotent/tie-break; 5 upsert incl. into-empty/
+> in-place/prepend/no-mutate; 4 remove incl. unknown-id no-op/empty/no-mutate; 3 find; 4 showPicker truth
+> table). Expectations are hand-written literals independent of the production derivation (not
+> tautological). **Mutation check (RED proof):** dropping the `.thenBy { it.id }` tie-break fails
+> **exactly** `sorted_identicalTimestamps_secondaryKeyOnIdAscending` +
+> `sorted_mixedTimestamps_secondaryKeyOnlyForTies` + `sorted_idempotent_inputOrderIrrelevant` (25 run,
+> 3 failed, no collateral) — behavioural, not tautological. RED was also proven first by the test suite
+> failing to compile against the absent production types. **Gate (system Gradle 8.14.3,
+> `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (whole module, new suite
+> 25/25); `assembleDebug` compiled every module. The full-repo `testDebugUnitTest` tripped **two
+> pre-existing unrelated reds this diff never touches**: (1) the documented `:sdk-core` DataStore
+> parallel-load flake (`InterfaceLanguageStoreTest`/`PrivacyPreferencesStoreTest`
+> `TimeoutCancellationException`) — **green in isolation**; (2) a **newly-noted deterministic**
+> `:feature:profile` `ProfileHeaderBuilderTest` failure (`presence is away…` + `last seen carries…`
+> expect `AWAY` for a 10-min-idle disconnected user, but `Presence.getPresenceStatus` returns `OFFLINE`
+> past its 3-min `AWAY_WINDOW_MS`) that **reproduces on clean `origin/main`** — so not a regression from
+> this slice. Reviewer **PASS** (diff `apps/android` only — 1 new production file + 1 test + tracking;
+> **SDK purity** — a pure data class + a pure object in `:core:model`, zero framework deps; the DataStore/
+> Keystore persistence store + the `LoginView` picker composable stay app-side/pending; **SSOT** — one
+> `SavedAccount` + one `SavedAccounts` own every sort/upsert/remove/find/showPicker derivation the picker
+> renders; **UX** — `sorted`/`shortName`/`showPicker` are the single truths the picker renders; no
+> coverage floor lowered, no test weakened).
+>
+> **✅ RESOLVED 2026-07-21 by slice `profile-presence-window-reconcile` (see top entry).** The
+> reconcile fixed the two `ProfileHeaderBuilderTest` tests to the 1/3/5 SSOT (production `Presence.kt`
+> was already correct; the tests carried a phantom 30-min expectation). Original ⚠ note kept below for
+> the audit trail.
+>
+> **⚠ Discovered this run — top-priority next slice (`profile-presence-window-reconcile`):** main's
+> Android local gate is red on `:feature:profile` `ProfileHeaderBuilderTest` (2 tests, deterministic,
+> reproduces on `origin/main`). The test expects `AWAY` for a disconnected user idle 10 min; `:core:model`
+> `Presence.getPresenceStatus` maps `elapsed > AWAY_WINDOW_MS` (180_000 ms) → `OFFLINE`. The
+> `ProfileHeaderBuilderTest` window expectation and the resolver's `AWAY_WINDOW_MS` diverged. Reconcile
+> against the CLAUDE.md presence spec (online/recent → green, away → orange, offline > 30 min → no dot),
+> keeping `Presence` the SSOT and the profile test aligned to it (or widening the window if the spec
+> demands). This is a genuine "leave main green" repair — do it before the next feature slice.
+>
+> **Next slice (after the ⚠ repair):** the app-side `LoginView` picker composable + a DataStore-backed
+> saved-account store (observing `SavedAccounts.sorted`, wiring `upsert` on login / `remove` on delete /
+> `find` on one-tap select → password focus, `showPicker` for the "other account" toggle); OR another §A
+> pure core (password-recovery masked-info challenge, token-refresh timing policy); OR the tracked Kover
+> 90% coverage-gate infra.
+
+> On 2026-07-21 the **server-environment selector enum + URL-derivation core** landed (slice
+> `auth-server-environment-selector`, feature-parity §A → advances "Server environment selector
+> (dev/staging/prod/custom host)" `[ ]` → `[~]`). This is the pure model behind the login screen's
+> developer/QA environment picker. Parity source: iOS `MeeshyConfig`
+> (`packages/MeeshySDK/Sources/MeeshySDK/Configuration/MeeshyConfig.swift`) + `LoginView`'s
+> `environmentSelector` — the `ServerEnvironment` enum (`rawValue`/`label`/`origin`),
+> `selectedEnvironment`'s `?? .production` fallback, the `apiBaseURL`/`serverOrigin`/`webOrigin`/
+> `applyEnvironment` derivations, and the custom-host apply gate
+> (`.disabled(customHost.trimmingCharacters(in:.whitespaces).isEmpty)`). Two pure `:core:model/auth/`
+> types. **`ServerEnvironment`** (enum, cases `PRODUCTION`=`gate.meeshy.me` / `STAGING`=
+> `gate.staging.meeshy.me` / `LOCALHOST`=`localhost:3000` / `CUSTOM`=`custom`): `label` (Production/
+> Staging/Localhost/Custom), `origin` (`https://gate.meeshy.me` / `https://gate.staging.meeshy.me` /
+> `http://localhost:3000` / `""` for custom — matching iOS's empty custom origin), and `fromId(raw)`
+> resolving a persisted id back to an env, **defaulting to PRODUCTION** for unknown/null/empty (iOS
+> `?? .production`). **`ServerEnvironmentResolver`** (object): `normalizeCustomHost` prepends `https://`
+> unless a scheme is present (whitespace-trimmed like iOS `applyCustomHost`); `canApplyCustomHost` =
+> trimmed-non-empty (the apply-button gate); `apiBaseUrl(env, customHost)` = origin + `/api/v1`;
+> `serverOrigin(apiBaseUrl)` parses scheme+host(+port) via `java.net.URI`, returning the input verbatim
+> on a parse miss (iOS `guard let … else { return apiBaseURL }`); `webOrigin(serverOrigin)` strips the
+> leading `gate.` subdomain and remaps localhost `:3000`→`:3100`. **SOTA note:** iOS keeps these as
+> computed props on a stateful `UserDefaults` singleton; Android lifts the pure string derivations into
+> a framework-free object so every branch is JVM-testable and the app-side store owns only persistence
+> + the mutable selection. **+35 behavioural tests** (`ServerEnvironmentTest` — 4 id + 4 label + 4
+> origin + entry-order; 4 `fromId` known/unknown/null/empty; 4 `normalizeCustomHost`; 3
+> `canApplyCustomHost`; 5 `apiBaseUrl`; 4 `serverOrigin`; 6 `webOrigin`; 2 composition chains).
+> Expectations are hand-written literals independent of the production derivation (not tautological).
+> **Mutation check (RED proof):** dropping the `gate.` strip from `webOrigin` (`if startsWith("gate.")
+> removePrefix else host` → `host`) fails **exactly** `webOrigin_productionGateHost_stripsGatePrefix`
+> + `webOrigin_stagingGateHost_stripsOnlyLeadingGate` + `composition_productionChain_apiToServerToWebOrigin`
+> (35 run, 3 failed, no collateral) — behavioural, not tautological. **Gate (system Gradle 8.14.3,
+> `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (new suite 35/35);
+> `assembleDebug` compiled every module. The full-repo `testDebugUnitTest` tripped the **pre-existing
+> unrelated `:sdk-core` DataStore flake** (`InterfaceLanguageStoreTest.dataStore_hydratesAlreadyPersistedChoiceOnConstruction`,
+> `TimeoutCancellationException` under parallel load — same pattern as the documented `ThemeStoreTest`
+> flake in NOTES.md, in a module this diff never touches); it passes **green in isolation**
+> (`:sdk-core:testDebugUnitTest --tests "*InterfaceLanguageStoreTest*"` → BUILD SUCCESSFUL in 45s), so it
+> is not a regression from this slice. Reviewer **PASS** (diff `apps/android` only —
+> 1 new production file + 1 test + tracking; **SDK purity** — a pure enum + a pure object in `:core:model`,
+> zero framework deps beyond `java.net.URI`; the `MeeshyConfig` apply/persist actuator + the DataStore
+> env store + the `LoginView` selector composable stay app-side/pending; **SSOT** — one enum + one
+> resolver own every env label/origin/URL derivation the login screen renders; **UX** — the four env
+> cases + custom-host gate are the single truths the selector renders; no coverage floor lowered, no test
+> weakened). **Next slice:** the app-side `LoginView` environment-selector composable + a DataStore store
+> owning the selected env + custom host, driving `ServerEnvironmentResolver.apiBaseUrl` into the SDK
+> config at launch (iOS `restoreEnvironment`); OR another §A pure core (saved-account picker model,
+> username-suggestion selection); OR the tracked Kover 90% coverage-gate infra.
+
 > On 2026-07-21 the **6-digit OTP field sanitiser + verify/resend/edit gate core** landed (slice
 > `auth-otp-verification-core`, feature-parity §A → advances "Email verification by 6-digit code (OTP
 > autofill, resend, success animation)" `[ ]` → `[~]`). This is the pure input+gate layer behind the

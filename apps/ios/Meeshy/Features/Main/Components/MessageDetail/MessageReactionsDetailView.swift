@@ -45,7 +45,12 @@ struct MessageReactionsDetailView: View {
                 ProgressView()
                     .tint(Color(hex: contactColor))
                     .padding(.vertical, 20)
-            } else if filteredReactionUsers.isEmpty {
+            } else if reactionGroups.isEmpty {
+                // Gate on `reactionGroups`, not `filteredReactionUsers`: every
+                // filter capsule is generated FROM `reactionGroups`, so once
+                // groups are seeded (see `loadReactionDetails`) selecting any
+                // capsule always yields ≥1 row — `filteredReactionUsers` only
+                // goes empty in lockstep with `reactionGroups`.
                 emptyReactionsView
             } else {
                 LazyVStack(spacing: 0) {
@@ -98,6 +103,13 @@ struct MessageReactionsDetailView: View {
             )
             .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textSecondary)
         }
+        // The capsule otherwise reads to VoiceOver as "<label> <number>", where
+        // the bare count carries no meaning. Collapse it into one element whose
+        // value names the count ("5 réaction(s)") so the filter is announced as
+        // "<label>, 5 réaction(s), sélectionné" instead of a context-less digit.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+        .accessibilityValue(String(localized: "message-detail.reactions.count-a11y", defaultValue: "\(count) réaction(s)", bundle: .main))
         // Selected filter is otherwise signalled by color alone — expose it to
         // VoiceOver via the trait so the active emoji filter is not lost to
         // non-sighted users (HIG: never rely on color to convey state).
@@ -162,12 +174,63 @@ struct MessageReactionsDetailView: View {
         message.id.count == 24 && message.id.allSatisfy(\.isHexDigit)
     }
 
+    /// Seeds `reactionGroups` from `message.reactions` — the same raw data
+    /// already summarized into the pills shown under the bubble the user
+    /// just opened this screen from — before ever touching the network.
+    /// Offline (or on a network failure below) this seed is the final,
+    /// preserved state instead of an empty array, which used to render
+    /// "Aucune reaction" under a bubble that visibly has some.
+    ///
+    /// Per-user identity is limited to what the client already has:
+    /// `MeeshyReaction` only carries `participantId`, not a username/avatar,
+    /// so only the current user's own reaction resolves to a real name —
+    /// every other row uses the existing `common.unknown` placeholder
+    /// (already used the same way in `RequestsTab`/`ThreadView`) rather than
+    /// fabricating an identity. The real usernames arrive once the network
+    /// fetch succeeds and replaces this seed.
+    static func seedReactionGroups(
+        from reactions: [MeeshyReaction],
+        currentUserId: String,
+        currentUserDisplayName: String
+    ) -> [ReactionGroup] {
+        let unknownLabel = String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main)
+        var usersByEmoji: [String: [ReactionUserDetail]] = [:]
+        var emojiOrder: [String] = []
+        for reaction in reactions {
+            if usersByEmoji[reaction.emoji] == nil {
+                emojiOrder.append(reaction.emoji)
+            }
+            let isMe = reaction.participantId != nil && reaction.participantId == currentUserId
+            let detail = ReactionUserDetail(
+                userId: reaction.participantId ?? reaction.id,
+                username: isMe ? currentUserDisplayName : unknownLabel,
+                avatar: nil,
+                createdAt: reaction.createdAt
+            )
+            usersByEmoji[reaction.emoji, default: []].append(detail)
+        }
+        return emojiOrder.map { emoji in
+            let users = usersByEmoji[emoji] ?? []
+            return ReactionGroup(emoji: emoji, count: users.count, users: users)
+        }
+    }
+
     private func loadReactionDetails() async {
         guard !isLoadingReactions || reactionGroups.isEmpty else { return }
-        isLoadingReactions = true
+        if reactionGroups.isEmpty, !message.reactions.isEmpty {
+            let user = AuthManager.shared.currentUser
+            reactionGroups = Self.seedReactionGroups(
+                from: message.reactions,
+                currentUserId: user?.id ?? "",
+                currentUserDisplayName: user?.displayName ?? user?.username
+                    ?? String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main)
+            )
+        }
+        isLoadingReactions = reactionGroups.isEmpty
         defer { isLoadingReactions = false }
         guard messageHasServerId else {
-            reactionGroups = []
+            // Not-yet-persisted optimistic message — nothing better exists
+            // server-side either way. Keep the seed (was `reactionGroups = []`).
             return
         }
         do {
@@ -178,7 +241,8 @@ struct MessageReactionsDetailView: View {
                 reactionGroups = response.data.reactions
             }
         } catch {
-            reactionGroups = []
+            // Network failure — keep the seed rather than erasing it (was
+            // `reactionGroups = []`, the false-empty bug this fix addresses).
         }
     }
 

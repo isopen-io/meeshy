@@ -27,6 +27,18 @@ public final class UserPreferencesManager: ObservableObject {
     private var syncTasks: [PreferenceCategory: Task<Void, Never>] = [:]
     private var cancellables = Set<AnyCancellable>()
 
+    /// Catégories avec une modification locale pas encore confirmée par le
+    /// backend — depuis `scheduleSyncToBackend` (synchrone, avant le
+    /// debounce de 1s) jusqu'à la fin de `syncCategoryToBackend` (PATCH ou
+    /// enqueue outbox terminé). `applyRemote` ("server wins") DOIT les
+    /// ignorer : sans ça, un `fetchFromBackend()` concurrent (foreground,
+    /// login) écrase l'édition locale en attente avec la valeur serveur
+    /// périmée, puis le debounce PATCHe cette même valeur périmée — la
+    /// modification de l'utilisateur disparaît silencieusement. Accès
+    /// `internal` (pas `private`) uniquement pour être observable/réinitialisable
+    /// par les tests `@testable import`.
+    var pendingCategories: Set<PreferenceCategory> = []
+
     private static let keyPrefix = "meeshy_prefs_"
     private static let lastSyncKey = "meeshy_prefs_last_sync"
     private static let minSyncInterval: TimeInterval = 5 * 60
@@ -144,15 +156,6 @@ public final class UserPreferencesManager: ObservableObject {
         }
     }
 
-    // MARK: - Convenience: Data-Saving Queries
-
-    public var shouldAutoDownloadMedia: Bool { document.autoDownloadEnabled }
-
-    public func shouldAutoDownload(fileSizeMB: Int = 0) -> Bool {
-        guard document.autoDownloadEnabled else { return false }
-        return fileSizeMB <= 0 || fileSizeMB <= document.autoDownloadMaxSize
-    }
-
     // MARK: - Backend Sync
 
     public func fetchFromBackend() async {
@@ -200,6 +203,7 @@ public final class UserPreferencesManager: ObservableObject {
 
         syncTasks.values.forEach { $0.cancel() }
         syncTasks.removeAll()
+        pendingCategories.removeAll()
         // NE PAS vider `cancellables` : il ne porte QUE les abonnements
         // process-lifetime posés une seule fois à l'init (`observeAuth` /
         // `observeForeground`). Les vider au premier logout tuait
@@ -243,6 +247,7 @@ public final class UserPreferencesManager: ObservableObject {
 
     private func scheduleSyncToBackend(_ category: PreferenceCategory) {
         syncTasks[category]?.cancel()
+        pendingCategories.insert(category)
         syncTasks[category] = Task {
             try? await Task.sleep(nanoseconds: 1_000_000_000)
             guard !Task.isCancelled else { return }
@@ -259,6 +264,10 @@ public final class UserPreferencesManager: ObservableObject {
     /// app boot, transient GRDB error) we fall back to the direct PATCH
     /// path so we don't drop preference changes silently.
     private func syncCategoryToBackend(_ category: PreferenceCategory) async {
+        // Cleared here (not right after the debounce sleep) so the category
+        // stays "pending" — and protected from `applyRemote` server-wins —
+        // for the full round trip, including the network/outbox call below.
+        defer { pendingCategories.remove(category) }
         guard AuthManager.shared.isAuthenticated else { return }
         let cmid = ClientMutationId.generate()
         let body: Data?
@@ -308,26 +317,50 @@ public final class UserPreferencesManager: ObservableObject {
         }
     }
 
-    // MARK: - Private: Apply Remote (server wins)
+    // MARK: - Private: Apply Remote (server wins — except categories pending local sync)
+
+    /// Pure decision: should `category`'s remote value overwrite the local,
+    /// in-memory state? Categories with an in-flight/debounced local edit
+    /// (`pendingCategories`) keep their local value — "server wins" there
+    /// would silently drop the user's own not-yet-confirmed change and then
+    /// PATCH the (now overwritten) stale value once the debounce fires.
+    /// `nonisolated`: pure Set membership check, no actor-isolated state.
+    nonisolated static func shouldApplyRemote(_ category: PreferenceCategory, pendingCategories: Set<PreferenceCategory>) -> Bool {
+        !pendingCategories.contains(category)
+    }
 
     private func applyRemote(_ remote: UserPreferences) {
         let localExtras = collectLocalExtras()
+        let pending = pendingCategories
 
-        privacy = mergeExtras(remote.privacy, localExtras: localExtras[.privacy])
-        audio = mergeExtras(remote.audio, localExtras: localExtras[.audio])
-        message = mergeExtras(remote.message, localExtras: localExtras[.message])
-        notification = mergeExtras(remote.notification, localExtras: localExtras[.notification])
-        video = mergeExtras(remote.video, localExtras: localExtras[.video])
-        document = mergeExtras(remote.document, localExtras: localExtras[.document])
-        application = mergeExtras(remote.application, localExtras: localExtras[.application])
-
-        persist(privacy, category: .privacy)
-        persist(audio, category: .audio)
-        persist(message, category: .message)
-        persist(notification, category: .notification)
-        persist(video, category: .video)
-        persist(document, category: .document)
-        persist(application, category: .application)
+        if Self.shouldApplyRemote(.privacy, pendingCategories: pending) {
+            privacy = mergeExtras(remote.privacy, localExtras: localExtras[.privacy])
+            persist(privacy, category: .privacy)
+        }
+        if Self.shouldApplyRemote(.audio, pendingCategories: pending) {
+            audio = mergeExtras(remote.audio, localExtras: localExtras[.audio])
+            persist(audio, category: .audio)
+        }
+        if Self.shouldApplyRemote(.message, pendingCategories: pending) {
+            message = mergeExtras(remote.message, localExtras: localExtras[.message])
+            persist(message, category: .message)
+        }
+        if Self.shouldApplyRemote(.notification, pendingCategories: pending) {
+            notification = mergeExtras(remote.notification, localExtras: localExtras[.notification])
+            persist(notification, category: .notification)
+        }
+        if Self.shouldApplyRemote(.video, pendingCategories: pending) {
+            video = mergeExtras(remote.video, localExtras: localExtras[.video])
+            persist(video, category: .video)
+        }
+        if Self.shouldApplyRemote(.document, pendingCategories: pending) {
+            document = mergeExtras(remote.document, localExtras: localExtras[.document])
+            persist(document, category: .document)
+        }
+        if Self.shouldApplyRemote(.application, pendingCategories: pending) {
+            application = mergeExtras(remote.application, localExtras: localExtras[.application])
+            persist(application, category: .application)
+        }
     }
 
     private func collectLocalExtras() -> [PreferenceCategory: [String: CodableValue]] {

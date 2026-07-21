@@ -87,14 +87,17 @@ public final class PhotoLibraryManager: @unchecked Sendable {
         }
     }
 
-    /// Save media from a URL string. Downloads via cache, determines type from extension/MIME.
+    /// Save media from a URL string. Downloads via cache, routes to the image
+    /// or video save path based on the caller-supplied `kind` — replaces the
+    /// previous substring sniffing (`.contains("video")` / `.contains(".mp4")`),
+    /// which could misclassify any URL whose path merely contained one of
+    /// those substrings. `AttachmentKind` is the single source of truth for
+    /// media family (mirrors `MediaSaveRequest.kind` in the app's unified
+    /// save flow, `MediaSaveCoordinator.swift`).
     @discardableResult
-    public func saveFromURL(_ urlString: String) async -> Bool {
-        let lower = urlString.lowercased()
-        let isVideo = lower.contains(".mp4") || lower.contains(".mov") || lower.contains(".m4v") || lower.contains("video")
-
+    public func saveFromURL(_ urlString: String, kind: AttachmentKind) async -> Bool {
         do {
-            if isVideo {
+            if kind == .video {
                 let localURL = try await CacheCoordinator.shared.video.localFileURLOrThrow(for: urlString)
                 return await saveVideo(at: localURL)
             } else {

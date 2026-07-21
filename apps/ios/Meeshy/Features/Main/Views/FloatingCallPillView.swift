@@ -203,7 +203,14 @@ struct FloatingCallPillView: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(pillStatus.isConnected ? formattedDuration : pillStatus.label)
+        // When connected the line otherwise reads to VoiceOver as a bare
+        // "02:34" with no hint it is the call duration. Name what the readout
+        // measures via the label and expose the running time as the value;
+        // pre-connection states keep their spoken status ("Sonnerie…").
+        .accessibilityLabel(pillStatus.isConnected
+            ? String(localized: "a11y.call.pill.duration", defaultValue: "Dur\u{00E9}e d'appel", bundle: .main)
+            : pillStatus.label)
+        .accessibilityValue(pillStatus.isConnected ? formattedDuration : "")
         .accessibilityAddTraits(.updatesFrequently)
     }
 

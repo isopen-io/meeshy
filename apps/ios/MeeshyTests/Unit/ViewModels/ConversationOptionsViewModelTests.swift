@@ -100,6 +100,15 @@ final class ConversationOptionsViewModelTests: XCTestCase {
         XCTAssertEqual(s.vm.loadState, .loaded)
     }
 
+    /// Guards against re-introducing a local `LoadState` enum that shadows
+    /// `MeeshySDK.LoadState` (loses `.cachedStale`/`.cachedFresh`/`.offline`).
+    /// This only compiles if `loadState` is truly typed as the SDK enum.
+    func test_loadState_isSDKLoadStateType_notLocalShadow() {
+        let s = makeSUT()
+        let value: LoadState = s.vm.loadState
+        XCTAssertEqual(value, .idle)
+    }
+
     func test_load_metadataFailure_setsErrorStateWhenNoCacheShown() async {
         let p = MockPreferenceService()
         p.getCategoriesResult = .failure(NSError(domain: "x", code: 1))

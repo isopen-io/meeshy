@@ -48,6 +48,7 @@ struct AudioBubbleRouter: View {
     let accentColorHex: String
     let transcription: MessageTranscription?
     let translatedAudios: [MessageTranslatedAudio]
+    let initialTranscriptionLanguage: String?
     let onFullscreen: (() -> Void)?
     let onRequestTranscription: (() -> Void)?
     let onRetranscribe: (() -> Void)?
@@ -82,6 +83,7 @@ struct AudioBubbleRouter: View {
         accentColorHex: String,
         transcription: MessageTranscription? = nil,
         translatedAudios: [MessageTranslatedAudio] = [],
+        initialTranscriptionLanguage: String? = nil,
         onFullscreen: (() -> Void)? = nil,
         onRequestTranscription: (() -> Void)? = nil,
         onRetranscribe: (() -> Void)? = nil,
@@ -99,6 +101,7 @@ struct AudioBubbleRouter: View {
         self.accentColorHex = accentColorHex
         self.transcription = transcription
         self.translatedAudios = translatedAudios
+        self.initialTranscriptionLanguage = initialTranscriptionLanguage
         self.onFullscreen = onFullscreen
         self.onRequestTranscription = onRequestTranscription
         self.onRetranscribe = onRetranscribe
@@ -138,6 +141,7 @@ struct AudioBubbleRouter: View {
             accentColorHex: accentColorHex,
             transcription: transcription,
             translatedAudios: translatedAudios,
+            initialTranscriptionLanguage: initialTranscriptionLanguage,
             onFullscreen: onFullscreen,
             onRequestTranscription: onRequestTranscription,
             onRetranscribe: onRetranscribe,
@@ -172,6 +176,7 @@ private struct AudioBubbleContent: View {
     let accentColorHex: String
     let transcription: MessageTranscription?
     let translatedAudios: [MessageTranslatedAudio]
+    let initialTranscriptionLanguage: String?
     let onFullscreen: (() -> Void)?
     let onRequestTranscription: (() -> Void)?
     let onRetranscribe: (() -> Void)?
@@ -198,6 +203,7 @@ private struct AudioBubbleContent: View {
                 accentColor: accentColorHex,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: initialTranscriptionLanguage,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,
@@ -217,6 +223,7 @@ private struct AudioBubbleContent: View {
                 accentColor: accentColorHex,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: initialTranscriptionLanguage,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,
@@ -235,6 +242,7 @@ private struct AudioBubbleContent: View {
                 accentColor: accentColorHex,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: initialTranscriptionLanguage,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,
@@ -253,6 +261,7 @@ private struct AudioBubbleContent: View {
                 accentColor: accentColorHex,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
+                initialTranscriptionLanguage: initialTranscriptionLanguage,
                 onFullscreen: onFullscreen,
                 onRequestTranscription: onRequestTranscription,
                 onRetranscribe: onRetranscribe,

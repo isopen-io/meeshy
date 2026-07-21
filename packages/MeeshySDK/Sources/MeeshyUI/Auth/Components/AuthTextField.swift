@@ -84,7 +84,7 @@ public struct AuthTextField: View {
                     .padding(.leading, 4)
             }
         }
-        .onChange(of: text) { newValue in
+        .adaptiveOnChange(of: text) { _, newValue in
             if let validation {
                 validationError = validation(newValue)
             }

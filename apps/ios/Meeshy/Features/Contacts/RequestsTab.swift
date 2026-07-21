@@ -280,17 +280,6 @@ struct RequestsTab: View {
     // MARK: - Empty State
 
     private func emptyState(icon: String, text: String) -> some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: icon)
-                .font(.system(.largeTitle).weight(.light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textMuted)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+        EmptyStateView(icon: icon, title: text, subtitle: "")
     }
 }

@@ -21,6 +21,14 @@ public struct CachedAsyncImage<Placeholder: View>: View {
     /// read as UI chrome bleeding through the content. Defaults to `true`
     /// (existing behaviour).
     public let showsStatusOverlays: Bool
+    /// When `true`, bypasses `MediaDownloadPolicy` and always fetches over the
+    /// network — mirrors `ProgressiveCachedImage.autoLoad`. A manual, explicit
+    /// user action (opening the fullscreen viewer) overrides the ambient
+    /// auto-download gate (contract §14.1: "un tap manuel outrepasse la
+    /// politique réseau") — without this the fullscreen spinner never
+    /// resolves in Low Data Mode / data-saver conditions. Defaults to `false`
+    /// (existing gated behaviour for inline bubble thumbnails).
+    public let autoLoad: Bool
     public let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
@@ -34,12 +42,14 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         targetSize: CGSize? = nil,
         thumbHash: String? = nil,
         showsStatusOverlays: Bool = true,
+        autoLoad: Bool = false,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.urlString = urlString
         self.targetSize = targetSize
         self.thumbHash = thumbHash
         self.showsStatusOverlays = showsStatusOverlays
+        self.autoLoad = autoLoad
         self.placeholder = placeholder
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
@@ -157,10 +167,13 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         //    by `cacheImageForPreview`) is just a disk read. Gating would force
         //    the user to wait until network conditions improve to see media
         //    they already have on device.
-        if !Self.isLocalFileURL(resolved),
-           CacheCoordinator.imageLocalFileURL(for: resolved) == nil,
-           DiskCacheStore.cachedImage(for: resolved) == nil,
-           !MediaDownloadPolicy.shouldAutoLoadImage() { return }
+        if MediaFetchGate.shouldSkipNetworkFetch(
+            autoLoad: autoLoad,
+            isLocalFileURL: Self.isLocalFileURL(resolved),
+            hasLocalCacheHit: CacheCoordinator.imageLocalFileURL(for: resolved) != nil
+                || DiskCacheStore.cachedImage(for: resolved) != nil,
+            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
+        ) { return }
 
         isLoading = true; hasFailed = false
         let loaded: UIImage?
@@ -193,6 +206,26 @@ enum MediaDownloadPolicy {
             condition: NetworkConditionMonitor.shared.condition,
             prefs: MediaDownloadPreferencesStore.shared.preferences
         )
+    }
+}
+
+/// Pure, synchronous decision extracted from the network-fetch gate that used
+/// to be copy-pasted 3× (`CachedAsyncImage.loadImage`,
+/// `ProgressiveCachedImage.loadThumbnail`, `.loadFullImage`). Every signal is
+/// a plain parameter — no singleton reads inside the gate itself — so the
+/// "cache → policy → download" cascade is expressed in exactly one place and
+/// is unit-testable without MainActor/SwiftUI hosting (SDK-purity: callers
+/// still resolve `policyAllowsAutoLoad` via `MediaDownloadPolicy`, an already
+/// SDK-legitimate composition of `MediaDownloadPolicyEngine` +
+/// `NetworkConditionMonitor` + `MediaDownloadPreferencesStore`).
+enum MediaFetchGate {
+    nonisolated static func shouldSkipNetworkFetch(
+        autoLoad: Bool,
+        isLocalFileURL: Bool,
+        hasLocalCacheHit: Bool,
+        policyAllowsAutoLoad: Bool
+    ) -> Bool {
+        !autoLoad && !isLocalFileURL && !hasLocalCacheHit && !policyAllowsAutoLoad
     }
 }
 
@@ -327,11 +360,29 @@ public struct CachedBannerImage: View {
         }
     }
 
+    /// Banners are laid out with a fixed `height` via `.frame(height:).clipped()`
+    /// but NO width constraint — every known call site (`ProfileView`,
+    /// `CommunityListView`, `CommunityDetailView`,
+    /// `ConversationListHelpers.ThemedCommunityCard`) stretches the view to
+    /// fill its container's width, which is at minimum comparable to, and
+    /// often much larger than, `height`. `kCGImageSourceThumbnailMaxPixelSize`
+    /// (used by `DiskCacheStore.downsampledImage`) bounds the LARGER of the
+    /// two rendered dimensions, so deriving the cap from `height` alone
+    /// starves the image on its actually-dominant width axis, producing a
+    /// visibly blurrier upscale than the pipeline's prior flat 1200px cap.
+    /// Anchoring on the device's screen width (this file has no visibility
+    /// into any per-call-site container width) restores parity with that
+    /// baseline for full-bleed banners.
+    @MainActor private static func pixelSize(for height: CGFloat) -> CGFloat {
+        max(UIScreen.main.bounds.width, height) * UIScreen.main.scale
+    }
+
     private func loadBanner(for currentUrlString: String?) async {
         guard let currentUrlString, !currentUrlString.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
-        if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
+        let maxPixel = Self.pixelSize(for: height)
+        if let loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel) {
             if self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) {
                     self.image = loaded
@@ -482,11 +533,13 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         // download trigger. `file://` URLs and on-disk hits bypass the gate:
         // they are zero-network reads. `autoLoad` also bypasses the gate so
         // Feed/Posts/Stories don't leave the thumbHash visible indefinitely.
-        if !autoLoad,
-           !ProgressiveCachedImage.isLocalFileURL(resolved),
-           CacheCoordinator.imageLocalFileURL(for: resolved) == nil,
-           DiskCacheStore.cachedImage(for: resolved) == nil,
-           !MediaDownloadPolicy.shouldAutoLoadImage() {
+        if MediaFetchGate.shouldSkipNetworkFetch(
+            autoLoad: autoLoad,
+            isLocalFileURL: ProgressiveCachedImage.isLocalFileURL(resolved),
+            hasLocalCacheHit: CacheCoordinator.imageLocalFileURL(for: resolved) != nil
+                || DiskCacheStore.cachedImage(for: resolved) != nil,
+            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
+        ) {
             return
         }
         if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
@@ -506,11 +559,13 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         // trigger an explicit download. `file://` URLs and on-disk hits
         // bypass the gate: they are zero-network reads. `autoLoad` also
         // bypasses the gate (Feed/Posts/Stories want eager display).
-        if !autoLoad,
-           !ProgressiveCachedImage.isLocalFileURL(resolved),
-           CacheCoordinator.imageLocalFileURL(for: resolved) == nil,
-           DiskCacheStore.cachedImage(for: resolved) == nil,
-           !MediaDownloadPolicy.shouldAutoLoadImage() {
+        if MediaFetchGate.shouldSkipNetworkFetch(
+            autoLoad: autoLoad,
+            isLocalFileURL: ProgressiveCachedImage.isLocalFileURL(resolved),
+            hasLocalCacheHit: CacheCoordinator.imageLocalFileURL(for: resolved) != nil
+                || DiskCacheStore.cachedImage(for: resolved) != nil,
+            policyAllowsAutoLoad: MediaDownloadPolicy.shouldAutoLoadImage()
+        ) {
             return
         }
         let loaded: UIImage?

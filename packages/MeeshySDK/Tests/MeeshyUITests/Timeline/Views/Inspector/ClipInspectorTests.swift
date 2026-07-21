@@ -68,6 +68,18 @@ final class ClipInspectorTests: XCTestCase {
         XCTAssertEqual(ClipInspector.formatTime(seconds: 65.25), "1:05.250")
     }
 
+    /// `ClipInspector.formatTime` MUST delegate to `TransportBar.formatTime`
+    /// (SSOT) rather than re-deriving the same formula — guards against the
+    /// two forking apart again.
+    func test_formatTime_delegatesToTransportBarFormatTime() {
+        for seconds: Float in [0, 0.5, 59.999, 65.25, 3600.1] {
+            XCTAssertEqual(
+                ClipInspector.formatTime(seconds: seconds),
+                TransportBar.formatTime(seconds: seconds)
+            )
+        }
+    }
+
     func test_volumeChanged_invokesCallback() {
         var captured: Float?
         let inspector = ClipInspector(

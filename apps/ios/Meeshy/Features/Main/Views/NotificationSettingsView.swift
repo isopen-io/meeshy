@@ -196,30 +196,20 @@ struct NotificationSettingsView: View {
                         keyPath: \.dndEnabled)
 
             settingsRow(icon: "clock.fill", title: String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main), color: MeeshyColors.infoHex) {
-                TextField("", text: Binding(
-                    get: { prefs.notification.dndStartTime },
-                    set: { val in prefs.updateNotification { $0.dndStartTime = val } }
-                ))
-                .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(Color(hex: accentColor))
-                .multilineTextAlignment(.trailing)
-                .frame(width: 60)
-                // The visible row title is a sibling element (row is not `.combine`d, so the
-                // Toggle rows stay tappable) → VoiceOver would announce only the field value
-                // ("22:00") with no context. Label mirrors the sibling toggles' pattern.
-                .accessibilityLabel(String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main))
+                DatePicker("", selection: dndTimeBinding(\.dndStartTime), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+                    // The visible row title is a sibling element (row is not `.combine`d, so the
+                    // Toggle rows stay tappable) → VoiceOver would announce only the field value
+                    // ("22:00") with no context. Label mirrors the sibling toggles' pattern.
+                    .accessibilityLabel(String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main))
             }
 
             settingsRow(icon: "clock.badge.checkmark", title: String(localized: "settings.notifications.dnd_end", defaultValue: "Heure fin", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
-                TextField("", text: Binding(
-                    get: { prefs.notification.dndEndTime },
-                    set: { val in prefs.updateNotification { $0.dndEndTime = val } }
-                ))
-                .font(MeeshyFont.relative(14, weight: .medium))
-                .foregroundColor(Color(hex: accentColor))
-                .multilineTextAlignment(.trailing)
-                .frame(width: 60)
-                .accessibilityLabel(String(localized: "settings.notifications.dnd_end", defaultValue: "Heure fin", bundle: .main))
+                DatePicker("", selection: dndTimeBinding(\.dndEndTime), displayedComponents: .hourAndMinute)
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+                    .accessibilityLabel(String(localized: "settings.notifications.dnd_end", defaultValue: "Heure fin", bundle: .main))
             }
 
             settingsRow(icon: "calendar", title: String(localized: "settings.notifications.dnd_days", defaultValue: "Jours", bundle: .main), color: MeeshyColors.warningHex) {
@@ -259,6 +249,46 @@ struct NotificationSettingsView: View {
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
+    }
+
+    // MARK: - DnD Time (DatePicker ↔ "HH:mm" persistence)
+
+    /// Pilote un `DatePicker(.hourAndMinute)` sur un champ `String` "HH:mm"
+    /// (`dndStartTime`/`dndEndTime`) — remplace l'ancien `TextField` libre
+    /// dont toute saisie ≠ "HH:mm" désactivait silencieusement la fenêtre
+    /// DnD (`UserNotificationPreferences+Filter.parseTime`, strict).
+    private func dndTimeBinding(_ keyPath: WritableKeyPath<UserNotificationPreferences, String>) -> Binding<Date> {
+        Binding(
+            get: { Self.dndDate(from: prefs.notification[keyPath: keyPath]) },
+            set: { newDate in
+                prefs.updateNotification { $0[keyPath: keyPath] = Self.formattedDndTime(from: newDate) }
+            }
+        )
+    }
+
+    /// Parse "HH:mm" en `Date` ancrée sur `referenceDate`, pour piloter le
+    /// DatePicker. Retombe sur minuit si la chaîne est invalide (migration
+    /// depuis une valeur posée par l'ancien TextField libre).
+    /// `nonisolated`: pure, no actor-isolated state.
+    nonisolated static func dndDate(from hhmm: String, referenceDate: Date = Date(), calendar: Calendar = .current) -> Date {
+        let components = hhmm.split(separator: ":")
+        guard components.count == 2,
+              let hour = Int(components[0]), (0...23).contains(hour),
+              let minute = Int(components[1]), (0...59).contains(minute) else {
+            return calendar.startOfDay(for: referenceDate)
+        }
+        return calendar.date(bySettingHour: hour, minute: minute, second: 0, of: referenceDate)
+            ?? calendar.startOfDay(for: referenceDate)
+    }
+
+    /// Formate une `Date` en "HH:mm" (2 chiffres chacun) pour persistance —
+    /// symétrique de `dndDate(from:)`, matche le format lu par
+    /// `UserNotificationPreferences.isInDoNotDisturbWindow`.
+    /// `nonisolated`: pure, no actor-isolated state.
+    nonisolated static func formattedDndTime(from date: Date, calendar: Calendar = .current) -> String {
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        return String(format: "%02d:%02d", hour, minute)
     }
 
     // MARK: - Helpers

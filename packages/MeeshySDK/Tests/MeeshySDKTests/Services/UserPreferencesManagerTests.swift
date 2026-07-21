@@ -14,51 +14,12 @@ final class UserPreferencesManagerTests: XCTestCase {
         super.setUp()
         manager = UserPreferencesManager.shared
         manager.resetToDefaults()
-    }
-
-    // MARK: - shouldAutoDownloadMedia
-
-    func test_shouldAutoDownloadMedia_defaultsToFalse() {
-        XCTAssertFalse(manager.shouldAutoDownloadMedia)
-    }
-
-    func test_shouldAutoDownloadMedia_afterEnabling_returnsTrue() {
-        manager.updateDocument { $0.autoDownloadEnabled = true }
-        XCTAssertTrue(manager.shouldAutoDownloadMedia)
-    }
-
-    // MARK: - shouldAutoDownload(fileSizeMB:)
-
-    func test_shouldAutoDownload_whenDisabled_returnsFalse() {
-        manager.updateDocument { $0.autoDownloadEnabled = false }
-        XCTAssertFalse(manager.shouldAutoDownload(fileSizeMB: 1))
-    }
-
-    func test_shouldAutoDownload_withinMaxSize_returnsTrue() {
-        manager.updateDocument {
-            $0.autoDownloadEnabled = true
-            $0.autoDownloadMaxSize = 10
-        }
-        XCTAssertTrue(manager.shouldAutoDownload(fileSizeMB: 5))
-        XCTAssertTrue(manager.shouldAutoDownload(fileSizeMB: 10))
-    }
-
-    func test_shouldAutoDownload_exceedsMaxSize_returnsFalse() {
-        manager.updateDocument {
-            $0.autoDownloadEnabled = true
-            $0.autoDownloadMaxSize = 10
-        }
-        XCTAssertFalse(manager.shouldAutoDownload(fileSizeMB: 11))
-    }
-
-    func test_shouldAutoDownload_zeroFileSize_returnsTrue() {
-        manager.updateDocument { $0.autoDownloadEnabled = true }
-        XCTAssertTrue(manager.shouldAutoDownload(fileSizeMB: 0))
-    }
-
-    func test_shouldAutoDownload_negativeFileSize_returnsTrue() {
-        manager.updateDocument { $0.autoDownloadEnabled = true }
-        XCTAssertTrue(manager.shouldAutoDownload(fileSizeMB: -1))
+        // Test-only cleanup: a previous test's `scheduleSyncToBackend` may
+        // still be inside its 1s debounce when this test starts (no network
+        // in this suite, so `resetToDefaults()` doesn't touch it). Without
+        // this, `pendingCategories` from a prior test leaks into this one's
+        // `shouldApplyRemote`/`applyRemote`-adjacent assertions.
+        manager.pendingCategories.removeAll()
     }
 
     // MARK: - resetToDefaults
@@ -190,5 +151,49 @@ final class UserPreferencesManagerTests: XCTestCase {
         manager.grantVoiceAutoTranslationConsent(now: first.addingTimeInterval(3600))
 
         XCTAssertEqual(manager.application.voiceProfileConsentAt, stamped)
+    }
+
+    // MARK: - shouldApplyRemote (applyRemote server-wins race, P1)
+    //
+    // `applyRemote` itself is private and only reachable through
+    // `fetchFromBackend()`, which hits the real (non-injectable)
+    // `PreferenceService.shared` — so the merge DECISION is extracted to a
+    // pure static function and tested directly (same "extract the pure
+    // core" pattern as `StoryViewerView.rollingBackOptimisticComment`).
+
+    func test_shouldApplyRemote_categoryNotPending_returnsTrue() {
+        XCTAssertTrue(UserPreferencesManager.shouldApplyRemote(.privacy, pendingCategories: []))
+    }
+
+    func test_shouldApplyRemote_categoryPending_returnsFalse() {
+        XCTAssertFalse(UserPreferencesManager.shouldApplyRemote(.privacy, pendingCategories: [.privacy]))
+    }
+
+    func test_shouldApplyRemote_otherCategoryPending_returnsTrue() {
+        XCTAssertTrue(UserPreferencesManager.shouldApplyRemote(.privacy, pendingCategories: [.audio]))
+    }
+
+    // MARK: - pendingCategories wiring (scheduleSyncToBackend / syncCategoryToBackend)
+
+    func test_updatePrivacy_marksCategoryPendingSynchronously() {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+
+        XCTAssertTrue(manager.pendingCategories.contains(.privacy), "scheduleSyncToBackend marks the category pending BEFORE the 1s debounce, synchronously")
+    }
+
+    func test_updateAudio_onlyMarksItsOwnCategoryPending() {
+        manager.updateAudio { $0.noiseSuppression = false }
+
+        XCTAssertTrue(manager.pendingCategories.contains(.audio))
+        XCTAssertFalse(manager.pendingCategories.contains(.privacy))
+    }
+
+    func test_resetSession_clearsPendingCategories() {
+        manager.updatePrivacy { $0.showOnlineStatus = false }
+        XCTAssertFalse(manager.pendingCategories.isEmpty, "precondition: a pending category exists")
+
+        manager.resetSession()
+
+        XCTAssertTrue(manager.pendingCategories.isEmpty)
     }
 }
