@@ -14,9 +14,11 @@ describe('validatePagination', () => {
     expect(validatePagination('40', '50')).toEqual({ offset: 40, limit: 50 });
   });
 
-  it('falls back to defaultLimit when limit is missing or unparsable', () => {
+  it('falls back to defaultLimit ONLY when limit is missing or unparsable', () => {
     expect(validatePagination('0', undefined, { defaultLimit: 50 }).limit).toBe(50);
     expect(validatePagination('0', 'abc', { defaultLimit: 50 }).limit).toBe(50);
+    // An empty string is unparsable → default, not the minimum.
+    expect(validatePagination('0', '', { defaultLimit: 50 }).limit).toBe(50);
   });
 
   it('clamps limit to maxLimit', () => {
@@ -24,8 +26,13 @@ describe('validatePagination', () => {
     expect(validatePagination('0', '80', { maxLimit: 50 }).limit).toBe(50);
   });
 
-  it('enforces a minimum limit of 1', () => {
-    expect(validatePagination('0', '0').limit).toBe(20);
+  it('enforces a minimum limit of 1 for explicit below-minimum values', () => {
+    // An EXPLICIT limit below the minimum (0 or negative) is a parsable value,
+    // not a missing one — it clamps to the floor (1), never to defaultLimit.
+    // Before this fix `'0'` was falsy-coerced to defaultLimit (20) while `'-5'`
+    // clamped to 1: two below-minimum inputs treated inconsistently.
+    expect(validatePagination('0', '0').limit).toBe(1);
+    expect(validatePagination('0', '0', { defaultLimit: 50 }).limit).toBe(1);
     expect(validatePagination('0', '-5').limit).toBe(1);
   });
 

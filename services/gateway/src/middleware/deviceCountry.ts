@@ -21,6 +21,14 @@ import { logger } from '../utils/logger';
 /** Minimum delay between two `User.deviceCountry` writes for the same user. */
 const DEBOUNCE_MS = 5 * 60 * 1000;
 
+/**
+ * Hard ceiling on the number of tracked users. Beyond it the debounce map is
+ * swept (see {@link pruneStaleDebounceEntries}) before the next insert so the
+ * per-process footprint stays bounded no matter how many distinct users the
+ * gateway serves over its lifetime.
+ */
+const MAX_TRACKED_USERS = 10_000;
+
 /** Per-process map: userId → last successful write timestamp (ms). */
 const lastUpdateByUserId = new Map<string, number>();
 
@@ -31,6 +39,33 @@ function normalizeCountryCode(header: string): string | undefined {
   const trimmed = header.trim();
   if (!COUNTRY_CODE_PATTERN.test(trimmed)) return undefined;
   return trimmed.toUpperCase();
+}
+
+/**
+ * Evict debounce entries that have aged past the window, then hard-cap the map.
+ *
+ * An entry older than {@link DEBOUNCE_MS} can never suppress a write — the
+ * debounce check (`now - last < DEBOUNCE_MS`) always fails for it — so it is
+ * dead weight and dropping it is strictly behaviour-preserving. Without this
+ * sweep the map grew one entry per distinct authenticated user for the entire
+ * process lifetime (an unbounded slow leak on a 100k+ user platform).
+ *
+ * The sweep runs only when the map crosses {@link MAX_TRACKED_USERS}, so its
+ * O(n) cost is amortised across ≥`MAX_TRACKED_USERS` writes. In the
+ * pathological case where more than `MAX_TRACKED_USERS` distinct users all
+ * wrote inside the window (every entry still fresh), memory is bounded hard by
+ * dropping oldest-inserted entries; the only consequence is that an evicted
+ * user may incur one extra (idempotent) `User.update` on its next request.
+ */
+function pruneStaleDebounceEntries(now: number): void {
+  for (const [id, ts] of lastUpdateByUserId) {
+    if (now - ts >= DEBOUNCE_MS) lastUpdateByUserId.delete(id);
+  }
+  while (lastUpdateByUserId.size >= MAX_TRACKED_USERS) {
+    const oldest = lastUpdateByUserId.keys().next().value;
+    if (oldest === undefined) break;
+    lastUpdateByUserId.delete(oldest);
+  }
 }
 
 /**
@@ -48,6 +83,18 @@ export function _resetDeviceCountryCache(): void {
 export function _seedDeviceCountryCache(userId: string, timestamp: number): void {
   lastUpdateByUserId.set(userId, timestamp);
 }
+
+/**
+ * Test-only seam: current number of tracked users in the debounce cache. Lets
+ * tests assert the bounded-growth / eviction behaviour without exposing the
+ * internal map.
+ */
+export function _deviceCountryCacheSize(): number {
+  return lastUpdateByUserId.size;
+}
+
+/** Test-only seam: the hard cap used by the eviction sweep. */
+export const _DEVICE_COUNTRY_MAX_TRACKED_USERS = MAX_TRACKED_USERS;
 
 type DeviceCountryUser = {
   id?: string;
@@ -119,6 +166,9 @@ export async function deviceCountryMiddleware(
       where: { id: userId },
       data: { deviceCountry: normalized },
     });
+    if (!lastUpdateByUserId.has(userId) && lastUpdateByUserId.size >= MAX_TRACKED_USERS) {
+      pruneStaleDebounceEntries(now);
+    }
     lastUpdateByUserId.set(userId, now);
   } catch (err) {
     // Best-effort: NEVER break a request because a preference write

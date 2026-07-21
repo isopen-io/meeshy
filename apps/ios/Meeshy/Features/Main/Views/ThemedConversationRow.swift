@@ -240,6 +240,10 @@ struct ThemedConversationRow: View {
             : "")
         .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
         .accessibilityAddTraits(.isButton)
+        // iPad/macOS split-view : la ligne active est signalée par le VISUEL seul
+        // (teinte accent + barre latérale + bordure) — invisible pour VoiceOver.
+        // Trait `.isSelected` pour annoncer « …, sélectionné » (WCAG 1.4.1).
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private var conversationAccessibilityLabel: String {

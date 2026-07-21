@@ -6,6 +6,7 @@
  *   GET /admin/users/:userId/media
  *   GET /admin/users/:userId/reports
  *   GET /admin/users/:userId/reported-messages
+ *   GET /admin/conversations/:conversationId/messages
  *
  * Covers permission gating, 404 on unknown user, and the response shape
  * (pagination + membership flattening / media merge / report+message join).
@@ -45,6 +46,7 @@ type PrismaOpts = {
   participants?: AnyRecord[];
   participantsCount?: number;
   messages?: AnyRecord[];
+  messagesCount?: number;
   conversationExists?: boolean;
 };
 
@@ -76,6 +78,7 @@ function createMockPrisma(opts: PrismaOpts) {
     },
     message: {
       findMany: jest.fn(async () => opts.messages ?? []),
+      count: jest.fn(async () => opts.messagesCount ?? (opts.messages?.length ?? 0)),
     },
   } as unknown as PrismaClient;
 }
@@ -304,6 +307,84 @@ describe('GET /admin/users/:userId/reported-messages', () => {
     expect(body.data).toHaveLength(1);
     expect(body.data[0]).toMatchObject({ id: 'r1', reportType: 'harassment' });
     expect(body.data[0].message).toMatchObject({ id: 'm1', content: 'bad message' });
+    await app.close();
+  });
+});
+
+describe('GET /admin/conversations/:conversationId/messages', () => {
+  it('returns 403 for a role without canViewUsers (USER)', async () => {
+    const app = await buildApp(createMockPrisma({}), 'USER');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/messages',
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('returns 404 when the conversation does not exist', async () => {
+    const app = await buildApp(createMockPrisma({ conversationExists: false }), 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/messages',
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('returns the paginated messages with their sender (deleted ones included)', async () => {
+    const prisma = createMockPrisma({
+      messages: [
+        {
+          id: 'm2',
+          content: 'latest message',
+          originalLanguage: 'fr',
+          messageType: 'text',
+          messageSource: 'user',
+          isEdited: false,
+          editedAt: null,
+          deletedAt: null,
+          replyToId: null,
+          createdAt: new Date('2026-06-02').toISOString(),
+          sender: { id: 'pt1', userId: 'u1', type: 'user', displayName: 'Alice', avatar: null, nickname: null, user: { id: 'u1', username: 'alice', displayName: 'Alice', avatar: null } },
+          _count: { attachments: 2 },
+        },
+        {
+          id: 'm1',
+          content: 'older, deleted',
+          originalLanguage: 'en',
+          messageType: 'text',
+          messageSource: 'user',
+          isEdited: true,
+          editedAt: new Date('2026-06-01').toISOString(),
+          deletedAt: new Date('2026-06-01').toISOString(),
+          replyToId: null,
+          createdAt: new Date('2026-06-01').toISOString(),
+          sender: { id: 'pt2', userId: 'u2', type: 'user', displayName: 'Bob', avatar: null, nickname: null, user: { id: 'u2', username: 'bob', displayName: 'Bob', avatar: null } },
+          _count: { attachments: 0 },
+        },
+      ],
+      messagesCount: 42,
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/messages?offset=0&limit=30',
+      headers: { authorization: 'Bearer x' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.data).toHaveLength(2);
+    expect(body.data[0]).toMatchObject({ id: 'm2', content: 'latest message' });
+    expect(body.data[0].sender).toMatchObject({ userId: 'u1' });
+    expect(body.data[0].sender.user).toMatchObject({ username: 'alice' });
+    expect(body.data[0].attachmentCount).toBe(2);
+    expect(body.data[1]).toMatchObject({ id: 'm1', isEdited: true });
+    expect(body.data[1].deletedAt).not.toBeNull();
+    expect(body.pagination).toMatchObject({ total: 42, offset: 0, limit: 30, hasMore: true });
     await app.close();
   });
 });

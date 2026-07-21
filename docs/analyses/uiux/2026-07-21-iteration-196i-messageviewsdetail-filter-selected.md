@@ -1,4 +1,4 @@
-# Iteration-195i — VoiceOver selected-state for `MessageViewsDetailView` sub-filter capsules
+# Iteration-196i — VoiceOver selected-state for `MessageViewsDetailView` sub-filter capsules
 
 **Date:** 2026-07-20
 **Scope:** iOS only
