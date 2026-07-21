@@ -404,10 +404,6 @@ struct FeedView: View {
     private func sharePostWithLink(postId: String) {
         guard !postShareInFlightIds.contains(postId) else { return }
         postShareInFlightIds.insert(postId)
-        // Optimistic share counter bump — the gateway always increments
-        // shareCount on POST /posts/:id/share regardless of mint success,
-        // so we mirror that even when we fall back to the raw URL.
-        postShareDelta[postId, default: 0] += 1
         Task {
             defer {
                 Task { @MainActor in
@@ -416,12 +412,19 @@ struct FeedView: View {
             }
             if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
                let url = URL(string: shortUrl) {
+                // Bump AFTER the confirmed REST success — `sharePost` only
+                // returns non-nil once the gateway actually recorded the
+                // share (and incremented `shareCount`). Bumping beforehand
+                // left the counter permanently inflated whenever the REST
+                // call failed, because the raw-URL fallback below almost
+                // always succeeds and the old "undo" branch never ran.
+                postShareDelta[postId, default: 0] += 1
                 shareableLink = ShareableLink(url: url)
             } else if let raw = ShareableLink.fallback(forPostId: postId) {
+                // `sharePost` already surfaced an error toast; the gateway
+                // never recorded this share, so no counter bump — the user
+                // can still forward the raw (untracked) post link.
                 shareableLink = raw
-            } else {
-                // Both REST and fallback failed → undo the optimistic bump.
-                postShareDelta[postId, default: 0] -= 1
             }
         }
     }
@@ -432,6 +435,20 @@ struct FeedView: View {
     }
 
     private var posts: [FeedPost] { viewModel.posts }
+
+    /// Fingerprint of the like/bookmark/repost "by me" flags across the
+    /// loaded feed, used ONLY to drive the re-seeding `adaptiveOnChange`
+    /// below. `FeedPost: Equatable` is intentionally id-only (it powers
+    /// `.equatable()` list-row diffing) — observing `viewModel.posts`
+    /// directly there silently skipped re-seeding whenever a refresh
+    /// returned the SAME post ids with DIFFERENT flags (e.g. a repost
+    /// confirmed on another device, or a stale-then-fresh cache pass): the
+    /// repost/bookmark icon stayed unfilled forever because `[FeedPost]`
+    /// compared "unchanged". This fingerprint changes whenever any flag
+    /// does, independent of the id-only `Equatable`.
+    private var feedFlagsFingerprint: [String] {
+        viewModel.posts.map { "\($0.id)|\($0.isLiked)|\($0.isBookmarkedByMe)|\($0.isRepostedByMe)" }
+    }
 
     private var newPostsBannerText: String {
         let count = viewModel.newPostsCount
@@ -1015,7 +1032,8 @@ struct FeedView: View {
             // iPhone feed). Cheap no-op when already loaded by iPadRootView.
             await storyViewModel.loadStories()
         }
-        .adaptiveOnChange(of: viewModel.posts) { _, newPosts in
+        .adaptiveOnChange(of: feedFlagsFingerprint) { _, _ in
+            let newPosts = viewModel.posts
             // Merge liked / bookmarked / reposted state when new pages
             // arrive. Only seed posts not yet tracked to avoid overwriting
             // optimistic state from in-flight toggles.
