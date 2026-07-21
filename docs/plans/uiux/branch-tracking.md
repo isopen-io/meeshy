@@ -96,6 +96,34 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   glyphe masqué / chip combiné — soldé 197i). Sibling restant même idiome : `UniversalComposerBar+Attachments.swift`
 >   (l.62, même label générique — fichier distinct, vérifier contention).
 > - **Base de départ 198i : `main` HEAD** (après merge, supprimer la branche).
+> **POINTEUR AUTORITAIRE iOS (mis à jour 199i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
+> - **Contexte essaim** : PR iOS ouvertes jusqu'à **198i** (#2209 `OnboardingView` language step).
+>   Numéro **199i** choisi strictement > plus haut en vol (198i). Base resync `main` HEAD `81d9c6b`
+>   (#2210 Android CountryCatalog mergé — hors scope iOS).
+> - **199i (branche `claude/laughing-thompson-9alos2`, base `main` HEAD `81d9c6b`)** :
+>   Accent-color doctrine pour `ConversationPreferencesTab` (onglet « Préférences » de
+>   `ConversationInfoSheet`). La section phare **« My display »** (nom personnalisé + réaction
+>   par défaut) codait en dur le hex brut **`A855F7`** (Tailwind purple-500, off-brand) en **4
+>   endroits** (l.159 `settingsSection(color:)` → en-tête + dégradé carte + bordure ; l.166/168
+>   badge icône `pencil` ; l.214 `settingsRow(iconColor:)` icône `heart.fill`) — **double
+>   violation** : (1) brand (échelle Indigo / sémantique obligatoire) ; (2) accent-color doctrine
+>   **impérative** (« ALL conversation-context components MUST use `accentColor`, never hardcode »)
+>   alors que le composant **détient** déjà `accentColor` (l.39) + `accent` (l.69). Défaut
+>   **explicitement différé par #2199** (195i) : « needs a design judgment call — not zero-diff ».
+>   Jugement tranché : la section de personnalisation adopte la **couleur d'accent de la
+>   conversation** (cible sémantiquement correcte, supérieure à un indigo statique). Fix = 4 swaps
+>   type-identiques (`"A855F7"` → `accentColor` / `accent`), 0 signature modifiée, 0 import.
+>   **Changement visuel assumé** (violet fixe → accent conversation = consolidation de marque
+>   délibérée, précédent 186i). 1 fichier, 4 lignes, 0 logique, 0 clé i18n, 0 SDK, 0 test (grep
+>   `ConversationPreferencesTab` dans `*Tests*` = 0). Gate = CI `iOS Tests`. PR à venir.
+> - **⚠️ `ConversationPreferencesTab` section « My display » SOLDÉ 199i** : ne plus reprendre.
+>   **Reste (1/itération, jugement de design distinct chacun)** : `organizationSection` `3B82F6`
+>   (incohérence interne — les toggles utilisent déjà `MeeshyColors.info`) ; `notificationsSection`
+>   `FF6B6B` (coral legacy) ; `actionsSection` en-tête `6B7280` (les icônes `F59E0B`/`F97316`/`F87171`
+>   sont sémantiques). Hors ce fichier (defect kind #4, hex brut vs token) : `UserStatsView`
+>   (l.86/89/90 `3498DB`/`F8B500`/`E91E63`), `FeedView`+`FeedView+Attachments` (`F8B500`/`9B59B6`),
+>   `AboutView` (l.103 `1C1917`).
+> - **Base de départ 200i : `main` HEAD** (après merge, supprimer la branche).
 >
 > **POINTEUR AUTORITAIRE iOS (mis à jour 183i, 2026-07-20)** — piste iOS indépendante (suffixe `i`).
 > - **183i (branche `claude/laughing-thompson-8vaq6w`, base `main` HEAD `64f943d`)** :
