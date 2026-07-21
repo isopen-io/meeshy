@@ -22,8 +22,8 @@ import CryptoKit
 /// unit-testable; the keychain read is injected as a closure.
 enum NSEDecryptor {
 
-    private static let appGroupId = "group.me.meeshy.apps"
-    private static let keychainService = "me.meeshy.app"
+    nonisolated private static let appGroupId = "group.me.meeshy.apps"
+    nonisolated private static let keychainService = "me.meeshy.app"
 
     /// Attempt to decrypt an E2EE message from the push payload.
     /// Returns the decrypted plaintext, or nil if decryption fails
@@ -108,7 +108,7 @@ enum NSEDecryptor {
     /// `me.meeshy.app`. Mirror of `NSEDataSync.sharedKeychainAccessGroup`
     /// (kept self-contained: `NSEDataSync` is not compiled into the test
     /// target, and its helper is private).
-    private static let sharedKeychainAccessGroup: String? = {
+    nonisolated private static let sharedKeychainAccessGroup: String? = {
         let discoveryQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: "_meeshy_nse_seed_discovery",
