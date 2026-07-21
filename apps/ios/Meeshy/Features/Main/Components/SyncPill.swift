@@ -80,7 +80,15 @@ struct SyncPill: View {
     @StateObject private var rotator = SyncPillRotator()
     @Environment(\.colorScheme) private var colorScheme
     @State private var dotPhase: Int = 0
-    private let dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+    // `@State` (not `let`) — a plain stored `let` re-evaluates its initializer
+    // on every reconstruction of this View value (every unrelated re-render
+    // of the parent ConnectionBanner), handing `.onReceive` a brand-new,
+    // not-yet-ticked Timer.publish().autoconnect() each time. If those
+    // reconstructions happen faster than the 0.5s interval, the publisher
+    // never survives long enough to fire and the dot pulse/ellipsis freeze.
+    // `@State`'s initial-value expression runs once per view identity, so the
+    // same connected publisher instance is preserved across re-renders.
+    @State private var dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     init(
         entries: [SyncPillEntry],
