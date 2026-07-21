@@ -136,6 +136,25 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         return (l2.items, Date().timeIntervalSince(l2.lastFetchedAt))
     }
 
+    /// Test-only seam: rewinds a key's freshness clock (L1 `loadedAt` +
+    /// persisted L2 `lastFetchedAt`) by `age` seconds without touching the
+    /// stored payload. `DBCacheMetadata` is SDK-internal, so integration
+    /// tests living outside this module (e.g. a `ConversationListViewModel`
+    /// test driving the real `CacheCoordinator.shared.conversations` store,
+    /// 24h TTL) have no other way to exercise `.stale`/`.expired` against a
+    /// singleton-backed store deterministically — waiting out the real TTL
+    /// isn't practical, and reaching into the private storage types isn't
+    /// possible from outside the module. No-op when `key` was never saved.
+    /// Never called from production code.
+    public func debugRewindFetchTimestamp(by age: TimeInterval, for key: Key) async {
+        let backdated = Date().addingTimeInterval(-age)
+        if var l1 = memoryCache[key] {
+            l1.loadedAt = backdated
+            memoryCache[key] = l1
+        }
+        rewriteL2FetchTimestamp(backdated, for: namespacedKey(key.description))
+    }
+
     public func update(for key: Key, mutate: @Sendable ([Value]) -> [Value]) async {
         if var l1 = memoryCache[key] {
             l1.items = mutate(l1.items)
@@ -486,6 +505,22 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         } catch {
             self.logger.error("Failed to load from L2 for key \(keyStr, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
+        }
+    }
+
+    /// Backing write for `debugRewindFetchTimestamp` — updates only the
+    /// `lastFetchedAt` column of an existing metadata row. No-op (does not
+    /// synthesize a row) when `keyStr` has no persisted metadata, mirroring
+    /// `loadIgnoringExpiry`'s "nil when never saved" contract.
+    private nonisolated func rewriteL2FetchTimestamp(_ date: Date, for keyStr: String) {
+        do {
+            try db.write { db in
+                guard var meta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db) else { return }
+                meta.lastFetchedAt = date
+                try meta.save(db)
+            }
+        } catch {
+            logger.error("Failed to rewind lastFetchedAt for key \(keyStr, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
     }
 

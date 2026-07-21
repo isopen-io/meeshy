@@ -142,4 +142,56 @@ final class GRDBCacheStoreFreshnessTests: XCTestCase {
 
         XCTAssertEqual(recovered?.items, [FreshnessTestItem(id: "1", name: "Alice")])
     }
+
+    // MARK: - debugRewindFetchTimestamp (test seam for `.expired` integration tests)
+    //
+    // `DBCacheMetadata` (the table backing `lastFetchedAt`) is SDK-internal,
+    // so a `CacheCoordinator.shared`-driven ViewModel test outside this
+    // module has no way to force a real, singleton-backed store (e.g. the
+    // 24h-TTL conversations store) into `.expired` short of waiting out the
+    // wall clock. This seam mirrors the private `backdateLastFetchedAt`
+    // helper above as a public, additive method so integration tests can
+    // drive that path deterministically.
+
+    func test_debugRewindFetchTimestamp_pastTTL_makesLoadReportExpiredButPayloadSurvives() async throws {
+        let db = try makeDB()
+        let store = makeStore(ttl: 1, staleTTL: 0.5, db: db)
+        try await store.save([FreshnessTestItem(id: "1", name: "Alice")], for: "k")
+
+        await store.debugRewindFetchTimestamp(by: 10, for: "k")
+
+        let result = await store.load(for: "k")
+        guard case .expired = result else {
+            return XCTFail("Expected .expired after rewinding lastFetchedAt past the TTL, got \(result)")
+        }
+        let recovered = await store.loadIgnoringExpiry(for: "k")
+        XCTAssertEqual(recovered?.items, [FreshnessTestItem(id: "1", name: "Alice")],
+                       "the payload must survive the rewind — only the freshness clock moves")
+    }
+
+    func test_debugRewindFetchTimestamp_afterL1Eviction_stillReportsExpiredFromL2() async throws {
+        let db = try makeDB()
+        let store = makeStore(ttl: 1, staleTTL: 0.5, db: db)
+        try await store.save([FreshnessTestItem(id: "1", name: "Alice")], for: "k")
+
+        await store.debugRewindFetchTimestamp(by: 10, for: "k")
+        await store.evictL1()
+
+        let result = await store.load(for: "k")
+        guard case .expired = result else {
+            return XCTFail("Expected .expired from L2 (not just L1) after eviction, got \(result)")
+        }
+    }
+
+    func test_debugRewindFetchTimestamp_unknownKey_isNoOp() async throws {
+        let db = try makeDB()
+        let store = makeStore(db: db)
+
+        await store.debugRewindFetchTimestamp(by: 10, for: "never-saved")
+
+        let result = await store.load(for: "never-saved")
+        guard case .empty = result else {
+            return XCTFail("Rewinding a key that was never saved must not synthesize an entry, got \(result)")
+        }
+    }
 }

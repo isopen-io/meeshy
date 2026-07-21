@@ -278,6 +278,49 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertGreaterThan(countAfterSecond, countAfterFirst, "Should refetch after invalidation")
     }
 
+    // MARK: - loadConversations: `.expired` cache recovery (P1 — Offline Graceful Degradation)
+    //
+    // `performLoadConversations`'s `.expired` branch recovers a disk snapshot
+    // past the 24h TTL via `loadIgnoringExpiry` and paints it immediately
+    // (`.offline`) before attempting a resync, instead of treating an expired
+    // entry as empty. These tests drive the REAL `CacheCoordinator.shared.
+    // conversations` singleton (not a stub) past its TTL via the
+    // `debugRewindFetchTimestamp` test seam, exercising the integration the
+    // SDK-level `GRDBCacheStoreFreshnessTests` (isolated `DatabaseQueue`)
+    // cannot reach.
+
+    func test_loadConversations_whenCacheExpiredAndSyncFails_paintsRecoveredDataAndReportsOffline() async throws {
+        let conversation = makeConversation(id: "000000000000000000000002")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        await CacheCoordinator.shared.conversations.debugRewindFetchTimestamp(by: 25 * 3600, for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = false
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+
+        XCTAssertEqual(sut.conversations.map(\.id), [conversation.id],
+                       "an expired-but-present disk cache must be painted immediately, not treated as empty")
+        XCTAssertEqual(sut.loadState, .offline,
+                       "a failed resync after `.expired` recovery must keep showing the recovered data, not regress to the empty error state")
+        XCTAssertFalse(sut.loadFailed, "recovered data means this is NOT the empty-cache failure case")
+    }
+
+    func test_loadConversations_whenCacheExpiredAndSyncSucceeds_reportsLoaded() async throws {
+        let conversation = makeConversation(id: "000000000000000000000003")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        await CacheCoordinator.shared.conversations.debugRewindFetchTimestamp(by: 25 * 3600, for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+
+        XCTAssertEqual(sut.loadState, .loaded,
+                       "a successful resync following `.expired` recovery must land on `.loaded`, not stay `.offline`")
+        XCTAssertFalse(sut.loadFailed)
+    }
+
     // MARK: - togglePin: Success (via ConversationStore — Strategy B 1b-ii-a)
 
     func test_togglePin_appliesViaStoreAndReflectsInList() async throws {
@@ -1468,6 +1511,17 @@ final class ConversationListViewModelTests: XCTestCase {
     /// author, a phantom attachment icon, or summarizes a brand-new text
     /// message as "1 message vue unique" because the stale
     /// `lastMessageIsViewOnce` flag survives the bump.
+    ///
+    /// P2 (follow-up): the same reasoning applies to `lastMessagePreview`
+    /// and its Prisme Linguistique companions (`lastMessageTranslations`,
+    /// `lastMessageOriginalLanguage`) — neither caller has the new
+    /// message's text either. Resetting only the sender/attachments/flags
+    /// while leaving the OLD preview text in place regressed the bug to a
+    /// subtler form: an unattributed stale text (no sender label, since
+    /// that's now nil) rendered as if it were the new message, and worse,
+    /// a stale `lastMessageTranslations` entry matching the viewer's
+    /// preferred language would surface a stale TRANSLATED string even
+    /// after `lastMessagePreview` itself is cleared.
     func test_bumpToTop_resetsStaleCompanionFields() async {
         let (sut, _, _, _, _, _, _) = makeSUT()
         var conv = makeConversation(id: "conv1", lastMessageAt: Date(timeIntervalSince1970: 1_000))
@@ -1479,6 +1533,9 @@ final class ConversationListViewModelTests: XCTestCase {
         conv.lastMessageIsBlurred = true
         conv.lastMessageIsViewOnce = true
         conv.lastMessageExpiresAt = Date(timeIntervalSince1970: 2_000)
+        conv.lastMessagePreview = "Photo envoyée à l'instant"
+        conv.lastMessageTranslations = ["en": "Photo just sent"]
+        conv.lastMessageOriginalLanguage = "fr"
         sut.setConversations([conv])
 
         sut.bumpToTop(conversationId: "conv1", newLastMessageAt: Date(timeIntervalSince1970: 9_000))
@@ -1490,6 +1547,9 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertFalse(bumped.lastMessageIsBlurred)
         XCTAssertFalse(bumped.lastMessageIsViewOnce, "a new message must not inherit the old one's 'View once' flag")
         XCTAssertNil(bumped.lastMessageExpiresAt)
+        XCTAssertNil(bumped.lastMessagePreview, "stale preview text must not survive the bump — an unattributed old text is worse than a blank row")
+        XCTAssertNil(bumped.lastMessageTranslations, "stale translations must not survive the bump — resolvedLastMessagePreview would otherwise surface a stale translated string even with lastMessagePreview cleared")
+        XCTAssertNil(bumped.lastMessageOriginalLanguage)
     }
 
     // MARK: - conversation:updated socket event with lastMessageAt

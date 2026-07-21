@@ -267,12 +267,20 @@ class ConversationListViewModel: ObservableObject {
     /// the source of truth for unknown conversations.
     ///
     /// The row's last-message COMPANION fields (sender name, attachments,
-    /// ephemeral flags) are reset to neutral defaults rather than left as
-    /// whatever the PREVIOUS message carried: neither caller has the new
-    /// message's actual sender/attachments/flags, so leaving the old ones
-    /// in place renders a wrong author, a phantom attachment icon, or a
-    /// brand-new text message summarized as "View once" because the
-    /// stale `lastMessageIsViewOnce` flag survived the bump. A blank
+    /// ephemeral flags, preview text + translations) are reset to neutral
+    /// defaults rather than left as whatever the PREVIOUS message carried:
+    /// neither caller has the new message's actual sender/attachments/
+    /// flags/text, so leaving the old ones in place renders a wrong
+    /// author, a phantom attachment icon, or a brand-new text message
+    /// summarized as "View once" because the stale `lastMessageIsViewOnce`
+    /// flag survived the bump. `lastMessagePreview` gets the same
+    /// treatment: an unattributed stale text (no sender label, since
+    /// that's now nil too) is exactly as wrong as the other companion
+    /// fields — and `lastMessageTranslations`/`lastMessageOriginalLanguage`
+    /// must go with it, or `resolvedLastMessagePreview` (Prisme
+    /// Linguistique) would resurface a stale TRANSLATED string for a
+    /// viewer whose preferred language happens to match a leftover
+    /// translation key, even with the raw preview cleared. A blank
     /// companion state is corrected on the next real sync (delta sync,
     /// per-row prefetch, or opening the conversation); a WRONG one isn't.
     func bumpToTop(conversationId: String, newLastMessageAt: Date) {
@@ -288,6 +296,9 @@ class ConversationListViewModel: ObservableObject {
         updated.lastMessageIsBlurred = false
         updated.lastMessageIsViewOnce = false
         updated.lastMessageExpiresAt = nil
+        updated.lastMessagePreview = nil
+        updated.lastMessageTranslations = nil
+        updated.lastMessageOriginalLanguage = nil
         conversations.remove(at: idx)
         conversations.insert(updated, at: 0)
         schedulePersist()
@@ -1163,15 +1174,26 @@ class ConversationListViewModel: ObservableObject {
         loadFailed = false
         loadState = .loading
         let succeeded = await syncEngine.fullSync()
-        // Fetch-then-replace: `fullSync()` only overwrites the "list" cache
-        // key on a SUCCESSFUL fetch (see ConversationSyncEngine.saveSorted).
-        // This used to call `invalidateCache()` BEFORE the fetch, wiping
-        // L1+L2 unconditionally — an offline/failed refresh then left the
-        // cache empty with nothing to replace it (a pull-to-refresh that
-        // failed emptied the whole app, violating Offline Graceful
-        // Degradation). `succeeded` — not "is the cache non-nil afterwards"
-        // — is the authoritative signal: existing cached data must survive
-        // untouched when the fetch never reached the network.
+        // Fetch-then-replace: THIS ViewModel only repaints `conversations`
+        // from the reloaded cache when `fullSync()` reports success — the
+        // in-memory list a failed refresh is currently showing is never
+        // touched. This used to call `invalidateCache()` BEFORE the fetch,
+        // wiping L1+L2 unconditionally — an offline/failed refresh then
+        // left the cache empty with nothing to replace it (a
+        // pull-to-refresh that failed emptied the whole app, violating
+        // Offline Graceful Degradation). `succeeded` — not "is the cache
+        // non-nil afterwards" — is the authoritative signal for what this
+        // ViewModel shows.
+        //
+        // Caveat: `fullSync()`'s own on-disk write
+        // (`ConversationSyncEngine.saveSorted`) is not perfectly
+        // all-or-nothing on multi-page accounts — its parallel fan-out can
+        // persist a partial merge to the "list" cache key before a later
+        // tail-loop page fails and the overall call still returns `false`.
+        // That's a pre-existing SDK-level gap (out of scope here, not
+        // introduced by this fix) and does NOT affect the guarantee this
+        // ViewModel relies on above, since we only ever trust the reload
+        // when `succeeded == true`.
         if succeeded {
             let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
             if let data = reloaded.snapshot() {
