@@ -57,7 +57,7 @@ struct BlockedUsersView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "chevron.left")
                         .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
@@ -77,8 +77,8 @@ struct BlockedUsersView: View {
 
             Color.clear.frame(width: 60, height: 24)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Content
@@ -104,24 +104,24 @@ struct BlockedUsersView: View {
     // MARK: - Loading
 
     private var loadingState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             ForEach(0..<4, id: \.self) { _ in
                 skeletonRow
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "blocked.users.loading.a11y", defaultValue: "Chargement en cours", bundle: .main))
     }
 
     private var skeletonRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(theme.textMuted.opacity(0.12))
                 .frame(width: 44, height: 44)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(theme.textMuted.opacity(0.12))
                     .frame(width: 120, height: 14)
@@ -132,8 +132,8 @@ struct BlockedUsersView: View {
 
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
@@ -183,7 +183,7 @@ struct BlockedUsersView: View {
     private func blockedUserRow(_ user: BlockedUser) -> some View {
         let color = DynamicColorGenerator.colorForName(user.name)
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: user.name,
                 context: .userListItem,
@@ -214,8 +214,8 @@ struct BlockedUsersView: View {
                 Text(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main))
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule()
                             .fill(Color(hex: accentColor).opacity(0.12))
@@ -223,8 +223,8 @@ struct BlockedUsersView: View {
             }
             .accessibilityLabel(String(localized: "blocked.users.unblock.a11y", defaultValue: "Debloquer \(user.name)", bundle: .main))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
