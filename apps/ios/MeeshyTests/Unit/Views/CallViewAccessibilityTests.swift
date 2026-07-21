@@ -476,7 +476,7 @@ final class CallViewAccessibilityTests: XCTestCase {
             XCTFail("\(marker) must render Text(callManager.formattedDuration)")
             return ""
         }
-        let end = source.index(durationRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(durationRange.lowerBound, offsetBy: 1900, limitedBy: source.endIndex) ?? source.endIndex
         return String(source[durationRange.lowerBound ..< end])
     }
 
@@ -512,18 +512,22 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    /// The capsule must keep `.combine` (NOT collapse to `.ignore`): unlike the
-    /// video badge — which has no status row and folds degraded state into a
-    /// composed label — the audio capsule relies on `.combine` so the signal
-    /// glyph's own `.accessibilityLabel` still merges in when the link degrades.
-    func test_audioDurationCapsules_keepCombineToPreserveSignalGlyph() throws {
+    /// Doctrine 206i/210i/211i: the capsule now collapses to `.ignore` (not
+    /// `.combine`) — combining previously let the signal glyph's own label
+    /// leak through and announce a naked "0:34" with no context when the
+    /// glyph was invisible on a healthy link. Unlike the video badge, the
+    /// audio layout already surfaces degraded-signal state via the separate
+    /// `statusPill` row, so folding the capsule into one opaque
+    /// call-duration-only element causes no information loss.
+    func test_audioDurationCapsules_collapseToIgnoreForNakedReadoutFix() throws {
         let source = try callViewSource()
         for marker in ["private var audioCallLayout: some View {", "private var compactAudioCallHeader: some View {"] {
             let vicinity = try audioDurationCapsuleVicinity(source, layout: marker)
             XCTAssertTrue(
-                vicinity.contains(".accessibilityElement(children: .combine)"),
-                "\(marker)'s duration capsule must keep children: .combine so the TransientCallSignalGlyph's " +
-                "own signal label merges in when visible — collapsing to .ignore would swallow it."
+                vicinity.contains(".accessibilityElement(children: .ignore)"),
+                "\(marker)'s duration capsule must collapse to children: .ignore so the composed " +
+                "call-duration label reads instead of a context-free timer digit (signal state is " +
+                "already surfaced separately via statusPill)."
             )
         }
     }
