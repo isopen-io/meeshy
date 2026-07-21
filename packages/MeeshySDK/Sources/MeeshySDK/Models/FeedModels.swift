@@ -423,24 +423,28 @@ public struct FeedPost: Identifiable, Sendable {
     public var bookmarkCount: Int = 0
     /// Server-issued share count (every `POST /posts/:id/share` increments it).
     public var shareCount: Int = 0
-    /// Server-issued unique-view count (`Post.viewCount`). Runtime-only like the
-    /// other counters above — set via `APIPost.toFeedPost`, not cached/Codable.
+    /// Server-issued unique-view count (`Post.viewCount`). Set via
+    /// `APIPost.toFeedPost` and persisted through the Codable round-trip
+    /// below so a cache-first render doesn't flash it back to 0.
     public var viewCount: Int = 0
     /// Server-issued post-open count (`Post.postOpenCount`) — TOTAL full-frame
     /// openings of this post: immersive reel player OR post Detail page (the
     /// concept is generic to any Post, not just reels). This is what the eye
     /// badge shows ("vues totales"). Derived server-side from PostEngagement
-    /// sessions on the `reels`/`detail` surfaces. Runtime-only.
+    /// sessions on the `reels`/`detail` surfaces. Persisted through the
+    /// Codable round-trip below (see `viewCount` note).
     public var postOpenCount: Int = 0
     /// Server-issued impression count (`Post.impressionCount`) — total
     /// exposures, NEVER deduplicated: each feed appearance AND each Detail
     /// open counts. This is what the "Impressions" (chart) badge shows.
-    /// Runtime-only — set via `APIPost.toFeedPost`, not cached/Codable.
+    /// Persisted through the Codable round-trip below (see `viewCount` note).
     public var impressionCount: Int = 0
     /// Server-issued qualified-view count (`Post.qualifiedViewCount`) — total
-    /// sessions reaching the 2.5s-OR-30% threshold. Runtime-only.
+    /// sessions reaching the 2.5s-OR-30% threshold. Persisted through the
+    /// Codable round-trip below (see `viewCount` note).
     public var qualifiedViewCount: Int = 0
-    /// Server-issued playback-completion count (`Post.playCount`). Runtime-only.
+    /// Server-issued playback-completion count (`Post.playCount`). Persisted
+    /// through the Codable round-trip below (see `viewCount` note).
     public var playCount: Int = 0
     public var repost: RepostContent? = nil
     public var repostAuthor: String? = nil
@@ -496,12 +500,18 @@ public struct FeedPost: Identifiable, Sendable {
     /// the original) — never `translations.keys.first` (dictionary iteration
     /// order is non-deterministic in Swift). Used by the feed card to know
     /// which language flag is "active" without re-deriving it unsafely.
-    /// `nil` when there is no original language to fall back to.
+    ///
+    /// `originalLanguage == nil` does NOT short-circuit to `nil`: `resolved()`
+    /// still matches `translations` against `preferredLanguages` in that case
+    /// (its `if let original = originalLanguage?.lowercased(), preferred.contains(original)`
+    /// simply fails and falls into the same preferred-language loop). This
+    /// mirrors that — `nil` only when there's truly no language to report
+    /// (no original AND no preferred-language translation matches).
     public func resolvedLanguageCode(preferredLanguages: [String]) -> String? {
-        guard let origLang = originalLanguage?.lowercased() else { return nil }
+        let origLang = originalLanguage?.lowercased()
         guard let dict = translations, !dict.isEmpty else { return origLang }
         let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        if preferred.contains(origLang) { return origLang }
+        if let origLang, preferred.contains(origLang) { return origLang }
         for lang in preferred {
             if dict.keys.contains(where: { $0.lowercased() == lang }) { return lang }
         }

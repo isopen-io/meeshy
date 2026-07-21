@@ -229,13 +229,24 @@ struct FeedView: View {
                     // canonical `post:liked`/`post:unliked` broadcast handled
                     // above reconciles `postLikedIds`/`postLikeDelta` once it
                     // lands.
+                    let cmid = ClientMutationId.generate()
                     do {
                         let payload = ToggleLikePostPayload(
-                            clientMutationId: ClientMutationId.generate(),
+                            clientMutationId: cmid,
                             postId: postId,
                             liked: !wasLiked
                         )
                         try await OfflineQueue.shared.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
+
+                        // Roll back the optimistic toggle if the outbox exhausts
+                        // its retry budget (server permanently rejects). Mirrors
+                        // `FeedViewModel.likePost`'s `observeOutcome` — without
+                        // this, a permanently-failing like/unlike stays stuck in
+                        // the UI forever: no `post:liked`/`post:unliked` broadcast
+                        // will ever arrive for a mutation the outbox gave up on,
+                        // and the feed re-seed explicitly skips posts with a live
+                        // `postLikeDelta`.
+                        observePostLikeOutcome(cmid: cmid, postId: postId, wasLiked: wasLiked)
                     } catch {
                         // The outbox itself refused the row (pool not
                         // configured, encoding failure) — only now is rolling
@@ -248,6 +259,32 @@ struct FeedView: View {
                             postLikeDelta[postId, default: 0] -= 1
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /// Subscribes to `OfflineQueue.shared.outcomeStream(for: cmid)` and rolls
+    /// the optimistic like/unlike back to its pre-toggle state if the row is
+    /// escalated to `.exhausted` (retry budget spent — the server permanently
+    /// rejected it). `.applied` is a no-op: the optimistic state is already
+    /// final. Same rollback arithmetic as the synchronous enqueue-refusal
+    /// catch above, since both restore the identical pre-toggle snapshot.
+    private func observePostLikeOutcome(cmid: String, postId: String, wasLiked: Bool) {
+        Task { @MainActor in
+            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    if wasLiked {
+                        postLikedIds.insert(postId)
+                        postLikeDelta[postId, default: 0] += 1
+                    } else {
+                        postLikedIds.remove(postId)
+                        postLikeDelta[postId, default: 0] -= 1
+                    }
+                    FeedbackToastManager.shared.showError(
+                        String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main)
+                    )
                 }
             }
         }
