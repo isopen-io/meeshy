@@ -30,7 +30,17 @@ public struct UpdateProfileRequest: Encodable {
         self.bio = bio
         self.systemLanguage = Self.validateLanguageCode(systemLanguage)
         self.regionalLanguage = Self.validateLanguageCode(regionalLanguage)
-        self.customDestinationLanguage = Self.validateLanguageCode(customDestinationLanguage)
+        // The gateway's `customDestinationLanguage` schema explicitly accepts an
+        // empty string as "clear this field" (`z.union([z.literal(''), z.null(),
+        // z.string().min(2).max(5)])` in packages/shared/utils/validation.ts) —
+        // unlike systemLanguage/regionalLanguage, which require a real code with
+        // no empty-string variant. Preserving that exact signal (instead of
+        // collapsing it to nil via validateLanguageCode) is what lets a caller
+        // distinguish "field untouched" (nil — omitted from the PATCH body) from
+        // "field intentionally cleared" (empty string — sent verbatim).
+        self.customDestinationLanguage = customDestinationLanguage == ""
+            ? ""
+            : Self.validateLanguageCode(customDestinationLanguage)
     }
 }
 

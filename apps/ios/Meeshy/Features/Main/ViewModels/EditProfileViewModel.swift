@@ -116,10 +116,16 @@ final class EditProfileViewModel: ObservableObject {
         let cmid = ClientMutationId.generate()
         let trimmedName = displayName.trimmingCharacters(in: .whitespaces)
         let trimmedBio = bio.trimmingCharacters(in: .whitespaces)
+        // Distinguish "untouched" (nil — omitted from the PATCH body) from
+        // "intentionally cleared" (empty string — sent verbatim). The gateway's
+        // `bio` schema accepts an empty string; collapsing a genuine clear to
+        // nil via `isEmpty ? nil : trimmedBio` silently dropped it from the
+        // request AND from the optimistic apply below.
+        let originalBio = authManager.currentUser?.bio ?? ""
         let payload = UpdateProfilePayload(
             clientMutationId: cmid,
             displayName: trimmedName.isEmpty ? nil : trimmedName,
-            bio: trimmedBio.isEmpty ? nil : trimmedBio,
+            bio: trimmedBio == originalBio ? nil : trimmedBio,
             avatarUrl: uploadedAvatarUrl
         )
 
