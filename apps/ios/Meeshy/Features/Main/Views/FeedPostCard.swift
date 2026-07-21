@@ -36,7 +36,6 @@ struct FeedPostCard: View {
     var onQuote: ((String) -> Void)? = nil
     var onShare: ((String) -> Void)? = nil
     var onBookmark: ((String) -> Void)? = nil
-    var onSendComment: ((String, String, String?) -> Void)? = nil // (postId, content, parentId?)
     var onSelectLanguage: ((String, String) -> Void)? = nil // (postId, language)
     var onTapPost: ((FeedPost) -> Void)? = nil
     var onTapRepost: ((String) -> Void)? = nil
@@ -361,7 +360,7 @@ struct FeedPostCard: View {
         )
         .padding(.horizontal, 16)
         .sheet(isPresented: $showCommentsSheet) {
-            CommentsSheetView(post: post, accentColor: accentColor, onSendComment: onSendComment)
+            CommentsSheetView(post: post, accentColor: accentColor)
         }
         .sheet(isPresented: $showTranslationSheet) {
             PostTranslationSheet(
