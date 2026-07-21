@@ -11,7 +11,7 @@ import MeeshyUI
 /// branch), which could leave a stale `ownsEngine == true` on a card's
 /// persisted `@State` after an abrupt teardown and reintroduce the repost/
 /// active-card pause bug this flag exists to prevent.
-enum ReelEngineOwnershipPolicy {
+nonisolated enum ReelEngineOwnershipPolicy {
     static func shouldRelease(ownsEngine: Bool, isShowingThis: Bool) -> Bool {
         ownsEngine && isShowingThis
     }
