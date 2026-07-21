@@ -174,8 +174,14 @@ struct ThemedConversationRow: View {
                             .accessibilityHidden(true)
                     }
 
-                    // Timestamp — layoutPriority(1) pour ne jamais être écrasé
-                    Text(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
+                    // Timestamp — layoutPriority(1) pour ne jamais être écrasé.
+                    // `RelativeTimestampText` fait ticker CE texte une fois par
+                    // minute via `TimelineView` — le reste de la row reste gelé
+                    // derrière `.equatable()` (aucune composante temporelle dans
+                    // sa comparaison), donc sans ce wrapper l'horodatage relatif
+                    // ne se rafraîchissait plus jamais après le montage initial
+                    // (audit 2026-07-20, "Horodatages relatifs figés").
+                    RelativeTimestampText(date: conversation.lastMessageAt)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
                         .layoutPriority(1)
@@ -246,9 +252,19 @@ struct ThemedConversationRow: View {
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
-    private var conversationAccessibilityLabel: String {
+    // Internal (not `private`): unit-tested directly from
+    // MeeshyTests/Unit/Views (same pattern as the cross-file access fix
+    // documented in apps/ios/CLAUDE.md — a stored/computed property read by
+    // a test target via `@testable import` needs at least `internal`).
+    var conversationAccessibilityLabel: String {
         var parts: [String] = []
         parts.append(String(format: String(localized: "accessibility.conversation_with", bundle: .main), conversation.name))
+        // B1 (Prisme Linguistique) — VoiceOver must read exactly what the
+        // visible preview shows (`standardMessageContent`, below), which
+        // already resolves through `resolvedLastMessagePreview`. Reading
+        // the raw `lastMessagePreview` here always announced the ORIGINAL
+        // language even when the row visibly displayed a translation.
+        let resolvedPreview = conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages)
         switch lastMessageSummary {
         case .expired:
             parts.append(String(localized: "accessibility.last_message_expired", bundle: .main))
@@ -257,11 +273,11 @@ struct ThemedConversationRow: View {
         case .viewOnce:
             parts.append(String(localized: "accessibility.last_message_view_once", bundle: .main))
         case .ephemeralActive:
-            if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let preview = resolvedPreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 parts.append(String(format: String(localized: "accessibility.last_message_ephemeral", bundle: .main), preview))
             }
         case .standard:
-            if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let preview = resolvedPreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 parts.append(String(format: String(localized: "accessibility.last_message_preview", bundle: .main), preview))
             }
         }
@@ -374,6 +390,25 @@ struct ThemedConversationRow: View {
     /// badge (#991B1B) pour que le texte 11pt reste lisible en mode sombre.
     static func timestampColor(unreadCount: Int, accent: Color) -> Color {
         unreadCount > 0 ? MeeshyColors.error : accent
+    }
+
+    // MARK: - Relative Timestamp (live tick)
+
+    /// Wraps the relative-time label in a `TimelineView(.periodic)` so it
+    /// re-renders once a minute on its own schedule — independent of the
+    /// row's `.equatable()` gate (which deliberately has NO temporal
+    /// component in `ThemedConversationRow.==`, otherwise every row would
+    /// invalidate on every tick). Without this, a row's timestamp froze at
+    /// whatever relative string it showed on first mount ("5 min") until
+    /// something else forced the row to rebuild.
+    private struct RelativeTimestampText: View {
+        let date: Date
+
+        var body: some View {
+            TimelineView(.periodic(from: date, by: 60)) { _ in
+                Text(RelativeTimeFormatter.shortString(for: date))
+            }
+        }
     }
 
     // MARK: - Typing Indicator
