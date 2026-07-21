@@ -1095,6 +1095,8 @@ struct StepProfileView: View {
                         .padding(8).background(Circle().fill(Color.black.opacity(0.5)))
                 }
                 .padding(8)
+                // Bouton icône-seule (camera.fill) : sans libellé, VoiceOver annonce un « bouton » anonyme (WCAG 4.1.2).
+                .accessibilityLabel(String(localized: "onboarding.photo.banner.a11y", defaultValue: "Ajouter une photo de bannière", bundle: .main))
             }
 
             HStack {
@@ -1126,6 +1128,8 @@ struct StepProfileView: View {
                             .font(.caption2).foregroundColor(.white)
                             .padding(6).background(Circle().fill(viewModel.currentStep.accentColor))
                     }
+                    // Bouton icône-seule (camera.fill) : sans libellé, VoiceOver annonce un « bouton » anonyme (WCAG 4.1.2).
+                    .accessibilityLabel(String(localized: "onboarding.photo.profile.a11y", defaultValue: "Ajouter une photo de profil", bundle: .main))
                 }
                 .offset(y: -30)
                 .padding(.leading, 16)
