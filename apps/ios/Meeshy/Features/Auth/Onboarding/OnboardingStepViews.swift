@@ -1268,7 +1268,10 @@ struct StepRecapView: View {
                         .frame(width: 24, height: 24)
                     if viewModel.acceptTerms {
                         RoundedRectangle(cornerRadius: 6).fill(MeeshyColors.success).frame(width: 24, height: 24)
+                        // Glyphe décoratif : l'état coché est porté par le trait `.isSelected` sur le bouton
+                        // (WCAG 1.4.1) — masqué pour éviter une annonce brute « checkmark » dans le label.
                         Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundColor(.white)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -1283,6 +1286,10 @@ struct StepRecapView: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
+        // La case « J'accepte les conditions » ne signale son état coché que par la couleur/le
+        // checkmark — on porte l'état via le trait `.isSelected` pour que VoiceOver annonce
+        // « sélectionné » sur ce consentement (WCAG 1.4.1, miroir CallsTab.chip/StepLanguageView).
+        .accessibilityAddTraits(viewModel.acceptTerms ? .isSelected : [])
         .bounceOnTap(scale: 0.96)
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 14).fill(Color(.systemGray6).opacity(0.6)))
