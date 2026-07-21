@@ -40,10 +40,16 @@ export function deepCleanTranslationOutput(text: string): string {
   cleaned = cleaned
     // Normaliser la ponctuation collée sans espace
     .replace(/([.,!?;:])([A-Za-zÀ-ÖØ-öø-ÿ])/g, '$1 $2')
-    // Normaliser les guillemets
-    .replace(/["']([^"']*?)["']/g, '"$1"')
-    // Supprimer les séquences de caractères non imprimables
-    .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+    // Normaliser les guillemets DOUBLES (guillemets français « », courbes “ ”)
+    // vers le guillemet droit ". L'apostrophe ASCII ' n'est JAMAIS un délimiteur :
+    // le français (langue primaire/fallback du Prisme) l'emploie dans ses
+    // contractions (l', d', c', qu', n'), et `d'accord, c'est` deviendrait
+    // `d"accord, c"est` si ' était traité comme un guillemet.
+    .replace(/[«»“”"]([^«»“”"]*?)[«»“”"]/g, '"$1"')
+    // Supprimer les caractères de contrôle non imprimables MAIS préserver
+    // tab (\t), saut de ligne (\n) et retour chariot (\r) : les strip glue les
+    // lignes adjacentes en un seul mot (`ligne un\nligne deux` → `ligne unligne deux`).
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
     // Normaliser les espaces avant la ponctuation française
     .replace(/\s+([.,!?;:])/g, '$1');
 
