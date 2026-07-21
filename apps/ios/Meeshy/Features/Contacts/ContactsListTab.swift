@@ -201,11 +201,6 @@ struct ContactsListTab: View {
         .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.filteredFriends.count)
     }
 
-    // Recompose le label VoiceOver de la rangée pour refléter EXACTEMENT le contenu
-    // visible : nom, @username, puis l'état de présence tel qu'affiché (« en ligne » /
-    // « vu il y a X » / « hors ligne »). Le label combiné antérieur perdait le @username
-    // et l'ancienneté « vu X » que l'utilisateur voyant lit. Zéro clé i18n neuve — réutilise
-    // les clés déjà rendues dans la rangée (miroir de CallsTab.rowAccessibilityLabel).
     private func contactRowAccessibilityLabel(_ user: FriendRequestUser, isOnline: Bool) -> String {
         var parts = [user.name, "@\(user.username)"]
         if isOnline {
