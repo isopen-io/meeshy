@@ -8,9 +8,18 @@ import MeeshySDK
 /// pur de la décision « quelle bascule griser » — extrait pour être
 /// testable sans construire `PrivacySettingsView` (mêmes contraintes
 /// SwiftUI @State que documentées pour `StoryViewerView`).
+///
+/// Remédiation B12 (2026-07-21) : `allowContactRequests` et
+/// `allowGroupInvites` rejoignent le lot — même pattern « persisté/synchronisé
+/// mais appliqué nulle part » : aucune route gateway (friends.ts,
+/// conversations/participants.ts) ni aucun code iOS ne consulte ces deux
+/// préférences avant de créer une demande de contact ou d'ajouter un membre
+/// à un groupe. `PrivacyPreferencesService` ne les expose qu'à
+/// `PresenceVisibilityService` / lecture des accusés de réception — jamais à
+/// la création de demande d'ami ou d'invitation de groupe.
 final class PrivacySettingsViewComingSoonTests: XCTestCase {
 
-    // MARK: - The 5 flagged placebo toggles
+    // MARK: - The 7 flagged placebo toggles
 
     func test_isComingSoon_hideProfileFromSearch_returnsTrue() {
         XCTAssertTrue(PrivacySettingsView.isComingSoon(\.hideProfileFromSearch))
@@ -32,6 +41,14 @@ final class PrivacySettingsViewComingSoonTests: XCTestCase {
         XCTAssertTrue(PrivacySettingsView.isComingSoon(\.shareUsageData))
     }
 
+    func test_isComingSoon_allowContactRequests_returnsTrue() {
+        XCTAssertTrue(PrivacySettingsView.isComingSoon(\.allowContactRequests))
+    }
+
+    func test_isComingSoon_allowGroupInvites_returnsTrue() {
+        XCTAssertTrue(PrivacySettingsView.isComingSoon(\.allowGroupInvites))
+    }
+
     // MARK: - Toggles that DO have a real effect elsewhere — must stay interactive
 
     func test_isComingSoon_showOnlineStatus_returnsFalse() {
@@ -48,14 +65,6 @@ final class PrivacySettingsViewComingSoonTests: XCTestCase {
 
     func test_isComingSoon_allowAnalytics_returnsFalse() {
         XCTAssertFalse(PrivacySettingsView.isComingSoon(\.allowAnalytics))
-    }
-
-    func test_isComingSoon_allowContactRequests_returnsFalse() {
-        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.allowContactRequests))
-    }
-
-    func test_isComingSoon_allowGroupInvites_returnsFalse() {
-        XCTAssertFalse(PrivacySettingsView.isComingSoon(\.allowGroupInvites))
     }
 
     func test_isComingSoon_showLastSeen_returnsFalse() {

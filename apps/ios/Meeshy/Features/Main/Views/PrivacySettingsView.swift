@@ -189,7 +189,13 @@ struct PrivacySettingsView: View {
     /// réellement bloquer une capture ; `allowCallsFromNonContacts` exigerait
     /// de toucher `CallManager.swift`, hors-lane ici ; `saveMediaToGallery`
     /// supposerait un pipeline d'auto-save à la réception, inexistant ;
-    /// `shareUsageData` n'a pas de mécanisme distinct de `allowAnalytics`).
+    /// `shareUsageData` n'a pas de mécanisme distinct de `allowAnalytics` ;
+    /// `allowContactRequests`/`allowGroupInvites` exigeraient un check côté
+    /// gateway avant la création d'une demande de contact
+    /// (`routes/friends.ts`) ou l'ajout d'un membre à un groupe
+    /// (`routes/conversations/participants.ts`) — `PrivacyPreferencesService`
+    /// ne les expose aujourd'hui qu'à `PresenceVisibilityService`/l'accusé de
+    /// lecture, jamais à ces deux flux).
     /// Grisées avec "Bientôt disponible" plutôt que persistées sans effet
     /// (faux sentiment de confidentialité) — cf.
     /// tasks/audit-backlog-2026-07-20.md LANE Réglages, item P1. Retirer un
@@ -205,6 +211,8 @@ struct PrivacySettingsView: View {
         \PrivacyPreferences.allowCallsFromNonContacts,
         \PrivacyPreferences.saveMediaToGallery,
         \PrivacyPreferences.shareUsageData,
+        \PrivacyPreferences.allowContactRequests,
+        \PrivacyPreferences.allowGroupInvites,
     ]
 
     // MARK: - Reusable Components
