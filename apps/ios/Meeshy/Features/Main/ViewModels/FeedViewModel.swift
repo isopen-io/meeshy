@@ -1047,13 +1047,29 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
+                // Prisme + effects parity with the REST comment mapping
+                // (`toFeedPost`/`loadComments`): a comment arriving in real
+                // time while the feed is open used to render as a blank row
+                // for a media/effect comment (effectFlags dropped) and
+                // always in its original language (no resolveCommentTranslation),
+                // and lost the "liked by me" heart on a comment that already
+                // carried reactions when it landed (currentUserReactions dropped).
+                let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+                    translations: data.comment.translations,
+                    originalLanguage: data.comment.originalLanguage,
+                    preferredLanguages: self.preferredLanguages
+                )
                 let feedComment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
                     authorAvatarURL: data.comment.author.avatar,
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
-                    parentId: data.comment.parentId
+                    parentId: data.comment.parentId,
+                    effectFlags: data.comment.effectFlags ?? 0,
+                    originalLanguage: data.comment.originalLanguage,
+                    translatedContent: translatedContent,
+                    currentUserReactions: data.comment.currentUserReactions
                 )
                 if !self.posts[index].comments.contains(where: { $0.id == feedComment.id }) {
                     self.posts[index].comments.insert(feedComment, at: 0)

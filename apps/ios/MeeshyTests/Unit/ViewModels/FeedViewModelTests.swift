@@ -1203,6 +1203,34 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    func test_socketCommentAdded_mapsEffectFlagsTranslationAndReactions() async {
+        // Regression guard: the handler used to build `FeedComment` with only
+        // id/author/content/likes/replies/parentId — silently dropping
+        // effectFlags (a media/effect comment rendered blank in real time),
+        // the Prisme translation (always shown in its original language),
+        // and currentUserReactions (heart state lost for an already-reacted
+        // comment landing via socket).
+        let (sut, api, socket, _) = makeSUT(preferredLanguages: ["fr"])
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "commented-post", commentCount: 3)]))
+        await sut.loadFeed(forceRefresh: true)
+
+        sut.subscribeToSocketEvents()
+
+        let commentData: SocketCommentAddedData = JSONStub.decode("""
+        {"postId":"commented-post","comment":{"id":"c1","content":"Nice!","originalLanguage":"en","translations":{"fr":{"text":"Sympa !"}},"effectFlags":4,"currentUserReactions":["\u{2764}\u{FE0F}"],"createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"a1","username":"bob"}},"commentCount":4}
+        """)
+        socket.commentAdded.send(commentData)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        let comment = sut.posts[0].comments.first(where: { $0.id == "c1" })
+        XCTAssertEqual(comment?.effectFlags, 4)
+        XCTAssertEqual(comment?.translatedContent, "Sympa !")
+        XCTAssertEqual(comment?.currentUserReactions, ["\u{2764}\u{FE0F}"])
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     func test_socketCommentDeleted_updatesCommentCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "comment-del-post", commentCount: 5)]))

@@ -557,6 +557,17 @@ class PostDetailViewModel: ObservableObject {
             .sink { [weak self] data in
                 guard let self else { return }
                 let parentId = data.comment.parentId
+                // Prisme + effects parity with the REST comment mapping
+                // (`loadComments`/`loadReplies`): a comment arriving in real
+                // time while the detail sheet is open used to render as a
+                // blank row for a media/effect comment (effectFlags dropped)
+                // and always in its original language (resolveCommentTranslation
+                // never consulted).
+                let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+                    translations: data.comment.translations,
+                    originalLanguage: data.comment.originalLanguage,
+                    preferredLanguages: self.preferredLanguages
+                )
                 let comment = FeedComment(
                     id: data.comment.id, author: data.comment.author.name,
                     authorId: data.comment.author.id,
@@ -564,6 +575,9 @@ class PostDetailViewModel: ObservableObject {
                     content: data.comment.content, timestamp: data.comment.createdAt,
                     likes: data.comment.likeCount ?? 0, replies: data.comment.replyCount ?? 0,
                     parentId: parentId,
+                    effectFlags: data.comment.effectFlags ?? 0,
+                    originalLanguage: data.comment.originalLanguage,
+                    translatedContent: translatedContent,
                     currentUserReactions: data.comment.currentUserReactions
                 )
                 if let parentId {
