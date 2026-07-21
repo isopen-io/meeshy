@@ -43,16 +43,43 @@ final class MeeshyAppOutboxHygieneTests: XCTestCase {
         )
     }
 
-    func test_settingsFlushHandler_catchesMeeshyErrorServer_forClientErrorRange() throws {
+    func test_settingsFlushHandler_catchesMeeshyErrorServer_forPermanentClientErrorCodes() throws {
         let source = try meeshyAppSource()
         guard let body = settingsFlushHandlerBody(from: source) else {
             XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in MeeshyApp.swift")
             return
         }
         XCTAssertTrue(
-            body.contains("catch MeeshyError.server(let code, _) where (400..<500).contains(code)"),
-            "Must catch the real MeeshyError.server case for the 4xx range so client-side validation " +
-            "errors are dropped (terminal) instead of replayed forever."
+            body.contains("catch MeeshyError.server(let code, _) where [400, 404, 413, 422].contains(code)"),
+            "Must catch the real MeeshyError.server case for an explicit allow-list of terminal 4xx " +
+            "codes so client-side validation errors are dropped instead of replayed forever."
+        )
+    }
+
+    // P1 — a bare `(400..<500).contains(code)` range silently swept 429
+    // (rate-limited) into "terminal" and dropped a queued settings mutation
+    // forever, contradicting `OutboxFlusher.permanentRejectionStatusCodes`
+    // which explicitly documents 429 as retryable (mirrors APIClient's own
+    // `retryableStatusCodes`). Pin that 429 is excluded from the terminal set.
+    func test_settingsFlushHandler_doesNotTreat429AsTerminal() throws {
+        let source = try meeshyAppSource()
+        guard let body = settingsFlushHandlerBody(from: source) else {
+            XCTFail("Could not locate SettingsActionQueue.setFlushHandler body in MeeshyApp.swift")
+            return
+        }
+        XCTAssertFalse(
+            body.contains("(400..<500).contains(code)"),
+            "Must not use an unfiltered 4xx range — it silently sweeps 429 (rate-limited, retryable) " +
+            "into the terminal/drop path."
+        )
+        guard let range = body.range(of: "catch MeeshyError.server(let code, _) where ") else {
+            XCTFail("Could not locate the MeeshyError.server catch guard")
+            return
+        }
+        let guardLine = String(body[range.upperBound...].prefix(60))
+        XCTAssertFalse(
+            guardLine.contains("429"),
+            "429 must not appear in the terminal-status allow-list — it is retryable, not permanent."
         )
     }
 

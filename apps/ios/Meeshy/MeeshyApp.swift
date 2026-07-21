@@ -278,7 +278,7 @@ struct MeeshyApp: App {
                                 body: action.payload
                             )
                             return true
-                        } catch MeeshyError.server(let code, _) where (400..<500).contains(code) {
+                        } catch MeeshyError.server(let code, _) where [400, 404, 413, 422].contains(code) {
                             // P1 — `APIClient.request` only ever throws `MeeshyError`
                             // (never the legacy `APIError`), so this catch NEVER
                             // matched and every 4xx (validation error, etc.) fell
@@ -287,6 +287,16 @@ struct MeeshyApp: App {
                             // never succeed. Treat client-side validation errors as
                             // terminal — replaying the same payload won't help. Drop
                             // the action so the queue doesn't bounce forever.
+                            //
+                            // 429 is deliberately EXCLUDED from this set — mirrors
+                            // `OutboxFlusher.permanentRejectionStatusCodes`
+                            // (packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxFlusher.swift),
+                            // which documents 408/429/503 as retryable (APIClient's
+                            // own `retryableStatusCodes` already treats 429 as
+                            // transient). An unfiltered `(400..<500)` range here
+                            // would silently sweep 429 into "terminal", permanently
+                            // dropping a queued settings mutation that only failed
+                            // because of rate limiting.
                             return true
                         } catch MeeshyError.forbidden {
                             // 403 is also a terminal client-side error (thrown as

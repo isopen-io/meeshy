@@ -251,16 +251,20 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         case sessionExpired
     }
 
-    /// P1 — a 401 on `/auth/login`, `/auth/login/2fa`, `/auth/register`, or
-    /// `/auth/magic-link/*` means "these credentials are wrong", never
-    /// "your session expired" (there is no session yet on these endpoints).
+    /// P1 — a 401 on `/auth/login` or `/auth/login/2fa` means "these
+    /// credentials are wrong", never "your session expired" (there is no
+    /// session yet on these endpoints).
     /// `/auth/refresh` is deliberately EXCLUDED: a 401 there means the
     /// refresh token itself is dead, which is genuinely `.sessionExpired`.
+    /// `/auth/register` and `/auth/magic-link/*` are also deliberately
+    /// EXCLUDED — the gateway never returns 401 on either (both surface
+    /// every error as 400 via `sendBadRequest`; verified against
+    /// `services/gateway/src/routes/auth/register.ts` and
+    /// `services/gateway/src/routes/magic-link.ts`, zero `sendUnauthorized`
+    /// call sites in either file). Including them here would be scope creep
+    /// beyond the audited root cause (wrong password / 2FA code).
     nonisolated static func mapUnauthorized(endpoint: String, serverMessage: String?) -> UnauthorizedMapping {
-        let isCredentialEndpoint = endpoint.hasPrefix("/auth/login")
-            || endpoint.hasPrefix("/auth/register")
-            || endpoint.hasPrefix("/auth/magic-link")
-        guard isCredentialEndpoint else { return .sessionExpired }
+        guard endpoint.hasPrefix("/auth/login") else { return .sessionExpired }
         return .invalidCredentials(message: serverMessage ?? "Identifiants invalides")
     }
 
