@@ -36,23 +36,33 @@ final class P2PWebRTCClientDelegateIdentityGuardTests: XCTestCase {
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }()
 
-    private func body(from startMarker: String, to endMarker: String) throws -> String {
-        XCTAssertFalse(Self.source.isEmpty, "Could not read P2PWebRTCClient.swift")
-        guard let start = Self.source.range(of: startMarker) else {
-            throw XCTSkip("\(startMarker) not found — file structure changed")
+    /// Loud by construction: a missing start OR end marker fails the test via
+    /// `XCTFail` (never a silent `XCTSkip`, which reads as green in CI) and the
+    /// end marker is mandatory — no falling back to `source.endIndex` on a miss,
+    /// which would silently widen the search window into unrelated code and let
+    /// an assertion pass for the wrong reason. Mirrors the loud pattern already
+    /// used in `CallManagerTests`.
+    private func body(from startMarker: String, to endMarker: String, file: StaticString = #filePath, line: UInt = #line) -> String? {
+        guard !Self.source.isEmpty else {
+            XCTFail("Could not read P2PWebRTCClient.swift", file: file, line: line)
+            return nil
         }
-        let end = Self.source.range(
-            of: endMarker,
-            range: start.upperBound..<Self.source.endIndex
-        )?.lowerBound ?? Self.source.endIndex
-        return String(Self.source[start.lowerBound..<end])
+        guard let start = Self.source.range(of: startMarker) else {
+            XCTFail("Start marker not found — file structure changed: \"\(startMarker)\"", file: file, line: line)
+            return nil
+        }
+        guard let end = Self.source.range(of: endMarker, range: start.upperBound..<Self.source.endIndex) else {
+            XCTFail("End marker not found — file structure changed: \"\(endMarker)\"", file: file, line: line)
+            return nil
+        }
+        return String(Self.source[start.lowerBound..<end.lowerBound])
     }
 
-    func test_deliverRemoteTrack_guardsOnOriginatingPeerConnectionIdentity() throws {
-        let fn = try body(
+    func test_deliverRemoteTrack_guardsOnOriginatingPeerConnectionIdentity() {
+        guard let fn = body(
             from: "nonisolated private func deliverRemoteTrack(_ track: RTCMediaStreamTrack?, from peerConnection: RTCPeerConnection)",
             to: "nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream)"
-        )
+        ) else { return }
         XCTAssertTrue(
             fn.contains("guard let self, self.peerConnection === peerConnection else { return }"),
             "deliverRemoteTrack must no-op when the delivering connection is not the currently active one — " +
@@ -60,22 +70,22 @@ final class P2PWebRTCClientDelegateIdentityGuardTests: XCTestCase {
         )
     }
 
-    func test_didStartReceivingOn_and_didAddReceiver_and_didAddStream_passOriginatingConnection() throws {
-        let fn = try body(
+    func test_didStartReceivingOn_and_didAddReceiver_and_didAddStream_passOriginatingConnection() {
+        guard let fn = body(
             from: "extension P2PWebRTCClient: RTCPeerConnectionDelegate {",
             to: "nonisolated private func deliverRemoteTrack"
-        )
+        ) else { return }
         XCTAssertTrue(fn.contains("deliverRemoteTrack(transceiver.receiver.track, from: peerConnection)"))
         XCTAssertTrue(fn.contains("deliverRemoteTrack(rtpReceiver.track, from: peerConnection)"))
         XCTAssertTrue(fn.contains("deliverRemoteTrack(stream.videoTracks.first, from: peerConnection)"))
         XCTAssertTrue(fn.contains("deliverRemoteTrack(stream.audioTracks.first, from: peerConnection)"))
     }
 
-    func test_didChangeConnectionState_guardsOnOriginatingPeerConnectionIdentity() throws {
-        let fn = try body(
+    func test_didChangeConnectionState_guardsOnOriginatingPeerConnectionIdentity() {
+        guard let fn = body(
             from: "nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState)",
             to: "nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState)"
-        )
+        ) else { return }
         XCTAssertTrue(
             fn.contains("guard let self, self.peerConnection === peerConnection else { return }"),
             "a stale .closed/.failed/.connected from a torn-down connection must not drive the FSM " +
@@ -83,11 +93,11 @@ final class P2PWebRTCClientDelegateIdentityGuardTests: XCTestCase {
         )
     }
 
-    func test_didGenerateCandidate_guardsOnOriginatingPeerConnectionIdentity() throws {
-        let fn = try body(
+    func test_didGenerateCandidate_guardsOnOriginatingPeerConnectionIdentity() {
+        guard let fn = body(
             from: "nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate)",
             to: "nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate])"
-        )
+        ) else { return }
         XCTAssertTrue(
             fn.contains("guard let self, self.peerConnection === peerConnection else { return }"),
             "an ICE candidate generated by a torn-down connection must not be tagged with the " +
@@ -95,11 +105,11 @@ final class P2PWebRTCClientDelegateIdentityGuardTests: XCTestCase {
         )
     }
 
-    func test_didOpenDataChannel_guardsOnOriginatingPeerConnectionIdentity() throws {
-        let fn = try body(
+    func test_didOpenDataChannel_guardsOnOriginatingPeerConnectionIdentity() {
+        guard let fn = body(
             from: "nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel)",
             to: "// MARK: - RTCDataChannelDelegate"
-        )
+        ) else { return }
         XCTAssertTrue(
             fn.contains("guard let self, self.peerConnection === peerConnection else { return }"),
             "a data channel opened by a torn-down connection must not overwrite the new call's " +
