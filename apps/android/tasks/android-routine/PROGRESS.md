@@ -5402,7 +5402,23 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
-**Just shipped (2026-07-15): `chat-appearance-transforms`** — the shake/zoom/explode/waoo one-shot appearance
+**Build-order focus is §A Auth** (parity sequencing `Auth → Conversations → Chat → …`). Just shipped
+(2026-07-21): `auth-password-requirements` — the itemised requirements checklist (`PasswordRequirements`)
++ confirm-password gate (`PasswordEntry`) pure `:core:model` cores for registration Step 5. With the
+strength meter (`PasswordStrength`), the country catalogue (`CountryCatalog`) and the Prisme device-locale
+resolver already landed, the remaining §A pure cores worth taking next:
+- **Live availability debounce + suggestions** — the username/email/phone "is this taken?" check
+  (`RegistrationViewModel.validateUsername/Email/Phone`, 250 ms debounce + suggestion generator). A pure
+  debounce/suggestion core (`:core:model`) + the app-side actuator later. Highest §A value (feeds the
+  8-step wizard's live badges).
+- **Region → language inference at signup** (`Country auto-detection + region→language inference`,
+  feature-parity §A) — a pure ISO-region → default-language map (iOS onboarding language pre-selection).
+- **Server environment selector** (dev/staging/prod/custom host) — a pure environment model + validator.
+- The tracked **Kover 90 % coverage-gate infra** (touches only `apps/android` gradle files).
+
+---
+
+**Earlier (2026-07-15): `chat-appearance-transforms`** — the shake/zoom/explode/waoo one-shot appearance
 transforms (the sibling half of the confetti/fireworks particles). Pure `:core:model`
 `AppearanceTransforms.forEffect(effect, progress): AppearanceTransformSpec?` (shake sinusoid / zoom grow /
 explode two-stage pop+fade / waoo two-stage bounce+glow) + `resolve(effects, progress)` fold + `transformEffects`
@@ -6330,6 +6346,44 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-21 — slice `auth-password-requirements` ✅ impl + local gate green + reviewer PASS → PR (CI pending)
+- **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start (only iOS `laughing-*`
+  PRs open). Synced local `main` to `origin/main` (force-updated to `0e9f8b9`), branched
+  `claude/apps/android/auth-password-requirements`.
+- **Slice:** two pure `:core:model` cores completing iOS registration Step 5 (`StepPasswordView` +
+  `RegistrationViewModel.canProceed`). Build-order area §A Auth (first in the parity sequence).
+  - `PasswordRequirements.evaluate(password) → PasswordRequirementsState` — the four itemised
+    `requirementsCard` rows (length ≥ 8 / uppercase / lowercase / digit), each an independent boolean;
+    `met` in card-render order, `allMet` summary. Distinct from `PasswordStrength` (the 0..5 score meter
+    with the extra 12-char + special-char bands) — this is the discrete rule checklist.
+  - `PasswordEntry.evaluate(password, confirm) → PasswordEntryState` — the confirm interaction:
+    `showConfirmField` = `password.length ≥ 8` (verbatim iOS reveal gate), `match` (`UNDETERMINED` until a
+    non-empty confirm on a visible field → `MATCHED`/`MISMATCHED`), `canProceed` =
+    `password.length ≥ 8 && password == confirm` (verbatim `RegistrationViewModel` gate). `isMatched`
+    convenience mirrors the verdict.
+- **Tests:** +19 behavioural (10 `PasswordRequirementsTest`: empty / 7-char misses-length / 8-char
+  boundary / each row present-vs-absent / all-four → allMet+set / eight-but-no-upper → not-all / symbol
+  is not a row / `isMet` mirrors `met` / rows in card order; 9 `PasswordEntryTest`: both-empty /
+  short-hides-confirm / 8-char reveal boundary / long+empty-confirm undetermined / matches → proceed /
+  differs → mismatch+no-proceed / matching-but-too-short → no-proceed / confirm-text-but-password-short
+  hidden / `isMatched` convenience). No tautologies (verdicts asserted against hardcoded expectations,
+  not the production expression).
+- **Edge cases:** empty password/confirm, 7↔8 length boundary (both cores), symbol-only (no row),
+  identical-but-below-gate (no proceed), confirm typed while password still short (field hidden, no card).
+- **Mutation (RED proof):** dropping the length gate from `canProceed`
+  (`showConfirmField && password == confirm` → `password == confirm`) fails **exactly**
+  `evaluate_bothEmpty_hidesConfirmAndCannotProceed` + `evaluate_matchingButTooShort_cannotProceed`
+  (9 run, 2 failed, no collateral) — behavioural, not tautological. Source restored from `.bak`.
+- **Verify (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk` — the `./gradlew` wrapper is
+  proxy-blocked, see NOTES 2026-07-21):** new suites `:core:model:testDebugUnitTest` green (10/10 + 9/9);
+  full-tree `assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL in 5m 19s**, zero failures across all
+  modules (the documented `:sdk-core` `ThemeStoreTest` DataStore flake did not recur this run).
+- **Reviewer:** PASS — diff `apps/android` only (2 new production files + 2 tests + tracking); behavioural
+  tests, no tautology; **SDK purity** — two stateless value cores in `:core:model`, zero framework deps,
+  the `StepPasswordView` composable + wizard scaffold stay app-side/pending; **SSOT** — one requirements
+  evaluator + one confirm-gate, `MIN_LENGTH` shared between the checklist and the field-reveal; no
+  coverage floor lowered, no existing test weakened.
 
 ### 2026-07-20 — slice `call-reliability-policy` ✅ impl + local gate green + reviewer PASS → PR #2166 (CI pending)
 - **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start; the prior slice
