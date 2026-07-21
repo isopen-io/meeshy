@@ -66,8 +66,17 @@ struct SectionDropDelegate: DropDelegate {
 /// 2026-07-20: the "créez-en une" CTA flashed during cold-start `.idle` —
 /// skeleton was gated strictly on `.loading` — and reused verbatim for an
 /// ACTIVE search with zero matches, misleadingly implying zero
-/// conversations). Top-level (not nested) — matches this codebase's
-/// established `nonisolated enum` placement convention.
+/// conversations). `loadState` is resolved BEFORE the search branch (fix
+/// 2026-07-21): `.idle`/`.loading` ONLY occur while the cold, cache-less
+/// first fetch is in flight (`ConversationListViewModel.performLoadConversations`'s
+/// `.expired`-with-nothing-recovered / `.empty` branches) — the search field
+/// is always focusable, so a user typing during that window must still see
+/// the cache-first skeleton, never a definitive "no results for your
+/// search" (a still-loading state is not a result). Once the load has
+/// settled (`.loaded`/`.offline`/`.error`/`.cachedFresh`/`.cachedStale`),
+/// an active search with zero matches takes priority over every other
+/// state. Top-level (not nested) — matches this codebase's established
+/// `nonisolated enum` placement convention.
 nonisolated enum ConversationListEmptyBranch: Equatable {
     case skeleton
     case searchNoResults
@@ -298,23 +307,38 @@ struct ConversationListView: View {
         loadFailed: Bool,
         searchTextIsEmpty: Bool
     ) -> ConversationListEmptyBranch {
-        guard searchTextIsEmpty else { return .searchNoResults }
         switch loadState {
         case .idle, .loading:
+            // Cold, cache-less first fetch still in flight: a still-loading
+            // state is never a definitive result, so this wins over an
+            // active search — never show "no results" while we don't yet
+            // know whether the cache is genuinely empty (fix 2026-07-21).
             return .skeleton
         default:
+            guard searchTextIsEmpty else { return .searchNoResults }
             return loadFailed ? .syncError : .createFirstConversation
         }
     }
 
     // MARK: - Preview Auto-Load Eligibility
     //
-    // Pure/testable (no SwiftUI/MainActor dependency) — mirrors the SAME
-    // shape as `triggerLoadMoreIfNeeded`'s existing `firstIndex(where:)` scan
-    // below, so it carries no new complexity class. Gates
-    // `ConversationRowItem.enableAutoPreviewLoad` to the first `limit` rows
-    // (audit 2026-07-20: every row firing its preview-prefetch `.task` on
-    // appear meant 1 REST call per newly-visible row on a cold cache).
+    // Pure/testable (no SwiftUI/MainActor dependency) — same `firstIndex`
+    // scan shape as `triggerLoadMoreIfNeeded` below, but NOT the same call
+    // cadence: `triggerLoadMoreIfNeeded` fires from `.onAppear` (once per
+    // scroll-triggered row appearance), while this runs on every
+    // `conversationRow` body evaluation for every on-screen row — including
+    // re-renders driven by `presencePulse`. The caller (`sectionsContent`)
+    // hoists the `orderedConversationIds` array build to ONCE per body pass
+    // instead of once per row to keep that repeated cost bounded. Gates
+    // `ConversationRowItem.enableAutoPreviewLoad` to the first `limit`
+    // entries of `orderedConversationIds` — the caller MUST pass the
+    // actually-rendered order (flattened `groupedConversations`), never the
+    // raw unfiltered/ungrouped `conversationViewModel.conversations`: a
+    // filtered/sectioned view's visible rows can fall entirely outside the
+    // full-account top-20 by recency, permanently starving their auto-load
+    // (fix 2026-07-21; audit 2026-07-20 introduced the limit itself: every
+    // row firing its preview-prefetch `.task` on appear meant 1 REST call
+    // per newly-visible row on a cold cache).
     nonisolated static func shouldAutoLoadPreview(
         conversationId: String,
         orderedConversationIds: [String],
@@ -326,9 +350,20 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private var sectionsContent: some View {
+        // Flattened render order across EVERY visible section — pinned →
+        // user categories (declared order) → other — mirrors exactly what
+        // `ConversationListViewModel.groupConversations` painted on screen.
+        // Computed ONCE per body pass here (not per row) and threaded down
+        // through `sectionView`/`sectionConversations` to `conversationRow`:
+        // ranking `enableAutoPreviewLoad` against
+        // `conversationViewModel.conversations` (the raw, unfiltered,
+        // ungrouped account-wide list) used to silently starve auto-load for
+        // any filtered/sectioned view whose visible rows don't line up with
+        // the full-account top-20 by recency (fix 2026-07-21).
+        let orderedConversationIds = conversationViewModel.groupedConversations.flatMap { $0.conversations.map(\.id) }
         LazyVStack(spacing: 8) {
             ForEach(conversationViewModel.groupedConversations, id: \.section.id) { group in
-                sectionView(for: group)
+                sectionView(for: group, orderedConversationIds: orderedConversationIds)
             }
         }
         // Sonde inerte : capture l'UIScrollView hôte pour l'auto-scroll de
@@ -342,7 +377,10 @@ struct ConversationListView: View {
     }
 
     @ViewBuilder
-    private func sectionView(for group: (section: ConversationSection, conversations: [Conversation])) -> some View {
+    private func sectionView(
+        for group: (section: ConversationSection, conversations: [Conversation]),
+        orderedConversationIds: [String]
+    ) -> some View {
         // Hide section header when there are no user categories (flat list)
         if !isSingleUngroupedSection {
             SectionHeaderView(
@@ -379,7 +417,7 @@ struct ConversationListView: View {
 
         // Section Content — always visible when no categories, otherwise animated expand/collapse
         if isSingleUngroupedSection || expandedSections.contains(group.section.id) {
-            sectionConversations(group.conversations)
+            sectionConversations(group.conversations, orderedConversationIds: orderedConversationIds)
                 .padding(.horizontal, 16)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)).combined(with: .offset(y: -8)),
@@ -389,7 +427,7 @@ struct ConversationListView: View {
     }
 
     @ViewBuilder
-    private func sectionConversations(_ conversations: [Conversation]) -> some View {
+    private func sectionConversations(_ conversations: [Conversation], orderedConversationIds: [String]) -> some View {
         // rowWidth derives from the actual containing column width (iPad
         // left column is much narrower than `UIScreen.main.bounds.width`)
         // minus innerPadding(32) + avatar(52) + badge(28) + spacing(24).
@@ -401,7 +439,7 @@ struct ConversationListView: View {
         let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
         LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in
-                conversationRow(for: conversation, rowWidth: rowWidth)
+                conversationRow(for: conversation, rowWidth: rowWidth, orderedConversationIds: orderedConversationIds)
                     .onAppear {
                         // Cursor-based infinite scroll: trigger `loadMore`
                         // 5 rows before the loaded tail. The ViewModel
@@ -431,7 +469,7 @@ struct ConversationListView: View {
     // type-metadata instantiation crash on low-memory devices. This builder
     // only wires the row's inputs; the returned `some View` is the nominal
     // `ConversationRowItem`, which keeps the enclosing list type small.
-    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> some View {
+    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat, orderedConversationIds: [String]) -> some View {
         let community: MeeshyCommunity? = {
             guard conversation.type == .community || conversation.communityId != nil,
                   let communityId = conversation.communityId else { return nil }
@@ -477,7 +515,7 @@ struct ConversationListView: View {
             },
             enableAutoPreviewLoad: Self.shouldAutoLoadPreview(
                 conversationId: conversation.id,
-                orderedConversationIds: conversationViewModel.conversations.map(\.id),
+                orderedConversationIds: orderedConversationIds,
                 limit: ConversationRowMetrics.autoPreviewLoadRowLimit
             ),
             onLongPress: { sourceFrame in

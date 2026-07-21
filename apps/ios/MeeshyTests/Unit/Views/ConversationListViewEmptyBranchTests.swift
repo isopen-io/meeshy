@@ -26,16 +26,37 @@ final class ConversationListViewEmptyBranchTests: XCTestCase {
         XCTAssertEqual(branch, .skeleton)
     }
 
-    func test_emptyBranch_activeSearchWithNoResults_returnsSearchNoResults_evenWhileLoading() {
-        // An ACTIVE search with zero matches must NEVER show the "you have no
-        // conversations, create one" CTA — that's specifically what the audit
-        // flagged as misleading. Takes priority over every other state.
+    func test_emptyBranch_activeSearchDuringColdStartLoading_returnsSkeleton_notSearchNoResults() {
+        // Fix 2026-07-21: `.loading` only occurs while the cold, cache-less
+        // first fetch is in flight — a still-loading state is NOT a
+        // definitive result, so it must win over an active search. The
+        // search field is always focusable, so a user can start typing
+        // before the very first `loadConversations()` round-trip lands;
+        // showing "no results" at that point would misleadingly claim a
+        // fact (zero matches) the app doesn't know yet.
         let branch = ConversationListView.emptyBranch(loadState: .loading, loadFailed: false, searchTextIsEmpty: false)
-        XCTAssertEqual(branch, .searchNoResults)
+        XCTAssertEqual(branch, .skeleton)
+    }
+
+    func test_emptyBranch_activeSearchDuringColdStartIdle_returnsSkeleton_notSearchNoResults() {
+        let branch = ConversationListView.emptyBranch(loadState: .idle, loadFailed: false, searchTextIsEmpty: false)
+        XCTAssertEqual(branch, .skeleton)
     }
 
     func test_emptyBranch_activeSearchWithNoResults_returnsSearchNoResults_evenOnSyncFailure() {
+        // `.error` is a SETTLED state (the load finished, unsuccessfully) —
+        // unlike `.idle`/`.loading`, so the active search takes priority:
+        // "no results for this search" beats "everything's broken" once we
+        // actually know the search came up empty.
         let branch = ConversationListView.emptyBranch(loadState: .error("boom"), loadFailed: true, searchTextIsEmpty: false)
+        XCTAssertEqual(branch, .searchNoResults)
+    }
+
+    func test_emptyBranch_activeSearchWithNoResults_afterSettledLoad_returnsSearchNoResults() {
+        // An ACTIVE search with zero matches must NEVER show the "you have no
+        // conversations, create one" CTA — that's specifically what the audit
+        // flagged as misleading. Takes priority over every other SETTLED state.
+        let branch = ConversationListView.emptyBranch(loadState: .loaded, loadFailed: false, searchTextIsEmpty: false)
         XCTAssertEqual(branch, .searchNoResults)
     }
 

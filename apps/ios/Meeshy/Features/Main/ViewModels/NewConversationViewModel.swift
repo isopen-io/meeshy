@@ -113,7 +113,12 @@ final class NewConversationViewModel: ObservableObject {
             searchResults = []
             isSearching = false
             searchFailed = true
-            Logger.network.warning("[NewConversationViewModel] user search failed for query=\(query, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            // `query` is free-text the user typed to look up a contact (name,
+            // email fragment, phone number…) — logged `.private` so it isn't
+            // persisted in cleartext by the unified logging system (fix
+            // 2026-07-21; matches the existing `.private` convention for
+            // user-entered PII, e.g. `MagicLinkView`'s email log).
+            Logger.network.warning("[NewConversationViewModel] user search failed for query=\(query, privacy: .private): \(error.localizedDescription, privacy: .public)")
         }
     }
 
