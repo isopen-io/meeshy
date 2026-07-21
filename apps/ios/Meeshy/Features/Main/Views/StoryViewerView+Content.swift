@@ -1592,6 +1592,58 @@ extension StoryViewerView {
     /// réinitialise le delta à 0, et on synchronise `storyCommentLikedIds`
     /// depuis `hasCurrentUser`. Le résultat affiché — `comment.likes + delta`
     /// — converge vers la vérité serveur sans flicker.
+    /// Realtime asymmetry fix (mirrors `PostDetailViewModel.subscribeToSocket`'s
+    /// `commentAdded` sink): a `comment:added` broadcast for the currently
+    /// viewed story used to only move the sidebar's denormalized count (via
+    /// `StoryViewModel`'s `storyGroups` mutation → the `.adaptiveOnChange(of:
+    /// currentStory?.commentCount)` mirror) — the comments overlay's own
+    /// `storyComments`/`storyCommentRepliesMap` never received the new row, so
+    /// a viewer with the overlay open needed to close and reopen it to see a
+    /// comment someone else just posted.
+    func applyStoryCommentAdded(_ data: SocketCommentAddedData) {
+        guard data.postId == currentStory?.id else { return }
+
+        let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+            translations: data.comment.translations,
+            originalLanguage: data.comment.originalLanguage,
+            preferredLanguages: resolvedViewerLanguageChain
+        )
+        let comment = FeedComment(
+            id: data.comment.id,
+            author: data.comment.author.name,
+            authorId: data.comment.author.id,
+            authorUsername: data.comment.author.username,
+            authorAvatarURL: data.comment.author.avatar,
+            content: data.comment.content,
+            timestamp: data.comment.createdAt,
+            likes: data.comment.likeCount ?? 0,
+            replies: data.comment.replyCount ?? 0,
+            parentId: data.comment.parentId,
+            effectFlags: data.comment.effectFlags ?? 0,
+            originalLanguage: data.comment.originalLanguage,
+            translatedContent: translatedContent,
+            currentUserReactions: data.comment.currentUserReactions,
+            media: (data.comment.media ?? []).map { $0.toFeedMedia() }
+        )
+
+        if let parentId = comment.parentId {
+            if storyCommentExpandedThreads.contains(parentId) {
+                var existing = storyCommentRepliesMap[parentId] ?? []
+                if !existing.contains(where: { $0.id == comment.id }) {
+                    existing.append(comment)
+                    storyCommentRepliesMap[parentId] = existing
+                }
+            }
+            if let idx = storyComments.firstIndex(where: { $0.id == parentId }) {
+                storyComments[idx].replies += 1
+            }
+        } else if !storyComments.contains(where: { $0.id == comment.id }) {
+            storyComments.append(comment)
+        }
+
+        storyCommentCount = data.commentCount
+    }
+
     func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
         // 2026-05-29 : on ne gate plus sur `showCommentsOverlay` — l'état doit
         // rester aligné sur le serveur même quand l'overlay est fermé.
