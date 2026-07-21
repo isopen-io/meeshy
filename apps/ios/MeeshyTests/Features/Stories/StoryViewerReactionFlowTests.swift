@@ -55,13 +55,15 @@ final class StoryViewerReactionFlowTests: XCTestCase {
 
     // MARK: - Rollback pattern (P1 — 409 REACTION_LIMIT_REACHED)
     //
-    // `sendReaction(emoji:priorReactions:priorCount:)` (StoryViewerView+Content.swift)
-    // is likewise private-state-bound and untestable without a live view. These
-    // tests mirror the exact snapshot → optimistic-mutate → rollback-on-failure
-    // sequence that `triggerStoryReaction` + `sendReaction` now perform together,
-    // pinning the intent that a rejected `StoryInteractionService.react` (any
-    // throw — 409 REACTION_LIMIT_REACHED is the concrete reproducible one)
-    // restores the EXACT pre-mutation snapshot, never a hardcoded empty state.
+    // These two tests mirror the snapshot → optimistic-mutate → rollback-on-
+    // failure sequence as spec-pattern documentation of intent (the animation
+    // preamble above them genuinely IS private-state-bound). The REAL
+    // rollback guarantee — including the `sendReaction` swipe-away guard
+    // these local-variable copies can't see — now has its own regression
+    // coverage against the actual production method: `sendReaction` gained
+    // an injectable `interactionService` parameter (defaults to the real
+    // `StoryInteractionService()`), and `StoryViewerReactionRollbackTests`
+    // exercises it end-to-end via a `MockAPIClientForApp`.
 
     func test_specPattern_reactionRejected_restoresExactPriorSnapshot() {
         // Arrange: user already reacted with 👍 before this tap.

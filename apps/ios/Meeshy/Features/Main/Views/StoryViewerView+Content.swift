@@ -819,13 +819,24 @@ extension StoryViewerView {
     /// gateway's 409 REACTION_LIMIT_REACHED conflict), so a rejected reaction
     /// restores the exact prior state instead of leaving a phantom emoji and
     /// an inflated counter forever.
-    func sendReaction(emoji: String, priorReactions: [String], priorCount: Int) {
+    ///
+    /// `interactionService` is injectable (defaults to the real service) so
+    /// `StoryViewerReactionRollbackTests` can exercise this exact method —
+    /// including the swipe-away guard below — against a `MockAPIClientForApp`
+    /// instead of re-implementing the snapshot/rollback logic as local
+    /// variables in a test that never calls production code.
+    func sendReaction(
+        emoji: String,
+        priorReactions: [String],
+        priorCount: Int,
+        interactionService: StoryInteractionService = StoryInteractionService()
+    ) {
         guard let story = currentStory else { return }
         EngagementTracker.shared.recordAction(.reacted, surface: .storyViewer)
 
         Task {
             do {
-                try await StoryInteractionService().react(storyId: story.id, emoji: emoji)
+                try await interactionService.react(storyId: story.id, emoji: emoji)
             } catch {
                 // Only roll back if we're still looking at the same story —
                 // the user may have swiped to another slide by the time the
@@ -1679,17 +1690,36 @@ extension StoryViewerView {
             media: (data.comment.media ?? []).map { $0.toFeedMedia() }
         )
 
+        // The echoed broadcast for OUR OWN just-sent comment/reply: `sendComment`
+        // (above) already inserted an optimistic `temp_` placeholder and bumped
+        // the counters synchronously — it never reconciles that placeholder on
+        // POST success. Without this check the server's real row lands ALONGSIDE
+        // the temp_ one (visible duplicate) and, for a reply, the parent's
+        // `replies` count gets incremented a second time here. Mirrors
+        // `FeedCommentsSheet`'s `isTwin` reconciliation for the equivalent case.
+        func isTwin(_ c: FeedComment) -> Bool {
+            c.id.hasPrefix("temp_")
+                && c.authorId == comment.authorId
+                && c.content == comment.content
+                && c.parentId == comment.parentId
+        }
+
         if let parentId = comment.parentId {
-            if storyCommentExpandedThreads.contains(parentId) {
-                var existing = storyCommentRepliesMap[parentId] ?? []
-                if !existing.contains(where: { $0.id == comment.id }) {
+            var existing = storyCommentRepliesMap[parentId] ?? []
+            if let idx = existing.firstIndex(where: isTwin) {
+                existing[idx] = comment
+                storyCommentRepliesMap[parentId] = existing
+            } else {
+                if storyCommentExpandedThreads.contains(parentId), !existing.contains(where: { $0.id == comment.id }) {
                     existing.append(comment)
                     storyCommentRepliesMap[parentId] = existing
                 }
+                if let idx = storyComments.firstIndex(where: { $0.id == parentId }) {
+                    storyComments[idx].replies += 1
+                }
             }
-            if let idx = storyComments.firstIndex(where: { $0.id == parentId }) {
-                storyComments[idx].replies += 1
-            }
+        } else if let idx = storyComments.firstIndex(where: isTwin) {
+            storyComments[idx] = comment
         } else if !storyComments.contains(where: { $0.id == comment.id }) {
             storyComments.append(comment)
         }

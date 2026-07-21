@@ -145,6 +145,54 @@ final class StoryViewerCommentRealtimeTests: XCTestCase {
             "A broadcast for a story the viewer isn't currently looking at must not touch this @State")
     }
 
+    // MARK: - Self-echo reconciliation (P1 — temp_ optimistic twin)
+
+    func test_applyStoryCommentAdded_selfEchoTopLevel_reconcilesOptimisticTempEntryInsteadOfDuplicating() {
+        let sut = makeSUT(storyId: "story-0")
+        let tempId = "temp_\(UUID().uuidString)"
+        sut.storyComments = [
+            FeedComment(id: tempId, author: "Bob", authorId: "u2", content: "Nice story!", timestamp: Date())
+        ]
+
+        sut.applyStoryCommentAdded(makeCommentAddedData(postId: "story-0", commentId: "comment-real", commentCount: 5))
+
+        XCTAssertEqual(sut.storyComments.count, 1,
+            "The server echo for our own comment must reconcile the temp_ placeholder in place, not duplicate it")
+        XCTAssertEqual(sut.storyComments.map(\.id), ["comment-real"])
+    }
+
+    func test_applyStoryCommentAdded_selfEchoTopLevel_differentAuthor_stillAppendsSeparately() {
+        // Sanity check for the isTwin guard: a temp_-prefixed row from a
+        // DIFFERENT author/content must never be treated as our own echo.
+        let sut = makeSUT(storyId: "story-0")
+        let tempId = "temp_\(UUID().uuidString)"
+        sut.storyComments = [
+            FeedComment(id: tempId, author: "Alice", authorId: "u1", content: "Unrelated draft", timestamp: Date())
+        ]
+
+        sut.applyStoryCommentAdded(makeCommentAddedData(postId: "story-0", commentId: "comment-real", commentCount: 5))
+
+        XCTAssertEqual(sut.storyComments.map(\.id), [tempId, "comment-real"])
+    }
+
+    func test_applyStoryCommentAdded_selfEchoReply_reconcilesOptimisticTempReplyWithoutDoubleCountingParent() {
+        let sut = makeSUT(storyId: "story-0")
+        let tempId = "temp_\(UUID().uuidString)"
+        sut.storyComments = [
+            FeedComment(id: "parent-1", author: "Alice", authorId: "u1", content: "Root comment", timestamp: Date(), replies: 1)
+        ]
+        sut.storyCommentRepliesMap["parent-1"] = [
+            FeedComment(id: tempId, author: "Bob", authorId: "u2", content: "Nice story!", timestamp: Date(), parentId: "parent-1")
+        ]
+
+        sut.applyStoryCommentAdded(makeCommentAddedData(postId: "story-0", commentId: "reply-real", parentId: "parent-1", commentCount: 5))
+
+        XCTAssertEqual(sut.storyComments.first?.replies, 1,
+            "sendComment already bumped the parent's reply count optimistically — the echo must not bump it again")
+        XCTAssertEqual(sut.storyCommentRepliesMap["parent-1"]?.map(\.id), ["reply-real"],
+            "The temp_ reply must be replaced by the real one in place, not appended alongside it")
+    }
+
     // MARK: - Counter mirror (asymmetry with reactionCount fix)
 
     func test_applyStoryCommentAdded_setsAuthoritativeCommentCountFromEvent() {
