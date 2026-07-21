@@ -1242,6 +1242,7 @@ struct ConversationView: View {
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .foregroundStyle(MeeshyColors.warning)
+                                .accessibilityHidden(true)
                             Text(error)
                                 .font(.caption)
                                 .lineLimit(2)
@@ -1252,6 +1253,7 @@ struct ConversationView: View {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.secondary)
                             }
+                            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                         }
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.sm)
