@@ -736,6 +736,11 @@ struct ConversationView: View {
             .sheet(item: $composerState.forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
+                    // ForwardPickerSheet reads `@EnvironmentObject StatusViewModel`
+                    // internally — .sheet does not reliably inherit the parent's
+                    // environment across this boundary (documented crash pattern,
+                    // see docs/lessons on @EnvironmentObject-across-sheet).
+                    .environmentObject(statusViewModel)
             }
             .overlay { overlayMenuContent }
             .overlay { replyThreadOverlayContent }
