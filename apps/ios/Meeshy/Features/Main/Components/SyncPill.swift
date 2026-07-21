@@ -160,7 +160,7 @@ struct SyncPill: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
         .accessibilityHint(visibleEntry?.source != nil
-            ? "Touchez pour ouvrir l'emplacement de l'opération."
+            ? String(localized: "sync.pill.a11y.openLocation.hint", defaultValue: "Touchez pour ouvrir l'emplacement de l'opération.", bundle: .main)
             : "")
     }
 
@@ -227,6 +227,6 @@ struct SyncPill: View {
         if entries.count == 1 {
             return entry.label
         }
-        return "\(entries.count) signaux. Actif : \(entry.label)."
+        return String(localized: "sync.pill.a11y.multiple", defaultValue: "\(entries.count) signaux. Actif : \(entry.label).", bundle: .main)
     }
 }
