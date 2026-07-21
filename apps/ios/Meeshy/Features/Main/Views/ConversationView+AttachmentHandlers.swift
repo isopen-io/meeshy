@@ -22,6 +22,19 @@ extension ConversationView {
         hasAudio && consentMissing && !alreadyPrompted
     }
 
+    /// Read a local attachment's bytes off the MainActor. `Data(contentsOf:)`
+    /// is a synchronous read; a multi-attachment send (dozens of MB of video)
+    /// previously read every file inline on the MainActor — either while
+    /// building the optimistic-send plan or inside the upload loop's `Task`
+    /// (which inherits MainActor isolation by default) — freezing the UI for
+    /// the whole read duration. Hops to a detached background Task — the
+    /// same technique previously implemented in `AttachmentSendService.swift`
+    /// (removed as dead code, 0 call sites) but never applied to this, the
+    /// actually-live send path.
+    nonisolated static func readAttachmentFileBytes(_ url: URL) async -> Data? {
+        await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
+    }
+
     // MARK: - Recording Functions
     func startRecording() {
         audioRecorder.startRecording()
@@ -141,13 +154,21 @@ extension ConversationView {
             let locals: [MeeshyMessageAttachment] = group.attachments.compactMap { att in
                 guard let fileURL = mediaFiles[att.id] else { return nil }
                 let isImage = att.mimeType.hasPrefix("image/")
-                if isImage, let data = try? Data(contentsOf: fileURL), let image = UIImage(data: data) {
+                if isImage {
                     // Seed in-memory NSCache + on-disk image cache so the
                     // optimistic bubble keeps the picture across navigation
                     // until the server `message:new` reconciliation lands.
-                    DiskCacheStore.cacheImageForPreview(image, key: fileURL.absoluteString)
+                    // The read hops off the MainActor (readAttachmentFileBytes)
+                    // — this compactMap runs synchronously on the tap-Send
+                    // call stack, so a raw `Data(contentsOf:)` here froze the
+                    // UI for the whole read of every selected photo/video.
                     let persistKey = fileURL.absoluteString
-                    Task { await CacheCoordinator.shared.images.save(data, for: persistKey) }
+                    Task {
+                        guard let data = await ConversationView.readAttachmentFileBytes(fileURL),
+                              let image = UIImage(data: data) else { return }
+                        DiskCacheStore.cacheImageForPreview(image, key: persistKey)
+                        await CacheCoordinator.shared.images.save(data, for: persistKey)
+                    }
                 }
                 // A video/audio file:// URL cannot be decoded as a still — seed
                 // a ThumbHash from the generated thumbnail so the bubble shows a
@@ -321,7 +342,12 @@ extension ConversationView {
                     await uploader.setExpectedBatch(totalFiles: uploadableAttachments.count, totalBytes: plannedBytes)
                     for att in send.group.attachments {
                         guard let fileURL = mediaFiles[att.id] else { continue }
-                        let fileData = try? Data(contentsOf: fileURL)
+                        // Off-MainActor read: this `Task` inherits the
+                        // MainActor isolation of `sendMessageWithAttachments`
+                        // (project default actor isolation), so a raw
+                        // `Data(contentsOf:)` here froze the UI for the
+                        // duration of every large video/photo read on send.
+                        let fileData = await ConversationView.readAttachmentFileBytes(fileURL)
                         let thumbHash = thumbnails[att.id]?.toThumbHash()
                         let mime = send.group.kind == .audio ? "audio/mp4" : att.mimeType
                         let result = try await uploader.uploadFile(
