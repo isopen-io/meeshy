@@ -852,7 +852,15 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
-            .accessibilityElement(children: .combine)
+            // `.combine` read this capsule as a bare "02:34" (plus the transient
+            // signal glyph) with no hint it is the call duration. Name the
+            // readout and expose the running time as the value, mirroring the
+            // video duration badge. Signal/network degradation is already voiced
+            // by the adjacent statusPill rows in the audio layout, so the
+            // decorative glyph is ignored here rather than duplicated.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+            .accessibilityValue(callManager.formattedDuration)
             .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
