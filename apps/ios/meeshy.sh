@@ -1188,9 +1188,13 @@ END_STATE_SUITE="ZZEndStateConnectedSessionTests"
 # UI/UX/navigation  : Bubble|Skeleton|Themed|Toast|Sync|Consent|Navigation|DeepLink|Router|Tab|Notification|Profile
 # État persistant hors-catégorie (wipes UserDefaults réels, cf. classification 2026-07-04) : CallQualitySummary|VoIPPush
 FINAL_PHASE_CLASS_PATTERN='Auth|Session|TwoFactor|EmailVerification|Connection|Guest|Presence|Anonymous|Story|Post|Feed|Reel|Bookmark|Status|Discover|Community|Conversation|Message|Thread|Attachment|Share|Block|Contact|Request|Friend|Voice|Keypad|CallsViewModel|Engagement|Search|Language|Translat|Compose|Mention|Draft|EditHistory|Starred|LocallyHidden|Outbox|Offline|Bubble|Skeleton|Themed|Toast|Sync|Consent|Navigation|DeepLink|Router|Tab|Notification|Profile|CallQualitySummary|VoIPPush'
-# Jamais exécutées dans les phases 1/2 : perf (opt-in), XCUITest hors target,
-# et la suite d'état final (réservée à la phase 3).
-NON_PHASE_SUITES="MessageListPerformanceTests BubbleSimpleMessagePerfTests SearchPerformanceTests BubbleExpandableTextUITests"
+# Jamais exécutées dans les phases 1/2 : perf (opt-in),
+# et la suite d'état final (réservée à la phase 3). (BubbleExpandableTextUITests,
+# the never-compiled XCUITest suite this list used to defend against, was
+# deleted 2026-07-21 — dead code with no UI-testing target to host it; its
+# stale project.yml exclude-list entry is left for the i18n lane, which owns
+# that file, to clear on its next pass.)
+NON_PHASE_SUITES="MessageListPerformanceTests BubbleSimpleMessagePerfTests SearchPerformanceTests"
 
 discover_test_classes() {
     grep -rhoE "class[[:space:]]+[A-Za-z0-9_]+[[:space:]]*:[[:space:]]*XCTestCase" MeeshyTests --include="*.swift" \
