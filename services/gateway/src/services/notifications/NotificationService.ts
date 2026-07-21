@@ -723,6 +723,14 @@ export class NotificationService {
                 conversationType: params.context.conversationType || '',
                 messageId: params.context.messageId || '',
                 postId: params.context.postId || '',
+                // Navigation sociale iOS — commentaire DÉCLENCHEUR (post_comment,
+                // comment_reply, story_new_comment, story_thread_reply,
+                // friend_story_comment) et requête d'ami (friend_request). Le
+                // handler iOS lit ces clés défensivement : commentId absent →
+                // commentaire racine ; friendRequestId absent → résolution via
+                // receivedRequests par senderId.
+                commentId: params.context.commentId || '',
+                friendRequestId: params.context.friendRequestId || '',
                 postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
                 senderId: params.actor?.id || '',
                 senderUsername: params.actor?.username || '',
@@ -2229,6 +2237,7 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        commentId: params.commentId,
       },
 
       metadata: {
@@ -2338,6 +2347,7 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        commentId: params.commentId,
       },
 
       metadata: {
