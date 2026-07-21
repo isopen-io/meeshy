@@ -40,7 +40,7 @@ final class UserProfileViewModel: ObservableObject {
         self.authManager = authManager
         self.blockService = blockService
         self.profileUser = user
-        self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager)
+        self.isBlocked = Self.checkIsBlocked(userId: user.userId, authManager: authManager, blockService: blockService)
     }
 
     private var resolvedIdentifier: String? {
@@ -217,9 +217,22 @@ final class UserProfileViewModel: ObservableObject {
         }
     }
 
-    private static func checkIsBlocked(userId: String?, authManager: AuthManaging) -> Bool {
-        guard let userId = userId,
-              let blockedIds = authManager.currentUser?.blockedUserIds else { return false }
-        return blockedIds.contains(userId)
+    /// P1 — `blockService` (the canonical, live-updated blocklist source,
+    /// injected but previously unused here) is now consulted FIRST. The
+    /// login-time snapshot (`currentUser.blockedUserIds`) is kept only as a
+    /// fallback for the brief window right after login before
+    /// `AuthManager.warmSessionScopedCaches` → `BlockService.refreshCache()`
+    /// has finished hydrating. Without this, a block/unblock performed
+    /// elsewhere during the session (or in a PRIOR session on this device)
+    /// showed as "not blocked" the next time this profile sheet opened for
+    /// the same user, because the snapshot never changes after init.
+    private static func checkIsBlocked(
+        userId: String?,
+        authManager: AuthManaging,
+        blockService: BlockServiceProviding
+    ) -> Bool {
+        guard let userId else { return false }
+        if blockService.isBlocked(userId: userId) { return true }
+        return authManager.currentUser?.blockedUserIds?.contains(userId) ?? false
     }
 }
