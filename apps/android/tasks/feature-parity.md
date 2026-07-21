@@ -301,7 +301,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `:core:model:testDebugUnitTest` green + full `:app:assembleDebug` → BUILD SUCCESSFUL. Diff =
       `apps/android` only. **Follow-up:** the app-side searchable picker sheet + phone-field composable
       (needs the registration wizard scaffold) and `java.util.Locale`-backed display-name wiring.
-- [ ] First/last name capture; password strength meter + requirements checklist
+- [~] First/last name capture; password strength meter + requirements checklist —
+      **requirements-checklist + confirm-gate cores shipped** (slice `auth-password-requirements`,
+      2026-07-21). The strength *meter* score (`PasswordStrength`, 0..5 bands) already existed; this
+      slice adds the two remaining pure Step-5 cores from iOS `StepPasswordView` +
+      `RegistrationViewModel.canProceed`. **(1)** `:core:model` `PasswordRequirements.evaluate` → a
+      `PasswordRequirementsState` of the four itemised `requirementsCard` rows (length ≥ 8, an
+      uppercase, a lowercase, a digit), each an independent boolean, `met` in card-render order +
+      `allMet` for the shield-header tint. Distinct from the score meter (no special-char band, no
+      12-char gate) — the discrete "have you satisfied this rule" checklist. **(2)** `:core:model`
+      `PasswordEntry.evaluate(password, confirm)` → the pure confirm-interaction state: `showConfirmField`
+      (`password.length ≥ 8`, verbatim iOS reveal gate), `match` (`UNDETERMINED` until a non-empty
+      confirm on a visible field, then `MATCHED`/`MISMATCHED` — the inline card verdict), and
+      `canProceed` (`password.length ≥ 8 && password == confirm`, verbatim `RegistrationViewModel`
+      gate). +19 behavioural tests (10 `PasswordRequirementsTest` every row + boundary + `allMet` +
+      symbol-is-not-a-row; 9 `PasswordEntryTest` reveal boundary / match verdicts / gate incl.
+      matching-but-too-short). Mutation (RED proof): dropping the length gate from `canProceed`
+      (`showConfirmField && password == confirm` → `password == confirm`) fails **exactly**
+      `evaluate_bothEmpty` + `evaluate_matchingButTooShort` (9 run, 2 failed, no collateral).
+      `:core:model:testDebugUnitTest` green + full `assembleDebug` → BUILD SUCCESSFUL. Diff =
+      `apps/android` only. **Follow-up:** first/last-name capture (Step 3) + the app-side `StepPasswordView`
+      composable (needs the registration wizard scaffold) rendering the checklist card + strength bar
+      + match card driven by these cores.
 - [ ] System + regional language selection with live translation preview
 - [ ] Profile photo / banner / bio optional step; registration recap + terms acceptance
 - [ ] Email verification by 6-digit code (OTP autofill, resend, success animation)
