@@ -679,7 +679,7 @@ struct MessageDetailSheet: View {
                             .font(.caption2.weight(.medium))
                             .foregroundColor(langColor.opacity(0.6))
                     }
-                    .accessibilityLabel(String(localized: "message-detail.a11y.language.retranslate", defaultValue: "Retraduire", bundle: .main))
+                    .accessibilityLabel(String(localized: "message-detail.a11y.retranslate", defaultValue: "Retraduire", bundle: .main))
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.caption.weight(.medium))
@@ -722,17 +722,6 @@ struct MessageDetailSheet: View {
             )
         }
         .disabled(isTranslating)
-        // Composed label folds flag/name/state into one announcement — the
-        // nested "Retraduire" Button above remains a known VoiceOver reach
-        // limitation (SwiftUI collapses a Button's label subtree to a single
-        // opaque element, hiding nested controls from the rotor); restructuring
-        // that is a separate interaction-design change, out of scope here.
-        .accessibilityLabel(Self.languageRowAccessibilityLabel(
-            languageName: lang.name,
-            isSelected: isSelected,
-            isTranslating: isTranslating,
-            hasTranslation: hasTranslation || hasAudioTranslation
-        ))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
