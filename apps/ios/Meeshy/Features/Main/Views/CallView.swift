@@ -1490,7 +1490,7 @@ struct CallView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Capsule().fill(Color.green))
+                    .background(Capsule().fill(MeeshyColors.success))
                 }
                 .padding(.top, 8)
                 .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))
