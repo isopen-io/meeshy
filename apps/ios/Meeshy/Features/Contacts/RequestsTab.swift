@@ -86,13 +86,21 @@ struct RequestsTab: View {
         switch activeFilter {
         case .received:
             if viewModel.receivedRequests.isEmpty {
-                emptyState(icon: "person.2.slash", text: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande recue", bundle: .main))
+                emptyState(
+                    icon: "person.2.slash",
+                    title: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande recue", bundle: .main),
+                    subtitle: String(localized: "contacts.requests.empty.received.subtitle", defaultValue: "Les demandes de contact recues apparaitront ici", bundle: .main)
+                )
             } else {
                 receivedList
             }
         case .sent:
             if viewModel.sentRequests.isEmpty {
-                emptyState(icon: "paperplane", text: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyee", bundle: .main))
+                emptyState(
+                    icon: "paperplane",
+                    title: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyee", bundle: .main),
+                    subtitle: String(localized: "contacts.requests.empty.sent.subtitle", defaultValue: "Les demandes que vous envoyez apparaitront ici", bundle: .main)
+                )
             } else {
                 sentList
             }
@@ -279,18 +287,19 @@ struct RequestsTab: View {
 
     // MARK: - Empty State
 
-    private func emptyState(icon: String, text: String) -> some View {
-        VStack(spacing: 16) {
-            Spacer()
-            Image(systemName: icon)
-                .font(.system(.largeTitle).weight(.light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textMuted)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
+    // Delegates to the shared `AdaptiveContentUnavailableView` (native
+    // `ContentUnavailableView` on iOS 17+, faithful iOS 16 fallback) instead of
+    // a hand-rolled VStack — parity with the twin `FriendRequestListView` (175i)
+    // and `StarredMessagesView`. The primitive groups icon + title + subtitle as
+    // one VoiceOver element and adds a guidance subtitle the bespoke version
+    // lacked. maxHeight fill keeps it vertically centred like the former Spacer
+    // sandwich.
+    private func emptyState(icon: String, title: String, subtitle: String) -> some View {
+        AdaptiveContentUnavailableView(
+            title,
+            systemImage: icon,
+            description: Text(subtitle)
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
