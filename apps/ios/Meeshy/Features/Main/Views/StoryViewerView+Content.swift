@@ -838,16 +838,34 @@ extension StoryViewerView {
             do {
                 try await interactionService.react(storyId: story.id, emoji: emoji)
             } catch {
-                // Only roll back if we're still looking at the same story —
-                // the user may have swiped to another slide by the time the
-                // network call resolves, in which case these `@State` fields
-                // already belong to a different story and must not be touched.
-                guard currentStory?.id == story.id else { return }
-                storyCurrentUserReactions = priorReactions
-                storyReactionCount = priorCount
-                HapticFeedback.error()
+                if let target = Self.reactionRollbackTarget(
+                    currentStoryId: currentStory?.id,
+                    originatingStoryId: story.id,
+                    priorReactions: priorReactions,
+                    priorCount: priorCount
+                ) {
+                    storyCurrentUserReactions = target.reactions
+                    storyReactionCount = target.count
+                    HapticFeedback.error()
+                }
             }
         }
+    }
+
+    /// Pure rollback decision for a rejected reaction — extracted so the
+    /// swipe-away guard is directly unit-testable
+    /// (`StoryViewerReactionRollbackTests`) without constructing a live view.
+    /// Returns `nil` when the viewer has moved to a different story since the
+    /// reaction was sent — those `@State` fields already belong to that other
+    /// story now and must not be touched.
+    nonisolated static func reactionRollbackTarget(
+        currentStoryId: String?,
+        originatingStoryId: String,
+        priorReactions: [String],
+        priorCount: Int
+    ) -> (reactions: [String], count: Int)? {
+        guard currentStoryId == originatingStoryId else { return nil }
+        return (priorReactions, priorCount)
     }
 
     func shareStory() {
@@ -1690,13 +1708,37 @@ extension StoryViewerView {
             media: (data.comment.media ?? []).map { $0.toFeedMedia() }
         )
 
-        // The echoed broadcast for OUR OWN just-sent comment/reply: `sendComment`
-        // (above) already inserted an optimistic `temp_` placeholder and bumped
-        // the counters synchronously — it never reconciles that placeholder on
-        // POST success. Without this check the server's real row lands ALONGSIDE
-        // the temp_ one (visible duplicate) and, for a reply, the parent's
-        // `replies` count gets incremented a second time here. Mirrors
-        // `FeedCommentsSheet`'s `isTwin` reconciliation for the equivalent case.
+        let result = Self.applyingStoryCommentAdded(
+            comment: comment,
+            expandedThreads: storyCommentExpandedThreads,
+            comments: storyComments,
+            repliesMap: storyCommentRepliesMap
+        )
+        storyComments = result.comments
+        storyCommentRepliesMap = result.repliesMap
+        storyCommentCount = data.commentCount
+    }
+
+    /// Pure routing/dedup decision for a `comment:added` broadcast — extracted
+    /// so it's directly unit-testable (`StoryViewerCommentRealtimeTests`)
+    /// without constructing a live view (mirrors `rollingBackOptimisticComment`
+    /// just above). The echoed broadcast for OUR OWN just-sent comment/reply:
+    /// `sendComment` already inserted an optimistic `temp_` placeholder and
+    /// bumped the counters synchronously — it never reconciles that
+    /// placeholder on POST success. Without the `isTwin` check the server's
+    /// real row lands ALONGSIDE the temp_ one (visible duplicate) and, for a
+    /// reply, the parent's `replies` count gets incremented a second time.
+    /// Mirrors `FeedCommentsSheet`'s `isTwin` reconciliation for the
+    /// equivalent case.
+    nonisolated static func applyingStoryCommentAdded(
+        comment: FeedComment,
+        expandedThreads: Set<String>,
+        comments: [FeedComment],
+        repliesMap: [String: [FeedComment]]
+    ) -> (comments: [FeedComment], repliesMap: [String: [FeedComment]]) {
+        var comments = comments
+        var repliesMap = repliesMap
+
         func isTwin(_ c: FeedComment) -> Bool {
             c.id.hasPrefix("temp_")
                 && c.authorId == comment.authorId
@@ -1705,26 +1747,26 @@ extension StoryViewerView {
         }
 
         if let parentId = comment.parentId {
-            var existing = storyCommentRepliesMap[parentId] ?? []
+            var existing = repliesMap[parentId] ?? []
             if let idx = existing.firstIndex(where: isTwin) {
                 existing[idx] = comment
-                storyCommentRepliesMap[parentId] = existing
+                repliesMap[parentId] = existing
             } else {
-                if storyCommentExpandedThreads.contains(parentId), !existing.contains(where: { $0.id == comment.id }) {
+                if expandedThreads.contains(parentId), !existing.contains(where: { $0.id == comment.id }) {
                     existing.append(comment)
-                    storyCommentRepliesMap[parentId] = existing
+                    repliesMap[parentId] = existing
                 }
-                if let idx = storyComments.firstIndex(where: { $0.id == parentId }) {
-                    storyComments[idx].replies += 1
+                if let idx = comments.firstIndex(where: { $0.id == parentId }) {
+                    comments[idx].replies += 1
                 }
             }
-        } else if let idx = storyComments.firstIndex(where: isTwin) {
-            storyComments[idx] = comment
-        } else if !storyComments.contains(where: { $0.id == comment.id }) {
-            storyComments.append(comment)
+        } else if let idx = comments.firstIndex(where: isTwin) {
+            comments[idx] = comment
+        } else if !comments.contains(where: { $0.id == comment.id }) {
+            comments.append(comment)
         }
 
-        storyCommentCount = data.commentCount
+        return (comments, repliesMap)
     }
 
     func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
