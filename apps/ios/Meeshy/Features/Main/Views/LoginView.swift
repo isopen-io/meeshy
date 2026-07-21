@@ -255,6 +255,7 @@ struct LoginView: View {
         } label: {
             HStack(spacing: MeeshySpacing.md) {
                 accountAvatar(account, size: 44)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs / 2) {
                     Text(account.shortName)
@@ -270,6 +271,7 @@ struct LoginView: View {
                 Image(systemName: "chevron.right")
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.textMuted.opacity(0.5))
+                    .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md)
@@ -284,6 +286,7 @@ struct LoginView: View {
         }
         .buttonStyle(.plain)
         .bounceOnTap()
+        .accessibilityHint(String(localized: "auth.login.saved_account.hint", bundle: .main))
     }
 
     private func selectedAccountView(_ account: SavedAccount) -> some View {
