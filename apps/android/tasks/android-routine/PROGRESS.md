@@ -1,5 +1,47 @@
 # Progress — state & what to do next
 
+> On 2026-07-21 the **signup local-validation gate + availability-debounce policy core** landed (slice
+> `auth-signup-availability-local-gate`, feature-parity §A → advances "8-step gamified registration wizard
+> (username/email/phone live availability + suggestions)" `[ ]` → `[~]`). This is the pure decision layer the
+> wizard's Steps 1/2 (pseudo/email) + phone step use to gate the debounced live-availability calls and the
+> Continue button. Parity source: iOS `RegistrationViewModel` — `isUsernameValidLocally` / `isEmailValidLocally`
+> / the phone `digits.count >= 8` guard, the three `.debounce(1s).removeDuplicates().sink { guard localValid }`
+> chains, and the `.pseudo`/`.phone`/`.email` arms of `canProceed`
+> (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`). One pure `:core:model` file with two
+> objects + a sealed intent, fully TDD-covered. **`SignupFieldValidation`** holds the local gates — username
+> (trimmed length 2..16, every char a letter/digit or `_`/`-`), email (contains `@` **and** `.` — iOS's
+> deliberately-loose gate), phone (≥ 8 digits) — plus the normalizers the availability calls apply
+> (`normalizedUsername` = trim, `normalizedEmail` = trim + lowercase, `phoneDigits` = digit filter).
+> **`SignupAvailabilityPolicy`** folds a debounced `(current, previous)` pair into an **`AvailabilityIntent`**:
+> `Unchanged` (dedup — raw value equals the last emission; checked **first**, mirroring `removeDuplicates`
+> preceding the local-validity guard, so a still-valid duplicate never re-probes the network), `Clear` (locally
+> invalid → wipe availability state, no network call), or `Check(query)` (locally valid → probe the **normalized**
+> query). Its `{username,email,phone}StepCanProceed(...)` answer the wizard's advance gate (local gate **AND** the
+> server's `available == true`; phone honours `skipPhone`). **SOTA note:** iOS buries all of this as `private
+> func`s + Combine plumbing inside the stateful view model; Android lifts the whole decision into a pure,
+> framework-free SSOT (`current`/`previous`/`available` all **injected**) so every branch is unit-testable and the
+> same gate is reusable by any onboarding surface — the 1 s debounce + `removeDuplicates` stay app-side (a
+> `Flow.debounce().distinctUntilChanged()` feeds `…Intent`). **+43 behavioural tests** (`SignupAvailabilityTest`
+> — username min/max/over boundaries, trim-before-length, whitespace-only/empty, `_`/`-` allowed, interior-space
+> / `.` / `@` rejected, digits-only; email `@`+`.` / missing-either / empty; `phoneDigits` strips formatting &
+> letters, 7 vs 8-digit threshold; dedup-`Unchanged` incl. **dedup-wins-when-valid**, first-emission-`null`-not-
+> `Unchanged`, `Check(normalized)` + `Clear` per field; each step gate incl. null/false availability, locally-
+> invalid-despite-stale-availableTrue, and `skipPhone` escaping garbage input). Expectations are hand-written
+> literals independent of the production derivation (not tautological). **Mutation check (RED proof):** flipping
+> the username step gate `usernameAvailable == true` → `usernameAvailable != false` fails **exactly**
+> `usernameStep_blockedWhenAvailabilityNull` (43 run, 1 failed, no collateral) — behavioural, not tautological.
+> **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green
+> (new suite 43/43) + full `:app:assembleDebug` → **BUILD SUCCESSFUL** (4m13s). Reviewer **PASS** (diff
+> `apps/android` only — 1 new production file + 1 test + tracking; **SDK purity** — a pure predicate object + a
+> pure stateless policy + a sealed intent in `:core:model`, zero framework deps; the `AuthService.checkAvailability`
+> actuator + the `Flow` debounce + the wizard step composables stay app-side/pending; **SSOT** — one gate reused by
+> the debounce intent AND the proceed gate, one normalizer per field; **UX** — the proceed gate is the Continue
+> button's single truth; no coverage floor lowered, no test weakened). **Next slice:** the app-side registration
+> wizard step scaffold wiring these cores (username/email fields → `Flow.debounce(1s).distinctUntilChanged()` →
+> `…Intent` → `AuthService.checkAvailability` → availability badge + Continue gate), closing §A L281 toward
+> `[x]`; OR another §A pure core (username-suggestion selection / magic-link countdown / 6-digit OTP field); OR
+> the tracked Kover 90% coverage-gate infra.
+
 > On 2026-07-21 the **signup device-locale → language/country inference core** landed (slice
 > `auth-region-language-inference`, feature-parity §A → advances "Country auto-detection + region→language
 > inference at signup" `[ ]` → `[~]`). This is the pure defaults engine the 8-step registration wizard uses
