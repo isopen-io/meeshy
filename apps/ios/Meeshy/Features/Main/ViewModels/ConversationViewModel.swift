@@ -1696,6 +1696,14 @@ class ConversationViewModel: ObservableObject {
             // Transient failure — keep hasOlderMessages so the next scroll
             // retries. Debounce prevents tight retry loops.
             Logger.messages.error("loadOlderMessages failed: \(error.localizedDescription)")
+
+            // Offline graceful degradation (reads must keep working without
+            // network): surface any older page already cached in GRDB from a
+            // prior online session. Without this, scrolling up while offline
+            // looked like there was nothing more to load even when the rows
+            // were sitting right there on disk.
+            let cacheDidLoad = await messageStore.loadOlder(before: oldestCreatedAt)
+            if cacheDidLoad { prefetchRecentMedia() }
         }
 
         isLoadingOlder = false

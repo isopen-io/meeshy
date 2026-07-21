@@ -271,6 +271,57 @@ final class ConversationViewModelTests: XCTestCase {
         await fulfillment(of: [marked], timeout: 1.0)
     }
 
+    // MARK: - loadOlderMessages Tests (P1 — offline cache fallback)
+
+    /// `loadOlderMessages` used to be network-first: the GRDB pagination
+    /// slide (`messageStore.loadOlder`) only ran inside the `do` block, right
+    /// after a successful REST `listBefore`. When the REST call fails
+    /// (offline / transient network error) the catch block never touched the
+    /// store, so scrolling up while offline looked like there was nothing
+    /// more to load even though a prior online session had already fetched +
+    /// persisted the older page into GRDB. The catch path must now fall back
+    /// to the cached page so reads keep working offline.
+    func test_loadOlderMessages_networkFailure_fallsBackToGRDBCachedOlderMessages() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        // Seed one more message than the store's fixed 200-row initial
+        // window so the oldest is cache-resident but outside the current
+        // slice — exactly the "already cached from a prior session, but out
+        // of window" scenario a real offline scroll-up hits.
+        let conversationId = testConversationId
+        let userId = testUserId
+        let base = Date()
+        let records: [MessageRecord] = (0..<201).map { i in
+            var record = MessageStoreObservationHelper.makeRecord(
+                localId: "older-\(i)", conversationId: conversationId,
+                senderId: userId, content: "msg \(i)",
+                state: .sent, createdAt: base.addingTimeInterval(Double(i))
+            )
+            record.cachedTimeString = MessageRecord.computeTimeString(for: record.createdAt)
+            return record
+        }
+        try await pool.write { db in
+            for record in records {
+                try record.insert(db)
+            }
+        }
+
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let windowed = await MessageStoreObservationHelper.awaitMessagesCount(equals: 200, in: sut)
+        XCTAssertTrue(windowed, "precondition: the initial window caps at the newest 200 cached messages")
+
+        mockMessageService.listBeforeResult = .failure(
+            NSError(domain: "test", code: -1009, userInfo: [NSLocalizedDescriptionKey: "offline"])
+        )
+
+        await sut.loadOlderMessages()
+
+        let grew = await MessageStoreObservationHelper.awaitMessagesCount(equals: 201, in: sut)
+        XCTAssertTrue(grew, "the offline catch path must surface the GRDB-cached older message")
+        XCTAssertEqual(mockMessageService.listBeforeCallCount, 1, "the REST call must still be attempted first")
+    }
+
     // MARK: - syncMissedMessages (T9 — reconnect gap recovery via watermark)
 
     /// The backfill must ask the gateway for messages created *after* the
