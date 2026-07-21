@@ -571,3 +571,15 @@ public func formatMediaDuration(_ seconds: TimeInterval) -> String {
 public func formatMediaDurationMs(_ ms: Int) -> String {
     formatMediaDuration(Double(ms) / 1000.0)
 }
+
+/// Single source of truth for human-readable file sizes across the app —
+/// download badges (image/video), audio play-button labels and upload
+/// progress all render through this one helper so a "870 KB" reads
+/// identically everywhere. Previously the SDK's audio label used a binary
+/// (1024-based) `ByteCountFormatter` while the app's download badge and
+/// upload progress each hand-rolled a decimal (1000-based)
+/// `.formatted(.byteCount(style: .file))` — two divergent algorithms behind
+/// a comment claiming parity. `.file` matches Finder's decimal convention.
+public func formatMediaFileSize(_ bytes: Int64) -> String {
+    bytes.formatted(.byteCount(style: .file))
+}

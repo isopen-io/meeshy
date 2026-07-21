@@ -522,29 +522,15 @@ extension AudioPlayerView {
         return "\(left) / \(right)"
     }
 
-    /// ByteCountFormatter binaire avec arrondi entier. Reproduit le même
-    /// format que `AttachmentDownloader.fmt` côté app pour cohérence
-    /// visuelle entre les badges DownloadBadgeView et les labels audio.
+    /// Delegates to the single SDK-wide `formatMediaFileSize` helper so the
+    /// audio play-button label, the download badges (image/video) and the
+    /// upload progress bar always render the exact same string for the same
+    /// byte count. Previously this used its own binary (1024-based)
+    /// `ByteCountFormatter` while the app's `AttachmentDownloader.fmt` used a
+    /// decimal (1000-based) one — despite a comment claiming they matched.
     nonisolated public static func formatBytes(_ bytes: Int64) -> String {
-        byteFormatter.string(fromByteCount: bytes)
+        formatMediaFileSize(bytes)
     }
-
-    /// Formatter configure une seule fois et reutilise. `formatBytes` est appele
-    /// au rendu de chaque bulle audio (label de taille) ET a chaque tick de
-    /// progression de telechargement ("410 KB / 850 KB") — creer un
-    /// ByteCountFormatter a chaque appel etait une allocation repetee dans un
-    /// chemin chaud. La config est constante et le formatter n'est que lu
-    /// (string(fromByteCount:) ne le mute pas), donc sur en lecture concurrente
-    /// au meme titre que DateFormatter/NumberFormatter (thread-safe iOS 7+).
-    nonisolated(unsafe) private static let byteFormatter: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .binary
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.includesUnit = true
-        formatter.includesCount = true
-        formatter.zeroPadsFractionDigits = false
-        return formatter
-    }()
 }
 
 public struct AudioPlayerView: View {

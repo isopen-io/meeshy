@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Sprint 3 RC3.2 — the download badge / `AttachmentDownloader` must resolve
@@ -105,6 +106,17 @@ final class AttachmentDownloaderTests: XCTestCase {
         )
         XCTAssertFalse(badge.hidesForLocalOrOptimisticMedia,
                        "The download badge must remain available for confirmed remote media")
+    }
+
+    // MARK: - Byte-size formatting
+
+    /// `AttachmentDownloader.fmt` must delegate to the single SDK-wide
+    /// `formatMediaFileSize` helper — locks the fix for the divergent
+    /// binary-vs-decimal formatters bug (AudioPlayerView.formatBytes used to
+    /// disagree with this one despite a comment claiming parity).
+    func test_fmt_delegatesToSharedSDKFileSizeFormatter() {
+        XCTAssertEqual(AttachmentDownloader.fmt(870_400), formatMediaFileSize(870_400))
+        XCTAssertEqual(AttachmentDownloader.fmt(1_048_576), formatMediaFileSize(1_048_576))
     }
 }
 
