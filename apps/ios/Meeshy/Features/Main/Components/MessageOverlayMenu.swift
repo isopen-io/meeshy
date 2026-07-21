@@ -1112,31 +1112,60 @@ private class OverlayAudioPlayer: ObservableObject {
         if currentURL != url {
             stop()
             currentURL = url
-            guard let resolved = MeeshyConfig.resolveMediaURL(url) else { return }
             isLoading = true
-            let item = AVPlayerItem(url: resolved)
-            avPlayer = AVPlayer(playerItem: item)
-
-            statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    if item.status == .readyToPlay {
-                        self.isLoading = false
-                        self.avPlayer?.rate = self.playbackRate
-                        self.isPlaying = true
-                    } else if item.status == .failed {
-                        self.isLoading = false
-                    }
-                }
+            Task { [weak self] in
+                await self?.startPlayback(remoteURL: url)
             }
-
-            setupTimeObserver()
-            observeEnd(item: item)
             return
         }
 
         avPlayer?.rate = playbackRate
         isPlaying = true
+    }
+
+    /// Cache-first: consults the audio disk cache BEFORE falling back to a
+    /// network `AVPlayerItem`. The preview used to always hit the network
+    /// URL directly, ignoring whatever `AttachmentDownloader`/auto-download
+    /// already saved to disk — re-downloading the same audio and failing
+    /// outright offline even when the file was sitting in the cache the
+    /// in-conversation bubble already plays from.
+    ///
+    /// Resolution key mirrors the existing local-first pattern in
+    /// `AudioFullscreenView.runLocalTranscription`: resolve the (possibly
+    /// relative) URL to its absolute form first, THEN look that resolved
+    /// string up in the disk cache — the cache is keyed by the resolved
+    /// URL, not the raw attachment path.
+    private func startPlayback(remoteURL: String) async {
+        let resolvedString = MeeshyConfig.resolveMediaURL(remoteURL)?.absoluteString ?? remoteURL
+        let cachedLocalURL = try? await CacheCoordinator.shared.audio.localFileURLOrThrow(for: resolvedString)
+        // A rapid second tap may have already switched `currentURL` to a
+        // different attachment while this lookup was in flight — bail
+        // rather than starting playback for a track the user isn't on
+        // anymore.
+        guard currentURL == remoteURL else { return }
+        guard let playbackURL = cachedLocalURL ?? MeeshyConfig.resolveMediaURL(remoteURL) else {
+            isLoading = false
+            return
+        }
+
+        let item = AVPlayerItem(url: playbackURL)
+        avPlayer = AVPlayer(playerItem: item)
+
+        statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if item.status == .readyToPlay {
+                    self.isLoading = false
+                    self.avPlayer?.rate = self.playbackRate
+                    self.isPlaying = true
+                } else if item.status == .failed {
+                    self.isLoading = false
+                }
+            }
+        }
+
+        setupTimeObserver()
+        observeEnd(item: item)
     }
 
     func stop() {
