@@ -547,8 +547,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       VerifyIdentity,VerifyCode}` + `resetPassword`) to the state machine, the `CountryPicker` dial-code
       prefix on the phone field, and the email-link recovery mode (the sibling `[ ]` above).
 - [ ] First-run onboarding carousel with live feature demo + animated step backgrounds
-- [ ] Persistent session restore with proactive token refresh
-- [ ] Transparent token refresh on 401 with one retry
+- [~] Persistent session restore with proactive token refresh — pure "is the token
+      expired / should we refresh" core landed (slice `auth-jwt-expiry-core`). `JwtExpiry`
+      (`:core:model/auth/JwtExpiry.kt`) faithfully ports iOS `AuthManager.isTokenExpired(_:now:)`:
+      decodes the base64url JWT payload, reads the `exp` claim as a JSON **number only**, and
+      treats every malformed input (null/blank, ≠3 segments, un-decodable payload, non-object /
+      non-JSON, absent or stringified `exp`) as expired — the safe default that forces a refresh.
+      Margin is a **parameter** (iOS hard-codes 30s inline) defaulting to 30s; boundary is strict
+      `<` (`exp - margin < now`), so the threshold instant is still valid. `TokenRefreshPolicy.
+      shouldRefresh(force, token, now)` carries `refreshSession(force:)`'s guard (`force ||
+      isExpired`). +24 behavioural tests (`JwtExpiryTest`); tokens really base64url-encoded so the
+      decoder runs for real; RED proven by mutation (drop `isString` guard → the string-`exp` test
+      fails; `<`→`<=` → the two threshold tests fail; 3 failures, no collateral). Gate: whole
+      `:core:model` module green + `:app:assembleDebug` BUILD SUCCESSFUL. **Follow-up:** the app-side
+      wiring — `AuthInterceptor`/`AuthRepository` consulting `TokenRefreshPolicy` before a request
+      and on app-start restore, plus the DataStore/EncryptedTokenStore session rehydration.
+- [ ] Transparent token refresh on 401 with one retry — the `JwtExpiry`/`TokenRefreshPolicy` core
+      above is the shared primitive; still needs the OkHttp `Authenticator`/interceptor retry wiring.
 - [ ] Anonymous (shared-link) sessions with restricted send permissions
 - [ ] Login/logout teardown wiping E2EE keys and per-user caches
 - [ ] Splash screen with brand animation + minimum display duration
