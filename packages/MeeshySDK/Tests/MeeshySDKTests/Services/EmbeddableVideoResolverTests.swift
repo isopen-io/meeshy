@@ -91,4 +91,28 @@ struct EmbeddableVideoResolverTests {
         let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/dQw4w9WgXcQ?t=90")!
         #expect(v.watchURL.absoluteString == "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=90s")
     }
+
+    @Test("videoId avec lettre Unicode (accent) tronqué sous le minimum → rejeté")
+    func unicodeVideoIdRejectedByAsciiFilter() {
+        let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/café12345678")
+        #expect(v == nil)
+    }
+
+    @Test("videoId avec chiffre Unicode non-ASCII (Devanagari) → rejeté")
+    func unicodeDigitVideoIdRejected() {
+        // "\u{0966}" = chiffre Devanagari '0', accepté par Character.isNumber mais pas ASCII.
+        let v = EmbeddableVideoResolver.resolve(urlString: "https://youtu.be/abc123\u{0966}\u{0966}\u{0966}")
+        #expect(v == nil)
+    }
+
+    @Test("thumbnailURL/embedURL ne force-unwrap jamais même avec un videoId Unicode construit directement")
+    func neverForceCrashesOnDirectUnicodeVideoId() {
+        let v = EmbeddedVideo(provider: .youtube, videoId: "日本語テスト1234", startSeconds: nil)
+        let thumb = v.thumbnailURL()
+        let embed = v.embedURL
+        let watch = v.watchURL
+        #expect(thumb.scheme == "https")
+        #expect(embed.scheme == "https")
+        #expect(watch.scheme == "https")
+    }
 }
