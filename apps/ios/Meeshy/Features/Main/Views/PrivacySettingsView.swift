@@ -205,7 +205,7 @@ struct PrivacySettingsView: View {
         Self.comingSoonPrivacyKeyPaths.contains(keyPath as AnyKeyPath)
     }
 
-    nonisolated private static let comingSoonPrivacyKeyPaths: Set<AnyKeyPath> = [
+    nonisolated(unsafe) private static let comingSoonPrivacyKeyPaths: Set<AnyKeyPath> = [
         \PrivacyPreferences.hideProfileFromSearch,
         \PrivacyPreferences.blockScreenshots,
         \PrivacyPreferences.allowCallsFromNonContacts,

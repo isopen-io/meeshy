@@ -105,7 +105,7 @@ final class ConversationOptionsViewModelTests: XCTestCase {
     /// This only compiles if `loadState` is truly typed as the SDK enum.
     func test_loadState_isSDKLoadStateType_notLocalShadow() {
         let s = makeSUT()
-        let value: MeeshySDK.LoadState = s.vm.loadState
+        let value: LoadState = s.vm.loadState
         XCTAssertEqual(value, .idle)
     }
 
