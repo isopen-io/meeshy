@@ -489,6 +489,25 @@ public struct FeedPost: Identifiable, Sendable {
         return copy
     }
 
+    /// Companion to `resolved(preferredLanguages:)`: returns the language code
+    /// that `displayContent` is currently showing, using the exact same
+    /// deterministic Prisme algorithm (short-circuit on original ∈ preferred,
+    /// else the first preferred language with a matching translation, else
+    /// the original) — never `translations.keys.first` (dictionary iteration
+    /// order is non-deterministic in Swift). Used by the feed card to know
+    /// which language flag is "active" without re-deriving it unsafely.
+    /// `nil` when there is no original language to fall back to.
+    public func resolvedLanguageCode(preferredLanguages: [String]) -> String? {
+        guard let origLang = originalLanguage?.lowercased() else { return nil }
+        guard let dict = translations, !dict.isEmpty else { return origLang }
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        if preferred.contains(origLang) { return origLang }
+        for lang in preferred {
+            if dict.keys.contains(where: { $0.lowercased() == lang }) { return lang }
+        }
+        return origLang
+    }
+
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorUsername: String? = nil,
                 authorAvatarURL: String? = nil,
                 type: String? = nil, content: String, timestamp: Date = Date(), likes: Int = 0,

@@ -942,10 +942,45 @@ final class FeedViewModelTests: XCTestCase {
 
         sut.clearTranslationOverride(postId: "t1")
 
-        // Since userLanguage defaults to "en" (no logged in user) and no "en" translation exists,
-        // clearTranslationOverride should set translatedContent to nil
+        // Default preferredLanguages is [] (MockLanguageProvider default), so
+        // resolved(preferredLanguages: []) has no preferred language to match
+        // against — translatedContent falls back to nil (original content).
         XCTAssertNil(sut.posts[0].translatedContent)
         XCTAssertEqual(sut.posts[0].displayContent, "Hello")
+    }
+
+    func test_clearTranslationOverride_secondPreferredLanguageMatches_resolvesFullChain() {
+        // Prisme regression guard: the old implementation only ever consulted
+        // preferredLanguages.first ("de") via an exact dictionary-key lookup,
+        // losing the "fr" translation available further down the chain.
+        let (sut, _, _, _) = makeSUT(preferredLanguages: ["de", "fr"])
+        sut.posts = [Self.makeFeedPost(
+            id: "t1",
+            content: "Hello",
+            translations: ["fr": PostTranslation(text: "Bonjour")],
+            translatedContent: "stale override"
+        )]
+
+        sut.clearTranslationOverride(postId: "t1")
+
+        XCTAssertEqual(sut.posts[0].translatedContent, "Bonjour")
+    }
+
+    func test_clearTranslationOverride_caseMismatchedPreferredLanguage_stillMatchesTranslation() {
+        // Prisme regression guard: the old implementation did an exact-case
+        // dictionary subscript (`translations?["FR"]`), which missed a
+        // lowercase "fr" key entirely.
+        let (sut, _, _, _) = makeSUT(preferredLanguages: ["FR"])
+        sut.posts = [Self.makeFeedPost(
+            id: "t1",
+            content: "Hello",
+            translations: ["fr": PostTranslation(text: "Bonjour")],
+            translatedContent: "stale override"
+        )]
+
+        sut.clearTranslationOverride(postId: "t1")
+
+        XCTAssertEqual(sut.posts[0].translatedContent, "Bonjour")
     }
 
     // MARK: - Socket.IO: subscribeToSocketEvents()

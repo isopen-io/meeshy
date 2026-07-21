@@ -125,4 +125,54 @@ final class FeedPostPrismeResolutionTests: XCTestCase {
         let twice = once.resolved(preferredLanguages: ["fr"])
         XCTAssertEqual(once.translatedContent, twice.translatedContent)
     }
+
+    // MARK: - resolvedLanguageCode(preferredLanguages:)
+    //
+    // Companion of `resolved(preferredLanguages:)` used by FeedPostCard to
+    // know which language flag is "active" — must mirror the exact same
+    // deterministic algorithm, never `translations.keys.first`.
+
+    func test_resolvedLanguageCode_originalInPreferred_returnsOriginal() {
+        let post = makePost(
+            originalLanguage: "fr",
+            translations: ["en": makeTranslation("Hello"), "es": makeTranslation("Hola")]
+        )
+        XCTAssertEqual(post.resolvedLanguageCode(preferredLanguages: ["fr"]), "fr")
+    }
+
+    func test_resolvedLanguageCode_secondPreferredMatches_returnsThatLanguage() {
+        // Deterministic chain order — must not depend on dictionary iteration
+        // order of `translations` (which is what the old `keys.first` bug did).
+        let post = makePost(
+            originalLanguage: "en",
+            translations: ["es": makeTranslation("Hola"), "fr": makeTranslation("Bonjour")]
+        )
+        XCTAssertEqual(post.resolvedLanguageCode(preferredLanguages: ["de", "fr"]), "fr")
+    }
+
+    func test_resolvedLanguageCode_noMatch_returnsOriginal() {
+        let post = makePost(
+            originalLanguage: "en",
+            translations: ["es": makeTranslation("Hola")]
+        )
+        XCTAssertEqual(post.resolvedLanguageCode(preferredLanguages: ["fr", "de"]), "en")
+    }
+
+    func test_resolvedLanguageCode_noTranslations_returnsOriginal() {
+        let post = makePost(originalLanguage: "fr")
+        XCTAssertEqual(post.resolvedLanguageCode(preferredLanguages: ["en"]), "fr")
+    }
+
+    func test_resolvedLanguageCode_noOriginalLanguage_returnsNil() {
+        let post = makePost(originalLanguage: nil, translations: ["fr": makeTranslation("Bonjour")])
+        XCTAssertNil(post.resolvedLanguageCode(preferredLanguages: ["fr"]))
+    }
+
+    func test_resolvedLanguageCode_caseInsensitiveMatch_returnsLowercasedCode() {
+        let post = makePost(
+            originalLanguage: "EN",
+            translations: ["FR": makeTranslation("Bonjour")]
+        )
+        XCTAssertEqual(post.resolvedLanguageCode(preferredLanguages: ["fr"]), "fr")
+    }
 }

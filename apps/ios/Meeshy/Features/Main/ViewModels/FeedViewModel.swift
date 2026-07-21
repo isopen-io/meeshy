@@ -103,10 +103,6 @@ class FeedViewModel: ObservableObject {
         languageProvider.preferredLanguages
     }
 
-    private var userLanguage: String {
-        preferredLanguages.first ?? "en"
-    }
-
     // MARK: - Initial Load
 
     /// Loads the feed cache-first. Pass `forceRefresh: true` (pull-to-refresh) to
@@ -889,13 +885,18 @@ class FeedViewModel: ObservableObject {
         posts[index].translatedContent = translation.text
     }
 
+    /// Re-resolves the post's displayed language back to the Prisme default
+    /// (undoes a manual flag-tap override). Previously did an exact-key
+    /// dictionary lookup on `userLanguage` alone — case-sensitive AND only
+    /// ever consulting the FIRST preferred language, so a francophone with
+    /// `["de", "fr"]` preferred languages (or any uppercase-cased locale
+    /// string) lost their translation even though "fr" matched further down
+    /// the chain. `resolved(preferredLanguages:)` walks the FULL chain
+    /// case-insensitively, matching the same algorithm used everywhere else
+    /// in the Prisme (never `translations.first`).
     func clearTranslationOverride(postId: String) {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
-        if let translation = posts[index].translations?[userLanguage] {
-            posts[index].translatedContent = translation.text
-        } else {
-            posts[index].translatedContent = nil
-        }
+        posts[index] = posts[index].resolved(preferredLanguages: preferredLanguages)
     }
 
     func requestTranslation(postId: String, targetLanguage: String) async {
