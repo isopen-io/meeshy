@@ -53,6 +53,16 @@ struct ConversationRowItem: View {
     let onCreateShareLink: (() -> Void)?
     let onTap: () -> Void
     let onLoadPreview: () async -> Void
+    /// Gates the opportunistic `.task { onLoadPreview() }` prefetch below to
+    /// a bounded PREFIX of the list (`ConversationRowMetrics
+    /// .autoPreviewLoadRowLimit`, computed by the caller via
+    /// `ConversationListView.shouldAutoLoadPreview`). Without this, EVERY
+    /// row firing `.task` on appear meant scrolling through a cold cache
+    /// issued one REST call per newly-visible conversation (audit
+    /// 2026-07-20). Rows past the limit still get their preview populated
+    /// on-demand via the long-press path (`onLongPress` →
+    /// `loadPreviewMessages`, ConversationListView.swift).
+    let enableAutoPreviewLoad: Bool
     /// Fallback < iOS 26 : appui long → overlay de menu custom (dessine ses
     /// icônes). Reçoit la frame GLOBALE de la ligne pressée — point de départ
     /// de l'émergence de l'aperçu (+Overlays). `.zero` quand la frame n'est
@@ -131,6 +141,7 @@ struct ConversationRowItem: View {
                         .frame(width: 340)
                     }
                     .task {
+                        guard enableAutoPreviewLoad else { return }
                         await onLoadPreview()
                     }
             } else {
@@ -172,6 +183,7 @@ struct ConversationRowItem: View {
                     // contexte scrollable.
                     .modifier(RowPressBounceModifier(onTap: onTap, onTrigger: onLongPress))
                     .task {
+                        guard enableAutoPreviewLoad else { return }
                         await onLoadPreview()
                     }
             }
@@ -215,6 +227,14 @@ struct ConversationRowItem: View {
 enum ConversationRowMetrics {
     static let avatarInteractionExclusionWidth: CGFloat =
         MeeshySpacing.md + AvatarContext.conversationList.ringSize
+
+    /// Bound for the opportunistic preview auto-load (`enableAutoPreviewLoad`
+    /// above) — matches the ViewModel's own top-conversations batch prefetch
+    /// (`ConversationListViewModel.prefetchTopConversationMessages`, N=20),
+    /// so rows within this prefix almost always find their preview already
+    /// cache-warm and rows beyond it fall back to the on-demand long-press
+    /// load instead of firing a REST call just for scrolling into view.
+    static let autoPreviewLoadRowLimit = 20
 }
 
 // MARK: - Press feedback (réduction pendant l'appui + rebond au trigger)
@@ -386,7 +406,8 @@ extension ConversationRowItem: @MainActor Equatable {
         zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&
         zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
         (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
-        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count
+        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count &&
+        lhs.enableAutoPreviewLoad == rhs.enableAutoPreviewLoad
     }
 }
 
