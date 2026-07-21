@@ -22,24 +22,33 @@ final class GlobalSearchViewTimeAgoTests: XCTestCase {
         )
     }
 
+    /// The exact French catalog values ("5 min", "maintenant") are exhaustively
+    /// covered by `RelativeTimeFormatterTests` in the SDK test target, where the
+    /// app bundle is absent and `String(localized:)` deterministically falls
+    /// back to the French `defaultValue`. This app-hosted target runs against
+    /// the real app bundle under the simulator's actual locale (not guaranteed
+    /// French), so these assert against the old hand-rolled-ladder strings
+    /// ("5m", "now") being absent — the actual regression this suite guards —
+    /// rather than a hardcoded language.
     func test_formatTimeAgo_fiveMinutesAgo_isLocalizedNotHardcodedEnglish() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
         let fiveMinutesAgo = now.addingTimeInterval(-5 * 60)
 
         XCTAssertEqual(
             GlobalSearchView.formatTimeAgo(fiveMinutesAgo, now: now),
-            "5 min",
-            "Must match RelativeTimeFormatter's French default catalog value, not the old hardcoded '5m'"
+            RelativeTimeFormatter.shortString(for: fiveMinutesAgo, now: now),
+            "Must delegate to RelativeTimeFormatter, not the old hardcoded '5m'"
         )
     }
 
     func test_formatTimeAgo_justNow_isNotHardcodedEnglishNow() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let fiveSecondsAgo = now.addingTimeInterval(-5)
 
         XCTAssertEqual(
-            GlobalSearchView.formatTimeAgo(now.addingTimeInterval(-5), now: now),
-            "maintenant",
-            "Must match RelativeTimeFormatter's 'maintenant', not the old hardcoded 'now'"
+            GlobalSearchView.formatTimeAgo(fiveSecondsAgo, now: now),
+            RelativeTimeFormatter.shortString(for: fiveSecondsAgo, now: now),
+            "Must delegate to RelativeTimeFormatter, not the old hardcoded 'now'"
         )
     }
 }
