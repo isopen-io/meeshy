@@ -15,6 +15,14 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var duration: TimeInterval = 0
     @Published public var speed: PlaybackSpeed = .x1_0
     @Published public var isLoading = false
+    /// Mirrors `SharedAVPlayerManager.shouldLoop` (the video engine): when
+    /// `true`, natural end-of-playback seeks back to 0 and replays instead of
+    /// tearing the engine down — used by the reels pager so an audio reel
+    /// loops exactly like a video reel instead of going silent forever after
+    /// one pass. Reset to `false` by `resetState()` on every new
+    /// `play`/`playLocal` call, same as the video engine's `cleanup()` — the
+    /// caller must opt back in per attachment, it never carries across tracks.
+    @Published public var shouldLoop = false
 
     public var onPlaybackFinished: (() -> Void)?
 
@@ -239,6 +247,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         listenStartTime = nil
         loadTask?.cancel()
         loadTask = nil
+        // Never carries across tracks — mirrors SharedAVPlayerManager.cleanup()
+        // resetting shouldLoop=false; the caller re-opts-in per attachment.
+        shouldLoop = false
     }
 
     public func stop() {
@@ -311,6 +322,21 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         if let attId = attachmentId {
             MediaConsumptionStore.shared.record(fraction: 1, complete: true, for: attId)
             AudioPlaybackPositionStore.shared.clear(for: attId)
+        }
+        // Reels pager parity — mirrors SharedAVPlayerManager's video loop:
+        // seek back to 0 and replay, keeping the player + session alive,
+        // instead of tearing everything down. Without this an audio reel
+        // stopped for good after one pass while its video-reel sibling looped
+        // forever (incohérence pager réels).
+        if shouldLoop, let player {
+            player.currentTime = 0
+            currentTime = 0
+            progress = 0
+            listenStartTime = Date()
+            player.play()
+            isPlaying = true
+            startProgressTimer()
+            return
         }
         timer?.invalidate()
         timer = nil
