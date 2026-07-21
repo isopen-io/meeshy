@@ -278,6 +278,49 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertGreaterThan(countAfterSecond, countAfterFirst, "Should refetch after invalidation")
     }
 
+    // MARK: - loadConversations: `.expired` cache recovery (P1 — Offline Graceful Degradation)
+    //
+    // `performLoadConversations`'s `.expired` branch recovers a disk snapshot
+    // past the 24h TTL via `loadIgnoringExpiry` and paints it immediately
+    // (`.offline`) before attempting a resync, instead of treating an expired
+    // entry as empty. These tests drive the REAL `CacheCoordinator.shared.
+    // conversations` singleton (not a stub) past its TTL via the
+    // `debugRewindFetchTimestamp` test seam, exercising the integration the
+    // SDK-level `GRDBCacheStoreFreshnessTests` (isolated `DatabaseQueue`)
+    // cannot reach.
+
+    func test_loadConversations_whenCacheExpiredAndSyncFails_paintsRecoveredDataAndReportsOffline() async throws {
+        let conversation = makeConversation(id: "000000000000000000000002")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        await CacheCoordinator.shared.conversations.debugRewindFetchTimestamp(by: 25 * 3600, for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = false
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+
+        XCTAssertEqual(sut.conversations.map(\.id), [conversation.id],
+                       "an expired-but-present disk cache must be painted immediately, not treated as empty")
+        XCTAssertEqual(sut.loadState, .offline,
+                       "a failed resync after `.expired` recovery must keep showing the recovered data, not regress to the empty error state")
+        XCTAssertFalse(sut.loadFailed, "recovered data means this is NOT the empty-cache failure case")
+    }
+
+    func test_loadConversations_whenCacheExpiredAndSyncSucceeds_reportsLoaded() async throws {
+        let conversation = makeConversation(id: "000000000000000000000003")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        await CacheCoordinator.shared.conversations.debugRewindFetchTimestamp(by: 25 * 3600, for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+
+        XCTAssertEqual(sut.loadState, .loaded,
+                       "a successful resync following `.expired` recovery must land on `.loaded`, not stay `.offline`")
+        XCTAssertFalse(sut.loadFailed)
+    }
+
     // MARK: - togglePin: Success (via ConversationStore — Strategy B 1b-ii-a)
 
     func test_togglePin_appliesViaStoreAndReflectsInList() async throws {
@@ -446,6 +489,29 @@ final class ConversationListViewModelTests: XCTestCase {
             XCTAssertFalse(result.contains(where: { $0.id == "conv1" }),
                            "Soft-deleted conv must be hidden from filter \(filter)")
         }
+    }
+
+    /// P2 — a conversation renamed locally (`userState.customName`) must
+    /// remain findable by the name the row actually shows. Matching on
+    /// `c.name` (server title/identifier) instead of `c.displayName`
+    /// (customName ?? title ?? identifier) made a renamed conversation
+    /// invisible to search under its own displayed name.
+    func test_filterConversations_matchesLocalCustomName_notJustServerTitle() {
+        var renamed = makeConversation(id: "conv1", name: "Team Alpha")
+        renamed.userState.customName = "Mon Groupe Préféré"
+        let untouched = makeConversation(id: "conv2", name: "Team Beta")
+
+        let byCustomName = ConversationListViewModel.filterConversations(
+            [renamed, untouched], searchText: "Préféré", filter: .all
+        )
+        XCTAssertEqual(byCustomName.map(\.id), ["conv1"],
+                       "search must match the locally-renamed displayName, not just the server title")
+
+        let byOldServerTitle = ConversationListViewModel.filterConversations(
+            [renamed, untouched], searchText: "Alpha", filter: .all
+        )
+        XCTAssertTrue(byOldServerTitle.isEmpty,
+                      "once renamed locally, the row is found by its displayed name — not the superseded server title")
     }
 
     // MARK: - Filter Pipeline
@@ -1468,6 +1534,53 @@ final class ConversationListViewModelTests: XCTestCase {
                        "bumpToTop on unknown id must leave the list untouched")
     }
 
+    /// P1 — a lightweight bump (socket relay or push notification) never
+    /// carries the new message's sender/attachments/flags. Leaving the
+    /// PREVIOUS message's companion fields in place renders a wrong
+    /// author, a phantom attachment icon, or summarizes a brand-new text
+    /// message as "1 message vue unique" because the stale
+    /// `lastMessageIsViewOnce` flag survives the bump.
+    ///
+    /// P2 (follow-up): the same reasoning applies to `lastMessagePreview`
+    /// and its Prisme Linguistique companions (`lastMessageTranslations`,
+    /// `lastMessageOriginalLanguage`) — neither caller has the new
+    /// message's text either. Resetting only the sender/attachments/flags
+    /// while leaving the OLD preview text in place regressed the bug to a
+    /// subtler form: an unattributed stale text (no sender label, since
+    /// that's now nil) rendered as if it were the new message, and worse,
+    /// a stale `lastMessageTranslations` entry matching the viewer's
+    /// preferred language would surface a stale TRANSLATED string even
+    /// after `lastMessagePreview` itself is cleared.
+    func test_bumpToTop_resetsStaleCompanionFields() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        var conv = makeConversation(id: "conv1", lastMessageAt: Date(timeIntervalSince1970: 1_000))
+        conv.lastMessageSenderName = "Alice"
+        conv.lastMessageAttachments = [
+            MeeshyMessageAttachment(id: "att1", mimeType: "image/jpeg", fileUrl: "https://x/a.jpg", uploadedBy: "alice")
+        ]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageIsBlurred = true
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageExpiresAt = Date(timeIntervalSince1970: 2_000)
+        conv.lastMessagePreview = "Photo envoyée à l'instant"
+        conv.lastMessageTranslations = ["en": "Photo just sent"]
+        conv.lastMessageOriginalLanguage = "fr"
+        sut.setConversations([conv])
+
+        sut.bumpToTop(conversationId: "conv1", newLastMessageAt: Date(timeIntervalSince1970: 9_000))
+
+        let bumped = sut.conversations[0]
+        XCTAssertNil(bumped.lastMessageSenderName, "stale author must not survive the bump")
+        XCTAssertTrue(bumped.lastMessageAttachments.isEmpty, "phantom attachment must not survive the bump")
+        XCTAssertEqual(bumped.lastMessageAttachmentCount, 0)
+        XCTAssertFalse(bumped.lastMessageIsBlurred)
+        XCTAssertFalse(bumped.lastMessageIsViewOnce, "a new message must not inherit the old one's 'View once' flag")
+        XCTAssertNil(bumped.lastMessageExpiresAt)
+        XCTAssertNil(bumped.lastMessagePreview, "stale preview text must not survive the bump — an unattributed old text is worse than a blank row")
+        XCTAssertNil(bumped.lastMessageTranslations, "stale translations must not survive the bump — resolvedLastMessagePreview would otherwise surface a stale translated string even with lastMessagePreview cleared")
+        XCTAssertNil(bumped.lastMessageOriginalLanguage)
+    }
+
     // MARK: - conversation:updated socket event — graft du titre
 
     /// Un DM n'est jamais renommable : son `title` client est le NOM DU
@@ -1528,6 +1641,32 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.conversations.first?.id, "c",
                        "Event with lastMessageAt must promote the conversation to the top")
+    }
+
+    /// P1 — end-to-end through the real socket sink (not calling
+    /// `bumpToTop` directly): CONVERSATION_UPDATED never carries the new
+    /// message's sender/attachments/flags, so the row must not keep
+    /// rendering the PREVIOUS message's companion state after the bump.
+    func test_conversationUpdatedEvent_withLastMessageAt_resetsStaleCompanionFields() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conv = makeConversation(id: "c", lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        conv.lastMessageSenderName = "Alice"
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageAttachmentCount = 1
+        sut.setConversations([conv])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(conversationId: "c", lastMessageAt: newer)
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        let bumped = try XCTUnwrap(sut.conversations.first(where: { $0.id == "c" }))
+        XCTAssertNil(bumped.lastMessageSenderName)
+        XCTAssertFalse(bumped.lastMessageIsViewOnce,
+                       "the row must not summarize a brand-new message as 'View once' from the stale flag")
+        XCTAssertEqual(bumped.lastMessageAttachmentCount, 0)
     }
 
     /// Pins the production payload shape: handlers/MessageHandler.ts emits
@@ -2313,6 +2452,114 @@ final class ConversationListViewModelTests: XCTestCase {
                       "pullToRefresh must not wipe the persistent image cache (avatars/banners)")
         XCTAssertTrue(thumbStillCached,
                       "pullToRefresh must not wipe the thumbnail cache")
+    }
+
+    /// P1 — TOP RISK: a pull-to-refresh that fails offline must never
+    /// destroy the conversations cache it can't repopulate. `forceRefresh`
+    /// used to call `invalidateCache()` (wiping L1+L2) BEFORE the fetch —
+    /// an offline pull emptied the app. Fetch-then-replace: existing data
+    /// must survive an unreachable sync untouched.
+    func test_forceRefresh_whenSyncFails_preservesExistingCache() async throws {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = false
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        await sut.loadConversations()
+        XCTAssertEqual(sut.conversations.count, 1, "precondition: cache seeded")
+
+        await sut.forceRefresh()
+
+        XCTAssertEqual(sut.conversations.count, 1,
+                       "a failed refresh must not empty the in-memory list")
+        XCTAssertTrue(sut.loadFailed)
+        let stillCached = await CacheCoordinator.shared.conversations.load(for: "list")
+        XCTAssertEqual(stillCached.snapshot()?.count, 1,
+                       "a failed refresh must not wipe the on-disk cache either")
+    }
+
+    /// Same guarantee, driven through the user-facing `.refreshable` entry
+    /// point. A failed offline pull must leave every cache untouched — not
+    /// just skip re-invalidating the ones `pullToRefresh` also wipes.
+    func test_pullToRefresh_whenSyncFails_preservesExistingCacheAndSkipsAncillaryInvalidation() async throws {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = false
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        await sut.loadConversations()
+
+        await sut.pullToRefresh()
+
+        XCTAssertEqual(sut.conversations.count, 1,
+                       "a failed pull-to-refresh must not empty the in-memory list")
+        XCTAssertTrue(sut.loadFailed)
+        let stillCached = await CacheCoordinator.shared.conversations.load(for: "list")
+        XCTAssertEqual(stillCached.snapshot()?.count, 1,
+                       "a failed pull-to-refresh must not wipe the conversations cache")
+    }
+
+    /// Regression guard: the ancillary cross-surface invalidation that runs
+    /// AFTER a successful `forceRefresh()` must not clobber the
+    /// conversations store `forceRefresh()` just fetch-then-replaced —
+    /// only the OTHER caches (messages, stories, preferences, ...) get
+    /// wiped for lazy rehydration.
+    func test_pullToRefresh_whenSyncSucceeds_leavesConversationsCacheIntact() async throws {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        await sut.loadConversations()
+
+        await sut.pullToRefresh()
+
+        XCTAssertFalse(sut.loadFailed, "a successful pull-to-refresh must not report a failure")
+        let stillCached = await CacheCoordinator.shared.conversations.load(for: "list")
+        XCTAssertEqual(stillCached.snapshot()?.count, 1,
+                       "the post-success ancillary invalidation must not wipe the conversations store it just fetch-then-replaced")
+    }
+
+    // MARK: - handleForegroundReturn (P2 — inverted guard)
+
+    /// `isCacheValid` means "we last fetched within the last 30s" — the
+    /// USEFUL case for a foreground-return stories refresh is precisely
+    /// when it's FALSE (a long background stint just ended). The guard
+    /// used to read `isCacheValid` (proceed only while still fresh),
+    /// short-circuiting the one scenario this method exists for.
+    func test_handleForegroundReturn_afterLongBackground_refreshesStaleStories() async throws {
+        await CacheCoordinator.shared.stories.invalidateAll()
+        let storyService = MockStoryService()
+        let (sut, _, _, _, _, _, _) = makeSUT(storyService: storyService)
+        // No `loadConversations()`/`forceRefresh()` call: `lastFetchedAt`
+        // stays nil, i.e. `isCacheValid == false` — simulates returning
+        // from a long background stint.
+
+        sut.handleForegroundReturn()
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertGreaterThan(storyService.listCallCount, 0,
+                             "after a long background stint the stale stories cache must be refreshed")
+    }
+
+    func test_handleForegroundReturn_withinCacheValidWindow_skipsStoriesRefresh() async throws {
+        let storyService = MockStoryService()
+        let (sut, _, _, _, _, _, _) = makeSUT(storyService: storyService)
+        await sut.loadConversations() // stamps `lastFetchedAt = Date()` — cache still valid
+        try await Task.sleep(nanoseconds: 150_000_000) // let loadConversations' own prefetch settle
+
+        // Empty the stories cache again so, if the OUTER `isCacheValid`
+        // guard didn't short-circuit, the INNER freshness check inside
+        // the Task would have no reason to skip either — isolates what
+        // this test actually exercises.
+        await CacheCoordinator.shared.stories.invalidateAll()
+        storyService.reset()
+
+        sut.handleForegroundReturn()
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertEqual(storyService.listCallCount, 0,
+                       "within the 30s cache-valid window, a foreground return must not force a stories refresh even with an empty stories cache")
     }
 
     func test_initialState_paginationStateIsIdleAndHasMoreIsTrue() {
