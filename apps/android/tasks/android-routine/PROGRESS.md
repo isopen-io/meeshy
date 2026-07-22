@@ -1,5 +1,22 @@
 # Progress — state & what to do next
 
+> On 2026-07-22 the **token-refresh decision core (reactive 401 + endpoint eligibility)** landed
+> (slice `auth-token-refresh-policy-core`, feature-parity §A → advances "Transparent token refresh on
+> 401 with one retry" `[ ]`→`[~]`). Extended the pure `:core:model/auth/TokenRefreshPolicy` (previously
+> only the proactive `shouldRefresh`) with the endpoint eligibility gate (`isRefreshEligible`), the
+> proactive call-site gate (`shouldRefreshBeforeSend`), the 401 credential-vs-session mapping
+> (`mapUnauthorized` → `UnauthorizedMapping`), the reactive 401 decision (`decideOn401` →
+> `Unauthorized401Decision{InvalidCredentials, RefreshAndRetry, Teardown}`), and the replay
+> classification (`classifyRetryStatus` → `RetryOutcome{Success, Teardown, ServerError}`) — a faithful
+> port of iOS `APIClient.requestWithHeaders`/`mapUnauthorized`, with a blank-server-message fallback
+> improving on iOS's nil-only coalesce. +29 behavioural tests, mutation-proven. Gate:
+> `:core:model:testDebugUnitTest` (whole module) + `:app:assembleDebug` → BUILD SUCCESSFUL. Reviewer
+> PASS. **Next slice:** the OkHttp `Authenticator`/interceptor in `:core:network` that *wires* these
+> decisions (proactive `shouldRefreshBeforeSend` before send, `decideOn401`→`RefreshAndRetry` on a 401,
+> `classifyRetryStatus` on the replay) into `AuthRepository.restoreSession`/`refresh`; OR the still-`[ ]`
+> app-side `RegistrationViewModel`/`OnboardingFlowView` wiring of the shipped auth cores; OR the tracked
+> Kover 90% coverage-gate infra.
+>
 > On 2026-07-22 the **content-language step picker + live-preview decision core** landed (slice
 > `auth-language-step-selection-core`, feature-parity §A → advances "System + regional language
 > selection with live translation preview" `[ ]` → `[~]`). This is the pure interaction + preview
@@ -6992,6 +7009,50 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-22 — slice `auth-token-refresh-policy-core` ✅ impl + local gate green + reviewer PASS → PR → merge
+- **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start (open PRs were all
+  iOS `laughing-*` / `story-*` / `ci/*`). Local `main` already synced to `origin/main` (`49d5f591`).
+  Branched `claude/apps/android/auth-token-refresh-policy-core`.
+- **Slice:** extended the pure `:core:model/auth/TokenRefreshPolicy` (which previously held only the
+  proactive `shouldRefresh` = iOS `refreshSession(force:)` guard) with the **endpoint-aware, reactive**
+  side of transparent session refresh, lifted out of iOS `APIClient.requestWithHeaders` /
+  `APIClient.mapUnauthorized`. Build-order area §A Auth (first in the parity sequence). Completes the
+  feature-parity item "Transparent token refresh on 401 with one retry" at the **decision** layer
+  (`[ ]`→`[~]`); the OkHttp `Authenticator`/interceptor wiring in `:core:network` stays a follow-up.
+- **Added (production):** in `JwtExpiry.kt`'s `TokenRefreshPolicy` object —
+  - `isRefreshEligible(endpoint)` = iOS `!isRefreshOrAuth` (`/auth/refresh`, `/auth/login*`,
+    `/auth/register*`, `/auth/magic-link*` are opted out; everything else eligible).
+  - `shouldRefreshBeforeSend(endpoint, token, now, margin)` = iOS proactive gate `if let token,
+    shouldAttemptRefresh && isTokenExpired` — token-present AND eligible AND expired.
+  - `UnauthorizedMapping{InvalidCredentials(message), SessionExpired}` + `mapUnauthorized(endpoint,
+    serverMessage)` = iOS `mapUnauthorized`; a 401 on `/auth/login*` is wrong-credentials (never a
+    teardown), anywhere else session-expired. **SOTA improvement over iOS:** blank server message also
+    falls back to `DEFAULT_INVALID_CREDENTIALS_MESSAGE` (iOS only nil-coalesces).
+  - `Unauthorized401Decision{InvalidCredentials, RefreshAndRetry, Teardown}` + `decideOn401(endpoint,
+    serverMessage, hasRefreshedOn401)` = iOS's 401 branch: credentials surface as-is; an eligible,
+    not-yet-retried endpoint earns one refresh+replay; otherwise teardown (already retried, or an
+    ineligible/handshake endpoint whose refresh token is itself dead).
+  - `RetryOutcome{Success, Teardown, ServerError(status)}` + `classifyRetryStatus(status)` = iOS's
+    post-refresh cascade (2xx→success, 401→teardown, else→server error).
+- **Tests:** +29 `TokenRefreshPolicyTest` (7 eligible / 6 shouldRefreshBeforeSend incl. absent+blank
+  token, margin boundary, handshake opt-out / 6 mapUnauthorized incl. null+blank fallback,
+  login/2fa/refresh/regular / 5 decideOn401 incl. already-retried, handshake-refresh, login-even-after-
+  flag / 5 classifyRetryStatus incl. 299 boundary, 403-not-teardown). Existing `JwtExpiryTest`
+  (`shouldRefresh`) untouched and still green. Expectations are hand-written literals.
+- **Mutation check (RED proof):** dropping the `!hasRefreshedOn401` guard from `decideOn401` fails
+  **exactly** `on401_regularEndpointAfterAlreadyRefreshing_tearsDown` (29 run, 1 failed, no collateral)
+  — behavioural, not tautological.
+- **Verify (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's gradle-distribution
+  download is 403-blocked in this container, so system Gradle is the gate):**
+  `:core:model:testDebugUnitTest` green (whole module, new suite 29/29) + `:app:assembleDebug` → BUILD
+  SUCCESSFUL (every module compiled).
+- **Reviewer:** PASS — diff `apps/android` only (1 modified source file + 1 new test + tracking docs,
+  zero production logic in web/ios/gateway/shared); **SDK purity** — a pure object + sealed decisions in
+  `:core:model`, zero framework/singleton coupling, the OkHttp wiring stays app/`:core:network`-side and
+  pending; **SSOT** — reuses `JwtExpiry.isExpired`, re-implementing no expiry logic; **UX/coherence** —
+  the credential-vs-session distinction means a wrong password never triggers a spurious session
+  teardown; no coverage floor lowered, no test weakened.
 
 ### 2026-07-21 — slice `auth-password-requirements` ✅ impl + local gate green + reviewer PASS → PR (CI pending)
 - **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start (only iOS `laughing-*`
