@@ -4,6 +4,10 @@ const GLOBE = '\u{1F310}';
 const FLAG_NORWAY = '\u{1F1F3}\u{1F1F4}';
 const FLAG_INDONESIA = '\u{1F1EE}\u{1F1E9}';
 const FLAG_FRANCE = '\u{1F1EB}\u{1F1F7}';
+const FLAG_SWEDEN = '\u{1F1F8}\u{1F1EA}';
+const FLAG_SPAIN = '\u{1F1EA}\u{1F1F8}';
+const FLAG_JAPAN = '\u{1F1EF}\u{1F1F5}';
+const FLAG_PORTUGAL = '\u{1F1E7}\u{1F1F7}';
 
 describe('v2/flags getFlag', () => {
   it('returns the France flag for a known 2-letter code', () => {
@@ -25,6 +29,32 @@ describe('v2/flags getFlag', () => {
 
   it('extracts the primary subtag from a BCP-47 locale', () => {
     expect(getFlag('fr-FR')).toBe(FLAG_FRANCE);
+  });
+
+  it('resolves ISO 639-2/639-3 codes to the correct national flag (not the globe)', () => {
+    // Blind slice(0, 2) turned these canonical multi-letter codes into a
+    // non-matching 2-letter prefix ("swe"->"sw", "spa"->"sp", "jpn"->"jp",
+    // "por"->"po") and fell through to the globe. normalizeLanguageCode maps
+    // them to their supported ISO 639-1 code.
+    expect(getFlag('swe')).toBe(FLAG_SWEDEN);
+    expect(getFlag('spa')).toBe(FLAG_SPAIN);
+    expect(getFlag('jpn')).toBe(FLAG_JAPAN);
+    expect(getFlag('por')).toBe(FLAG_PORTUGAL);
+  });
+
+  it('resolves 639-2/B (bibliographic) variants that differ from the 639-1 prefix', () => {
+    // "ger"->"de", "dut"->"nl", "chi"->"zh": bibliographic codes whose first
+    // two letters never form the target ISO 639-1 code.
+    expect(getFlag('ger')).toBe(FLAG_MAP.de);
+    expect(getFlag('dut')).toBe(FLAG_MAP.nl);
+    expect(getFlag('chi')).toBe(FLAG_MAP.zh);
+  });
+
+  it('does not truncate a supported 3-letter code into an unrelated language', () => {
+    // "swe" (Swedish) must never resolve as "sw" (Swahili). No Swahili flag
+    // exists in the map, but the invariant is enforced regardless.
+    expect(getFlag('swe')).not.toBe(GLOBE);
+    expect(getFlag('swe')).toBe(FLAG_SWEDEN);
   });
 
   it('falls back to the globe for an unknown code', () => {
@@ -56,5 +86,16 @@ describe('v2/flags getLanguageName', () => {
 
   it('falls back to the uppercased code for an unknown language', () => {
     expect(getLanguageName('xx')).toBe('XX');
+  });
+
+  it('resolves an ISO 639-2/639-3 code to its romanized name', () => {
+    // slice(0, 2) turned "swe" into "sw" (absent from LANGUAGE_NAMES) and
+    // returned the raw "SWE"; normalization resolves it to Swedish.
+    expect(getLanguageName('swe')).toBe('Svenska');
+    expect(getLanguageName('spa')).toBe('Espanol');
+  });
+
+  it('keeps the original code (uppercased) when it cannot be normalized', () => {
+    expect(getLanguageName('fil')).toBe('FIL');
   });
 });

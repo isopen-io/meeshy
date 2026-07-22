@@ -1,7 +1,17 @@
 /**
  * Language flag mappings and utilities.
  * Extracted from MessageBubble for reuse across TranslationToggle, PostCard, etc.
+ *
+ * Language identifiers are resolved through the shared `normalizeLanguageCode`
+ * SSOT rather than a blind `slice(0, 2)`: BCP-47 locales (`fr-FR`), ISO 639-2/3
+ * codes (`swe`, `spa`, `jpn`) and 639-2/B bibliographic variants (`ger`, `dut`)
+ * all map to their supported ISO 639-1 code before lookup. This closes the
+ * silent-collision class the truncation created (`swe` -> `sw`, `spa` -> `sp`)
+ * and keeps the badges consistent with the rest of the codebase.
  */
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+
+const GLOBE = '\u{1F310}';
 
 export const FLAG_MAP: Record<string, string> = {
   fr: '\u{1F1EB}\u{1F1F7}',
@@ -52,13 +62,13 @@ export const LANGUAGE_NAMES: Record<string, string> = {
 };
 
 export function getFlag(code: string | undefined | null): string {
-  if (!code) return '\u{1F310}';
-  const normalized = code.toLowerCase().slice(0, 2);
-  return FLAG_MAP[normalized] || '\u{1F310}';
+  const normalized = normalizeLanguageCode(code);
+  if (!normalized) return GLOBE;
+  return FLAG_MAP[normalized] || GLOBE;
 }
 
 export function getLanguageName(code: string | undefined | null): string {
-  if (!code) return 'Unknown';
-  const normalized = code.toLowerCase().slice(0, 2);
-  return LANGUAGE_NAMES[normalized] || code.toUpperCase();
+  const normalized = normalizeLanguageCode(code);
+  if (!normalized) return code ? code.toUpperCase() : 'Unknown';
+  return LANGUAGE_NAMES[normalized] || normalized.toUpperCase();
 }
