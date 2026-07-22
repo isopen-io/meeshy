@@ -2,10 +2,12 @@ name: iOS Release (ANDP)
 
 # Release the iOS app through isopen-io/andp (API-first App Store Connect
 # publishing — no Transporter/altool, no fastlane, no agvtool). Flow:
-#   1. build (macOS): xcodebuild archives + exports the IPA (signing via the ASC
-#      API key). The build number comes from `andp build-number --strategy
-#      max-build` (numeric global max on ASC + 1) and is applied as the
-#      CURRENT_PROJECT_VERSION build setting — CFBundleVersion resolves from it.
+#   1. build (macOS): xcodebuild archives + exports the IPA. Signing assets (the
+#      Apple Distribution cert + App Store profiles) are pulled from the match
+#      certificates repo and decrypted with openssl — no fastlane. The build
+#      number comes from `andp build-number --strategy max-build` (numeric global
+#      max on ASC + 1), applied as the CURRENT_PROJECT_VERSION build setting so
+#      CFBundleVersion resolves from it — no agvtool, no file mutation.
 #   2a. target=testflight: `andp release <ipa> [--group]` uploads and waits VALID.
 #   2b. target=appstore: `andp release start --ship` advances to the approval
 #       gate and WAITS. A protected environment (`appstore-submit`) holds the
@@ -103,29 +105,59 @@ jobs:
             sed 's/^/        /' "$RUNNER_TEMP/AuthKey.p8"
           } > apps/ios/secrets.yml
 
-      # Signing without fastlane/match: xcodebuild uses the ASC API key for
-      # automatic (cloud-managed) signing. If the key lacks cloud-signing
-      # permission, provide the distribution cert as DIST_CERT_P12_BASE64
-      # (+ DIST_CERT_PASSWORD) and it's imported into a temporary keychain.
-      - name: Install distribution certificate (only if provided)
+      # Reuse the match certificates repo WITHOUT fastlane: clone it over SSH,
+      # decrypt the Apple Distribution cert + App Store profiles with openssl
+      # (match's legacy AES-256-CBC), and install them into a temporary keychain
+      # + the profiles dir. This is exactly what `fastlane match` set up — the
+      # same certs/profiles the proven build_production lane used — minus fastlane.
+      - name: Set up SSH (match certificates repo)
+        uses: webfactory/ssh-agent@v0.10.0
+        with:
+          ssh-private-key: ${{ secrets.MATCH_DEPLOY_KEY }}
+
+      - name: Install signing assets from the match repo (git + openssl)
         env:
-          DIST_CERT_P12_BASE64: ${{ secrets.DIST_CERT_P12_BASE64 }}
-          DIST_CERT_PASSWORD: ${{ secrets.DIST_CERT_PASSWORD }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -z "${DIST_CERT_P12_BASE64:-}" ]; then
-            echo "::notice::No DIST_CERT_P12_BASE64 — using Xcode cloud-managed signing via the ASC API key. If archive can't find a signing identity, add DIST_CERT_P12_BASE64 (+ DIST_CERT_PASSWORD)."
-            exit 0
-          fi
+          CERTS="$RUNNER_TEMP/match-certs"
+          GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" \
+            git clone --depth 1 "$MATCH_GIT_URL" "$CERTS"
+
+          # match legacy encryption (force_legacy_encryption: true) = AES-256-CBC,
+          # base64, MD5 key derivation; fall back to SHA-256 for any newer entry.
+          dec() {
+            for md in md5 sha256; do
+              openssl aes-256-cbc -d -k "$MATCH_PASSWORD" -a -md "$md" -in "$1" -out "$2" 2>/dev/null && return 0
+            done
+            echo "::error::could not decrypt $1 (wrong MATCH_PASSWORD?)"; return 1
+          }
+
           KC="$RUNNER_TEMP/signing.keychain-db"
           security create-keychain -p "" "$KC"
           security set-keychain-settings -lut 21600 "$KC"
           security unlock-keychain -p "" "$KC"
-          printf '%s' "$DIST_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/dist.p12"
-          security import "$RUNNER_TEMP/dist.p12" -k "$KC" -P "${DIST_CERT_PASSWORD:-}" -T /usr/bin/codesign -f pkcs12
-          security set-key-partition-list -S apple-tool:,apple: -k "" "$KC" >/dev/null
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed s/\"//g)
-          echo "Distribution certificate imported into a temporary keychain."
+
+          shopt -s nullglob
+          n=0
+          for p12 in "$CERTS"/certs/distribution/*.p12; do
+            dec "$p12" "$RUNNER_TEMP/dist.p12"
+            security import "$RUNNER_TEMP/dist.p12" -k "$KC" -P "" -T /usr/bin/codesign -f pkcs12
+            n=$((n+1))
+          done
+          security set-key-partition-list -S apple-tool:,apple: -k "" "$KC" >/dev/null
+          echo "Imported $n distribution certificate(s)."
+
+          PROFILES="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES"
+          m=0
+          for prof in "$CERTS"/profiles/appstore/*.mobileprovision; do
+            dec "$prof" "$PROFILES/match-$m.mobileprovision"   # Xcode scans by content, not name
+            m=$((m+1))
+          done
+          echo "Installed $m App Store provisioning profile(s)."
 
       - name: Compute build number (ANDP max-build)
         run: |
