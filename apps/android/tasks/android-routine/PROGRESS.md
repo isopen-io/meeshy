@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-07-22 the **content-language step picker + live-preview decision core** landed (slice
+> `auth-language-step-selection-core`, feature-parity §A → advances "System + regional language
+> selection with live translation preview" `[ ]` → `[~]`). This is the pure interaction + preview
+> primitive behind the 8-step wizard's Step 6. Parity source: iOS `StepLanguageView`
+> (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`) over
+> `RegistrationViewModel.systemLanguage`/`.regionalLanguage`. One pure
+> `:core:model/auth/LanguageStepSelection.kt` holding **`LanguageSlot`** (SYSTEM/REGIONAL — iOS
+> `LanguageTarget`), **`LanguageSelectionState`** (immutable `(systemLanguage, regionalLanguage)`
+> pair), and the **`LanguageStepSelection`** object. Decisions: `pickerLanguages` =
+> `LanguageData.allLanguagesCommonFirst` (**reuses the catalogue SSOT**, mirroring iOS
+> `LanguageSelector.defaultLanguages` = `LanguageData.allLanguagesCommonFirst` — ordering/metadata
+> never drift); `filter(query)` (empty → whole list, else case-insensitive `nativeName`/`code`
+> contains, faithful to iOS `filteredLanguages` incl. the untrimmed `isEmpty` guard);
+> `summaryLabel(code)` (`"<flag> <nativeName>"` or raw-code fallback); `selectedLanguageName(code)`
+> (nativeName or raw-code, the preview description); `translationPreview(systemLanguage)` (verbatim
+> port of iOS `translatedExample` — 11 explicit arms + a French default for every other language incl.
+> English); `isSelected(slot, code, state)` (slot-aware highlight, reads only the edited slot);
+> `select(slot, code, state)` (slot-aware immutable write, the other slot untouched). **SOTA note:**
+> iOS spreads the filter + summary-label fallback + slot-aware write + preview switch across a SwiftUI
+> `View` body and its `@State editingTarget`; Android lifts the whole thing into one framework-free
+> SSOT *reusing* `LanguageData`, so the app-side picker composable is a thin caller feeding
+> `select`/`filter`/`translationPreview` and `systemLanguage.isNotEmpty()` straight into
+> `RegistrationStepGate`. **+32 behavioural tests** (`LanguageStepSelectionTest`): 2 pickerLanguages /
+> 5 filter / 3 summaryLabel / 2 selectedLanguageName / 13 translationPreview / 3 isSelected / 4 select.
+> Expectations are hand-written literals. **Mutation check (RED proof):** flipping `summaryLabel`'s
+> raw-code fallback to `""` fails **exactly** `summaryLabel_unknownCode_fallsBackToRawCode` (32 run,
+> 1 failed, no collateral) — behavioural, not tautological; RED was also proven first by the suite
+> failing to compile against the absent `LanguageStepSelection`/`LanguageSlot`/`LanguageSelectionState`
+> types. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's
+> gradle-distribution download is 403-blocked in this container, so system Gradle is the gate):**
+> `:core:model:testDebugUnitTest` green (whole module, new suite 32/32) + `:app:assembleDebug` → BUILD
+> SUCCESSFUL (every module compiled). Reviewer **PASS** (diff `apps/android` only — 1 new source file +
+> 1 test + tracking docs, zero production logic in web/ios/gateway/shared; **SDK purity** — a pure object
+> + enum + data class in `:core:model`, zero framework/singleton coupling, the picker composable stays
+> app-side/pending; **SSOT** — `pickerLanguages`/`summaryLabel`/`selectedLanguageName` all resolve through
+> `LanguageData`, re-implementing nothing; **UX** — the slot-aware selection + live-preview mapping are
+> faithfully encoded so Step 6 stays coherent with iOS; no coverage floor lowered, no test weakened).
+>
+> **Next slice:** the app-side `StepLanguageView` composable (system/regional tab, searchable grid driven
+> by `filter`, summary cards via `summaryLabel`, the live-preview example card via `translationPreview`/
+> `selectedLanguageName`) inside the still-pending `RegistrationViewModel`/`OnboardingFlowView`
+> scaffold; OR that whole app-side registration-wizard wiring (`RegistrationStepGate.canProceed` →
+> `RegistrationStepNavigator.advance` + `RegistrationProgressBar` off `currentStep`, DataStore-backed
+> field state); OR the app-side JWT-refresh wiring (OkHttp `Authenticator` + persistent session
+> restore); OR the tracked Kover 90% coverage-gate infra. **Known standing debt (not this slice):**
+> (1) the `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest` /
+> `InterfaceLanguageStoreTest` / `PrivacyPreferencesStoreTest`) — green in isolation, intermittent in
+> the full run; a "harden the DataStore test harness against parallel-load timeout" follow-up, tracked
+> and unclaimed.
+
 > On 2026-07-22 the **unified registration per-step proceed-gate core** landed (slice
 > `registration-step-gate-core`, feature-parity §A → advances "Profile photo / banner / bio optional
 > step; registration recap + terms acceptance" `[ ]` → `[~]`). This is the **capstone SSOT** of the
