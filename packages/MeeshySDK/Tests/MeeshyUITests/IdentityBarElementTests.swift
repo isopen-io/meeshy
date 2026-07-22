@@ -126,6 +126,7 @@ final class UserIdentityBarLayoutTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_element_presence_hasStableId() {
         let idleId = IdentityBarElement.presence(.idle).id
         let onlineId = IdentityBarElement.presence(.online).id
