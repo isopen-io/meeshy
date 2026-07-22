@@ -1,10 +1,11 @@
 name: iOS Release (ANDP)
 
 # Release the iOS app through isopen-io/andp (API-first App Store Connect
-# publishing — no Transporter/altool). Flow:
-#   1. build (macOS): fastlane `build_for_andp` signs the app and sets the build
-#      number = max(local project, latest TestFlight) + 1 — a strictly higher
-#      CFBundleVersion, so the upload never hits ...DUPLICATE. No upload here.
+# publishing — no Transporter/altool, no fastlane, no agvtool). Flow:
+#   1. build (macOS): xcodebuild archives + exports the IPA (signing via the ASC
+#      API key). The build number comes from `andp build-number --strategy
+#      max-build` (numeric global max on ASC + 1) and is applied as the
+#      CURRENT_PROJECT_VERSION build setting — CFBundleVersion resolves from it.
 #   2a. target=testflight: `andp release <ipa> [--group]` uploads and waits VALID.
 #   2b. target=appstore: `andp release start --ship` advances to the approval
 #       gate and WAITS. A protected environment (`appstore-submit`) holds the
@@ -126,24 +127,26 @@ jobs:
           security list-keychains -d user -s "$KC" $(security list-keychains -d user | sed s/\"//g)
           echo "Distribution certificate imported into a temporary keychain."
 
-      - name: Compute build number (ANDP max-build) and stamp it
+      - name: Compute build number (ANDP max-build)
+        run: |
+          set -euo pipefail
+          # ANDP's max-build queries every build on ASC (incl. PROCESSING), so no
+          # local floor is needed. No agvtool, no file mutation.
+          BUILD_NUMBER="$(cd apps/ios && andp build-number me.meeshy.app --strategy max-build)"
+          echo "→ build number $BUILD_NUMBER"
+          echo "ANDP_BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+
+      - name: Archive (xcodebuild — ASC-key signing; version via build settings)
         env:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           cd apps/ios
-          FLOOR="$(agvtool what-version -terse 2>/dev/null || echo 0)"
-          BUILD_NUMBER="$(andp build-number me.meeshy.app --strategy max-build --floor "$FLOOR")"
-          echo "→ build number $BUILD_NUMBER (floor $FLOOR)"
-          agvtool new-version -all "$BUILD_NUMBER"
-          if [ -n "${RELEASE_VERSION}" ]; then
-            agvtool new-marketing-version "${RELEASE_VERSION}"
-          fi
-
-      - name: Archive (xcodebuild — ASC-key automatic signing)
-        run: |
-          set -euo pipefail
-          cd apps/ios
+          # CFBundleVersion resolves from $(CURRENT_PROJECT_VERSION) and
+          # CFBundleShortVersionString from $(MARKETING_VERSION); we set them as
+          # build settings here — future-proof, no agvtool, no file mutation.
+          VERSION_ARGS=("CURRENT_PROJECT_VERSION=$ANDP_BUILD_NUMBER")
+          [ -n "${RELEASE_VERSION}" ] && VERSION_ARGS+=("MARKETING_VERSION=$RELEASE_VERSION")
           xcodebuild archive \
             -project Meeshy.xcodeproj -scheme Meeshy -configuration Release \
             -archivePath build/Meeshy.xcarchive \
@@ -152,7 +155,8 @@ jobs:
             -authenticationKeyID "$ANDP_KEY_ID" \
             -authenticationKeyIssuerID "$ANDP_ISSUER_ID" \
             -allowProvisioningUpdates \
-            DEVELOPMENT_TEAM=D72UK7R5RE CODE_SIGN_STYLE=Automatic SWIFT_OPTIMIZATION_LEVEL=-Onone
+            DEVELOPMENT_TEAM=D72UK7R5RE CODE_SIGN_STYLE=Automatic SWIFT_OPTIMIZATION_LEVEL=-Onone \
+            "${VERSION_ARGS[@]}"
 
       # The same standalone script Xcode Cloud / the local scheme use — strips
       # ad-hoc framework signatures so the export re-signs cleanly (ITMS-90035).
