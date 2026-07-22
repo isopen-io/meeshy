@@ -3,6 +3,9 @@ import { apiService } from './api.service';
 import { User } from '@/types';
 import { getDefaultPermissions } from '@/utils/user-adapter';
 import { getUserPresenceStatus, type UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
+import { getUserDisplayName } from '@/utils/user-display-name';
+import { getInitials } from '@/utils/initials';
+import { formatPresenceLabel } from '@/utils/presence-format';
 // Importer les types partagés pour cohérence
 import type { ApiResponse, UpdateUserRequest, UpdateUserResponse } from '@meeshy/shared/types';
 
@@ -212,73 +215,62 @@ export const usersService = {
   },
 
   /**
-   * Formate le nom d'affichage d'un utilisateur
+   * Formate le nom d'affichage d'un utilisateur — délègue à la source unique
+   * `@/utils/user-display-name` (priorité displayName > firstName+lastName >
+   * username, avec `trim` et garde contre un displayName blanc). Aucune
+   * réimplémentation locale.
    */
   getDisplayName(user: User): string {
-    if (user.displayName) {
-      return user.displayName;
-    }
-    return `${user.firstName} ${user.lastName}`.trim() || user.username;
+    return getUserDisplayName(user, user.username);
   },
 
   /**
-   * Formate la dernière connexion
-   * (clés i18n `contacts.status.*`, namespace 'contacts')
+   * Formate la dernière connexion — délègue à la source unique
+   * `@/utils/presence-format` (`formatPresenceLabel`). Le libellé « en ligne »
+   * suit la règle de présence canonique partagée (gardée contre un `isOnline`
+   * périmé) et s'accorde donc toujours avec la pastille (`presenceColorClass`).
+   * Clés i18n `contacts.status.*` (namespace 'contacts').
    */
   getLastSeenFormatted(
     user: User,
     options: { t: (key: string, params?: Record<string, unknown>) => string; locale?: string }
   ): string {
-    if (user.isOnline) {
-      return options.t('status.online');
-    }
-    return this.formatLastSeenLabel(user.lastActiveAt, options);
+    return formatPresenceLabel({
+      lastActiveAt: user.lastActiveAt,
+      isOnline: user.isOnline,
+      t: options.t,
+      locale: options.locale,
+    });
   },
 
   /**
-   * Formate un horodatage de dernière activité en libellé relatif.
-   * Pur (dépend de Date.now()) — pensé pour un appel au render dans une
-   * feuille abonnée au tick présence, jamais figé dans un objet de données.
+   * Formate un horodatage de dernière activité en libellé relatif — délègue à
+   * `formatPresenceLabel` (source unique, math de jour calendaire + heure
+   * exacte). Pur (dépend de Date.now() via le SSOT) — pensé pour un appel au
+   * render dans une feuille abonnée au tick présence, jamais figé dans un objet
+   * de données. `isOnline` non fourni : online = activité < 60 s (règle
+   * canonique).
    */
   formatLastSeenLabel(
     lastActiveAt: string | Date,
     options: { t: (key: string, params?: Record<string, unknown>) => string; locale?: string }
   ): string {
-    const { t, locale } = options;
-
-    const lastActive = new Date(lastActiveAt);
-    const now = new Date();
-    const diffMs = now.getTime() - lastActive.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMinutes / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMinutes < 1) {
-      return t('status.justNow');
-    }
-    if (diffMinutes < 60) {
-      return t('status.minutesAgo', { count: diffMinutes });
-    }
-    if (diffHours < 24) {
-      return t('status.hoursAgo', { count: diffHours });
-    }
-    if (diffDays < 7) {
-      return t('status.daysAgo', { count: diffDays });
-    }
-    return lastActive.toLocaleDateString(locale);
+    return formatPresenceLabel({
+      lastActiveAt,
+      t: options.t,
+      locale: options.locale,
+    });
   },
 
   /**
-   * Obtient l'avatar par défaut pour un utilisateur
+   * Obtient l'avatar par défaut pour un utilisateur — initiales via la source
+   * unique `@/utils/initials` (`getInitials`, découpe par point de code Unicode,
+   * jamais `charAt` : un displayName commençant par un emoji ne produit plus de
+   * demi-paire de substitution cassée).
    */
   getDefaultAvatar(user: User): string {
-    const initials = this.getDisplayName(user)
-      .split(' ')
-      .map(word => word.charAt(0))
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-    
+    const initials = getInitials(getUserDisplayName(user, user.username));
+
     // Couleur basée sur l'ID utilisateur pour cohérence
     const colors = [
       'bg-blue-500', 'bg-green-500', 'bg-yellow-500', 'bg-red-500',
