@@ -696,7 +696,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       refresh-once via `hasRefreshedOn401`), and the **replay classification**
       (`classifyRetryStatus` → `Success`/`Teardown`/`ServerError`). +29 behavioural tests, mutation-proven.
       Still needs the OkHttp `Authenticator`/interceptor that *wires* these decisions into `:core:network`.
-- [ ] Anonymous (shared-link) sessions with restricted send permissions
+- [~] Anonymous (shared-link) sessions with restricted send permissions — the
+      **permission-hardening decision core** landed (slice `anonymous-session-permissions-core`,
+      2026-07-22): `ParticipantPermissions.defaultUser`/`.defaultAnonymous` (port of iOS
+      `ParticipantModels.swift`), the `ParticipantPermissions.anonymous(messages, files, images)`
+      SSOT that **force-denies videos/audios/locations/links** regardless of the server payload,
+      and `AnonymousJoinResponse.toSessionContext()` → `AnonymousSessionContext?` (port of iOS
+      `AnonymousSessionContext.swift`, returning `null` for a malformed response — missing
+      participant/conversation or blank session token — instead of iOS's force-unwrap crash).
+      +12 behavioural tests, mutation-proven. Still needs the app-side wiring: an
+      `AnonymousSessionStore` (persist the token), the guest join flow feeding `toSessionContext`,
+      and the composer/`X-Session-Token` header consuming `permissions` to gate the attachment bar.
 - [ ] Login/logout teardown wiping E2EE keys and per-user caches
 - [ ] Splash screen with brand animation + minimum display duration
 

@@ -1,5 +1,46 @@
 # Progress — state & what to do next
 
+> On 2026-07-22 the **anonymous-session permission-hardening core** landed (slice
+> `anonymous-session-permissions-core`, feature-parity §A → advances "Anonymous (shared-link) sessions
+> with restricted send permissions" `[ ]`→`[~]`). The security-critical piece of guest sessions: a
+> shared-link guest may only ever send **text + images (+ optionally files)** — videos, audios,
+> locations and links are **force-denied regardless of what the gateway advertises**. Added to
+> `:core:model`: `ParticipantPermissions.defaultUser` (all 7 true) / `.defaultAnonymous` (messages +
+> images only) — port of iOS `ParticipantModels.swift`; the `ParticipantPermissions.anonymous(messages,
+> files, images)` factory that hard-codes videos/audios/locations/links = false (the hardening SSOT,
+> reused by `defaultAnonymous` and by the transform); and `AnonymousSession.kt`'s
+> `AnonymousSessionContext` + `AnonymousJoinResponse.toSessionContext(): AnonymousSessionContext?`
+> (port of iOS app-side `AnonymousSessionContext.swift`'s `toSessionContext`). **SOTA over iOS:** iOS
+> force-unwraps `participant`/`conversation` in the transform (a malformed join response crashes) and
+> never guards a blank token; the Android port returns `null` when the response can't form a real
+> session (missing participant/conversation, or a blank `X-Session-Token`), degrading gracefully. **+12
+> behavioural tests** (`AnonymousSessionContextTest`): 3 `anonymous()` (all-true forced-false /
+> pass-through negotiable / all-denied), `defaultAnonymous`, `defaultUser`, 7 `toSessionContext`
+> (hardens ignoring unnegotiable grants / carries negotiable flags / maps every identifier / null
+> participant / null conversation / blank token / empty token). Expectations are hand-written literals.
+> **Mutation check (RED proof):** flipping the `anonymous()` factory's `canSendVideos = false` → `true`
+> fails **exactly** the 4 hardening assertions (`anonymous_forcesFourCapabilitiesFalse`,
+> `anonymous_deniesEverything`, `defaultAnonymous_grantsOnlyMessagesAndImages`,
+> `toSessionContext_hardensGuestCapabilities`) — 12 run, 4 failed, no collateral — proving the forcing
+> is load-bearing across every consumer of the SSOT; RED was also proven first by the suite failing to
+> compile against the absent `defaultUser`/`defaultAnonymous`/`anonymous`/`AnonymousSessionContext`/
+> `toSessionContext` symbols. **Gate:** `:core:model:testDebugUnitTest` green (whole module, new suite
+> 12/12) + `assembleDebug testDebugUnitTest` (all modules) → BUILD SUCCESSFUL. Reviewer **PASS** (diff
+> `apps/android` only — 1 modified + 1 new source + 1 new test + tracking docs, zero production logic
+> elsewhere; **SDK purity** — pure companion factories + a stateless extension transform in
+> `:core:model`, zero framework/singleton coupling, the store/join-flow/composer wiring stays
+> app-side/pending; **SSOT** — the `anonymous()` factory is the single home of the guest-capability
+> forcing, reused by `defaultAnonymous` and `toSessionContext`; **UX/security** — a guest can never be
+> tricked into an attachment the product forbids, even by a compromised/buggy server). **Next slice:**
+> the app-side wiring of this core — an `AnonymousSessionStore` (persist `sessionToken` per `linkId`,
+> mirroring iOS Keychain `AnonymousSessionStore`), the guest join flow calling `toSessionContext`, and
+> the composer reading `permissions` to gate the attachment bar + the `X-Session-Token` header; OR the
+> still-`[ ]` app-side `RegistrationViewModel`/`OnboardingFlowView` wiring of the shipped auth cores; OR
+> the OkHttp `Authenticator` wiring the token-refresh decision core into `:core:network`; OR the tracked
+> Kover 90% coverage-gate infra. **Known standing debt (not this slice):** the `:sdk-core`
+> DataStore-parallel-load timeout flake (`ThemeStoreTest`/`InterfaceLanguageStoreTest`/
+> `PrivacyPreferencesStoreTest`) — green in isolation, intermittent in the full run.
+
 > On 2026-07-22 the **token-refresh decision core (reactive 401 + endpoint eligibility)** landed
 > (slice `auth-token-refresh-policy-core`, feature-parity §A → advances "Transparent token refresh on
 > 401 with one retry" `[ ]`→`[~]`). Extended the pure `:core:model/auth/TokenRefreshPolicy` (previously
@@ -7009,6 +7050,41 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-22 — slice `anonymous-session-permissions-core` ✅ impl + local gate green + reviewer PASS → PR → merge
+- **Rule #0:** one open android-track PR at start — #2283 `claude/apps/android/auth-token-refresh-policy-core`
+  (prior iteration, `mergeable_state: clean`, apps/android-only, CI has path filters so no required
+  checks run on an apps/android diff). **Squash-merged it to main first** (sha `75942ed7`), synced local
+  `main` to `origin/main`, then branched `claude/apps/android/anonymous-session-permissions-core`.
+- **Slice:** the security-critical decision layer of anonymous (shared-link) guest sessions. Build-order
+  §A Auth. Advances feature-parity "Anonymous (shared-link) sessions with restricted send permissions"
+  `[ ]`→`[~]` (decision layer; the store/join-flow/composer wiring remains a follow-up).
+- **Added (production):**
+  - `ParticipantPermissions` companion (`Participant.kt`): `defaultUser` (all 7 true), `defaultAnonymous`
+    (messages + images only), and `anonymous(canSendMessages, canSendFiles, canSendImages)` — the
+    hardening SSOT that hard-codes `canSendVideos/Audios/Locations/Links = false`. Port of iOS
+    `ParticipantModels.swift` `defaultUser`/`defaultAnonymous`.
+  - `AnonymousSession.kt`: `AnonymousSessionContext(sessionToken, participantId, permissions, linkId,
+    conversationId)` + `AnonymousJoinResponse.toSessionContext(): AnonymousSessionContext?` — port of iOS
+    app-side `AnonymousSessionContext.swift`. Trusts only the server's messages/files/images flags,
+    force-denies the other four via `anonymous()`. **SOTA over iOS:** returns `null` (not a crash) when
+    participant/conversation is missing or the session token is blank.
+- **Tests:** +12 `AnonymousSessionContextTest` (3 `anonymous()` / `defaultAnonymous` / `defaultUser` /
+  7 `toSessionContext` incl. null participant, null conversation, blank + empty token, identifier
+  mapping with distinct literals to catch a field swap). Expectations are hand-written literals.
+- **Mutation check (RED proof):** flipping the `anonymous()` factory's `canSendVideos = false` → `true`
+  fails **exactly** the 4 hardening assertions (12 run, 4 failed, no collateral) — the forcing is
+  load-bearing across every consumer of the SSOT (`defaultAnonymous`, `toSessionContext`). RED also
+  proven by the suite failing to compile against the absent symbols first.
+- **Verify (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's gradle-distribution
+  download is 403-blocked in this container, so system Gradle is the gate):** `:core:model:testDebugUnitTest`
+  green (whole module, new suite 12/12) + `assembleDebug testDebugUnitTest` (all modules) → BUILD SUCCESSFUL.
+- **Reviewer:** PASS — diff `apps/android` only (1 modified + 1 new source + 1 new test + tracking docs,
+  zero production logic elsewhere); **SDK purity** — pure companion factories + a stateless extension
+  transform in `:core:model`, zero framework/singleton coupling, the store/join-flow/composer wiring
+  stays app-side/pending; **SSOT** — `anonymous()` is the single home of the guest-capability forcing;
+  **UX/security** — a guest can never be tricked into a forbidden attachment even by a buggy/compromised
+  server; no coverage floor lowered, no test weakened.
 
 ### 2026-07-22 — slice `auth-token-refresh-policy-core` ✅ impl + local gate green + reviewer PASS → PR → merge
 - **Rule #0:** no open PR on the android track (`claude/apps/android/*`) at start (open PRs were all
