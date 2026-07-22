@@ -168,6 +168,7 @@ extension TimelineViewModel {
         if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration.map { Float($0) } }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
+        if let s = project.stickerObjects.first(where: { $0.id == id }) { return s.duration.map { Float($0) } }
         return nil
     }
 

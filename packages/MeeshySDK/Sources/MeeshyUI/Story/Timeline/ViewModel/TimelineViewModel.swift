@@ -555,11 +555,12 @@ public final class TimelineViewModel: ObservableObject {
         }
     }
 
-    /// Returns the duration of any clip (media/audio/text) by id, or nil.
+    /// Returns the duration of any clip (media/audio/text/sticker) by id, or nil.
     private func clipDuration(forId id: String) -> Float? {
         if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration.map { Float($0) } }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
+        if let s = project.stickerObjects.first(where: { $0.id == id }) { return s.duration.map { Float($0) } }
         return nil
     }
 
