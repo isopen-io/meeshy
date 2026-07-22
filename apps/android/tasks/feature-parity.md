@@ -502,7 +502,39 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `apps/android` only. **Follow-up:** first/last-name capture (Step 3) + the app-side `StepPasswordView`
       composable (needs the registration wizard scaffold) rendering the checklist card + strength bar
       + match card driven by these cores.
-- [ ] System + regional language selection with live translation preview
+- [~] System + regional language selection with live translation preview — **picker + preview
+      decision core shipped** (slice `auth-language-step-selection-core`, 2026-07-22). Pure
+      `:core:model/auth/LanguageStepSelection.kt` (`LanguageSlot` enum + `LanguageSelectionState`
+      data class + `LanguageStepSelection` object), a faithful port of iOS `StepLanguageView`
+      (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`) over
+      `RegistrationViewModel.systemLanguage`/`.regionalLanguage`. Decisions: `pickerLanguages`
+      (= `LanguageData.allLanguagesCommonFirst`, reusing the catalogue SSOT — mirrors iOS
+      `LanguageSelector.defaultLanguages`, no drift); `filter(query)` (empty query → whole list,
+      else case-insensitive `nativeName`/`code` contains — faithful to iOS `filteredLanguages`,
+      untrimmed `isEmpty` guard); `summaryLabel(code)` (`"<flag> <nativeName>"` or raw-code fallback);
+      `selectedLanguageName(code)` (nativeName or raw-code fallback, the preview description);
+      `translationPreview(systemLanguage)` (verbatim port of iOS `translatedExample` — 11 explicit
+      arms + French default for every other language incl. English); `isSelected(slot, code, state)`
+      (slot-aware highlight, reads only the edited slot); `select(slot, code, state)` (slot-aware
+      immutable write, other slot untouched). **SOTA note:** iOS scatters the filter, summary-label
+      fallback, slot-aware write, and preview switch across a SwiftUI `View` body + `@State
+      editingTarget`; Android lifts every decision into one framework-free SSOT reusing `LanguageData`,
+      so the picker composable is a thin caller and every branch is JVM-testable. **+32 behavioural
+      tests** (`LanguageStepSelectionTest`): 2 pickerLanguages / 5 filter (empty / by-name / by-code /
+      no-match / no-dup) / 3 summaryLabel (known / unknown / blank) / 2 selectedLanguageName /
+      13 translationPreview (11 arms + unknown→fr + english→fr default) / 3 isSelected (system /
+      regional / slot-isolation) / 4 select (system / regional / inert reselect / input-unmutated).
+      Expectations are hand-written literals (not tautological). **Mutation check (RED proof):**
+      flipping `summaryLabel`'s raw-code fallback to `""` fails **exactly**
+      `summaryLabel_unknownCode_fallsBackToRawCode` (32 run, 1 failed, no collateral); RED was also
+      proven first by the suite failing to compile against the absent `LanguageStepSelection`/
+      `LanguageSlot`/`LanguageSelectionState` types. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`,
+      `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (whole module) + `:app:assembleDebug`
+      → BUILD SUCCESSFUL (every module compiled). Diff = `apps/android` only (1 new source file +
+      1 test + tracking docs). **Follow-up:** the app-side `StepLanguageView` composable (system/regional
+      tab, searchable grid driven by `filter`, summary cards via `summaryLabel`, the live-preview
+      example card via `translationPreview`/`selectedLanguageName`) wired into the `RegistrationViewModel`
+      + the `RegistrationStepGate` LANGUAGE arm (`systemLanguage.isNotEmpty()`).
 - [~] Profile photo / banner / bio optional step; registration recap + terms acceptance —
       **unified per-step proceed-gate core shipped** (slice `registration-step-gate-core`, 2026-07-22).
       Pure `:core:model/auth/RegistrationStepGate.kt` — the SSOT capstone that answers the wizard's
