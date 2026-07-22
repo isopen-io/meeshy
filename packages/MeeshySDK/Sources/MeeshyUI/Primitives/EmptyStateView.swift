@@ -34,13 +34,13 @@ public struct EmptyStateView: View {
     }
 
     public var body: some View {
-        VStack(spacing: compact ? 10 : 16) {
+        VStack(spacing: compact ? MeeshySpacing.sm : MeeshySpacing.lg) {
             Spacer()
 
             Image(systemName: icon)
                 .font(MeeshyFont.relative(compact ? 36 : 52, weight: .light))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
-                .padding(.bottom, compact ? 0 : 4)
+                .padding(.bottom, compact ? 0 : MeeshySpacing.xs)
 
             if let actionLabel, let onAction, compact {
                 actionButton(label: actionLabel, action: onAction)
@@ -56,19 +56,19 @@ public struct EmptyStateView: View {
                     .font(MeeshyFont.relative(compact ? 12 : 14))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, MeeshySpacing.xxxl)
             }
 
             if let actionLabel, let onAction, !compact {
                 actionButton(label: actionLabel, action: onAction)
-                    .padding(.top, 4)
+                    .padding(.top, MeeshySpacing.xs)
             }
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .opacity(appeared ? 1 : 0)
-        .offset(y: appeared ? 0 : 12)
+        .offset(y: appeared ? 0 : MeeshySpacing.md)
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15)) {
                 appeared = true
@@ -86,8 +86,8 @@ public struct EmptyStateView: View {
             Text(label)
                 .font(MeeshyFont.relative(compact ? 13 : 14, weight: .semibold))
                 .foregroundColor(.white)
-                .padding(.horizontal, compact ? 16 : 24)
-                .padding(.vertical, compact ? 8 : 10)
+                .padding(.horizontal, compact ? MeeshySpacing.lg : MeeshySpacing.xxl)
+                .padding(.vertical, compact ? MeeshySpacing.sm : MeeshySpacing.md)
                 .background(
                     Capsule()
                         .fill(Color(hex: accentColor))
