@@ -45,6 +45,10 @@ struct StatusComposerView: View {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(MeeshyFont.relative(12))
                                 .foregroundColor(MeeshyColors.indigo400)
+                                // Decorative repost glyph — the adjacent "Status de @…"
+                                // text already conveys the repost, so hide the symbol
+                                // from VoiceOver instead of reading its SF Symbol name.
+                                .accessibilityHidden(true)
                             Text(String(localized: "status.composer.repost.via", defaultValue: "Status de @\(via)", bundle: .main))
                                 .font(MeeshyFont.relative(13, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
@@ -255,6 +259,11 @@ struct StatusComposerView: View {
                         HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: vis.icon)
                                 .font(MeeshyFont.relative(11))
+                                // Decorative visibility glyph — the capsule's text
+                                // label ("Public", "Privé", …) is the meaningful
+                                // content, so hide the symbol so VoiceOver announces
+                                // "Public, sélectionné" rather than "globe, Public".
+                                .accessibilityHidden(true)
                             Text(showCount ? "\(vis.label) (\(selectedUserIds.count))" : vis.label)
                                 .font(MeeshyFont.relative(12, weight: .medium))
                         }
