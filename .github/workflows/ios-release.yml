@@ -122,8 +122,15 @@ jobs:
         run: |
           set -euo pipefail
           CERTS="$RUNNER_TEMP/match-certs"
+          # MATCH_GIT_URL may be https; the MATCH_DEPLOY_KEY authorizes SSH, so
+          # rewrite a GitHub https URL to SSH before cloning.
+          URL="$MATCH_GIT_URL"
+          case "$URL" in
+            https://github.com/*) URL="git@github.com:${URL#https://github.com/}" ;;
+            http://github.com/*)  URL="git@github.com:${URL#http://github.com/}" ;;
+          esac
           GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new" \
-            git clone --depth 1 "$MATCH_GIT_URL" "$CERTS"
+            git clone --depth 1 "$URL" "$CERTS"
 
           # match legacy encryption (force_legacy_encryption: true) = AES-256-CBC,
           # base64, MD5 key derivation; fall back to SHA-256 for any newer entry.
