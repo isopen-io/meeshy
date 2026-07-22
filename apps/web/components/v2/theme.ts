@@ -10,6 +10,8 @@
  * Supports light and dark modes following Web Interface Guidelines.
  */
 
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+
 // Light mode colors — palette v1 (indigo / slate)
 const lightColors = {
   // Base Palette
@@ -151,11 +153,18 @@ export type ThemeColor = keyof typeof theme.colors;
 export type LanguageCode = keyof typeof theme.languageColors;
 
 /**
- * Get language color by code
+ * Get language color by code.
+ *
+ * Le code est réduit via le SSOT partagé `normalizeLanguageCode` (639-2/3 → 639-1,
+ * BCP-47) plutôt que par une troncature aveugle `slice(0, 2)` : `'spa'` → `'es'`
+ * (ambre) et non `'sp'` → gris `default`. Garde la couleur d'accent cohérente
+ * quelle que soit la forme du code, comme `getFlag` dans `flags.ts`.
  */
 export function getLanguageColor(code: string): string {
-  const normalizedCode = code.toLowerCase().slice(0, 2);
-  return theme.languageColors[normalizedCode as LanguageCode] || theme.languageColors.default;
+  const normalizedCode = normalizeLanguageCode(code);
+  return (
+    theme.languageColors[normalizedCode as LanguageCode] || theme.languageColors.default
+  );
 }
 
 /**

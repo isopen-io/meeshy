@@ -12,6 +12,7 @@
 
 import crypto from 'crypto';
 import axios from 'axios';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 // Logger dédié pour EmailService
@@ -763,9 +764,13 @@ export class EmailService {
 
   private normalizeLanguage(language?: string): SupportedLanguage {
     if (!language) return this.defaultLanguage;
-    const normalized = language.toLowerCase().substring(0, 2);
+    // Réduction 639-2/639-3 → 639-1 + BCP-47 via le SSOT partagé (jamais une
+    // troncature aveugle : `'spa'` → `'es'`, `'por'` → `'pt'`, PAS `'sp'`/`'po'`).
+    const normalized = normalizeLanguageCode(language);
     const supported: SupportedLanguage[] = ['fr', 'en', 'es', 'pt', 'it', 'de'];
-    return supported.includes(normalized as SupportedLanguage) ? (normalized as SupportedLanguage) : this.defaultLanguage;
+    return normalized && supported.includes(normalized as SupportedLanguage)
+      ? (normalized as SupportedLanguage)
+      : this.defaultLanguage;
   }
 
   private getLocale(language?: string): string {
