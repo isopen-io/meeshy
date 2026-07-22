@@ -501,6 +501,7 @@ struct ConversationInfoSheet: View {
                             .foregroundColor(theme.textMuted)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
             .padding(10)
@@ -814,6 +815,7 @@ struct ConversationInfoSheet: View {
                             .frame(width: 28, height: 28)
                             .background(Circle().fill(theme.textMuted.opacity(0.12)))
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
             }
         }
