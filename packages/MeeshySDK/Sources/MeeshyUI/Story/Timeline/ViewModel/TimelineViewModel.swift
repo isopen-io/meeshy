@@ -300,6 +300,9 @@ public final class TimelineViewModel: ObservableObject {
         for t in project.textObjects {
             addEdges(id: t.id, start: Float(t.startTime ?? 0), duration: Float(t.duration ?? 0))
         }
+        for s in project.stickerObjects {
+            addEdges(id: s.id, start: Float(s.startTime ?? 0), duration: Float(s.duration ?? 0))
+        }
         return candidates
     }
 
@@ -350,6 +353,7 @@ public final class TimelineViewModel: ObservableObject {
         }
         if project.audioPlayerObjects.contains(where: { $0.id == id }) { return .audio }
         if project.textObjects.contains(where: { $0.id == id }) { return .text }
+        if project.stickerObjects.contains(where: { $0.id == id }) { return .sticker }
         return nil
     }
 
@@ -365,6 +369,7 @@ public final class TimelineViewModel: ObservableObject {
         if let m = project.mediaObjects.first(where: { $0.id == id }) { return Float(m.startTime ?? 0) }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.startTime ?? 0 }
         if let t = project.textObjects.first(where: { $0.id == id }) { return Float(t.startTime ?? 0) }
+        if let s = project.stickerObjects.first(where: { $0.id == id }) { return Float(s.startTime ?? 0) }
         return nil
     }
 
@@ -381,6 +386,11 @@ public final class TimelineViewModel: ObservableObject {
         }
         if let i = project.textObjects.firstIndex(where: { $0.id == clipId }) {
             project.textObjects[i].startTime = Double(newStartTime)
+            recomputeSlideDuration()
+            return
+        }
+        if let i = project.stickerObjects.firstIndex(where: { $0.id == clipId }) {
+            project.stickerObjects[i].startTime = Double(newStartTime)
             recomputeSlideDuration()
         }
     }
