@@ -121,14 +121,20 @@ jobs:
           # $1 = the match-encrypted (Salted__, base64) blob; $2 = output path.
           # match's KDF varies by version/openssl (legacy MD5, SHA-256, or PBKDF2)
           # — try each and keep the first that yields a non-empty decrypt.
+          # Format is confirmed AES-256-CBC/Salted__/base64; the only unknowns are
+          # the KDF and whether the MATCH_PASSWORD secret carries a stray newline.
+          PW_RAW="$MATCH_PASSWORD"
+          PW_TRIM="$(printf '%s' "$MATCH_PASSWORD" | tr -d '\r\n')"
           dec() {
-            local opt
-            for opt in "-md md5" "-md sha256" "-pbkdf2 -md sha256" "-pbkdf2 -md md5" ""; do
-              if printf '%s' "$1" | openssl aes-256-cbc -d -k "$MATCH_PASSWORD" -a $opt -out "$2" 2>/dev/null && [ -s "$2" ]; then
-                echo "  decrypted with: openssl aes-256-cbc $opt"; return 0
-              fi
+            local opt pw
+            for pw in "$PW_TRIM" "$PW_RAW"; do
+              for opt in "-md md5" "-md sha256" "-pbkdf2 -md sha256" "-pbkdf2 -md md5" ""; do
+                if printf '%s' "$1" | openssl aes-256-cbc -d -k "$pw" -a $opt -out "$2" 2>/dev/null && [ -s "$2" ]; then
+                  return 0
+                fi
+              done
             done
-            echo "::error::could not decrypt a signing asset (tried md5/sha256/pbkdf2 — wrong MATCH_PASSWORD?)"; return 1
+            echo "::error::could not decrypt a signing asset — the MATCH_PASSWORD secret does not match the certificates repo's encryption."; return 1
           }
 
           # Apple Distribution certificate -> temporary keychain.
