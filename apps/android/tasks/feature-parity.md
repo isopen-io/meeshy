@@ -503,7 +503,38 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       composable (needs the registration wizard scaffold) rendering the checklist card + strength bar
       + match card driven by these cores.
 - [ ] System + regional language selection with live translation preview
-- [ ] Profile photo / banner / bio optional step; registration recap + terms acceptance
+- [~] Profile photo / banner / bio optional step; registration recap + terms acceptance —
+      **unified per-step proceed-gate core shipped** (slice `registration-step-gate-core`, 2026-07-22).
+      Pure `:core:model/auth/RegistrationStepGate.kt` — the SSOT capstone that answers the wizard's
+      advance decision for **all 8 steps**, a faithful port of iOS `RegistrationViewModel.canProceed`
+      (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`, the computed
+      `switch currentStep` var gating the bottom bar's Next/Register button). `RegistrationStepGate.
+      canProceed(step, fields)` over an immutable **`RegistrationFields`** snapshot (the exact
+      `@Published` inputs iOS reads; tri-state `Boolean?` availability = not-probed vs confirmed-taken).
+      **Composes the already-shipped per-field cores** rather than re-implementing them: PSEUDO/PHONE/EMAIL
+      → `SignupAvailabilityPolicy.{username,phone,email}StepCanProceed` (local validity AND server
+      availability, phone honouring `skipPhone`); PASSWORD → `PasswordEntry.evaluate(...).canProceed`
+      (≥8 AND confirm match). The four arms with no prior core are encoded verbatim from iOS: IDENTITY →
+      first & last name both non-blank (iOS trims both → `isNotBlank`); LANGUAGE → `systemLanguage.
+      isNotEmpty()` (iOS `!systemLanguage.isEmpty`, a picker-sourced code); PROFILE → always `true` (the
+      optional photo/bio step); RECAP → `acceptTerms`. **SOTA note:** iOS spreads the eight-arm decision
+      inside a stateful ViewModel computed var re-inlining the username/email/phone/password rules; Android
+      lifts the whole decision into one framework-free SSOT reusing the shipped cores, so the ViewModel is a
+      thin caller feeding this boolean straight into `RegistrationStepNavigator.advance`. **+26 behavioural
+      tests** (`RegistrationStepGateTest` — 4 pseudo (valid+available / invalid / null / false); 4 phone
+      (skipped-short / valid+available / too-short / null); 3 email; 5 identity (both / first-blank /
+      last-blank / both-blank / whitespace-only); 3 password; 2 language; 1 profile-always; 2 recap; plus 2
+      whole-wizard compositions — every step green for a fully-valid snapshot, only PROFILE green for an
+      empty one). Expectations are hand-written literals (not tautological). **Mutation check (RED proof):**
+      flipping the RECAP arm to a constant `true` fails **exactly** `recap_termsNotAccepted_blocks` +
+      `onlyProfileProceeds_forAnEmptySnapshot` (26 run, 2 failed, no collateral); RED was also proven first
+      by the suite failing to compile against the absent `RegistrationFields`/`RegistrationStepGate` types.
+      **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest`
+      green (whole module, new suite 26/26) + `:app:assembleDebug` → BUILD SUCCESSFUL (every module
+      compiled). Diff = `apps/android` only (1 new source file + 1 test + tracking docs). **Follow-up:** the
+      app-side profile photo/banner/bio step composables + the recap screen (terms checkbox → `acceptTerms`)
+      + the `RegistrationViewModel` wiring `RegistrationStepGate.canProceed(currentStep, fields)` into
+      `RegistrationStepNavigator.advance`, and the still-`[ ]` System+regional language selection step above.
 - [~] Email verification by 6-digit code (OTP autofill, resend, success animation) —
       **field sanitiser + completeness gate + verify/resend/edit gates core shipped** (slice
       `auth-otp-verification-core`, 2026-07-21). Pure `:core:model` `OtpCodeField` +

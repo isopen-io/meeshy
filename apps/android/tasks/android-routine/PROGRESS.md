@@ -1,5 +1,55 @@
 # Progress — state & what to do next
 
+> On 2026-07-22 the **unified registration per-step proceed-gate core** landed (slice
+> `registration-step-gate-core`, feature-parity §A → advances "Profile photo / banner / bio optional
+> step; registration recap + terms acceptance" `[ ]` → `[~]`). This is the **capstone SSOT** of the
+> 8-step wizard: the single decision that answers "may the bottom bar's Next/Register button advance?"
+> for every step, faithfully porting iOS `RegistrationViewModel.canProceed` (the computed
+> `switch currentStep` var, `packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`).
+> One pure `:core:model/auth/RegistrationStepGate.kt` holding **`RegistrationFields`** (an immutable
+> snapshot of the exact `@Published` inputs iOS reads — tri-state `Boolean?` availability distinguishing
+> not-probed from confirmed-taken) + the **`RegistrationStepGate`** object. `canProceed(step, fields)`
+> **composes the already-shipped per-field cores** instead of re-implementing them: PSEUDO/PHONE/EMAIL →
+> `SignupAvailabilityPolicy.{username,phone,email}StepCanProceed` (local validity AND server availability,
+> phone honouring `skipPhone`); PASSWORD → `PasswordEntry.evaluate(...).canProceed` (≥8 AND confirm match).
+> The four arms with no prior core are encoded verbatim from iOS: IDENTITY → first & last name both
+> `isNotBlank()` (iOS trims both with `.whitespacesAndNewlines`); LANGUAGE → `systemLanguage.isNotEmpty()`
+> (iOS `!systemLanguage.isEmpty`); PROFILE → always `true` (the optional photo/bio step); RECAP →
+> `acceptTerms`. **SOTA note:** iOS spreads the eight-arm decision inside a stateful ViewModel computed var
+> re-inlining the username/email/phone/password rules that also live elsewhere; Android lifts the whole
+> decision into one framework-free SSOT reusing the shipped cores, so the app-side `RegistrationViewModel`
+> is a thin caller that feeds this boolean straight into `RegistrationStepNavigator.advance`. **+26
+> behavioural tests** (`RegistrationStepGateTest`): 4 pseudo / 4 phone / 3 email / 5 identity (incl.
+> whitespace-only) / 3 password / 2 language / 1 profile-always / 2 recap, plus 2 whole-wizard compositions
+> (every step green for a fully-valid snapshot; only PROFILE green for an empty one). Expectations are
+> hand-written literals. **Mutation check (RED proof):** flipping the RECAP arm to a constant `true` fails
+> **exactly** `recap_termsNotAccepted_blocks` + `onlyProfileProceeds_forAnEmptySnapshot` (26 run, 2 failed,
+> no collateral) — behavioural, not tautological; RED was also proven first by the suite failing to compile
+> against the absent `RegistrationFields`/`RegistrationStepGate` types. **Gate (system Gradle 8.14.3,
+> `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's gradle-distribution download is 403-blocked in this
+> container, so system Gradle is the gate):** `:core:model:testDebugUnitTest` green (whole module, new
+> suite 26/26) + `:app:assembleDebug` → BUILD SUCCESSFUL (every module compiled). Reviewer **PASS** (diff
+> `apps/android` only — 1 new source file + 1 test + tracking docs, zero production logic in
+> web/ios/gateway/shared; **SDK purity** — a pure object + data class in `:core:model`, zero
+> framework/singleton coupling, the ViewModel + step composables stay app-side/pending; **SSOT** — the gate
+> *reuses* `SignupAvailabilityPolicy`/`PasswordEntry`, re-implementing nothing; **UX** — the eight-arm
+> advance rule is faithfully encoded so the wizard's forward gating stays coherent; no coverage floor
+> lowered, no test weakened).
+>
+> **Next slice:** the app-side `RegistrationViewModel` + `OnboardingFlowView`-style composable wiring
+> `RegistrationStepGate.canProceed(currentStep, fields)` → `RegistrationStepNavigator.advance`/`previous`/
+> `skip` and `RegistrationProgressBar.fill`/`jumpTarget` off `currentStep`, with a DataStore-backed field
+> state; OR the still-`[ ]` **System + regional language selection with live translation preview** step
+> (its inference core `SignupRegionInference` already shipped — this is the app-side language-picker
+> composable + a small "which languages are selectable / preview target" decision core); OR the app-side
+> wiring of the JWT-refresh core (OkHttp `Authenticator` + persistent session restore); OR the tracked
+> Kover 90% coverage-gate infra. **Known standing debt (not this slice):** (1) the `:sdk-core`
+> DataStore-parallel-load timeout flake (`ThemeStoreTest` / `InterfaceLanguageStoreTest` /
+> `PrivacyPreferencesStoreTest`) — green in isolation, intermittent in the full run; (2) the deterministic
+> `:feature:profile` `ProfileHeaderBuilderTest` red on clean `main` (presence AWAY-window vs
+> `AWAY_WINDOW_MS` divergence) awaiting the `profile-presence-window-reconcile` repair slice. Both remain
+> tracked and unclaimed.
+
 > On 2026-07-22 the **registration step-navigation decision core** landed (slice
 > `registration-step-navigation-core`, feature-parity §A → advances a new box "Bottom-bar step
 > navigation (next / previous / skip)" `[ ]` → `[~]`, the sibling of the progress-bar core). This is
