@@ -684,8 +684,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `:core:model` module green + `:app:assembleDebug` BUILD SUCCESSFUL. **Follow-up:** the app-side
       wiring — `AuthInterceptor`/`AuthRepository` consulting `TokenRefreshPolicy` before a request
       and on app-start restore, plus the DataStore/EncryptedTokenStore session rehydration.
-- [ ] Transparent token refresh on 401 with one retry — the `JwtExpiry`/`TokenRefreshPolicy` core
-      above is the shared primitive; still needs the OkHttp `Authenticator`/interceptor retry wiring.
+- [~] Transparent token refresh on 401 with one retry — the `JwtExpiry`/`TokenRefreshPolicy` core
+      above is the shared primitive. Decision layer complete (slice
+      `auth-token-refresh-policy-core`, 2026-07-22): `TokenRefreshPolicy` now carries the endpoint
+      **eligibility gate** (`isRefreshEligible` = iOS `!isRefreshOrAuth` for `/auth/refresh`,
+      `/auth/login*`, `/auth/register*`, `/auth/magic-link*`), the **proactive** call-site gate
+      (`shouldRefreshBeforeSend` = iOS `if let token, shouldAttemptRefresh && isTokenExpired`), the
+      **401 credential-vs-session mapping** (`mapUnauthorized` → `InvalidCredentials`/`SessionExpired`,
+      iOS `mapUnauthorized`, blank-message fallback improving on iOS's nil-only coalesce), the
+      **reactive 401 decision** (`decideOn401` → `InvalidCredentials`/`RefreshAndRetry`/`Teardown`,
+      refresh-once via `hasRefreshedOn401`), and the **replay classification**
+      (`classifyRetryStatus` → `Success`/`Teardown`/`ServerError`). +29 behavioural tests, mutation-proven.
+      Still needs the OkHttp `Authenticator`/interceptor that *wires* these decisions into `:core:network`.
 - [ ] Anonymous (shared-link) sessions with restricted send permissions
 - [ ] Login/logout teardown wiping E2EE keys and per-user caches
 - [ ] Splash screen with brand animation + minimum display duration
