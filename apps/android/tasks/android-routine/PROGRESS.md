@@ -1,5 +1,51 @@
 # Progress — state & what to do next
 
+> On 2026-07-22 the **registration progress-bar decision core** landed (slice
+> `registration-progress-bar-core`, feature-parity §A → advances "Interactive step progress bar with
+> jump-back to completed steps" `[ ]` → `[~]`). This is the pure step-set + progress-bar interaction
+> primitive behind the 8-step gamified wizard's tappable indicator. Parity source: iOS
+> `InteractiveProgressBar` (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingAnimations.swift`
+> `stepColor(for:)` + `.disabled(step.rawValue > current)`) and the `onStepTapped` closure in
+> `OnboardingFlowView` (`if step.rawValue <= currentStep.rawValue { currentStep = step }`). Two pure
+> `:core:model/auth/` types in one file. **`RegistrationStep`** — the 8-step ordinal enum
+> (`PSEUDO`..`RECAP` by `index`) with `ordered` (ascending), `total` (= 8), and `fromIndex(index)`
+> (null out of range) — the SSOT for the wizard's step set/order/count (iOS `RegistrationStep.allCases`
+> + `totalSteps`). Per-step display metadata iOS hangs off the enum (`funHeader`/`funSubtitle`/
+> `iconName`/`accentColor`) is deliberately **not** ported here — i18n copy + design-system colour
+> belong to the UI layer, keeping `:core:model` framework-free. **`RegistrationProgressBar`** — the pure
+> decisions: `fill(step,current)` returns `StepFill{COMPLETED,CURRENT,UPCOMING}` (iOS's three
+> `stepColor` arms — `index < current`, `== current`, else); `canJumpTo(step,current)` =
+> `step.index <= current.index` (the tap gate, inverse of `.disabled`); `jumpTarget(tapped,current)`
+> resolves a tap to a target step **or null** so the bar jumps only *back* to a completed step (or
+> re-selects current), never forward. **+22 behavioural tests** (`RegistrationProgressBarTest`);
+> expectations are hand-written literals independent of the production derivation. **Mutation check
+> (RED proof):** flipping `fill`'s boundary `<`→`<=` fails **exactly** the 3 current-step fill tests
+> (`fill_currentStep_isCurrent` + the first/last-step sweeps); flipping `canJumpTo`'s `<=`→`<` fails
+> **exactly** the 4 current-step reachability tests (`canJumpTo_theCurrentStep_isTrue`, the first/last
+> sweeps, `jumpTarget_forTheCurrentStep`), no collateral — behavioural, not tautological; RED was also
+> proven first by the suite failing to compile against the absent production types. **Gate (system
+> Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's gradle-distribution download is
+> 403-blocked in this container, so system Gradle is the gate):** `:core:model:testDebugUnitTest` green
+> (whole module, new suite 22/22) + `:app:assembleDebug` → BUILD SUCCESSFUL (every module compiled).
+> Reviewer **PASS** (diff `apps/android` only — 1 new source file + 1 test + tracking docs, zero
+> production logic in web/ios/gateway/shared; **SDK purity** — two pure types in `:core:model`, zero
+> framework/singleton coupling, the composable + `currentStep` wiring stay app-side/pending, display
+> metadata left to the UI layer; **SSOT** — a brand-new primitive, nothing re-implemented; **UX** — the
+> jump-back-only rule is faithfully encoded so navigation stays coherent; no coverage floor lowered, no
+> test weakened).
+>
+> **Next slice:** the app-side `InteractiveProgressBar` composable (an accent-coloured tappable bar row
+> wired to `RegistrationProgressBar.fill`/`jumpTarget` → `currentStep`), OR the `nextStep`/`previousStep`/
+> `skipCurrentStep` bottom-bar navigation core (iOS `RegistrationViewModel.nextStep`/`previousStep`/
+> `skipCurrentStep`/`nextStepForced`, a separate §A box under the 8-step wizard), OR the app-side wiring
+> of the JWT-refresh core (OkHttp `Authenticator` + persistent session restore), OR the app-side
+> `ForgotPasswordView` composable unifying the shipped email/phone recovery cores, OR the tracked Kover
+> 90% coverage-gate infra. **Known standing debt (not this slice):** the `:sdk-core`
+> DataStore-parallel-load timeout flake (`ThemeStoreTest` / `InterfaceLanguageStoreTest` /
+> `PrivacyPreferencesStoreTest`) surfaces intermittently in the full `testDebugUnitTest` run but passes
+> in isolation — a "harden the DataStore test harness against parallel-load timeout" follow-up, tracked
+> and still unclaimed.
+
 > On 2026-07-21 the **JWT-expiry / refresh-decision core** landed (slice `auth-jwt-expiry-core`,
 > feature-parity §A → advances "Persistent session restore with proactive token refresh" `[ ]` → `[~]`
 > and seeds "Transparent token refresh on 401 with one retry"). This is the pure primitive Android was

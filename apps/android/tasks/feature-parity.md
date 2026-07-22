@@ -399,7 +399,36 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       → BUILD SUCCESSFUL. Diff = `apps/android` only. **Follow-up:** the app-side `AuthService.checkAvailability`
       call + the wizard step composables (username/email/phone fields) driving these cores off the 1 s debounce,
       and the username-suggestion strip.
-- [ ] Interactive step progress bar with jump-back to completed steps
+- [~] Interactive step progress bar with jump-back to completed steps —
+      **step-set + progress-bar decision core shipped** (slice `registration-progress-bar-core`,
+      2026-07-22). Pure `:core:model` `RegistrationStep` (8-step ordinal enum: `PSEUDO`..`RECAP`
+      by `index`, + `ordered`/`total`/`fromIndex`) + `RegistrationProgressBar` (fill partition +
+      jump gate) — faithful port of iOS `InteractiveProgressBar`
+      (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingAnimations.swift` `stepColor(for:)` +
+      the `.disabled(step.rawValue > current)` gate) and the `onStepTapped` closure in
+      `OnboardingFlowView` (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingFlowView.swift`,
+      `if step.rawValue <= currentStep.rawValue { currentStep = step }`). `StepFill{COMPLETED,
+      CURRENT,UPCOMING}` = iOS's three `stepColor` arms; `canJumpTo(step,current)` = the tap gate
+      (`step.index <= current.index`, inverse of `.disabled`); `jumpTarget(tapped,current)` resolves
+      a tap to a target step **or null** so the bar can only jump *back* to a completed step (or
+      re-select current), never forward. **SOTA note:** iOS spreads these `rawValue` comparisons
+      across a SwiftUI `View` body and a tap closure; Android lifts the whole completed/current/
+      upcoming partition + jump-back gate into one framework-free object so every branch is
+      JVM-testable. Per-step display metadata iOS hangs off the enum (`funHeader`/`funSubtitle`/
+      `iconName`/`accentColor`) is deliberately left to the UI layer (i18n copy + design-system
+      colour), keeping `:core:model` pure. +22 behavioural tests (`RegistrationProgressBarTest` —
+      enum order/total/`fromIndex` incl. negative + at-or-beyond-count null; `fill` 3 arms +
+      first/last-step sweeps; `canJumpTo` completed/current/upcoming/next + first/last sweeps;
+      `jumpTarget` completed/current/upcoming/next). Expectations are hand-written literals (not
+      tautological). Mutation (RED proof): `fill` boundary `<`→`<=` fails **exactly** the 3
+      current-step fill tests; `canJumpTo` boundary `<=`→`<` fails **exactly** the 4 current-step
+      reachability tests (`canJumpTo_theCurrentStep_isTrue` + first/last sweeps +
+      `jumpTarget_forTheCurrentStep`), no collateral. RED was also proven first by the suite failing
+      to compile against the absent production types. `:core:model:testDebugUnitTest` green (22/22)
+      + `:app:assembleDebug` → BUILD SUCCESSFUL (every module compiled). Diff = `apps/android` only.
+      **Follow-up:** the app-side `InteractiveProgressBar` composable (an accent-coloured tappable
+      bar row wired to `RegistrationProgressBar.fill`/`jumpTarget` → `currentStep`) + the
+      `nextStep`/`previousStep`/`skipCurrentStep` bottom-bar navigation core (a separate box).
 - [~] Phone entry with searchable country-code picker (skippable) — **catalogue core shipped**
       (slice `auth-country-catalog`, 2026-07-20): pure `:core:model` `CountryCatalog` + `Country`
       (faithful port of iOS `CountryPicker`,
