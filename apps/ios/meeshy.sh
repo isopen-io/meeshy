@@ -907,6 +907,140 @@ do_release() {
     return "$rc"
 }
 
+# ─── Release via ANDP (new tool) ─────────────────────────────────────────────
+# Uses ANDP (isopen-io/andp) for build number, upload/submit instead of fastlane.
+# Flow: build via fastlane build_for_andp (syncs certs, builds IPA, increments build number)
+#       then: andp release <ipa> [--group] (TestFlight) or andp release start --ship (App Store)
+# Flags: --testflight : upload to TestFlight (default)
+#        --appstore : submit to App Store
+#        --skip-tests : skip the unit-test pre-flight run.
+do_release_andp() {
+    local target="${RELEASE_TARGET:-testflight}"
+    local target_label="TestFlight"
+    [ "$target" = "appstore" ] && target_label="App Store"
+
+    local key_file="$(pwd)/fastlane/AuthKey_5542B6LVNL.p8"
+    if [ ! -f "$key_file" ]; then
+        err "ASC API Key missing: $key_file"
+        err "Drop the .p8 file there or rotate the key via App Store Connect → Users → Integrations → App Store Connect API"
+        return 1
+    fi
+
+    # Setup fastlane runner for build phase
+    local -a fastlane_runner
+    if command -v bundle >/dev/null 2>&1 && [ ! -f "Gemfile.lock" ]; then
+        log "Bundle install (first-time setup)…"
+        bundle install || return 1
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v bundle >/dev/null 2>&1 && bundle exec ruby -e 'exit 0' >/dev/null 2>&1; then
+        fastlane_runner=(bundle exec fastlane)
+    elif command -v fastlane >/dev/null 2>&1; then
+        warn "Bundler can't resolve the locked gems here → using the global fastlane."
+        fastlane_runner=(fastlane)
+    else
+        err "No usable fastlane. Fix bundler (cd apps/ios && bundle install) or run: gem install fastlane"
+        return 1
+    fi
+
+    # MATCH_PASSWORD for fastlane match
+    if [ -z "${MATCH_PASSWORD:-}" ] && [ -f ".env" ]; then
+        set -a; source .env; set +a
+    fi
+    if [ -z "${MATCH_PASSWORD:-}" ] && ! security find-generic-password -l "fastlane-match" >/dev/null 2>&1; then
+        err "MATCH_PASSWORD is unset and the keychain has no 'fastlane-match' entry."
+        echo ""
+        echo -e "  ${DIM}fastlane match needs the password chosen at 'fastlane match init' time.${NC}"
+        echo -e "  ${DIM}Options :${NC}"
+        echo -e "  ${DIM}  1. Pass inline      :${NC} MATCH_PASSWORD=xxx ./meeshy.sh release --andp"
+        echo -e "  ${DIM}  2. Store in .env    :${NC} echo 'MATCH_PASSWORD=xxx' >> apps/ios/.env"
+        echo -e "  ${DIM}  3. Save to keychain :${NC} cd apps/ios && bundle exec fastlane match appstore --readonly"
+        return 1
+    fi
+
+    # Check ANDP is installed
+    if ! command -v andp >/dev/null 2>&1 && ! python3 -m andp --version >/dev/null 2>&1; then
+        err "ANDP not installed. Run: pip install andp"
+        return 1
+    fi
+    local andp_cmd="python3 -m andp"
+    command -v andp >/dev/null 2>&1 && andp_cmd="andp"
+
+    log "Release → $target_label via ANDP (build via fastlane build_for_andp)"
+    log "ASC API Key : $(basename "$key_file") (key_id: 5542B6LVNL)"
+    [ -n "${MATCH_PASSWORD:-}" ] && log "MATCH_PASSWORD : sourced (env or .env)"
+
+    local fastlane_args=()
+    [ "${SKIP_TESTS:-}" = "true" ] && fastlane_args+=("skip_tests:true")
+    [ -n "${RELEASE_VERSION:-}" ] && fastlane_args+=("version:${RELEASE_VERSION}")
+
+    echo ""
+    warn "This will : sync certificates · build Release IPA (~15 min) · hand off to ANDP for $target_label upload"
+    echo ""
+
+    # Phase 1: Build IPA via fastlane (no upload yet)
+    ASC_KEY_FILEPATH="${ASC_KEY_FILEPATH:-$key_file}" \
+    ASC_KEY_ID="${ASC_KEY_ID:-5542B6LVNL}" \
+    ASC_ISSUER_ID="${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}" \
+        "${fastlane_runner[@]}" build_for_andp "${fastlane_args[@]}"
+    local rc=$?
+
+    if [ "$rc" -ne 0 ]; then
+        err "Build via fastlane FAILED (exit $rc)"
+        return "$rc"
+    fi
+    ok "IPA built successfully at build/Meeshy.ipa"
+
+    # Phase 2: Upload/submit via ANDP
+    local ipa_path="build/Meeshy.ipa"
+    if [ ! -f "$ipa_path" ]; then
+        err "IPA not found at $ipa_path"
+        return 1
+    fi
+
+    # Write ANDP secrets file
+    mkdir -p .andp
+    {
+        echo "accounts:"
+        echo "  primary:"
+        echo "    asc_api:"
+        echo "      key_id: \"${ASC_KEY_ID:-5542B6LVNL}\""
+        echo "      issuer_id: \"${ASC_ISSUER_ID:-69a6de89-ae7a-47e3-e053-5b8c7c11a4d1}\""
+        echo "      key_content: |"
+        sed 's/^/        /' "$key_file"
+    } > .andp/secrets.yml
+    chmod 600 .andp/secrets.yml
+
+    # Write compliance policy
+    {
+        echo "compliance:"
+        echo "  uses_non_exempt_encryption: false"
+    } > andp.yml
+
+    log "Uploading to $target_label via ANDP…"
+
+    if [ "$target" = "testflight" ]; then
+        $andp_cmd release "$ipa_path"
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            ok "Release to TestFlight SUCCEEDED"
+        else
+            err "Release to TestFlight FAILED (exit $rc)"
+        fi
+    else
+        # App Store submit — waits at approval gate
+        log "Starting App Store submission (will wait at approval gate)…"
+        $andp_cmd release start "$ipa_path" --ship --json | jq .
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            ok "Build advanced to App Store approval gate — waiting for environment approval"
+        else
+            err "App Store submission FAILED (exit $rc)"
+        fi
+    fi
+
+    return "$rc"
+}
+
 # ─── Archive + IPA ───────────────────────────────────────────────────────────
 do_archive() {
     local archive_config="${CONFIGURATION:-Release}"
@@ -1419,7 +1553,7 @@ usage() {
     echo -e "    ${GREEN}clean${NC}        Clean build artifacts ${DIM}(add --deep for global caches)${NC}"
     echo -e "    ${GREEN}archive${NC}      Create archive + IPA for distribution"
     echo -e "    ${GREEN}release-check${NC} Mirror Xcode Cloud Release build locally ${DIM}(catch -O/-wmo crashes before push)${NC}"
-    echo -e "    ${GREEN}release${NC}      Upload to TestFlight via fastlane ${DIM}(--appstore for App Store submission)${NC}"
+    echo -e "    ${GREEN}release${NC}      Upload to TestFlight ${DIM}(--fastlane or --andp; fastlane default)${NC}"
     echo -e "    ${GREEN}distribute${NC}   App Store build ${DIM}(auto: signing, aps-environment, preflight)${NC}"
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
@@ -1436,6 +1570,11 @@ usage() {
     echo -e "    ${YELLOW}--release, -r${NC}            Release configuration"
     echo -e "    ${YELLOW}--configuration, -c${NC} <v>  Explicit config (Debug/Release/Staging)"
     echo -e "    ${YELLOW}--method, -m${NC} <v>         Export method (app-store/ad-hoc/development)"
+    echo -e "    ${YELLOW}--fastlane${NC}               Use fastlane for release (default)"
+    echo -e "    ${YELLOW}--andp${NC}                   Use ANDP for release (new tool)"
+    echo -e "    ${YELLOW}--testflight${NC}             Upload to TestFlight (default)"
+    echo -e "    ${YELLOW}--appstore${NC}               Submit to App Store"
+    echo -e "    ${YELLOW}--skip-tests${NC}             Skip unit tests before release"
     echo -e "    ${YELLOW}--ui${NC}                     Include UI tests"
     echo -e "    ${YELLOW}--coverage${NC}               Generate coverage report"
     echo -e "    ${YELLOW}--deep${NC}                   Deep clean (global Xcode caches)"
@@ -1449,8 +1588,11 @@ usage() {
     echo -e "    ${DIM}./meeshy.sh build --ipad${NC}             ${DIM}# Build for iPad sim${NC}"
     echo -e "    ${DIM}./meeshy.sh archive -m ad-hoc${NC}        ${DIM}# Ad-hoc IPA${NC}"
     echo -e "    ${DIM}./meeshy.sh release-check${NC}            ${DIM}# Mirror Xcode Cloud Release build (no signing)${NC}"
-    echo -e "    ${DIM}./meeshy.sh release${NC}                  ${DIM}# Upload Release to TestFlight via fastlane${NC}"
-    echo -e "    ${DIM}./meeshy.sh release --appstore${NC}       ${DIM}# Submit to App Store via fastlane${NC}"
+    echo -e "    ${DIM}./meeshy.sh release${NC}                  ${DIM}# Upload Release to TestFlight via fastlane (default)${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --fastlane${NC}       ${DIM}# TestFlight via fastlane (explicit)${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --andp${NC}           ${DIM}# TestFlight via ANDP (new tool)${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --appstore${NC}       ${DIM}# Submit to App Store${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --andp --appstore${NC} ${DIM}# App Store submission via ANDP${NC}"
     echo -e "    ${DIM}./meeshy.sh release --skip-tests${NC}     ${DIM}# TestFlight upload without pre-flight tests${NC}"
     echo -e "    ${DIM}./meeshy.sh distribute${NC}               ${DIM}# App Store / TestFlight build${NC}"
     echo -e "    ${DIM}./meeshy.sh test --ui --coverage${NC}     ${DIM}# All tests + coverage${NC}"
@@ -1485,6 +1627,8 @@ while [[ $# -gt 0 ]]; do
         --release|-r)     CONFIGURATION="Release"; shift ;;
         --testflight)     RELEASE_TARGET="testflight"; shift ;;
         --appstore)       RELEASE_TARGET="appstore"; shift ;;
+        --fastlane)       RELEASE_TOOL="fastlane"; shift ;;
+        --andp)           RELEASE_TOOL="andp"; shift ;;
         --skip-tests)     SKIP_TESTS=true; shift ;;
         --changelog)      RELEASE_CHANGELOG="$2"; shift 2 ;;
         --version)        RELEASE_VERSION="$2"; shift 2 ;;
@@ -1611,7 +1755,11 @@ case "$COMMAND" in
         ;;
 
     release)
-        do_release
+        if [ "${RELEASE_TOOL:-fastlane}" = "andp" ]; then
+            do_release_andp
+        else
+            do_release
+        fi
         ;;
 
     distribute)

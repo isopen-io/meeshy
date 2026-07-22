@@ -47,6 +47,14 @@ Sync development certificates
 
 Build production IPA
 
+### ios build_for_andp
+
+```sh
+[bundle exec] fastlane ios build_for_andp
+```
+
+Build a signed IPA with a correctly-incremented build number, WITHOUT uploading — ANDP (isopen-io/andp) handles the upload/submit
+
 ### ios beta
 
 ```sh

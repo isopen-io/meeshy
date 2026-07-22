@@ -166,6 +166,36 @@ platform :ios do
 
 
   # ========================================
+  # BUILD ONLY (for ANDP-driven upload/submit)
+  # ========================================
+
+  desc "Build a signed IPA with a correctly-incremented build number, WITHOUT uploading — ANDP (isopen-io/andp) handles the upload/submit"
+  lane :build_for_andp do |options|
+    sync_certificates
+
+    if options[:version]
+      increment_version_number(version_number: options[:version])
+    end
+
+    # Same robust build number as beta/release: max(local project build, latest
+    # build Apple knows) + 1. latest_testflight_build_number alone under-counts a
+    # build still PROCESSING; taking the max with the local number guarantees a
+    # strictly higher CFBundleVersion, so the ANDP upload never hits
+    # 409 ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE.
+    next_build = [
+      get_build_number(xcodeproj: "Meeshy.xcodeproj").to_i,
+      latest_testflight_build_number(api_key: api_key, initial_build_number: 0).to_i
+    ].max + 1
+    increment_build_number(build_number: next_build)
+
+    test unless options[:skip_tests]
+
+    build_production
+
+    UI.success("IPA built with build number #{next_build} at build/Meeshy.ipa — ANDP will upload it.")
+  end
+
+  # ========================================
   # DEPLOY: TESTFLIGHT
   # ========================================
 
