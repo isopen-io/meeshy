@@ -639,8 +639,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Handle 401 (called from APIClient during active session)
 
     public func handleUnauthorized() {
-        guard activeUserId != nil else {
-            // No active user at all — nothing to refresh, no state to clear.
+        guard isAuthenticated else {
+            // No active session — nothing to refresh.
             return
         }
 

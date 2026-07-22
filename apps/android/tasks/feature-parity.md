@@ -502,8 +502,71 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `apps/android` only. **Follow-up:** first/last-name capture (Step 3) + the app-side `StepPasswordView`
       composable (needs the registration wizard scaffold) rendering the checklist card + strength bar
       + match card driven by these cores.
-- [ ] System + regional language selection with live translation preview
-- [ ] Profile photo / banner / bio optional step; registration recap + terms acceptance
+- [~] System + regional language selection with live translation preview — **picker + preview
+      decision core shipped** (slice `auth-language-step-selection-core`, 2026-07-22). Pure
+      `:core:model/auth/LanguageStepSelection.kt` (`LanguageSlot` enum + `LanguageSelectionState`
+      data class + `LanguageStepSelection` object), a faithful port of iOS `StepLanguageView`
+      (`apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift`) over
+      `RegistrationViewModel.systemLanguage`/`.regionalLanguage`. Decisions: `pickerLanguages`
+      (= `LanguageData.allLanguagesCommonFirst`, reusing the catalogue SSOT — mirrors iOS
+      `LanguageSelector.defaultLanguages`, no drift); `filter(query)` (empty query → whole list,
+      else case-insensitive `nativeName`/`code` contains — faithful to iOS `filteredLanguages`,
+      untrimmed `isEmpty` guard); `summaryLabel(code)` (`"<flag> <nativeName>"` or raw-code fallback);
+      `selectedLanguageName(code)` (nativeName or raw-code fallback, the preview description);
+      `translationPreview(systemLanguage)` (verbatim port of iOS `translatedExample` — 11 explicit
+      arms + French default for every other language incl. English); `isSelected(slot, code, state)`
+      (slot-aware highlight, reads only the edited slot); `select(slot, code, state)` (slot-aware
+      immutable write, other slot untouched). **SOTA note:** iOS scatters the filter, summary-label
+      fallback, slot-aware write, and preview switch across a SwiftUI `View` body + `@State
+      editingTarget`; Android lifts every decision into one framework-free SSOT reusing `LanguageData`,
+      so the picker composable is a thin caller and every branch is JVM-testable. **+32 behavioural
+      tests** (`LanguageStepSelectionTest`): 2 pickerLanguages / 5 filter (empty / by-name / by-code /
+      no-match / no-dup) / 3 summaryLabel (known / unknown / blank) / 2 selectedLanguageName /
+      13 translationPreview (11 arms + unknown→fr + english→fr default) / 3 isSelected (system /
+      regional / slot-isolation) / 4 select (system / regional / inert reselect / input-unmutated).
+      Expectations are hand-written literals (not tautological). **Mutation check (RED proof):**
+      flipping `summaryLabel`'s raw-code fallback to `""` fails **exactly**
+      `summaryLabel_unknownCode_fallsBackToRawCode` (32 run, 1 failed, no collateral); RED was also
+      proven first by the suite failing to compile against the absent `LanguageStepSelection`/
+      `LanguageSlot`/`LanguageSelectionState` types. **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`,
+      `$HOME/android-sdk`):** `:core:model:testDebugUnitTest` green (whole module) + `:app:assembleDebug`
+      → BUILD SUCCESSFUL (every module compiled). Diff = `apps/android` only (1 new source file +
+      1 test + tracking docs). **Follow-up:** the app-side `StepLanguageView` composable (system/regional
+      tab, searchable grid driven by `filter`, summary cards via `summaryLabel`, the live-preview
+      example card via `translationPreview`/`selectedLanguageName`) wired into the `RegistrationViewModel`
+      + the `RegistrationStepGate` LANGUAGE arm (`systemLanguage.isNotEmpty()`).
+- [~] Profile photo / banner / bio optional step; registration recap + terms acceptance —
+      **unified per-step proceed-gate core shipped** (slice `registration-step-gate-core`, 2026-07-22).
+      Pure `:core:model/auth/RegistrationStepGate.kt` — the SSOT capstone that answers the wizard's
+      advance decision for **all 8 steps**, a faithful port of iOS `RegistrationViewModel.canProceed`
+      (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`, the computed
+      `switch currentStep` var gating the bottom bar's Next/Register button). `RegistrationStepGate.
+      canProceed(step, fields)` over an immutable **`RegistrationFields`** snapshot (the exact
+      `@Published` inputs iOS reads; tri-state `Boolean?` availability = not-probed vs confirmed-taken).
+      **Composes the already-shipped per-field cores** rather than re-implementing them: PSEUDO/PHONE/EMAIL
+      → `SignupAvailabilityPolicy.{username,phone,email}StepCanProceed` (local validity AND server
+      availability, phone honouring `skipPhone`); PASSWORD → `PasswordEntry.evaluate(...).canProceed`
+      (≥8 AND confirm match). The four arms with no prior core are encoded verbatim from iOS: IDENTITY →
+      first & last name both non-blank (iOS trims both → `isNotBlank`); LANGUAGE → `systemLanguage.
+      isNotEmpty()` (iOS `!systemLanguage.isEmpty`, a picker-sourced code); PROFILE → always `true` (the
+      optional photo/bio step); RECAP → `acceptTerms`. **SOTA note:** iOS spreads the eight-arm decision
+      inside a stateful ViewModel computed var re-inlining the username/email/phone/password rules; Android
+      lifts the whole decision into one framework-free SSOT reusing the shipped cores, so the ViewModel is a
+      thin caller feeding this boolean straight into `RegistrationStepNavigator.advance`. **+26 behavioural
+      tests** (`RegistrationStepGateTest` — 4 pseudo (valid+available / invalid / null / false); 4 phone
+      (skipped-short / valid+available / too-short / null); 3 email; 5 identity (both / first-blank /
+      last-blank / both-blank / whitespace-only); 3 password; 2 language; 1 profile-always; 2 recap; plus 2
+      whole-wizard compositions — every step green for a fully-valid snapshot, only PROFILE green for an
+      empty one). Expectations are hand-written literals (not tautological). **Mutation check (RED proof):**
+      flipping the RECAP arm to a constant `true` fails **exactly** `recap_termsNotAccepted_blocks` +
+      `onlyProfileProceeds_forAnEmptySnapshot` (26 run, 2 failed, no collateral); RED was also proven first
+      by the suite failing to compile against the absent `RegistrationFields`/`RegistrationStepGate` types.
+      **Gate (system Gradle 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`):** `:core:model:testDebugUnitTest`
+      green (whole module, new suite 26/26) + `:app:assembleDebug` → BUILD SUCCESSFUL (every module
+      compiled). Diff = `apps/android` only (1 new source file + 1 test + tracking docs). **Follow-up:** the
+      app-side profile photo/banner/bio step composables + the recap screen (terms checkbox → `acceptTerms`)
+      + the `RegistrationViewModel` wiring `RegistrationStepGate.canProceed(currentStep, fields)` into
+      `RegistrationStepNavigator.advance`, and the still-`[ ]` System+regional language selection step above.
 - [~] Email verification by 6-digit code (OTP autofill, resend, success animation) —
       **field sanitiser + completeness gate + verify/resend/edit gates core shipped** (slice
       `auth-otp-verification-core`, 2026-07-21). Pure `:core:model` `OtpCodeField` +
@@ -621,8 +684,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `:core:model` module green + `:app:assembleDebug` BUILD SUCCESSFUL. **Follow-up:** the app-side
       wiring — `AuthInterceptor`/`AuthRepository` consulting `TokenRefreshPolicy` before a request
       and on app-start restore, plus the DataStore/EncryptedTokenStore session rehydration.
-- [ ] Transparent token refresh on 401 with one retry — the `JwtExpiry`/`TokenRefreshPolicy` core
-      above is the shared primitive; still needs the OkHttp `Authenticator`/interceptor retry wiring.
+- [~] Transparent token refresh on 401 with one retry — the `JwtExpiry`/`TokenRefreshPolicy` core
+      above is the shared primitive. Decision layer complete (slice
+      `auth-token-refresh-policy-core`, 2026-07-22): `TokenRefreshPolicy` now carries the endpoint
+      **eligibility gate** (`isRefreshEligible` = iOS `!isRefreshOrAuth` for `/auth/refresh`,
+      `/auth/login*`, `/auth/register*`, `/auth/magic-link*`), the **proactive** call-site gate
+      (`shouldRefreshBeforeSend` = iOS `if let token, shouldAttemptRefresh && isTokenExpired`), the
+      **401 credential-vs-session mapping** (`mapUnauthorized` → `InvalidCredentials`/`SessionExpired`,
+      iOS `mapUnauthorized`, blank-message fallback improving on iOS's nil-only coalesce), the
+      **reactive 401 decision** (`decideOn401` → `InvalidCredentials`/`RefreshAndRetry`/`Teardown`,
+      refresh-once via `hasRefreshedOn401`), and the **replay classification**
+      (`classifyRetryStatus` → `Success`/`Teardown`/`ServerError`). +29 behavioural tests, mutation-proven.
+      Still needs the OkHttp `Authenticator`/interceptor that *wires* these decisions into `:core:network`.
 - [ ] Anonymous (shared-link) sessions with restricted send permissions
 - [ ] Login/logout teardown wiping E2EE keys and per-user caches
 - [ ] Splash screen with brand animation + minimum display duration

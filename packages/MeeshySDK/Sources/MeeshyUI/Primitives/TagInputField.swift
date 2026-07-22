@@ -43,7 +43,7 @@ public struct TagInputField: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if !selectedTags.isEmpty { chips }
             inputField
             if focused { suggestionPanel }
@@ -51,34 +51,37 @@ public struct TagInputField: View {
     }
 
     private var chips: some View {
-        FlowLayout(spacing: 6) {
+        FlowLayout(spacing: MeeshySpacing.xs) {
             ForEach(selectedTags, id: \.self) { tag in
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(tag)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(accentColor)
                     Button {
                         selectedTags.removeAll { $0 == tag }
                     } label: {
                         Image(systemName: "xmark")
-                            .font(.system(size: 8, weight: .bold))
+                            .font(MeeshyFont.relative(8, weight: .bold))
                             .foregroundColor(accentColor.opacity(0.6))
+                            .meeshyTapTarget()
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(Text("Retirer le tag \(tag)"))
                 }
-                .padding(.horizontal, 10).padding(.vertical, 5)
+                .padding(.leading, MeeshySpacing.sm)
+                .padding(.trailing, 0)
+                .padding(.vertical, 0)
                 .background(Capsule().fill(accentColor.opacity(isDark ? 0.15 : 0.1)))
             }
         }
     }
 
     private var inputField: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xs) {
             TextField("Ajouter un tag...", text: $editing)
                 .focused($focused)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .onSubmit { submit() }
@@ -92,13 +95,13 @@ public struct TagInputField: View {
                 .accessibilityLabel("Effacer la saisie")
             }
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .strokeBorder(focused ? accentColor.opacity(0.6) : Color.gray.opacity(0.15), lineWidth: 1)
         )
     }
@@ -110,12 +113,12 @@ public struct TagInputField: View {
                     addTag(tag)
                 } label: {
                     HStack {
-                        Image(systemName: "tag.fill").font(.system(size: 10)).foregroundColor(.secondary)
-                        Text(tag).font(.system(size: 14, weight: .medium))
+                        Image(systemName: "tag.fill").font(MeeshyFont.relative(10)).foregroundColor(.secondary)
+                        Text(tag).font(MeeshyFont.relative(14, weight: .medium))
                         Spacer()
-                        Image(systemName: "arrow.turn.down.left").font(.system(size: 10)).foregroundColor(.secondary)
+                        Image(systemName: "arrow.turn.down.left").font(MeeshyFont.relative(10)).foregroundColor(.secondary)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Ajouter le tag \(tag)"))
@@ -126,21 +129,21 @@ public struct TagInputField: View {
                 Button {
                     addTag(trimmedQuery)
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "plus.circle.fill").foregroundColor(accentColor)
                         Text("Créer \"\(trimmedQuery)\"")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                             .foregroundColor(accentColor)
                         Spacer()
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Text("Créer le tag \(trimmedQuery)"))
             }
         }
-        .background(RoundedRectangle(cornerRadius: 8).fill(isDark ? Color.white.opacity(0.06) : Color.white))
-        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.gray.opacity(0.12), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(isDark ? Color.white.opacity(0.06) : Color.white))
+        .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.sm).strokeBorder(Color.gray.opacity(0.12), lineWidth: 1))
     }
 
     private func submit() {

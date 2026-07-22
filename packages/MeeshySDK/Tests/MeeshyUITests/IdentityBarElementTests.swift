@@ -126,9 +126,12 @@ final class UserIdentityBarLayoutTests: XCTestCase {
         }
     }
 
+    @MainActor
     func test_element_presence_hasStableId() {
-        XCTAssertEqual(IdentityBarElement.presence(.idle).id, "presence:idle")
-        XCTAssertEqual(IdentityBarElement.presence(.online).id, "presence:online")
+        let idleId = IdentityBarElement.presence(.idle).id
+        let onlineId = IdentityBarElement.presence(.online).id
+        XCTAssertEqual(idleId, "presence:idle")
+        XCTAssertEqual(onlineId, "presence:online")
     }
 
     /// Règle 1/3/5 : l'élément `.presence` ne rend RIEN pour `offline`.
