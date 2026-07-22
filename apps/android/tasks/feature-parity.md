@@ -429,6 +429,36 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **Follow-up:** the app-side `InteractiveProgressBar` composable (an accent-coloured tappable
       bar row wired to `RegistrationProgressBar.fill`/`jumpTarget` → `currentStep`) + the
       `nextStep`/`previousStep`/`skipCurrentStep` bottom-bar navigation core (a separate box).
+- [~] Bottom-bar step navigation (next / previous / skip) — **step-transition decision core shipped**
+      (slice `registration-step-navigation-core`, 2026-07-22). Pure `:core:model`
+      `RegistrationStepNavigator` + `SkipOutcome` — faithful port of iOS `RegistrationViewModel`
+      (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`): `nextStep()` (gated on
+      `canProceed`), `previousStep()`, `skipCurrentStep()` (phone-clear + forced advance) and the
+      private `nextStepForced()`. `isFirst`/`isLast` = the iOS `idx > 0` / `idx < count-1` boundaries;
+      `next(current)`/`previous(current)` = the ordinal successor/predecessor (null at the last/first
+      step, via `RegistrationStep.fromIndex` so the bound is a single source of truth, not an
+      open-coded `idx < count-1` in every method); `advance(current, canProceed)` = `nextStep`'s gated
+      move (null when blocked *or* at the last step); `skip(current)` = `SkipOutcome(target = next,
+      clearPhone = current == PHONE)` — the forced advance paired with the phone-clear *decision* (the
+      pure core surfaces the decision; the app-side ViewModel performs the `skipPhone = true;
+      phoneNumber = ""` field mutation). **SOTA note:** iOS recomputes `allSteps.firstIndex(of:)` inline
+      in four separate methods and folds the gate/bounds/side-effect into each mutation; Android lifts
+      every branch into one framework-free SSOT returning the target step (or null for an inert
+      transition), leaving the ViewModel a thin caller. **The per-step `canProceed` field-validation
+      (username availability, phone digits, email, password match, …) stays app-side** — it reads live
+      wizard field state — and is passed to `advance` as a boolean, keeping `:core:model` pure. +18
+      behavioural tests (`RegistrationStepNavigatorTest` — `isFirst`/`isLast` sweeps; `next`/`previous`
+      first/interior/last + full index-walk sweeps; `advance` proceed/blocked/last-step/first-blocked;
+      `skip` phone/non-phone/first/last-no-op). Expectations are hand-written literals (not
+      tautological). Mutation (RED proof): dropping `advance`'s `canProceed` guard fails **exactly**
+      `advance_whenBlocked_staysPut` + `advance_atTheFirstStepWhenBlocked`; forcing `skip`'s
+      `clearPhone = false` fails **exactly** `skip_onThePhoneStep` (3 failed together, no collateral).
+      RED was also proven first by the suite failing to compile against the absent production types.
+      `:core:model:testDebugUnitTest` green (18/18 new, whole module green) + `:app:assembleDebug` →
+      BUILD SUCCESSFUL (every module compiled). Diff = `apps/android` only. **Follow-up:** the app-side
+      bottom-bar composable (Back / Skip / Next-or-Register buttons) + the `RegistrationViewModel`
+      wiring `advance`/`previous`/`skip` to `currentStep`, computing `canProceed` from the shipped
+      field-validation cores.
 - [~] Phone entry with searchable country-code picker (skippable) — **catalogue core shipped**
       (slice `auth-country-catalog`, 2026-07-20): pure `:core:model` `CountryCatalog` + `Country`
       (faithful port of iOS `CountryPicker`,

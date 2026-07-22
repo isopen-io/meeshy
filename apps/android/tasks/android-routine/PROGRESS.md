@@ -1,5 +1,50 @@
 # Progress — state & what to do next
 
+> On 2026-07-22 the **registration step-navigation decision core** landed (slice
+> `registration-step-navigation-core`, feature-parity §A → advances a new box "Bottom-bar step
+> navigation (next / previous / skip)" `[ ]` → `[~]`, the sibling of the progress-bar core). This is
+> the pure step-transition primitive behind the 8-step wizard's bottom bar. Parity source: iOS
+> `RegistrationViewModel` (`packages/MeeshySDK/Sources/MeeshyUI/Auth/RegistrationViewModel.swift`) —
+> `nextStep()` (gated on `canProceed`), `previousStep()`, `skipCurrentStep()` (phone-clear + forced
+> advance) and the private `nextStepForced()`. One pure `:core:model/auth/RegistrationStepNavigator.kt`
+> (`RegistrationStepNavigator` object + `SkipOutcome` data class). **`isFirst`/`isLast`** = iOS's
+> `idx > 0` / `idx < count-1` boundaries; **`next`/`previous`** resolve the ordinal successor/predecessor
+> via `RegistrationStep.fromIndex(index ± 1)` (null at the last/first step — the bound lives in one place,
+> not open-coded `idx < count-1` per method as iOS does); **`advance(current, canProceed)`** is
+> `nextStep`'s gated move (`if (canProceed) next(current) else null` — still null at the last step even
+> when proceeding); **`skip(current)`** returns `SkipOutcome(target = next(current), clearPhone = current
+> == PHONE)` — the forced advance paired with the phone-clear *decision* (iOS mutates `skipPhone`/
+> `phoneNumber` inline; the pure core surfaces the decision, the app-side ViewModel performs the field
+> mutation). **The per-step `canProceed` field-validation stays app-side** (it reads live wizard field
+> state) and is passed to `advance` as a boolean, keeping `:core:model` framework-free. **+18 behavioural
+> tests** (`RegistrationStepNavigatorTest`): `isFirst`/`isLast` sweeps, `next`/`previous`
+> first/interior/last + full index-walk sweeps, `advance` proceed/blocked/last-step/first-blocked, `skip`
+> phone/non-phone/first/last-no-op; expectations are hand-written literals. **Mutation check (RED proof):**
+> dropping `advance`'s `canProceed` guard fails **exactly** `advance_whenBlocked_staysPut` +
+> `advance_atTheFirstStepWhenBlocked`; forcing `skip`'s `clearPhone = false` fails **exactly**
+> `skip_onThePhoneStep` — 3 failures together, no collateral — behavioural, not tautological; RED was also
+> proven first by the suite failing to compile against the absent production types. **Gate (system Gradle
+> 8.14.3, `LANG=C.UTF-8`, `$HOME/android-sdk`; the wrapper's gradle-distribution download is 403-blocked
+> in this container, so system Gradle is the gate):** `:core:model:testDebugUnitTest` green (whole module,
+> new suite 18/18) + `:app:assembleDebug` → BUILD SUCCESSFUL (every module compiled). Reviewer **PASS**
+> (diff `apps/android` only — 1 new source file + 1 test + tracking docs, zero production logic in
+> web/ios/gateway/shared; **SDK purity** — a pure object + data class in `:core:model`, zero
+> framework/singleton coupling, `canProceed` and the bottom-bar composable stay app-side/pending; **SSOT**
+> — a new primitive built on the shipped `RegistrationStep` enum, nothing re-implemented; **UX** — the
+> forced-skip/gated-next/back rules are faithfully encoded so navigation stays coherent; no coverage floor
+> lowered, no test weakened).
+>
+> **Next slice:** the app-side wiring of the registration wizard — a `RegistrationViewModel` +
+> `OnboardingFlowView`-style composable driving `RegistrationStepNavigator.advance`/`previous`/`skip` and
+> `RegistrationProgressBar.jumpTarget` off `currentStep`, computing `canProceed` from the shipped
+> `SignupStepGate`/field-validation cores; OR the app-side wiring of the JWT-refresh core (OkHttp
+> `Authenticator` + persistent session restore); OR the app-side `ForgotPasswordView` composable unifying
+> the shipped email/phone recovery cores; OR the tracked Kover 90% coverage-gate infra. **Known standing
+> debt (not this slice):** the `:sdk-core` DataStore-parallel-load timeout flake (`ThemeStoreTest` /
+> `InterfaceLanguageStoreTest` / `PrivacyPreferencesStoreTest`) surfaces intermittently in the full
+> `testDebugUnitTest` run but passes in isolation — a "harden the DataStore test harness against
+> parallel-load timeout" follow-up, tracked and still unclaimed.
+
 > On 2026-07-22 the **registration progress-bar decision core** landed (slice
 > `registration-progress-bar-core`, feature-parity §A → advances "Interactive step progress bar with
 > jump-back to completed steps" `[ ]` → `[~]`). This is the pure step-set + progress-bar interaction
