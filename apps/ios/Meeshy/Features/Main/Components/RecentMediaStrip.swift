@@ -321,6 +321,11 @@ struct RecentMediaStrip: View {
     /// handed to the host, which opens its editor before staging the result.
     /// `nil` hides the action (hosts without an editor flow).
     var onEdit: ((RecentMediaPick) -> Void)? = nil
+    /// Mirrors the multi-selection outwards so a host that offers its OWN
+    /// shortcut to the full library (the panel grab handle) can preselect the
+    /// same assets — same invariant as `onOpenLibrary`: leaving the strip for
+    /// the picker must never lose the user's picks.
+    var onSelectionChanged: (([String]) -> Void)? = nil
 
     @StateObject private var model = RecentMediaStripModel()
     @State private var resolvingId: String?
@@ -372,6 +377,7 @@ struct RecentMediaStrip: View {
             }
         }
         .task { model.load() }
+        .adaptiveOnChange(of: selection.ids) { _, ids in onSelectionChanged?(ids) }
     }
 
     /// Remplace la grille tant que la photothèque n'est pas accessible.
