@@ -67,12 +67,15 @@ jobs:
           path: ${{ runner.temp }}/spm
           key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
 
-      # Compiled modules / build products. Rolling key → incremental reuse from
-      # the most recent prior run; the toolchain + manifest prefix starts a
-      # fresh lineage on a dependency or Xcode bump. This one only saves at
-      # post-job (below), so it seeds once a run actually COMPLETES the build.
+      # Compiled modules / build products. RESTORE-ONLY; the save is explicit,
+      # after the compile step (see "Save DerivedData build cache"), because the
+      # post-job save is skipped on a timeout-cancellation exactly like the SPM
+      # one. Rolling key → incremental reuse from the most recent prior run; the
+      # toolchain + manifest prefix starts a fresh lineage on a dependency or
+      # Xcode bump.
       - name: Restore DerivedData build cache
-        uses: actions/cache@v4
+        id: dd-restore
+        uses: actions/cache/restore@v4
         with:
           path: ${{ runner.temp }}/DerivedData
           key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
@@ -155,7 +158,34 @@ jobs:
           path: ${{ runner.temp }}/spm
           key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
 
-      - name: Run iOS tests
+      # Compile separately from running so DerivedData can be banked the moment
+      # the (expensive) build finishes — see "Save DerivedData build cache".
+      - name: Build for testing
+        run: |
+          xcodebuild build-for-testing \
+            -project apps/ios/Meeshy.xcodeproj \
+            -scheme Meeshy \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            -quiet
+
+      # Seed DerivedData the instant the compile succeeds — BEFORE the test run,
+      # which can itself be slow. Same rationale as "Save SPM cache": the
+      # post-job save is skipped on a timeout-cancellation, so an explicit save
+      # here banks the compiled build products even if the run phase later
+      # overruns. `success()` guards against caching a broken build. Progressive:
+      # once seeded, the next run restores compiled modules and the compile is
+      # incremental (minutes, not the ~15+ min cold compile that was overrunning
+      # the budget). Skipped when the restore already hit the exact key.
+      - name: Save DerivedData build cache
+        if: success() && steps.dd-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/DerivedData
+          key: ios-dd-macos15-xc26_1_1-${{ hashFiles('apps/ios/project.yml') }}-${{ github.sha }}
+
+      - name: Run iOS tests (without building)
         run: |
           rm -rf TestResults.xcresult
           # The 3 XCTMetric benchmark suites (MessageListPerformanceTests,
@@ -167,7 +197,7 @@ jobs:
           # reaches the in-simulator test process under `xcodebuild test`),
           # so -skip-testing is the only thing that actually excludes them.
           # meeshy.sh mirrors the same exclusion locally (NON_PHASE_SUITES).
-          xcodebuild test \
+          xcodebuild test-without-building \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
