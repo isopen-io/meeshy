@@ -1,3 +1,8 @@
+// Même contrainte que `button.tsx` : `@radix-ui/react-slot` ≥ 1.3.1 appelle
+// `React.createContext` au chargement, absent de l'export `react-server`.
+// Ce composant est importé par des pages serveur (/privacy, /terms…).
+'use client';
+
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
