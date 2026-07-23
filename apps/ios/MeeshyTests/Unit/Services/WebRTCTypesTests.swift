@@ -114,14 +114,19 @@ final class QualityThresholdsAudioBitrateTests: XCTestCase {
                           "highJitterThresholdMs must be < excellentRTT to catch jitter-induced degradation on otherwise-healthy paths")
     }
 
-    func test_videoFairRTT_is200ms() {
-        XCTAssertEqual(QualityThresholds.videoFairRTT, 200.0, accuracy: 0.001,
-                       "RTT boundary between good and fair video tiers (200 ms)")
+    func test_videoFairRTT_is300ms() {
+        XCTAssertEqual(QualityThresholds.videoFairRTT, 300.0, accuracy: 0.001,
+                       "RTT boundary between good and fair video tiers — 300 ms tolerates a 4G/international baseline without flagging the indicator 'fair'")
     }
 
-    func test_videoPoorRTT_is300ms() {
-        XCTAssertEqual(QualityThresholds.videoPoorRTT, 300.0, accuracy: 0.001,
-                       "RTT boundary between fair and poor video tiers (300 ms)")
+    func test_videoPoorRTT_is500ms() {
+        XCTAssertEqual(QualityThresholds.videoPoorRTT, 500.0, accuracy: 0.001,
+                       "RTT boundary between fair and poor video tiers — 500 ms (~250 ms one-way) covers an Africa↔Asia backbone hop (155-221 ms) plus a mobile last mile")
+    }
+
+    func test_poorRTT_is800ms() {
+        XCTAssertEqual(QualityThresholds.poorRTT, 800.0, accuracy: 0.001,
+                       "RTT boundary between poor and critical video tiers — 800 ms is the ITU-T G.114 conversational acceptability limit (~400 ms one-way)")
     }
 
     func test_videoFairPacketLoss_is3percent() {
@@ -323,24 +328,41 @@ final class VideoQualityLevelFromRttTests: XCTestCase {
         XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.02), .good)
     }
 
+    func test_good_rttElevatedBaseline_notFair() {
+        // 250 ms RTT (4G / intercontinental baseline) with no loss must stay
+        // 'good', not fall to 'fair' — this is the mislabelled-degraded case the
+        // recalibration fixes (was 'fair' under the 200 ms boundary).
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 250, packetLoss: 0), .good)
+    }
+
     func test_fair_rttDominated() {
-        XCTAssertEqual(VideoQualityLevel.from(rtt: 250, packetLoss: 0), .fair)
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 350, packetLoss: 0), .fair)
     }
 
     func test_fair_lossDominated() {
         XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.04), .fair)
     }
 
+    func test_fair_rttHigh_notPoor() {
+        // 400 ms RTT, no loss: distant but usable → 'fair', not 'poor'.
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 400, packetLoss: 0), .fair)
+    }
+
     func test_poor_rttDominated() {
-        XCTAssertEqual(VideoQualityLevel.from(rtt: 400, packetLoss: 0), .poor)
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 650, packetLoss: 0), .poor)
     }
 
     func test_poor_lossDominated() {
         XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.07), .poor)
     }
 
+    func test_poor_rttVeryHigh_notCritical() {
+        // 600 ms RTT, no loss: bad but not dead → 'poor', not 'critical'.
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 600, packetLoss: 0), .poor)
+    }
+
     func test_critical_rttDominated() {
-        XCTAssertEqual(VideoQualityLevel.from(rtt: 600, packetLoss: 0), .critical)
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 900, packetLoss: 0), .critical)
     }
 
     func test_critical_lossDominated() {
@@ -352,7 +374,7 @@ final class VideoQualityLevelFromRttTests: XCTestCase {
     }
 
     func test_worstAxisWins_lossGoodButRttCritical() {
-        XCTAssertEqual(VideoQualityLevel.from(rtt: 600, packetLoss: 0.001), .critical)
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 900, packetLoss: 0.001), .critical)
     }
 }
 

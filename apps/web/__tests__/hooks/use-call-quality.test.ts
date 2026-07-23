@@ -350,8 +350,50 @@ describe('useCallQuality', () => {
       expect(result.current.qualityStats?.level).toBe('good');
     });
 
+    it('reports good quality for an elevated baseline RTT with no packet loss (mobile/international link)', async () => {
+      // 250ms RTT is a normal baseline on 4G/5G or an intercontinental hop, not
+      // congestion. With 0% loss it must read 'good', not 'fair' — the pre-fix
+      // threshold (rtt < 200 → good) mislabelled healthy mobile calls as degraded.
+      const mockPC = makeMockPeerConnection({
+        forEach: (cb: Function) => {
+          cb({ type: 'inbound-rtp', kind: 'audio', packetsLost: 0, packetsReceived: 100, jitter: 0, bytesReceived: 1000 });
+          cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.25 });
+          cb({ type: 'outbound-rtp', bytesSent: 500 });
+        },
+      } as any);
+
+      const { result } = renderHook(() =>
+        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+
+      expect(result.current.qualityStats?.level).toBe('good');
+    });
+
+    it('reports fair (not poor) for a high baseline RTT with no packet loss', async () => {
+      // 400ms RTT with 0% loss is a distant-but-usable link. It must read 'fair',
+      // not 'poor' — the pre-fix threshold (rtt < 300 → fair) was too strict for
+      // long-haul paths and flipped healthy calls straight to the red indicator.
+      const mockPC = makeMockPeerConnection({
+        forEach: (cb: Function) => {
+          cb({ type: 'inbound-rtp', kind: 'audio', packetsLost: 0, packetsReceived: 100, jitter: 0, bytesReceived: 1000 });
+          cb({ type: 'candidate-pair', state: 'succeeded', currentRoundTripTime: 0.4 });
+          cb({ type: 'outbound-rtp', bytesSent: 500 });
+        },
+      } as any);
+
+      const { result } = renderHook(() =>
+        useCallQuality({ peerConnection: mockPC as unknown as RTCPeerConnection })
+      );
+
+      await act(async () => { await Promise.resolve(); });
+
+      expect(result.current.qualityStats?.level).toBe('fair');
+    });
+
     it('reports fair quality for mid-range packet loss', async () => {
-      // 4% packet loss, RTT=250ms → fair (packetLoss < 5, rtt < 300)
+      // 4% packet loss, RTT=250ms → fair (packetLoss between good/fair loss bands)
       const mockPC = {
         getStats: jest.fn().mockResolvedValue({
           forEach: (cb: Function) => {
