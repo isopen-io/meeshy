@@ -35,6 +35,13 @@ export function useInfiniteNotificationsQuery(options: NotificationsFiltersAndPa
       if (!lastPage?.pagination?.hasMore) return undefined;
       return lastPage.pagination.offset + lastPage.pagination.limit;
     },
+    // Le client global tourne en `staleTime: Infinity` + `refetchOnMount: false`
+    // (Socket.IO est la source temps réel). Mais le socket ne pousse RIEN quand
+    // l'app est fermée : une liste restaurée du cache restait alors affichée
+    // telle quelle, sans jamais montrer les notifications reçues entre-temps —
+    // ni dans la cloche, ni sur /notifications, quel que soit le nombre de
+    // rechargements. Monter la cloche ou la page relit donc toujours le serveur.
+    refetchOnMount: 'always',
   });
 }
 
@@ -46,7 +53,10 @@ export function useUnreadNotificationCountQuery() {
       return response.data?.count ?? 0;
     },
     // No refetchInterval — the notification socket manager updates this count
-    // directly via setQueryData on every notification:new event.
+    // directly via setQueryData on every notification:new event. It still has to
+    // re-read on mount: the socket pushes nothing while the app is closed, so a
+    // restored count would otherwise stay frozen at its last-seen value.
+    refetchOnMount: 'always',
   });
 }
 

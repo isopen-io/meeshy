@@ -22,6 +22,11 @@ describe('shouldDehydrateQuery', () => {
     expect(shouldDehydrateQuery(query(['messages', 'status-details', 'msg-1']))).toBe(false);
   });
 
+  it('never persists notification lists or counts', () => {
+    expect(shouldDehydrateQuery(query(['notifications', 'list', 'infinite', {}]))).toBe(false);
+    expect(shouldDehydrateQuery(query(['notifications', 'unreadCount']))).toBe(false);
+  });
+
   it('persists non-message queries', () => {
     expect(shouldDehydrateQuery(query(['conversations', 'infinite']))).toBe(true);
     expect(shouldDehydrateQuery(query(['users', 'detail', 'user-1']))).toBe(true);

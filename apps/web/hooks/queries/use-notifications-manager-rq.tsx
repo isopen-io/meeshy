@@ -105,6 +105,19 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
 
       const queries = queryClient.getQueriesData({ queryKey: queryKeys.notifications.lists(), exact: false });
 
+      // Aucune liste n'a encore de données (fetch initial en vol, ou écran
+      // jamais monté) : `setQueriesData` ci-dessous n'écrirait NULLE PART et la
+      // notification serait perdue sans rattrapage, `staleTime: Infinity`
+      // interdisant toute relecture. On invalide pour forcer le serveur.
+      const hasCachedList = queries.some(([_key, data]: [unknown, unknown]) =>
+        !!data && typeof data === 'object' && 'pages' in data
+      );
+
+      if (!hasCachedList) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.lists() });
+        queryClient.invalidateQueries({ queryKey: queryKeys.notifications.unreadCount() });
+      }
+
       const notificationExists = queries.some(([_key, data]: [unknown, unknown]) => {
         if (!data || typeof data !== 'object' || !('pages' in data)) return false;
         const d = data as { pages: Array<{ notifications?: Notification[] }> };

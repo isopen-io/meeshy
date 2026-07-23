@@ -27,11 +27,15 @@ jest.mock('@/services/notification.service', () => ({
 }));
 
 let capturedReadHandler: ((notificationId: string) => void) | null = null;
+let capturedNotificationHandler: ((notification: unknown) => void) | null = null;
 
 jest.mock('@/services/notification-socketio.singleton', () => ({
   notificationSocketIO: {
     connect: jest.fn(),
-    onNotification: jest.fn(() => () => {}),
+    onNotification: jest.fn((cb: (notification: unknown) => void) => {
+      capturedNotificationHandler = cb;
+      return () => {};
+    }),
     onNotificationRead: jest.fn((cb: (id: string) => void) => {
       capturedReadHandler = cb;
       return () => {};
@@ -160,5 +164,70 @@ describe('useNotificationsManagerRQ — notification:read handler', () => {
 
     await waitFor(() => expect(result.current.notifications.find((n) => n.id === 'notif-3')?.state.isRead).toBe(true));
     expect(result.current.unreadCount).toBe(2);
+  });
+});
+
+/**
+ * Real-time freshness. The global QueryClient runs with `staleTime: Infinity` +
+ * `refetchOnMount: false`, and the notification list was persisted to IndexedDB
+ * for 24h. A list restored from that cache was therefore displayed as-is, and
+ * notifications that arrived while the app was closed (socket disconnected,
+ * so nothing pushed them into the cache) never showed up — neither in the bell
+ * badge nor on /notifications — no matter how many times the page was reloaded.
+ */
+describe('useNotificationsManagerRQ — freshness', () => {
+  function createStaleForeverWrapper() {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 30 * 60 * 1000, staleTime: Infinity, refetchOnMount: false },
+      },
+    });
+    const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+      return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    };
+    return { wrapper, queryClient };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    capturedNotificationHandler = null;
+    capturedReadHandler = null;
+  });
+
+  it('re-reads the server on mount even when a cached list exists', async () => {
+    const queryKey = ['notifications', 'list', 'infinite', {}];
+    const { wrapper, queryClient } = createStaleForeverWrapper();
+
+    queryClient.setQueryData(queryKey, {
+      pages: [{ notifications: [makeNotification('stale-1', false)], pagination: { limit: 20, offset: 0, total: 1, hasMore: false }, unreadCount: 1 }],
+      pageParams: [0],
+    });
+
+    mockFetchNotifications.mockResolvedValue(seedPage(2));
+
+    renderHook(() => useNotificationsManagerRQ(), { wrapper });
+
+    await waitFor(() => expect(mockFetchNotifications).toHaveBeenCalled());
+  });
+
+  it('invalidates the notification lists when none holds data yet', async () => {
+    const { wrapper, queryClient } = createStaleForeverWrapper();
+    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+    // Never resolves: the initial fetch is still in flight when the socket
+    // event lands, so no cache entry exists to write into.
+    mockFetchNotifications.mockImplementation(() => new Promise(() => {}));
+
+    renderHook(() => useNotificationsManagerRQ(), { wrapper });
+
+    await waitFor(() => expect(capturedNotificationHandler).not.toBeNull());
+
+    act(() => {
+      capturedNotificationHandler!(makeNotification('brand-new', false));
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ['notifications', 'list'] })
+    );
   });
 });
