@@ -164,12 +164,23 @@ jobs:
       # the (expensive) build finishes — see "Save DerivedData build cache".
       - name: Build for testing
         run: |
+          # CI-only compile trims (safe — no IDE, no archiving here):
+          #   COMPILER_INDEX_STORE_ENABLE=NO  → skip the index-while-building
+          #     store; it only feeds Xcode's IDE features, useless on CI.
+          #   DEBUG_INFORMATION_FORMAT=dwarf  → emit DWARF in the binaries but
+          #     skip the separate .dSYM bundle generation/linking; a test run
+          #     symbolicates fine without it.
+          #   ONLY_ACTIVE_ARCH=YES            → arm64 only (the single sim
+          #     destination), never build the unused arch.
           xcodebuild build-for-testing \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            ONLY_ACTIVE_ARCH=YES \
             -quiet
 
       # Seed DerivedData the instant the compile succeeds — BEFORE the test run,
