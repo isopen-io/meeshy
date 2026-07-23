@@ -29,7 +29,8 @@ final class SettingsActionQueueTests: XCTestCase {
 
         await queue.flushIfPossible()
 
-        XCTAssertEqual(queue.count, 0)
+        let count = await queue.count
+        XCTAssertEqual(count, 0)
     }
 
     // MARK: - Transient failure (below maxAttempts)
@@ -40,7 +41,8 @@ final class SettingsActionQueueTests: XCTestCase {
 
         await queue.flushIfPossible()
 
-        XCTAssertEqual(queue.count, 1, "A single failure must keep the item queued for retry")
+        let count = await queue.count
+        XCTAssertEqual(count, 1, "A single failure must keep the item queued for retry")
     }
 
     func test_flushIfPossible_repeatedFailures_stayQueued_untilMaxAttempts() async {
@@ -51,7 +53,8 @@ final class SettingsActionQueueTests: XCTestCase {
             await queue.flushIfPossible()
         }
 
-        XCTAssertEqual(queue.count, 1, "4 failures must not yet exhaust the item (maxAttempts is 5)")
+        let count = await queue.count
+        XCTAssertEqual(count, 1, "4 failures must not yet exhaust the item (maxAttempts is 5)")
     }
 
     // MARK: - Permanent failure (maxAttempts + drop) — the P2 fix
@@ -64,7 +67,8 @@ final class SettingsActionQueueTests: XCTestCase {
             await queue.flushIfPossible()
         }
 
-        XCTAssertEqual(queue.count, 0,
+        let count = await queue.count
+        XCTAssertEqual(count, 0,
             "A permanently-failing item must be dropped after maxAttempts, not block the queue forever")
     }
 
@@ -81,13 +85,19 @@ final class SettingsActionQueueTests: XCTestCase {
         for _ in 0..<4 {
             await queue.flushIfPossible()
         }
-        XCTAssertEqual(queue.count, 2, "FIFO still blocks fresh while stale hasn't hit maxAttempts")
+        let countAfterFour = await queue.count
+        XCTAssertEqual(countAfterFour, 2, "FIFO still blocks fresh while stale hasn't hit maxAttempts")
+        let countBefore = await queue.count
+        XCTAssertEqual(countBefore, 2, "FIFO still blocks fresh while stale hasn't hit maxAttempts")
 
         // The 5th attempt exhausts `stale` — it must be dropped AND `fresh`
         // must be processed in this SAME pass, not wait for a 6th flush call.
         await queue.flushIfPossible()
 
-        XCTAssertEqual(queue.count, 0,
+        let countAfterFifth = await queue.count
+        XCTAssertEqual(countAfterFifth, 0,
+        let countAfter = await queue.count
+        XCTAssertEqual(countAfter, 0,
             "Dropping the exhausted head must let the rest of the queue drain immediately")
     }
 
@@ -100,18 +110,27 @@ final class SettingsActionQueueTests: XCTestCase {
         for _ in 0..<4 {
             await queue.flushIfPossible()
         }
-        XCTAssertEqual(queue.count, 1, "Still queued — one attempt short of exhaustion")
+        let countBeforeReplace = await queue.count
+        XCTAssertEqual(countBeforeReplace, 1, "Still queued — one attempt short of exhaustion")
+        let countBefore = await queue.count
+        XCTAssertEqual(countBefore, 1, "Still queued — one attempt short of exhaustion")
 
         // A fresh edit for the SAME endpoint replaces the pending row with a
         // brand-new id (existing last-write-wins behavior).
         await queue.enqueue(makeAction(endpoint: "/users/me"))
-        XCTAssertEqual(queue.count, 1)
+        let countAfterReplace = await queue.count
+        XCTAssertEqual(countAfterReplace, 1)
+        let countAfterEnqueue = await queue.count
+        XCTAssertEqual(countAfterEnqueue, 1)
 
         // One more failure must NOT exhaust the replacement — it has its own
         // fresh budget, not the 4 failures already accrued by the old row.
         await queue.flushIfPossible()
 
-        XCTAssertEqual(queue.count, 1,
+        let countAfterFailure = await queue.count
+        XCTAssertEqual(countAfterFailure, 1,
+        let countAfterFlush = await queue.count
+        XCTAssertEqual(countAfterFlush, 1,
             "The replacement item must not inherit the old item's failure count")
     }
 
@@ -132,9 +151,13 @@ final class SettingsActionQueueTests: XCTestCase {
         // optimization).
         await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"displayName":"Bob"}"#))
 
-        XCTAssertEqual(queue.count, 1, "The two saves for the same endpoint still collapse into one pending action")
+        let mergedCount = await queue.count
+        XCTAssertEqual(mergedCount, 1, "The two saves for the same endpoint still collapse into one pending action")
+        let count = await queue.count
+        XCTAssertEqual(count, 1, "The two saves for the same endpoint still collapse into one pending action")
 
-        guard let merged = queue.pendingItems.first,
+        let pendingItems = await queue.pendingItems
+        guard let merged = pendingItems.first,
               let dict = try? JSONSerialization.jsonObject(with: merged.payload) as? [String: Any] else {
             return XCTFail("Expected the merged payload to decode as a JSON object")
         }
@@ -147,7 +170,8 @@ final class SettingsActionQueueTests: XCTestCase {
         await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"displayName":"Alice"}"#))
         await queue.enqueue(makeAction(endpoint: "/users/me", payload: #"{"displayName":"Bob"}"#))
 
-        guard let merged = queue.pendingItems.first,
+        let pendingItems = await queue.pendingItems
+        guard let merged = pendingItems.first,
               let dict = try? JSONSerialization.jsonObject(with: merged.payload) as? [String: Any] else {
             return XCTFail("Expected the merged payload to decode as a JSON object")
         }

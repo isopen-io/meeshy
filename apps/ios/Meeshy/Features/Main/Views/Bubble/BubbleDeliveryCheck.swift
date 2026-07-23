@@ -63,8 +63,13 @@ struct BubbleDeliveryCheck: View, Equatable {
                 .foregroundColor(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.slow))
         case .sent:
+            // Poids `.regular` comme le double check (`.delivered`) et le
+            // double violet (`.read`) : les trois coches (simple / double /
+            // violette) partagent la même graisse fine, aucune en gras
+            // (directive user — « le coche simple double et violet ne soient
+            // pas en gras »). `.semibold` faisait ressortir la coche simple.
             Image(systemName: "checkmark")
-                .font(MeeshyFont.relative(10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .regular))
                 .foregroundColor(tint)
                 .accessibilityLabel(Self.label(.sent))
         case .delivered:
