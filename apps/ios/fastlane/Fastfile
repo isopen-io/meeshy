@@ -96,7 +96,11 @@ platform :ios do
         "me.meeshy.app.widgets"
       ],
       api_key: api_key,
-      readonly: is_ci,
+      # readonly skips the Dev Portal round-trip and just installs the certs/profiles
+      # already in the match git repo. Auto-on in CI; opt-in locally via MATCH_READONLY=true
+      # (e.g. when the ASC API key belongs to a different team than DEVELOPMENT_TEAM and
+      # the cached certs are still valid — no need to create/renew).
+      readonly: is_ci || ENV['MATCH_READONLY'] == 'true',
       force_legacy_encryption: true
     )
   end
