@@ -55,17 +55,23 @@ jobs:
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
 
-      # Cache DerivedData: compiled modules/build products AND the resolved SPM
-      # checkouts+binaries (they live under <DerivedData>/SourcePackages). The
-      # compile is the dominant cost — the job was dying mid-`swift-frontend` at
-      # the old cap — and Firebase/gRPC ship binary zips fetched from
-      # dl.google.com that are slow and flaky. Restoring both turns a cold
-      # ~25-30 min job into an incremental one. Keyed on the toolchain + package
-      # manifest so a dependency or Xcode bump starts a fresh lineage; the
-      # rolling SHA suffix + prefix restore-keys give incremental reuse from the
-      # most recent prior run. NOTE: the FIRST run after this lands is a cache
-      # miss and still pays full cold cost to seed the cache.
-      - name: Cache DerivedData (SPM + build products)
+      # SPM checkouts + binary-target zips (Firebase/gRPC from dl.google.com,
+      # ~6 min cold and flaky). RESTORE-ONLY here; the matching save runs right
+      # after resolve — see the "Save SPM cache" step for why the split matters.
+      # Kept in its own tree (`$RUNNER_TEMP/spm`, via -clonedSourcePackagesDirPath)
+      # so it caches independently of the compiled build products below.
+      - name: Restore SPM cache
+        id: spm-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/spm
+          key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
+
+      # Compiled modules / build products. Rolling key → incremental reuse from
+      # the most recent prior run; the toolchain + manifest prefix starts a
+      # fresh lineage on a dependency or Xcode bump. This one only saves at
+      # post-job (below), so it seeds once a run actually COMPLETES the build.
+      - name: Restore DerivedData build cache
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/DerivedData
@@ -115,16 +121,16 @@ jobs:
       # zips fetched from dl.google.com, which intermittently fail mid-download
       # on the runner ("The network connection was lost." → exit 74) and took the
       # whole job down before a single test compiled. Resolving up front — into
-      # the SAME fixed DerivedData the cache above restores and the test step
-      # reuses — lets us retry the transient network failure instead of losing
-      # the run, and a warm cache makes this near-instant; a real resolution
-      # error still fails after the attempts are exhausted.
+      # the same fixed trees the cache restores and the test step reuses — lets
+      # us retry the transient network failure, and a warm cache makes it
+      # near-instant; a real resolution error still fails after the attempts.
       - name: Resolve SPM packages (retry on transient network)
         run: |
           for attempt in 1 2 3 4; do
             if xcodebuild -resolvePackageDependencies \
                  -project apps/ios/Meeshy.xcodeproj -scheme Meeshy \
-                 -derivedDataPath "$RUNNER_TEMP/DerivedData"; then
+                 -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+                 -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm"; then
               echo "SPM resolve OK (attempt $attempt)"
               exit 0
             fi
@@ -133,6 +139,21 @@ jobs:
           done
           echo "::error::SPM resolve failed after 4 attempts"
           exit 1
+
+      # Seed the SPM cache the INSTANT it resolves — before the compile that may
+      # blow the timeout. actions/cache's post-job save is skipped when the job
+      # is cancelled, and a timeout IS a cancellation: the first cold run proved
+      # a combined cache never seeds because the compile is killed before
+      # post-job runs. This explicit save sits right after a resolve that
+      # finishes well within budget, so run N banks the ~6-min SPM download even
+      # if it later times out compiling — run N+1 then starts warm and is far
+      # likelier to finish the build, which in turn seeds the DerivedData cache.
+      - name: Save SPM cache
+        if: always() && steps.spm-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/spm
+          key: ios-spm-${{ hashFiles('apps/ios/project.yml') }}
 
       - name: Run iOS tests
         run: |
@@ -151,6 +172,7 @@ jobs:
             -scheme Meeshy \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
             -only-testing:MeeshyTests \
             -skip-testing:MeeshyTests/MessageListPerformanceTests \
             -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
